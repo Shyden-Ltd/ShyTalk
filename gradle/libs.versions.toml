@@ -13,6 +13,7 @@ firebaseBom = "34.9.0"
 googleServices = "4.4.4"
 coroutines = "1.10.2"
 coil = "2.7.0"
+imageCropper = "4.6.0"
 agora = "4.6.2"
 credentials = "1.5.0"
 googleid = "1.2.0"
@@ -61,6 +62,9 @@ kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "ko
 
 # Coil (image loading)
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+
+# Image Cropper
+android-image-cropper = { group = "com.vanniktech", name = "android-image-cropper", version.ref = "imageCropper" }
 
 # Credential Manager (Google Sign-In)
 androidx-credentials = { group = "androidx.credentials", name = "credentials", version.ref = "credentials" }

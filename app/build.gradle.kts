@@ -24,8 +24,8 @@ android {
         applicationId = "com.shyden.shytalk"
         minSdk = 28
         targetSdk = 36
-        versionCode = 8
-        versionName = "0.08"
+        versionCode = 9
+        versionName = "0.09"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -111,6 +111,9 @@ dependencies {
 
     // Coil
     implementation(libs.coil.compose)
+
+    // Image Cropper
+    implementation(libs.android.image.cropper)
 
     // Agora
     implementation(libs.agora.rtc)

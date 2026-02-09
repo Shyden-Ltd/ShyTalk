@@ -9,7 +9,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.Seat
-import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Constants
 
@@ -23,19 +22,9 @@ fun SeatGrid(
     speakingUids: Set<Int>,
     seatUsers: Map<String, User> = emptyMap(),
     onSeatClick: (Int) -> Unit,
-    onRemoveFromSeat: (Int) -> Unit,
-    onToggleSelfMute: (Int) -> Unit,
-    onForceMute: (Int) -> Unit,
-    onKickUser: (Int) -> Unit,
-    onMoveSeat: (fromIndex: Int, toIndex: Int) -> Unit,
     onTapUser: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    // Collect empty seat indices for the move dialog
-    val emptySeats = seats.entries
-        .filter { it.value.state != SeatState.OCCUPIED && it.key.toInt() != Constants.OWNER_SEAT_INDEX }
-        .map { it.key.toInt() }
-
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -56,17 +45,6 @@ fun SeatGrid(
                         else -> RoomRole.ATTENDEE
                     }
 
-                    val isTargetNormalUser = seat.userId != null
-                        && seat.userId != currentUserId
-                        && seatRole == RoomRole.ATTENDEE
-
-                    val canModerate = when {
-                        !isTargetNormalUser -> false
-                        currentRole == RoomRole.OWNER -> true
-                        currentRole == RoomRole.HOST -> true
-                        else -> false
-                    }
-
                     // Check if this seat's user is speaking via Agora UID
                     val isSpeaking = seatUserId != null &&
                         (seatUserId.hashCode() and 0x7FFFFFFF) in speakingUids
@@ -83,19 +61,9 @@ fun SeatGrid(
                         seatRole = seatRole,
                         isCurrentUser = seat.userId == currentUserId,
                         canLeaveSeat = seat.userId == currentUserId && !isOwnerOnOwnSeat,
-                        canRemove = canModerate && seatIndex != Constants.OWNER_SEAT_INDEX,
-                        canMute = canModerate,
-                        canKick = canModerate,
-                        canMove = canModerate && emptySeats.isNotEmpty() && seatIndex != Constants.OWNER_SEAT_INDEX,
-                        emptySeats = emptySeats,
                         isSpeaking = isSpeaking,
                         user = seatUser,
                         onClick = { onSeatClick(seatIndex) },
-                        onRemove = { onRemoveFromSeat(seatIndex) },
-                        onToggleSelfMute = { onToggleSelfMute(seatIndex) },
-                        onForceMute = { onForceMute(seatIndex) },
-                        onKick = { onKickUser(seatIndex) },
-                        onMoveTo = { toIndex -> onMoveSeat(seatIndex, toIndex) },
                         onTapUser = seatUserId?.let { uid -> { onTapUser(uid) } },
                         modifier = Modifier.weight(1f)
                     )

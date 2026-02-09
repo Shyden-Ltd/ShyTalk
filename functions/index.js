@@ -22,10 +22,9 @@ exports.generateAgoraToken = onCall((request) => {
     );
   }
 
-  // Token expires in 24 hours
-  const expirationTimeInSeconds = 86400;
-  const currentTimestamp = Math.floor(Date.now() / 1000);
-  const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
+  // agora-token v2 expects relative expiration in seconds (not absolute timestamps)
+  const tokenExpirationSeconds = 86400; // 24 hours
+  const privilegeExpirationSeconds = 86400;
 
   const token = RtcTokenBuilder.buildTokenWithUid(
     AGORA_APP_ID,
@@ -33,10 +32,11 @@ exports.generateAgoraToken = onCall((request) => {
     channelName,
     uid,
     RtcRole.PUBLISHER,
-    privilegeExpiredTs,
-    privilegeExpiredTs
+    tokenExpirationSeconds,
+    privilegeExpirationSeconds
   );
 
+  console.log(`Generated token for channel=${channelName} uid=${uid}`);
   return { token };
 });
 
@@ -98,11 +98,37 @@ exports.onPresenceRemoved = onValueDeleted(
           updates[`pendingInvites.${userId}`] = require("firebase-admin/firestore").FieldValue.delete();
         }
 
-        // If this user is the owner, set room to OWNER_AWAY
+        // If this user is the owner, check if anyone is still on mic
         if (room.ownerId === userId && room.state === "ACTIVE") {
-          updates.state = "OWNER_AWAY";
-          updates.ownerLeftAt = require("firebase-admin/firestore").Timestamp.now();
-          console.log(`Owner left room ${roomId}, setting OWNER_AWAY`);
+          // Check if any other user is still seated (on mic) after clearing this user's seats
+          let anyoneOnMic = false;
+          for (let i = 0; i < MAX_SEATS; i++) {
+            const key = i.toString();
+            // Skip seats we just cleared for this user
+            if (updates[`seats.${key}`]) continue;
+            const seat = seats[key];
+            if (seat && seat.userId && seat.userId !== userId && seat.state === "OCCUPIED") {
+              anyoneOnMic = true;
+              break;
+            }
+          }
+
+          if (anyoneOnMic) {
+            // Someone is still on mic, enter grace period
+            updates.state = "OWNER_AWAY";
+            updates.ownerLeftAt = require("firebase-admin/firestore").Timestamp.now();
+            console.log(`Owner left room ${roomId}, users still on mic - setting OWNER_AWAY`);
+          } else {
+            // No one on mic, close immediately
+            updates.state = "CLOSED";
+            updates.closedAt = require("firebase-admin/firestore").Timestamp.now();
+            updates.participantIds = [];
+            // Clear all seats
+            for (let i = 0; i < MAX_SEATS; i++) {
+              updates[`seats.${i.toString()}`] = { userId: null, state: "EMPTY", isMuted: false };
+            }
+            console.log(`Owner left room ${roomId}, no users on mic - closing immediately`);
+          }
         }
 
         transaction.update(roomRef, updates);

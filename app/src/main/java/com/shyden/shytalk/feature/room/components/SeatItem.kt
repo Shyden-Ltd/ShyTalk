@@ -24,14 +24,12 @@ import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -60,27 +58,13 @@ fun SeatItem(
     seatRole: RoomRole,
     isCurrentUser: Boolean,
     canLeaveSeat: Boolean,
-    canRemove: Boolean,
-    canMute: Boolean,
-    canKick: Boolean,
-    canMove: Boolean,
-    emptySeats: List<Int>,
     isSpeaking: Boolean,
     user: User? = null,
     onClick: () -> Unit,
-    onRemove: () -> Unit,
-    onToggleSelfMute: () -> Unit,
-    onForceMute: () -> Unit,
-    onKick: () -> Unit,
-    onMoveTo: (toIndex: Int) -> Unit,
     onTapUser: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var showMenu by remember { mutableStateOf(false) }
-    var showMoveDialog by remember { mutableStateOf(false) }
-
-    val hasSelfActions = canLeaveSeat || isCurrentUser
-    val hasModActions = canRemove || canMute || canKick || canMove
 
     // Speaking animation
     val infiniteTransition = rememberInfiniteTransition(label = "speaking")
@@ -136,7 +120,7 @@ fun SeatItem(
                             }
                         },
                         onLongClick = {
-                            if (hasModActions || hasSelfActions) {
+                            if (canLeaveSeat) {
                                 showMenu = true
                             }
                         }
@@ -220,55 +204,17 @@ fun SeatItem(
                 }
             }
 
-            // Context menu
+            // Context menu (only leave seat for current user)
             DropdownMenu(
                 expanded = showMenu,
                 onDismissRequest = { showMenu = false }
             ) {
-                // Self actions
                 if (canLeaveSeat) {
                     DropdownMenuItem(
                         text = { Text("Leave seat") },
                         onClick = {
                             showMenu = false
                             onClick()
-                        }
-                    )
-                }
-                // Moderation actions on normal users
-                if (canMute) {
-                    DropdownMenuItem(
-                        text = { Text(if (seat.isMuted) "Unmute user" else "Mute user") },
-                        onClick = {
-                            showMenu = false
-                            onForceMute()
-                        }
-                    )
-                }
-                if (canMove) {
-                    DropdownMenuItem(
-                        text = { Text("Move to seat\u2026") },
-                        onClick = {
-                            showMenu = false
-                            showMoveDialog = true
-                        }
-                    )
-                }
-                if (canRemove) {
-                    DropdownMenuItem(
-                        text = { Text("Remove from seat") },
-                        onClick = {
-                            showMenu = false
-                            onRemove()
-                        }
-                    )
-                }
-                if (canKick) {
-                    DropdownMenuItem(
-                        text = { Text("Kick from room") },
-                        onClick = {
-                            showMenu = false
-                            onKick()
                         }
                     )
                 }
@@ -287,32 +233,6 @@ fun SeatItem(
             textAlign = TextAlign.Center,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
-        )
-    }
-
-    // Move-to-seat picker dialog
-    if (showMoveDialog) {
-        AlertDialog(
-            onDismissRequest = { showMoveDialog = false },
-            title = { Text("Move to which seat?") },
-            text = {
-                Column {
-                    emptySeats.forEach { targetIndex ->
-                        TextButton(onClick = {
-                            showMoveDialog = false
-                            onMoveTo(targetIndex)
-                        }) {
-                            Text("Seat ${targetIndex + 1}")
-                        }
-                    }
-                }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { showMoveDialog = false }) {
-                    Text("Cancel")
-                }
-            }
         )
     }
 }

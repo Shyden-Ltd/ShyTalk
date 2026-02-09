@@ -56,6 +56,7 @@ import com.shyden.shytalk.feature.room.components.ChatPanel
 import com.shyden.shytalk.feature.room.components.OwnerAwayBanner
 import com.shyden.shytalk.feature.room.components.ParticipantInfo
 import com.shyden.shytalk.feature.room.components.ParticipantListPanel
+import com.shyden.shytalk.feature.room.components.RoomClosedSummaryPanel
 import com.shyden.shytalk.feature.room.components.RoomToolbar
 import com.shyden.shytalk.feature.room.components.SeatGrid
 import com.shyden.shytalk.feature.room.components.UserCardPopup
@@ -103,10 +104,18 @@ fun RoomScreen(
         showParticipantPanel = false
     }
 
-    LaunchedEffect(uiState.roomClosed) {
-        if (uiState.roomClosed) {
-            onNavigateBack()
-        }
+    // Show kicked dialog
+    if (uiState.wasKicked) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Removed from Room") },
+            text = { Text("You have been kicked from this room.") },
+            confirmButton = {
+                TextButton(onClick = { onNavigateBack() }) {
+                    Text("OK")
+                }
+            }
+        )
     }
 
     LaunchedEffect(uiState.shouldNavigateBack) {
@@ -125,6 +134,20 @@ fun RoomScreen(
     // Block warning dialogs
     uiState.blockWarning?.let { warning ->
         when (warning) {
+            is BlockWarning.BlockedByRoomOwner -> {
+                AlertDialog(
+                    onDismissRequest = {},
+                    title = { Text("Cannot Enter Room") },
+                    text = {
+                        Text("You are not allowed to enter this room.")
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { onNavigateBack() }) {
+                            Text("Go Back")
+                        }
+                    }
+                )
+            }
             is BlockWarning.BlockedUserInRoom -> {
                 AlertDialog(
                     onDismissRequest = {},
@@ -239,7 +262,16 @@ fun RoomScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            if (uiState.isLoading) {
+            val closedSummary = uiState.roomClosedSummary
+            if (uiState.roomClosed && closedSummary != null) {
+                RoomClosedSummaryPanel(
+                    summary = closedSummary,
+                    onDismiss = onNavigateBack
+                )
+            } else if (uiState.roomClosed) {
+                // Room closed but no summary data available, navigate back
+                LaunchedEffect(Unit) { onNavigateBack() }
+            } else if (uiState.isLoading) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -259,9 +291,7 @@ fun RoomScreen(
                     // Owner Away Banner
                     if (uiState.room?.state == RoomState.OWNER_AWAY) {
                         OwnerAwayBanner(
-                            remainingMs = uiState.ownerAwayRemainingMs,
-                            isOwner = uiState.currentRole == RoomRole.OWNER,
-                            onOwnerReturn = { viewModel.ownerReturn() }
+                            remainingMs = uiState.ownerAwayRemainingMs
                         )
                     }
 
@@ -315,21 +345,6 @@ fun RoomScreen(
                             } else if (seat?.userId == null) {
                                 viewModel.takeSeat(seatIndex)
                             }
-                        },
-                        onRemoveFromSeat = { seatIndex ->
-                            viewModel.removeFromSeat(seatIndex)
-                        },
-                        onToggleSelfMute = { seatIndex ->
-                            viewModel.toggleSelfMute(seatIndex)
-                        },
-                        onForceMute = { seatIndex ->
-                            viewModel.forceMuteUser(seatIndex)
-                        },
-                        onKickUser = { seatIndex ->
-                            viewModel.kickUser(seatIndex)
-                        },
-                        onMoveSeat = { fromIndex, toIndex ->
-                            viewModel.moveSeat(fromIndex, toIndex)
                         },
                         onTapUser = { userId ->
                             showUserCardForId = userId
@@ -419,9 +434,31 @@ fun RoomScreen(
         showUserCardForId?.let { userId ->
             val user = uiState.seatUsers[userId] ?: uiState.participantUsers[userId]
             if (user != null) {
+                val targetSeatEntry = uiState.room?.seats?.entries?.find {
+                    it.value.userId == userId && it.value.state == SeatState.OCCUPIED
+                }
+                val isTargetSeated = targetSeatEntry != null
+                val targetSeatIndex = targetSeatEntry?.key?.toIntOrNull()
+
+                val targetRole = when {
+                    userId == uiState.room?.ownerId -> RoomRole.OWNER
+                    userId in (uiState.room?.hostIds ?: emptyList()) -> RoomRole.HOST
+                    else -> RoomRole.ATTENDEE
+                }
+
                 val canInviteFromCard = (uiState.currentRole == RoomRole.OWNER || uiState.currentRole == RoomRole.HOST)
                         && userId != uiState.currentUserId
-                        && uiState.room?.seats?.values?.none { it.userId == userId && it.state == SeatState.OCCUPIED } == true
+                        && !isTargetSeated
+
+                // Mod capabilities: owner/host can act on normal users
+                val isTargetNormalUser = userId != uiState.currentUserId && targetRole == RoomRole.ATTENDEE
+                val canModerate = isTargetNormalUser && isTargetSeated
+                        && (uiState.currentRole == RoomRole.OWNER || uiState.currentRole == RoomRole.HOST)
+
+                val emptySeats = uiState.room?.seats?.entries
+                    ?.filter { it.value.state != SeatState.OCCUPIED && it.key.toInt() != com.shyden.shytalk.core.util.Constants.OWNER_SEAT_INDEX }
+                    ?.map { it.key.toInt() } ?: emptyList()
+
                 UserCardPopup(
                     user = user,
                     isBlocked = userId in uiState.blockedUserIds,
@@ -444,6 +481,22 @@ fun RoomScreen(
                             showUserCardForId = null
                         }
                     } else null,
+                    onMuteToggle = if (canModerate && targetSeatIndex != null) {
+                        { viewModel.forceMuteUser(targetSeatIndex) }
+                    } else null,
+                    isTargetMuted = targetSeatEntry?.value?.isMuted ?: false,
+                    onRemoveFromSeat = if (canModerate && targetSeatIndex != null
+                        && targetSeatIndex != com.shyden.shytalk.core.util.Constants.OWNER_SEAT_INDEX) {
+                        { viewModel.removeFromSeat(targetSeatIndex) }
+                    } else null,
+                    onKickFromRoom = if (canModerate && targetSeatIndex != null) {
+                        { viewModel.kickUser(targetSeatIndex) }
+                    } else null,
+                    onMoveSeat = if (canModerate && targetSeatIndex != null && emptySeats.isNotEmpty()
+                        && targetSeatIndex != com.shyden.shytalk.core.util.Constants.OWNER_SEAT_INDEX) {
+                        { toIndex -> viewModel.moveSeat(targetSeatIndex, toIndex) }
+                    } else null,
+                    emptySeats = emptySeats,
                     onDismiss = { showUserCardForId = null }
                 )
             }

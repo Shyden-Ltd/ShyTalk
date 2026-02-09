@@ -29,13 +29,22 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import android.util.Log
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 sealed class BlockWarning {
+    data object BlockedByRoomOwner : BlockWarning()
     data object BlockedUserInRoom : BlockWarning()
     data object BlockedByUserInRoom : BlockWarning()
 }
+
+data class RoomClosedSummary(
+    val roomName: String,
+    val durationMs: Long,
+    val hostUsers: List<User>,
+    val totalVisitors: Int
+)
 
 data class RoomUiState(
     val room: ChatRoom? = null,
@@ -46,6 +55,7 @@ data class RoomUiState(
     val isLoading: Boolean = true,
     val error: String? = null,
     val roomClosed: Boolean = false,
+    val roomClosedSummary: RoomClosedSummary? = null,
     val ownerAwayRemainingMs: Long = 0L,
     val speakingUids: Set<Int> = emptySet(),
     val isVoiceJoined: Boolean = false,
@@ -56,6 +66,7 @@ data class RoomUiState(
     val blockWarning: BlockWarning? = null,
     val hasJoined: Boolean = false,
     val shouldNavigateBack: Boolean = false,
+    val wasKicked: Boolean = false,
     val hasAudioPermission: Boolean = false
 )
 
@@ -71,6 +82,10 @@ class RoomViewModel @Inject constructor(
     private val presenceService: PresenceService
 ) : ViewModel() {
 
+    companion object {
+        private const val TAG = "RoomViewModel"
+    }
+
     private val roomId: String = savedStateHandle["roomId"] ?: ""
 
     private val _uiState = MutableStateFlow(RoomUiState())
@@ -82,6 +97,8 @@ class RoomViewModel @Inject constructor(
     private var blockCheckDone = false
     private var firstJoinTimestamp: Timestamp? = null
     private var allMessages: List<Message> = emptyList()
+    private var lastKnownRoom: ChatRoom? = null
+    private var ownerReturnTriggered = false
 
     init {
         val userId = authRepository.currentUser?.uid ?: ""
@@ -119,22 +136,38 @@ class RoomViewModel @Inject constructor(
                 .collect { room ->
                     if (room == null || room.state == RoomState.CLOSED) {
                         agoraVoiceService.leaveChannel()
+                        presenceService.removePresence()
+                        val summary = buildClosedSummary(room)
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
-                            roomClosed = true
+                            roomClosed = true,
+                            roomClosedSummary = summary
                         )
                         return@collect
                     }
+
+                    // Cache room data for summary if it closes later
+                    lastKnownRoom = room
 
                     val userId = _uiState.value.currentUserId
 
                     // Only check kicked status after we've joined
                     if (_uiState.value.hasJoined) {
-                        if (userId !in room.participantIds || userId in room.bannedUserIds) {
+                        if (userId in room.bannedUserIds) {
                             agoraVoiceService.leaveChannel()
+                            presenceService.removePresence()
                             _uiState.value = _uiState.value.copy(
                                 isLoading = false,
-                                roomClosed = true
+                                wasKicked = true
+                            )
+                            return@collect
+                        }
+                        if (userId !in room.participantIds) {
+                            agoraVoiceService.leaveChannel()
+                            presenceService.removePresence()
+                            _uiState.value = _uiState.value.copy(
+                                isLoading = false,
+                                shouldNavigateBack = true
                             )
                             return@collect
                         }
@@ -167,16 +200,31 @@ class RoomViewModel @Inject constructor(
                         return@collect
                     }
 
+                    // Auto-detect owner return
+                    if (room.state == RoomState.OWNER_AWAY
+                        && room.ownerId == userId
+                        && _uiState.value.hasJoined
+                        && !ownerReturnTriggered
+                    ) {
+                        ownerReturnTriggered = true
+                        ownerReturn()
+                    }
+                    if (room.state == RoomState.ACTIVE) {
+                        ownerReturnTriggered = false
+                    }
+
                     // Normal room updates after joining
                     val currentlySeated = room.seats.values.any {
                         it.userId == userId && it.state == SeatState.OCCUPIED
                     }
 
                     if (currentlySeated && !isSeated) {
+                        Log.d(TAG, "User became seated, hasAudioPermission=${_uiState.value.hasAudioPermission}")
                         if (_uiState.value.hasAudioPermission) {
                             joinVoiceChannel(room.agoraChannelName)
                         }
                     } else if (!currentlySeated && isSeated) {
+                        Log.d(TAG, "User left seat, leaving voice channel")
                         agoraVoiceService.leaveChannel()
                     }
                     isSeated = currentlySeated
@@ -214,6 +262,29 @@ class RoomViewModel @Inject constructor(
             val userId = _uiState.value.currentUserId
             val myBlockedIds = _uiState.value.blockedUserIds
 
+            // Check if user is banned from this room (kicked previously)
+            if (userId in room.bannedUserIds) {
+                _uiState.value = _uiState.value.copy(
+                    blockWarning = BlockWarning.BlockedByRoomOwner
+                )
+                return@launch
+            }
+
+            // Always check room owner's block list (even if owner is away)
+            val ownerUser = userCache[room.ownerId] ?: when (val result = userRepository.getUser(room.ownerId)) {
+                is Resource.Success -> {
+                    userCache[room.ownerId] = result.data
+                    result.data
+                }
+                else -> null
+            }
+            if (ownerUser != null && userId in ownerUser.blockedUserIds) {
+                _uiState.value = _uiState.value.copy(
+                    blockWarning = BlockWarning.BlockedByRoomOwner
+                )
+                return@launch
+            }
+
             // Check if any participant is blocked by me
             val blockedInRoom = room.participantIds.any { it in myBlockedIds && it != userId }
             if (blockedInRoom) {
@@ -223,9 +294,9 @@ class RoomViewModel @Inject constructor(
                 return@launch
             }
 
-            // Check if any participant has blocked me
+            // Check if any other participant (non-owner) has blocked me
             for (participantId in room.participantIds) {
-                if (participantId == userId) continue
+                if (participantId == userId || participantId == room.ownerId) continue
                 val cached = userCache[participantId]
                 val participantUser = if (cached != null) {
                     cached
@@ -329,6 +400,7 @@ class RoomViewModel @Inject constructor(
     private fun joinVoiceChannel(channelName: String) {
         viewModelScope.launch {
             val uid = _uiState.value.currentUserId.hashCode() and 0x7FFFFFFF
+            Log.d(TAG, "joinVoiceChannel channel=$channelName uid=$uid")
             agoraVoiceService.joinChannel(channelName, uid)
         }
     }
@@ -499,8 +571,15 @@ class RoomViewModel @Inject constructor(
             val isTargetHost = targetUserId in room.hostIds
             if (isTargetOwner || isTargetHost) return@launch
 
+            val kickerName = _uiState.value.currentUserName
+            val targetUser = userCache[targetUserId]
+            val targetName = targetUser?.displayName ?: "A user"
+
             roomRepository.kickUser(roomId, targetUserId, seatIndex)
-            messageRepository.sendSystemMessage(roomId, "A user was kicked from the room")
+            messageRepository.sendSystemMessage(
+                roomId,
+                "$targetName was kicked by $kickerName"
+            )
         }
     }
 
@@ -583,12 +662,19 @@ class RoomViewModel @Inject constructor(
             withContext(NonCancellable) {
                 room.seats.forEach { (index, seat) ->
                     if (seat.userId == userId) {
-                        if (index.toInt() == Constants.OWNER_SEAT_INDEX && room.ownerId == userId) {
-                            roomRepository.leaveSeat(roomId, index.toInt())
-                            roomRepository.setOwnerAway(roomId)
-                        } else {
-                            roomRepository.leaveSeat(roomId, index.toInt())
-                        }
+                        roomRepository.leaveSeat(roomId, index.toInt())
+                    }
+                }
+
+                if (room.ownerId == userId) {
+                    // Check if anyone else is still on mic
+                    val anyoneOnMic = room.seats.any { (_, seat) ->
+                        seat.userId != null && seat.userId != userId && seat.state == SeatState.OCCUPIED
+                    }
+                    if (anyoneOnMic) {
+                        roomRepository.setOwnerAway(roomId)
+                    } else {
+                        roomRepository.closeRoom(roomId)
                     }
                 }
 
@@ -719,11 +805,37 @@ class RoomViewModel @Inject constructor(
         }
     }
 
+    private fun buildClosedSummary(closedRoom: ChatRoom?): RoomClosedSummary? {
+        // Use closed room data if available, fall back to last known snapshot
+        val room = closedRoom ?: lastKnownRoom ?: return null
+
+        val createdMs = room.createdAt.toDate().time
+        val closedMs = room.closedAt?.toDate()?.time ?: System.currentTimeMillis()
+        val durationMs = closedMs - createdMs
+
+        // Host users: owner + anyone in hostIds
+        val hostIds = (listOf(room.ownerId) + room.hostIds).distinct()
+        val hostUsers = hostIds.mapNotNull { userCache[it] }
+
+        // Total unique visitors from firstJoinTimestamps, fall back to lastKnownRoom
+        val visitors = room.firstJoinTimestamps.size.coerceAtLeast(
+            lastKnownRoom?.participantIds?.size ?: 0
+        )
+
+        return RoomClosedSummary(
+            roomName = room.name,
+            durationMs = durationMs,
+            hostUsers = hostUsers,
+            totalVisitors = visitors
+        )
+    }
+
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
     }
 
     fun onAudioPermissionResult(granted: Boolean) {
+        Log.d(TAG, "onAudioPermissionResult granted=$granted isSeated=$isSeated")
         _uiState.value = _uiState.value.copy(hasAudioPermission = granted)
         if (granted && isSeated) {
             val channelName = _uiState.value.room?.agoraChannelName ?: return

@@ -129,6 +129,12 @@ class AgoraVoiceService @Inject constructor(
             return
         }
 
+        // Leave any existing channel first
+        if (_isJoined.value) {
+            Log.d(TAG, "Already in a channel, leaving first")
+            engine.leaveChannel()
+        }
+
         // Enable audio right before joining — this is when RECORD_AUDIO permission is guaranteed
         engine.enableAudio()
 
@@ -153,16 +159,21 @@ class AgoraVoiceService @Inject constructor(
             Log.e(TAG, "joinChannel failed with error code $result")
         } else {
             Log.d(TAG, "joinChannel call succeeded (waiting for onJoinChannelSuccess callback)")
-            // Force speakerphone on after join for reliable audio routing
+            // Force speakerphone on and unmute mic after join
             engine.setEnableSpeakerphone(true)
+            engine.muteLocalAudioStream(false)
+            engine.adjustRecordingSignalVolume(400)
+            Log.d(TAG, "Audio configured: speakerphone=on, mic=unmuted, recordingVolume=400")
         }
     }
 
     fun leaveChannel() {
+        Log.d(TAG, "leaveChannel called, isJoined=${_isJoined.value}")
         rtcEngine?.leaveChannel()
     }
 
     fun muteLocalAudio(mute: Boolean) {
+        Log.d(TAG, "muteLocalAudio mute=$mute")
         rtcEngine?.muteLocalAudioStream(mute)
     }
 

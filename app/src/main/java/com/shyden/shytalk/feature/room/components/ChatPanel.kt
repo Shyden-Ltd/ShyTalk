@@ -18,6 +18,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,6 +62,17 @@ fun ChatPanel(
     }
     val isSeated = currentSeatEntry != null
     val isSelfMuted = currentSeatEntry?.value?.isMuted ?: false
+
+    // Auto-scroll: with reverseLayout=true, index 0 is the bottom (newest message)
+    val isAtBottom by remember {
+        derivedStateOf { listState.firstVisibleItemIndex == 0 }
+    }
+
+    LaunchedEffect(messages.size) {
+        if (isAtBottom) {
+            listState.animateScrollToItem(0)
+        }
+    }
 
     Column(modifier = modifier) {
         LazyColumn(

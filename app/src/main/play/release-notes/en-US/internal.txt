@@ -1,9 +1,13 @@
-Voice Chat & Stability Improvements
+Room Management & UX Improvements
 
-- Fixed voice chat: users can now hear each other when seated
-- Added mic mute/unmute button in the chat input area
-- App now detects when users close the app and removes them from rooms automatically
-- Users can no longer be in multiple rooms at the same time
-- Fixed issue where "Someone" appeared instead of the user's name
-- Removed redundant system messages from the chat
-- Various room management bug fixes (invites, seat requests, leave cleanup)
+- Room closed summary: see room duration, hosts, and visitor count when a room closes
+- Owner return auto-detected: no more "Return" button needed
+- Rooms close immediately when owner leaves and no one is on mic
+- Chat auto-scrolls to latest messages
+- Moderation actions (mute, kick, move) moved to user card popup
+- Blocked/kicked users are now fully denied room entry
+- Kicked users see a notification and the chat shows who kicked them
+- Profile and cover photo cropping before upload
+- Improved Agora token authentication
+
+WARNING: Voice chat is currently not working and will be fixed in a later version.

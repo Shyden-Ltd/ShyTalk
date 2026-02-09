@@ -1,8 +1,13 @@
 package com.shyden.shytalk.feature.profile
 
+import android.graphics.Color as AndroidColor
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import com.canhub.cropper.CropImageContract
+import com.canhub.cropper.CropImageContractOptions
+import com.canhub.cropper.CropImageOptions
+import com.canhub.cropper.CropImageView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -91,16 +96,20 @@ fun ProfileScreen(
     var showCountryPicker by remember { mutableStateOf(false) }
     var showBlockDialog by remember { mutableStateOf(false) }
 
-    // Photo pickers
-    val profilePhotoPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { viewModel.uploadProfilePhoto(it) }
+    // Photo pickers with cropping
+    val profilePhotoCropper = rememberLauncherForActivityResult(
+        contract = CropImageContract()
+    ) { result ->
+        if (result.isSuccessful) {
+            result.uriContent?.let { viewModel.uploadProfilePhoto(it) }
+        }
     }
-    val coverPhotoPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { viewModel.uploadCoverPhoto(it) }
+    val coverPhotoCropper = rememberLauncherForActivityResult(
+        contract = CropImageContract()
+    ) { result ->
+        if (result.isSuccessful) {
+            result.uriContent?.let { viewModel.uploadCoverPhoto(it) }
+        }
     }
 
     LaunchedEffect(uiState.error) {
@@ -134,8 +143,38 @@ fun ProfileScreen(
                 onSaveEdits = {
                     viewModel.saveProfileEdits(editDisplayName, editDescription, editNationality)
                 },
-                onPickProfilePhoto = { profilePhotoPicker.launch("image/*") },
-                onPickCoverPhoto = { coverPhotoPicker.launch("image/*") },
+                onPickProfilePhoto = {
+                    profilePhotoCropper.launch(
+                        CropImageContractOptions(
+                            uri = null,
+                            cropImageOptions = CropImageOptions(
+                                guidelines = CropImageView.Guidelines.ON,
+                                aspectRatioX = 1,
+                                aspectRatioY = 1,
+                                fixAspectRatio = true,
+                                cropShape = CropImageView.CropShape.OVAL,
+                                outputCompressQuality = 80,
+                                activityBackgroundColor = AndroidColor.BLACK
+                            )
+                        )
+                    )
+                },
+                onPickCoverPhoto = {
+                    coverPhotoCropper.launch(
+                        CropImageContractOptions(
+                            uri = null,
+                            cropImageOptions = CropImageOptions(
+                                guidelines = CropImageView.Guidelines.ON,
+                                aspectRatioX = 16,
+                                aspectRatioY = 9,
+                                fixAspectRatio = true,
+                                cropShape = CropImageView.CropShape.RECTANGLE,
+                                outputCompressQuality = 80,
+                                activityBackgroundColor = AndroidColor.BLACK
+                            )
+                        )
+                    )
+                },
                 onBlockToggle = { showBlockDialog = true },
                 onSignOut = onSignOut,
                 snackbarHostState = snackbarHostState,
@@ -173,8 +212,38 @@ fun ProfileScreen(
                 onSaveEdits = {
                     viewModel.saveProfileEdits(editDisplayName, editDescription, editNationality)
                 },
-                onPickProfilePhoto = { profilePhotoPicker.launch("image/*") },
-                onPickCoverPhoto = { coverPhotoPicker.launch("image/*") },
+                onPickProfilePhoto = {
+                    profilePhotoCropper.launch(
+                        CropImageContractOptions(
+                            uri = null,
+                            cropImageOptions = CropImageOptions(
+                                guidelines = CropImageView.Guidelines.ON,
+                                aspectRatioX = 1,
+                                aspectRatioY = 1,
+                                fixAspectRatio = true,
+                                cropShape = CropImageView.CropShape.OVAL,
+                                outputCompressQuality = 80,
+                                activityBackgroundColor = AndroidColor.BLACK
+                            )
+                        )
+                    )
+                },
+                onPickCoverPhoto = {
+                    coverPhotoCropper.launch(
+                        CropImageContractOptions(
+                            uri = null,
+                            cropImageOptions = CropImageOptions(
+                                guidelines = CropImageView.Guidelines.ON,
+                                aspectRatioX = 16,
+                                aspectRatioY = 9,
+                                fixAspectRatio = true,
+                                cropShape = CropImageView.CropShape.RECTANGLE,
+                                outputCompressQuality = 80,
+                                activityBackgroundColor = AndroidColor.BLACK
+                            )
+                        )
+                    )
+                },
                 onBlockToggle = { showBlockDialog = true },
                 onSignOut = onSignOut,
                 snackbarHostState = snackbarHostState,
