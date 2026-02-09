@@ -363,6 +363,22 @@ class RoomRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun closeAllRoomsByOwner(ownerId: String): Resource<Unit> {
+        return try {
+            val snapshot = roomsCollection
+                .whereEqualTo("ownerId", ownerId)
+                .whereIn("state", listOf(RoomState.ACTIVE.name, RoomState.OWNER_AWAY.name))
+                .get()
+                .await()
+            for (doc in snapshot.documents) {
+                closeRoom(doc.id)
+            }
+            Resource.Success(Unit)
+        } catch (e: Exception) {
+            Resource.Error(e.message ?: "Failed to close rooms", e)
+        }
+    }
+
     override suspend fun closeRoom(roomId: String): Resource<Unit> {
         return try {
             val emptySeats = (0 until Constants.MAX_SEATS).associate { i ->

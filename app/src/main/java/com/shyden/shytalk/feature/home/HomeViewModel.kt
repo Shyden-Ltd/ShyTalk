@@ -134,6 +134,8 @@ class HomeViewModel @Inject constructor(
         val userId = authRepository.currentUser?.uid ?: return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            // Close any existing rooms owned by this user
+            roomRepository.closeAllRoomsByOwner(userId)
             when (val result = roomRepository.createRoom(name, userId)) {
                 is Resource.Success -> {
                     _uiState.value = _uiState.value.copy(
