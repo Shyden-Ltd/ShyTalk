@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.model.ChatRoom
 import com.shyden.shytalk.core.model.Message
+import com.shyden.shytalk.core.model.MessageType
 import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.RoomState
 import com.shyden.shytalk.core.model.SeatState
@@ -269,9 +270,9 @@ class RoomViewModel @Inject constructor(
     private fun updateFilteredMessages() {
         val ts = firstJoinTimestamp
         val filtered = if (ts != null) {
-            allMessages.filter { it.createdAt >= ts }
+            allMessages.filter { it.createdAt >= ts && it.type != MessageType.SYSTEM }
         } else {
-            allMessages
+            allMessages.filter { it.type != MessageType.SYSTEM }
         }
         _uiState.value = _uiState.value.copy(messages = filtered)
     }

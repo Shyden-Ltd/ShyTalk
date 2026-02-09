@@ -235,15 +235,6 @@ fun SeatItem(
                         }
                     )
                 }
-                if (isCurrentUser) {
-                    DropdownMenuItem(
-                        text = { Text(if (seat.isMuted) "Unmute" else "Mute") },
-                        onClick = {
-                            showMenu = false
-                            onToggleSelfMute()
-                        }
-                    )
-                }
                 // Moderation actions on normal users
                 if (canMute) {
                     DropdownMenuItem(

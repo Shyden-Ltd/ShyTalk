@@ -1,6 +1,7 @@
 package com.shyden.shytalk.data.remote
 
 import android.content.Context
+import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.agora.rtc2.ChannelMediaOptions
 import io.agora.rtc2.Constants
@@ -28,6 +29,7 @@ class AgoraVoiceService @Inject constructor(
     enum class ConnectionState { CONNECTED, DISCONNECTED, RECONNECTING }
 
     companion object {
+        private const val TAG = "AgoraVoiceService"
         const val AGORA_APP_ID = "7bdf5596c88f49edba75568f529c4389"
     }
 
@@ -112,7 +114,7 @@ class AgoraVoiceService @Inject constructor(
         val token = try {
             tokenService.fetchToken(channelName, uid)
         } catch (e: Exception) {
-            // Fallback: join without token (for testing with App ID only, no certificate)
+            Log.w(TAG, "Token fetch failed, joining without token", e)
             ""
         }
 
@@ -120,8 +122,11 @@ class AgoraVoiceService @Inject constructor(
             clientRoleType = Constants.CLIENT_ROLE_BROADCASTER
             channelProfile = Constants.CHANNEL_PROFILE_LIVE_BROADCASTING
             autoSubscribeAudio = true
+            publishMicrophoneTrack = true
+            autoSubscribeVideo = false
         }
 
+        Log.d(TAG, "Joining channel=$channelName uid=$uid")
         engine.joinChannel(token, channelName, uid, options)
     }
 
