@@ -342,20 +342,13 @@ fun RoomScreen(
                     HorizontalDivider()
 
                     // Chat Panel (lower portion)
-                    val currentSeat = uiState.room?.seats?.entries?.find {
-                        it.value.userId == uiState.currentUserId && it.value.state == SeatState.OCCUPIED
-                    }
                     ChatPanel(
                         messages = uiState.messages,
                         currentUserId = uiState.currentUserId,
                         currentRole = uiState.currentRole,
                         seats = uiState.room?.seats ?: emptyMap(),
                         userMap = userMap,
-                        isSeated = currentSeat != null,
-                        isSelfMuted = currentSeat?.value?.isMuted ?: false,
-                        onToggleMic = {
-                            currentSeat?.key?.toIntOrNull()?.let { viewModel.toggleSelfMute(it) }
-                        },
+                        onToggleMic = { seatIndex -> viewModel.toggleSelfMute(seatIndex) },
                         onSendMessage = { viewModel.sendMessage(it) },
                         onTapUser = { userId ->
                             showUserCardForId = userId

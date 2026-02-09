@@ -96,6 +96,7 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.functions)
     implementation(libs.firebase.storage)
+    implementation(libs.firebase.database)
 
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)

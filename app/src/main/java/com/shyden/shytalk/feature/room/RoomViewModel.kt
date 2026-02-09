@@ -13,6 +13,7 @@ import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.remote.AgoraVoiceService
+import com.shyden.shytalk.data.remote.PresenceService
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.MessageRepository
 import com.shyden.shytalk.data.repository.RoomRepository
@@ -66,7 +67,8 @@ class RoomViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val userRepository: UserRepository,
     private val seatRequestRepository: SeatRequestRepository,
-    private val agoraVoiceService: AgoraVoiceService
+    private val agoraVoiceService: AgoraVoiceService,
+    private val presenceService: PresenceService
 ) : ViewModel() {
 
     private val roomId: String = savedStateHandle["roomId"] ?: ""
@@ -311,6 +313,7 @@ class RoomViewModel @Inject constructor(
             roomRepository.leaveAllRooms(userId, exceptRoomId = roomId)
             roomRepository.recordFirstJoinTimestamp(roomId, userId)
             roomRepository.joinRoom(roomId, userId)
+            presenceService.setPresence(roomId, userId)
             _uiState.value = _uiState.value.copy(hasJoined = true)
             if (userName.isNotEmpty()) {
                 messageRepository.sendJoinMessage(
@@ -573,6 +576,7 @@ class RoomViewModel @Inject constructor(
             val userId = _uiState.value.currentUserId
             val room = _uiState.value.room ?: return@launch
 
+            presenceService.removePresence()
             agoraVoiceService.leaveChannel()
 
             // Use NonCancellable so Firestore cleanup completes even if ViewModel is destroyed
@@ -608,6 +612,7 @@ class RoomViewModel @Inject constructor(
             val room = _uiState.value.room ?: return@launch
             if (_uiState.value.currentUserId != room.ownerId) return@launch
 
+            presenceService.removePresence()
             agoraVoiceService.leaveChannel()
             roomRepository.closeRoom(roomId)
             messageRepository.sendSystemMessage(roomId, "Room has been closed")
@@ -729,6 +734,7 @@ class RoomViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         ownerAwayCountdownJob?.cancel()
+        presenceService.removePresence()
         agoraVoiceService.leaveChannel()
     }
 }

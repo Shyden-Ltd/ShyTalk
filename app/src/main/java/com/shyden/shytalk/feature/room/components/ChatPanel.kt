@@ -39,9 +39,7 @@ fun ChatPanel(
     currentRole: RoomRole,
     seats: Map<String, Seat>,
     userMap: Map<String, User>,
-    isSeated: Boolean = false,
-    isSelfMuted: Boolean = false,
-    onToggleMic: () -> Unit = {},
+    onToggleMic: (Int) -> Unit = {},
     onSendMessage: (String) -> Unit,
     onTapUser: (String) -> Unit,
     onInviteUser: (String, String) -> Unit,
@@ -56,6 +54,12 @@ fun ChatPanel(
             .mapNotNull { it.userId }
             .toSet()
     }
+
+    val currentSeatEntry = seats.entries.find {
+        it.value.userId == currentUserId && it.value.state == SeatState.OCCUPIED
+    }
+    val isSeated = currentSeatEntry != null
+    val isSelfMuted = currentSeatEntry?.value?.isMuted ?: false
 
     Column(modifier = modifier) {
         LazyColumn(
@@ -99,7 +103,9 @@ fun ChatPanel(
             )
 
             if (isSeated) {
-                IconButton(onClick = onToggleMic) {
+                IconButton(onClick = {
+                    currentSeatEntry?.key?.toIntOrNull()?.let { onToggleMic(it) }
+                }) {
                     Icon(
                         imageVector = if (isSelfMuted) Icons.Default.MicOff else Icons.Default.Mic,
                         contentDescription = if (isSelfMuted) "Unmute" else "Mute",
