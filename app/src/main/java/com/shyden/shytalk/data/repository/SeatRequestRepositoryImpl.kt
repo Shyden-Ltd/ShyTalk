@@ -42,6 +42,14 @@ class SeatRequestRepositoryImpl @Inject constructor(
         seatIndex: Int
     ): Resource<Unit> {
         return try {
+            // Check if user already has a pending request
+            val existing = requestsCollection(roomId)
+                .whereEqualTo("userId", userId)
+                .whereEqualTo("status", SeatRequestStatus.PENDING.name)
+                .get()
+                .await()
+            if (!existing.isEmpty) return Resource.Success(Unit)
+
             val requestId = UUID.randomUUID().toString()
             val request = SeatRequest(
                 requestId = requestId,

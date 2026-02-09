@@ -329,6 +329,40 @@ class RoomRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun leaveAllRooms(userId: String, exceptRoomId: String?): Resource<Unit> {
+        return try {
+            val snapshot = roomsCollection
+                .whereArrayContains("participantIds", userId)
+                .whereIn("state", listOf(RoomState.ACTIVE.name, RoomState.OWNER_AWAY.name))
+                .get()
+                .await()
+            for (doc in snapshot.documents) {
+                val otherRoomId = doc.id
+                if (otherRoomId == exceptRoomId) continue
+                val room = doc.data?.let { ChatRoom.fromMap(it, otherRoomId) } ?: continue
+
+                val updates = mutableMapOf<String, Any>(
+                    "participantIds" to FieldValue.arrayRemove(userId)
+                )
+                // Clear any seats the user occupies
+                for ((idx, seat) in room.seats) {
+                    if (seat.userId == userId && seat.state == SeatState.OCCUPIED) {
+                        updates["seats.$idx"] = Seat().toMap()
+                    }
+                }
+                // If user is the owner, set room to owner away
+                if (room.ownerId == userId) {
+                    updates["state"] = RoomState.OWNER_AWAY.name
+                    updates["ownerLeftAt"] = Timestamp.now()
+                }
+                roomsCollection.document(otherRoomId).update(updates).await()
+            }
+            Resource.Success(Unit)
+        } catch (e: Exception) {
+            Resource.Error(e.message ?: "Failed to leave all rooms", e)
+        }
+    }
+
     override suspend fun closeRoom(roomId: String): Resource<Unit> {
         return try {
             val emptySeats = (0 until Constants.MAX_SEATS).associate { i ->
