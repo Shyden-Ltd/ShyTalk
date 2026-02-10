@@ -1,14 +1,20 @@
 package com.shyden.shytalk.feature.profile
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.Color as AndroidColor
-import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.core.content.ContextCompat
 import com.canhub.cropper.CropImageContract
 import com.canhub.cropper.CropImageContractOptions
 import com.canhub.cropper.CropImageOptions
 import com.canhub.cropper.CropImageView
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,6 +36,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
@@ -54,13 +61,16 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -95,8 +105,12 @@ fun ProfileScreen(
     }
     var showCountryPicker by remember { mutableStateOf(false) }
     var showBlockDialog by remember { mutableStateOf(false) }
+    var fullscreenPhotoUrl by remember { mutableStateOf<String?>(null) }
 
     // Photo pickers with cropping
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
     val profilePhotoCropper = rememberLauncherForActivityResult(
         contract = CropImageContract()
     ) { result ->
@@ -109,6 +123,77 @@ fun ProfileScreen(
     ) { result ->
         if (result.isSuccessful) {
             result.uriContent?.let { viewModel.uploadCoverPhoto(it) }
+        }
+    }
+
+    val profileCropOptions = CropImageContractOptions(
+        uri = null,
+        cropImageOptions = CropImageOptions(
+            guidelines = CropImageView.Guidelines.ON,
+            aspectRatioX = 1,
+            aspectRatioY = 1,
+            fixAspectRatio = true,
+            cropShape = CropImageView.CropShape.OVAL,
+            outputCompressQuality = 80,
+            activityBackgroundColor = AndroidColor.BLACK,
+            toolbarColor = AndroidColor.DKGRAY,
+            toolbarTintColor = AndroidColor.WHITE,
+            toolbarBackButtonColor = AndroidColor.WHITE,
+            activityTitle = "Crop Profile Photo"
+        )
+    )
+    val coverCropOptions = CropImageContractOptions(
+        uri = null,
+        cropImageOptions = CropImageOptions(
+            guidelines = CropImageView.Guidelines.ON,
+            aspectRatioX = 16,
+            aspectRatioY = 9,
+            fixAspectRatio = true,
+            cropShape = CropImageView.CropShape.RECTANGLE,
+            outputCompressQuality = 80,
+            activityBackgroundColor = AndroidColor.BLACK,
+            toolbarColor = AndroidColor.DKGRAY,
+            toolbarTintColor = AndroidColor.WHITE,
+            toolbarBackButtonColor = AndroidColor.WHITE,
+            activityTitle = "Crop Cover Photo"
+        )
+    )
+
+    // Track which photo type triggered the permission request
+    var pendingPhotoType by remember { mutableStateOf<String?>(null) }
+
+    val storagePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            when (pendingPhotoType) {
+                "profile" -> profilePhotoCropper.launch(profileCropOptions)
+                "cover" -> coverPhotoCropper.launch(coverCropOptions)
+            }
+        } else {
+            scope.launch {
+                snackbarHostState.showSnackbar("Storage permission is required to select a photo")
+            }
+        }
+        pendingPhotoType = null
+    }
+
+    fun launchPhotoPicker(type: String) {
+        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_IMAGES
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        val alreadyGranted = ContextCompat.checkSelfPermission(context, permission) ==
+                PackageManager.PERMISSION_GRANTED
+        if (alreadyGranted) {
+            when (type) {
+                "profile" -> profilePhotoCropper.launch(profileCropOptions)
+                "cover" -> coverPhotoCropper.launch(coverCropOptions)
+            }
+        } else {
+            pendingPhotoType = type
+            storagePermissionLauncher.launch(permission)
         }
     }
 
@@ -143,38 +228,9 @@ fun ProfileScreen(
                 onSaveEdits = {
                     viewModel.saveProfileEdits(editDisplayName, editDescription, editNationality)
                 },
-                onPickProfilePhoto = {
-                    profilePhotoCropper.launch(
-                        CropImageContractOptions(
-                            uri = null,
-                            cropImageOptions = CropImageOptions(
-                                guidelines = CropImageView.Guidelines.ON,
-                                aspectRatioX = 1,
-                                aspectRatioY = 1,
-                                fixAspectRatio = true,
-                                cropShape = CropImageView.CropShape.OVAL,
-                                outputCompressQuality = 80,
-                                activityBackgroundColor = AndroidColor.BLACK
-                            )
-                        )
-                    )
-                },
-                onPickCoverPhoto = {
-                    coverPhotoCropper.launch(
-                        CropImageContractOptions(
-                            uri = null,
-                            cropImageOptions = CropImageOptions(
-                                guidelines = CropImageView.Guidelines.ON,
-                                aspectRatioX = 16,
-                                aspectRatioY = 9,
-                                fixAspectRatio = true,
-                                cropShape = CropImageView.CropShape.RECTANGLE,
-                                outputCompressQuality = 80,
-                                activityBackgroundColor = AndroidColor.BLACK
-                            )
-                        )
-                    )
-                },
+                onPickProfilePhoto = { launchPhotoPicker("profile") },
+                onPickCoverPhoto = { launchPhotoPicker("cover") },
+                onTapPhoto = { fullscreenPhotoUrl = it },
                 onBlockToggle = { showBlockDialog = true },
                 onSignOut = onSignOut,
                 snackbarHostState = snackbarHostState,
@@ -212,38 +268,9 @@ fun ProfileScreen(
                 onSaveEdits = {
                     viewModel.saveProfileEdits(editDisplayName, editDescription, editNationality)
                 },
-                onPickProfilePhoto = {
-                    profilePhotoCropper.launch(
-                        CropImageContractOptions(
-                            uri = null,
-                            cropImageOptions = CropImageOptions(
-                                guidelines = CropImageView.Guidelines.ON,
-                                aspectRatioX = 1,
-                                aspectRatioY = 1,
-                                fixAspectRatio = true,
-                                cropShape = CropImageView.CropShape.OVAL,
-                                outputCompressQuality = 80,
-                                activityBackgroundColor = AndroidColor.BLACK
-                            )
-                        )
-                    )
-                },
-                onPickCoverPhoto = {
-                    coverPhotoCropper.launch(
-                        CropImageContractOptions(
-                            uri = null,
-                            cropImageOptions = CropImageOptions(
-                                guidelines = CropImageView.Guidelines.ON,
-                                aspectRatioX = 16,
-                                aspectRatioY = 9,
-                                fixAspectRatio = true,
-                                cropShape = CropImageView.CropShape.RECTANGLE,
-                                outputCompressQuality = 80,
-                                activityBackgroundColor = AndroidColor.BLACK
-                            )
-                        )
-                    )
-                },
+                onPickProfilePhoto = { launchPhotoPicker("profile") },
+                onPickCoverPhoto = { launchPhotoPicker("cover") },
+                onTapPhoto = { fullscreenPhotoUrl = it },
                 onBlockToggle = { showBlockDialog = true },
                 onSignOut = onSignOut,
                 snackbarHostState = snackbarHostState,
@@ -297,6 +324,42 @@ fun ProfileScreen(
             }
         )
     }
+
+    // Fullscreen photo viewer
+    AnimatedVisibility(
+        visible = fullscreenPhotoUrl != null,
+        enter = fadeIn(),
+        exit = fadeOut()
+    ) {
+        fullscreenPhotoUrl?.let { url ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.9f))
+                    .clickable { fullscreenPhotoUrl = null },
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = url,
+                    contentDescription = "Full screen photo",
+                    modifier = Modifier.fillMaxWidth(),
+                    contentScale = ContentScale.Fit
+                )
+                IconButton(
+                    onClick = { fullscreenPhotoUrl = null },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(16.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = Color.White
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -313,6 +376,7 @@ private fun ProfileContent(
     onSaveEdits: () -> Unit,
     onPickProfilePhoto: () -> Unit,
     onPickCoverPhoto: () -> Unit,
+    onTapPhoto: (String) -> Unit,
     onBlockToggle: () -> Unit,
     onSignOut: (() -> Unit)?,
     snackbarHostState: SnackbarHostState,
@@ -373,6 +437,11 @@ private fun ProfileContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(180.dp)
+                .then(
+                    if (user.coverPhotoUrl != null && !uiState.isEditing)
+                        Modifier.clickable { onTapPhoto(user.coverPhotoUrl) }
+                    else Modifier
+                )
         ) {
             if (user.coverPhotoUrl != null) {
                 AsyncImage(
@@ -434,7 +503,12 @@ private fun ProfileContent(
                         contentDescription = "Profile photo",
                         modifier = Modifier
                             .size(100.dp)
-                            .clip(CircleShape),
+                            .clip(CircleShape)
+                            .then(
+                                if (!uiState.isEditing)
+                                    Modifier.clickable { onTapPhoto(photoUrl) }
+                                else Modifier
+                            ),
                         contentScale = ContentScale.Crop
                     )
                 } else {

@@ -1,3 +1,8 @@
-Bug fix: photo cropping crash resolved
+Profile Photo Improvements
+
+- Fixed crash when cropping profile/cover photos
+- Storage permission requested before selecting a photo
+- Tap profile or cover photo to view full screen
+- Crop toolbar now visible (dark toolbar with white icons)
 
 WARNING: Voice chat not working, fix coming in a later version.
