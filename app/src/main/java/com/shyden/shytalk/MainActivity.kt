@@ -1,9 +1,8 @@
 package com.shyden.shytalk
 
-import android.app.PictureInPictureParams
+import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
-import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -16,6 +15,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.firestore.FirebaseFirestore
 import com.shyden.shytalk.core.pip.PipContent
+import com.shyden.shytalk.core.pip.PipHelper
 import com.shyden.shytalk.core.room.ActiveRoomManager
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.feature.privacy.PrivacyPolicyScreen
@@ -24,7 +24,12 @@ import com.shyden.shytalk.navigation.NavGraph
 import com.shyden.shytalk.navigation.Screen
 import com.shyden.shytalk.ui.theme.ShyTalkTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -37,6 +42,7 @@ class MainActivity : ComponentActivity() {
     lateinit var activeRoomManager: ActiveRoomManager
 
     private val isInPipMode = mutableStateOf(false)
+    private val _navigateToRoom = mutableStateOf<String?>(null)
 
     companion object {
         private const val PREFS_NAME = "shytalk_prefs"
@@ -99,6 +105,18 @@ class MainActivity : ComponentActivity() {
                             ForceUpdateScreen()
                         } else {
                             val navController = rememberNavController()
+                            val navigateToRoomId by _navigateToRoom
+
+                            LaunchedEffect(navigateToRoomId) {
+                                val roomId = navigateToRoomId
+                                if (roomId != null) {
+                                    navController.navigate(Screen.Room.createRoute(roomId)) {
+                                        launchSingleTop = true
+                                    }
+                                    _navigateToRoom.value = null
+                                }
+                            }
+
                             NavGraph(
                                 navController = navController,
                                 startDestination = Screen.GoogleSignIn.route,
@@ -110,15 +128,29 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+
+        // Handle notification tap to open room (cold start)
+        handleRoomIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleRoomIntent(intent)
+    }
+
+    private fun handleRoomIntent(intent: Intent?) {
+        if (intent?.action == "OPEN_ROOM") {
+            val roomId = intent.getStringExtra("roomId")
+            if (roomId != null) {
+                _navigateToRoom.value = roomId
+            }
+        }
     }
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         if (activeRoomManager.isInAnyRoom()) {
-            val params = PictureInPictureParams.Builder()
-                .setAspectRatio(Rational(9, 16))
-                .build()
-            enterPictureInPictureMode(params)
+            PipHelper.enterPipMode(this)
         }
     }
 
@@ -128,5 +160,22 @@ class MainActivity : ComponentActivity() {
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         isInPipMode.value = isInPictureInPictureMode
+
+        if (!isInPictureInPictureMode) {
+            if (isFinishing) {
+                // PIP was swiped away — leave room cleanly
+                CoroutineScope(Dispatchers.Main.immediate).launch {
+                    withContext(NonCancellable) {
+                        activeRoomManager.leaveRoom()
+                    }
+                }
+            } else {
+                // PIP tapped to expand — navigate to active room
+                val roomId = activeRoomManager.activeRoomId.value
+                if (roomId != null) {
+                    _navigateToRoom.value = roomId
+                }
+            }
+        }
     }
 }

@@ -16,8 +16,11 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -104,6 +107,17 @@ class RoomService : Service() {
             .setOngoing(true)
             .setSilent(true)
             .build()
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        // Process is being killed — use runBlocking to ensure Firestore cleanup completes
+        runBlocking {
+            withContext(NonCancellable) {
+                activeRoomManager.leaveRoom()
+            }
+        }
+        stopSelf()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

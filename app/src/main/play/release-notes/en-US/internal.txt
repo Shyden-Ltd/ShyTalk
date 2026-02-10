@@ -1,6 +1,9 @@
-v0.15 - Crop Toolbar Fix & Tests
+v0.16 - Voice Chat & Presence Fixes
 
-- Fixed crop photo toolbar hidden behind the status bar
-- Status bar now matches toolbar color for seamless look
-- Added 6 CropContract unit tests (211 total)
-- Performance and refactoring improvements from v0.14
+- All users can now hear speakers without sitting on a seat
+- Speaking animation visible for all users, not just yourself
+- Speaking indicator hidden when muted
+- Fixed voice engine crash on Android 16 (OnePlus 15)
+- Ghost users auto-removed via realtime presence monitoring
+- Fixed room owner voice not working after joining
+- 327 unit tests (up from 211)

@@ -32,7 +32,7 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideFirebaseDatabase(): FirebaseDatabase = FirebaseDatabase.getInstance()
+    fun provideFirebaseDatabase(): FirebaseDatabase = FirebaseDatabase.getInstance("https://shytalk-7ba69-default-rtdb.asia-southeast1.firebasedatabase.app")
 
     @Provides
     @Singleton

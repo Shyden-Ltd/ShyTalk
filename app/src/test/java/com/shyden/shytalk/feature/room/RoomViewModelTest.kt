@@ -62,6 +62,7 @@ class RoomViewModelTest {
     private val messagesFlow = MutableStateFlow<List<Message>>(emptyList())
     private val speakingFlow = MutableStateFlow<Set<Int>>(emptySet())
     private val joinedFlow = MutableStateFlow(false)
+    private val voiceErrorFlow = MutableStateFlow<String?>(null)
 
     private val currentUserId = "current-user"
     private val ownerId = "owner-1"
@@ -78,6 +79,7 @@ class RoomViewModelTest {
         every { messageRepository.getMessages(any()) } returns messagesFlow
         every { agoraVoiceService.speakingUsers } returns speakingFlow
         every { agoraVoiceService.isJoined } returns joinedFlow
+        every { agoraVoiceService.error } returns voiceErrorFlow
         coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(
             TestData.createTestUser(uid = currentUserId, displayName = "Current User")
         )
@@ -953,5 +955,221 @@ class RoomViewModelTest {
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.roomClosed)
+    }
+
+    // ===== Voice Error Surfacing =====
+
+    @Test
+    fun `voice error from agora service surfaces in uiState`() = runTest {
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceUntilIdle()
+
+        voiceErrorFlow.value = "Voice join failed (code -7)"
+        advanceUntilIdle()
+
+        assertEquals("Voice join failed (code -7)", viewModel.uiState.value.error)
+        verify { agoraVoiceService.clearError() }
+    }
+
+    @Test
+    fun `null voice error does not overwrite uiState error`() = runTest {
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceUntilIdle()
+
+        voiceErrorFlow.value = null
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.error)
+    }
+
+    // ===== Voice Channel Audience-First Tests =====
+
+    @Test
+    fun `joinRoom joins voice channel as audience`() = runTest {
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceUntilIdle()
+
+        coVerify { agoraVoiceService.joinChannel("channel-1", any(), asBroadcaster = false) }
+    }
+
+    @Test
+    fun `becoming seated switches role to broadcaster when has audio permission`() = runTest {
+        viewModel = createViewModel()
+        // First emit: user NOT seated (all empty seats) — triggers handleFirstJoin → joinRoom
+        val emptySeats = TestData.createDefaultSeats()
+        emitRoomAsOwner(TestData.createTestRoom(ownerId = currentUserId, seats = emptySeats))
+        advanceUntilIdle()
+
+        // Grant audio permission
+        viewModel.onAudioPermissionResult(true)
+        advanceUntilIdle()
+
+        // Second emit: user IS seated — triggers handleNormalUpdate with currentlySeated=true, isSeated=false
+        val seatedSeats = TestData.createSeatsWithOwner(currentUserId)
+        emitRoomAsOwner(TestData.createTestRoom(ownerId = currentUserId, seats = seatedSeats))
+        advanceUntilIdle()
+
+        verify { agoraVoiceService.setRole(true) }
+    }
+
+    @Test
+    fun `leaving seat switches role to audience instead of leaving channel`() = runTest {
+        // Pre-set room BEFORE creating VM to avoid null initial emission calling leaveChannel
+        val emptySeats = TestData.createDefaultSeats()
+        roomFlow.value = TestData.createTestRoom(ownerId = currentUserId, seats = emptySeats)
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        // Grant audio permission
+        viewModel.onAudioPermissionResult(true)
+        advanceUntilIdle()
+
+        // Emit with user seated — handleNormalUpdate sets isSeated = true
+        val seatedSeats = TestData.createSeatsWithOwner(currentUserId)
+        roomFlow.value = TestData.createTestRoom(ownerId = currentUserId, seats = seatedSeats)
+        advanceUntilIdle()
+
+        // Emit with user NOT seated — handleNormalUpdate detects isSeated→not seated
+        roomFlow.value = TestData.createTestRoom(
+            ownerId = currentUserId,
+            seats = emptySeats,
+            name = "Test Room 2"  // change something so MutableStateFlow re-emits
+        )
+        advanceUntilIdle()
+
+        verify { agoraVoiceService.setRole(false) }
+        // Should NOT call leaveChannel when leaving seat
+        verify(exactly = 0) { agoraVoiceService.leaveChannel() }
+    }
+
+    @Test
+    fun `onAudioPermissionResult granted when seated calls setRole`() = runTest {
+        viewModel = createViewModel()
+        // First emit with empty seats to trigger handleFirstJoin → joinRoom → hasJoined=true
+        val emptySeats = TestData.createDefaultSeats()
+        emitRoomAsOwner(TestData.createTestRoom(ownerId = currentUserId, seats = emptySeats))
+        advanceUntilIdle()
+
+        // Second emit with user seated — handleNormalUpdate sets isSeated=true
+        // but hasAudioPermission is false, so no setRole yet
+        val seatedSeats = TestData.createSeatsWithOwner(currentUserId)
+        emitRoomAsOwner(TestData.createTestRoom(ownerId = currentUserId, seats = seatedSeats))
+        advanceUntilIdle()
+
+        // Now grant permission — should trigger setRole(true) since isSeated=true
+        viewModel.onAudioPermissionResult(true)
+        advanceUntilIdle()
+
+        verify { agoraVoiceService.setRole(true) }
+    }
+
+    @Test
+    fun `onAudioPermissionResult granted when not seated does not call setRole`() = runTest {
+        viewModel = createViewModel()
+        val seatsWithoutUser = TestData.createDefaultSeats()
+        emitRoomAsOwner(TestData.createTestRoom(ownerId = currentUserId, seats = seatsWithoutUser))
+        advanceUntilIdle()
+
+        viewModel.onAudioPermissionResult(true)
+        advanceUntilIdle()
+
+        verify(exactly = 0) { agoraVoiceService.setRole(any()) }
+    }
+
+    @Test
+    fun `leaveRoom still calls leaveChannel`() = runTest {
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceUntilIdle()
+
+        viewModel.leaveRoom()
+        advanceUntilIdle()
+
+        verify { agoraVoiceService.leaveChannel() }
+    }
+
+    @Test
+    fun `attendee joining room also joins voice as audience`() = runTest {
+        viewModel = createViewModel()
+        emitRoomAsAttendee()
+        advanceUntilIdle()
+
+        coVerify { agoraVoiceService.joinChannel("channel-1", any(), asBroadcaster = false) }
+    }
+
+    @Test
+    fun `owner already seated with permission joins voice as broadcaster directly`() = runTest {
+        viewModel = createViewModel()
+        // Grant audio permission BEFORE room emission
+        viewModel.onAudioPermissionResult(true)
+        advanceUntilIdle()
+
+        // Emit room with owner on seat 0 (default seats)
+        emitRoomAsOwner()
+        advanceUntilIdle()
+
+        // Should join as broadcaster since already seated + has permission
+        coVerify { agoraVoiceService.joinChannel("channel-1", any(), asBroadcaster = true) }
+    }
+
+    @Test
+    fun `owner already seated without permission joins as audience then upgrades on permission grant`() = runTest {
+        viewModel = createViewModel()
+        // Emit room with owner on seat 0, but NO audio permission yet
+        emitRoomAsOwner()
+        advanceUntilIdle()
+
+        // Should join as audience (no permission yet)
+        coVerify { agoraVoiceService.joinChannel("channel-1", any(), asBroadcaster = false) }
+
+        // Grant permission — should call setRole(true) since isSeated was set in joinRoom()
+        viewModel.onAudioPermissionResult(true)
+        advanceUntilIdle()
+
+        verify { agoraVoiceService.setRole(true) }
+    }
+
+    @Test
+    fun `alreadyInRoom path sets isSeated and does not trigger redundant seat transition`() = runTest {
+        // Simulate ViewModel recreation: activeRoomManager reports already in room
+        every { activeRoomManager.isInRoom("room-1") } returns true
+
+        // Pre-set room with owner seated BEFORE creating VM
+        roomFlow.value = TestData.createTestRoom(
+            ownerId = currentUserId,
+            participantIds = listOf(currentUserId)
+        )
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        // Grant permission — since isSeated is set in alreadyInRoom path, this should call setRole
+        viewModel.onAudioPermissionResult(true)
+        advanceUntilIdle()
+
+        verify { agoraVoiceService.setRole(true) }
+    }
+
+    @Test
+    fun `alreadyInRoom path without seat does not set broadcaster`() = runTest {
+        every { activeRoomManager.isInRoom("room-1") } returns true
+
+        // Pre-set room with empty seats (user not seated)
+        val emptySeats = TestData.createDefaultSeats()
+        roomFlow.value = TestData.createTestRoom(
+            ownerId = currentUserId,
+            participantIds = listOf(currentUserId),
+            seats = emptySeats
+        )
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        // Grant permission — since NOT seated, should NOT call setRole
+        viewModel.onAudioPermissionResult(true)
+        advanceUntilIdle()
+
+        verify(exactly = 0) { agoraVoiceService.setRole(any()) }
     }
 }

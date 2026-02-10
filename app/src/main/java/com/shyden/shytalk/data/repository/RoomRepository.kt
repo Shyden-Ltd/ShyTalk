@@ -31,4 +31,5 @@ interface RoomRepository {
     suspend fun recordFirstJoinTimestamp(roomId: String, userId: String): Resource<Unit>
     suspend fun leaveAllRooms(userId: String, exceptRoomId: String? = null): Resource<Unit>
     suspend fun closeAllRoomsByOwner(ownerId: String): Resource<Unit>
+    suspend fun removeDisconnectedUser(roomId: String, userId: String): Resource<Unit>
 }

@@ -206,6 +206,18 @@ class RoomViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(
                 room = room, currentRole = role, isLoading = false, hasJoined = true
             )
+            // Track seat state so handleNormalUpdate detects transitions correctly
+            isSeated = room.seats.values.any {
+                it.userId == userId && it.state == SeatState.OCCUPIED
+            }
+            // Rejoin voice if not already connected (ViewModel recreated)
+            if (room.agoraChannelName.isNotEmpty()) {
+                val asBroadcaster = isSeated && _uiState.value.hasAudioPermission
+                viewModelScope.launch {
+                    val uid = userId.hashCode() and 0x7FFFFFFF
+                    agoraVoiceService.joinChannel(room.agoraChannelName, uid, asBroadcaster = asBroadcaster)
+                }
+            }
             activeRoomManager.updateTrackedRoom(room)
             loadSeatUsers(room)
             loadParticipantUsers(room)
@@ -248,11 +260,11 @@ class RoomViewModel @Inject constructor(
         if (currentlySeated && !isSeated) {
             Log.d(TAG, "User became seated, hasAudioPermission=${_uiState.value.hasAudioPermission}")
             if (_uiState.value.hasAudioPermission) {
-                joinVoiceChannel(room.agoraChannelName)
+                agoraVoiceService.setRole(true)
             }
         } else if (!currentlySeated && isSeated) {
-            Log.d(TAG, "User left seat, leaving voice channel")
-            agoraVoiceService.leaveChannel()
+            Log.d(TAG, "User left seat, switching to audience")
+            agoraVoiceService.setRole(false)
         }
         isSeated = currentlySeated
 
@@ -392,6 +404,14 @@ class RoomViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(isVoiceJoined = joined)
             }
         }
+        viewModelScope.launch {
+            agoraVoiceService.error.collect { errorMsg ->
+                if (errorMsg != null) {
+                    _uiState.value = _uiState.value.copy(error = errorMsg)
+                    agoraVoiceService.clearError()
+                }
+            }
+        }
     }
 
     private fun joinRoom() {
@@ -427,6 +447,18 @@ class RoomViewModel @Inject constructor(
             // Start foreground service via ActiveRoomManager
             activeRoomManager.trackRoom(roomId)
 
+            // Join voice channel — as broadcaster if already seated with permission, otherwise audience
+            val channel = room?.agoraChannelName
+            if (!channel.isNullOrEmpty()) {
+                val uid = userId.hashCode() and 0x7FFFFFFF
+                val alreadySeated = room.seats.values.any {
+                    it.userId == userId && it.state == SeatState.OCCUPIED
+                }
+                val asBroadcaster = alreadySeated && _uiState.value.hasAudioPermission
+                if (alreadySeated) isSeated = true
+                agoraVoiceService.joinChannel(channel, uid, asBroadcaster = asBroadcaster)
+            }
+
             if (userName.isNotEmpty()) {
                 messageRepository.sendJoinMessage(
                     roomId,
@@ -438,11 +470,11 @@ class RoomViewModel @Inject constructor(
         }
     }
 
-    private fun joinVoiceChannel(channelName: String) {
+    private fun joinVoiceChannelAsAudience(channelName: String) {
         viewModelScope.launch {
             val uid = _uiState.value.currentUserId.hashCode() and 0x7FFFFFFF
-            Log.d(TAG, "joinVoiceChannel channel=$channelName uid=$uid")
-            agoraVoiceService.joinChannel(channelName, uid)
+            Log.d(TAG, "joinVoiceChannelAsAudience channel=$channelName uid=$uid")
+            agoraVoiceService.joinChannel(channelName, uid, asBroadcaster = false)
         }
     }
 
@@ -901,8 +933,7 @@ class RoomViewModel @Inject constructor(
         Log.d(TAG, "onAudioPermissionResult granted=$granted isSeated=$isSeated")
         _uiState.value = _uiState.value.copy(hasAudioPermission = granted)
         if (granted && isSeated) {
-            val channelName = _uiState.value.room?.agoraChannelName ?: return
-            joinVoiceChannel(channelName)
+            agoraVoiceService.setRole(true)
         }
     }
 

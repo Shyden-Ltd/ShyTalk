@@ -379,6 +379,44 @@ class RoomRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun removeDisconnectedUser(roomId: String, userId: String): Resource<Unit> {
+        return try {
+            val docRef = roomsCollection.document(roomId)
+            firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(docRef)
+                val room = snapshot.data?.let { ChatRoom.fromMap(it, snapshot.id) }
+                    ?: throw Exception("Room not found")
+
+                if (userId !in room.participantIds) return@runTransaction
+
+                val updates = mutableMapOf<String, Any>()
+
+                // Clear seats occupied by this user
+                for ((idx, seat) in room.seats) {
+                    if (seat.userId == userId && seat.state == SeatState.OCCUPIED) {
+                        updates["seats.$idx"] = Seat().toMap()
+                    }
+                }
+
+                if (room.ownerId == userId) {
+                    // Owner disconnected: set OWNER_AWAY
+                    updates["state"] = RoomState.OWNER_AWAY.name
+                    updates["ownerLeftAt"] = Timestamp.now()
+                } else {
+                    // Non-owner: remove from participants
+                    updates["participantIds"] = FieldValue.arrayRemove(userId)
+                }
+
+                if (updates.isNotEmpty()) {
+                    transaction.update(docRef, updates)
+                }
+            }.await()
+            Resource.Success(Unit)
+        } catch (e: Exception) {
+            Resource.Error(e.message ?: "Failed to remove disconnected user", e)
+        }
+    }
+
     override suspend fun closeRoom(roomId: String): Resource<Unit> {
         return try {
             val emptySeats = (0 until Constants.MAX_SEATS).associate { i ->

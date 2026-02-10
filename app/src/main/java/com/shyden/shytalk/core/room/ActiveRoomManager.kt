@@ -1,6 +1,7 @@
 package com.shyden.shytalk.core.room
 
 import android.content.Context
+import android.util.Log
 import com.shyden.shytalk.core.model.ChatRoom
 import com.shyden.shytalk.core.model.Message
 import com.shyden.shytalk.core.model.RoomRole
@@ -9,6 +10,7 @@ import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.remote.AgoraVoiceService
+import com.shyden.shytalk.data.remote.PresenceService
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.MessageRepository
 import com.shyden.shytalk.data.repository.RoomRepository
@@ -36,6 +38,7 @@ class ActiveRoomManager @Inject constructor(
     private val userRepository: UserRepository,
     private val seatRequestRepository: SeatRequestRepository,
     val agoraVoiceService: AgoraVoiceService,
+    private val presenceService: PresenceService,
     @param:ApplicationContext private val context: Context
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -62,6 +65,7 @@ class ActiveRoomManager @Inject constructor(
     private var messageObserverJob: Job? = null
     private var ownerAwayCountdownJob: Job? = null
     private var connectionMonitorJob: Job? = null
+    private var presenceMonitorJob: Job? = null
     private var isSeated = false
 
     var currentUserName: String = ""
@@ -78,6 +82,8 @@ class ActiveRoomManager @Inject constructor(
         _activeRoomId.value = roomId
         _roomClosed.value = false
         RoomService.start(context, roomId)
+        startConnectionMonitor()
+        startPresenceMonitor()
     }
 
     /** Called by RoomViewModel on each room update. Keeps notification current. */
@@ -121,6 +127,8 @@ class ActiveRoomManager @Inject constructor(
         val roomId = _activeRoomId.value ?: return
         val room = _activeRoom.value ?: return
         val userId = currentUserId
+
+        presenceService.removePresence()
 
         // Vacate seats
         room.seats.forEach { (index, seat) ->
@@ -167,6 +175,7 @@ class ActiveRoomManager @Inject constructor(
         messageObserverJob?.cancel()
         ownerAwayCountdownJob?.cancel()
         connectionMonitorJob?.cancel()
+        presenceMonitorJob?.cancel()
         isSeated = false
         _activeRoomId.value = null
         _activeRoom.value = null
@@ -209,15 +218,14 @@ class ActiveRoomManager @Inject constructor(
                         return@collect
                     }
 
-                    // Agora join/leave based on seat status
+                    // Switch Agora role based on seat status
                     val currentlySeated = room.seats.values.any {
                         it.userId == userId && it.state == SeatState.OCCUPIED
                     }
                     if (currentlySeated && !isSeated) {
-                        val uid = userId.hashCode() and 0x7FFFFFFF
-                        agoraVoiceService.joinChannel(room.agoraChannelName, uid)
+                        agoraVoiceService.setRole(true)
                     } else if (!currentlySeated && isSeated) {
-                        agoraVoiceService.leaveChannel()
+                        agoraVoiceService.setRole(false)
                     }
                     isSeated = currentlySeated
 
@@ -246,29 +254,77 @@ class ActiveRoomManager @Inject constructor(
         connectionMonitorJob?.cancel()
         connectionMonitorJob = scope.launch {
             var graceJob: Job? = null
+            var wasEverConnected = false
+
             agoraVoiceService.connectionState.collect { state ->
                 val room = _activeRoom.value ?: return@collect
-                if (room.ownerId != currentUserId) return@collect
+                val userId = currentUserId
+
+                // Only monitor when user is seated (has an Agora connection)
+                val currentlySeated = room.seats.values.any {
+                    it.userId == userId && it.state == SeatState.OCCUPIED
+                }
+                if (!currentlySeated) {
+                    graceJob?.cancel()
+                    wasEverConnected = false
+                    return@collect
+                }
 
                 when (state) {
+                    AgoraVoiceService.ConnectionState.CONNECTED -> {
+                        wasEverConnected = true
+                        graceJob?.cancel()
+                    }
                     AgoraVoiceService.ConnectionState.DISCONNECTED -> {
+                        if (!wasEverConnected) return@collect
+
                         graceJob?.cancel()
                         graceJob = scope.launch {
                             delay(Constants.AGORA_DISCONNECT_GRACE_PERIOD_MS)
-                            // Still disconnected after grace period — set owner away
                             if (_activeRoomId.value != null) {
                                 leaveRoom()
                             }
                         }
                     }
-                    AgoraVoiceService.ConnectionState.CONNECTED -> {
-                        graceJob?.cancel()
-                    }
                     AgoraVoiceService.ConnectionState.RECONNECTING -> {
-                        // Wait — don't act yet
+                        // Wait — Agora is trying to reconnect
                     }
                 }
             }
+        }
+    }
+
+    private fun startPresenceMonitor() {
+        val roomId = _activeRoomId.value ?: return
+        presenceMonitorJob?.cancel()
+        presenceMonitorJob = scope.launch {
+            val graceTimers = mutableMapOf<String, Job>()
+
+            presenceService.observeRoomPresence(roomId)
+                .catch { e -> Log.w("ActiveRoomManager", "Presence monitor error", e) }
+                .collect { presentUserIds ->
+                    val room = _activeRoom.value ?: return@collect
+                    val participantIds = room.participantIds.toSet()
+
+                    // Users in room but not present in RTDB
+                    val absentUsers = participantIds - presentUserIds - currentUserId
+
+                    // Cancel timers for users who reappeared
+                    val reappeared = graceTimers.keys - absentUsers
+                    for (userId in reappeared) {
+                        graceTimers.remove(userId)?.cancel()
+                    }
+
+                    // Start grace timers for newly absent users
+                    for (userId in absentUsers) {
+                        if (userId in graceTimers) continue
+                        graceTimers[userId] = scope.launch {
+                            delay(Constants.PRESENCE_TIMEOUT_MS)
+                            roomRepository.removeDisconnectedUser(roomId, userId)
+                            graceTimers.remove(userId)
+                        }
+                    }
+                }
         }
     }
 

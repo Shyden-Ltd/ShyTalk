@@ -32,7 +32,7 @@ object PipHelper {
         )
 
         return PictureInPictureParams.Builder()
-            .setAspectRatio(Rational(3, 4))
+            .setAspectRatio(Rational(1, 1))
             .setActions(listOf(leaveAction))
             .build()
     }
