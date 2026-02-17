@@ -230,6 +230,51 @@ class UserRepositoryImpl(
             ).await()
         }
 
+    override suspend fun submitSuspensionAppeal(userId: String, appealText: String): Resource<Unit> =
+        firebaseCall("Failed to submit appeal") {
+            val userDoc = usersCollection.document(userId).get().await()
+            val userData = userDoc.data ?: throw Exception("User not found")
+            val user = User.fromMap(userData, userId)
+
+            val appealData = hashMapOf(
+                "userId" to userId,
+                "userUniqueId" to user.uniqueId,
+                "userDisplayName" to user.displayName,
+                "appealText" to appealText,
+                "submittedAt" to Timestamp.now(),
+                "status" to "pending",
+                "reviewedBy" to null,
+                "reviewedAt" to null,
+                "adminNote" to null
+            )
+
+            val batch = firestore.batch()
+            batch.set(firestore.collection("suspensionAppeals").document(), appealData)
+            batch.update(usersCollection.document(userId), mapOf(
+                "suspensionCanAppeal" to false,
+                "suspensionAppealStatus" to "pending"
+            ))
+            batch.commit().await()
+        }
+
+    override suspend fun liftExpiredSuspension(userId: String): Resource<Unit> =
+        firebaseCall("Failed to lift expired suspension") {
+            val doc = usersCollection.document(userId).get().await()
+            val data = doc.data ?: throw Exception("User not found")
+            val updates = mutableMapOf<String, Any?>("isSuspended" to false)
+
+            @Suppress("UNCHECKED_CAST")
+            val preSuspension = data["_preSuspension"] as? Map<String, Any?>
+            if (preSuspension != null) {
+                updates["displayName"] = preSuspension["displayName"] ?: data["displayName"]
+                updates["profilePhotoUrl"] = preSuspension["profilePhotoUrl"]
+                updates["coverPhotoUrl"] = preSuspension["coverPhotoUrl"]
+                updates["_preSuspension"] = FieldValue.delete()
+            }
+
+            usersCollection.document(userId).update(updates).await()
+        }
+
     override fun observeUsers(userIds: Set<String>): Flow<User> {
         if (userIds.isEmpty()) return emptyFlow()
         return userIds.map { userId ->

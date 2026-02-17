@@ -35,6 +35,31 @@ fun formatRelativeTime(timestampMs: Long): String {
     }
 }
 
+fun formatSuspensionEnd(endDateMillis: Long): String {
+    val remaining = endDateMillis - currentTimeMillis()
+    if (remaining <= 0) return "Expired"
+    val totalMinutes = remaining / 60_000
+    val days = totalMinutes / 1440
+    val hours = (totalMinutes % 1440) / 60
+    val minutes = totalMinutes % 60
+    val parts = mutableListOf<String>()
+    if (days > 0) parts.add("$days day${if (days != 1L) "s" else ""}")
+    if (hours > 0) parts.add("$hours hour${if (hours != 1L) "s" else ""}")
+    if (minutes > 0) parts.add("$minutes minute${if (minutes != 1L) "s" else ""}")
+    return parts.joinToString(", ").ifEmpty { "Less than 1 minute" }
+}
+
+fun formatSuspensionEndDateTime(endDateMillis: Long): String {
+    val tz = TimeZone.currentSystemDefault()
+    val dt = Instant.fromEpochMilliseconds(endDateMillis).toLocalDateTime(tz)
+    val month = dt.month.name.lowercase().replaceFirstChar { it.uppercase() }.take(3)
+    val day = dt.dayOfMonth
+    val year = dt.year
+    val hour = dt.hour.toString().padStart(2, '0')
+    val minute = dt.minute.toString().padStart(2, '0')
+    return "$month $day, $year at $hour:$minute"
+}
+
 fun formatDateForDisplay(millis: Long): String {
     val tz = TimeZone.currentSystemDefault()
     val date = Instant.fromEpochMilliseconds(millis).toLocalDateTime(tz).date

@@ -28,8 +28,22 @@ data class User(
     val lastSeenAt: Long = currentTimeMillis(),
     val stalkerCount: Long = 0,
     val newStalkerCount: Long = 0,
-    val stalkersLastViewedAt: Long = 0
+    val stalkersLastViewedAt: Long = 0,
+    val isSuspended: Boolean = false,
+    val suspensionReason: String? = null,
+    val suspensionStartDate: Long? = null,
+    val suspensionEndDate: Long? = null,
+    val suspensionCanAppeal: Boolean = false,
+    val suspendedBy: String? = null,
+    val suspensionAppealStatus: String? = null
 ) {
+    val isActivelySuspended: Boolean
+        get() {
+            if (!isSuspended) return false
+            val endDate = suspensionEndDate ?: return true // permanent
+            return currentTimeMillis() < endDate
+        }
+
     /** Resolved photo URL: prefers profilePhotoUrl, falls back to avatarUrl. */
     val photoUrl: String? get() = profilePhotoUrl ?: avatarUrl
 
@@ -57,7 +71,14 @@ data class User(
         "lastSeenAt" to millisToTimestamp(lastSeenAt),
         "stalkerCount" to stalkerCount,
         "newStalkerCount" to newStalkerCount,
-        "stalkersLastViewedAt" to millisToTimestamp(stalkersLastViewedAt)
+        "stalkersLastViewedAt" to millisToTimestamp(stalkersLastViewedAt),
+        "isSuspended" to isSuspended,
+        "suspensionReason" to suspensionReason,
+        "suspensionStartDate" to suspensionStartDate?.let { millisToTimestamp(it) },
+        "suspensionEndDate" to suspensionEndDate?.let { millisToTimestamp(it) },
+        "suspensionCanAppeal" to suspensionCanAppeal,
+        "suspendedBy" to suspendedBy,
+        "suspensionAppealStatus" to suspensionAppealStatus
     )
 
     companion object {
@@ -90,7 +111,14 @@ data class User(
             lastSeenAt = timestampToMillis(map["lastSeenAt"]),
             stalkerCount = (map["stalkerCount"] as? Long) ?: 0,
             newStalkerCount = (map["newStalkerCount"] as? Long) ?: 0,
-            stalkersLastViewedAt = map["stalkersLastViewedAt"]?.let { timestampToMillis(it) } ?: 0
+            stalkersLastViewedAt = map["stalkersLastViewedAt"]?.let { timestampToMillis(it) } ?: 0,
+            isSuspended = map["isSuspended"] as? Boolean ?: false,
+            suspensionReason = map["suspensionReason"] as? String,
+            suspensionStartDate = map["suspensionStartDate"]?.let { timestampToMillis(it) },
+            suspensionEndDate = map["suspensionEndDate"]?.let { timestampToMillis(it) },
+            suspensionCanAppeal = map["suspensionCanAppeal"] as? Boolean ?: false,
+            suspendedBy = map["suspendedBy"] as? String,
+            suspensionAppealStatus = map["suspensionAppealStatus"] as? String
         )
     }
 }

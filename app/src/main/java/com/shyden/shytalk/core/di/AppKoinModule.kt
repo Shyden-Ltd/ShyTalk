@@ -78,7 +78,7 @@ val appModule = module {
     // ViewModels
     viewModel { AuthViewModel(get(), get(), get(), get(named("deviceId"))) }
     viewModel { HomeViewModel(get(), get(), get()) }
-    viewModel { ProfileViewModel(get(), get(), get()) }
+    viewModel { ProfileViewModel(get(), get(), get(), get()) }
     viewModel { RequiredDOBViewModel(get(), get()) }
     viewModel { params -> FollowListViewModel(params[0], params[1], get(), get()) }
     viewModel { params -> RoomViewModel(params[0], get(), get(), get(), get(), get(), get(), get(), get()) }

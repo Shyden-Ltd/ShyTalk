@@ -323,4 +323,106 @@ class AuthViewModelTest {
         assertTrue(vm.uiState.value.hasProfile)
         assertFalse(vm.uiState.value.hasDOB)
     }
+
+    // ===== Suspension =====
+
+    @Test
+    fun `init - suspended user sets isSuspended true and isAuthenticated false`() = runTest {
+        every { authRepository.isAuthenticated } returns true
+        every { authRepository.currentUserId } returns userId
+        coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(userId)
+        coEvery { userRepository.userExists(userId) } returns Resource.Success(true)
+        coEvery { userRepository.getUser(userId) } returns Resource.Success(
+            TestData.createTestUser(
+                uid = userId,
+                dateOfBirth = testDob,
+                isSuspended = true,
+                suspensionReason = "Spam",
+                suspensionEndDate = System.currentTimeMillis() + 86_400_000L,
+                suspensionCanAppeal = true
+            )
+        )
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.isSuspended)
+        assertFalse(vm.uiState.value.isAuthenticated)
+        assertEquals("Spam", vm.uiState.value.suspensionReason)
+        assertTrue(vm.uiState.value.suspensionCanAppeal)
+    }
+
+    @Test
+    fun `init - expired suspension passes through normally`() = runTest {
+        every { authRepository.isAuthenticated } returns true
+        every { authRepository.currentUserId } returns userId
+        coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(userId)
+        coEvery { userRepository.userExists(userId) } returns Resource.Success(true)
+        coEvery { userRepository.getUser(userId) } returns Resource.Success(
+            TestData.createTestUser(
+                uid = userId,
+                dateOfBirth = testDob,
+                isSuspended = true,
+                suspensionEndDate = System.currentTimeMillis() - 86_400_000L
+            )
+        )
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.isSuspended)
+        assertTrue(vm.uiState.value.isAuthenticated)
+    }
+
+    @Test
+    fun `init - permanent suspension blocks indefinitely`() = runTest {
+        every { authRepository.isAuthenticated } returns true
+        every { authRepository.currentUserId } returns userId
+        coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(userId)
+        coEvery { userRepository.userExists(userId) } returns Resource.Success(true)
+        coEvery { userRepository.getUser(userId) } returns Resource.Success(
+            TestData.createTestUser(
+                uid = userId,
+                dateOfBirth = testDob,
+                isSuspended = true,
+                suspensionEndDate = null,
+                suspensionCanAppeal = false
+            )
+        )
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.isSuspended)
+        assertFalse(vm.uiState.value.isAuthenticated)
+        assertNull(vm.uiState.value.suspensionEndDate)
+        assertFalse(vm.uiState.value.suspensionCanAppeal)
+    }
+
+    @Test
+    fun `submitAppeal - success sets canAppeal to false`() = runTest {
+        every { authRepository.isAuthenticated } returns true
+        every { authRepository.currentUserId } returns userId
+        coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(userId)
+        coEvery { userRepository.userExists(userId) } returns Resource.Success(true)
+        coEvery { userRepository.getUser(userId) } returns Resource.Success(
+            TestData.createTestUser(
+                uid = userId,
+                isSuspended = true,
+                suspensionEndDate = System.currentTimeMillis() + 86_400_000L,
+                suspensionCanAppeal = true
+            )
+        )
+        coEvery { userRepository.submitSuspensionAppeal(userId, any()) } returns Resource.Success(Unit)
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.suspensionCanAppeal)
+
+        vm.submitAppeal("Please unsuspend me")
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.suspensionCanAppeal)
+        assertEquals("pending", vm.uiState.value.suspensionAppealStatus)
+    }
 }

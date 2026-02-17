@@ -1,8 +1,10 @@
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onValueDeleted } = require("firebase-functions/v2/database");
+const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { defineSecret } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
-const { getFirestore } = require("firebase-admin/firestore");
+const { getAuth } = require("firebase-admin/auth");
+const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getDatabase } = require("firebase-admin/database");
 const { AccessToken } = require("livekit-server-sdk");
 
@@ -180,6 +182,114 @@ exports.onPresenceRemoved = onValueDeleted(
       });
     } catch (error) {
       console.error(`Error cleaning up presence for room=${roomId} user=${userId}:`, error);
+    }
+  }
+);
+
+// --- Suspension enforcement trigger ---
+exports.onUserSuspended = onDocumentUpdated(
+  { document: "users/{userId}", region: "asia-southeast1" },
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    const userId = event.params.userId;
+
+    // Only act when isSuspended transitions false → true
+    if (before.isSuspended === true || after.isSuspended !== true) return;
+
+    console.log(`User ${userId} suspended — enforcing`);
+
+    // 1. Revoke Firebase Auth refresh tokens (forces sign-out on all devices)
+    try {
+      await getAuth().revokeRefreshTokens(userId);
+      console.log(`Revoked tokens for ${userId}`);
+    } catch (err) {
+      console.error(`Failed to revoke tokens for ${userId}:`, err);
+    }
+
+    const db = getFirestore();
+
+    // 2. Evict from rooms
+    try {
+      const roomsSnapshot = await db.collection("rooms")
+        .where("participantIds", "array-contains", userId)
+        .where("state", "in", ["ACTIVE", "OWNER_AWAY"])
+        .get();
+
+      for (const roomDoc of roomsSnapshot.docs) {
+        const room = roomDoc.data();
+        const roomRef = roomDoc.ref;
+        const isOwner = room.ownerId === userId;
+
+        if (isOwner) {
+          // Close the room entirely
+          const updates = {
+            state: "CLOSED",
+            closedAt: FieldValue.serverTimestamp(),
+            participantIds: [],
+          };
+          for (let i = 0; i < MAX_SEATS; i++) {
+            updates[`seats.${i}`] = { userId: null, state: "EMPTY", isMuted: false };
+          }
+          await roomRef.update(updates);
+          console.log(`Closed room ${roomDoc.id} (owner suspended)`);
+        } else {
+          // Remove non-owner from room
+          const updates = {
+            participantIds: FieldValue.arrayRemove(userId),
+          };
+          const seats = room.seats || {};
+          for (let i = 0; i < MAX_SEATS; i++) {
+            const seat = seats[i.toString()];
+            if (seat && seat.userId === userId) {
+              updates[`seats.${i}`] = { userId: null, state: "EMPTY", isMuted: false };
+            }
+          }
+          await roomRef.update(updates);
+          console.log(`Removed ${userId} from room ${roomDoc.id}`);
+        }
+      }
+    } catch (err) {
+      console.error(`Failed to evict ${userId} from rooms:`, err);
+    }
+
+    // 3. Clear currentRoomId on user doc
+    try {
+      if (after.currentRoomId) {
+        await db.collection("users").doc(userId).update({ currentRoomId: null });
+      }
+    } catch (err) {
+      console.error(`Failed to clear currentRoomId for ${userId}:`, err);
+    }
+
+    // 4. Remove RTDB presence entries
+    try {
+      const rtdb = getDatabase();
+      const presenceSnap = await rtdb.ref("presence").get();
+      if (presenceSnap.exists()) {
+        const rooms = presenceSnap.val();
+        for (const roomId of Object.keys(rooms)) {
+          if (rooms[roomId] && rooms[roomId][userId]) {
+            await rtdb.ref(`presence/${roomId}/${userId}`).remove();
+            console.log(`Removed presence for ${userId} in room ${roomId}`);
+          }
+        }
+      }
+    } catch (err) {
+      console.error(`Failed to remove presence for ${userId}:`, err);
+    }
+
+    // 5. Mask profile (displayName → "Suspended Account", clear photos)
+    // _preSuspension snapshot is already stored by the suspend endpoint
+    try {
+      await db.collection("users").doc(userId).update({
+        displayName: "Suspended Account",
+        profilePhotoUrl: null,
+        coverPhotoUrl: null,
+      });
+      console.log(`Masked profile for ${userId}`);
+    } catch (err) {
+      console.error(`Failed to mask profile for ${userId}:`, err);
     }
   }
 );

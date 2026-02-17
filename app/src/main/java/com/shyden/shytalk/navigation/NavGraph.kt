@@ -11,9 +11,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
@@ -22,7 +24,9 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.google.firebase.firestore.FirebaseFirestore
 import com.shyden.shytalk.core.room.ActiveRoomManager
+import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.feature.auth.GoogleSignInScreen
 import com.shyden.shytalk.feature.home.LunarNewYearScreen
 import com.shyden.shytalk.feature.main.MainScreen
@@ -42,6 +46,39 @@ fun NavGraph(
     onSignOut: () -> Unit
 ) {
     val activeRoomManager: ActiveRoomManager = koinInject()
+    val authRepository: AuthRepository = koinInject()
+    var currentUserId by remember { mutableStateOf(authRepository.currentUserId) }
+
+    // Re-sync after navigation (e.g., fresh sign-in updates currentUserId from null)
+    LaunchedEffect(Unit) {
+        navController.currentBackStackEntryFlow.collect {
+            currentUserId = authRepository.currentUserId
+        }
+    }
+
+    // Real-time suspension listener: force sign-out when user is actively suspended
+    val uid = currentUserId
+    if (uid != null) {
+        DisposableEffect(uid) {
+            val listener = FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(uid)
+                .addSnapshotListener { snapshot, _ ->
+                    if (snapshot?.getBoolean("isSuspended") == true) {
+                        val endTimestamp = snapshot.getTimestamp("suspensionEndDate")
+                        val isActive = endTimestamp == null ||
+                            endTimestamp.toDate().time > System.currentTimeMillis()
+                        if (isActive) {
+                            onSignOut()
+                            navController.navigate(Screen.SignIn.route) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        }
+                    }
+                }
+            onDispose { listener.remove() }
+        }
+    }
 
     fun navigateToRoom(roomId: String) {
         val currentRoomId = activeRoomManager.activeRoomId.value

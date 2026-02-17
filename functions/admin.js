@@ -50,6 +50,12 @@ const FIELD_SCHEMA = {
   dateOfBirth:      { type: "timestamp", nullable: true },
   createdAt:        { type: "timestamp", nullable: false },
   lastSeenAt:       { type: "timestamp", nullable: false },
+  isSuspended:           { type: "boolean" },
+  suspensionReason:      { type: "string", nullable: true },
+  suspensionStartDate:   { type: "timestamp", nullable: true },
+  suspensionEndDate:     { type: "timestamp", nullable: true },
+  suspensionCanAppeal:   { type: "boolean" },
+  suspendedBy:           { type: "string", nullable: true },
 };
 
 function validateAndConvert(field, value) {
@@ -268,6 +274,179 @@ app.patch("/api/user/:uid", async (req, res) => {
     return res.json({ success: true, updatedFields: Object.keys(firestoreUpdates) });
   } catch (err) {
     console.error("PATCH /api/user error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// --- POST /api/user/:uid/suspend ---
+app.post("/api/user/:uid/suspend", async (req, res) => {
+  try {
+    const { reason, endDate, canAppeal } = req.body;
+
+    if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
+      return res.status(400).json({ error: "reason is required" });
+    }
+    if (typeof canAppeal !== "boolean") {
+      return res.status(400).json({ error: "canAppeal must be a boolean" });
+    }
+
+    let endTimestamp = null;
+    if (endDate !== null && endDate !== undefined) {
+      const d = new Date(endDate);
+      if (isNaN(d.getTime())) {
+        return res.status(400).json({ error: "endDate must be a valid ISO-8601 date or null" });
+      }
+      if (d.getTime() <= Date.now()) {
+        return res.status(400).json({ error: "endDate must be in the future" });
+      }
+      endTimestamp = Timestamp.fromDate(d);
+    }
+
+    const docRef = getFirestore().collection("users").doc(req.params.uid);
+    const doc = await docRef.get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const userData = doc.data();
+    const preSuspension = {
+      displayName: userData.displayName || "",
+      profilePhotoUrl: userData.profilePhotoUrl || null,
+      coverPhotoUrl: userData.coverPhotoUrl || null,
+    };
+
+    await docRef.update({
+      isSuspended: true,
+      suspensionReason: reason.trim(),
+      suspensionStartDate: Timestamp.now(),
+      suspensionEndDate: endTimestamp,
+      suspensionCanAppeal: canAppeal,
+      suspendedBy: req.admin.uid,
+      _preSuspension: preSuspension,
+    });
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("POST /api/user/:uid/suspend error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// --- POST /api/user/:uid/unsuspend ---
+app.post("/api/user/:uid/unsuspend", async (req, res) => {
+  try {
+    const docRef = getFirestore().collection("users").doc(req.params.uid);
+    const doc = await docRef.get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const userData = doc.data();
+    const updates = { isSuspended: false };
+
+    // Restore pre-suspension profile data if available
+    if (userData._preSuspension) {
+      updates.displayName = userData._preSuspension.displayName || userData.displayName;
+      updates.profilePhotoUrl = userData._preSuspension.profilePhotoUrl || null;
+      updates.coverPhotoUrl = userData._preSuspension.coverPhotoUrl || null;
+      updates._preSuspension = FieldValue.delete();
+    }
+
+    await docRef.update(updates);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("POST /api/user/:uid/unsuspend error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// --- GET /api/appeals ---
+app.get("/api/appeals", async (req, res) => {
+  try {
+    const status = req.query.status || "pending";
+    if (!["pending", "approved", "rejected"].includes(status)) {
+      return res.status(400).json({ error: "status must be pending, approved, or rejected" });
+    }
+
+    // Single-field query avoids composite index requirement
+    const snapshot = await getFirestore().collection("suspensionAppeals")
+      .where("status", "==", status)
+      .limit(50)
+      .get();
+
+    const appeals = snapshot.docs.map((doc) => {
+      const data = doc.data();
+      for (const [key, val] of Object.entries(data)) {
+        if (val && typeof val.toDate === "function") {
+          data[key] = val.toDate().toISOString();
+        }
+      }
+      return { id: doc.id, ...data };
+    });
+
+    // Sort by submittedAt desc in memory
+    appeals.sort((a, b) => {
+      const ta = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+      const tb = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+      return tb - ta;
+    });
+
+    return res.json({ appeals });
+  } catch (err) {
+    console.error("GET /api/appeals error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// --- PATCH /api/appeals/:id ---
+app.patch("/api/appeals/:id", async (req, res) => {
+  try {
+    const { status, adminNote } = req.body;
+    if (!["approved", "rejected"].includes(status)) {
+      return res.status(400).json({ error: "status must be approved or rejected" });
+    }
+
+    const db = getFirestore();
+    const appealRef = db.collection("suspensionAppeals").doc(req.params.id);
+    const appealDoc = await appealRef.get();
+    if (!appealDoc.exists) {
+      return res.status(404).json({ error: "Appeal not found" });
+    }
+
+    const appealData = appealDoc.data();
+    const appealUpdates = {
+      status,
+      reviewedBy: req.admin.uid,
+      reviewedAt: Timestamp.now(),
+    };
+    if (adminNote !== undefined) {
+      appealUpdates.adminNote = adminNote;
+    }
+
+    await appealRef.update(appealUpdates);
+
+    // Update user doc based on appeal outcome
+    const userRef = db.collection("users").doc(appealData.userId);
+    if (status === "approved") {
+      const userDoc = await userRef.get();
+      if (userDoc.exists) {
+        const userData = userDoc.data();
+        const userUpdates = { isSuspended: false, suspensionAppealStatus: "approved" };
+        if (userData._preSuspension) {
+          userUpdates.displayName = userData._preSuspension.displayName || userData.displayName;
+          userUpdates.profilePhotoUrl = userData._preSuspension.profilePhotoUrl || null;
+          userUpdates.coverPhotoUrl = userData._preSuspension.coverPhotoUrl || null;
+          userUpdates._preSuspension = FieldValue.delete();
+        }
+        await userRef.update(userUpdates);
+      }
+    } else {
+      await userRef.update({ suspensionAppealStatus: "rejected" });
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("PATCH /api/appeals/:id error:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });

@@ -18,7 +18,12 @@ data class AuthUiState(
     val isAuthenticated: Boolean = false,
     val hasProfile: Boolean = false,
     val hasDOB: Boolean = false,
-    val isDeviceLocked: Boolean = false
+    val isDeviceLocked: Boolean = false,
+    val isSuspended: Boolean = false,
+    val suspensionReason: String? = null,
+    val suspensionEndDate: Long? = null,
+    val suspensionCanAppeal: Boolean = false,
+    val suspensionAppealStatus: String? = null
 )
 
 class AuthViewModel(
@@ -122,19 +127,56 @@ class AuthViewModel(
         when (val result = userRepository.userExists(userId)) {
             is Resource.Success -> {
                 val hasProfile = result.data
-                val hasDOB = if (hasProfile) {
+                if (hasProfile) {
                     when (val userResult = userRepository.getUser(userId)) {
-                        is Resource.Success -> userResult.data.dateOfBirth != null
-                        else -> false
+                        is Resource.Success -> {
+                            val user = userResult.data
+                            if (user.isActivelySuspended) {
+                                _uiState.update {
+                                    it.copy(
+                                        isLoading = false,
+                                        isSuspended = true,
+                                        suspensionReason = user.suspensionReason,
+                                        suspensionEndDate = user.suspensionEndDate,
+                                        suspensionCanAppeal = user.suspensionCanAppeal,
+                                        suspensionAppealStatus = user.suspensionAppealStatus
+                                    )
+                                }
+                                return
+                            }
+                            // Suspension expired — clear the flag in Firestore
+                            if (user.isSuspended) {
+                                userRepository.liftExpiredSuspension(userId)
+                            }
+                            _uiState.update {
+                                it.copy(
+                                    isLoading = false,
+                                    isAuthenticated = true,
+                                    hasProfile = true,
+                                    hasDOB = user.dateOfBirth != null
+                                )
+                            }
+                        }
+                        else -> {
+                            _uiState.update {
+                                it.copy(
+                                    isLoading = false,
+                                    isAuthenticated = true,
+                                    hasProfile = true,
+                                    hasDOB = false
+                                )
+                            }
+                        }
                     }
-                } else false
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        isAuthenticated = true,
-                        hasProfile = hasProfile,
-                        hasDOB = hasDOB
-                    )
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            isAuthenticated = true,
+                            hasProfile = false,
+                            hasDOB = false
+                        )
+                    }
                 }
             }
             is Resource.Error -> {
@@ -143,6 +185,22 @@ class AuthViewModel(
                 }
             }
             is Resource.Loading -> {}
+        }
+    }
+
+    fun submitAppeal(appealText: String) {
+        val userId = authRepository.currentUserId ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            when (userRepository.submitSuspensionAppeal(userId, appealText)) {
+                is Resource.Success -> {
+                    _uiState.update { it.copy(isLoading = false, suspensionCanAppeal = false, suspensionAppealStatus = "pending") }
+                }
+                is Resource.Error -> {
+                    _uiState.update { it.copy(isLoading = false, error = "Failed to submit appeal") }
+                }
+                is Resource.Loading -> {}
+            }
         }
     }
 

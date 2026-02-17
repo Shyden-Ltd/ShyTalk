@@ -27,4 +27,6 @@ interface UserRepository {
     suspend fun getStalkers(profileUserId: String): Resource<List<ProfileVisitor>>
     suspend fun markStalkersViewed(userId: String): Resource<Unit>
     fun observeUsers(userIds: Set<String>): Flow<User>
+    suspend fun submitSuspensionAppeal(userId: String, appealText: String): Resource<Unit>
+    suspend fun liftExpiredSuspension(userId: String): Resource<Unit>
 }

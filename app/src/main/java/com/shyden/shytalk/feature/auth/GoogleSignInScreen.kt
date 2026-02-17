@@ -35,6 +35,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.shyden.shytalk.feature.suspension.SuspensionScreen
 import com.shyden.shytalk.ui.components.CnyRoomBackground
 import com.shyden.shytalk.ui.theme.CnyGold
 import kotlinx.coroutines.launch
@@ -55,10 +56,23 @@ fun GoogleSignInScreen(
     val scope = rememberCoroutineScope()
     val credentialManager = remember { CredentialManager.create(context) }
 
-    LaunchedEffect(uiState.isAuthenticated) {
-        if (uiState.isAuthenticated) {
+    LaunchedEffect(uiState.isAuthenticated, uiState.isSuspended) {
+        if (uiState.isAuthenticated && !uiState.isSuspended) {
             onAuthSuccess(uiState.hasProfile, uiState.hasDOB)
         }
+    }
+
+    if (uiState.isSuspended) {
+        SuspensionScreen(
+            reason = uiState.suspensionReason,
+            endDate = uiState.suspensionEndDate,
+            canAppeal = uiState.suspensionCanAppeal,
+            appealStatus = uiState.suspensionAppealStatus,
+            onSubmitAppeal = { viewModel.submitAppeal(it) },
+            onSignOut = { viewModel.signOut() },
+            isLoading = uiState.isLoading
+        )
+        return
     }
 
     if (uiState.isDeviceLocked) {

@@ -1,9 +1,13 @@
 package com.shyden.shytalk.feature.profile
 
+import com.shyden.shytalk.core.model.ChatRoom
+import com.shyden.shytalk.core.model.RoomState
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.AuthRepository
+import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.StorageRepository
 import com.shyden.shytalk.data.repository.UserRepository
+import kotlinx.coroutines.flow.flowOf
 import com.shyden.shytalk.testutil.MainDispatcherRule
 import com.shyden.shytalk.testutil.TestData
 import io.mockk.coEvery
@@ -32,6 +36,7 @@ class ProfileViewModelTest {
     private val authRepository = mockk<AuthRepository>(relaxed = true)
     private val userRepository = mockk<UserRepository>(relaxed = true)
     private val storageRepository = mockk<StorageRepository>(relaxed = true)
+    private val roomRepository = mockk<RoomRepository>(relaxed = true)
 
     private val currentUserId = "current-user"
     private val otherUserId = "other-user"
@@ -47,7 +52,8 @@ class ProfileViewModelTest {
         return ProfileViewModel(
             authRepository = authRepository,
             userRepository = userRepository,
-            storageRepository = storageRepository
+            storageRepository = storageRepository,
+            roomRepository = roomRepository
         )
     }
 
@@ -657,7 +663,7 @@ class ProfileViewModelTest {
     }
 
     @Test
-    fun `loadProfile - online user with currentRoomId has activeRoomId set`() = runTest {
+    fun `loadProfile - online user with currentRoomId and active room has activeRoomId set`() = runTest {
         val recentTs = System.currentTimeMillis() - 60_000L
         val user = TestData.createTestUser(uid = otherUserId).copy(
             lastSeenAt = recentTs,
@@ -665,6 +671,9 @@ class ProfileViewModelTest {
         )
         coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
         coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+        every { roomRepository.getRoomFlow("room-123") } returns flowOf(
+            ChatRoom(roomId = "room-123", state = RoomState.ACTIVE)
+        )
 
         val vm = createViewModel()
         vm.loadProfile(otherUserId)
@@ -672,6 +681,46 @@ class ProfileViewModelTest {
 
         assertTrue(vm.uiState.value.isOnline)
         assertEquals("room-123", vm.uiState.value.activeRoomId)
+    }
+
+    @Test
+    fun `loadProfile - online user with currentRoomId but closed room has null activeRoomId`() = runTest {
+        val recentTs = System.currentTimeMillis() - 60_000L
+        val user = TestData.createTestUser(uid = otherUserId).copy(
+            lastSeenAt = recentTs,
+            currentRoomId = "room-123"
+        )
+        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+        every { roomRepository.getRoomFlow("room-123") } returns flowOf(
+            ChatRoom(roomId = "room-123", state = RoomState.CLOSED)
+        )
+
+        val vm = createViewModel()
+        vm.loadProfile(otherUserId)
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.isOnline)
+        assertNull(vm.uiState.value.activeRoomId)
+    }
+
+    @Test
+    fun `loadProfile - online user with currentRoomId but missing room has null activeRoomId`() = runTest {
+        val recentTs = System.currentTimeMillis() - 60_000L
+        val user = TestData.createTestUser(uid = otherUserId).copy(
+            lastSeenAt = recentTs,
+            currentRoomId = "room-123"
+        )
+        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+        every { roomRepository.getRoomFlow("room-123") } returns flowOf(null)
+
+        val vm = createViewModel()
+        vm.loadProfile(otherUserId)
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.isOnline)
+        assertNull(vm.uiState.value.activeRoomId)
     }
 
     @Test
@@ -890,5 +939,75 @@ class ProfileViewModelTest {
 
         assertEquals(0, vm.uiState.value.stalkerCount)
         assertEquals(0, vm.uiState.value.newStalkerCount)
+    }
+
+    // ===== Suspension =====
+
+    @Test
+    fun `loadProfile - suspended other user sets isTargetSuspended`() = runTest {
+        val user = TestData.createTestUser(
+            uid = otherUserId,
+            isSuspended = true,
+            suspensionEndDate = System.currentTimeMillis() + 86_400_000L
+        )
+        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+
+        val vm = createViewModel()
+        vm.loadProfile(otherUserId)
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.isTargetSuspended)
+        assertFalse(vm.uiState.value.isOwnProfile)
+    }
+
+    @Test
+    fun `loadProfile - own profile even if suspended loads normally`() = runTest {
+        val user = TestData.createTestUser(
+            uid = currentUserId,
+            isSuspended = true,
+            suspensionEndDate = System.currentTimeMillis() + 86_400_000L
+        )
+        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+
+        val vm = createViewModel()
+        vm.loadProfile(null)
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.isOwnProfile)
+        assertFalse(vm.uiState.value.isTargetSuspended)
+        assertEquals(user, vm.uiState.value.user)
+    }
+
+    @Test
+    fun `loadProfile - permanently suspended other user sets isTargetSuspended`() = runTest {
+        val user = TestData.createTestUser(
+            uid = otherUserId,
+            isSuspended = true,
+            suspensionEndDate = null
+        )
+        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+
+        val vm = createViewModel()
+        vm.loadProfile(otherUserId)
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.isTargetSuspended)
+    }
+
+    @Test
+    fun `loadProfile - expired suspension on other user does NOT set isTargetSuspended`() = runTest {
+        val user = TestData.createTestUser(
+            uid = otherUserId,
+            isSuspended = true,
+            suspensionEndDate = System.currentTimeMillis() - 86_400_000L
+        )
+        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+
+        val vm = createViewModel()
+        vm.loadProfile(otherUserId)
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.isTargetSuspended)
     }
 }

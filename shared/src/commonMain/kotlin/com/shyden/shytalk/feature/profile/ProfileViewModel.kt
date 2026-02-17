@@ -2,11 +2,13 @@ package com.shyden.shytalk.feature.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.shyden.shytalk.core.model.RoomState
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.data.repository.AuthRepository
+import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.StorageRepository
 import com.shyden.shytalk.data.repository.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -35,13 +38,15 @@ data class ProfileUiState(
     val hideFollowing: Boolean = false,
     val activeRoomId: String? = null,
     val stalkerCount: Int = 0,
-    val newStalkerCount: Int = 0
+    val newStalkerCount: Int = 0,
+    val isTargetSuspended: Boolean = false
 )
 
 class ProfileViewModel(
     private val authRepository: AuthRepository,
     private val userRepository: UserRepository,
-    private val storageRepository: StorageRepository
+    private val storageRepository: StorageRepository,
+    private val roomRepository: RoomRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -58,21 +63,33 @@ class ProfileViewModel(
             userRepository.userUpdates.collect { updatedUser ->
                 val currentUser = _uiState.value.user ?: return@collect
                 if (updatedUser.uid == currentUser.uid) {
+                    val isOnline = !updatedUser.hideOnlineStatus &&
+                        (currentTimeMillis() - updatedUser.lastSeenAt) < Constants.ONLINE_THRESHOLD_MS
+                    val activeRoomId = resolveActiveRoomId(updatedUser.currentRoomId, isOnline)
                     _uiState.update { state ->
-                        val isOnline = !updatedUser.hideOnlineStatus &&
-                            (currentTimeMillis() - updatedUser.lastSeenAt) < Constants.ONLINE_THRESHOLD_MS
                         state.copy(
                             user = updatedUser,
                             followerCount = updatedUser.followerIds.size,
                             followingCount = updatedUser.followingIds.size,
                             isOnline = isOnline,
-                            activeRoomId = if (isOnline) updatedUser.currentRoomId else null,
+                            activeRoomId = activeRoomId,
                             stalkerCount = if (state.isOwnProfile) updatedUser.stalkerCount.toInt() else state.stalkerCount,
                             newStalkerCount = if (state.isOwnProfile) updatedUser.newStalkerCount.toInt() else state.newStalkerCount
                         )
                     }
                 }
             }
+        }
+    }
+
+    /** Returns the roomId only if the user is online AND the room is still active. */
+    private suspend fun resolveActiveRoomId(currentRoomId: String?, isOnline: Boolean): String? {
+        if (!isOnline || currentRoomId.isNullOrEmpty()) return null
+        val room = roomRepository.getRoomFlow(currentRoomId).first()
+        return if (room != null && room.state in listOf(RoomState.ACTIVE, RoomState.OWNER_AWAY)) {
+            currentRoomId
+        } else {
+            null
         }
     }
 
@@ -94,7 +111,21 @@ class ProfileViewModel(
                     val isOnline = !user.hideOnlineStatus &&
                         (currentTimeMillis() - user.lastSeenAt) < Constants.ONLINE_THRESHOLD_MS
 
+                    val activeRoomId = resolveActiveRoomId(user.currentRoomId, isOnline)
+
                     if (!isOwn) {
+                        // Check if target user is suspended
+                        if (user.isActivelySuspended) {
+                            _uiState.update {
+                                it.copy(
+                                    isLoading = false,
+                                    user = user,
+                                    isTargetSuspended = true
+                                )
+                            }
+                            return@launch
+                        }
+
                         // Fetch viewer's blocked list in parallel with profile load
                         val blockedByTarget = user.blockedUserIds.contains(currentUid)
                         val viewerBlockedTarget = coroutineScope {
@@ -116,7 +147,7 @@ class ProfileViewModel(
                                 followingCount = followingCount,
                                 isOnline = isOnline,
                                 hideFollowing = user.hideFollowing,
-                                activeRoomId = if (isOnline) user.currentRoomId else null
+                                activeRoomId = activeRoomId
                             )
                         }
                         // Record profile visit (fire-and-forget)
@@ -134,7 +165,7 @@ class ProfileViewModel(
                                 followingCount = followingCount,
                                 isOnline = isOnline,
                                 hideFollowing = user.hideFollowing,
-                                activeRoomId = if (isOnline) user.currentRoomId else null,
+                                activeRoomId = activeRoomId,
                                 stalkerCount = user.stalkerCount.toInt(),
                                 newStalkerCount = user.newStalkerCount.toInt()
                             )

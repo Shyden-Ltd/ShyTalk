@@ -30,7 +30,14 @@ object TestData {
         hideFollowing: Boolean = false,
         stalkerCount: Long = 0,
         newStalkerCount: Long = 0,
-        stalkersLastViewedAt: Long = 0
+        stalkersLastViewedAt: Long = 0,
+        isSuspended: Boolean = false,
+        suspensionReason: String? = null,
+        suspensionStartDate: Long? = null,
+        suspensionEndDate: Long? = null,
+        suspensionCanAppeal: Boolean = false,
+        suspendedBy: String? = null,
+        suspensionAppealStatus: String? = null
     ) = User(
         uid = uid,
         displayName = displayName,
@@ -47,7 +54,14 @@ object TestData {
         newStalkerCount = newStalkerCount,
         stalkersLastViewedAt = stalkersLastViewedAt,
         createdAt = BASE_TIMESTAMP,
-        lastSeenAt = BASE_TIMESTAMP
+        lastSeenAt = BASE_TIMESTAMP,
+        isSuspended = isSuspended,
+        suspensionReason = suspensionReason,
+        suspensionStartDate = suspensionStartDate,
+        suspensionEndDate = suspensionEndDate,
+        suspensionCanAppeal = suspensionCanAppeal,
+        suspendedBy = suspendedBy,
+        suspensionAppealStatus = suspensionAppealStatus
     )
 
     fun createTestProfileVisitor(

@@ -225,4 +225,101 @@ class UserFromMapTest {
         val user = User.fromMap(map, "uid")
         assertEquals(0L, user.stalkersLastViewedAt)
     }
+
+    // ===== Suspension fields =====
+
+    @Test
+    fun `fromMap parses suspension fields`() {
+        val startTs = Timestamp(Date(1_500_000_000_000L))
+        val endTs = Timestamp(Date(1_600_000_000_000L))
+        val map = mapOf<String, Any?>(
+            "isSuspended" to true,
+            "suspensionReason" to "Spam",
+            "suspensionStartDate" to startTs,
+            "suspensionEndDate" to endTs,
+            "suspensionCanAppeal" to true,
+            "suspendedBy" to "admin-1",
+            "suspensionAppealStatus" to "pending"
+        )
+        val user = User.fromMap(map, "uid")
+
+        assertTrue(user.isSuspended)
+        assertEquals("Spam", user.suspensionReason)
+        assertEquals(1_500_000_000_000L, user.suspensionStartDate)
+        assertEquals(1_600_000_000_000L, user.suspensionEndDate)
+        assertTrue(user.suspensionCanAppeal)
+        assertEquals("admin-1", user.suspendedBy)
+        assertEquals("pending", user.suspensionAppealStatus)
+    }
+
+    @Test
+    fun `fromMap defaults suspension fields when missing`() {
+        val user = User.fromMap(emptyMap(), "uid")
+
+        assertFalse(user.isSuspended)
+        assertNull(user.suspensionReason)
+        assertNull(user.suspensionStartDate)
+        assertNull(user.suspensionEndDate)
+        assertFalse(user.suspensionCanAppeal)
+        assertNull(user.suspendedBy)
+        assertNull(user.suspensionAppealStatus)
+    }
+
+    @Test
+    fun `fromMap parses permanent suspension (null endDate)`() {
+        val map = mapOf<String, Any?>(
+            "isSuspended" to true,
+            "suspensionEndDate" to null
+        )
+        val user = User.fromMap(map, "uid")
+
+        assertTrue(user.isSuspended)
+        assertNull(user.suspensionEndDate)
+    }
+
+    @Test
+    fun `isActivelySuspended returns true for permanent suspension`() {
+        val user = User(isSuspended = true, suspensionEndDate = null)
+        assertTrue(user.isActivelySuspended)
+    }
+
+    @Test
+    fun `isActivelySuspended returns true for future end date`() {
+        val futureEnd = System.currentTimeMillis() + 86_400_000L
+        val user = User(isSuspended = true, suspensionEndDate = futureEnd)
+        assertTrue(user.isActivelySuspended)
+    }
+
+    @Test
+    fun `isActivelySuspended returns false for past end date`() {
+        val pastEnd = System.currentTimeMillis() - 86_400_000L
+        val user = User(isSuspended = true, suspensionEndDate = pastEnd)
+        assertFalse(user.isActivelySuspended)
+    }
+
+    @Test
+    fun `isActivelySuspended returns false when not suspended`() {
+        val user = User(isSuspended = false)
+        assertFalse(user.isActivelySuspended)
+    }
+
+    @Test
+    fun `fromMap of toMap roundtrip preserves suspension fields`() {
+        val original = User(
+            uid = "user-1",
+            displayName = "Test",
+            isSuspended = true,
+            suspensionReason = "Abuse",
+            suspensionStartDate = tsMillis,
+            suspensionEndDate = tsMillis,
+            suspensionCanAppeal = true,
+            suspendedBy = "admin-1",
+            suspensionAppealStatus = "pending",
+            createdAt = tsMillis,
+            lastSeenAt = tsMillis,
+            stalkersLastViewedAt = tsMillis
+        )
+        val roundtripped = User.fromMap(original.toMap(), "user-1")
+        assertEquals(original, roundtripped)
+    }
 }

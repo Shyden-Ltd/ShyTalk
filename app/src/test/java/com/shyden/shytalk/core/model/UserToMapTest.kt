@@ -66,10 +66,10 @@ class UserToMapTest {
     }
 
     @Test
-    fun `toMap contains exactly 24 keys`() {
+    fun `toMap contains exactly 31 keys`() {
         val user = TestData.createTestUser()
         val map = user.toMap()
-        assertEquals(24, map.size)
+        assertEquals(31, map.size)
     }
 
     @Test
@@ -80,7 +80,10 @@ class UserToMapTest {
             "followingIds", "followerIds", "dateOfBirth", "hideFollowing",
             "hideOnlineStatus", "hideAge", "email",
             "currentRoomId", "lastRoomName", "userType", "createdAt", "lastSeenAt",
-            "stalkerCount", "newStalkerCount", "stalkersLastViewedAt"
+            "stalkerCount", "newStalkerCount", "stalkersLastViewedAt",
+            "isSuspended", "suspensionReason", "suspensionStartDate",
+            "suspensionEndDate", "suspensionCanAppeal", "suspendedBy",
+            "suspensionAppealStatus"
         )
         val user = TestData.createTestUser()
         assertEquals(expectedKeys, user.toMap().keys)
@@ -140,6 +143,13 @@ class UserToMapTest {
         assertEquals(0L, user.stalkerCount)
         assertEquals(0L, user.newStalkerCount)
         assertEquals(0L, user.stalkersLastViewedAt)
+        assertEquals(false, user.isSuspended)
+        assertNull(user.suspensionReason)
+        assertNull(user.suspensionStartDate)
+        assertNull(user.suspensionEndDate)
+        assertEquals(false, user.suspensionCanAppeal)
+        assertNull(user.suspendedBy)
+        assertNull(user.suspensionAppealStatus)
     }
 
     @Test
@@ -189,5 +199,43 @@ class UserToMapTest {
         assertEquals(user.email, map["email"])
         assertEquals(Timestamp(Date(user.createdAt)), map["createdAt"])
         assertEquals(Timestamp(Date(user.lastSeenAt)), map["lastSeenAt"])
+    }
+
+    // ===== Suspension fields =====
+
+    @Test
+    fun `toMap includes suspension fields when suspended`() {
+        val startMillis = 1_500_000_000_000L
+        val endMillis = 1_600_000_000_000L
+        val user = User(
+            isSuspended = true,
+            suspensionReason = "Spam",
+            suspensionStartDate = startMillis,
+            suspensionEndDate = endMillis,
+            suspensionCanAppeal = true,
+            suspendedBy = "admin-1"
+        )
+        val map = user.toMap()
+
+        assertEquals(true, map["isSuspended"])
+        assertEquals("Spam", map["suspensionReason"])
+        assertEquals(Timestamp(Date(startMillis)), map["suspensionStartDate"])
+        assertEquals(Timestamp(Date(endMillis)), map["suspensionEndDate"])
+        assertEquals(true, map["suspensionCanAppeal"])
+        assertEquals("admin-1", map["suspendedBy"])
+    }
+
+    @Test
+    fun `toMap defaults suspension fields`() {
+        val user = User()
+        val map = user.toMap()
+
+        assertEquals(false, map["isSuspended"])
+        assertNull(map["suspensionReason"])
+        assertNull(map["suspensionStartDate"])
+        assertNull(map["suspensionEndDate"])
+        assertEquals(false, map["suspensionCanAppeal"])
+        assertNull(map["suspendedBy"])
+        assertNull(map["suspensionAppealStatus"])
     }
 }
