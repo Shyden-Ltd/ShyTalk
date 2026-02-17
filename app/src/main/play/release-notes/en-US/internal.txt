@@ -1,12 +1,11 @@
 v0.32 - Seat safety, chathead UX & bug fixes
 
-- Seat race condition fixed: users can no longer end up in multiple seats when hosts move them simultaneously
-- Chathead X button now shows confirmation dialog when app is open; dismisses immediately when in background
+- Seat race condition fixed: no more duplicate seats from simultaneous moves
+- Chathead X shows confirmation dialog when app is open
 - Chathead show/hide race condition fixed
-- Owner dimmed during OWNER_AWAY countdown (UI-layer rendering)
-- Dimming no longer lost when another user moves seats
-- Seat grid always fills top row of 4 before second row
-- "Invite to Mic" hidden for seated users and users not in room
-- JOIN message avatars and user cards now persist after room re-entry
-- Connections page: Following tab now appears first
-- Profile follow stats spacing adjusted
+- Owner dimmed during OWNER_AWAY countdown
+- Dimming persists through seat moves
+- Seat grid fills top row of 4 first
+- Invite hidden for seated/absent users
+- JOIN message avatars persist after re-entry
+- Following tab now first on connections page
