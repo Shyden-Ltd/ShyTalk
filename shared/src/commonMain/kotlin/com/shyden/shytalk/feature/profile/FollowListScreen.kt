@@ -89,17 +89,17 @@ fun FollowListScreen(
                 .padding(padding)
         ) {
             PrimaryTabRow(
-                selectedTabIndex = if (uiState.selectedTab == FollowTab.FOLLOWERS) 0 else 1
+                selectedTabIndex = if (uiState.selectedTab == FollowTab.FOLLOWING) 0 else 1
             ) {
-                Tab(
-                    selected = uiState.selectedTab == FollowTab.FOLLOWERS,
-                    onClick = { viewModel.selectTab(FollowTab.FOLLOWERS) },
-                    text = { Text("Followers (${uiState.followers.size})") }
-                )
                 Tab(
                     selected = uiState.selectedTab == FollowTab.FOLLOWING,
                     onClick = { viewModel.selectTab(FollowTab.FOLLOWING) },
                     text = { Text("Following (${uiState.following.size})") }
+                )
+                Tab(
+                    selected = uiState.selectedTab == FollowTab.FOLLOWERS,
+                    onClick = { viewModel.selectTab(FollowTab.FOLLOWERS) },
+                    text = { Text("Followers (${uiState.followers.size})") }
                 )
             }
 

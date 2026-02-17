@@ -1,12 +1,12 @@
-v0.31 - Voice overhaul, chat limits & UX improvements
+v0.32 - Seat safety, chathead UX & bug fixes
 
-- Voice disconnect: non-owners keep room access, only seat cleared
-- Speakerphone auto-enabled when unmuted, earpiece routing fixed
-- Unmute blocked until voice fully connected
-- Re-entry skips block dialogs, joins fresh session
-- Seat request fixes: stale requests refreshed, re-entry race resolved
-- Duplicate sit invites prevented
-- Chat capped at 50 messages, oldest auto-trimmed
-- Follower removal now shows Undo button (5s grace period)
-- Room name persisted across sessions
-- Country flag badges on user cards
+- Seat race condition fixed: users can no longer end up in multiple seats when hosts move them simultaneously
+- Chathead X button now shows confirmation dialog when app is open; dismisses immediately when in background
+- Chathead show/hide race condition fixed
+- Owner dimmed during OWNER_AWAY countdown (UI-layer rendering)
+- Dimming no longer lost when another user moves seats
+- Seat grid always fills top row of 4 before second row
+- "Invite to Mic" hidden for seated users and users not in room
+- JOIN message avatars and user cards now persist after room re-entry
+- Connections page: Following tab now appears first
+- Profile follow stats spacing adjusted

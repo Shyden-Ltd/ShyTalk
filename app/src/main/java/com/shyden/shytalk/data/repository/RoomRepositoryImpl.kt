@@ -154,38 +154,44 @@ class RoomRepositoryImpl(
                 ?: throw Exception("Room not found")
             val fromSeat = room.seats[fromIndex.toString()]
             val toSeat = room.seats[toIndex.toString()]
-            val fromMuted = fromSeat?.isMuted ?: false
+
+            // Verify user is still in the source seat (another host may have already moved them)
+            if (fromSeat?.userId != userId) return@runTransaction
+
+            val fromMuted = fromSeat.isMuted
+
+            // Clear user from ALL seats first (prevents ending up in multiple seats)
+            val updates = clearUserSeats(room, userId)
 
             if (toSeat?.state == SeatState.OCCUPIED && toSeat.userId != null) {
-                // Swap: move both users, preserving each user's mute state
+                // Swap: move the other user to the source seat, preserving their mute state
                 val toMuted = toSeat.isMuted
-                transaction.update(docRef, mapOf(
-                    "seats.$fromIndex" to Seat(userId = toSeat.userId, state = SeatState.OCCUPIED, isMuted = toMuted).toMap(),
-                    "seats.$toIndex" to Seat(userId = userId, state = SeatState.OCCUPIED, isMuted = fromMuted).toMap()
-                ))
+                updates["seats.$fromIndex"] = Seat(userId = toSeat.userId, state = SeatState.OCCUPIED, isMuted = toMuted).toMap()
+                updates["seats.$toIndex"] = Seat(userId = userId, state = SeatState.OCCUPIED, isMuted = fromMuted).toMap()
             } else {
-                // Move to empty seat
-                transaction.update(docRef, mapOf(
-                    "seats.$fromIndex" to Seat.EMPTY_MAP,
-                    "seats.$toIndex" to Seat(userId = userId, state = SeatState.OCCUPIED, isMuted = fromMuted).toMap()
-                ))
+                // Move to empty seat (clearUserSeats already cleared the source)
+                updates["seats.$toIndex"] = Seat(userId = userId, state = SeatState.OCCUPIED, isMuted = fromMuted).toMap()
             }
+            transaction.update(docRef, updates)
         }.await()
     }
 
     override suspend fun kickUser(roomId: String, userId: String, seatIndex: Int?, kickerName: String, reason: String): Resource<Unit> = firebaseCall("Failed to kick user") {
-        val updates = mutableMapOf<String, Any>(
-            "participantIds" to FieldValue.arrayRemove(userId),
-            "bannedUserIds" to FieldValue.arrayUnion(userId),
-            "kickInfo.$userId" to mapOf(
+        val docRef = roomsCollection.document(roomId)
+        firestore.runTransaction { transaction ->
+            val snapshot = transaction.get(docRef)
+            val room = snapshot.data?.let { ChatRoom.fromMap(it, snapshot.id) }
+                ?: throw Exception("Room not found")
+
+            val updates = clearUserSeats(room, userId)
+            updates["participantIds"] = FieldValue.arrayRemove(userId)
+            updates["bannedUserIds"] = FieldValue.arrayUnion(userId)
+            updates["kickInfo.$userId"] = mapOf(
                 "kickerName" to kickerName,
                 "reason" to reason.ifBlank { "No reason given" }
             )
-        )
-        if (seatIndex != null) {
-            updates["seats.$seatIndex"] = Seat.EMPTY_MAP
-        }
-        roomsCollection.document(roomId).update(updates).await()
+            transaction.update(docRef, updates)
+        }.await()
     }
 
     override suspend fun toggleMute(roomId: String, seatIndex: Int, isMuted: Boolean): Resource<Unit> = firebaseCall("Failed to toggle mute") {

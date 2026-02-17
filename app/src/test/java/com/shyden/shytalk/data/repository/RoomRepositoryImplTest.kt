@@ -132,6 +132,33 @@ class RoomRepositoryImplTest {
 
     // --- moveSeat ---
 
+    private fun setupMoveSeatTransaction(
+        seats: Map<String, Map<String, Any?>> = mapOf(
+            "0" to mapOf("userId" to "owner-1", "state" to "OCCUPIED", "isMuted" to false),
+            "2" to mapOf("userId" to "user-a", "state" to "OCCUPIED", "isMuted" to true),
+            "5" to mapOf("userId" to null, "state" to "EMPTY", "isMuted" to false)
+        )
+    ): Pair<Transaction, MutableList<Map<String, Any>>> {
+        val transaction = mockk<Transaction>(relaxed = true)
+        val snapshot = mockk<DocumentSnapshot>(relaxed = true)
+        every { snapshot.data } returns mapOf(
+            "ownerId" to "owner-1",
+            "state" to "ACTIVE",
+            "participantIds" to listOf("owner-1", "user-a"),
+            "seats" to seats
+        )
+        every { snapshot.id } returns "room-1"
+        every { transaction.get(docRef) } returns snapshot
+        val updateSlots = mutableListOf<Map<String, Any>>()
+        every { transaction.update(docRef, capture(updateSlots)) } returns transaction
+        every { firestore.runTransaction(any<Transaction.Function<*>>()) } answers {
+            val fn = firstArg<Transaction.Function<*>>()
+            fn.apply(transaction)
+            Tasks.forResult(null)
+        }
+        return transaction to updateSlots
+    }
+
     @Test
     fun `moveSeat returns Success`() = runTest {
         every { firestore.runTransaction(any<Transaction.Function<Any?>>()) } returns Tasks.forResult(null)
@@ -141,54 +168,129 @@ class RoomRepositoryImplTest {
         assertTrue(result is Resource.Success)
     }
 
-    // --- kickUser ---
+    @Test
+    fun `moveSeat clears user from all seats before placing in destination`() = runTest {
+        val (_, updateSlots) = setupMoveSeatTransaction()
+
+        val result = repo.moveSeat("room-1", 2, 5, "user-a")
+
+        assertTrue(result is Resource.Success)
+        val updates = updateSlots.first()
+        // clearUserSeats should have set seat 2 to empty, then destination seat 5 gets the user
+        assertTrue(updates.containsKey("seats.5"))
+        @Suppress("UNCHECKED_CAST")
+        val destSeat = updates["seats.5"] as Map<String, Any?>
+        assertEquals("user-a", destSeat["userId"])
+    }
 
     @Test
-    fun `kickUser with seatIndex clears seat`() = runTest {
-        val mapSlot = slot<Map<String, Any>>()
-        every { docRef.update(capture(mapSlot)) } returns Tasks.forResult(null)
+    fun `moveSeat aborts if user not in source seat`() = runTest {
+        val (_, updateSlots) = setupMoveSeatTransaction()
+
+        // Try to move "user-b" from seat 2, but seat 2 has "user-a"
+        val result = repo.moveSeat("room-1", 2, 5, "user-b")
+
+        assertTrue(result is Resource.Success) // transaction still succeeds, just no-op
+        assertTrue(updateSlots.isEmpty()) // no updates were made
+    }
+
+    @Test
+    fun `moveSeat swap preserves mute states`() = runTest {
+        val (_, updateSlots) = setupMoveSeatTransaction(
+            seats = mapOf(
+                "0" to mapOf("userId" to "owner-1", "state" to "OCCUPIED", "isMuted" to false),
+                "2" to mapOf("userId" to "user-a", "state" to "OCCUPIED", "isMuted" to true),
+                "5" to mapOf("userId" to "user-b", "state" to "OCCUPIED", "isMuted" to false)
+            )
+        )
+
+        val result = repo.moveSeat("room-1", 2, 5, "user-a")
+
+        assertTrue(result is Resource.Success)
+        val updates = updateSlots.first()
+        // user-a moves to seat 5 with their original mute state (true)
+        @Suppress("UNCHECKED_CAST")
+        val destSeat = updates["seats.5"] as Map<String, Any?>
+        assertEquals("user-a", destSeat["userId"])
+        assertEquals(true, destSeat["isMuted"])
+        // user-b swaps to seat 2 with their original mute state (false)
+        @Suppress("UNCHECKED_CAST")
+        val srcSeat = updates["seats.2"] as Map<String, Any?>
+        assertEquals("user-b", srcSeat["userId"])
+        assertEquals(false, srcSeat["isMuted"])
+    }
+
+    // --- kickUser ---
+
+    private fun setupKickUserTransaction(): Pair<Transaction, MutableList<Map<String, Any>>> {
+        val transaction = mockk<Transaction>(relaxed = true)
+        val snapshot = mockk<DocumentSnapshot>(relaxed = true)
+        every { snapshot.data } returns mapOf(
+            "ownerId" to "owner-1",
+            "state" to "ACTIVE",
+            "participantIds" to listOf("owner-1", "bad-user"),
+            "seats" to mapOf(
+                "0" to mapOf("userId" to "owner-1", "state" to "OCCUPIED", "isMuted" to false),
+                "2" to mapOf("userId" to "bad-user", "state" to "OCCUPIED", "isMuted" to false)
+            )
+        )
+        every { snapshot.id } returns "room-1"
+        every { transaction.get(docRef) } returns snapshot
+        val updateSlots = mutableListOf<Map<String, Any>>()
+        every { transaction.update(docRef, capture(updateSlots)) } returns transaction
+        every { firestore.runTransaction(any<Transaction.Function<*>>()) } answers {
+            val fn = firstArg<Transaction.Function<*>>()
+            fn.apply(transaction)
+            Tasks.forResult(null)
+        }
+        return transaction to updateSlots
+    }
+
+    @Test
+    fun `kickUser clears all seats for user`() = runTest {
+        val (_, updateSlots) = setupKickUserTransaction()
 
         val result = repo.kickUser("room-1", "bad-user", 2)
 
         assertTrue(result is Resource.Success)
-        assertTrue(mapSlot.captured.containsKey("seats.2"))
+        val updates = updateSlots.first()
+        assertTrue(updates.containsKey("seats.2"))
     }
 
     @Test
-    fun `kickUser without seatIndex does not clear seat`() = runTest {
-        val mapSlot = slot<Map<String, Any>>()
-        every { docRef.update(capture(mapSlot)) } returns Tasks.forResult(null)
+    fun `kickUser without seatIndex still clears occupied seat`() = runTest {
+        val (_, updateSlots) = setupKickUserTransaction()
 
         val result = repo.kickUser("room-1", "bad-user", null)
 
         assertTrue(result is Resource.Success)
-        assertTrue(mapSlot.captured.keys.none { it.startsWith("seats.") })
+        val updates = updateSlots.first()
+        // clearUserSeats finds seat 2 and clears it even without explicit seatIndex
+        assertTrue(updates.containsKey("seats.2"))
     }
 
     @Test
     fun `kickUser stores kickInfo with kicker name and reason`() = runTest {
-        val mapSlot = slot<Map<String, Any>>()
-        every { docRef.update(capture(mapSlot)) } returns Tasks.forResult(null)
+        val (_, updateSlots) = setupKickUserTransaction()
 
         val result = repo.kickUser("room-1", "bad-user", 2, "Admin", "Spamming")
 
         assertTrue(result is Resource.Success)
         @Suppress("UNCHECKED_CAST")
-        val kickInfo = mapSlot.captured["kickInfo.bad-user"] as Map<String, String>
+        val kickInfo = updateSlots.first()["kickInfo.bad-user"] as Map<String, String>
         assertEquals("Admin", kickInfo["kickerName"])
         assertEquals("Spamming", kickInfo["reason"])
     }
 
     @Test
     fun `kickUser with blank reason defaults to No reason given`() = runTest {
-        val mapSlot = slot<Map<String, Any>>()
-        every { docRef.update(capture(mapSlot)) } returns Tasks.forResult(null)
+        val (_, updateSlots) = setupKickUserTransaction()
 
         val result = repo.kickUser("room-1", "bad-user", 2, "Admin", "")
 
         assertTrue(result is Resource.Success)
         @Suppress("UNCHECKED_CAST")
-        val kickInfo = mapSlot.captured["kickInfo.bad-user"] as Map<String, String>
+        val kickInfo = updateSlots.first()["kickInfo.bad-user"] as Map<String, String>
         assertEquals("No reason given", kickInfo["reason"])
     }
 

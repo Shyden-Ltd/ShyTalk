@@ -479,7 +479,7 @@ private fun ProfileContent(
                 Row(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
-                        .padding(top = 24.dp),
+                        .padding(top = 32.dp),
                     horizontalArrangement = Arrangement.spacedBy(24.dp)
                 ) {
                     Column(

@@ -855,6 +855,21 @@ class RoomViewModelTest {
         coVerify(exactly = 0) { roomRepository.sendInvite(any(), any(), any()) }
     }
 
+    @Test
+    fun `inviteUser - already pending invite is rejected`() = roomTest {
+        viewModel = createViewModel()
+        emitRoomAsOwner(TestData.createTestRoom(
+            ownerId = currentUserId,
+            pendingInvites = mapOf("target-user" to currentUserId)
+        ))
+        advanceUntilIdle()
+
+        viewModel.inviteUser("target-user", "Target")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { roomRepository.sendInvite(any(), any(), any()) }
+    }
+
     // ===== acceptInvite Tests =====
 
     @Test
@@ -2750,5 +2765,65 @@ class RoomViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { roomRepository.moveSeat(any(), any(), any(), any()) }
+    }
+
+    // ===== Message sender user loading (v0.32 fix) =====
+
+    @Test
+    fun `loadMessageSenderUsers - loads users for JOIN message senders`() = roomTest {
+        val joinUser = TestData.createTestUser(uid = "joiner-1", displayName = "Joiner")
+        coEvery { userRepository.getUser("joiner-1") } returns Resource.Success(joinUser)
+        coEvery { userRepository.getUsers(any()) } coAnswers {
+            val ids = firstArg<List<String>>()
+            val users = ids.mapNotNull { id ->
+                when (id) {
+                    currentUserId -> TestData.createTestUser(uid = currentUserId, displayName = "Current User")
+                    "joiner-1" -> joinUser
+                    else -> null
+                }
+            }
+            Resource.Success(users)
+        }
+
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceUntilIdle()
+
+        // Emit a JOIN message from joiner-1 (who is no longer in the room)
+        val joinMessage = TestData.createTestMessage(
+            messageId = "msg-join",
+            senderId = "joiner-1",
+            senderName = "Joiner",
+            text = "Joiner joined the room",
+            type = MessageType.JOIN,
+            createdAt = TestData.BASE_TIMESTAMP
+        )
+        messagesFlow.value = listOf(joinMessage)
+        advanceUntilIdle()
+
+        // joiner-1 should be loaded into allKnownUsers via loadMessageSenderUsers
+        assertTrue(viewModel.uiState.value.allKnownUsers.containsKey("joiner-1"))
+        assertEquals("Joiner", viewModel.uiState.value.allKnownUsers["joiner-1"]?.displayName)
+    }
+
+    @Test
+    fun `disconnectedUserIds - does not include owner during OWNER_AWAY`() = roomTest {
+        val disconnectedFlow = MutableStateFlow<Set<String>>(emptySet())
+        every { roomLifecycleManager.disconnectedUserIds } returns disconnectedFlow
+
+        viewModel = createViewModel()
+        // Emit OWNER_AWAY room as attendee
+        val awayRoom = TestData.createTestRoom(
+            ownerId = ownerId,
+            participantIds = setOf(ownerId, currentUserId),
+            state = RoomState.OWNER_AWAY,
+            ownerLeftAt = System.currentTimeMillis()
+        )
+        emitRoomAsAttendee(awayRoom)
+        // Use advanceTimeBy instead of advanceUntilIdle to avoid the infinite countdown loop
+        advanceTimeBy(100)
+
+        // disconnectedUserIds should NOT contain the owner (dimming handled in UI layer now)
+        assertFalse(viewModel.uiState.value.disconnectedUserIds.contains(ownerId))
     }
 }

@@ -31,6 +31,7 @@ fun SeatGrid(
     speakingUserIds: Set<String>,
     seatUsers: Map<String, User> = emptyMap(),
     disconnectedUserIds: Set<String> = emptySet(),
+    isOwnerAway: Boolean = false,
     showRequestSeat: Boolean = false,
     onSeatClick: (Int) -> Unit,
     onTapUser: (String) -> Unit = {},
@@ -76,13 +77,12 @@ fun SeatGrid(
         label = "seatSize"
     )
 
-    // Split into 2 rows: row1 gets first half (ceil), row2 gets remainder
+    // Split into 2 rows: top row always fills up to 4 seats first, overflow goes to row 2
     val (row1, row2) = remember(displaySeats) {
         if (count <= 4) {
             displaySeats to emptyList()
         } else {
-            val splitAt = (count + 1) / 2 // ceil division — top row gets more if odd
-            displaySeats.take(splitAt) to displaySeats.drop(splitAt)
+            displaySeats.take(4) to displaySeats.drop(4)
         }
     }
 
@@ -90,7 +90,7 @@ fun SeatGrid(
         modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
-        val maxItemsPerRow = if (count <= 4) count.coerceAtLeast(1) else (count + 1) / 2
+        val maxItemsPerRow = if (count <= 4) count.coerceAtLeast(1) else 4
         val maxSeatSize = (maxWidth / maxItemsPerRow) - 24.dp
         val cappedSeatSize = seatSize.coerceAtMost(maxSeatSize)
 
@@ -107,6 +107,7 @@ fun SeatGrid(
                 speakingUserIds = speakingUserIds,
                 seatUsers = seatUsers,
                 disconnectedUserIds = disconnectedUserIds,
+                isOwnerAway = isOwnerAway,
                 seatSize = cappedSeatSize,
                 requestSeatIndex = requestSeatIndex,
                 onSeatClick = onSeatClick,
@@ -122,6 +123,7 @@ fun SeatGrid(
                     speakingUserIds = speakingUserIds,
                     seatUsers = seatUsers,
                     disconnectedUserIds = disconnectedUserIds,
+                    isOwnerAway = isOwnerAway,
                     seatSize = cappedSeatSize,
                     requestSeatIndex = requestSeatIndex,
                     onSeatClick = onSeatClick,
@@ -142,6 +144,7 @@ private fun SeatRow(
     speakingUserIds: Set<String>,
     seatUsers: Map<String, User>,
     disconnectedUserIds: Set<String>,
+    isOwnerAway: Boolean,
     seatSize: Dp,
     requestSeatIndex: Int? = null,
     onSeatClick: (Int) -> Unit,
@@ -169,7 +172,8 @@ private fun SeatRow(
                     !(seatUserId == currentUserId && seat.isMuted) &&
                     seatUserId in speakingUserIds
 
-                val isDisconnected = seatUserId != null && seatUserId in disconnectedUserIds
+                val isDisconnected = (seatUserId != null && seatUserId in disconnectedUserIds)
+                    || (isOwnerAway && seatUserId == ownerId)
 
                 val isOwnerOnOwnSeat = seatUserId == currentUserId
                     && seatIndex == Constants.OWNER_SEAT_INDEX

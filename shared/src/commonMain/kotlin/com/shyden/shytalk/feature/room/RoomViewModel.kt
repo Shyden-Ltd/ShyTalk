@@ -579,7 +579,15 @@ class RoomViewModel(
         if (filtered !== lastFilteredMessages) {
             lastFilteredMessages = filtered
             _uiState.update { it.copy(messages = filtered) }
+            loadMessageSenderUsers(filtered)
         }
+    }
+
+    private fun loadMessageSenderUsers(messages: List<Message>) {
+        val senderIds = messages.mapTo(mutableSetOf()) { it.senderId }
+        senderIds.remove("system")
+        if (senderIds.isEmpty()) return
+        loadUsersForIds(senderIds) { /* accumulateKnownUsers handles the UI update */ }
     }
 
     private fun observeVoiceState() {

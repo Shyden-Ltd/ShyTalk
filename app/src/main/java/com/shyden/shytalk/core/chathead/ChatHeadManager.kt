@@ -43,12 +43,12 @@ class ChatHeadManager(
 
     fun show(ownerPhotoUrl: String?) {
         if (isShowing) return
+        isShowing = true
 
         handler.post {
             try {
                 createCloseZoneView()
                 createBubbleView(ownerPhotoUrl)
-                isShowing = true
             } catch (e: Exception) {
                 // Permission not granted or window manager error
                 destroy()
@@ -58,10 +58,10 @@ class ChatHeadManager(
 
     fun hide() {
         if (!isShowing) return
+        isShowing = false
         handler.post {
             removeBubble()
             removeCloseZone()
-            isShowing = false
         }
     }
 

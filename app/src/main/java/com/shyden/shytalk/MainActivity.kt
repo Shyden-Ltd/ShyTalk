@@ -5,6 +5,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -13,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.firestore.FirebaseFirestore
 import com.shyden.shytalk.core.room.ActiveRoomManager
+import com.shyden.shytalk.core.room.RoomService
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.UserRepository
 import kotlinx.coroutines.CoroutineScope
@@ -33,6 +37,7 @@ class MainActivity : ComponentActivity() {
     private val activeRoomManager: ActiveRoomManager by inject()
 
     private val _navigateToRoom = mutableStateOf<String?>(null)
+    private val _showLeaveConfirmation = mutableStateOf(false)
 
     companion object {
         private const val PREFS_NAME = "shytalk_prefs"
@@ -107,6 +112,34 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+
+                // Leave room confirmation dialog (triggered by chathead X tap)
+                val showLeaveDialog by _showLeaveConfirmation
+                if (showLeaveDialog) {
+                    val isOwner = activeRoomManager.activeRoom.value?.ownerId == activeRoomManager.currentUserId
+                    AlertDialog(
+                        onDismissRequest = { _showLeaveConfirmation.value = false },
+                        title = { Text(if (isOwner) "Close Room?" else "Leave Room?") },
+                        text = { Text(
+                            if (isOwner) "This will close the room for everyone."
+                            else "You will leave the voice room."
+                        ) },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                _showLeaveConfirmation.value = false
+                                val intent = Intent(this@MainActivity, RoomService::class.java).apply {
+                                    action = "CONFIRM_DISMISS"
+                                }
+                                startService(intent)
+                            }) { Text("Leave") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { _showLeaveConfirmation.value = false }) {
+                                Text("Cancel")
+                            }
+                        }
+                    )
+                }
             }
         }
 
@@ -139,6 +172,9 @@ class MainActivity : ComponentActivity() {
                 if (roomId != null) {
                     _navigateToRoom.value = roomId
                 }
+            }
+            "CONFIRM_LEAVE_ROOM" -> {
+                _showLeaveConfirmation.value = true
             }
             "FINISH_APP" -> {
                 finishAffinity()

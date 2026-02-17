@@ -53,6 +53,7 @@ fun ParticipantListPanel(
     audienceUsers: List<ParticipantInfo>,
     pendingRequests: List<SeatRequest> = emptyList(),
     pendingInviteUserIds: Set<String> = emptySet(),
+    seatedUserIds: Set<String> = emptySet(),
     isOwnerOrHost: Boolean = false,
     onUserClick: (String) -> Unit,
     onApproveRequest: (SeatRequest) -> Unit = {},
@@ -130,6 +131,7 @@ fun ParticipantListPanel(
                     val pendingRequest = requestByUserId[participant.user.uid]
                     val hasPendingInvite = participant.user.uid in pendingInviteUserIds
                     val canInvite = isOwnerOrHost && pendingRequest == null && !hasPendingInvite
+                        && participant.user.uid !in seatedUserIds
                     ParticipantRow(
                         participant = participant,
                         pendingRequest = pendingRequest,

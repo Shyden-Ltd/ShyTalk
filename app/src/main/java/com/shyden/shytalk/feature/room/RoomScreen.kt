@@ -417,6 +417,7 @@ fun RoomScreen(
                         speakingUserIds = uiState.speakingUserIds,
                         seatUsers = uiState.seatUsers,
                         disconnectedUserIds = uiState.disconnectedUserIds,
+                        isOwnerAway = uiState.room?.state == RoomState.OWNER_AWAY,
                         showRequestSeat = showRequestSeat,
                         onSeatClick = { seatIndex ->
                             val seat = uiState.room?.seats?.get(seatIndex.toString())
@@ -502,6 +503,7 @@ fun RoomScreen(
                     audienceUsers = audienceUsers,
                     pendingRequests = uiState.pendingRequestsForPanel,
                     pendingInviteUserIds = uiState.room?.pendingInvites?.keys ?: emptySet(),
+                    seatedUserIds = seatedUserIds,
                     isOwnerOrHost = isOwnerOrHost,
                     onUserClick = { userId ->
                         showParticipantPanel = false
@@ -597,9 +599,12 @@ fun RoomScreen(
 
                 val targetRole = uiState.room?.resolveRole(userId) ?: RoomRole.ATTENDEE
 
+                val isInRoom = userId in (uiState.room?.participantIds ?: emptyList())
                 val canInviteFromCard = (uiState.currentRole == RoomRole.OWNER || uiState.currentRole == RoomRole.HOST)
                         && userId != uiState.currentUserId
+                        && isInRoom
                         && !isTargetSeated
+                        && userId !in (uiState.room?.pendingInvites?.keys ?: emptySet())
 
                 // Mod capabilities: owner can act on hosts + attendees; hosts can act on attendees only
                 val isNotSelf = userId != uiState.currentUserId

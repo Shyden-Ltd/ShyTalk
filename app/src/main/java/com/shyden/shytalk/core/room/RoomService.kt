@@ -66,28 +66,29 @@ class RoomService : Service() {
                 startActivity(intent)
             },
             onBubbleDismissed = {
-                serviceScope.launch {
-                    val isOwner = activeRoomManager.activeRoom.value?.ownerId == activeRoomManager.currentUserId
-                    if (isOwner) {
-                        activeRoomManager.closeRoom()
-                    } else {
-                        activeRoomManager.leaveRoom()
-                    }
-                }
-                if (!activeRoomManager.isAppInForeground) {
-                    val finishIntent = Intent(this, MainActivity::class.java).apply {
-                        action = "FINISH_APP"
+                if (activeRoomManager.isAppInForeground) {
+                    // App is open — ask for confirmation via MainActivity dialog
+                    val confirmIntent = Intent(this, MainActivity::class.java).apply {
+                        action = "CONFIRM_LEAVE_ROOM"
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                                Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                Intent.FLAG_ACTIVITY_SINGLE_TOP
                     }
-                    startActivity(finishIntent)
+                    startActivity(confirmIntent)
+                } else {
+                    // App in background — leave/close immediately
+                    performDismiss()
                 }
-                stopSelf()
             }
         )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Handle confirmed dismiss from MainActivity dialog
+        if (intent?.action == "CONFIRM_DISMISS") {
+            performDismiss()
+            return START_NOT_STICKY
+        }
+
         val roomId = intent?.getStringExtra("roomId") ?: run {
             stopSelf()
             return START_NOT_STICKY
@@ -99,6 +100,26 @@ class RoomService : Service() {
         observeRoomClosed()
 
         return START_STICKY
+    }
+
+    private fun performDismiss() {
+        serviceScope.launch {
+            val isOwner = activeRoomManager.activeRoom.value?.ownerId == activeRoomManager.currentUserId
+            if (isOwner) {
+                activeRoomManager.closeRoom()
+            } else {
+                activeRoomManager.leaveRoom()
+            }
+        }
+        if (!activeRoomManager.isAppInForeground) {
+            val finishIntent = Intent(this, MainActivity::class.java).apply {
+                action = "FINISH_APP"
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            startActivity(finishIntent)
+        }
+        stopSelf()
     }
 
     private fun observeRoom() {
