@@ -69,7 +69,7 @@ fun MainScreen(
                     title = {
                         Text(
                             when (selectedTab) {
-                                BottomNavTab.Rooms -> "ShyTalk \uD83D\uDC0E\uD83C\uDFEE"
+                                BottomNavTab.Rooms -> "\uD83D\uDC0E\uD83C\uDFEE"
                                 BottomNavTab.Profile -> "Profile"
                             }
                         )

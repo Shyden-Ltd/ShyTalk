@@ -32,6 +32,11 @@ class UserRepositoryImplTest {
         docRef = mockk(relaxed = true)
         every { firestore.collection("users") } returns usersCollection
         every { usersCollection.document(any<String>()) } returns docRef
+        // Default get() to return non-existent doc so emitUserUpdate() completes quickly
+        val emptySnapshot = mockk<DocumentSnapshot> {
+            every { exists() } returns false
+        }
+        every { docRef.get() } returns Tasks.forResult(emptySnapshot)
         repo = UserRepositoryImpl(firestore)
     }
 

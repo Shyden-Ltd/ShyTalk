@@ -1,4 +1,12 @@
-v0.30 - Sign-in button contrast fix
+v0.31 - Voice overhaul, chat limits & UX improvements
 
-- Fixed sign-in button readability: now gold background with black text
-- Previously gold text on red was difficult to read
+- Voice disconnect: non-owners keep room access, only seat cleared
+- Speakerphone auto-enabled when unmuted, earpiece routing fixed
+- Unmute blocked until voice fully connected
+- Re-entry skips block dialogs, joins fresh session
+- Seat request fixes: stale requests refreshed, re-entry race resolved
+- Duplicate sit invites prevented
+- Chat capped at 50 messages, oldest auto-trimmed
+- Follower removal now shows Undo button (5s grace period)
+- Room name persisted across sessions
+- Country flag badges on user cards

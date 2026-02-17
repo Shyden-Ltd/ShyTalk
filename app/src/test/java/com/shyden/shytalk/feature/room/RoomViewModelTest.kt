@@ -14,6 +14,7 @@ import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
+import com.shyden.shytalk.data.remote.VoiceConnectionState
 import com.shyden.shytalk.data.remote.VoiceService
 import com.shyden.shytalk.data.remote.PresenceService
 import com.shyden.shytalk.data.repository.AuthRepository
@@ -30,6 +31,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -64,6 +66,7 @@ class RoomViewModelTest {
     private val speakingFlow = MutableStateFlow<Set<String>>(emptySet())
     private val joinedFlow = MutableStateFlow(false)
     private val voiceErrorFlow = MutableStateFlow<String?>(null)
+    private val connectionStateFlow = MutableStateFlow(VoiceConnectionState.CONNECTED)
     private val pendingRequestsFlow = MutableStateFlow<List<SeatRequest>>(emptyList())
     private val myRequestsFlow = MutableStateFlow<List<SeatRequest>>(emptyList())
 
@@ -75,11 +78,13 @@ class RoomViewModelTest {
     @Before
     fun setup() {
         every { authRepository.currentUserId } returns currentUserId
+        every { userRepository.userUpdates } returns MutableSharedFlow()
         every { roomRepository.getRoomFlow(any()) } returns roomFlow
         every { messageRepository.getMessages(any()) } returns messagesFlow
         every { voiceService.speakingUsers } returns speakingFlow
         every { voiceService.isJoined } returns joinedFlow
         every { voiceService.error } returns voiceErrorFlow
+        every { voiceService.connectionState } returns connectionStateFlow
         coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(
             TestData.createTestUser(uid = currentUserId, displayName = "Current User")
         )
@@ -517,13 +522,14 @@ class RoomViewModelTest {
     }
 
     @Test
-    fun `moveSeat - destination occupied is rejected`() = roomTest {
+    fun `moveSeat - destination occupied triggers swap`() = roomTest {
         viewModel = createViewModel()
         val seats = TestData.createSeatsWithOwner(currentUserId).toMutableMap()
         seats["2"] = TestData.createTestSeat(userId = "attendee-1")
         seats["5"] = TestData.createTestSeat(userId = "attendee-2")
         emitRoomAsOwner(TestData.createTestRoom(
             ownerId = currentUserId,
+            participantIds = setOf(currentUserId, "attendee-1", "attendee-2"),
             seats = seats
         ))
         advanceUntilIdle()
@@ -531,7 +537,7 @@ class RoomViewModelTest {
         viewModel.moveSeat(2, 5)
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { roomRepository.moveSeat(any(), any(), any(), any()) }
+        coVerify { roomRepository.moveSeat("room-1", 2, 5, "attendee-1") }
     }
 
     @Test
@@ -937,14 +943,21 @@ class RoomViewModelTest {
     }
 
     @Test
-    fun `leaveRoom - non-owner just leaves`() = roomTest {
+    fun `leaveRoom - non-owner clears seat and leaves`() = roomTest {
         viewModel = createViewModel()
-        emitRoomAsAttendee()
+        val seats = TestData.createSeatsWithOwner(ownerId).toMutableMap()
+        seats["3"] = TestData.createTestSeat(userId = currentUserId)
+        emitRoomAsAttendee(TestData.createTestRoom(
+            ownerId = ownerId,
+            participantIds = setOf(ownerId, currentUserId),
+            seats = seats
+        ))
         advanceUntilIdle()
 
         viewModel.leaveRoom()
         advanceUntilIdle()
 
+        coVerify { roomRepository.leaveSeat("room-1", 3) }
         coVerify { roomRepository.leaveRoom("room-1", currentUserId) }
         coVerify(exactly = 0) { roomRepository.setOwnerAway(any()) }
         coVerify(exactly = 0) { roomRepository.closeRoom(any()) }
@@ -1079,7 +1092,8 @@ class RoomViewModelTest {
         viewModel.toggleSelfMute(3) // not our seat
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { roomRepository.toggleMute(any(), any(), any()) }
+        // toggleMute for seat 3 should not be called (not our seat)
+        coVerify(exactly = 0) { roomRepository.toggleMute(any(), eq(3), any()) }
     }
 
     @Test
@@ -1093,6 +1107,65 @@ class RoomViewModelTest {
         advanceUntilIdle()
 
         coVerify { roomRepository.toggleMute("room-1", 0, true) } // was false, toggled to true
+    }
+
+    @Test
+    fun `toggleSelfMute - rejects unmute when voice not connected`() = roomTest {
+        viewModel = createViewModel()
+        val seats = TestData.createSeatsWithOwner(currentUserId).toMutableMap()
+        // Owner is on seat 0, muted
+        seats["0"] = TestData.createTestSeat(userId = currentUserId, isMuted = true)
+        emitRoomAsOwner(TestData.createTestRoom(ownerId = currentUserId, seats = seats))
+        advanceUntilIdle()
+
+        // Set voice to disconnected
+        connectionStateFlow.value = VoiceConnectionState.DISCONNECTED
+
+        viewModel.toggleSelfMute(0) // try to unmute
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { roomRepository.toggleMute(any(), any(), any()) }
+        assertEquals("Voice not connected yet", viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun `toggleSelfMute - allows mute when voice disconnected`() = roomTest {
+        viewModel = createViewModel()
+        val seats = TestData.createSeatsWithOwner(currentUserId)
+        emitRoomAsOwner(TestData.createTestRoom(ownerId = currentUserId, seats = seats))
+        advanceUntilIdle()
+
+        // Set voice to disconnected
+        connectionStateFlow.value = VoiceConnectionState.DISCONNECTED
+
+        viewModel.toggleSelfMute(0) // muting (isMuted=false→true) should work
+        advanceUntilIdle()
+
+        coVerify { roomRepository.toggleMute("room-1", 0, true) }
+    }
+
+    // ===== Re-entry Tests =====
+
+    @Test
+    fun `re-entry skips block check when user already in participantIds`() = roomTest {
+        viewModel = createViewModel()
+
+        // User is in participantIds but lifecycle manager is NOT tracking
+        every { roomLifecycleManager.isInRoom("room-1") } returns false
+
+        val room = TestData.createTestRoom(
+            ownerId = ownerId,
+            participantIds = setOf(ownerId, currentUserId)
+        )
+        coEvery { userRepository.getUser(ownerId) } returns Resource.Success(
+            TestData.createTestUser(uid = ownerId, displayName = "Owner")
+        )
+        roomFlow.value = room
+        advanceUntilIdle()
+
+        // Should have joined (hasJoined=true) without showing block warning
+        assertTrue(viewModel.uiState.value.hasJoined)
+        assertNull(viewModel.uiState.value.blockWarning)
     }
 
     // ===== confirmJoinDespiteBlock / cancelJoin Tests =====
@@ -1299,24 +1372,26 @@ class RoomViewModelTest {
     }
 
     @Test
-    fun `owner already seated without permission joins then enables mic on permission grant`() = roomTest {
+    fun `owner already seated without permission joins but does not auto-enable mic on permission grant`() = roomTest {
         viewModel = createViewModel()
         // Emit room with owner on seat 0, but NO audio permission yet
         emitRoomAsOwner()
         advanceUntilIdle()
 
-        // Should join voice (mic disabled since no permission yet)
+        // Should join voice (mic disabled since always starting muted)
         coVerify { voiceService.joinRoom("channel-1", any()) }
 
-        // Grant permission — should enable mic since isSeated was set in joinRoom()
+        // Grant permission — Bug #6: should NOT enable mic, user must manually unmute
+        // The state should have hasAudioPermission=true but onAudioPermissionResult
+        // no longer calls setMicrophoneEnabled
         viewModel.onAudioPermissionResult(true)
         advanceUntilIdle()
 
-        verify { voiceService.setMicrophoneEnabled(true) }
+        assertTrue(viewModel.uiState.value.hasAudioPermission)
     }
 
     @Test
-    fun `alreadyInRoom path sets isSeated and does not trigger redundant seat transition`() = roomTest {
+    fun `alreadyInRoom path sets isSeated but does not auto-enable mic on permission grant`() = roomTest {
         // Simulate ViewModel recreation: roomLifecycleManager reports already in room
         every { roomLifecycleManager.isInRoom("room-1") } returns true
 
@@ -1328,11 +1403,11 @@ class RoomViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        // Grant permission — since isSeated is set in alreadyInRoom path, this should enable mic
+        // Grant permission — Bug #6: should NOT enable mic, user must manually unmute
         viewModel.onAudioPermissionResult(true)
         advanceUntilIdle()
 
-        verify { voiceService.setMicrophoneEnabled(true) }
+        assertTrue(viewModel.uiState.value.hasAudioPermission)
     }
 
     @Test
@@ -1511,10 +1586,16 @@ class RoomViewModelTest {
         emitRoomAsAttendee()
         advanceUntilIdle()
 
+        // First emission (no approved requests) — seeds the suppression snapshot
+        myRequestsFlow.value = emptyList()
+        advanceUntilIdle()
+
+        // Second emission — freshly approved request triggers notification
         val approvedRequest = TestData.createTestSeatRequest(
             userId = currentUserId,
             userName = "Current User",
-            status = SeatRequestStatus.APPROVED
+            status = SeatRequestStatus.APPROVED,
+            createdAt = System.currentTimeMillis() - 10_000L
         )
         myRequestsFlow.value = listOf(approvedRequest)
         advanceUntilIdle()
@@ -2497,5 +2578,177 @@ class RoomViewModelTest {
         assertTrue(viewModel.uiState.value.roomClosed)
         // Verify batch loading was used for host users
         coVerify { userRepository.getUsers(any()) }
+    }
+
+    // ===== Bug 1: Mic sync on join for already-seated owner =====
+
+    @Test
+    fun `joinRoom - owner already seated with isMuted true disables mic`() = roomTest {
+        viewModel = createViewModel()
+        // Owner is seated at index 0 with isMuted = true (default for new rooms)
+        val seats = TestData.createDefaultSeats().toMutableMap()
+        seats["0"] = TestData.createTestSeat(userId = currentUserId, isMuted = true)
+        emitRoomAsOwner(TestData.createTestRoom(
+            ownerId = currentUserId,
+            seats = seats
+        ))
+        advanceUntilIdle()
+
+        // Mic should be disabled because seat.isMuted == true
+        verify { voiceService.setMicrophoneEnabled(false) }
+    }
+
+    @Test
+    fun `joinRoom - always starts muted even with isMuted false`() = roomTest {
+        viewModel = createViewModel()
+        viewModel.onAudioPermissionResult(true)
+        advanceUntilIdle()
+
+        val seats = TestData.createDefaultSeats().toMutableMap()
+        seats["0"] = TestData.createTestSeat(userId = currentUserId, isMuted = false)
+        emitRoomAsOwner(TestData.createTestRoom(
+            ownerId = currentUserId,
+            seats = seats
+        ))
+        advanceUntilIdle()
+
+        // Bug #6: joinRoom always starts muted — mic is disabled on join
+        verify { voiceService.setMicrophoneEnabled(false) }
+    }
+
+    // ===== Bug 2: allKnownUsers persists user data after they leave =====
+
+    @Test
+    fun `allKnownUsers accumulates and retains departed users`() = roomTest {
+        val departedUser = TestData.createTestUser(uid = "departed-1", displayName = "Departed")
+        coEvery { userRepository.getUser("departed-1") } returns Resource.Success(departedUser)
+        coEvery { userRepository.getUsers(any()) } coAnswers {
+            val ids = firstArg<List<String>>()
+            val users = ids.mapNotNull { id ->
+                when (id) {
+                    currentUserId -> TestData.createTestUser(uid = currentUserId, displayName = "Current User")
+                    ownerId -> TestData.createTestUser(uid = ownerId, displayName = "Owner")
+                    "departed-1" -> departedUser
+                    else -> null
+                }
+            }
+            Resource.Success(users)
+        }
+
+        viewModel = createViewModel()
+        // Emit room with departed-1 as participant
+        emitRoomAsAttendee(TestData.createTestRoom(
+            ownerId = ownerId,
+            participantIds = setOf(ownerId, currentUserId, "departed-1")
+        ))
+        advanceUntilIdle()
+
+        // Verify departed-1 is in allKnownUsers
+        assertTrue(viewModel.uiState.value.allKnownUsers.containsKey("departed-1"))
+
+        // Now departed-1 leaves (no longer in participantIds)
+        roomFlow.value = TestData.createTestRoom(
+            ownerId = ownerId,
+            participantIds = setOf(ownerId, currentUserId)
+        )
+        advanceUntilIdle()
+
+        // departed-1 should still be in allKnownUsers
+        assertTrue(viewModel.uiState.value.allKnownUsers.containsKey("departed-1"))
+        assertEquals("Departed", viewModel.uiState.value.allKnownUsers["departed-1"]?.displayName)
+    }
+
+    // ===== Non-owner seat cleared on explicit leave =====
+
+    @Test
+    fun `leaveRoom - non-owner clears seat on explicit leave`() = roomTest {
+        viewModel = createViewModel()
+        val seats = TestData.createSeatsWithOwner(ownerId).toMutableMap()
+        seats["3"] = TestData.createTestSeat(userId = currentUserId)
+        emitRoomAsAttendee(TestData.createTestRoom(
+            ownerId = ownerId,
+            participantIds = setOf(ownerId, currentUserId),
+            seats = seats
+        ))
+        advanceUntilIdle()
+
+        viewModel.leaveRoom()
+        advanceUntilIdle()
+
+        // Non-owner explicit leave clears seat AND leaves participant list
+        coVerify { roomRepository.leaveSeat("room-1", 3) }
+        coVerify { roomRepository.leaveRoom("room-1", currentUserId) }
+    }
+
+    // ===== Bug 5: Banned block warning with reason and kickerName =====
+
+    @Test
+    fun `checkBlockConflicts - banned user sees Banned warning with reason`() = roomTest {
+        viewModel = createViewModel()
+
+        // Emit room where current user is banned
+        val room = TestData.createTestRoom(
+            ownerId = ownerId,
+            participantIds = setOf(ownerId),
+            bannedUserIds = setOf(currentUserId),
+            kickInfo = mapOf(
+                currentUserId to mapOf(
+                    "kickerName" to "RoomOwner",
+                    "reason" to "Spamming"
+                )
+            )
+        )
+        coEvery { userRepository.getUser(ownerId) } returns Resource.Success(
+            TestData.createTestUser(uid = ownerId, displayName = "Owner")
+        )
+        roomFlow.value = room
+        advanceUntilIdle()
+
+        val warning = viewModel.uiState.value.blockWarning
+        assertTrue("Expected Banned warning but was $warning", warning is BlockWarning.Banned)
+        assertEquals("Spamming", (warning as BlockWarning.Banned).reason)
+        assertEquals("RoomOwner", warning.kickerName)
+    }
+
+    @Test
+    fun `checkBlockConflicts - banned user without kickInfo sees null reason`() = roomTest {
+        viewModel = createViewModel()
+
+        val room = TestData.createTestRoom(
+            ownerId = ownerId,
+            participantIds = setOf(ownerId),
+            bannedUserIds = setOf(currentUserId)
+        )
+        coEvery { userRepository.getUser(ownerId) } returns Resource.Success(
+            TestData.createTestUser(uid = ownerId, displayName = "Owner")
+        )
+        roomFlow.value = room
+        advanceUntilIdle()
+
+        val warning = viewModel.uiState.value.blockWarning
+        assertTrue("Expected Banned warning but was $warning", warning is BlockWarning.Banned)
+        assertNull((warning as BlockWarning.Banned).reason)
+        assertNull(warning.kickerName)
+    }
+
+    // ===== Seat swap: moveSeat to owner seat still blocked =====
+
+    @Test
+    fun `moveSeat - swap cannot target owner seat`() = roomTest {
+        viewModel = createViewModel()
+        val seats = TestData.createSeatsWithOwner(currentUserId).toMutableMap()
+        seats["3"] = TestData.createTestSeat(userId = "attendee-1")
+        emitRoomAsOwner(TestData.createTestRoom(
+            ownerId = currentUserId,
+            participantIds = setOf(currentUserId, "attendee-1"),
+            seats = seats
+        ))
+        advanceUntilIdle()
+
+        // Try to swap attendee onto owner seat — should be blocked
+        viewModel.moveSeat(3, 0)
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { roomRepository.moveSeat(any(), any(), any(), any()) }
     }
 }

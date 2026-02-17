@@ -44,6 +44,7 @@ class HomeViewModelTest {
     fun setup() {
         every { authRepository.currentUserId } returns currentUserId
         every { roomRepository.getActiveRooms() } returns roomsFlow
+        every { userRepository.userUpdates } returns MutableSharedFlow()
         coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
     }
 
@@ -205,6 +206,26 @@ class HomeViewModelTest {
         advanceUntilIdle()
 
         assertFalse(vm.uiState.value.isRefreshing)
+    }
+
+    @Test
+    fun `createRoom stores lastRoomName in state`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+        coEvery { roomRepository.createRoom(any(), any()) } returns Resource.Success("new-room-id")
+
+        vm.createRoom("My Cool Room")
+        advanceUntilIdle()
+
+        assertEquals("My Cool Room", vm.uiState.value.lastRoomName)
+    }
+
+    @Test
+    fun `lastRoomName defaults to empty`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        assertEquals("", vm.uiState.value.lastRoomName)
     }
 
     @Test

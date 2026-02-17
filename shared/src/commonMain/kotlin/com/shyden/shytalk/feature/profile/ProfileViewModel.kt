@@ -48,6 +48,24 @@ class ProfileViewModel(
     init {
         val currentUid = authRepository.currentUserId ?: ""
         _uiState.update { it.copy(currentUserId = currentUid) }
+        observeUserUpdates()
+    }
+
+    private fun observeUserUpdates() {
+        viewModelScope.launch {
+            userRepository.userUpdates.collect { updatedUser ->
+                val currentUser = _uiState.value.user ?: return@collect
+                if (updatedUser.uid == currentUser.uid) {
+                    _uiState.update { state ->
+                        state.copy(
+                            user = updatedUser,
+                            followerCount = updatedUser.followerIds.size,
+                            followingCount = updatedUser.followingIds.size
+                        )
+                    }
+                }
+            }
+        }
     }
 
     fun loadProfile(userId: String?) {

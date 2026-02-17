@@ -2,6 +2,7 @@ package com.shyden.shytalk.data.repository
 
 import com.shyden.shytalk.core.model.Message
 import com.shyden.shytalk.core.model.MessageType
+import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.core.util.currentTimeMillis
@@ -24,7 +25,7 @@ class MessageRepositoryImpl(
     override fun getMessages(roomId: String): Flow<List<Message>> = callbackFlow {
         val listener = messagesCollection(roomId)
             .orderBy("createdAt", Query.Direction.ASCENDING)
-            .limitToLast(200)
+            .limitToLast(Constants.MAX_ROOM_MESSAGES.toLong())
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     close(error)
@@ -55,6 +56,21 @@ class MessageRepositoryImpl(
             type = type
         )
         messagesCollection(roomId).document(messageId).set(message.toMap()).await()
+        trimOldMessages(roomId)
+    }
+
+    private suspend fun trimOldMessages(roomId: String) {
+        val collection = messagesCollection(roomId)
+        val snapshot = collection
+            .orderBy("createdAt", Query.Direction.ASCENDING)
+            .get()
+            .await()
+        val excess = snapshot.documents.size - Constants.MAX_ROOM_MESSAGES
+        if (excess > 0) {
+            val batch = firestore.batch()
+            snapshot.documents.take(excess).forEach { batch.delete(it.reference) }
+            batch.commit().await()
+        }
     }
 
     override suspend fun sendMessage(

@@ -62,19 +62,29 @@ class SeatRequestRepositoryImplTest {
     }
 
     @Test
-    fun `createRequest is no-op when pending request already exists`() = runTest {
+    fun `createRequest refreshes existing pending request instead of creating new`() = runTest {
+        val existingDocRef = mockk<DocumentReference>(relaxed = true)
+        val existingDoc = mockk<DocumentSnapshot> {
+            every { reference } returns existingDocRef
+        }
         val query = mockk<Query>(relaxed = true)
-        val querySnapshot = mockk<QuerySnapshot> { every { isEmpty } returns false }
+        val querySnapshot = mockk<QuerySnapshot> {
+            every { isEmpty } returns false
+            every { documents } returns listOf(existingDoc)
+        }
         every { requestsCollection.whereEqualTo("userId", "user-1") } returns query
         every { query.whereEqualTo("status", SeatRequestStatus.PENDING.name) } returns query
         every { query.limit(1) } returns query
         every { query.get() } returns Tasks.forResult(querySnapshot)
+        every { existingDocRef.update(any<Map<String, Any>>()) } returns Tasks.forResult(null)
 
         val result = repo.createRequest("room-1", "user-1", "Alice", 2)
 
         assertTrue(result is Resource.Success)
-        // Should NOT have written a new document
+        // Should NOT have created a new document
         verify(exactly = 0) { requestDoc.set(any()) }
+        // Should have updated the existing one
+        verify(exactly = 1) { existingDocRef.update(any<Map<String, Any>>()) }
     }
 
     @Test

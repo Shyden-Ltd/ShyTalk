@@ -138,34 +138,40 @@ exports.onPresenceRemoved = onValueDeleted(
           }
         } else {
           // --- Non-owner disconnected ---
-          // Remove from participants and clear their seats.
-
-          // Clear any seats occupied by this user
+          // Clear their seat but keep them in participantIds.
+          // They may reconnect; seat is the only thing removed on disconnect.
           for (let i = 0; i < MAX_SEATS; i++) {
+            if (i === OWNER_SEAT_INDEX) continue;
             const key = i.toString();
             const seat = seats[key];
             if (seat && seat.userId === userId && seat.state === "OCCUPIED") {
-              updates[`seats.${key}`] = {
-                userId: null,
-                state: "EMPTY",
-                isMuted: false,
-              };
+              updates[`seats.${key}`] = { userId: null, state: "EMPTY", isMuted: false };
+              break;
             }
           }
 
-          const remainingParticipants = participantIds.filter((id) => id !== userId);
-
-          // If only the owner remains and they're away, close the room
-          if (remainingParticipants.length === 1 && remainingParticipants[0] === room.ownerId && room.state === "OWNER_AWAY") {
-            updates.state = "CLOSED";
-            updates.closedAt = require("firebase-admin/firestore").Timestamp.now();
-            updates.participantIds = [];
+          // If no one is on mic anymore and owner is away, close the room
+          if (room.state === "OWNER_AWAY") {
+            let anyoneOnMic = false;
             for (let i = 0; i < MAX_SEATS; i++) {
-              updates[`seats.${i.toString()}`] = { userId: null, state: "EMPTY", isMuted: false };
+              if (i === OWNER_SEAT_INDEX) continue;
+              const key = i.toString();
+              // Check the seat AFTER our clear (use updates if we just cleared it)
+              const seat = updates[`seats.${key}`] || seats[key];
+              if (seat && seat.userId && seat.userId !== userId && seat.state === "OCCUPIED") {
+                anyoneOnMic = true;
+                break;
+              }
             }
-            console.log(`Last non-owner left room ${roomId} (owner away) - closing`);
-          } else {
-            updates.participantIds = remainingParticipants;
+            if (!anyoneOnMic) {
+              updates.state = "CLOSED";
+              updates.closedAt = require("firebase-admin/firestore").Timestamp.now();
+              updates.participantIds = [];
+              for (let i = 0; i < MAX_SEATS; i++) {
+                updates[`seats.${i.toString()}`] = { userId: null, state: "EMPTY", isMuted: false };
+              }
+              console.log(`No one on mic in OWNER_AWAY room ${roomId} — closing`);
+            }
           }
         }
 

@@ -83,11 +83,11 @@ fun ProfileSetupScreen(
 
             OutlinedTextField(
                 value = displayName,
-                onValueChange = { if (it.length <= 30) displayName = it },
+                onValueChange = { if (it.length <= 20) displayName = it },
                 label = { Text("Display Name") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                supportingText = { Text("${displayName.length}/30") }
+                supportingText = { Text("${displayName.length}/20") }
             )
 
             Spacer(modifier = Modifier.height(16.dp))

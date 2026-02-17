@@ -34,13 +34,13 @@ private val Gold = Color(0xFFF0C246)
 private val CloudWhite = Color(0xFFFFFFFF)
 
 // Pre-computed alpha variants to avoid per-frame Color.copy() allocations
-private val LanternBodyColor = LanternRed.copy(alpha = 0.5f)
-private val GoldRimColor = Gold.copy(alpha = 0.6f)
-private val GoldTasselColor = Gold.copy(alpha = 0.4f)
-private val GoldHandleColor = Gold.copy(alpha = 0.5f)
-private val RadialGlowColor = Color(0x15D4263E)
+private val LanternBodyColor = LanternRed.copy(alpha = 0.7f)
+private val GoldRimColor = Gold.copy(alpha = 0.8f)
+private val GoldTasselColor = Gold.copy(alpha = 0.6f)
+private val GoldHandleColor = Gold.copy(alpha = 0.7f)
+private val RadialGlowColor = Color(0x30D4263E)
 private val BackgroundGradient = Brush.verticalGradient(listOf(DeepRedTop, DeepRedBottom))
-private val HorseWatermarkColor = Color.White.copy(alpha = 0.04f)
+private val HorseWatermarkColor = Color.White.copy(alpha = 0.07f)
 
 private data class LanternConfig(
     val xFraction: Float,
@@ -144,7 +144,7 @@ fun CnyRoomBackground(modifier: Modifier = Modifier) {
                     rawProgress < 0.1f -> rawProgress / 0.1f
                     rawProgress > 0.9f -> (1f - rawProgress) / 0.1f
                     else -> 1f
-                } * 0.6f
+                } * 0.8f
                 drawCircle(
                     color = Gold.copy(alpha = alpha),
                     radius = sparkle.radius,
@@ -157,19 +157,19 @@ fun CnyRoomBackground(modifier: Modifier = Modifier) {
                 startX = 0f,
                 y = size.height * 0.88f,
                 width = size.width * 0.35f,
-                alpha = 0.03f
+                alpha = 0.06f
             )
             drawCloudWisp(
                 startX = size.width * 0.65f,
                 y = size.height * 0.92f,
                 width = size.width * 0.35f,
-                alpha = 0.03f
+                alpha = 0.06f
             )
             drawCloudWisp(
                 startX = size.width * 0.3f,
                 y = size.height * 0.95f,
                 width = size.width * 0.4f,
-                alpha = 0.025f
+                alpha = 0.05f
             )
         }
 

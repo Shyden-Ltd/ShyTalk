@@ -23,6 +23,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -72,6 +73,7 @@ class ActiveRoomManagerTest {
         every { presenceService.observeRoomPresence(any()) } returns presenceFlow
 
         every { authRepository.currentUserId } returns currentUserId
+        every { userRepository.userUpdates } returns MutableSharedFlow()
 
         manager = ActiveRoomManager(
             roomRepository = roomRepository,
@@ -462,6 +464,39 @@ class ActiveRoomManagerTest {
         val room = TestData.createTestRoom(ownerId = "owner", seats = seats)
         manager.updateTrackedRoom(room)
 
+        // Voice must be connected for unmute, but muting (isMuted=false→true) is always allowed
+        manager.toggleSelfMute(3)
+
+        coVerify { roomRepository.toggleMute("room-1", 3, true) }
+        verify { voiceService.setMicrophoneEnabled(false) }
+    }
+
+    @Test
+    fun `toggleSelfMute - rejects unmute when voice not connected`() = runTest {
+        manager.trackRoom("room-1")
+        val seats = TestData.createDefaultSeats().toMutableMap()
+        seats["3"] = TestData.createTestSeat(userId = currentUserId, isMuted = true)
+        val room = TestData.createTestRoom(ownerId = "owner", seats = seats)
+        manager.updateTrackedRoom(room)
+
+        // connectionState starts as DISCONNECTED
+        manager.toggleSelfMute(3)
+
+        // Should NOT call toggleMute or setMicrophoneEnabled
+        coVerify(exactly = 0) { roomRepository.toggleMute(any(), any(), any()) }
+        verify(exactly = 0) { voiceService.setMicrophoneEnabled(true) }
+        assertEquals("Voice not connected yet", manager.error.value)
+    }
+
+    @Test
+    fun `toggleSelfMute - allows mute when voice disconnected`() = runTest {
+        manager.trackRoom("room-1")
+        val seats = TestData.createDefaultSeats().toMutableMap()
+        seats["3"] = TestData.createTestSeat(userId = currentUserId, isMuted = false)
+        val room = TestData.createTestRoom(ownerId = "owner", seats = seats)
+        manager.updateTrackedRoom(room)
+
+        // connectionState is DISCONNECTED — muting (isMuted=false→true) should still work
         manager.toggleSelfMute(3)
 
         coVerify { roomRepository.toggleMute("room-1", 3, true) }
@@ -504,20 +539,21 @@ class ActiveRoomManagerTest {
     }
 
     @Test
-    fun `moveSeat - cannot move to occupied seat`() = runTest {
+    fun `moveSeat - occupied destination triggers swap`() = runTest {
         manager.trackRoom("room-1")
         val seats = TestData.createDefaultSeats().toMutableMap()
         seats["2"] = TestData.createTestSeat(userId = "target")
         seats["3"] = TestData.createTestSeat(userId = "occupied")
         val room = TestData.createTestRoom(
             ownerId = currentUserId,
+            participantIds = setOf(currentUserId, "target", "occupied"),
             seats = seats
         )
         manager.updateTrackedRoom(room)
 
         manager.moveSeat(2, 3)
 
-        coVerify(exactly = 0) { roomRepository.moveSeat(any(), any(), any(), any()) }
+        coVerify { roomRepository.moveSeat("room-1", 2, 3, "target") }
     }
 
     // --- leaveRoom ---
@@ -664,7 +700,7 @@ class ActiveRoomManagerTest {
     }
 
     @Test
-    fun `connection monitor - non-owner disconnect triggers leaveRoom after grace period`() = runTest {
+    fun `connection monitor - non-owner disconnect removes from seat after grace period`() = runTest {
         manager.trackRoom("room-1")
         val seats = TestData.createSeatsWithOwner("other-owner").toMutableMap()
         seats["3"] = TestData.createTestSeat(userId = currentUserId)
@@ -684,9 +720,10 @@ class ActiveRoomManagerTest {
         // Advance past the grace period
         testScheduler.advanceTimeBy(Constants.VOICE_DISCONNECT_GRACE_PERIOD_MS + 1000)
 
-        // Non-owner should have left the room
+        // Non-owner should have seat cleared but NOT full leaveRoom
         coVerify { roomRepository.leaveSeat("room-1", 3) }
-        coVerify { voiceService.leaveChannel() }
+        coVerify(exactly = 0) { voiceService.leaveChannel() }
+        coVerify(exactly = 0) { roomRepository.leaveRoom(any(), any()) }
     }
 
     // --- presence monitor ---
@@ -739,20 +776,27 @@ class ActiveRoomManagerTest {
         presenceFlow.value = setOf(currentUserId, "other-owner")
 
         manager.trackRoom("room-1")
+        // Use default seats (owner on seat 0) but make "other-owner" NOT seated
+        // so the presence monitor considers them for removal
+        val seats = TestData.createDefaultSeats().toMutableMap()
+        seats["0"] = TestData.createTestSeat(userId = "other-owner") // owner is seated
         val room = TestData.createTestRoom(
             ownerId = "other-owner",
-            participantIds = setOf("other-owner", currentUserId)
+            participantIds = setOf("other-owner", currentUserId, "unseated-participant"),
+            seats = seats
         )
         manager.updateTrackedRoom(room)
 
-        // Both disappear from presence
+        // Both disappear from presence, plus unseated-participant
         presenceFlow.value = setOf("nobody")
 
         testScheduler.advanceTimeBy(Constants.PRESENCE_TIMEOUT_MS + 100)
 
-        // Should only try to remove other-owner, not self
+        // Should not try to remove self; seated users and unseated participants are sent to
+        // removeDisconnectedUser (Firestore transaction handles owner protection server-side)
         coVerify(exactly = 0) { roomRepository.removeDisconnectedUser("room-1", currentUserId) }
         coVerify { roomRepository.removeDisconnectedUser("room-1", "other-owner") }
+        coVerify { roomRepository.removeDisconnectedUser("room-1", "unseated-participant") }
     }
 
     @Test

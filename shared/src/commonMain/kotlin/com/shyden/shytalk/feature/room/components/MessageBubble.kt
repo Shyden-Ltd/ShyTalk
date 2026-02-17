@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
@@ -36,6 +37,7 @@ import com.shyden.shytalk.core.model.MessageType
 import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.flagEmojiForCode
+import com.shyden.shytalk.ui.components.FlagBadge
 
 private val BubbleShape = RoundedCornerShape(
     topStart = 4.dp,
@@ -80,18 +82,11 @@ private fun UserAvatar(
             }
         }
         if (nationality != null && size >= 32.dp) {
-            val flagSize = size * 0.4f
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .size(flagSize),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = flagEmojiForCode(nationality),
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = (size.value * 0.28f).sp)
-                )
-            }
+            FlagBadge(
+                countryCode = nationality,
+                badgeSize = size * 0.4f,
+                modifier = Modifier.align(Alignment.BottomEnd)
+            )
         }
     }
 }
@@ -144,21 +139,31 @@ fun MessageBubble(
                     text = message.text,
                     style = MaterialTheme.typography.bodySmall,
                     fontStyle = FontStyle.Italic,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 if (canInvite) {
+                    Spacer(modifier = Modifier.width(4.dp))
                     IconButton(
                         onClick = onInvite,
                         modifier = Modifier.size(28.dp)
                     ) {
-                        Icon(
-                            Icons.Default.Mic,
-                            contentDescription = "Invite to mic",
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.Mic,
+                                contentDescription = "Invite to mic",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .align(Alignment.BottomEnd),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
             }

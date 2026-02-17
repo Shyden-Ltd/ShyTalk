@@ -11,6 +11,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -39,6 +40,7 @@ class ProfileViewModelTest {
     fun setup() {
         every { authRepository.currentUserId } returns currentUserId
         every { authRepository.currentUserEmail } returns "test@example.com"
+        every { userRepository.userUpdates } returns MutableSharedFlow()
     }
 
     private fun createViewModel(): ProfileViewModel {

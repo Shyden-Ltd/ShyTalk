@@ -23,7 +23,10 @@ object TestData {
         coverPhotoUrl: String? = null,
         uniqueId: Long = 12345L,
         dateOfBirth: Long? = null,
-        hideAge: Boolean = false
+        hideAge: Boolean = false,
+        followerIds: Set<String> = emptySet(),
+        followingIds: Set<String> = emptySet(),
+        hideFollowing: Boolean = false
     ) = User(
         uid = uid,
         displayName = displayName,
@@ -33,6 +36,9 @@ object TestData {
         uniqueId = uniqueId,
         dateOfBirth = dateOfBirth,
         hideAge = hideAge,
+        followerIds = followerIds,
+        followingIds = followingIds,
+        hideFollowing = hideFollowing,
         createdAt = BASE_TIMESTAMP,
         lastSeenAt = BASE_TIMESTAMP
     )

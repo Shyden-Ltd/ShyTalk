@@ -189,7 +189,8 @@ private fun SeatRow(
                     user = seatUser,
                     seatSize = seatSize,
                     onClick = { onSeatClick(seatIndex) },
-                    onTapUser = seatUserId?.let { uid -> { onTapUser(uid) } }
+                    onTapUser = seatUserId?.let { uid -> { onTapUser(uid) } },
+                    modifier = Modifier.weight(1f)
                 )
             }
         }

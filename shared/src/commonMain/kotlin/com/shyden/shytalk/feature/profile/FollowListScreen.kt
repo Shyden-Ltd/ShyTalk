@@ -16,9 +16,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -152,7 +154,10 @@ fun FollowListScreen(
                                 selectedTab = uiState.selectedTab,
                                 iFollowThisUser = user.uid in uiState.currentUserFollowingIds,
                                 thisUserFollowsMe = user.uid in uiState.currentUserFollowerIds,
+                                isPendingRemove = user.uid == uiState.pendingRemoveFollowerId,
                                 onToggleFollow = { viewModel.toggleFollow(user.uid) },
+                                onRemoveFollower = { viewModel.removeFollower(user.uid) },
+                                onUndoRemove = { viewModel.undoRemoveFollower() },
                                 onClick = { onNavigateToUserProfile(user.uid) }
                             )
                         }
@@ -170,7 +175,10 @@ private fun FollowUserRow(
     selectedTab: FollowTab,
     iFollowThisUser: Boolean,
     thisUserFollowsMe: Boolean,
+    isPendingRemove: Boolean = false,
     onToggleFollow: () -> Unit,
+    onRemoveFollower: () -> Unit = {},
+    onUndoRemove: () -> Unit = {},
     onClick: () -> Unit
 ) {
     Row(
@@ -217,13 +225,11 @@ private fun FollowUserRow(
             )
         }
 
-        // Action button (only on own lists)
+        // Action buttons (only on own lists)
         if (isOwnList) {
-            IconButton(onClick = onToggleFollow) {
-                when (selectedTab) {
-                    FollowTab.FOLLOWING -> {
-                        // Shows mutual status: People if they follow me back, Person if one-way
-                        // After unfollowing: PersonAdd to re-follow
+            when (selectedTab) {
+                FollowTab.FOLLOWING -> {
+                    IconButton(onClick = onToggleFollow) {
                         val icon = when {
                             !iFollowThisUser -> Icons.Default.PersonAdd
                             thisUserFollowsMe -> Icons.Default.People
@@ -236,8 +242,10 @@ private fun FollowUserRow(
                                 else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    FollowTab.FOLLOWERS -> {
-                        // Shows if I follow them back: People if yes, PersonAdd if no
+                }
+                FollowTab.FOLLOWERS -> {
+                    // Follow back button
+                    IconButton(onClick = onToggleFollow) {
                         Icon(
                             imageVector = if (iFollowThisUser) Icons.Default.People
                                 else Icons.Default.PersonAdd,
@@ -245,6 +253,24 @@ private fun FollowUserRow(
                             tint = if (iFollowThisUser) MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                    // Remove follower / Undo button
+                    if (isPendingRemove) {
+                        IconButton(onClick = onUndoRemove) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Undo,
+                                contentDescription = "Undo remove",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    } else {
+                        IconButton(onClick = onRemoveFollower) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Remove follower",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
                 }
             }

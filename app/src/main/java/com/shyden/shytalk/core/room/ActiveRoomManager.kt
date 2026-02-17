@@ -270,21 +270,24 @@ class ActiveRoomManager(
                     // Switch mic based on seat status (single lookup)
                     val mySeat = findMySeat(room, userId)
                     val currentlySeated = mySeat != null
-                    if (currentlySeated != isSeated) {
-                        voiceService.setMicrophoneEnabled(currentlySeated)
+                    if (currentlySeated != isSeated && !currentlySeated) {
+                        voiceService.setMicrophoneEnabled(false)
+                        voiceService.setAudioMode(false)
                     }
+                    // When becoming seated: do NOT enable mic. User starts muted (Bug #6).
                     isSeated = currentlySeated
 
                     if (mySeat != null) {
-                        // Sync mute state
-                        voiceService.setMicrophoneEnabled(!mySeat.isMuted)
+                        // Sync mute state and audio mode
+                        val shouldUnmute = !mySeat.isMuted
+                        voiceService.setMicrophoneEnabled(shouldUnmute)
+                        voiceService.setAudioMode(shouldUnmute)
 
                         // Ensure connected to voice room
                         if (!voiceService.isJoined.value && room.voiceRoomName.isNotEmpty()) {
                             voiceService.joinRoom(room.voiceRoomName, currentUserId)
-                            if (mySeat.isMuted) {
-                                voiceService.setMicrophoneEnabled(false)
-                            }
+                            voiceService.setMicrophoneEnabled(shouldUnmute)
+                            voiceService.setAudioMode(shouldUnmute)
                         }
                     }
 
@@ -340,8 +343,11 @@ class ActiveRoomManager(
                         graceJob?.cancel()
                         graceJob = scope.launch {
                             delay(Constants.VOICE_DISCONNECT_GRACE_PERIOD_MS)
-                            if (_activeRoomId.value != null) {
-                                leaveRoom()
+                            val currentRoom = _activeRoom.value ?: return@launch
+                            val seatEntry = currentRoom.findUserSeat(currentUserId)
+                            if (seatEntry != null && _activeRoomId.value != null) {
+                                Log.d(TAG, "connectionMonitor: non-owner voice disconnect timeout — removing from seat ${seatEntry.key}")
+                                roomRepository.leaveSeat(_activeRoomId.value!!, seatEntry.key.toInt())
                             }
                         }
                     }
@@ -372,7 +378,7 @@ class ActiveRoomManager(
                     val room = _activeRoom.value ?: return@collect
                     val participantIds = room.participantIds
 
-                    // Users in room but not present in RTDB
+                    // Users in room but not present in RTDB (include seated users for dimming)
                     val absentUsers = participantIds - presentUserIds - currentUserId
 
                     // Cancel timers for users who reappeared
@@ -475,6 +481,12 @@ class ActiveRoomManager(
         if (seat.userId != currentUserId) return
 
         val newMuteState = !seat.isMuted
+        // Block unmute when voice is not connected — muting is always allowed
+        if (!newMuteState && voiceService.connectionState.value != VoiceConnectionState.CONNECTED) {
+            _error.value = "Voice not connected yet"
+            return
+        }
+
         roomRepository.toggleMute(roomId, seatIndex, newMuteState)
         voiceService.setMicrophoneEnabled(!newMuteState)
     }
@@ -490,7 +502,9 @@ class ActiveRoomManager(
         if (targetUserId == room.ownerId) return
         if (role == RoomRole.HOST && targetUserId in room.hostIds) return
 
-        roomRepository.toggleMute(roomId, seatIndex, !seat.isMuted)
+        // Only mute, never unmute — only the user themselves can unmute
+        if (seat.isMuted) return
+        roomRepository.toggleMute(roomId, seatIndex, true)
     }
 
     suspend fun moveSeat(fromIndex: Int, toIndex: Int) {
@@ -504,9 +518,7 @@ class ActiveRoomManager(
         val targetUserId = fromSeat.userId ?: return
         if (role == RoomRole.HOST && (targetUserId == room.ownerId || targetUserId in room.hostIds)) return
 
-        val toSeat = room.seats[toIndex.toString()] ?: return
-        if (toSeat.state == SeatState.OCCUPIED) return
-
+        // Destination can be empty or occupied (swap)
         roomRepository.moveSeat(roomId, fromIndex, toIndex, targetUserId)
     }
 

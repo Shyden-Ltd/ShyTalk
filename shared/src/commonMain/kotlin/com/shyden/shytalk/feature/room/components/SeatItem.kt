@@ -57,6 +57,7 @@ import com.shyden.shytalk.core.model.Seat
 import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.flagEmojiForCode
+import com.shyden.shytalk.ui.components.FlagBadge
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -193,17 +194,11 @@ fun SeatItem(
 
             // Nationality flag badge (overlapping avatar border, bottom-end)
             if (seat.state == SeatState.OCCUPIED && user?.nationality != null) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .size(badgeSize),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = flagEmojiForCode(user.nationality!!),
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = flagFontSize.sp)
-                    )
-                }
+                FlagBadge(
+                    countryCode = user.nationality!!,
+                    badgeSize = badgeSize,
+                    modifier = Modifier.align(Alignment.BottomEnd)
+                )
             }
 
             // Context menu (only leave seat for current user)
@@ -264,7 +259,8 @@ fun SeatItem(
                     style = textShadowStyle,
                     color = MaterialTheme.colorScheme.onBackground,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
                 Spacer(modifier = Modifier.width(3.dp))
                 Icon(

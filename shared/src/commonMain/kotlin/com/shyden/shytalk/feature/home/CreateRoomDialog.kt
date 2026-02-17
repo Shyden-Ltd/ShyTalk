@@ -19,9 +19,10 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun CreateRoomDialog(
     onDismiss: () -> Unit,
-    onCreate: (String) -> Unit
+    onCreate: (String) -> Unit,
+    initialRoomName: String = ""
 ) {
-    var roomName by remember { mutableStateOf("") }
+    var roomName by remember { mutableStateOf(initialRoomName) }
 
     AlertDialog(
         onDismissRequest = onDismiss,

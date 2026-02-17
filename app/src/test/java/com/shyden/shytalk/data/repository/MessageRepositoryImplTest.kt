@@ -4,6 +4,8 @@ import com.google.android.gms.tasks.Tasks
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.QuerySnapshot
 import com.shyden.shytalk.core.util.Resource
 import io.mockk.every
 import io.mockk.mockk
@@ -36,6 +38,12 @@ class MessageRepositoryImplTest {
         every { roomDoc.collection("messages") } returns messagesCollection
         every { messagesCollection.document(any<String>()) } returns messageDoc
         every { messageDoc.set(any()) } returns Tasks.forResult(null)
+
+        // Mock trimOldMessages query (returns empty snapshot — no excess messages)
+        val trimQuery = mockk<Query>(relaxed = true)
+        val emptySnapshot = mockk<QuerySnapshot> { every { documents } returns emptyList() }
+        every { messagesCollection.orderBy("createdAt", Query.Direction.ASCENDING) } returns trimQuery
+        every { trimQuery.get() } returns Tasks.forResult(emptySnapshot)
 
         repo = MessageRepositoryImpl(firestore)
     }

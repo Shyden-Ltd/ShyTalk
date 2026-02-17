@@ -6,6 +6,8 @@ import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.UserRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,7 +26,8 @@ data class FollowListUiState(
     val currentUserFollowingIds: Set<String> = emptySet(),
     val currentUserFollowerIds: Set<String> = emptySet(),
     val currentUserBlockedIds: Set<String> = emptySet(),
-    val followingHidden: Boolean = false
+    val followingHidden: Boolean = false,
+    val pendingRemoveFollowerId: String? = null
 )
 
 enum class FollowTab { FOLLOWERS, FOLLOWING }
@@ -49,6 +52,20 @@ class FollowListViewModel(
             selectedTab = tab
         )
         loadData()
+        observeUserUpdates()
+    }
+
+    private fun observeUserUpdates() {
+        viewModelScope.launch {
+            userRepository.userUpdates.collect { updatedUser ->
+                _uiState.update { state ->
+                    state.copy(
+                        followers = state.followers.map { if (it.uid == updatedUser.uid) updatedUser else it },
+                        following = state.following.map { if (it.uid == updatedUser.uid) updatedUser else it }
+                    )
+                }
+            }
+        }
     }
 
     fun selectTab(tab: FollowTab) {
@@ -144,7 +161,52 @@ class FollowListViewModel(
         }
     }
 
+    private var removeFollowerJob: Job? = null
+    private var pendingRemoveUser: User? = null
+
+    fun removeFollower(followerId: String) {
+        val currentUid = _uiState.value.profileUserId
+        if (!_uiState.value.isOwnList) return
+
+        // Mark as pending remove — keep in list so Undo button is visible
+        pendingRemoveUser = _uiState.value.followers.find { it.uid == followerId }
+        _uiState.update { it.copy(pendingRemoveFollowerId = followerId) }
+
+        // Auto-confirm after delay
+        removeFollowerJob?.cancel()
+        removeFollowerJob = viewModelScope.launch {
+            delay(UNDO_TIMEOUT_MS)
+            confirmRemoveFollower(followerId, currentUid)
+        }
+    }
+
+    fun undoRemoveFollower() {
+        removeFollowerJob?.cancel()
+        pendingRemoveUser = null
+        _uiState.update { it.copy(pendingRemoveFollowerId = null) }
+    }
+
+    private fun confirmRemoveFollower(followerId: String, userId: String) {
+        pendingRemoveUser = null
+        _uiState.update {
+            it.copy(
+                followers = it.followers.filter { u -> u.uid != followerId },
+                pendingRemoveFollowerId = null
+            )
+        }
+        viewModelScope.launch {
+            val result = userRepository.removeFollower(userId, followerId)
+            if (result is Resource.Error) {
+                _uiState.update { it.copy(error = result.message) }
+            }
+        }
+    }
+
     fun clearError() {
         _uiState.update { it.copy(error = null) }
+    }
+
+    companion object {
+        private const val UNDO_TIMEOUT_MS = 5000L
     }
 }

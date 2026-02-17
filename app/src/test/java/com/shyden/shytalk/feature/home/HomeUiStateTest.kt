@@ -69,6 +69,17 @@ class HomeUiStateTest {
     }
 
     @Test
+    fun `default state has empty lastRoomName`() {
+        assertEquals("", HomeUiState().lastRoomName)
+    }
+
+    @Test
+    fun `copy updates lastRoomName`() {
+        val state = HomeUiState().copy(lastRoomName = "My Room")
+        assertEquals("My Room", state.lastRoomName)
+    }
+
+    @Test
     fun `REFRESH_INTERVAL_MS is 30 seconds`() {
         assertEquals(30_000L, HomeViewModel.REFRESH_INTERVAL_MS)
     }

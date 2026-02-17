@@ -122,6 +122,9 @@ class RoomSettingsViewModel(
         val room = _uiState.value.room ?: return
         // Owner can always invite; hosts only when requireApproval is OFF
         if (currentUserId != room.ownerId && (currentUserId !in room.hostIds || room.requireApproval)) return
+        // Don't invite someone already invited or already seated
+        if (userId in room.pendingInvites) return
+        if (room.findUserSeat(userId) != null) return
         viewModelScope.launch {
             roomRepository.sendInvite(currentRoomId, userId, currentUserId)
         }

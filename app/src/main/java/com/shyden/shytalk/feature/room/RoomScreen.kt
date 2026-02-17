@@ -26,6 +26,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -77,10 +78,10 @@ fun RoomScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
-    var showSettings by remember { mutableStateOf(false) }
-    var showUserCardForId by remember { mutableStateOf<String?>(null) }
-    var showParticipantPanel by remember { mutableStateOf(false) }
-    var showRoomNameDialog by remember { mutableStateOf(false) }
+    var showSettings by remember(roomId) { mutableStateOf(false) }
+    var showUserCardForId by remember(roomId) { mutableStateOf<String?>(null) }
+    var showParticipantPanel by remember(roomId) { mutableStateOf(false) }
+    var showRoomNameDialog by remember(roomId) { mutableStateOf(false) }
 
     // Track room screen visibility for chathead
     DisposableEffect(Unit) {
@@ -179,6 +180,18 @@ fun RoomScreen(
     // Block warning dialogs
     uiState.blockWarning?.let { warning ->
         val (title, message, showEnterOption) = when (warning) {
+            is BlockWarning.Banned -> {
+                val reason = buildString {
+                    append("You were banned from this room.")
+                    if (warning.kickerName != null) {
+                        append("\nBanned by: ${warning.kickerName}")
+                    }
+                    if (!warning.reason.isNullOrBlank()) {
+                        append("\nReason: ${warning.reason}")
+                    }
+                }
+                Triple("Banned from Room", reason, false)
+            }
             is BlockWarning.BlockedByRoomOwner -> Triple(
                 "Cannot Enter Room",
                 "You are not allowed to enter this room.",
@@ -265,9 +278,9 @@ fun RoomScreen(
         }
     }
 
-    // Merged user map for ChatPanel (memoized)
-    val userMap = remember(uiState.seatUsers, uiState.participantUsers) {
-        uiState.seatUsers + uiState.participantUsers
+    // Merged user map for ChatPanel — use allKnownUsers so departed users keep their avatars
+    val userMap = remember(uiState.allKnownUsers) {
+        uiState.allKnownUsers
     }
 
     Box(
@@ -278,16 +291,28 @@ fun RoomScreen(
         // Animated CNY Canvas background
         CnyRoomBackground(modifier = Modifier.fillMaxSize())
 
-        // Semi-transparent scrim so text remains readable
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.85f))
-        )
-
         Scaffold(
             containerColor = Color.Transparent,
-            snackbarHost = { SnackbarHost(snackbarHostState) },
+            snackbarHost = {
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier.padding(bottom = 56.dp),
+                    snackbar = { data ->
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.75f),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = data.visuals.message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.inverseOnSurface,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            )
+                        }
+                    }
+                )
+            },
             topBar = {
                 if (!uiState.roomClosed) {
                     RoomToolbar(
@@ -347,6 +372,27 @@ fun RoomScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator()
+                }
+            } else if (uiState.hasJoined && !uiState.isVoiceReady) {
+                // Loading screen while connecting to voice
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = uiState.room?.name ?: "Room",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    CircularProgressIndicator()
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Connecting...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             } else if (uiState.hasJoined) {
                 Column(modifier = Modifier.fillMaxSize()) {
@@ -538,12 +584,12 @@ fun RoomScreen(
 
         // User card popup when tapping a user
         showUserCardForId?.let { userId ->
-            val emptySeats = remember(uiState.room?.seats) {
+            val movableSeats = remember(uiState.room?.seats, userId) {
                 uiState.room?.seats?.entries
-                    ?.filter { it.value.state != SeatState.OCCUPIED && it.key.toInt() != Constants.OWNER_SEAT_INDEX }
+                    ?.filter { it.key.toInt() != Constants.OWNER_SEAT_INDEX && it.value.userId != userId }
                     ?.map { it.key.toInt() } ?: emptyList()
             }
-            val user = uiState.seatUsers[userId] ?: uiState.participantUsers[userId]
+            val user = uiState.seatUsers[userId] ?: uiState.participantUsers[userId] ?: uiState.allKnownUsers[userId]
             if (user != null) {
                 val targetSeatEntry = uiState.room?.findUserSeat(userId)
                 val isTargetSeated = targetSeatEntry != null
@@ -589,7 +635,8 @@ fun RoomScreen(
                             showUserCardForId = null
                         }
                     } else null,
-                    onMuteToggle = if (canModerate && targetSeatIndex != null) {
+                    onMuteToggle = if (canModerate && targetSeatIndex != null
+                        && targetSeatEntry?.value?.isMuted != true) {
                         { viewModel.forceMuteUser(targetSeatIndex) }
                     } else null,
                     isTargetMuted = targetSeatEntry?.value?.isMuted ?: false,
@@ -600,11 +647,18 @@ fun RoomScreen(
                     onKickFromRoom = if (canKick) {
                         { reason -> viewModel.kickUser(userId, targetSeatIndex, reason) }
                     } else null,
-                    onMoveSeat = if (canModerate && targetSeatIndex != null && emptySeats.isNotEmpty()
+                    onMoveSeat = if (canModerate && targetSeatIndex != null && movableSeats.isNotEmpty()
                         && targetSeatIndex != Constants.OWNER_SEAT_INDEX) {
                         { toIndex -> viewModel.moveSeat(targetSeatIndex, toIndex) }
                     } else null,
-                    emptySeats = emptySeats,
+                    emptySeats = movableSeats,
+                    seatOccupantNames = remember(uiState.room?.seats, uiState.seatUsers) {
+                        uiState.room?.seats?.entries
+                            ?.filter { it.value.state == SeatState.OCCUPIED && it.value.userId != null }
+                            ?.associate { (key, seat) ->
+                                key.toInt() to (uiState.seatUsers[seat.userId]?.displayName ?: "User")
+                            } ?: emptyMap()
+                    },
                     onMakeHost = if (isOwner && isNotSelf && isTargetSeated
                         && targetRole == RoomRole.ATTENDEE) {
                         { viewModel.addHost(userId) }

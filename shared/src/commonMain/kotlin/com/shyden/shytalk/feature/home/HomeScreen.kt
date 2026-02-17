@@ -197,7 +197,8 @@ fun RoomListContent(
             onCreate = { name ->
                 onDismissCreateDialog()
                 viewModel.createRoom(name)
-            }
+            },
+            initialRoomName = uiState.lastRoomName
         )
     }
 }

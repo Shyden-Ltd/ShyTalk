@@ -68,7 +68,7 @@ class RoomRepositoryImpl(
         val roomId = UUID.randomUUID().toString()
         val seats = (0 until Constants.MAX_SEATS).associate { i ->
             i.toString() to if (i == Constants.OWNER_SEAT_INDEX) {
-                Seat(userId = ownerId, state = SeatState.OCCUPIED)
+                Seat(userId = ownerId, state = SeatState.OCCUPIED, isMuted = true)
             } else {
                 Seat()
             }
@@ -122,8 +122,15 @@ class RoomRepositoryImpl(
             val room = snapshot.data?.let { ChatRoom.fromMap(it, snapshot.id) }
                 ?: throw Exception("Room not found")
 
+            // User already in a seat — no-op (prevents duplicate seating)
+            if (room.findUserSeat(userId) != null) return@runTransaction
+
+            // Target seat occupied — abort
+            val seat = room.seats[seatIndex.toString()]
+            if (seat?.state == SeatState.OCCUPIED) return@runTransaction
+
             val updates = clearUserSeats(room, userId)
-            updates["seats.$seatIndex"] = Seat(userId = userId, state = SeatState.OCCUPIED).toMap()
+            updates["seats.$seatIndex"] = Seat(userId = userId, state = SeatState.OCCUPIED, isMuted = true).toMap()
             updates["allTimeSeatUserIds"] = FieldValue.arrayUnion(userId)
             transaction.update(docRef, updates)
         }.await()
@@ -145,11 +152,24 @@ class RoomRepositoryImpl(
             val snapshot = transaction.get(docRef)
             val room = snapshot.data?.let { ChatRoom.fromMap(it, snapshot.id) }
                 ?: throw Exception("Room not found")
-            val currentMuted = room.seats[fromIndex.toString()]?.isMuted ?: false
-            transaction.update(docRef, mapOf(
-                "seats.$fromIndex" to Seat.EMPTY_MAP,
-                "seats.$toIndex" to Seat(userId = userId, state = SeatState.OCCUPIED, isMuted = currentMuted).toMap()
-            ))
+            val fromSeat = room.seats[fromIndex.toString()]
+            val toSeat = room.seats[toIndex.toString()]
+            val fromMuted = fromSeat?.isMuted ?: false
+
+            if (toSeat?.state == SeatState.OCCUPIED && toSeat.userId != null) {
+                // Swap: move both users, preserving each user's mute state
+                val toMuted = toSeat.isMuted
+                transaction.update(docRef, mapOf(
+                    "seats.$fromIndex" to Seat(userId = toSeat.userId, state = SeatState.OCCUPIED, isMuted = toMuted).toMap(),
+                    "seats.$toIndex" to Seat(userId = userId, state = SeatState.OCCUPIED, isMuted = fromMuted).toMap()
+                ))
+            } else {
+                // Move to empty seat
+                transaction.update(docRef, mapOf(
+                    "seats.$fromIndex" to Seat.EMPTY_MAP,
+                    "seats.$toIndex" to Seat(userId = userId, state = SeatState.OCCUPIED, isMuted = fromMuted).toMap()
+                ))
+            }
         }.await()
     }
 
@@ -254,7 +274,24 @@ class RoomRepositoryImpl(
 
             val updates = clearUserSeats(room, userId)
             updates["pendingInvites.$userId"] = FieldValue.delete()
-            updates["seats.$seatIndex"] = Seat(userId = userId, state = SeatState.OCCUPIED).toMap()
+
+            // User already seated — just clear the invite, don't add another seat
+            if (room.findUserSeat(userId) != null) {
+                transaction.update(docRef, updates)
+                return@runTransaction
+            }
+
+            // Find actual empty seat from transactional read (local state may be stale)
+            val actualSeatIndex = if (room.seats[seatIndex.toString()]?.state != SeatState.OCCUPIED) {
+                seatIndex
+            } else {
+                (1 until Constants.MAX_SEATS).firstOrNull { i ->
+                    val s = room.seats[i.toString()]
+                    s != null && s.state != SeatState.OCCUPIED
+                } ?: return@runTransaction // No seats available
+            }
+
+            updates["seats.$actualSeatIndex"] = Seat(userId = userId, state = SeatState.OCCUPIED, isMuted = true).toMap()
             updates["allTimeSeatUserIds"] = FieldValue.arrayUnion(userId)
             transaction.update(docRef, updates)
         }.await()
@@ -350,22 +387,27 @@ class RoomRepositoryImpl(
             // Owner keeps seat 0 for reconnection — only clear non-owner seats
             val updates = if (isOwner) mutableMapOf() else clearUserSeats(room, userId)
 
-            val remainingParticipants = room.participantIds - userId
-
-            if (remainingParticipants.isEmpty() && !isOwner) {
-                // Room is now empty — close it
-                updates.putAll(closeRoomUpdates())
-            } else if (isOwner) {
-                // Owner disconnected — mark away, keep in participants, and guarantee seat 0
+            if (isOwner) {
+                // Owner disconnected — mark away, keep in participants, guarantee seat 0
                 val currentMuted = room.seats[Constants.OWNER_SEAT_INDEX.toString()]?.isMuted ?: false
                 updates["state"] = RoomState.OWNER_AWAY.name
                 updates["ownerLeftAt"] = Timestamp.now()
                 updates["seats.${Constants.OWNER_SEAT_INDEX}"] =
                     Seat(userId = userId, state = SeatState.OCCUPIED, isMuted = currentMuted).toMap()
             } else {
-                updates["participantIds"] = FieldValue.arrayRemove(userId)
-                // If only the owner remains and they're away, close the room
-                if (remainingParticipants.singleOrNull() == room.ownerId && room.state == RoomState.OWNER_AWAY) {
+                // Non-owner: clear seat only, keep in participantIds
+                // (seat clearing already done by clearUserSeats above)
+                // If no one is seated anymore and owner is away, close the room
+                val seatsAfterClear = room.seats.toMutableMap()
+                val userSeatKey = room.findUserSeat(userId)?.key
+                if (userSeatKey != null) {
+                    seatsAfterClear[userSeatKey] = Seat()
+                }
+                val anyoneOnMic = seatsAfterClear.any { (key, seat) ->
+                    key != Constants.OWNER_SEAT_INDEX.toString() &&
+                    seat.userId != null && seat.state == SeatState.OCCUPIED
+                }
+                if (!anyoneOnMic && room.state == RoomState.OWNER_AWAY) {
                     updates.putAll(closeRoomUpdates())
                 }
             }
@@ -388,10 +430,14 @@ class RoomRepositoryImpl(
     )
 
     private fun clearUserSeats(room: ChatRoom, userId: String): MutableMap<String, Any> {
-        // Short-circuit: a user can only occupy one seat, so find it directly
-        val entry = room.findUserSeat(userId) ?: return mutableMapOf()
-        // Owner must never be removed from seat 0
-        if (entry.key == Constants.OWNER_SEAT_INDEX.toString() && userId == room.ownerId) return mutableMapOf()
-        return mutableMapOf("seats.${entry.key}" to Seat.EMPTY_MAP)
+        val updates = mutableMapOf<String, Any>()
+        for ((key, seat) in room.seats) {
+            if (seat.userId == userId && seat.state == SeatState.OCCUPIED) {
+                // Owner must never be removed from seat 0
+                if (key == Constants.OWNER_SEAT_INDEX.toString() && userId == room.ownerId) continue
+                updates["seats.$key"] = Seat.EMPTY_MAP
+            }
+        }
+        return updates
     }
 }

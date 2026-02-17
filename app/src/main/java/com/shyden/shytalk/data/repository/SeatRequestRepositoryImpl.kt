@@ -42,14 +42,24 @@ class SeatRequestRepositoryImpl(
         userName: String,
         seatIndex: Int
     ): Resource<Unit> = firebaseCall("Failed to create seat request") {
-        // Check if user already has a pending request (limit 1 — only need existence)
+        // Check if user already has a pending request
         val existing = requestsCollection(roomId)
             .whereEqualTo("userId", userId)
             .whereEqualTo("status", SeatRequestStatus.PENDING.name)
             .limit(1)
             .get()
             .await()
-        if (!existing.isEmpty) return@firebaseCall
+        if (!existing.isEmpty) {
+            // Refresh the stale request so snapshot listeners re-fire for observers
+            existing.documents.first().reference.update(
+                mapOf(
+                    "seatIndex" to seatIndex,
+                    "userName" to userName,
+                    "createdAt" to Timestamp.now()
+                )
+            ).await()
+            return@firebaseCall
+        }
 
         val requestId = UUID.randomUUID().toString()
         val request = SeatRequest(

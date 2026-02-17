@@ -32,9 +32,19 @@ class LiveKitVoiceService(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    private var room: Room? = null
     private var currentRoomName: String? = null
     private val joinMutex = Mutex()
+
+    // Pre-create LiveKit Room object on service init (app start) so joining a
+    // voice room later only needs a token fetch + connect — no SDK init delay.
+    private val room: Room = LiveKit.create(
+        appContext = context,
+        overrides = LiveKitOverrides(
+            audioOptions = AudioOptions(
+                audioOutputType = AudioType.MediaAudioType()
+            )
+        )
+    )
 
     private val _speakingUsers = MutableStateFlow<Set<String>>(emptySet())
     override val speakingUsers: StateFlow<Set<String>> = _speakingUsers.asStateFlow()
@@ -50,46 +60,21 @@ class LiveKitVoiceService(
 
     override fun clearError() { _error.value = null }
 
-    override suspend fun joinRoom(roomName: String, userId: String) = joinMutex.withLock {
-        // Already in this room — no-op
-        if (_isJoined.value && currentRoomName == roomName) {
-            Log.d(TAG, "Already joined room=$roomName, skipping rejoin")
-            return@withLock
-        }
-
-        // Leave any existing room first
-        if (room != null) {
-            Log.d(TAG, "Already in a room, leaving first")
-            room?.disconnect()
-            room?.release()
-            room = null
-            _isJoined.value = false
-            currentRoomName = null
-        }
-
-        val newRoom = LiveKit.create(
-            appContext = context,
-            overrides = LiveKitOverrides(
-                audioOptions = AudioOptions(
-                    audioOutputType = AudioType.MediaAudioType()
-                )
-            )
-        )
-        room = newRoom
-        currentRoomName = roomName
-
-        // Collect room events
+    init {
+        Log.d(TAG, "LiveKit Room pre-initialized")
+        // Collect events once — the Room's SharedFlow persists across disconnect/connect cycles
         scope.launch {
-            newRoom.events.collect { event ->
+            room.events.collect { event ->
                 when (event) {
                     is RoomEvent.Connected -> {
-                        Log.d(TAG, "Connected to room=$roomName")
+                        Log.d(TAG, "Connected to room=$currentRoomName")
                         _isJoined.value = true
                         _connectionState.value = VoiceConnectionState.CONNECTED
                     }
                     is RoomEvent.Disconnected -> {
                         Log.d(TAG, "Disconnected from room")
-                        currentRoomName = null
+                        // Don't clear currentRoomName here — managed by joinRoom/leaveChannel
+                        // to avoid race conditions with back-to-back disconnect+connect
                         _isJoined.value = false
                         _connectionState.value = VoiceConnectionState.DISCONNECTED
                         _speakingUsers.value = emptySet()
@@ -125,6 +110,24 @@ class LiveKitVoiceService(
                 }
             }
         }
+    }
+
+    override suspend fun joinRoom(roomName: String, userId: String) = joinMutex.withLock {
+        // Already in this room — no-op
+        if (_isJoined.value && currentRoomName == roomName) {
+            Log.d(TAG, "Already joined room=$roomName, skipping rejoin")
+            return@withLock
+        }
+
+        // Disconnect from current room if needed (Room object stays alive)
+        if (currentRoomName != null) {
+            Log.d(TAG, "Already in a room, disconnecting first")
+            room.disconnect()
+            _isJoined.value = false
+            currentRoomName = null
+        }
+
+        currentRoomName = roomName
 
         // Fetch token and connect
         val token: String? = try {
@@ -136,8 +139,6 @@ class LiveKitVoiceService(
         }
 
         if (token == null) {
-            room?.release()
-            room = null
             currentRoomName = null
             return@withLock
         }
@@ -146,19 +147,15 @@ class LiveKitVoiceService(
             val serverUrl = BuildConfig.LIVEKIT_SERVER_URL
             if (serverUrl.isBlank()) {
                 _error.value = "LiveKit server URL not configured"
-                room?.release()
-                room = null
                 currentRoomName = null
                 return@withLock
             }
             Log.d(TAG, "Connecting to room=$roomName identity=$userId")
-            newRoom.connect(serverUrl, token)
+            room.connect(serverUrl, token)
             Log.d(TAG, "Connected successfully")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to connect", e)
             _error.value = "Voice connection failed: ${e.message}"
-            room?.release()
-            room = null
             currentRoomName = null
         }
     }
@@ -168,44 +165,51 @@ class LiveKitVoiceService(
         _isJoined.value = false
         _speakingUsers.value = emptySet()
         currentRoomName = null
+        audioManager.isSpeakerphoneOn = false
         audioManager.mode = AudioManager.MODE_NORMAL
         try {
-            room?.disconnect()
-            room?.release()
+            room.disconnect()
         } catch (e: Exception) {
             Log.e(TAG, "leaveChannel failed", e)
         }
-        room = null
         _connectionState.value = VoiceConnectionState.DISCONNECTED
     }
 
     override fun setMicrophoneEnabled(enabled: Boolean) {
-        Log.d(TAG, "setMicrophoneEnabled enabled=$enabled")
-        // Switch audio routing: call mode for mic, media mode otherwise
-        if (enabled) {
-            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-            audioManager.isSpeakerphoneOn = true
-        } else {
-            audioManager.mode = AudioManager.MODE_NORMAL
+        Log.d(TAG, "setMicrophoneEnabled enabled=$enabled isJoined=${_isJoined.value}")
+        if (!_isJoined.value) {
+            Log.w(TAG, "setMicrophoneEnabled called but not joined, ignoring")
+            return
         }
         scope.launch {
             try {
-                room?.localParticipant?.setMicrophoneEnabled(enabled)
+                room.localParticipant.setMicrophoneEnabled(enabled)
             } catch (e: Exception) {
                 Log.e(TAG, "setMicrophoneEnabled failed", e)
             }
         }
     }
 
+    override fun setAudioMode(voiceMode: Boolean) {
+        Log.d(TAG, "setAudioMode voiceMode=$voiceMode")
+        if (voiceMode) {
+            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+            audioManager.isSpeakerphoneOn = true
+        } else {
+            audioManager.isSpeakerphoneOn = false
+            audioManager.mode = AudioManager.MODE_NORMAL
+        }
+    }
+
     fun destroy() {
+        audioManager.isSpeakerphoneOn = false
         audioManager.mode = AudioManager.MODE_NORMAL
         try {
-            room?.disconnect()
-            room?.release()
+            room.disconnect()
+            room.release()
         } catch (e: Exception) {
             Log.e(TAG, "destroy failed", e)
         }
-        room = null
         _isJoined.value = false
         _speakingUsers.value = emptySet()
         _connectionState.value = VoiceConnectionState.DISCONNECTED

@@ -74,6 +74,7 @@ import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.util.calculateAge
 import com.shyden.shytalk.core.util.countryNameForCode
 import com.shyden.shytalk.core.util.flagEmojiForCode
+import com.shyden.shytalk.ui.components.FlagBadge
 import com.shyden.shytalk.ui.theme.CnyGold
 import com.shyden.shytalk.ui.theme.SpeakingGreen
 
@@ -350,7 +351,7 @@ private fun ProfileContent(
         return
     }
 
-    // Blocked by target - show blocked message
+    // Blocked by target - show blocked message with name and ID
     if (uiState.isBlockedByTarget) {
         Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -361,6 +362,22 @@ private fun ProfileContent(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(16.dp))
+                if (user != null) {
+                    Text(
+                        text = user.displayName,
+                        style = MaterialTheme.typography.titleLarge,
+                        textAlign = TextAlign.Center
+                    )
+                    if (user.uniqueId != 0L) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "ID: ${user.uniqueId}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
                 Text(
                     text = "This profile is not available",
                     style = MaterialTheme.typography.titleMedium,
@@ -447,7 +464,7 @@ private fun ProfileContent(
             }
         }
 
-        // Profile photo (overlapping cover)
+        // Profile photo + follow stats (overlapping cover)
         val activeRoomId = uiState.activeRoomId
         Box(
             modifier = Modifier
@@ -456,6 +473,50 @@ private fun ProfileContent(
                 .padding(horizontal = 16.dp),
             contentAlignment = Alignment.CenterStart
         ) {
+            // Follow stats — positioned slightly below center to sit under the cover edge
+            if (!uiState.isEditing) {
+                val followingHidden = !isOwn && uiState.hideFollowing
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(top = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.clickable(enabled = !followingHidden) {
+                            onNavigateToFollowList?.invoke(user.uid, "following")
+                        },
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = if (followingHidden) "-" else "${uiState.followingCount}",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = if (followingHidden) "Following (Private)" else "Following",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Column(
+                        modifier = Modifier.clickable {
+                            onNavigateToFollowList?.invoke(user.uid, "followers")
+                        },
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "${uiState.followerCount}",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "Followers",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
             Box(
                 modifier = Modifier
                     .then(
@@ -533,6 +594,15 @@ private fun ProfileContent(
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
+
+                // Nationality flag badge on profile photo
+                if (!uiState.isEditing && user.nationality != null) {
+                    FlagBadge(
+                        countryCode = user.nationality!!,
+                        badgeSize = 28.dp,
+                        modifier = Modifier.align(Alignment.BottomEnd)
+                    )
+                }
             }
         }
 
@@ -557,10 +627,11 @@ private fun ProfileContent(
                 // Edit mode
                 OutlinedTextField(
                     value = editDisplayName,
-                    onValueChange = onEditDisplayNameChange,
+                    onValueChange = { if (it.length <= 20) onEditDisplayNameChange(it) },
                     label = { Text("Display Name") },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
+                    supportingText = { Text("${editDisplayName.length}/20") }
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -667,14 +738,6 @@ private fun ProfileContent(
                     )
                 }
 
-                user.nationality?.let { nat ->
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "${flagEmojiForCode(nat)} ${countryNameForCode(nat) ?: ""}",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-
                 val age = user.dateOfBirth?.let { calculateAge(it) }
                 val shouldShowAge = age != null && (isOwn || !user.hideAge)
                 if (shouldShowAge) {
@@ -693,47 +756,6 @@ private fun ProfileContent(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                }
-
-                // Follower / Following counts
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(24.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.clickable {
-                            onNavigateToFollowList?.invoke(user.uid, "followers")
-                        },
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "${uiState.followerCount}",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            text = "Followers",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    val followingHidden = !isOwn && uiState.hideFollowing
-                    Column(
-                        modifier = Modifier.clickable(enabled = !followingHidden) {
-                            onNavigateToFollowList?.invoke(user.uid, "following")
-                        },
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = if (followingHidden) "-" else "${uiState.followingCount}",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            text = if (followingHidden) "Following (Private)" else "Following",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))

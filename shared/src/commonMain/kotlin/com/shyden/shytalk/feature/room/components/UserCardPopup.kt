@@ -62,6 +62,7 @@ fun UserCardPopup(
     onKickFromRoom: ((String) -> Unit)? = null,
     onMoveSeat: ((Int) -> Unit)? = null,
     emptySeats: List<Int> = emptyList(),
+    seatOccupantNames: Map<Int, String> = emptyMap(),
     onMakeHost: (() -> Unit)? = null,
     onRemoveHost: (() -> Unit)? = null,
     isHost: Boolean = false
@@ -115,6 +116,15 @@ fun UserCardPopup(
                     text = user.displayName,
                     style = MaterialTheme.typography.titleMedium
                 )
+
+                if (user.uniqueId != 0L) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "ID: ${user.uniqueId}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
                 user.nationality?.let { nat ->
                     Spacer(modifier = Modifier.height(4.dp))
@@ -183,7 +193,7 @@ fun UserCardPopup(
                 }
 
                 // Moderation actions
-                if (onMuteToggle != null || onRemoveFromSeat != null || onMoveSeat != null || onKickFromRoom != null || onMakeHost != null || onRemoveHost != null) {
+                if ((onMuteToggle != null && !isTargetMuted) || onRemoveFromSeat != null || onMoveSeat != null || onKickFromRoom != null || onMakeHost != null || onRemoveHost != null) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         text = "Moderation",
@@ -193,7 +203,7 @@ fun UserCardPopup(
                     Spacer(modifier = Modifier.height(4.dp))
                 }
 
-                if (onMuteToggle != null) {
+                if (onMuteToggle != null && !isTargetMuted) {
                     OutlinedButton(
                         onClick = {
                             onMuteToggle()
@@ -202,12 +212,12 @@ fun UserCardPopup(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(
-                            if (isTargetMuted) Icons.Default.Mic else Icons.Default.MicOff,
+                            Icons.Default.MicOff,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(if (isTargetMuted) "Unmute User" else "Mute User")
+                        Text("Mute User")
                     }
                 }
 
@@ -280,7 +290,7 @@ fun UserCardPopup(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Remove from Seat")
+                        Text("Move to Audience")
                     }
                 }
 
@@ -381,12 +391,18 @@ fun UserCardPopup(
             text = {
                 Column {
                     emptySeats.forEach { targetIndex ->
+                        val occupantName = seatOccupantNames[targetIndex]
+                        val label = if (occupantName != null) {
+                            "Seat ${targetIndex + 1} (swap with $occupantName)"
+                        } else {
+                            "Seat ${targetIndex + 1}"
+                        }
                         TextButton(onClick = {
                             showMoveDialog = false
                             onMoveSeat?.invoke(targetIndex)
                             onDismiss()
                         }) {
-                            Text("Seat ${targetIndex + 1}")
+                            Text(label)
                         }
                     }
                 }

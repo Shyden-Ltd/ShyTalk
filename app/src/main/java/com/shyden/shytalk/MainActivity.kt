@@ -46,7 +46,7 @@ class MainActivity : ComponentActivity() {
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
 
         setContent {
-            ShyTalkTheme {
+            ShyTalkTheme(darkTheme = true) {
                 var privacyAccepted by remember {
                     mutableStateOf(prefs.getBoolean(KEY_PRIVACY_ACCEPTED, false))
                 }

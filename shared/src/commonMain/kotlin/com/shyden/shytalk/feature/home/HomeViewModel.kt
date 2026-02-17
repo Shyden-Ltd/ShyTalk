@@ -24,7 +24,8 @@ data class HomeUiState(
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     val error: String? = null,
-    val createdRoomId: String? = null
+    val createdRoomId: String? = null,
+    val lastRoomName: String = ""
 )
 
 class HomeViewModel(
@@ -48,7 +49,24 @@ class HomeViewModel(
 
     init {
         loadBlockedUsersAndFilter()
+        loadLastRoomName()
         observeRooms()
+        observeUserUpdates()
+    }
+
+    private fun loadLastRoomName() {
+        val userId = currentUserId ?: return
+        viewModelScope.launch {
+            when (val result = userRepository.getUser(userId)) {
+                is Resource.Success -> {
+                    val name = result.data.lastRoomName
+                    if (!name.isNullOrBlank()) {
+                        _uiState.update { it.copy(lastRoomName = name) }
+                    }
+                }
+                else -> {}
+            }
+        }
     }
 
     private fun loadBlockedUsersAndFilter() {
@@ -74,6 +92,23 @@ class HomeViewModel(
                     allRooms = rooms
                     filterAndEmitRooms()
                 }
+        }
+    }
+
+    private fun observeUserUpdates() {
+        viewModelScope.launch {
+            userRepository.userUpdates.collect { updatedUser ->
+                if (updatedUser.uid in userCache) {
+                    userCache[updatedUser.uid] = updatedUser
+                    _uiState.update { state ->
+                        state.copy(
+                            seatUsers = state.seatUsers.let { map ->
+                                if (updatedUser.uid in map) map + (updatedUser.uid to updatedUser) else map
+                            }
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -178,7 +213,8 @@ class HomeViewModel(
     fun createRoom(name: String) {
         val userId = authRepository.currentUserId ?: return
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            _uiState.update { it.copy(isLoading = true, error = null, lastRoomName = name) }
+            userRepository.updateProfile(userId, mapOf("lastRoomName" to name))
             // Close any existing rooms owned by this user
             roomRepository.closeAllRoomsByOwner(userId)
             when (val result = roomRepository.createRoom(name, userId)) {

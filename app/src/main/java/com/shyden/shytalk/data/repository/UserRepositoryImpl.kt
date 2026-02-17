@@ -10,7 +10,15 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeout
 
@@ -20,11 +28,34 @@ class UserRepositoryImpl(
 
     private val usersCollection = firestore.collection("users")
 
+    private val _userUpdates = MutableSharedFlow<User>(replay = 1, extraBufferCapacity = 5)
+    override val userUpdates: SharedFlow<User> = _userUpdates.asSharedFlow()
+
+    private suspend fun emitUserUpdate(userId: String) {
+        try {
+            val doc = usersCollection.document(userId).get().await()
+            if (doc.exists()) {
+                val data = doc.data
+                if (data != null) {
+                    _userUpdates.tryEmit(User.fromMap(data, doc.id))
+                }
+            }
+        } catch (_: Exception) {
+            // Best-effort: don't fail the parent operation if re-fetch fails
+        }
+    }
+
+    private val profileVisibleFields = setOf(
+        "displayName", "description", "nationality", "profilePhotoUrl",
+        "coverPhotoUrl", "avatarUrl", "hideFollowing", "hideOnlineStatus", "hideAge"
+    )
+
     override suspend fun createOrUpdateUser(user: User): Resource<Unit> = firebaseCall("Failed to create/update user") {
         try {
             withTimeout(10_000L) {
                 usersCollection.document(user.uid).set(user.toMap()).await()
             }
+            _userUpdates.tryEmit(user)
         } catch (_: TimeoutCancellationException) {
             throw Exception("Server not responding — please try again")
         }
@@ -44,10 +75,12 @@ class UserRepositoryImpl(
 
     override suspend fun updateDisplayName(userId: String, displayName: String): Resource<Unit> = firebaseCall("Failed to update display name") {
         usersCollection.document(userId).update("displayName", displayName).await()
+        emitUserUpdate(userId)
     }
 
     override suspend fun updateAvatar(userId: String, avatarUrl: String): Resource<Unit> = firebaseCall("Failed to update avatar") {
         usersCollection.document(userId).update("avatarUrl", avatarUrl).await()
+        emitUserUpdate(userId)
     }
 
     override suspend fun updateLastSeen(userId: String): Resource<Unit> = firebaseCall("Failed to update last seen") {
@@ -56,6 +89,9 @@ class UserRepositoryImpl(
 
     override suspend fun updateProfile(userId: String, fields: Map<String, Any?>): Resource<Unit> = firebaseCall("Failed to update profile") {
         usersCollection.document(userId).update(fields).await()
+        if (fields.keys.any { it in profileVisibleFields }) {
+            emitUserUpdate(userId)
+        }
     }
 
     override suspend fun generateUniqueId(userId: String): Resource<Long> = firebaseCall("Failed to generate unique ID") {
@@ -113,6 +149,14 @@ class UserRepositoryImpl(
             batch.commit().await()
         }
 
+    override suspend fun removeFollower(userId: String, followerId: String): Resource<Unit> =
+        firebaseCall("Failed to remove follower") {
+            val batch = firestore.batch()
+            batch.update(usersCollection.document(userId), "followerIds", FieldValue.arrayRemove(followerId))
+            batch.update(usersCollection.document(followerId), "followingIds", FieldValue.arrayRemove(userId))
+            batch.commit().await()
+        }
+
     override suspend fun getUsers(userIds: List<String>): Resource<List<User>> =
         firebaseCall("Failed to get users") {
             if (userIds.isEmpty()) return@firebaseCall emptyList()
@@ -127,4 +171,18 @@ class UserRepositoryImpl(
                 }.awaitAll().flatMap { it }
             }
         }
+
+    override fun observeUsers(userIds: Set<String>): Flow<User> {
+        if (userIds.isEmpty()) return emptyFlow()
+        return userIds.map { userId ->
+            callbackFlow {
+                val listener = usersCollection.document(userId)
+                    .addSnapshotListener { snapshot, error ->
+                        if (error != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
+                        snapshot.data?.let { trySend(User.fromMap(it, snapshot.id)) }
+                    }
+                awaitClose { listener.remove() }
+            }
+        }.merge()
+    }
 }

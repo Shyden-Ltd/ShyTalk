@@ -17,6 +17,7 @@ import com.shyden.shytalk.core.util.logD
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.core.room.RoomLifecycleManager
+import com.shyden.shytalk.data.remote.VoiceConnectionState
 import com.shyden.shytalk.data.remote.VoiceService
 import com.shyden.shytalk.data.remote.PresenceService
 import com.shyden.shytalk.data.repository.AuthRepository
@@ -44,6 +45,7 @@ sealed class BlockWarning {
     data object BlockedByRoomOwner : BlockWarning()
     data object BlockedUserInRoom : BlockWarning()
     data object BlockedByUserInRoom : BlockWarning()
+    data class Banned(val reason: String?, val kickerName: String?) : BlockWarning()
 }
 
 data class RoomClosedSummary(
@@ -75,9 +77,11 @@ data class RoomUiState(
     val roomExpiryRemainingMs: Long = 0L,
     val speakingUserIds: Set<String> = emptySet(),
     val isVoiceJoined: Boolean = false,
+    val isVoiceReady: Boolean = false,
     val pendingInvite: String? = null,
     val seatUsers: Map<String, User> = emptyMap(),
     val participantUsers: Map<String, User> = emptyMap(),
+    val allKnownUsers: Map<String, User> = emptyMap(),
     val blockedUserIds: Set<String> = emptySet(),
     val blockWarning: BlockWarning? = null,
     val hasJoined: Boolean = false,
@@ -125,6 +129,9 @@ class RoomViewModel(
     private var lastOwnerAwayState: Pair<RoomState, Long?>? = null
     private var lastFilteredMessages: List<Message> = emptyList()
     private var seatActionResetJob: Job? = null
+    private var autoRejoinAttempted = false
+    private var userObserverJob: Job? = null
+    private var observedUserIds: Set<String> = emptySet()
 
     // Message flood protection
     private val recentMessageTimestamps = ArrayDeque<Long>()
@@ -134,10 +141,14 @@ class RoomViewModel(
     private var autoDismissJob: Job? = null
     private val processedRequestIds = mutableSetOf<String>()
     private val processedApprovalIds = mutableSetOf<String>()
+    private var rawPendingRequests: List<SeatRequest> = emptyList()
 
     init {
         val userId = authRepository.currentUserId ?: ""
-        _uiState.value = _uiState.value.copy(currentUserId = userId)
+        _uiState.value = _uiState.value.copy(
+            currentUserId = userId,
+            isVoiceReady = voiceService.connectionState.value == VoiceConnectionState.CONNECTED
+        )
         loadUserName()
         loadBlockedUsers()
         observeRoom()
@@ -146,6 +157,61 @@ class RoomViewModel(
         observeDisconnectedUsers()
         observePendingRequests()
         observeMyRequest()
+        observeUserUpdates()
+    }
+
+    private fun observeUserUpdates() {
+        viewModelScope.launch {
+            userRepository.userUpdates.collect { updatedUser ->
+                val uid = updatedUser.uid
+                if (uid in userCache) {
+                    userCache[uid] = updatedUser
+                    _uiState.update { state ->
+                        state.copy(
+                            seatUsers = state.seatUsers.replaceUser(updatedUser),
+                            participantUsers = state.participantUsers.replaceUser(updatedUser),
+                            allKnownUsers = state.allKnownUsers.replaceUser(updatedUser),
+                            currentUserName = if (uid == state.currentUserId) updatedUser.displayName else state.currentUserName
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun Map<String, User>.replaceUser(user: User): Map<String, User> =
+        if (user.uid in this) this + (user.uid to user) else this
+
+    private fun observeRemoteUserChanges(userIds: Set<String>) {
+        if (userIds == observedUserIds) return
+        observedUserIds = userIds
+        userObserverJob?.cancel()
+        if (userIds.isEmpty()) return
+        userObserverJob = viewModelScope.launch {
+            userRepository.observeUsers(userIds).collect { updatedUser ->
+                val uid = updatedUser.uid
+                val cached = userCache[uid]
+                if (cached != null && cached != updatedUser) {
+                    userCache[uid] = updatedUser
+                    _uiState.update { state ->
+                        state.copy(
+                            seatUsers = state.seatUsers.replaceUser(updatedUser),
+                            participantUsers = state.participantUsers.replaceUser(updatedUser),
+                            allKnownUsers = state.allKnownUsers.replaceUser(updatedUser),
+                            currentUserName = if (uid == state.currentUserId) updatedUser.displayName else state.currentUserName
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun collectRoomUserIds(room: ChatRoom, currentUserId: String): Set<String> {
+        val seatUserIds = room.seats.values.asSequence()
+            .filter { it.state == SeatState.OCCUPIED && it.userId != null }
+            .mapNotNull { it.userId }
+            .toSet()
+        return (seatUserIds + room.participantIds).filter { it != currentUserId }.toSet()
     }
 
     private fun loadUserName() {
@@ -238,10 +304,22 @@ class RoomViewModel(
             return true
         }
         if (userId !in room.participantIds) {
+            // If not banned and room is active, attempt one auto-rejoin
+            // (handles race between join write and stale Firestore emission)
+            if (!autoRejoinAttempted && room.state == RoomState.ACTIVE) {
+                autoRejoinAttempted = true
+                logW(TAG, "User not in participantIds but not banned — attempting auto-rejoin")
+                viewModelScope.launch {
+                    roomRepository.joinRoom(roomId, userId)
+                    presenceService.setPresence(roomId, userId)
+                }
+                return false
+            }
             disconnectFromRoom()
             _uiState.update { it.copy(isLoading = false, shouldNavigateBack = true) }
             return true
         }
+        autoRejoinAttempted = false
         return false
     }
 
@@ -252,17 +330,18 @@ class RoomViewModel(
         val alreadyInRoom = userId in room.participantIds && roomLifecycleManager.isInRoom(roomId)
         if (alreadyInRoom) {
             _uiState.update { it.copy(room = room, currentRole = role, isLoading = false, hasJoined = true) }
+            refilterPendingRequests()
             // Track seat state so handleNormalUpdate detects transitions correctly
             isSeated = room.findUserSeat(userId) != null
             // Rejoin voice if not already connected (ViewModel recreated)
             if (room.voiceRoomName.isNotEmpty() && !voiceService.isJoined.value) {
                 viewModelScope.launch {
                     voiceService.joinRoom(room.voiceRoomName, userId)
-                    // If seated and muted, disable mic after joining
+                    // Sync mic and audio mode to seat's mute state after joining
                     val mySeat = room.findUserSeat(userId)?.value
-                    if (mySeat?.isMuted == true) {
-                        voiceService.setMicrophoneEnabled(false)
-                    }
+                    val shouldUnmute = mySeat != null && !mySeat.isMuted
+                    voiceService.setMicrophoneEnabled(shouldUnmute)
+                    voiceService.setAudioMode(shouldUnmute)
                 }
             }
             // Detect owner return on first emission — without this, the ViewModel
@@ -271,8 +350,29 @@ class RoomViewModel(
             roomLifecycleManager.updateTrackedRoom(room)
             loadSeatUsers(room)
             loadParticipantUsers(room)
+            observeRemoteUserChanges(collectRoomUserIds(room, userId))
             handleOwnerAwayCountdown(room)
             handleRoomExpiryCountdown(room)
+            return
+        }
+
+        // Re-entry: user is in participantIds but lifecycle manager is not tracking
+        // (e.g., app was backgrounded, process killed, or previous session cleaned up).
+        // Treat as a completely new session — skip block dialogs, join fresh.
+        val isReEntry = userId in room.participantIds && !roomLifecycleManager.isInRoom(roomId)
+        if (isReEntry) {
+            _uiState.update { it.copy(room = room, currentRole = role, isLoading = false) }
+            joinRoom()
+            loadSeatUsers(room)
+            loadParticipantUsers(room)
+            observeRemoteUserChanges(collectRoomUserIds(room, userId))
+            handleOwnerAwayCountdown(room)
+            handleRoomExpiryCountdown(room)
+            // Owner re-entering OWNER_AWAY room
+            if (room.ownerId == userId && room.state == RoomState.OWNER_AWAY) {
+                ownerReturnTriggered = true
+                ownerReturn()
+            }
             return
         }
 
@@ -284,6 +384,7 @@ class RoomViewModel(
         }
         loadSeatUsers(room)
         loadParticipantUsers(room)
+        observeRemoteUserChanges(collectRoomUserIds(room, userId))
         handleOwnerAwayCountdown(room)
         handleRoomExpiryCountdown(room)
 
@@ -327,27 +428,28 @@ class RoomViewModel(
         val hasAudio = _uiState.value.hasAudioPermission
 
         if (currentlySeated != isSeated) {
-            if (currentlySeated) {
-                logD(TAG, "User became seated, hasAudioPermission=$hasAudio")
-                if (hasAudio) voiceService.setMicrophoneEnabled(true)
-            } else {
+            if (!currentlySeated) {
                 logD(TAG, "User left seat, disabling mic")
                 voiceService.setMicrophoneEnabled(false)
+                voiceService.setAudioMode(false)
             }
+            // When becoming seated: do NOT enable mic. User starts muted (Bug #6).
         }
         isSeated = currentlySeated
 
         if (mySeat != null) {
-            // Sync mute state
-            voiceService.setMicrophoneEnabled(!mySeat.isMuted)
+            // Sync mute state and audio mode to seat's isMuted
+            val shouldUnmute = !mySeat.isMuted
+            voiceService.setMicrophoneEnabled(shouldUnmute)
+            voiceService.setAudioMode(shouldUnmute)
 
             // Ensure connected to voice room
             if (!voiceService.isJoined.value && hasAudio && room.voiceRoomName.isNotEmpty()) {
                 viewModelScope.launch {
                     voiceService.joinRoom(room.voiceRoomName, userId)
-                    if (mySeat.isMuted) {
-                        voiceService.setMicrophoneEnabled(false)
-                    }
+                    // Re-sync after connection established
+                    voiceService.setMicrophoneEnabled(shouldUnmute)
+                    voiceService.setAudioMode(shouldUnmute)
                 }
             }
         }
@@ -375,7 +477,9 @@ class RoomViewModel(
         roomLifecycleManager.updateTrackedRoom(room)
         loadSeatUsers(room)
         loadParticipantUsers(room)
+        observeRemoteUserChanges(collectRoomUserIds(room, _uiState.value.currentUserId))
         handleOwnerAwayCountdown(room)
+        refilterPendingRequests()
     }
 
     private fun checkBlockConflicts(room: ChatRoom) {
@@ -385,7 +489,13 @@ class RoomViewModel(
 
             // Check if user is banned from this room (kicked previously)
             if (userId in room.bannedUserIds) {
-                _uiState.update { it.copy(blockWarning = BlockWarning.BlockedByRoomOwner) }
+                val kickInfo = room.kickInfo[userId]
+                _uiState.update {
+                    it.copy(blockWarning = BlockWarning.Banned(
+                        reason = kickInfo?.get("reason"),
+                        kickerName = kickInfo?.get("kickerName")
+                    ))
+                }
                 return@launch
             }
 
@@ -492,6 +602,14 @@ class RoomViewModel(
                 if (errorMsg != null) voiceService.clearError()
             }
         }
+        // Latch isVoiceReady — once connected, never hide the room again
+        viewModelScope.launch {
+            voiceService.connectionState.collect { connState ->
+                if (connState == VoiceConnectionState.CONNECTED) {
+                    _uiState.update { it.copy(isVoiceReady = true) }
+                }
+            }
+        }
     }
 
     private fun observeDisconnectedUsers() {
@@ -513,6 +631,7 @@ class RoomViewModel(
             // Already in this room (e.g., returned after pressing back)
             if (room != null && userId in room.participantIds && roomLifecycleManager.isInRoom(roomId)) {
                 _uiState.update { it.copy(hasJoined = true) }
+                refilterPendingRequests()
                 roomLifecycleManager.trackRoom(roomId)
                 return@launch
             }
@@ -533,20 +652,28 @@ class RoomViewModel(
             presenceService.setPresence(roomId, userId)
             userRepository.updateProfile(userId, mapOf("currentRoomId" to roomId))
             _uiState.update { it.copy(hasJoined = true) }
+            refilterPendingRequests()
 
             // Start foreground service via RoomLifecycleManager
             roomLifecycleManager.trackRoom(roomId)
 
-            // Join voice room
+            // Join voice room — always start muted (Bug #6)
             val voiceRoom = room?.voiceRoomName
             if (!voiceRoom.isNullOrEmpty()) {
-                val alreadySeated = room.findUserSeat(userId) != null
-                if (alreadySeated) isSeated = true
-                voiceService.joinRoom(voiceRoom, userId)
-                // If not seated, disable mic (audience mode)
-                if (!alreadySeated || !_uiState.value.hasAudioPermission) {
-                    voiceService.setMicrophoneEnabled(false)
+                val seatEntry = room.findUserSeat(userId)
+                if (seatEntry != null) {
+                    isSeated = true
+                    // Ensure Firestore seat shows muted so the icon is correct
+                    if (!seatEntry.value.isMuted) {
+                        roomRepository.toggleMute(roomId, seatEntry.key.toInt(), true)
+                    }
                 }
+                voiceService.joinRoom(voiceRoom, userId)
+                voiceService.setMicrophoneEnabled(false)
+                voiceService.setAudioMode(false)
+            } else {
+                // No voice room — mark ready so the room UI is shown immediately
+                _uiState.update { it.copy(isVoiceReady = true) }
             }
 
             if (userName.isNotEmpty()) {
@@ -644,6 +771,8 @@ class RoomViewModel(
     }
 
     fun takeSeat(seatIndex: Int) {
+        // Block rapid successive taps while a seat action is in flight
+        if (_uiState.value.seatActionStatus is SeatActionStatus.Loading) return
         val userId = _uiState.value.currentUserId
         val room = _uiState.value.room ?: return
         val role = _uiState.value.currentRole
@@ -723,6 +852,11 @@ class RoomViewModel(
         if (seat.userId != userId) return
 
         val newMuteState = !seat.isMuted
+        // Block unmute when voice is not connected — muting is always allowed
+        if (!newMuteState && voiceService.connectionState.value != VoiceConnectionState.CONNECTED) {
+            _uiState.update { it.copy(error = "Voice not connected yet") }
+            return
+        }
         val loadingMsg = if (newMuteState) "Muting..." else "Unmuting..."
         val successMsg = if (newMuteState) "Muted" else "Unmuted"
 
@@ -730,6 +864,7 @@ class RoomViewModel(
             val result = roomRepository.toggleMute(roomId, seatIndex, newMuteState)
             if (result is Resource.Success) {
                 voiceService.setMicrophoneEnabled(!newMuteState)
+                voiceService.setAudioMode(!newMuteState)
             }
             result
         }
@@ -748,7 +883,9 @@ class RoomViewModel(
             if (targetUserId == room.ownerId) return@launch
             if (role == RoomRole.HOST && targetUserId in room.hostIds) return@launch
 
-            roomRepository.toggleMute(roomId, seatIndex, !seat.isMuted)
+            // Only mute, never unmute — only the user themselves can unmute
+            if (seat.isMuted) return@launch
+            roomRepository.toggleMute(roomId, seatIndex, true)
         }
     }
 
@@ -769,10 +906,7 @@ class RoomViewModel(
             val isTargetHost = targetUserId in room.hostIds
             if (role == RoomRole.HOST && (isTargetOwner || isTargetHost)) return@launch
 
-            // Destination must be empty
-            val toSeat = room.seats[toIndex.toString()] ?: return@launch
-            if (toSeat.state == SeatState.OCCUPIED) return@launch
-
+            // If destination is occupied, swap the two users
             roomRepository.moveSeat(roomId, fromIndex, toIndex, targetUserId)
         }
     }
@@ -818,8 +952,9 @@ class RoomViewModel(
             val room = _uiState.value.room ?: return@launch
             val role = _uiState.value.currentRole
 
-            // Don't invite someone who is already seated
+            // Don't invite someone who is already seated or already invited
             if (room.findUserSeat(userId) != null) return@launch
+            if (userId in room.pendingInvites) return@launch
 
             // Owner can always invite; hosts only when requireApproval is OFF
             if (role == RoomRole.ATTENDEE) return@launch
@@ -834,6 +969,7 @@ class RoomViewModel(
     }
 
     fun acceptInvite() {
+        if (_uiState.value.seatActionStatus is SeatActionStatus.Loading) return
         dismissCurrentNotification()
         val userId = _uiState.value.currentUserId
         val room = _uiState.value.room ?: return
@@ -917,11 +1053,10 @@ class RoomViewModel(
                             roomRepository.closeRoom(roomId)
                         }
                     } else {
-                        // Non-owner: clear their seat
-                        val mySeatIndex = room.findUserSeat(userId)?.key?.toInt()
-                        if (mySeatIndex != null) {
-                            logD(TAG, "leaveRoom (VM): clearing seat $mySeatIndex")
-                            roomRepository.leaveSeat(roomId, mySeatIndex)
+                        // Non-owner: clear seat on explicit leave
+                        val mySeatEntry = room.findUserSeat(userId)
+                        if (mySeatEntry != null) {
+                            roomRepository.leaveSeat(roomId, mySeatEntry.key.toInt())
                         }
                     }
 
@@ -961,15 +1096,16 @@ class RoomViewModel(
                     roomLifecycleManager.trackRoom(roomId)
                 }
 
-                // Rejoin voice if needed
+                // Rejoin voice if needed — sync to seat's actual mute state
                 val voiceRoom = room.voiceRoomName
                 if (voiceRoom.isNotEmpty()) {
                     if (!voiceService.isJoined.value) {
                         voiceService.joinRoom(voiceRoom, userId)
                     }
-                    if (_uiState.value.hasAudioPermission) {
-                        voiceService.setMicrophoneEnabled(true)
-                    }
+                    val mySeat = room.findUserSeat(userId)?.value
+                    val shouldUnmute = mySeat != null && !mySeat.isMuted && _uiState.value.hasAudioPermission
+                    voiceService.setMicrophoneEnabled(shouldUnmute)
+                    voiceService.setAudioMode(shouldUnmute)
                 }
             } catch (e: Exception) {
                 logE(TAG, "ownerReturn failed, will retry on next room update", e)
@@ -1023,7 +1159,9 @@ class RoomViewModel(
     private fun loadUsersForIds(userIds: Set<String>, onLoaded: (Map<String, User>) -> Unit) {
         val newUserIds = userIds.filter { it !in userCache }
         if (newUserIds.isEmpty()) {
-            onLoaded(userCache.filterKeys { it in userIds })
+            val filtered = userCache.filterKeys { it in userIds }
+            onLoaded(filtered)
+            accumulateKnownUsers(filtered)
             return
         }
 
@@ -1034,7 +1172,18 @@ class RoomViewModel(
                 }
                 else -> {}
             }
-            onLoaded(userCache.filterKeys { it in userIds })
+            val filtered = userCache.filterKeys { it in userIds }
+            onLoaded(filtered)
+            accumulateKnownUsers(filtered)
+        }
+    }
+
+    private fun accumulateKnownUsers(newUsers: Map<String, User>) {
+        if (newUsers.isEmpty()) return
+        val current = _uiState.value.allKnownUsers
+        val hasNew = newUsers.any { it.key !in current }
+        if (hasNew) {
+            _uiState.update { it.copy(allKnownUsers = it.allKnownUsers + newUsers) }
         }
     }
 
@@ -1167,32 +1316,39 @@ class RoomViewModel(
 
     // --- Observe Seat Requests ---
 
+    /** Re-filter raw requests against latest room state and enqueue new notifications. */
+    private fun refilterPendingRequests() {
+        val room = _uiState.value.room
+        val validRequests = rawPendingRequests.filter { req ->
+            val alreadySeated = room?.findUserSeat(req.userId) != null
+            val leftRoom = room != null && req.userId !in room.participantIds
+            !alreadySeated && !leftRoom
+        }
+        _uiState.update { it.copy(pendingRequestsForPanel = validRequests) }
+
+        val role = _uiState.value.currentRole
+        val isHostOrOwner = role == RoomRole.OWNER || role == RoomRole.HOST
+        if (isHostOrOwner && _uiState.value.hasJoined) {
+            for (request in validRequests) {
+                if (request.requestId !in processedRequestIds) {
+                    enqueueNotification(RoomNotification.SeatRequestReceived(request))
+                }
+            }
+        }
+    }
+
     private fun observePendingRequests() {
         viewModelScope.launch {
             seatRequestRepository.getPendingRequests(roomId)
                 .catch { /* ignore */ }
                 .collect { requests ->
-                    val room = _uiState.value.room
-                    // Filter out stale requests: user already seated or left the room
-                    val validRequests = requests.filter { req ->
-                        val alreadySeated = room?.findUserSeat(req.userId) != null
-                        val leftRoom = room != null && req.userId !in room.participantIds
-                        !alreadySeated && !leftRoom
-                    }
-                    _uiState.update { it.copy(pendingRequestsForPanel = validRequests) }
-
-                    val role = _uiState.value.currentRole
-                    val isHostOrOwner = role == RoomRole.OWNER || role == RoomRole.HOST
-                    if (isHostOrOwner && _uiState.value.hasJoined) {
-                        for (request in validRequests) {
-                            if (request.requestId !in processedRequestIds) {
-                                enqueueNotification(RoomNotification.SeatRequestReceived(request))
-                            }
-                        }
-                    }
+                    rawPendingRequests = requests
+                    refilterPendingRequests()
                 }
         }
     }
+
+    private var initialApprovalsSuppressed = false
 
     private fun observeMyRequest() {
         viewModelScope.launch {
@@ -1200,6 +1356,16 @@ class RoomViewModel(
             seatRequestRepository.getRequestsByUser(roomId, userId)
                 .catch { /* ignore */ }
                 .collect { requests ->
+                    // On the first emission, suppress all existing approved requests.
+                    // Only approvals that arrive in later emissions (freshly approved
+                    // during this session) will trigger notifications.
+                    if (!initialApprovalsSuppressed) {
+                        initialApprovalsSuppressed = true
+                        requests.filter { it.status == SeatRequestStatus.APPROVED }
+                            .forEach { processedApprovalIds.add(it.requestId) }
+                        return@collect
+                    }
+
                     val approvedRequest = requests.firstOrNull {
                         it.status == SeatRequestStatus.APPROVED
                     } ?: return@collect
@@ -1256,6 +1422,7 @@ class RoomViewModel(
     }
 
     fun acceptApprovedRequest(request: SeatRequest) {
+        if (_uiState.value.seatActionStatus is SeatActionStatus.Loading) return
         val room = _uiState.value.room ?: return
         val userId = _uiState.value.currentUserId
         val seat = room.seats[request.seatIndex.toString()]
@@ -1288,9 +1455,7 @@ class RoomViewModel(
     fun onAudioPermissionResult(granted: Boolean) {
         logD(TAG, "onAudioPermissionResult granted=$granted isSeated=$isSeated")
         _uiState.update { it.copy(hasAudioPermission = granted) }
-        if (granted && isSeated) {
-            voiceService.setMicrophoneEnabled(true)
-        }
+        // Do NOT enable mic here. User must explicitly unmute via toggleSelfMute (Bug #6).
     }
 
     fun setRoomScreenVisible(visible: Boolean) {
@@ -1302,6 +1467,7 @@ class RoomViewModel(
         ownerAwayCountdownJob?.cancel()
         roomExpiryCountdownJob?.cancel()
         seatActionResetJob?.cancel()
+        userObserverJob?.cancel()
         userCache.clear()
         // DO NOT call presenceService.removePresence() or voiceService.leaveChannel()
         // Voice/presence survive ViewModel destruction; explicit leaveRoom() handles cleanup.

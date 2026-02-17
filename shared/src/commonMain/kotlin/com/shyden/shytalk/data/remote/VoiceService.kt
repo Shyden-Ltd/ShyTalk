@@ -12,5 +12,6 @@ interface VoiceService {
     suspend fun joinRoom(roomName: String, userId: String)
     fun leaveChannel()
     fun setMicrophoneEnabled(enabled: Boolean)
+    fun setAudioMode(voiceMode: Boolean)
     fun clearError()
 }
