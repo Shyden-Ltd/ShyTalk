@@ -50,6 +50,7 @@ import com.shyden.shytalk.ui.components.CnyRoomBackground
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -68,9 +69,20 @@ import com.shyden.shytalk.feature.room.components.RoomToolbar
 import com.shyden.shytalk.feature.room.components.SeatGrid
 import com.shyden.shytalk.feature.room.components.UserCardPopup
 import androidx.activity.result.PickVisualMediaRequest
+import com.shyden.shytalk.core.model.Broadcast
+import com.shyden.shytalk.core.ui.BroadcastBanner
+import com.shyden.shytalk.core.ui.GiftEffectOverlay
+import com.shyden.shytalk.data.repository.GiftRepository
+import com.shyden.shytalk.feature.gacha.GachaViewModel
+import com.shyden.shytalk.feature.gacha.LuckySpinOverlay
+import com.shyden.shytalk.feature.gifting.GiftingViewModel
 import com.shyden.shytalk.feature.messaging.ConversationListViewModel
 import com.shyden.shytalk.feature.messaging.PmBottomSheet
 import com.shyden.shytalk.feature.messaging.PrivateChatViewModel
+import com.shyden.shytalk.feature.room.components.BackpackSheet
+import com.shyden.shytalk.feature.room.components.RoomActionCarousel
+import com.shyden.shytalk.feature.daily.DailyRewardDialog
+import com.shyden.shytalk.feature.daily.DailyRewardViewModel
 import com.shyden.shytalk.feature.settings.RoomSettingsSheet
 import org.koin.compose.koinInject
 
@@ -85,6 +97,13 @@ fun RoomScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val conversationListViewModel: ConversationListViewModel = koinInject()
     val convListState by conversationListViewModel.uiState.collectAsStateWithLifecycle()
+    val gachaViewModel: GachaViewModel = koinInject()
+    val giftingViewModel: GiftingViewModel = koinInject()
+    val dailyRewardViewModel: DailyRewardViewModel = koinInject()
+    val giftRepository: GiftRepository = koinInject()
+    val gachaState by gachaViewModel.uiState.collectAsStateWithLifecycle()
+    val giftingState by giftingViewModel.uiState.collectAsStateWithLifecycle()
+    var latestBroadcast by remember { mutableStateOf<Broadcast?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     var showSettings by remember(roomId) { mutableStateOf(false) }
     var showUserCardForId by remember(roomId) { mutableStateOf<String?>(null) }
@@ -92,6 +111,14 @@ fun RoomScreen(
     var showRoomNameDialog by remember(roomId) { mutableStateOf(false) }
     var showPmSheet by remember(roomId) { mutableStateOf(false) }
     var pmSheetPreOpenUserId by remember(roomId) { mutableStateOf<String?>(null) }
+    var showGachaWheel by remember(roomId) { mutableStateOf(false) }
+    var showDailyReward by remember(roomId) { mutableStateOf(false) }
+    var showBackpackSheet by remember(roomId) { mutableStateOf(false) }
+    var backpackRecipientId by remember(roomId) { mutableStateOf("") }
+    var backpackRecipientName by remember(roomId) { mutableStateOf("") }
+    var showGiftEffect by remember { mutableStateOf(false) }
+    var giftEffectAnimUrl by remember { mutableStateOf("") }
+    var giftEffectSoundUrl by remember { mutableStateOf("") }
     var pmImageResultHandler by remember { mutableStateOf<((List<ByteArray>) -> Unit)?>(null) }
     var pmStickerResultHandler by remember { mutableStateOf<((ByteArray) -> Unit)?>(null) }
     val reportEvidenceList = remember { mutableListOf<Pair<ByteArray, String>>() }
@@ -155,6 +182,67 @@ fun RoomScreen(
             if (bytes != null) {
                 pmStickerResultHandler?.invoke(bytes)
             }
+        }
+    }
+
+    // Sync gacha balance from user data
+    val currentUser = uiState.allKnownUsers[uiState.currentUserId]
+    LaunchedEffect(currentUser?.shyCoins, currentUser?.pityCounter, currentUser?.luckScore) {
+        currentUser?.let { user ->
+            gachaViewModel.updateBalance(user.shyCoins, user.pityCounter, user.luckScore)
+        }
+    }
+
+    // Observe broadcasts
+    LaunchedEffect(Unit) {
+        giftRepository.observeBroadcasts()
+            .catch { /* ignore errors */ }
+            .collect { broadcasts ->
+                latestBroadcast = broadcasts.firstOrNull()
+            }
+    }
+
+    // Handle gift sending success - trigger effect
+    LaunchedEffect(giftingState.sentGiftId) {
+        val giftId = giftingState.sentGiftId ?: return@LaunchedEffect
+        val gift = giftingState.giftCatalog.find { it.id == giftId }
+        if (gift != null) {
+            giftEffectAnimUrl = gift.animationUrl ?: ""
+            giftEffectSoundUrl = gift.soundUrl ?: ""
+            showGiftEffect = giftEffectAnimUrl.isNotBlank()
+            showBackpackSheet = false
+        }
+        giftingViewModel.clearSentGift()
+    }
+
+    // Handle gacha win — trigger GiftEffectOverlay for RARE+ single wins
+    LaunchedEffect(gachaState.currentWin) {
+        val win = gachaState.currentWin ?: return@LaunchedEffect
+        if (win.bracket.ordinal >= com.shyden.shytalk.core.model.GiftBracket.RARE.ordinal) {
+            val gift = gachaState.giftCatalog.find { it.id == win.giftId }
+            if (gift != null && gift.animationUrl.isNotBlank()) {
+                // Delay so the wheel celebration finishes first
+                kotlinx.coroutines.delay(2600)
+                giftEffectAnimUrl = gift.animationUrl
+                giftEffectSoundUrl = gift.soundUrl
+                showGiftEffect = true
+            }
+        }
+    }
+
+    // Handle gacha errors
+    LaunchedEffect(gachaState.error) {
+        gachaState.error?.let {
+            snackbarHostState.showSnackbar(it)
+            gachaViewModel.clearError()
+        }
+    }
+
+    // Handle gifting errors
+    LaunchedEffect(giftingState.error) {
+        giftingState.error?.let {
+            snackbarHostState.showSnackbar(it)
+            giftingViewModel.clearError()
         }
     }
 
@@ -542,6 +630,11 @@ fun RoomScreen(
                             showPmSheet = true
                         },
                         unreadCount = convListState.totalUnreadCount.toInt(),
+                        onOpenBackpack = {
+                            backpackRecipientId = uiState.currentUserId
+                            backpackRecipientName = ""
+                            showBackpackSheet = true
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
@@ -608,6 +701,16 @@ fun RoomScreen(
                         .fillMaxHeight()
                         .fillMaxWidth(0.7f)
                 )
+            // Floating action carousel (bottom-right, inside scaffold content to respect padding)
+            if (uiState.hasJoined && !uiState.roomClosed) {
+                RoomActionCarousel(
+                    onOpenGacha = { showGachaWheel = true },
+                    onOpenDailyReward = { showDailyReward = true },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(bottom = 64.dp, end = 8.dp)
+                )
+            }
             }
         }
 
@@ -722,6 +825,14 @@ fun RoomScreen(
                             showPmSheet = true
                         }
                     } else null,
+                    onSendGift = if (userId != uiState.currentUserId) {
+                        {
+                            showUserCardForId = null
+                            backpackRecipientId = userId
+                            backpackRecipientName = user.displayName
+                            showBackpackSheet = true
+                        }
+                    } else null,
                     onBlock = {
                         viewModel.blockUser(userId)
                         showUserCardForId = null
@@ -819,6 +930,65 @@ fun RoomScreen(
                 },
                 activeRoomId = roomId,
                 activeRoomName = uiState.room?.name
+            )
+        }
+
+        // Backpack Sheet for sending/viewing gifts
+        if (showBackpackSheet) {
+            BackpackSheet(
+                viewModel = giftingViewModel,
+                recipientId = backpackRecipientId,
+                recipientName = backpackRecipientName,
+                currentUserId = uiState.currentUserId,
+                onDismiss = { showBackpackSheet = false }
+            )
+        }
+
+        // Spin-the-Wheel overlay
+        if (showGachaWheel && uiState.hasJoined) {
+            LuckySpinOverlay(
+                gachaState = gachaState,
+                onSpin = gachaViewModel::pullSingle,
+                onQuickSpin = { count ->
+                    when (count) {
+                        10 -> gachaViewModel.pullTen()
+                        100 -> gachaViewModel.pullHundred()
+                    }
+                },
+                onAdvanceMultiSpin = gachaViewModel::advanceMultiSpin,
+                onSkipMultiSpin = gachaViewModel::skipMultiSpin,
+                onDismissResults = gachaViewModel::dismissResults,
+                onDismiss = { showGachaWheel = false }
+            )
+        }
+
+        // Daily Reward Dialog
+        if (showDailyReward) {
+            currentUser?.let { user ->
+                LaunchedEffect(Unit) {
+                    dailyRewardViewModel.checkAndShowDialog(user)
+                }
+                DailyRewardDialog(
+                    viewModel = dailyRewardViewModel,
+                    onDismiss = { showDailyReward = false }
+                )
+            }
+        }
+
+        // Broadcast Banner (top overlay)
+        BroadcastBanner(
+            broadcast = latestBroadcast,
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
+
+        // Full-screen gift effect overlay
+        if (showGiftEffect) {
+            GiftEffectOverlay(
+                animationUrl = giftEffectAnimUrl,
+                soundUrl = giftEffectSoundUrl,
+                isVisible = true,
+                onFinished = { showGiftEffect = false },
+                modifier = Modifier.fillMaxSize()
             )
         }
         }

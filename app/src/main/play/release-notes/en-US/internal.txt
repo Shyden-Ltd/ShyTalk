@@ -1,12 +1,12 @@
-v0.37 - Group Messaging & Moderation
+v0.38 - Lucky Spin & Virtual Economy
 
-- Group chats with admin roles, permissions & mod actions
-- New message screen for starting conversations
-- In-app user reporting in conversations
-- Warning system with emergency tone alerts
-- Video compression and thumbnail support
-- Sticker storage (KMP: Android & iOS)
-- Community Guidelines & Terms via in-app WebView
-- Orphaned storage cleanup (daily cron + admin purge)
-- Expanded admin panel with moderation tools
-- Bug fixes and performance improvements
+- Lucky Spin dual-ring wheel with light-chase animations
+- 1x, 10x, 100x spin tiers with confetti and screen shake
+- 27 gifts across 5 rarity tiers
+- Shy Coins wallet with test purchases
+- Shy Beans redemption (10% bonus at 2000+)
+- Transaction history
+- Daily rewards with streak milestones
+- Animated mini-wheel in room carousel
+- Firestore PITR and delete protection
+- Bug fixes and UI improvements

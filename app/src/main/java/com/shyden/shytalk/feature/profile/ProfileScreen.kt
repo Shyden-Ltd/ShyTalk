@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -43,7 +45,13 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.AccountBalanceWallet
+import android.app.Activity
 import android.content.Intent
+import com.android.billingclient.api.BillingClient
+import com.shyden.shytalk.data.remote.BillingService
+import org.koin.compose.koinInject
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -56,16 +64,19 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -80,12 +91,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import com.shyden.shytalk.core.ui.StyledDisplayName
+import com.shyden.shytalk.core.ui.SuperShyGold
 import com.shyden.shytalk.core.util.calculateAge
+import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.feature.messaging.ReportUserDialog
+import com.shyden.shytalk.feature.shop.SuperShyBottomSheet
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.countryNameForCode
 import com.shyden.shytalk.core.util.flagEmojiForCode
@@ -105,6 +122,7 @@ fun ProfileScreen(
     onNavigateToSettings: (() -> Unit)? = null,
     onNavigateToRoom: ((String) -> Unit)? = null,
     onNavigateToChat: ((String) -> Unit)? = null,
+    onNavigateToWallet: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: ProfileViewModel = koinViewModel()
 ) {
@@ -223,6 +241,44 @@ fun ProfileScreen(
     val user = uiState.user
     val isOwn = uiState.isOwnProfile
 
+    // Billing setup for Super Shy purchases
+    val billingService: BillingService = koinInject()
+    val billingScope = rememberCoroutineScope()
+    val activity = LocalContext.current as? Activity
+
+    LaunchedEffect(Unit) {
+        billingService.purchaseEvents.collect { result ->
+            if (result.success) {
+                viewModel.validateSuperShyPurchase(result.productId, result.purchaseToken)
+            } else if (result.errorMessage != null) {
+                snackbarHostState.showSnackbar(result.errorMessage!!)
+            }
+        }
+    }
+
+    val onPurchaseSuperShy: (String) -> Unit = { productId ->
+        if (activity != null) {
+            billingScope.launch {
+                val type = if (productId == "super_shy_lifetime")
+                    BillingClient.ProductType.INAPP
+                else BillingClient.ProductType.SUBS
+
+                val products = billingService.queryProducts(listOf(productId), type)
+                val details = products.firstOrNull()
+                if (details == null) {
+                    snackbarHostState.showSnackbar("Product not available")
+                    return@launch
+                }
+
+                val offerToken = if (type == BillingClient.ProductType.SUBS) {
+                    details.subscriptionOfferDetails?.firstOrNull()?.offerToken
+                } else null
+
+                billingService.launchPurchaseFlow(activity, details, offerToken)
+            }
+        }
+    }
+
     // If this is embedded in a tab (no scaffold needed), just render the content
     if (!showBackButton) {
         Box(modifier = modifier) {
@@ -252,6 +308,8 @@ fun ProfileScreen(
                 onNavigateToFollowList = onNavigateToFollowList,
                 onNavigateToRoom = onNavigateToRoom,
                 onNavigateToChat = onNavigateToChat,
+                onNavigateToWallet = onNavigateToWallet,
+                onPurchaseSuperShy = onPurchaseSuperShy,
                 snackbarHostState = snackbarHostState,
                 modifier = Modifier.fillMaxSize()
             )
@@ -315,6 +373,8 @@ fun ProfileScreen(
                 onNavigateToFollowList = onNavigateToFollowList,
                 onNavigateToRoom = onNavigateToRoom,
                 onNavigateToChat = onNavigateToChat,
+                onNavigateToWallet = onNavigateToWallet,
+                onPurchaseSuperShy = onPurchaseSuperShy,
                 snackbarHostState = snackbarHostState,
                 modifier = Modifier
                     .fillMaxSize()
@@ -436,6 +496,7 @@ fun ProfileScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProfileContent(
     uiState: ProfileUiState,
@@ -457,10 +518,13 @@ private fun ProfileContent(
     onNavigateToFollowList: ((String, String) -> Unit)? = null,
     onNavigateToRoom: ((String) -> Unit)? = null,
     onNavigateToChat: ((String) -> Unit)? = null,
+    onNavigateToWallet: (() -> Unit)? = null,
+    onPurchaseSuperShy: (String) -> Unit = {},
     snackbarHostState: SnackbarHostState,
     modifier: Modifier = Modifier
 ) {
     val user = uiState.user
+    var showSuperShySheet by remember { mutableStateOf(false) }
 
     if (uiState.isLoading) {
         Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -564,6 +628,12 @@ private fun ProfileContent(
         return
     }
 
+    // Gift Wall ViewModel for tab
+    val giftWallViewModel: GiftWallViewModel = koinViewModel(
+        key = user.uid
+    ) { org.koin.core.parameter.parametersOf(user.uid) }
+    val giftWallState by giftWallViewModel.uiState.collectAsStateWithLifecycle()
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -623,26 +693,18 @@ private fun ProfileContent(
                     }
                 }
             }
-        }
 
-        // Profile photo + follow stats (overlapping cover)
-        val activeRoomId = uiState.activeRoomId
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset(y = (-50).dp)
-                .padding(horizontal = 16.dp),
-            contentAlignment = Alignment.CenterStart
-        ) {
-            // Follow stats — positioned slightly below center to sit under the cover edge
+            // Follow stats overlay at bottom of cover photo
             if (!uiState.isEditing) {
                 val followingHidden = !isOwn && uiState.hideFollowing
                 Row(
                     modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(top = 32.dp),
+                        .align(Alignment.BottomEnd)
+                        .background(Color.Black.copy(alpha = 0.45f))
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(24.dp)
                 ) {
+                    // Following
                     Column(
                         modifier = Modifier.clickable(enabled = !followingHidden) {
                             onNavigateToFollowList?.invoke(user.uid, "following")
@@ -650,15 +712,17 @@ private fun ProfileContent(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = if (followingHidden) "Following (Private)" else "Following",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = if (followingHidden) "-" else "${uiState.followingCount}",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White
                         )
                         Text(
-                            text = if (followingHidden) "-" else "${uiState.followingCount}",
-                            style = MaterialTheme.typography.titleMedium
+                            text = if (followingHidden) "Following (Private)" else "Following",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.8f)
                         )
                     }
+                    // Followers
                     Column(
                         modifier = Modifier.clickable {
                             onNavigateToFollowList?.invoke(user.uid, "followers")
@@ -666,15 +730,17 @@ private fun ProfileContent(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "Followers",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = "${uiState.followerCount}",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White
                         )
                         Text(
-                            text = "${uiState.followerCount}",
-                            style = MaterialTheme.typography.titleMedium
+                            text = "Followers",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.8f)
                         )
                     }
+                    // Stalkers (own profile only)
                     if (isOwn) {
                         Column(
                             modifier = Modifier.clickable {
@@ -709,20 +775,31 @@ private fun ProfileContent(
                                 }
                             ) {
                                 Text(
-                                    text = "Stalkers",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    text = "${uiState.stalkerCount}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = Color.White
                                 )
                             }
                             Text(
-                                text = "${uiState.stalkerCount}",
-                                style = MaterialTheme.typography.titleMedium
+                                text = "Stalkers",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.8f)
                             )
                         }
                     }
                 }
             }
+        }
 
+        // Profile photo (overlapping cover)
+        val activeRoomId = uiState.activeRoomId
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset(y = (-50).dp)
+                .padding(horizontal = 16.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
             Box(
                 modifier = Modifier
                     .then(
@@ -810,6 +887,7 @@ private fun ProfileContent(
                     )
                 }
             }
+
         }
 
         // CNY badge
@@ -919,19 +997,42 @@ private fun ProfileContent(
                 // View mode
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        text = user.displayName,
+                    StyledDisplayName(
+                        displayName = user.displayName,
+                        isSuperShy = user.isSuperShy,
                         style = MaterialTheme.typography.headlineMedium
                     )
                     if (uiState.isOnline) {
+                        Spacer(modifier = Modifier.width(8.dp))
                         Box(
                             modifier = Modifier
                                 .size(10.dp)
                                 .clip(CircleShape)
                                 .background(SpeakingGreen)
                         )
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    if (isOwn) {
+                        Surface(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .clickable { onToggleEditing() },
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shadowElevation = 2.dp
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.Edit,
+                                    contentDescription = "Edit profile",
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -955,29 +1056,103 @@ private fun ProfileContent(
                     )
                 }
 
+                // Collapsible description
                 user.description?.takeIf { it.isNotBlank() }?.let { desc ->
                     Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = desc,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    var expanded by rememberSaveable { mutableStateOf(false) }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .animateContentSize()
+                    ) {
+                        Text(
+                            text = desc,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = if (expanded) Int.MAX_VALUE else 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (desc.length > 80) {
+                            Text(
+                                text = if (expanded) "less" else "more",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.clickable { expanded = !expanded }
+                            )
+                        }
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
-
+                // Super Shy + Wallet buttons (own profile only)
                 if (isOwn) {
-                    // Edit profile button
-                    OutlinedButton(
-                        onClick = onToggleEditing,
-                        modifier = Modifier.fillMaxWidth()
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Edit Profile")
-                    }
+                        // Super Shy button
+                        val superShyActive = user.isSuperShy
+                        Button(
+                            onClick = { showSuperShySheet = true },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (superShyActive) SuperShyGold
+                                else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (superShyActive) Color.Black
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                Icons.Filled.Star,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            if (superShyActive) {
+                                val label = if (user.superShyTier == "lifetime") {
+                                    "Super Shy \u2726 Lifetime"
+                                } else {
+                                    val daysLeft = user.superShyExpiry?.let {
+                                        ((it - currentTimeMillis()) / 86_400_000).toInt()
+                                    }
+                                    if (daysLeft != null && daysLeft > 0) "Super Shy \u2726 ${daysLeft}d"
+                                    else "Super Shy"
+                                }
+                                Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            } else {
+                                Text("Get Super Shy")
+                            }
+                        }
 
-                } else {
+                        // Wallet button
+                        Button(
+                            onClick = { onNavigateToWallet?.invoke() },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                Icons.Filled.AccountBalanceWallet,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                "Wallet \u00B7 ${formatBalance(user.shyCoins)}",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (!isOwn) {
                     // Follow/Unfollow + Message buttons
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1054,9 +1229,44 @@ private fun ProfileContent(
                         Text("Report")
                     }
                 }
+
+                // Gift Wall Tab
+                Spacer(modifier = Modifier.height(16.dp))
+                var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+                PrimaryTabRow(selectedTabIndex = selectedTab) {
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        text = { Text("Gift Wall") }
+                    )
+                }
+
+                // Gift Wall content inline (non-scrolling since parent scrolls)
+                GiftWallContent(
+                    state = giftWallState,
+                    onSelectGift = { giftWallViewModel.selectGift(it) },
+                    onDismissDetails = { giftWallViewModel.dismissDetails() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(400.dp)
+                )
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
     }
+
+    // Super Shy bottom sheet
+    if (showSuperShySheet) {
+        SuperShyBottomSheet(
+            user = user,
+            onPurchase = { productId ->
+                showSuperShySheet = false
+                onPurchaseSuperShy(productId)
+            },
+            onDismiss = { showSuperShySheet = false }
+        )
+    }
 }
+
+private fun formatBalance(value: Long): String = "%,d".format(value)

@@ -56,6 +56,7 @@ fun MainScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToLunarNewYear: () -> Unit = {},
     onNavigateToNewMessage: () -> Unit = {},
+    onNavigateToWallet: () -> Unit = {},
     messagesContent: @Composable (Modifier) -> Unit = {},
     totalUnreadCount: Long = 0,
     profileContent: @Composable (Modifier) -> Unit

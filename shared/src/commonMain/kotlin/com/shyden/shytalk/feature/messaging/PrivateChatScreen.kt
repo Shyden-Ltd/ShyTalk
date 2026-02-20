@@ -69,6 +69,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.GroupPermissions
+import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.model.MessageEdit
 import com.shyden.shytalk.core.model.PrivateMessage
 import com.shyden.shytalk.core.util.Constants
@@ -237,11 +238,10 @@ fun PrivateChatScreen(
                             }
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
-                                Text(
-                                    text = otherUser?.displayName ?: "Chat",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                StyledDisplayName(
+                                    displayName = otherUser?.displayName ?: "Chat",
+                                    isSuperShy = otherUser?.isSuperShy == true,
+                                    style = MaterialTheme.typography.titleMedium
                                 )
                                 if (uiState.isOtherUserTyping) {
                                     Text(

@@ -1341,8 +1341,8 @@
 <div id="login-screen" class="screen">
   <div class="login-box">
     <h2>ShyTalk Admin</h2>
-    <input type="email" id="login-email" placeholder="Email" autocomplete="email">
-    <input type="password" id="login-password" placeholder="Password" autocomplete="current-password">
+    <input type="email" id="login-email" placeholder="Email" autocomplete="email" aria-label="Email">
+    <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" aria-label="Password">
     <button id="login-btn">Sign In</button>
     <div class="login-error" id="login-error"></div>
   </div>
@@ -1363,7 +1363,7 @@
 
   <div class="main-content">
     <div class="search-bar">
-      <input type="number" id="search-uid" placeholder="Enter ShyTalk User ID">
+      <input type="number" id="search-uid" placeholder="Enter ShyTalk User ID" aria-label="ShyTalk User ID">
       <button id="search-btn">Search</button>
     </div>
 
@@ -1377,23 +1377,23 @@
         </div>
         <div class="field-group">
           <label>Display Name</label>
-          <input type="text" data-field="displayName">
+          <input type="text" data-field="displayName" aria-label="Display Name">
         </div>
         <div class="field-group">
           <label>Email</label>
           <div class="field-row">
-            <input type="text" data-field="email" id="email-input">
+            <input type="text" data-field="email" id="email-input" aria-label="Email">
             <button class="btn-clear" id="email-toggle" type="button">Show</button>
             <button class="btn-clear" data-clear="email">Clear</button>
           </div>
         </div>
         <div class="field-group">
           <label>Unique ID</label>
-          <input type="number" data-field="uniqueId">
+          <input type="number" data-field="uniqueId" aria-label="Unique ID">
         </div>
         <div class="field-group">
           <label>User Type</label>
-          <select data-field="userType">
+          <select data-field="userType" aria-label="User Type">
             <option value="MEMBER">MEMBER</option>
             <option value="SHYTALK_OFFICIAL">SHYTALK_OFFICIAL</option>
             <option value="MC_SINGER">MC_SINGER</option>
@@ -1404,7 +1404,7 @@
         <div class="field-group">
           <label>Nationality</label>
           <div class="field-row">
-            <select data-field="nationality" id="nationality-select"></select>
+            <select data-field="nationality" id="nationality-select" aria-label="Nationality"></select>
             <button class="btn-clear" data-clear="nationality">Clear</button>
           </div>
         </div>
@@ -1416,21 +1416,21 @@
         <div class="field-group">
           <label>Description</label>
           <div class="field-row">
-            <textarea data-field="description" rows="3"></textarea>
+            <textarea data-field="description" rows="3" aria-label="Description"></textarea>
             <button class="btn-clear" data-clear="description">Clear</button>
           </div>
         </div>
         <div class="field-group">
           <label>Profile Photo URL</label>
           <div class="field-row">
-            <input type="text" data-field="profilePhotoUrl">
+            <input type="text" data-field="profilePhotoUrl" aria-label="Profile Photo URL">
             <button class="btn-clear" data-clear="profilePhotoUrl">Clear</button>
           </div>
         </div>
         <div class="field-group">
           <label>Cover Photo URL</label>
           <div class="field-row">
-            <input type="text" data-field="coverPhotoUrl">
+            <input type="text" data-field="coverPhotoUrl" aria-label="Cover Photo URL">
             <button class="btn-clear" data-clear="coverPhotoUrl">Clear</button>
           </div>
         </div>
@@ -1460,7 +1460,7 @@
         <div id="pre-suspension-info" style="display:none;margin-top:12px;padding:12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);">
           <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">Original Profile (before suspension)</div>
           <div style="display:flex;align-items:center;gap:12px;">
-            <img id="pre-suspension-photo" src="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;display:none;" />
+            <img id="pre-suspension-photo" src="" alt="Pre-suspension profile photo" style="width:40px;height:40px;border-radius:50%;object-fit:cover;display:none;" />
             <div>
               <div id="pre-suspension-name" style="font-weight:600;"></div>
               <div id="pre-suspension-cover" style="font-size:12px;color:var(--text2);display:none;">Has cover photo</div>
@@ -1469,7 +1469,7 @@
         </div>
         <div class="field-group">
           <label>Reason</label>
-          <textarea id="suspend-reason" rows="2" placeholder="Reason for suspension"></textarea>
+          <textarea id="suspend-reason" rows="2" placeholder="Reason for suspension" aria-label="Suspension Reason"></textarea>
         </div>
         <div class="field-group">
           <label>Duration</label>
@@ -1480,7 +1480,7 @@
             <button type="button" data-days="30">30 Days</button>
             <button type="button" data-days="0">Permanent</button>
           </div>
-          <input type="datetime-local" id="suspend-end-date">
+          <input type="datetime-local" id="suspend-end-date" aria-label="Suspension End Date">
         </div>
         <div class="checkbox-row">
           <input type="checkbox" id="suspend-can-appeal">
@@ -1509,7 +1509,7 @@
       <div class="form-section" id="direct-warn-section" style="display:none;">
         <h3>Issue Warning</h3>
         <div style="display:flex;flex-direction:column;gap:10px;">
-          <select id="direct-warn-reason" style="padding:8px;background:var(--surface);color:var(--text1);border:1px solid var(--border);border-radius:6px;">
+          <select id="direct-warn-reason" aria-label="Warning Reason" style="padding:8px;background:var(--surface);color:var(--text1);border:1px solid var(--border);border-radius:6px;">
             <option value="">Select reason...</option>
             <option value="Spam">Spam</option>
             <option value="Harassment">Harassment</option>
@@ -1524,7 +1524,7 @@
             <label style="color:var(--text2);font-size:13px;cursor:pointer;"><input type="radio" name="direct-warn-severity" value="4"> 4 (-20)</label>
             <label style="color:var(--text2);font-size:13px;cursor:pointer;"><input type="radio" name="direct-warn-severity" value="5"> 5 (-25)</label>
           </div>
-          <textarea id="direct-warn-note" rows="2" placeholder="Admin note (optional)" style="padding:8px;background:var(--surface);color:var(--text1);border:1px solid var(--border);border-radius:6px;resize:vertical;font-family:inherit;"></textarea>
+          <textarea id="direct-warn-note" rows="2" placeholder="Admin note (optional)" aria-label="Warning Note" style="padding:8px;background:var(--surface);color:var(--text1);border:1px solid var(--border);border-radius:6px;resize:vertical;font-family:inherit;"></textarea>
           <button type="button" id="direct-warn-btn" class="btn-warn" style="align-self:flex-start;">Issue Warning</button>
         </div>
       </div>
@@ -1541,7 +1541,7 @@
         <div class="field-group">
           <label>Date of Birth</label>
           <div class="field-row">
-            <input type="datetime-local" data-field="dateOfBirth">
+            <input type="datetime-local" data-field="dateOfBirth" aria-label="Date of Birth">
             <button class="btn-clear" data-clear="dateOfBirth">Clear</button>
           </div>
         </div>
@@ -1564,7 +1564,7 @@
           <div class="list-widget" id="list-blockedUserIds">
             <div class="list-items"></div>
             <div class="list-add">
-              <input type="number" placeholder="ShyTalk User ID">
+              <input type="number" placeholder="ShyTalk User ID" aria-label="Add blocked user ID">
               <button type="button">Add</button>
             </div>
           </div>
@@ -1574,7 +1574,7 @@
           <div class="list-widget" id="list-followingIds">
             <div class="list-items"></div>
             <div class="list-add">
-              <input type="number" placeholder="ShyTalk User ID">
+              <input type="number" placeholder="ShyTalk User ID" aria-label="Add following user ID">
               <button type="button">Add</button>
             </div>
           </div>
@@ -1584,11 +1584,113 @@
           <div class="list-widget" id="list-followerIds">
             <div class="list-items"></div>
             <div class="list-add">
-              <input type="number" placeholder="ShyTalk User ID">
+              <input type="number" placeholder="ShyTalk User ID" aria-label="Add follower user ID">
               <button type="button">Add</button>
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- Economy -->
+      <div class="form-section">
+        <h3>Economy</h3>
+        <div class="field-group">
+          <label>Shy Coins</label>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span id="eco-coins-display" style="font-weight:bold;min-width:60px">0</span>
+            <select id="eco-coins-op" aria-label="Coins operation" style="width:80px">
+              <option value="add">Add</option>
+              <option value="deduct">Deduct</option>
+            </select>
+            <input type="number" id="eco-coins-amount" placeholder="Amount" min="0" aria-label="Coins amount" style="width:100px">
+            <button type="button" id="eco-coins-apply" class="btn-sm">Apply</button>
+          </div>
+        </div>
+        <div class="field-group">
+          <label>Shy Beans</label>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span id="eco-beans-display" style="font-weight:bold;min-width:60px">0</span>
+            <select id="eco-beans-op" aria-label="Beans operation" style="width:80px">
+              <option value="add">Add</option>
+              <option value="deduct">Deduct</option>
+            </select>
+            <input type="number" id="eco-beans-amount" placeholder="Amount" min="0" aria-label="Beans amount" style="width:100px">
+            <button type="button" id="eco-beans-apply" class="btn-sm">Apply</button>
+          </div>
+        </div>
+        <div class="field-group">
+          <label>Super Shy</label>
+          <select id="eco-super-shy" aria-label="Super Shy">
+            <option value="false">No</option>
+            <option value="true">Yes</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>Super Shy Tier</label>
+          <select id="eco-super-shy-tier" aria-label="Super Shy Tier" disabled>
+            <option value="">None</option>
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly</option>
+            <option value="lifetime">Lifetime</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>Login Streak</label>
+          <input type="number" id="eco-streak" value="0" min="0" aria-label="Login Streak">
+        </div>
+        <div class="field-group">
+          <label>Luck Score (0-100)</label>
+          <input type="number" id="eco-luck" value="0" min="0" max="100" aria-label="Luck Score">
+        </div>
+        <div class="field-group">
+          <label>Pity Counter (0-80)</label>
+          <input type="number" id="eco-pity" value="0" min="0" max="80" aria-label="Pity Counter">
+        </div>
+      </div>
+
+      <!-- Backpack -->
+      <div class="form-section">
+        <h3>Backpack</h3>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input type="text" id="backpack-search" placeholder="Search by name, type, or ID..." aria-label="Search backpack" style="flex:1">
+          <select id="backpack-filter-type" aria-label="Filter by type" style="width:120px">
+            <option value="">All Types</option>
+            <option value="COMMON">Common</option>
+            <option value="UNCOMMON">Uncommon</option>
+            <option value="RARE">Rare</option>
+            <option value="EPIC">Epic</option>
+            <option value="LEGENDARY">Legendary</option>
+          </select>
+        </div>
+        <div id="backpack-container">
+          <p style="color:var(--text2)">Loading backpack...</p>
+        </div>
+        <div style="margin-top:8px;display:flex;gap:8px">
+          <select id="backpack-gift-select" aria-label="Select gift" style="flex:1"><option value="">Select gift...</option></select>
+          <input type="number" id="backpack-qty" placeholder="Qty" min="1" aria-label="Quantity" style="width:80px">
+          <button type="button" id="backpack-add-btn" class="btn-sm">Add</button>
+        </div>
+      </div>
+
+      <!-- Transactions -->
+      <div class="form-section">
+        <h3>Transaction History</h3>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <select id="tx-type-filter" aria-label="Transaction type filter" style="flex:1">
+            <option value="">All Types</option>
+            <option value="PURCHASE">Purchase</option>
+            <option value="GACHA_PULL">Gacha Pull</option>
+            <option value="GIFT_SENT">Gift Sent</option>
+            <option value="GIFT_RECEIVED">Gift Received</option>
+            <option value="BEAN_REDEEM">Bean Redeem</option>
+            <option value="DAILY_REWARD">Daily Reward</option>
+            <option value="SUBSCRIPTION">Subscription</option>
+            <option value="ADMIN_ADJUSTMENT">Admin Adjustment</option>
+            <option value="ADMIN_BACKPACK">Admin Backpack</option>
+          </select>
+          <button type="button" id="tx-load-btn" class="btn-sm">Load</button>
+        </div>
+        <div id="tx-list" style="max-height:300px;overflow-y:auto"></div>
       </div>
 
       <!-- Save -->
@@ -3544,6 +3646,234 @@
     }
     btn.disabled = false;
     btn.textContent = "Purge Orphaned Files";
+  });
+
+  // --- Economy Admin ---
+  let _ecoCoins = 0;
+  let _ecoBeans = 0;
+
+  function populateEconomySection(data) {
+    _ecoCoins = data.shyCoins || 0;
+    _ecoBeans = data.shyBeans || 0;
+    $("#eco-coins-display").textContent = _ecoCoins;
+    $("#eco-beans-display").textContent = _ecoBeans;
+    $("#eco-coins-amount").value = "";
+    $("#eco-beans-amount").value = "";
+    $("#eco-super-shy").value = data.isSuperShy ? "true" : "false";
+    const isSuperShy = data.isSuperShy === true;
+    $("#eco-super-shy-tier").disabled = !isSuperShy;
+    $("#eco-super-shy-tier").value = isSuperShy ? (data.superShyTier || "") : "";
+    $("#eco-streak").value = data.loginStreak || 0;
+    $("#eco-luck").value = data.luckScore || 0;
+    $("#eco-pity").value = data.pityCounter || 0;
+  }
+
+  // Toggle Super Shy Tier enabled/disabled based on Super Shy value
+  $("#eco-super-shy").addEventListener("change", () => {
+    const isSuperShy = $("#eco-super-shy").value === "true";
+    $("#eco-super-shy-tier").disabled = !isSuperShy;
+    if (!isSuperShy) {
+      $("#eco-super-shy-tier").value = "";
+    }
+  });
+
+  // Apply coins add/deduct (uses dedicated audit endpoint)
+  $("#eco-coins-apply").addEventListener("click", async () => {
+    if (!currentUid) return;
+    const op = $("#eco-coins-op").value;
+    const amount = parseInt($("#eco-coins-amount").value) || 0;
+    if (amount <= 0) { showToast("Enter a positive amount", "error"); return; }
+    try {
+      const result = await apiCall("POST", `/api/users/${currentUid}/adjust-balance`, {
+        currency: "COINS", amount, operation: op
+      });
+      _ecoCoins = result.newBalance;
+      $("#eco-coins-display").textContent = _ecoCoins;
+      $("#eco-coins-amount").value = "";
+      showToast(`${op === "add" ? "Added" : "Deducted"} ${amount} coins (now ${_ecoCoins})`);
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+  });
+
+  // Apply beans add/deduct (uses dedicated audit endpoint)
+  $("#eco-beans-apply").addEventListener("click", async () => {
+    if (!currentUid) return;
+    const op = $("#eco-beans-op").value;
+    const amount = parseInt($("#eco-beans-amount").value) || 0;
+    if (amount <= 0) { showToast("Enter a positive amount", "error"); return; }
+    try {
+      const result = await apiCall("POST", `/api/users/${currentUid}/adjust-balance`, {
+        currency: "BEANS", amount, operation: op
+      });
+      _ecoBeans = result.newBalance;
+      $("#eco-beans-display").textContent = _ecoBeans;
+      $("#eco-beans-amount").value = "";
+      showToast(`${op === "add" ? "Added" : "Deducted"} ${amount} beans (now ${_ecoBeans})`);
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+  });
+
+  // Hook economy into full populate
+  const _origPopulateFull = populateFormFull;
+  populateFormFull = async function(data) {
+    await _origPopulateFull(data);
+    populateEconomySection(data);
+    loadBackpack(data.uid);
+    populateGiftSelect();
+  };
+
+  // Include economy fields in save (coins/beans excluded — managed via add/deduct buttons)
+  const _origGetModified = getModifiedFields;
+  getModifiedFields = function() {
+    const modified = _origGetModified();
+    const isSuperShy = $("#eco-super-shy").value === "true";
+    const ecoFields = {
+      isSuperShy,
+      superShyTier: isSuperShy ? ($("#eco-super-shy-tier").value || null) : null,
+      loginStreak: parseInt($("#eco-streak").value) || 0,
+      luckScore: parseInt($("#eco-luck").value) || 0,
+      pityCounter: parseInt($("#eco-pity").value) || 0,
+    };
+    for (const [k, v] of Object.entries(ecoFields)) {
+      if (v !== (loadedData[k] ?? (typeof v === "boolean" ? false : typeof v === "number" ? 0 : null))) {
+        modified[k] = v;
+      }
+    }
+    return modified;
+  };
+
+  // Backpack management
+  let _backpackItems = [];
+  let _giftCatalog = [];
+
+  async function loadBackpack(uid) {
+    const container = $("#backpack-container");
+    container.innerHTML = '<p style="color:var(--text2)">Loading...</p>';
+    try {
+      const data = await apiCall("GET", `/api/users/${uid}/backpack`);
+      _backpackItems = data.items || [];
+      renderBackpack();
+    } catch (err) {
+      container.innerHTML = `<p style="color:var(--danger)">${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  function renderBackpack() {
+    const container = $("#backpack-container");
+    const searchText = ($("#backpack-search").value || "").toLowerCase();
+    const filterType = $("#backpack-filter-type").value;
+
+    let filtered = _backpackItems;
+    if (searchText) {
+      filtered = filtered.filter(item => {
+        const name = (item.giftName || item.giftId || "").toLowerCase();
+        const id = (item.giftId || "").toLowerCase();
+        const bracket = (item.bracket || "").toLowerCase();
+        return name.includes(searchText) || id.includes(searchText) || bracket.includes(searchText);
+      });
+    }
+    if (filterType) {
+      filtered = filtered.filter(item => (item.bracket || "").toUpperCase() === filterType);
+    }
+
+    if (_backpackItems.length === 0) {
+      container.innerHTML = '<p style="color:var(--text2)">Backpack is empty</p>';
+    } else if (filtered.length === 0) {
+      container.innerHTML = '<p style="color:var(--text2)">No items match your search</p>';
+    } else {
+      container.innerHTML = filtered.map(item =>
+        `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)">
+          <span>
+            ${escapeHtml(item.giftName || item.giftId)}
+            <span style="color:var(--text2)">x${item.quantity}</span>
+            ${item.bracket ? `<span style="color:var(--text2);font-size:0.8em">[${escapeHtml(item.bracket)}]</span>` : ""}
+            <span style="color:var(--text2);font-size:0.75em">(${escapeHtml(item.giftId)})</span>
+          </span>
+          <div style="display:flex;gap:4px">
+            <button type="button" class="btn-sm" style="background:var(--danger)" onclick="removeBackpackItem('${escapeHtml(item.giftId)}')">Remove</button>
+          </div>
+        </div>`
+      ).join("");
+    }
+  }
+
+  // Search & filter triggers
+  $("#backpack-search").addEventListener("input", renderBackpack);
+  $("#backpack-filter-type").addEventListener("change", renderBackpack);
+
+  async function populateGiftSelect() {
+    const select = $("#backpack-gift-select");
+    try {
+      const data = await apiCall("GET", "/api/gifts");
+      _giftCatalog = data.gifts || [];
+      select.innerHTML = '<option value="">Select gift...</option>' +
+        _giftCatalog.map(g => `<option value="${g.id}">${escapeHtml(g.name)} (${g.bracket})</option>`).join("");
+    } catch (err) {
+      // Gift catalog not available
+    }
+  }
+
+  window.removeBackpackItem = async function(giftId) {
+    if (!currentUid || !confirm("Remove this gift from backpack?")) return;
+    try {
+      await apiCall("POST", `/api/users/${currentUid}/backpack`, { giftId, quantity: 0 });
+      showToast("Removed from backpack");
+      loadBackpack(currentUid);
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+  };
+
+  $("#backpack-add-btn").addEventListener("click", async () => {
+    const giftId = $("#backpack-gift-select").value;
+    const qty = parseInt($("#backpack-qty").value) || 0;
+    if (!giftId || !currentUid || qty <= 0) { showToast("Select a gift and enter a quantity", "error"); return; }
+    try {
+      // Find current quantity and add to it
+      const existing = _backpackItems.find(i => i.giftId === giftId);
+      const newQty = (existing ? existing.quantity : 0) + qty;
+      await apiCall("POST", `/api/users/${currentUid}/backpack`, { giftId, quantity: newQty });
+      showToast(`Added ${qty} (total now ${newQty})`);
+      loadBackpack(currentUid);
+      $("#backpack-qty").value = "";
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+  });
+
+  // Transaction history
+  $("#tx-load-btn").addEventListener("click", async () => {
+    if (!currentUid) return;
+    const typeFilter = $("#tx-type-filter").value;
+    const txList = $("#tx-list");
+    txList.innerHTML = '<p style="color:var(--text2)">Loading...</p>';
+    try {
+      const url = typeFilter
+        ? `/api/users/${currentUid}/transactions?type=${typeFilter}`
+        : `/api/users/${currentUid}/transactions`;
+      const data = await apiCall("GET", url);
+      const txs = data.transactions || [];
+      if (txs.length === 0) {
+        txList.innerHTML = '<p style="color:var(--text2)">No transactions found</p>';
+      } else {
+        txList.innerHTML = txs.map(tx => {
+          const date = tx.timestamp ? new Date(tx.timestamp).toLocaleString() : "—";
+          const details = tx.details || tx.giftName || "";
+          return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--accent)">${escapeHtml(tx.type)}</span>
+              <span style="color:var(--text2)">${date}</span>
+            </div>
+            <div>${tx.amount > 0 ? "+" : ""}${tx.amount} ${tx.currency || "COINS"} → Balance: ${tx.balanceAfter ?? "?"}</div>
+            ${details ? `<div style="color:var(--text2)">${escapeHtml(details)}</div>` : ""}
+          </div>`;
+        }).join("");
+      }
+    } catch (err) {
+      txList.innerHTML = `<p style="color:var(--danger)">${escapeHtml(err.message)}</p>`;
+    }
   });
 </script>
 </body>

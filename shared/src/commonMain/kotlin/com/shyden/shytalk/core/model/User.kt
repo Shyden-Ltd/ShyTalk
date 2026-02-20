@@ -50,7 +50,18 @@ data class User(
     val dndStartHour: Int = 22,
     val dndStartMinute: Int = 0,
     val dndEndHour: Int = 8,
-    val dndEndMinute: Int = 0
+    val dndEndMinute: Int = 0,
+    // Monetization
+    val shyCoins: Long = 0,
+    val shyBeans: Long = 0,
+    val isSuperShy: Boolean = false,
+    val superShyExpiry: Long? = null,
+    val superShyTier: String? = null,
+    val luckScore: Int = 0,
+    val pityCounter: Int = 0,
+    val loginStreak: Int = 0,
+    val lastLoginDate: String? = null,
+    val lastLoginRewardDate: String? = null
 ) {
     val isActivelySuspended: Boolean
         get() {
@@ -106,7 +117,17 @@ data class User(
         "dndStartHour" to dndStartHour,
         "dndStartMinute" to dndStartMinute,
         "dndEndHour" to dndEndHour,
-        "dndEndMinute" to dndEndMinute
+        "dndEndMinute" to dndEndMinute,
+        "shyCoins" to shyCoins,
+        "shyBeans" to shyBeans,
+        "isSuperShy" to isSuperShy,
+        "superShyExpiry" to superShyExpiry?.let { millisToTimestamp(it) },
+        "superShyTier" to superShyTier,
+        "luckScore" to luckScore,
+        "pityCounter" to pityCounter,
+        "loginStreak" to loginStreak,
+        "lastLoginDate" to lastLoginDate,
+        "lastLoginRewardDate" to lastLoginRewardDate
     )
 
     companion object {
@@ -162,7 +183,17 @@ data class User(
             dndStartHour = (map["dndStartHour"] as? Long)?.toInt() ?: 22,
             dndStartMinute = (map["dndStartMinute"] as? Long)?.toInt() ?: 0,
             dndEndHour = (map["dndEndHour"] as? Long)?.toInt() ?: 8,
-            dndEndMinute = (map["dndEndMinute"] as? Long)?.toInt() ?: 0
+            dndEndMinute = (map["dndEndMinute"] as? Long)?.toInt() ?: 0,
+            shyCoins = (map["shyCoins"] as? Long) ?: 0,
+            shyBeans = (map["shyBeans"] as? Long) ?: 0,
+            isSuperShy = map["isSuperShy"] as? Boolean ?: false,
+            superShyExpiry = map["superShyExpiry"]?.let { timestampToMillis(it) },
+            superShyTier = map["superShyTier"] as? String,
+            luckScore = (map["luckScore"] as? Long)?.toInt() ?: 0,
+            pityCounter = (map["pityCounter"] as? Long)?.toInt() ?: 0,
+            loginStreak = (map["loginStreak"] as? Long)?.toInt() ?: 0,
+            lastLoginDate = map["lastLoginDate"] as? String,
+            lastLoginRewardDate = map["lastLoginRewardDate"] as? String
         )
     }
 }

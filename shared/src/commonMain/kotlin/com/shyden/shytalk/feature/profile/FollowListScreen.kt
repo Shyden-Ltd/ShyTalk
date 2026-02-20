@@ -54,6 +54,7 @@ import androidx.compose.runtime.collectAsState
 import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.ProfileVisitor
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.util.formatRelativeTime
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -274,11 +275,10 @@ private fun FollowUserRow(
 
         // Name
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = user.displayName.ifEmpty { "Unknown" },
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+            StyledDisplayName(
+                displayName = user.displayName.ifEmpty { "Unknown" },
+                isSuperShy = user.isSuperShy,
+                style = MaterialTheme.typography.bodyLarge
             )
         }
 
@@ -379,11 +379,10 @@ private fun StalkerUserRow(
 
         // Name and visit count
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = user?.displayName?.ifEmpty { "Unknown" } ?: "Unknown",
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+            StyledDisplayName(
+                displayName = user?.displayName?.ifEmpty { "Unknown" } ?: "Unknown",
+                isSuperShy = user?.isSuperShy == true,
+                style = MaterialTheme.typography.bodyLarge
             )
             val agoText = remember(visitor.lastVisitedAt) {
                 formatRelativeTime(visitor.lastVisitedAt)

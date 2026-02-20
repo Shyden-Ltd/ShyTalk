@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.EventSeat
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Mic
@@ -45,6 +46,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.util.countryNameForCode
 import com.shyden.shytalk.core.util.flagEmojiForCode
 import com.shyden.shytalk.feature.messaging.ReportUserDialog
@@ -72,6 +74,7 @@ fun UserCardPopup(
     onMakeHost: (() -> Unit)? = null,
     onRemoveHost: (() -> Unit)? = null,
     isHost: Boolean = false,
+    onSendGift: (() -> Unit)? = null,
     onReportUser: ((reason: String, description: String) -> Unit)? = null,
     evidenceItems: List<ByteArray> = emptyList(),
     onAddEvidence: (() -> Unit)? = null,
@@ -136,8 +139,9 @@ fun UserCardPopup(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                Text(
-                    text = user.displayName,
+                StyledDisplayName(
+                    displayName = user.displayName,
+                    isSuperShy = user.isSuperShy,
                     style = MaterialTheme.typography.titleMedium
                 )
 
@@ -213,6 +217,22 @@ fun UserCardPopup(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Message")
+                    }
+                }
+
+                if (!isSelf && onSendGift != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = onSendGift,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            Icons.Default.CardGiftcard,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Send Gift")
                     }
                 }
 

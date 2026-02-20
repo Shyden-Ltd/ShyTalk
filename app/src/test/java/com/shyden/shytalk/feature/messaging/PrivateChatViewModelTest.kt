@@ -34,6 +34,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -58,7 +59,14 @@ class PrivateChatViewModelTest {
 
     private val messagesFlow = MutableSharedFlow<List<PrivateMessage>>()
     private val settingsFlow = MutableSharedFlow<ConversationSettings>()
+    private val activeViewModels = mutableListOf<PrivateChatViewModel>()
     private val typingFlow = MutableSharedFlow<Boolean>()
+
+    @After
+    fun tearDown() {
+        activeViewModels.forEach { it.viewModelScope.cancel() }
+        activeViewModels.clear()
+    }
 
     @Before
     fun setup() {
@@ -94,7 +102,7 @@ class PrivateChatViewModelTest {
             typingRepository = typingRepository,
             reportRepository = reportRepository,
             storageRepository = storageRepository
-        )
+        ).also { activeViewModels.add(it) }
     }
 
     // ===== Init =====

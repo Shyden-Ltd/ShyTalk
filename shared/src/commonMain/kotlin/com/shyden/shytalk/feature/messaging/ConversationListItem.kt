@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.GroupRole
+import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.currentTimeMillis
@@ -124,11 +125,10 @@ fun ConversationListItem(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text(
-                    text = if (isGroup) groupName ?: "Group" else otherUser?.displayName ?: "Unknown",
+                StyledDisplayName(
+                    displayName = if (isGroup) groupName ?: "Group" else otherUser?.displayName ?: "Unknown",
+                    isSuperShy = !isGroup && otherUser?.isSuperShy == true,
                     style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
                 )
                 if (isGroup && currentUserRole != GroupRole.MEMBER) {

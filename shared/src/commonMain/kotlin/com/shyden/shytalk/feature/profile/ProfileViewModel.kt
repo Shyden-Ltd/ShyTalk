@@ -8,6 +8,7 @@ import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.data.repository.AuthRepository
+import com.shyden.shytalk.data.repository.EconomyRepository
 import com.shyden.shytalk.data.repository.ReportRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.StorageRepository
@@ -51,7 +52,8 @@ class ProfileViewModel(
     private val userRepository: UserRepository,
     private val storageRepository: StorageRepository,
     private val roomRepository: RoomRepository,
-    private val reportRepository: ReportRepository
+    private val reportRepository: ReportRepository,
+    private val economyRepository: EconomyRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -468,5 +470,20 @@ class ProfileViewModel(
 
     fun clearReportSubmitted() {
         _uiState.update { it.copy(reportSubmitted = false, reportError = null) }
+    }
+
+    fun validateSuperShyPurchase(productId: String, purchaseToken: String) {
+        viewModelScope.launch {
+            when (val result = economyRepository.purchaseSubscription(productId, purchaseToken)) {
+                is Resource.Success -> {
+                    // Reload profile to pick up isSuperShy change
+                    loadProfile(null)
+                }
+                is Resource.Error -> {
+                    _uiState.update { it.copy(error = result.message ?: "Purchase validation failed") }
+                }
+                is Resource.Loading -> {}
+            }
+        }
     }
 }

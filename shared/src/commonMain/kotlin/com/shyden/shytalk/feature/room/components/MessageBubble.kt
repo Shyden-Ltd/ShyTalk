@@ -36,6 +36,7 @@ import com.shyden.shytalk.core.model.Message
 import com.shyden.shytalk.core.model.MessageType
 import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.util.flagEmojiForCode
 import com.shyden.shytalk.ui.components.FlagBadge
 
@@ -187,10 +188,12 @@ fun MessageBubble(
                 Spacer(modifier = Modifier.width(8.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = message.senderName,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
+                    StyledDisplayName(
+                        displayName = message.senderName,
+                        isSuperShy = user?.isSuperShy ?: false,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     )
 
                     Surface(

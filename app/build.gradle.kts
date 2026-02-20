@@ -22,8 +22,8 @@ android {
         applicationId = "com.shyden.shytalk"
         minSdk = 28
         targetSdk = 36
-        versionCode = 37
-        versionName = "0.37"
+        versionCode = 38
+        versionName = "0.38"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -130,6 +130,12 @@ dependencies {
 
     // LiveKit
     implementation(libs.livekit.android)
+
+    // Lottie
+    implementation(libs.lottie.compose)
+
+    // Google Play Billing
+    implementation(libs.billing)
 
     // Testing
     testImplementation(libs.junit)

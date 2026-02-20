@@ -58,8 +58,17 @@ import com.shyden.shytalk.feature.privacy.PrivacyPolicyScreen
 import com.shyden.shytalk.feature.settings.AppSettingsScreen
 import com.shyden.shytalk.feature.profile.FollowListScreen
 import com.shyden.shytalk.feature.profile.ProfileScreen
+import com.shyden.shytalk.feature.profile.GiftWallScreen
+import com.shyden.shytalk.feature.profile.GiftWallViewModel
 import com.shyden.shytalk.feature.profile.ProfileSetupScreen
 import com.shyden.shytalk.feature.profile.RequiredDOBScreen
+import com.shyden.shytalk.feature.shop.TransactionHistoryScreen
+import com.shyden.shytalk.feature.shop.TransactionHistoryViewModel
+import com.shyden.shytalk.feature.shop.WalletScreen
+import com.shyden.shytalk.feature.shop.WalletViewModel
+import com.shyden.shytalk.feature.daily.DailyRewardDialog
+import com.shyden.shytalk.feature.daily.DailyRewardViewModel
+import com.shyden.shytalk.data.remote.BillingService
 import com.shyden.shytalk.feature.room.RoomScreen
 import com.shyden.shytalk.feature.warning.WarningScreen
 import kotlinx.coroutines.launch
@@ -272,6 +281,15 @@ fun NavGraph(
             }
 
             val conversationListViewModel: ConversationListViewModel = koinInject()
+            val dailyRewardViewModel: DailyRewardViewModel = org.koin.compose.viewmodel.koinViewModel()
+            var showDailyRewardDialog by rememberSaveable { mutableStateOf(true) }
+
+            if (showDailyRewardDialog) {
+                DailyRewardDialog(
+                    viewModel = dailyRewardViewModel,
+                    onDismiss = { showDailyRewardDialog = false }
+                )
+            }
 
             MainScreen(
                 onNavigateToRoom = { roomId ->
@@ -291,6 +309,9 @@ fun NavGraph(
                 },
                 onNavigateToNewMessage = {
                     navController.navigate(Screen.NewMessage.route)
+                },
+                onNavigateToWallet = {
+                    navController.navigate(Screen.Wallet.route)
                 },
                 messagesContent = { modifier ->
                     ConversationListScreen(
@@ -318,6 +339,9 @@ fun NavGraph(
                         onNavigateToRoom = { roomId -> navigateToRoom(roomId) },
                         onNavigateToChat = { otherUserId ->
                             navController.navigate(Screen.PrivateChat.createRoute(otherUserId))
+                        },
+                        onNavigateToWallet = {
+                            navController.navigate(Screen.Wallet.route)
                         },
                         modifier = modifier
                     )
@@ -359,6 +383,9 @@ fun NavGraph(
                 onNavigateToRoom = { roomId -> navigateToRoom(roomId) },
                 onNavigateToChat = { otherUserId ->
                     navController.navigate(Screen.PrivateChat.createRoute(otherUserId))
+                },
+                onNavigateToWallet = {
+                    navController.navigate(Screen.Wallet.route)
                 }
             )
         }
@@ -653,6 +680,47 @@ fun NavGraph(
                     )
                 },
                 viewModel = groupSetupViewModel
+            )
+        }
+
+        composable(Screen.Wallet.route) {
+            val walletViewModel: WalletViewModel = org.koin.compose.viewmodel.koinViewModel()
+            val billingService: BillingService = koinInject()
+
+            WalletScreen(
+                viewModel = walletViewModel,
+                onNavigateBack = { navController.safePopBackStack() },
+                onNavigateToTransactions = { navController.navigate(Screen.Transactions.route) },
+                onPurchasePackage = { pkg ->
+                    // TODO: Launch billing flow for coin package
+                },
+                onPurchaseSubscription = { productId ->
+                    // TODO: Launch billing flow for subscription
+                }
+            )
+        }
+
+        composable(Screen.Transactions.route) {
+            val transactionHistoryViewModel: TransactionHistoryViewModel =
+                org.koin.compose.viewmodel.koinViewModel()
+            TransactionHistoryScreen(
+                viewModel = transactionHistoryViewModel,
+                onNavigateBack = { navController.safePopBackStack() }
+            )
+        }
+
+        composable(
+            route = Screen.GiftWall.route,
+            arguments = listOf(navArgument("userId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val userId = backStackEntry.arguments?.getString("userId") ?: return@composable
+            val giftWallViewModel: GiftWallViewModel = org.koin.compose.viewmodel.koinViewModel(
+                key = userId
+            ) { org.koin.core.parameter.parametersOf(userId) }
+
+            GiftWallScreen(
+                viewModel = giftWallViewModel,
+                onNavigateBack = { navController.safePopBackStack() }
             )
         }
 

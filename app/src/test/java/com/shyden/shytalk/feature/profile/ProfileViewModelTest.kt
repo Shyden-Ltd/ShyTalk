@@ -4,6 +4,7 @@ import com.shyden.shytalk.core.model.ChatRoom
 import com.shyden.shytalk.core.model.RoomState
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.AuthRepository
+import com.shyden.shytalk.data.repository.EconomyRepository
 import com.shyden.shytalk.data.repository.ReportRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.StorageRepository
@@ -39,6 +40,7 @@ class ProfileViewModelTest {
     private val storageRepository = mockk<StorageRepository>(relaxed = true)
     private val roomRepository = mockk<RoomRepository>(relaxed = true)
     private val reportRepository = mockk<ReportRepository>(relaxed = true)
+    private val economyRepository = mockk<EconomyRepository>(relaxed = true)
 
     private val currentUserId = "current-user"
     private val otherUserId = "other-user"
@@ -56,7 +58,8 @@ class ProfileViewModelTest {
             userRepository = userRepository,
             storageRepository = storageRepository,
             roomRepository = roomRepository,
-            reportRepository = reportRepository
+            reportRepository = reportRepository,
+            economyRepository = economyRepository
         )
     }
 

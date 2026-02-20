@@ -824,6 +824,633 @@ exports.onModAction = onDocumentCreated(
   }
 );
 
+// ─── Monetization ───────────────────────────────────────────────
+
+const DAILY_BASE = 50;
+const MILESTONE_REWARDS = {
+  7: 100, 14: 200, 30: 500, 60: 1000, 90: 2000
+};
+function getDailyReward(day) {
+  return MILESTONE_REWARDS[day] || DAILY_BASE;
+}
+const MILESTONES = new Set([7, 14, 30, 60, 90]);
+const PULL_COSTS = { 1: 10, 10: 100, 100: 1000 };
+
+// Base drop rates: [Common, Uncommon, Rare, Epic, Legendary]
+const BASE_RATES = [0.70, 0.20, 0.08, 0.018, 0.002];
+const BRACKETS = ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"];
+
+exports.claimDailyReward = onCall({ region: "asia-southeast1" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in");
+  const uid = request.auth.uid;
+  const db = getFirestore();
+  const userRef = db.collection("users").doc(uid);
+
+  return await db.runTransaction(async (tx) => {
+    const userDoc = await tx.get(userRef);
+    if (!userDoc.exists) throw new HttpsError("not-found", "User not found");
+    const user = userDoc.data();
+
+    const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    if (user.lastLoginRewardDate === today) {
+      throw new HttpsError("already-exists", "Already claimed today");
+    }
+
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+    const lastDate = user.lastLoginDate || "";
+    const newStreak = (lastDate === yesterday) ? (user.loginStreak || 0) + 1 : 1;
+
+    let reward = getDailyReward(newStreak);
+    const isMilestone = MILESTONES.has(newStreak);
+
+    // Super Shy 10% bonus (rounded up)
+    if (user.isSuperShy) {
+      reward = Math.ceil(reward * 1.1);
+    }
+
+    const newBalance = (user.shyCoins || 0) + reward;
+
+    tx.update(userRef, {
+      shyCoins: newBalance,
+      loginStreak: newStreak,
+      lastLoginDate: today,
+      lastLoginRewardDate: today,
+    });
+
+    // Write transaction record
+    const txRef = userRef.collection("transactions").doc();
+    tx.set(txRef, {
+      type: "DAILY_REWARD",
+      amount: reward,
+      currency: "COINS",
+      balanceAfter: newBalance,
+      details: `Day ${newStreak}${isMilestone ? " (milestone)" : ""}`,
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    return { coinsAwarded: reward, newStreak, isMilestone, newBalance };
+  });
+});
+
+exports.pullGacha = onCall({ region: "asia-southeast1" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in");
+  const uid = request.auth.uid;
+  const pullCount = request.data.pullCount;
+
+  if (![1, 10, 100].includes(pullCount)) {
+    throw new HttpsError("invalid-argument", "pullCount must be 1, 10, or 100");
+  }
+
+  const cost = PULL_COSTS[pullCount];
+  const db = getFirestore();
+  const userRef = db.collection("users").doc(uid);
+
+  // Load gift catalog
+  const giftsSnap = await db.collection("gifts").orderBy("order").get();
+  if (giftsSnap.empty) throw new HttpsError("failed-precondition", "Gift catalog not configured");
+
+  const giftsByBracket = {};
+  for (const b of BRACKETS) giftsByBracket[b] = [];
+  giftsSnap.docs.forEach((doc) => {
+    const g = { id: doc.id, ...doc.data() };
+    if (giftsByBracket[g.bracket]) giftsByBracket[g.bracket].push(g);
+  });
+
+  return await db.runTransaction(async (tx) => {
+    const userDoc = await tx.get(userRef);
+    if (!userDoc.exists) throw new HttpsError("not-found", "User not found");
+    const user = userDoc.data();
+
+    if ((user.shyCoins || 0) < cost) {
+      throw new HttpsError("failed-precondition", "Insufficient coins");
+    }
+
+    let pity = user.pityCounter || 0;
+    let luck = user.luckScore || 0;
+    const results = [];
+
+    for (let i = 0; i < pullCount; i++) {
+      // Calculate effective rates
+      const rates = [...BASE_RATES];
+
+      // Pity system
+      if (pity >= 80) {
+        // Hard pity: force Epic+
+        rates[0] = 0; rates[1] = 0; rates[2] = 0;
+        const epicLeg = BASE_RATES[3] + BASE_RATES[4];
+        rates[3] = BASE_RATES[3] / epicLeg;
+        rates[4] = BASE_RATES[4] / epicLeg;
+      } else if (pity >= 60) {
+        const pityBoost = (pity - 60) / 20; // 0→1 linear
+        const shift = 0.15 * pityBoost;
+        rates[0] -= shift;
+        rates[3] += shift;
+      }
+
+      // Luck boost (up to 5%)
+      const luckBoost = (luck / 100) * 0.05;
+      if (luckBoost > 0 && rates[0] > luckBoost) {
+        rates[0] -= luckBoost;
+        // Distribute proportionally across higher brackets
+        const higherTotal = rates[1] + rates[2] + rates[3] + rates[4];
+        if (higherTotal > 0) {
+          for (let b = 1; b < 5; b++) {
+            rates[b] += luckBoost * (rates[b] / higherTotal);
+          }
+        }
+      }
+
+      // Normalize rates
+      const total = rates.reduce((s, r) => s + r, 0);
+      for (let b = 0; b < 5; b++) rates[b] /= total;
+
+      // Roll
+      const roll = Math.random();
+      let cumulative = 0;
+      let bracketIndex = 0;
+      for (let b = 0; b < 5; b++) {
+        cumulative += rates[b];
+        if (roll <= cumulative) { bracketIndex = b; break; }
+      }
+
+      const bracket = BRACKETS[bracketIndex];
+      const gifts = giftsByBracket[bracket];
+      if (!gifts || gifts.length === 0) {
+        // Fallback to common
+        const fallback = giftsByBracket["COMMON"];
+        const gift = fallback[Math.floor(Math.random() * fallback.length)];
+        results.push(gift);
+        pity++;
+        continue;
+      }
+
+      const gift = gifts[Math.floor(Math.random() * gifts.length)];
+      results.push(gift);
+
+      // Reset pity on Epic+
+      if (bracketIndex >= 3) {
+        pity = 0;
+      } else {
+        pity++;
+      }
+    }
+
+    // 100-pull luck bonus
+    if (pullCount === 100) {
+      luck = Math.min(100, luck + 2);
+    }
+
+    const newBalance = (user.shyCoins || 0) - cost;
+
+    // Update user
+    tx.update(userRef, {
+      shyCoins: newBalance,
+      pityCounter: pity,
+      luckScore: luck,
+    });
+
+    // Add gifts to backpack
+    for (const gift of results) {
+      const bpRef = userRef.collection("backpack").doc(gift.id);
+      tx.set(bpRef, {
+        quantity: FieldValue.increment(1),
+        lastAcquired: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+
+    // Write transaction
+    const txRef = userRef.collection("transactions").doc();
+    tx.set(txRef, {
+      type: "GACHA_PULL",
+      amount: -cost,
+      currency: "COINS",
+      balanceAfter: newBalance,
+      pullCount,
+      details: results.map((g) => g.name).join(", "),
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    return {
+      gifts: results.map((g) => ({
+        giftId: g.id,
+        giftName: g.name,
+        bracket: g.bracket,
+        coinValue: g.coinValue,
+        iconUrl: g.iconUrl || "",
+      })),
+      coinsSpent: cost,
+      newBalance,
+      newPityCounter: pity,
+      newLuckScore: luck,
+    };
+  });
+});
+
+exports.sendGift = onCall({ region: "asia-southeast1" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in");
+  const senderUid = request.auth.uid;
+  const { recipientId, giftId } = request.data;
+
+  if (!recipientId || !giftId) {
+    throw new HttpsError("invalid-argument", "recipientId and giftId required");
+  }
+  if (senderUid === recipientId) {
+    throw new HttpsError("invalid-argument", "Cannot send gift to yourself");
+  }
+
+  const db = getFirestore();
+  const senderRef = db.collection("users").doc(senderUid);
+  const recipientRef = db.collection("users").doc(recipientId);
+  const giftRef = db.collection("gifts").doc(giftId);
+
+  const giftDoc = await giftRef.get();
+  if (!giftDoc.exists) throw new HttpsError("not-found", "Gift not found");
+  const gift = giftDoc.data();
+
+  return await db.runTransaction(async (tx) => {
+    const bpRef = senderRef.collection("backpack").doc(giftId);
+    const bpDoc = await tx.get(bpRef);
+
+    if (!bpDoc.exists || (bpDoc.data().quantity || 0) < 1) {
+      throw new HttpsError("failed-precondition", "Gift not in backpack");
+    }
+
+    const senderDoc = await tx.get(senderRef);
+    const recipientDoc = await tx.get(recipientRef);
+    if (!recipientDoc.exists) throw new HttpsError("not-found", "Recipient not found");
+
+    const sender = senderDoc.data();
+    const recipient = recipientDoc.data();
+    const beanReward = Math.floor(gift.coinValue * 0.6);
+
+    // Decrement sender backpack
+    const newQty = (bpDoc.data().quantity || 0) - 1;
+    if (newQty <= 0) {
+      tx.delete(bpRef);
+    } else {
+      tx.update(bpRef, { quantity: newQty });
+    }
+
+    // Update recipient gift wall
+    const wallRef = recipientRef.collection("giftWall").doc(giftId);
+    tx.set(wallRef, {
+      receivedCount: FieldValue.increment(1),
+      [`senders.${senderUid}`]: FieldValue.increment(1),
+    }, { merge: true });
+
+    // Credit beans to recipient
+    tx.update(recipientRef, {
+      shyBeans: FieldValue.increment(beanReward),
+    });
+
+    // Transaction records
+    const senderTxRef = senderRef.collection("transactions").doc();
+    tx.set(senderTxRef, {
+      type: "GIFT_SENT",
+      amount: -1,
+      currency: "COINS",
+      balanceAfter: sender.shyCoins || 0,
+      giftId, giftName: gift.name,
+      recipientId,
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    const recipientTxRef = recipientRef.collection("transactions").doc();
+    tx.set(recipientTxRef, {
+      type: "GIFT_RECEIVED",
+      amount: beanReward,
+      currency: "BEANS",
+      balanceAfter: (recipient.shyBeans || 0) + beanReward,
+      giftId, giftName: gift.name,
+      senderId: senderUid,
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    return { success: true, beanReward, giftName: gift.name };
+  }).then(async (result) => {
+    // Broadcast if eligible (outside transaction)
+    if (gift.broadcastEnabled) {
+      const senderDoc = await senderRef.get();
+      const recipientDoc = await recipientRef.get();
+      const senderData = senderDoc.data();
+      const recipientData = recipientDoc.data();
+
+      const broadcastsRef = db.collection("broadcasts");
+      await broadcastsRef.add({
+        senderName: senderData.displayName || "",
+        senderPhotoUrl: senderData.profilePhotoUrl || null,
+        recipientName: recipientData.displayName || "",
+        giftName: gift.name,
+        giftIconUrl: gift.iconUrl || "",
+        giftCoinValue: gift.coinValue,
+        timestamp: FieldValue.serverTimestamp(),
+      });
+
+      // Keep only last 50 broadcasts
+      const oldBroadcasts = await broadcastsRef
+        .orderBy("timestamp", "desc")
+        .offset(50)
+        .get();
+      const batch = db.batch();
+      oldBroadcasts.docs.forEach((doc) => batch.delete(doc.ref));
+      if (!oldBroadcasts.empty) await batch.commit();
+    }
+
+    return result;
+  });
+});
+
+exports.redeemBeans = onCall({ region: "asia-southeast1" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in");
+  const uid = request.auth.uid;
+  const amount = request.data.amount;
+
+  if (!amount || typeof amount !== "number" || amount < 1) {
+    throw new HttpsError("invalid-argument", "amount must be a positive number");
+  }
+
+  const db = getFirestore();
+  const userRef = db.collection("users").doc(uid);
+
+  return await db.runTransaction(async (tx) => {
+    const userDoc = await tx.get(userRef);
+    if (!userDoc.exists) throw new HttpsError("not-found", "User not found");
+    const user = userDoc.data();
+
+    if ((user.shyBeans || 0) < amount) {
+      throw new HttpsError("failed-precondition", "Insufficient beans");
+    }
+
+    const coins = amount >= 2000 ? Math.floor(amount * 1.1) : amount;
+    const newBeans = (user.shyBeans || 0) - amount;
+    const newCoins = (user.shyCoins || 0) + coins;
+
+    tx.update(userRef, {
+      shyBeans: newBeans,
+      shyCoins: newCoins,
+    });
+
+    const txRef = userRef.collection("transactions").doc();
+    tx.set(txRef, {
+      type: "BEAN_REDEEM",
+      amount: coins,
+      currency: "COINS",
+      balanceAfter: newCoins,
+      details: `Redeemed ${amount} beans${amount >= 2000 ? " (10% bonus)" : ""}`,
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    return { coinsReceived: coins, newCoinBalance: newCoins, newBeanBalance: newBeans };
+  });
+});
+
+exports.validatePurchase = onCall({ region: "asia-southeast1" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in");
+  const uid = request.auth.uid;
+  const { productId, purchaseToken, isSubscription } = request.data;
+
+  if (!productId || !purchaseToken) {
+    throw new HttpsError("invalid-argument", "productId and purchaseToken required");
+  }
+
+  const db = getFirestore();
+  const userRef = db.collection("users").doc(uid);
+
+  // TODO: Add Google Play Developer API verification of purchaseToken here
+  // For now, trust the client (acceptable during development/testing)
+
+  if (isSubscription) {
+    const tierMap = {
+      super_shy_monthly: { tier: "monthly", days: 30 },
+      super_shy_yearly: { tier: "yearly", days: 365 },
+      super_shy_lifetime: { tier: "lifetime", days: null },
+    };
+
+    const sub = tierMap[productId];
+    if (!sub) throw new HttpsError("invalid-argument", "Unknown subscription product");
+
+    const expiry = sub.days ? new Date(Date.now() + sub.days * 86400000) : null;
+
+    await userRef.update({
+      isSuperShy: true,
+      superShyExpiry: expiry ? require("firebase-admin/firestore").Timestamp.fromDate(expiry) : null,
+      superShyTier: sub.tier,
+    });
+
+    const txRef = userRef.collection("transactions").doc();
+    await txRef.set({
+      type: "SUBSCRIPTION",
+      amount: 0,
+      currency: "COINS",
+      balanceAfter: 0,
+      details: `Super Shy ${sub.tier}`,
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    return { success: true, tier: sub.tier };
+  } else {
+    // Coin package
+    const packagesSnap = await db.collection("coinPackages")
+      .where("productId", "==", productId)
+      .limit(1)
+      .get();
+
+    if (packagesSnap.empty) throw new HttpsError("not-found", "Unknown coin package");
+
+    const pkg = packagesSnap.docs[0].data();
+    const totalCoins = (pkg.coins || 0) + (pkg.bonusCoins || 0);
+
+    return await db.runTransaction(async (tx) => {
+      const userDoc = await tx.get(userRef);
+      if (!userDoc.exists) throw new HttpsError("not-found", "User not found");
+      const user = userDoc.data();
+      const newBalance = (user.shyCoins || 0) + totalCoins;
+
+      tx.update(userRef, { shyCoins: newBalance });
+
+      const txDocRef = userRef.collection("transactions").doc();
+      tx.set(txDocRef, {
+        type: "PURCHASE",
+        amount: totalCoins,
+        currency: "COINS",
+        balanceAfter: newBalance,
+        details: `${pkg.coins} + ${pkg.bonusCoins} bonus coins`,
+        timestamp: FieldValue.serverTimestamp(),
+      });
+
+      return { success: true, coinsAdded: totalCoins, newBalance };
+    });
+  }
+});
+
+exports.checkSubscriptionStatus = onSchedule(
+  { schedule: "every day 00:00", region: "asia-southeast1", timeZone: "UTC" },
+  async () => {
+    const db = getFirestore();
+    const now = require("firebase-admin/firestore").Timestamp.now();
+
+    const expiredSnap = await db.collection("users")
+      .where("isSuperShy", "==", true)
+      .where("superShyExpiry", "<=", now)
+      .get();
+
+    let expired = 0;
+    for (const doc of expiredSnap.docs) {
+      const data = doc.data();
+      if (data.superShyTier === "lifetime") continue;
+      await doc.ref.update({
+        isSuperShy: false,
+        superShyExpiry: null,
+        superShyTier: null,
+      });
+      expired++;
+    }
+    console.log(`Expired ${expired} Super Shy subscriptions`);
+  }
+);
+
+exports.updateGiftRankings = onSchedule(
+  { schedule: "every 1 hours", region: "asia-southeast1", timeZone: "UTC", memory: "512MiB" },
+  async () => {
+    const db = getFirestore();
+    const giftsSnap = await db.collection("gifts").get();
+
+    for (const giftDoc of giftsSnap.docs) {
+      const giftId = giftDoc.id;
+
+      // Query all users who have this gift on their wall
+      const wallSnap = await db.collectionGroup("giftWall")
+        .where(require("firebase-admin/firestore").FieldPath.documentId(), "==", giftId)
+        .get();
+
+      // Not feasible with collectionGroup by doc ID directly, so we iterate all users
+      // Alternative approach: aggregate from giftWall subcollections
+      // For now, we'll use a simpler approach based on the data we have
+    }
+
+    // Simplified: scan users' giftWall for each gift
+    const usersSnap = await db.collection("users").select().get(); // Just get IDs
+
+    for (const giftDoc of giftsSnap.docs) {
+      const giftId = giftDoc.id;
+      const entries = [];
+      let totalSent = 0;
+
+      for (const userDoc of usersSnap.docs) {
+        const wallDoc = await db.collection("users").doc(userDoc.id)
+          .collection("giftWall").doc(giftId).get();
+        if (wallDoc.exists) {
+          const data = wallDoc.data();
+          const count = data.receivedCount || 0;
+          totalSent += count;
+          entries.push({ userId: userDoc.id, count });
+        }
+      }
+
+      entries.sort((a, b) => b.count - a.count);
+      const top100 = entries.slice(0, 100);
+
+      // Fetch display names for top 100
+      const rankings = [];
+      for (const entry of top100) {
+        const uDoc = await db.collection("users").doc(entry.userId).get();
+        const uData = uDoc.exists ? uDoc.data() : {};
+        rankings.push({
+          userId: entry.userId,
+          count: entry.count,
+          displayName: uData.displayName || "",
+          profilePhotoUrl: uData.profilePhotoUrl || null,
+        });
+      }
+
+      await db.collection("giftRankings").doc(giftId).set({
+        rankings,
+        totalSent,
+        lastUpdated: FieldValue.serverTimestamp(),
+      });
+    }
+
+    console.log("Gift rankings updated");
+  }
+);
+
+// --- Seed gift & coin package catalogs ---
+exports.seedCatalog = onCall({ region: "asia-southeast1" }, async (request) => {
+  if (!request.auth || request.auth.token.admin !== true) {
+    throw new HttpsError("permission-denied", "Admin access required");
+  }
+
+  const db = getFirestore();
+
+  const giftCatalog = [
+    { name: "Rose", coinValue: 8, baseDropRate: 0.70, bracket: "COMMON", order: 1 },
+    { name: "Heart", coinValue: 10, baseDropRate: 0.70, bracket: "COMMON", order: 2 },
+    { name: "Thumbs Up", coinValue: 12, baseDropRate: 0.70, bracket: "COMMON", order: 3 },
+    { name: "Star", coinValue: 15, baseDropRate: 0.70, bracket: "COMMON", order: 4 },
+    { name: "Smiley", coinValue: 18, baseDropRate: 0.70, bracket: "COMMON", order: 5 },
+    { name: "Coffee", coinValue: 20, baseDropRate: 0.70, bracket: "COMMON", order: 6 },
+    { name: "Candy", coinValue: 25, baseDropRate: 0.70, bracket: "COMMON", order: 7 },
+    { name: "Balloon", coinValue: 30, baseDropRate: 0.70, bracket: "COMMON", order: 8 },
+    { name: "Teddy Bear", coinValue: 50, baseDropRate: 0.20, bracket: "UNCOMMON", order: 9 },
+    { name: "Perfume", coinValue: 80, baseDropRate: 0.20, bracket: "UNCOMMON", order: 10 },
+    { name: "Diamond Ring", coinValue: 120, baseDropRate: 0.20, bracket: "UNCOMMON", order: 11 },
+    { name: "Bouquet", coinValue: 150, baseDropRate: 0.20, bracket: "UNCOMMON", order: 12 },
+    { name: "Fireworks", coinValue: 200, baseDropRate: 0.20, bracket: "UNCOMMON", order: 13 },
+    { name: "Music Box", coinValue: 300, baseDropRate: 0.20, bracket: "UNCOMMON", order: 14 },
+    { name: "Treasure Chest", coinValue: 500, baseDropRate: 0.08, bracket: "RARE", order: 15 },
+    { name: "Crown", coinValue: 800, baseDropRate: 0.08, bracket: "RARE", order: 16 },
+    { name: "Sports Car", coinValue: 1200, baseDropRate: 0.08, bracket: "RARE", order: 17 },
+    { name: "Yacht", coinValue: 1800, baseDropRate: 0.08, bracket: "RARE", order: 18 },
+    { name: "Dragon", coinValue: 2500, baseDropRate: 0.08, bracket: "RARE", order: 19 },
+    { name: "Phoenix", coinValue: 3500, baseDropRate: 0.08, bracket: "RARE", order: 20 },
+    { name: "Crystal Ball", coinValue: 5000, baseDropRate: 0.018, bracket: "EPIC", order: 21 },
+    { name: "Castle", coinValue: 8000, baseDropRate: 0.018, bracket: "EPIC", order: 22 },
+    { name: "Spaceship", coinValue: 12000, baseDropRate: 0.018, bracket: "EPIC", order: 23 },
+    { name: "Aurora", coinValue: 16000, baseDropRate: 0.018, bracket: "EPIC", order: 24 },
+    { name: "Galaxy Unicorn", coinValue: 20000, baseDropRate: 0.018, bracket: "EPIC", order: 25 },
+    { name: "ShyTalk Emblem", coinValue: 35000, baseDropRate: 0.002, bracket: "LEGENDARY", order: 26 },
+    { name: "Celestial Throne", coinValue: 52000, baseDropRate: 0.002, bracket: "LEGENDARY", order: 27 },
+  ];
+
+  const coinPackages = [
+    { productId: "coins_100", coins: 100, bonusCoins: 0, displayPrice: "$0.99", order: 1, isActive: true },
+    { productId: "coins_500", coins: 500, bonusCoins: 50, displayPrice: "$4.99", order: 2, isActive: true },
+    { productId: "coins_1200", coins: 1200, bonusCoins: 200, displayPrice: "$9.99", order: 3, isActive: true },
+    { productId: "coins_2500", coins: 2500, bonusCoins: 500, displayPrice: "$19.99", order: 4, isActive: true },
+    { productId: "coins_6500", coins: 6500, bonusCoins: 1500, displayPrice: "$49.99", order: 5, isActive: true },
+    { productId: "coins_14000", coins: 14000, bonusCoins: 4000, displayPrice: "$99.99", order: 6, isActive: true },
+  ];
+
+  const batch = db.batch();
+
+  for (const gift of giftCatalog) {
+    const docId = gift.name.toLowerCase().replace(/\s+/g, "_");
+    batch.set(db.collection("gifts").doc(docId), {
+      ...gift,
+      beanValue: Math.floor(gift.coinValue * 0.6),
+      broadcastEnabled: gift.bracket === "LEGENDARY",
+      animationUrl: "",
+      soundUrl: "",
+      iconUrl: "",
+    }, { merge: true });
+  }
+
+  for (const pkg of coinPackages) {
+    batch.set(db.collection("coinPackages").doc(pkg.productId), pkg, { merge: true });
+  }
+
+  // App config (force update minimum version, etc.)
+  batch.set(db.collection("config").doc("app"), {
+    minVersionCode: 1,
+  }, { merge: true });
+
+  await batch.commit();
+  return { giftsSeeded: giftCatalog.length, packagesSeeded: coinPackages.length, configSeeded: true };
+});
+
+
 // --- Admin API ---
 const adminApp = require("./admin");
 exports.adminApi = onRequest({ region: "asia-southeast1" }, adminApp);
+
+// deploy 1771560904

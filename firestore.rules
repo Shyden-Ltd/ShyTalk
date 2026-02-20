@@ -1,0 +1,113 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users
+    match /users/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+
+      // Backpack — read own, write only via Cloud Functions
+      match /backpack/{giftId} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow write: if false;
+      }
+
+      // Gift Wall — auth read, write only via Cloud Functions
+      match /giftWall/{giftId} {
+        allow read: if request.auth != null;
+        allow write: if false;
+      }
+
+      // Transactions — owner read only, write only via Cloud Functions
+      match /transactions/{txId} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow write: if false;
+      }
+    }
+
+    // Rooms
+    match /rooms/{roomId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // Conversations
+    match /conversations/{conversationId} {
+      allow read: if request.auth != null
+                  && request.auth.uid in resource.data.participantIds;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null
+                    && request.auth.uid in resource.data.participantIds;
+
+      match /messages/{messageId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null;
+      }
+      match /settings/{userId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      match /mod_log/{logId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null;
+      }
+    }
+
+    // Gift catalog — auth read, admin write only
+    match /gifts/{giftId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // Gift rankings — auth read, server write only
+    match /giftRankings/{giftId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // Broadcasts — auth read, server write only
+    match /broadcasts/{broadcastId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // Coin packages — auth read, admin write only
+    match /coinPackages/{packageId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // Reports
+    match /reports/{reportId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if false;
+    }
+
+    // Suspension appeals
+    match /suspensionAppeals/{appealId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null;
+    }
+
+    // Seat requests
+    match /seatRequests/{requestId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Admin tokens
+    match /admin_tokens/{tokenId} {
+      allow read, write: if false;
+    }
+
+    // Admin audit log
+    match /admin_audit_log/{logId} {
+      allow read, write: if false;
+    }
+
+    // Report locks
+    match /report_locks/{lockId} {
+      allow read, write: if false;
+    }
+  }
+}

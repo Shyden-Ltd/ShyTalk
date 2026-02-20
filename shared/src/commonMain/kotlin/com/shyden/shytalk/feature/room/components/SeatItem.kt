@@ -56,6 +56,8 @@ import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.Seat
 import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.ui.StyledDisplayName
+import com.shyden.shytalk.core.ui.SuperShyGold
 import com.shyden.shytalk.core.util.flagEmojiForCode
 import com.shyden.shytalk.ui.components.FlagBadge
 
@@ -254,12 +256,12 @@ fun SeatItem(
                     )
                 }
                 Spacer(modifier = Modifier.width(3.dp))
-                Text(
-                    text = name,
-                    style = textShadowStyle,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                StyledDisplayName(
+                    displayName = name,
+                    isSuperShy = user.isSuperShy,
+                    style = textShadowStyle.copy(
+                        color = MaterialTheme.colorScheme.onBackground
+                    ),
                     modifier = Modifier.weight(1f, fill = false)
                 )
                 Spacer(modifier = Modifier.width(3.dp))

@@ -32,4 +32,9 @@ sealed class Screen(val route: String) {
         fun createRoute(selectedIds: String) = "group_setup/$selectedIds"
     }
     data object Warning : Screen("warning")
+    data object Wallet : Screen("wallet")
+    data object Transactions : Screen("transactions")
+    data object GiftWall : Screen("gift_wall/{userId}") {
+        fun createRoute(userId: String) = "gift_wall/$userId"
+    }
 }

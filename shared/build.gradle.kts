@@ -50,6 +50,7 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.firebase.common)
             implementation(libs.ktor.client.okhttp)
+            implementation(libs.lottie.compose)
         }
 
         iosMain.dependencies {

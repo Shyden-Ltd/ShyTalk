@@ -1,0 +1,368 @@
+package com.shyden.shytalk.feature.shop
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Tab
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.shyden.shytalk.core.model.CoinPackage
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun WalletScreen(
+    viewModel: WalletViewModel,
+    onNavigateBack: () -> Unit,
+    onNavigateToTransactions: () -> Unit,
+    onPurchasePackage: (CoinPackage) -> Unit,
+    onPurchaseSubscription: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+
+    LaunchedEffect(state.error) {
+        state.error?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearError()
+        }
+    }
+
+    LaunchedEffect(state.successMessage) {
+        state.successMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearSuccess()
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Wallet") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onNavigateToTransactions) {
+                        Icon(Icons.AutoMirrored.Filled.ReceiptLong, contentDescription = "Transaction History")
+                    }
+                }
+            )
+        },
+        modifier = modifier
+    ) { padding ->
+        if (state.isLoading) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
+                PrimaryTabRow(selectedTabIndex = selectedTab) {
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        text = { Text("Shy Coins") }
+                    )
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        text = { Text("Shy Beans") }
+                    )
+                }
+
+                when (selectedTab) {
+                    0 -> CoinsTab(
+                        coinBalance = state.coinBalance,
+                        coinPackages = state.coinPackages,
+                        isPurchasing = state.isPurchasing,
+                        onTestPurchase = { coins -> viewModel.testPurchaseCoins(coins) }
+                    )
+                    1 -> BeansTab(
+                        beanBalance = state.beanBalance,
+                        isPurchasing = state.isPurchasing,
+                        onRedeem = { amount -> viewModel.redeemBeans(amount) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CoinsTab(
+    coinBalance: Long,
+    coinPackages: List<CoinPackage>,
+    isPurchasing: Boolean,
+    onTestPurchase: (Int) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
+    ) {
+        BalanceCard(
+            label = "Shy Coins",
+            amount = coinBalance,
+            icon = "\uD83E\uDE99",
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer
+            )
+        ) {
+            Text(
+                text = "Testing mode — no real money is charged. " +
+                    "Tap a package to instantly receive coins.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier.padding(12.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Buy Shy Coins", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            contentPadding = PaddingValues(0.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.height(300.dp)
+        ) {
+            items(coinPackages) { pkg ->
+                val totalCoins = pkg.coins + pkg.bonusCoins
+                CoinPackageCard(
+                    pkg = pkg,
+                    enabled = !isPurchasing,
+                    onClick = { onTestPurchase(totalCoins) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun BeansTab(
+    beanBalance: Long,
+    isPurchasing: Boolean,
+    onRedeem: (Int) -> Unit
+) {
+    val presets = listOf(100, 500, 1_000, 2_000, 5_000)
+    var confirmAmount by remember { mutableStateOf<Int?>(null) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
+    ) {
+        BalanceCard(
+            label = "Shy Beans",
+            amount = beanBalance,
+            icon = "\uD83E\uDED8",
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Text("Redeem Shy Beans", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(
+            "1 bean = 1 coin. Redeem 2,000+ for a 10% bonus!",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Preset buttons in 2-column grid
+        val rows = (presets + -1).chunked(2) // -1 sentinel for "Redeem All"
+        rows.forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                row.forEach { preset ->
+                    val isRedeemAll = preset == -1
+                    val amount = if (isRedeemAll) beanBalance.toInt() else preset
+                    val label = if (isRedeemAll) "Redeem All" else formatNumber(preset.toLong())
+                    val hasBonus = amount >= 2_000
+                    val enabled = !isPurchasing && amount > 0 && amount <= beanBalance
+
+                    Button(
+                        onClick = { confirmAmount = amount },
+                        enabled = enabled,
+                        modifier = Modifier.weight(1f).height(56.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (hasBonus && enabled) Color(0xFF4CAF50)
+                            else MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(label, fontWeight = FontWeight.Bold)
+                            if (hasBonus) {
+                                Text(
+                                    "+10%",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (enabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+                // Pad last row if odd
+                if (row.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+
+    // Confirmation dialog
+    confirmAmount?.let { amount ->
+        val coins = if (amount >= 2_000) (amount * 1.1).toInt() else amount
+        AlertDialog(
+            onDismissRequest = { confirmAmount = null },
+            title = { Text("Confirm Redemption") },
+            text = {
+                Text("Redeem ${formatNumber(amount.toLong())} beans for ${formatNumber(coins.toLong())} coins?")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmAmount = null
+                    onRedeem(amount)
+                }) {
+                    Text("Redeem")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmAmount = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun BalanceCard(
+    label: String,
+    amount: Long,
+    icon: String,
+    containerColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = containerColor)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(icon, style = MaterialTheme.typography.headlineMedium)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = formatNumber(amount),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                label,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun CoinPackageCard(pkg: CoinPackage, enabled: Boolean = true, onClick: () -> Unit) {
+    Card(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("${pkg.coins}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+            if (pkg.bonusCoins > 0) {
+                Text("+${pkg.bonusCoins} bonus", color = Color(0xFF4CAF50), style = MaterialTheme.typography.bodySmall)
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(pkg.displayPrice, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}

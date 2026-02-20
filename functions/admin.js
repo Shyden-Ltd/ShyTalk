@@ -57,6 +57,16 @@ const FIELD_SCHEMA = {
   suspensionEndDate:     { type: "timestamp", nullable: true },
   suspensionCanAppeal:   { type: "boolean" },
   suspendedBy:           { type: "string", nullable: true },
+  shyCoins:              { type: "number" },
+  shyBeans:              { type: "number" },
+  isSuperShy:            { type: "boolean" },
+  superShyExpiry:        { type: "timestamp", nullable: true },
+  superShyTier:          { type: "string", nullable: true },
+  luckScore:             { type: "number" },
+  pityCounter:           { type: "number" },
+  loginStreak:           { type: "number" },
+  lastLoginDate:         { type: "string", nullable: true },
+  lastLoginRewardDate:   { type: "string", nullable: true },
 };
 
 function validateAndConvert(field, value) {
@@ -364,13 +374,14 @@ app.post("/api/user/:uid/unsuspend", async (req, res) => {
 // --- GET /api/appeals ---
 app.get("/api/appeals", async (req, res) => {
   try {
+    const db = getFirestore();
     const status = req.query.status || "pending";
     if (!["pending", "approved", "rejected"].includes(status)) {
       return res.status(400).json({ error: "status must be pending, approved, or rejected" });
     }
 
     // Single-field query avoids composite index requirement
-    const snapshot = await getFirestore().collection("suspensionAppeals")
+    const snapshot = await db.collection("suspensionAppeals")
       .where("status", "==", status)
       .limit(50)
       .get();
@@ -1756,6 +1767,348 @@ app.post("/api/cleanup/orphaned-storage", async (req, res) => {
   } catch (err) {
     console.error("POST /api/cleanup/orphaned-storage error:", err);
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Gift Catalog ─────────────────────────────────────────────
+
+// GET /api/gifts — List all gifts in the catalog
+app.get("/api/gifts", async (req, res) => {
+  try {
+    const db = getFirestore();
+    const snap = await db.collection("gifts").orderBy("order").get();
+    const gifts = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    return res.json({ gifts });
+  } catch (err) {
+    console.error("GET gifts error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/gifts/seed — Seed the 27-gift catalog (idempotent)
+app.post("/api/gifts/seed", async (req, res) => {
+  try {
+    const db = getFirestore();
+    const catalog = [
+      { name: "Rose", coinValue: 8, baseDropRate: 0.70, bracket: "COMMON", order: 1 },
+      { name: "Heart", coinValue: 10, baseDropRate: 0.70, bracket: "COMMON", order: 2 },
+      { name: "Thumbs Up", coinValue: 12, baseDropRate: 0.70, bracket: "COMMON", order: 3 },
+      { name: "Star", coinValue: 15, baseDropRate: 0.70, bracket: "COMMON", order: 4 },
+      { name: "Smiley", coinValue: 18, baseDropRate: 0.70, bracket: "COMMON", order: 5 },
+      { name: "Coffee", coinValue: 20, baseDropRate: 0.70, bracket: "COMMON", order: 6 },
+      { name: "Candy", coinValue: 25, baseDropRate: 0.70, bracket: "COMMON", order: 7 },
+      { name: "Balloon", coinValue: 30, baseDropRate: 0.70, bracket: "COMMON", order: 8 },
+      { name: "Teddy Bear", coinValue: 50, baseDropRate: 0.20, bracket: "UNCOMMON", order: 9 },
+      { name: "Perfume", coinValue: 80, baseDropRate: 0.20, bracket: "UNCOMMON", order: 10 },
+      { name: "Diamond Ring", coinValue: 120, baseDropRate: 0.20, bracket: "UNCOMMON", order: 11 },
+      { name: "Bouquet", coinValue: 150, baseDropRate: 0.20, bracket: "UNCOMMON", order: 12 },
+      { name: "Fireworks", coinValue: 200, baseDropRate: 0.20, bracket: "UNCOMMON", order: 13 },
+      { name: "Music Box", coinValue: 300, baseDropRate: 0.20, bracket: "UNCOMMON", order: 14 },
+      { name: "Treasure Chest", coinValue: 500, baseDropRate: 0.08, bracket: "RARE", order: 15 },
+      { name: "Crown", coinValue: 800, baseDropRate: 0.08, bracket: "RARE", order: 16 },
+      { name: "Sports Car", coinValue: 1200, baseDropRate: 0.08, bracket: "RARE", order: 17 },
+      { name: "Yacht", coinValue: 1800, baseDropRate: 0.08, bracket: "RARE", order: 18 },
+      { name: "Dragon", coinValue: 2500, baseDropRate: 0.08, bracket: "RARE", order: 19 },
+      { name: "Phoenix", coinValue: 3500, baseDropRate: 0.08, bracket: "RARE", order: 20 },
+      { name: "Crystal Ball", coinValue: 5000, baseDropRate: 0.018, bracket: "EPIC", order: 21 },
+      { name: "Castle", coinValue: 8000, baseDropRate: 0.018, bracket: "EPIC", order: 22 },
+      { name: "Spaceship", coinValue: 12000, baseDropRate: 0.018, bracket: "EPIC", order: 23 },
+      { name: "Aurora", coinValue: 16000, baseDropRate: 0.018, bracket: "EPIC", order: 24 },
+      { name: "Galaxy Unicorn", coinValue: 20000, baseDropRate: 0.018, bracket: "EPIC", order: 25 },
+      { name: "ShyTalk Emblem", coinValue: 35000, baseDropRate: 0.002, bracket: "LEGENDARY", order: 26 },
+      { name: "Celestial Throne", coinValue: 52000, baseDropRate: 0.002, bracket: "LEGENDARY", order: 27 },
+    ];
+
+    const batch = db.batch();
+    for (const gift of catalog) {
+      const docId = gift.name.toLowerCase().replace(/\s+/g, "_");
+      const ref = db.collection("gifts").doc(docId);
+      batch.set(ref, {
+        ...gift,
+        beanValue: Math.floor(gift.coinValue * 0.6),
+        broadcastEnabled: gift.bracket === "LEGENDARY",
+        animationUrl: "",
+        soundUrl: "",
+        iconUrl: "",
+      }, { merge: true });
+    }
+    await batch.commit();
+
+    await writeAuditLog(db, {
+      adminUid: req.admin.uid,
+      action: "seed_gifts",
+      note: `Seeded ${catalog.length} gifts`,
+    });
+
+    return res.json({ success: true, count: catalog.length });
+  } catch (err) {
+    console.error("POST gifts/seed error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── Economy Admin Endpoints ───────────────────────────────────
+
+// GET /api/users/:uid/economy — Full economy snapshot
+app.get("/api/users/:uid/economy", async (req, res) => {
+  try {
+    const db = getFirestore();
+    const userDoc = await db.collection("users").doc(req.params.uid).get();
+    if (!userDoc.exists) return res.status(404).json({ error: "User not found" });
+    const u = userDoc.data();
+
+    return res.json({
+      shyCoins: u.shyCoins || 0,
+      shyBeans: u.shyBeans || 0,
+      isSuperShy: u.isSuperShy || false,
+      superShyExpiry: u.superShyExpiry?.toDate?.()?.toISOString() || null,
+      superShyTier: u.superShyTier || null,
+      luckScore: u.luckScore || 0,
+      pityCounter: u.pityCounter || 0,
+      loginStreak: u.loginStreak || 0,
+      lastLoginDate: u.lastLoginDate || null,
+      lastLoginRewardDate: u.lastLoginRewardDate || null,
+    });
+  } catch (err) {
+    console.error("GET economy error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/users/:uid/backpack — List user's backpack items (enriched with gift catalog info)
+app.get("/api/users/:uid/backpack", async (req, res) => {
+  try {
+    const db = getFirestore();
+    const [bpSnap, giftSnap] = await Promise.all([
+      db.collection("users").doc(req.params.uid).collection("backpack").get(),
+      db.collection("gifts").get(),
+    ]);
+    const giftMap = {};
+    giftSnap.docs.forEach((doc) => { giftMap[doc.id] = doc.data(); });
+
+    const items = bpSnap.docs.map((doc) => {
+      const gift = giftMap[doc.id] || {};
+      return {
+        giftId: doc.id,
+        ...doc.data(),
+        giftName: gift.name || doc.id,
+        bracket: gift.bracket || "",
+        coinValue: gift.coinValue || 0,
+        lastAcquired: doc.data().lastAcquired?.toDate?.()?.toISOString() || null,
+      };
+    });
+    return res.json({ items });
+  } catch (err) {
+    console.error("GET backpack error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/users/:uid/backpack — Set gift quantity (0 = remove), with transaction audit
+app.post("/api/users/:uid/backpack", async (req, res) => {
+  try {
+    const { giftId, quantity } = req.body;
+    if (!giftId || typeof quantity !== "number") {
+      return res.status(400).json({ error: "giftId and quantity required" });
+    }
+
+    const db = getFirestore();
+    const userRef = db.collection("users").doc(req.params.uid);
+    const bpRef = userRef.collection("backpack").doc(giftId);
+
+    // Get current quantity for audit delta
+    const bpDoc = await bpRef.get();
+    const previousQty = bpDoc.exists ? (bpDoc.data().quantity || 0) : 0;
+    const delta = quantity - previousQty;
+
+    const batch = db.batch();
+
+    if (quantity <= 0) {
+      batch.delete(bpRef);
+    } else {
+      batch.set(bpRef, { quantity, lastAcquired: Timestamp.now() }, { merge: true });
+    }
+
+    // Write transaction record for audit
+    const action = quantity <= 0 ? "removed" : (delta > 0 ? "added" : "set");
+    const txRef = userRef.collection("transactions").doc();
+    batch.set(txRef, {
+      type: "ADMIN_BACKPACK",
+      amount: Math.abs(delta),
+      currency: "COINS",
+      balanceAfter: 0,
+      giftId,
+      details: `Admin ${action} backpack item ${giftId}: ${previousQty} -> ${Math.max(0, quantity)} (by ShyTalk Official)`,
+      timestamp: Timestamp.now(),
+    });
+
+    await batch.commit();
+
+    await writeAuditLog(db, {
+      adminUid: req.admin.uid,
+      action: "edit_backpack",
+      targetUserId: req.params.uid,
+      note: `${action} ${giftId}: ${previousQty} -> ${Math.max(0, quantity)}`,
+    });
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("POST backpack error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/users/:uid/luck — Get luck score + pity counter
+app.get("/api/users/:uid/luck", async (req, res) => {
+  try {
+    const db = getFirestore();
+    const userDoc = await db.collection("users").doc(req.params.uid).get();
+    if (!userDoc.exists) return res.status(404).json({ error: "User not found" });
+    const u = userDoc.data();
+    return res.json({
+      luckScore: u.luckScore || 0,
+      pityCounter: u.pityCounter || 0,
+    });
+  } catch (err) {
+    console.error("GET luck error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/users/:uid/adjust-balance — Add/deduct coins or beans with audit
+app.post("/api/users/:uid/adjust-balance", async (req, res) => {
+  try {
+    const { currency, amount, operation } = req.body;
+    if (!["COINS", "BEANS"].includes(currency)) {
+      return res.status(400).json({ error: "currency must be COINS or BEANS" });
+    }
+    if (typeof amount !== "number" || amount <= 0) {
+      return res.status(400).json({ error: "amount must be a positive number" });
+    }
+    if (!["add", "deduct"].includes(operation)) {
+      return res.status(400).json({ error: "operation must be add or deduct" });
+    }
+
+    const db = getFirestore();
+    const userRef = db.collection("users").doc(req.params.uid);
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) return res.status(404).json({ error: "User not found" });
+
+    const userData = userDoc.data();
+    const field = currency === "COINS" ? "shyCoins" : "shyBeans";
+    const currentBalance = userData[field] || 0;
+    const delta = operation === "deduct" ? -amount : amount;
+    const newBalance = Math.max(0, currentBalance + delta);
+
+    const batch = db.batch();
+
+    // Update balance
+    batch.update(userRef, { [field]: newBalance });
+
+    // Write transaction record
+    const txRef = userRef.collection("transactions").doc();
+    batch.set(txRef, {
+      type: "ADMIN_ADJUSTMENT",
+      amount: delta,
+      currency,
+      balanceAfter: newBalance,
+      details: `Admin ${operation} ${amount} ${currency.toLowerCase()} (by ShyTalk Official)`,
+      timestamp: Timestamp.now(),
+    });
+
+    await batch.commit();
+
+    await writeAuditLog(db, {
+      adminUid: req.admin.uid,
+      action: "adjust_balance",
+      targetUserId: req.params.uid,
+      note: `${operation} ${amount} ${currency.toLowerCase()} (${currentBalance} -> ${newBalance})`,
+    });
+
+    return res.json({ success: true, newBalance });
+  } catch (err) {
+    console.error("POST adjust-balance error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/users/:uid/luck — Update luck score / pity counter
+app.post("/api/users/:uid/luck", async (req, res) => {
+  try {
+    const { luckScore, pityCounter } = req.body;
+    const updates = {};
+
+    if (typeof luckScore === "number") {
+      if (luckScore < 0 || luckScore > 100) {
+        return res.status(400).json({ error: "luckScore must be 0-100" });
+      }
+      updates.luckScore = luckScore;
+    }
+    if (typeof pityCounter === "number") {
+      if (pityCounter < 0 || pityCounter > 80) {
+        return res.status(400).json({ error: "pityCounter must be 0-80" });
+      }
+      updates.pityCounter = pityCounter;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: "Provide luckScore and/or pityCounter" });
+    }
+
+    const db = getFirestore();
+    const userRef = db.collection("users").doc(req.params.uid);
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) return res.status(404).json({ error: "User not found" });
+
+    await userRef.update(updates);
+
+    await writeAuditLog(db, {
+      adminUid: req.admin.uid,
+      action: "edit_luck",
+      targetUserId: req.params.uid,
+      note: JSON.stringify(updates),
+    });
+
+    return res.json({ success: true, ...updates });
+  } catch (err) {
+    console.error("POST luck error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/users/:uid/transactions — Paginated transaction audit
+app.get("/api/users/:uid/transactions", async (req, res) => {
+  try {
+    const db = getFirestore();
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const typeFilter = req.query.type || null;
+
+    let query = db.collection("users").doc(req.params.uid)
+      .collection("transactions")
+      .orderBy("timestamp", "desc")
+      .limit(limit);
+
+    if (typeFilter) {
+      query = db.collection("users").doc(req.params.uid)
+        .collection("transactions")
+        .where("type", "==", typeFilter)
+        .orderBy("timestamp", "desc")
+        .limit(limit);
+    }
+
+    const snap = await query.get();
+    const transactions = snap.docs.map((doc) => {
+      const data = doc.data();
+      if (data.timestamp && typeof data.timestamp.toDate === "function") {
+        data.timestamp = data.timestamp.toDate().toISOString();
+      }
+      return { id: doc.id, ...data };
+    });
+
+    return res.json({ transactions });
+  } catch (err) {
+    console.error("GET transactions error:", err);
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 

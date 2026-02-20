@@ -24,6 +24,8 @@ turbine = "1.2.1"
 junit = "4.13.2"
 junitVersion = "1.1.5"
 espressoCore = "3.5.1"
+lottieCompose = "6.7.1"
+billing = "7.1.1"
 
 [libraries]
 # AndroidX Core
@@ -89,6 +91,12 @@ google-id = { group = "com.google.android.libraries.identity.googleid", name = "
 
 # LiveKit
 livekit-android = { group = "io.livekit", name = "livekit-android", version.ref = "livekit" }
+
+# Lottie
+lottie-compose = { group = "com.airbnb.android", name = "lottie-compose", version.ref = "lottieCompose" }
+
+# Google Play Billing
+billing = { group = "com.android.billingclient", name = "billing-ktx", version.ref = "billing" }
 
 # Testing
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }

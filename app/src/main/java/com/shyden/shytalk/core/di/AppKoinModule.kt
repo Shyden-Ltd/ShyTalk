@@ -38,7 +38,19 @@ import com.shyden.shytalk.data.repository.StorageRepository
 import com.shyden.shytalk.data.repository.StorageRepositoryImpl
 import com.shyden.shytalk.data.repository.UserRepository
 import com.shyden.shytalk.data.repository.UserRepositoryImpl
+import com.shyden.shytalk.data.repository.GiftRepository
+import com.shyden.shytalk.data.repository.GiftRepositoryImpl
+import com.shyden.shytalk.data.repository.EconomyRepository
+import com.shyden.shytalk.data.repository.EconomyRepositoryImpl
+import com.shyden.shytalk.data.remote.BillingService
+import com.google.firebase.functions.FirebaseFunctions
 import com.shyden.shytalk.feature.auth.AuthViewModel
+import com.shyden.shytalk.feature.daily.DailyRewardViewModel
+import com.shyden.shytalk.feature.gacha.GachaViewModel
+import com.shyden.shytalk.feature.gifting.GiftingViewModel
+import com.shyden.shytalk.feature.profile.GiftWallViewModel
+import com.shyden.shytalk.feature.shop.TransactionHistoryViewModel
+import com.shyden.shytalk.feature.shop.WalletViewModel
 import com.shyden.shytalk.feature.home.HomeViewModel
 import com.shyden.shytalk.feature.messaging.ConversationListViewModel
 import com.shyden.shytalk.feature.messaging.GroupSetupViewModel
@@ -70,11 +82,15 @@ val appModule = module {
         Settings.Secure.getString(androidContext().contentResolver, Settings.Secure.ANDROID_ID)
     }
 
+    // Firebase Functions
+    single { FirebaseFunctions.getInstance("asia-southeast1") }
+
     // Services
     single<TokenService> { LiveKitTokenService() }
     single<VoiceService> { LiveKitVoiceService(androidContext(), get()) }
     single<PresenceService> { FirebasePresenceService(get()) }
     single<AppConfigService> { AndroidAppConfigService(androidContext(), get()) }
+    single { BillingService(androidContext()) }
 
     // Repositories
     singleOf(::AuthRepositoryImpl) bind AuthRepository::class
@@ -88,6 +104,8 @@ val appModule = module {
     singleOf(::ReportRepositoryImpl) bind ReportRepository::class
     singleOf(::TypingRepositoryImpl) bind TypingRepository::class
     singleOf(::NotificationRepositoryImpl) bind NotificationRepository::class
+    singleOf(::GiftRepositoryImpl) bind GiftRepository::class
+    single<EconomyRepository> { EconomyRepositoryImpl(get(), get()) }
     single { StickerStorage(androidContext()) }
 
     // ActiveRoomManager
@@ -97,7 +115,7 @@ val appModule = module {
     // ViewModels
     viewModel { AuthViewModel(get(), get(), get(), get(named("deviceId"))) }
     viewModel { HomeViewModel(get(), get(), get()) }
-    viewModel { ProfileViewModel(get(), get(), get(), get(), get()) }
+    viewModel { ProfileViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { RequiredDOBViewModel(get(), get()) }
     viewModel { params -> FollowListViewModel(params[0], params[1], get(), get()) }
     viewModel { params -> RoomViewModel(params[0], get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
@@ -121,4 +139,12 @@ val appModule = module {
     viewModel { ReportReviewViewModel(get(), get()) }
     viewModel { NewMessageViewModel(get(), get(), get()) }
     viewModel { params -> GroupSetupViewModel(params[0], get(), get(), get(), get()) }
+
+    // Monetization ViewModels
+    viewModel { GachaViewModel(get(), get()) }
+    viewModel { WalletViewModel(get(), get(), get()) }
+    viewModel { TransactionHistoryViewModel(get()) }
+    viewModel { GiftingViewModel(get(), get(), get()) }
+    viewModel { params -> GiftWallViewModel(params[0], get()) }
+    viewModel { DailyRewardViewModel(get(), get()) }
 }

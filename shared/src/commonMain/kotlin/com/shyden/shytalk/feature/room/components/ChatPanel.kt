@@ -1,16 +1,23 @@
 package com.shyden.shytalk.feature.room.components
 
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Backpack
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material3.Badge
@@ -29,6 +36,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.ui.theme.SpeakingGreen
@@ -52,6 +60,7 @@ fun ChatPanel(
     onInviteUser: (String, String) -> Unit,
     onToggleMessages: (() -> Unit)? = null,
     unreadCount: Int = 0,
+    onOpenBackpack: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
@@ -122,9 +131,37 @@ fun ChatPanel(
                 value = messageText,
                 onValueChange = { if (it.length <= 200) messageText = it },
                 placeholder = { Text("Type a message...") },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(0.6f),
                 singleLine = true
             )
+
+            IconButton(
+                onClick = {
+                    if (messageText.isNotBlank()) {
+                        onSendMessage(messageText)
+                        messageText = ""
+                    }
+                }
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.Send,
+                    contentDescription = "Send",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            if (isSeated) {
+                IconButton(onClick = {
+                    focusManager.clearFocus()
+                    currentSeatEntry?.key?.toIntOrNull()?.let { onToggleMic(it) }
+                }) {
+                    Icon(
+                        imageVector = if (isSelfMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                        contentDescription = if (isSelfMuted) "Unmute" else "Mute",
+                        tint = if (isSelfMuted) MaterialTheme.colorScheme.error else SpeakingGreen
+                    )
+                }
+            }
 
             if (onToggleMessages != null) {
                 IconButton(onClick = { focusManager.clearFocus(); onToggleMessages() }) {
@@ -149,32 +186,31 @@ fun ChatPanel(
                 }
             }
 
-            if (isSeated) {
-                IconButton(onClick = {
-                    focusManager.clearFocus()
-                    currentSeatEntry?.key?.toIntOrNull()?.let { onToggleMic(it) }
-                }) {
+            Spacer(modifier = Modifier.width(4.dp))
+
+            if (onOpenBackpack != null) {
+                val pulseTransition = rememberInfiniteTransition(label = "backpackPulse")
+                val scale by pulseTransition.animateFloat(
+                    initialValue = 1f,
+                    targetValue = 1.15f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(750)
+                    ),
+                    label = "backpackScale"
+                )
+                IconButton(
+                    onClick = { focusManager.clearFocus(); onOpenBackpack() },
+                    modifier = Modifier.graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    }
+                ) {
                     Icon(
-                        imageVector = if (isSelfMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                        contentDescription = if (isSelfMuted) "Unmute" else "Mute",
-                        tint = if (isSelfMuted) MaterialTheme.colorScheme.error else SpeakingGreen
+                        Icons.Default.Backpack,
+                        contentDescription = "Backpack",
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
-            }
-
-            IconButton(
-                onClick = {
-                    if (messageText.isNotBlank()) {
-                        onSendMessage(messageText)
-                        messageText = ""
-                    }
-                }
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Send,
-                    contentDescription = "Send",
-                    tint = MaterialTheme.colorScheme.primary
-                )
             }
         }
     }

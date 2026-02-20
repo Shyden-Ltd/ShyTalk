@@ -36,6 +36,7 @@ import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.SeatRequest
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.ui.StyledDisplayName
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.ui.unit.sp
@@ -219,11 +220,10 @@ private fun ParticipantRow(
         }
 
         // Name
-        Text(
-            text = participant.user.displayName.ifEmpty { "Unknown" },
+        StyledDisplayName(
+            displayName = participant.user.displayName.ifEmpty { "Unknown" },
+            isSuperShy = participant.user.isSuperShy,
             style = MaterialTheme.typography.bodyMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
         )
 

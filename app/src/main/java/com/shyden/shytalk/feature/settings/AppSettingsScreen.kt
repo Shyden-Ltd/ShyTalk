@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -311,7 +312,7 @@ private fun SettingsMainPage(
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             SettingsMenuItem(
-                icon = Icons.Default.Notifications,
+                icon = Icons.Default.Security,
                 title = "Permissions",
                 onClick = { onNavigateToPage(SettingsPage.Permissions) }
             )
