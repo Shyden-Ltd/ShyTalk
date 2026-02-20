@@ -1,12 +1,12 @@
-v0.39 - Sound Effects, Bug Fixes & Balance Tuning
+v0.39 - Sound Effects & Bug Fixes
 
-- Synthesized sound effects for Lucky Spin (chase ticks, win fanfares, coin purchase)
+- Sound effects for Lucky Spin (ticks, fanfares, coin ding)
 - High-tier fanfare for RARE+ wins
-- Backpack shows gift names, coin values, and total value
+- Backpack: names, coin values, total value, sorted
 - Uniform win card sizes in summary popup
 - Inline coin shop via + button on balance pill
 - Gacha drop rates rebalanced (harder high-tier)
 - Fixed coin balance showing 0 after spinning
 - Fixed daily reward showing 0 coins/streak
 - Fixed spin history not loading
-- Admin panel: partial backpack item removal
+- Admin: partial backpack item removal
