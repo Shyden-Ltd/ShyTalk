@@ -2,9 +2,11 @@ package com.shyden.shytalk.feature.gacha
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.shyden.shytalk.core.model.CoinPackage
 import com.shyden.shytalk.core.model.GachaGift
 import com.shyden.shytalk.core.model.GachaResult
 import com.shyden.shytalk.core.model.Gift
+import com.shyden.shytalk.core.model.Transaction
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.EconomyRepository
 import com.shyden.shytalk.data.repository.GiftRepository
@@ -28,7 +30,9 @@ data class GachaUiState(
     val currentWin: GachaGift? = null,
     val isMultiSpin: Boolean = false,
     val multiSpinResults: List<GachaGift> = emptyList(),
-    val multiSpinIndex: Int = 0
+    val multiSpinIndex: Int = 0,
+    val coinPackages: List<CoinPackage> = emptyList(),
+    val spinHistory: List<Transaction> = emptyList()
 )
 
 class GachaViewModel(
@@ -39,8 +43,14 @@ class GachaViewModel(
     private val _uiState = MutableStateFlow(GachaUiState())
     val uiState: StateFlow<GachaUiState> = _uiState.asStateFlow()
 
+    // Guard against stale Firestore snapshots overwriting the pull result balance
+    private var pullBalanceSetAt = 0L
+
     init {
         observeGiftCatalog()
+        observeBalance()
+        loadCoinPackages()
+        loadSpinHistory()
     }
 
     private fun observeGiftCatalog() {
@@ -55,6 +65,44 @@ class GachaViewModel(
                         )
                     }
                 }
+        }
+    }
+
+    private fun observeBalance() {
+        viewModelScope.launch {
+            economyRepository.observeBalance()
+                .catch { /* ignore */ }
+                .collect { coins ->
+                    // Ignore stale Firestore snapshots for 3s after a pull set the balance
+                    val elapsed = System.currentTimeMillis() - pullBalanceSetAt
+                    if (elapsed < 3000 && coins < _uiState.value.coinBalance) return@collect
+                    _uiState.update { it.copy(coinBalance = coins) }
+                }
+        }
+    }
+
+    private fun loadCoinPackages() {
+        viewModelScope.launch {
+            when (val result = economyRepository.getCoinPackages()) {
+                is Resource.Success -> _uiState.update { it.copy(coinPackages = result.data) }
+                else -> {}
+            }
+        }
+    }
+
+    private fun loadSpinHistory(delayMs: Long = 0) {
+        viewModelScope.launch {
+            if (delayMs > 0) kotlinx.coroutines.delay(delayMs)
+            when (val result = economyRepository.getAllTransactions("GACHA_PULL")) {
+                is Resource.Success -> _uiState.update { it.copy(spinHistory = result.data) }
+                else -> {}
+            }
+        }
+    }
+
+    fun testPurchase(amount: Int) {
+        viewModelScope.launch {
+            economyRepository.addTestCoins(amount)
         }
     }
 
@@ -76,6 +124,7 @@ class GachaViewModel(
             _uiState.update { it.copy(isPulling = true, error = null, currentWin = null) }
             when (val result = economyRepository.pullGacha(count)) {
                 is Resource.Success -> {
+                    pullBalanceSetAt = System.currentTimeMillis()
                     if (count == 1) {
                         _uiState.update {
                             it.copy(
@@ -110,6 +159,8 @@ class GachaViewModel(
                 }
                 is Resource.Loading -> {}
             }
+            // Delay to allow cloud function to write transaction doc
+            loadSpinHistory(delayMs = 2000)
         }
     }
 

@@ -837,7 +837,7 @@ const MILESTONES = new Set([7, 14, 30, 60, 90]);
 const PULL_COSTS = { 1: 10, 10: 100, 100: 1000 };
 
 // Base drop rates: [Common, Uncommon, Rare, Epic, Legendary]
-const BASE_RATES = [0.70, 0.20, 0.08, 0.018, 0.002];
+const BASE_RATES = [0.74, 0.18, 0.06, 0.015, 0.005];
 const BRACKETS = ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"];
 
 exports.claimDailyReward = onCall({ region: "asia-southeast1" }, async (request) => {
@@ -934,15 +934,15 @@ exports.pullGacha = onCall({ region: "asia-southeast1" }, async (request) => {
       const rates = [...BASE_RATES];
 
       // Pity system
-      if (pity >= 80) {
+      if (pity >= 150) {
         // Hard pity: force Epic+
         rates[0] = 0; rates[1] = 0; rates[2] = 0;
         const epicLeg = BASE_RATES[3] + BASE_RATES[4];
         rates[3] = BASE_RATES[3] / epicLeg;
         rates[4] = BASE_RATES[4] / epicLeg;
-      } else if (pity >= 60) {
-        const pityBoost = (pity - 60) / 20; // 0→1 linear
-        const shift = 0.15 * pityBoost;
+      } else if (pity >= 100) {
+        const pityBoost = (pity - 100) / 50; // 0→1 linear over 50 pulls
+        const shift = 0.10 * pityBoost;
         rates[0] -= shift;
         rates[3] += shift;
       }

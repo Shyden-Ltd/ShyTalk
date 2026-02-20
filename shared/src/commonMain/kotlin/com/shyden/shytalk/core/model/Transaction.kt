@@ -31,16 +31,16 @@ data class Transaction(
             type = (map["type"] as? String)?.let {
                 try { TransactionType.valueOf(it) } catch (_: Exception) { TransactionType.PURCHASE }
             } ?: TransactionType.PURCHASE,
-            amount = (map["amount"] as? Long) ?: 0,
+            amount = (map["amount"] as? Number)?.toLong() ?: 0,
             currency = (map["currency"] as? String)?.let {
                 try { CurrencyType.valueOf(it) } catch (_: Exception) { CurrencyType.COINS }
             } ?: CurrencyType.COINS,
-            balanceAfter = (map["balanceAfter"] as? Long) ?: 0,
+            balanceAfter = (map["balanceAfter"] as? Number)?.toLong() ?: 0,
             giftId = map["giftId"] as? String,
             giftName = map["giftName"] as? String,
             recipientId = map["recipientId"] as? String,
             senderId = map["senderId"] as? String,
-            pullCount = (map["pullCount"] as? Long)?.toInt(),
+            pullCount = (map["pullCount"] as? Number)?.toInt(),
             details = map["details"] as? String,
             timestamp = map["timestamp"]?.let { timestampToMillis(it) } ?: 0
         )

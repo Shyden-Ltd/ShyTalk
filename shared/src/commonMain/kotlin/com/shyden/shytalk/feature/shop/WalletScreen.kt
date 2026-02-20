@@ -347,7 +347,7 @@ private fun BalanceCard(
 }
 
 @Composable
-private fun CoinPackageCard(pkg: CoinPackage, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun CoinPackageCard(pkg: CoinPackage, enabled: Boolean = true, onClick: () -> Unit) {
     Card(
         onClick = onClick,
         enabled = enabled,

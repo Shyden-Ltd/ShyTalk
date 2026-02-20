@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -128,7 +130,7 @@ fun LuckySpinSummaryPopup(
                 )
 
                 Text(
-                    text = "${wins.size} SPIN${if (wins.size > 1) "S" else ""}${if (spinTier.boostedDrop) "  ★ BOOSTED" else ""}",
+                    text = "${wins.size} SPIN${if (wins.size > 1) "S" else ""}${if (spinTier.boostedDrop) "  ★ INCREASED DROP RATE" else ""}",
                     color = Color.White.copy(alpha = 0.35f),
                     fontSize = 11.sp,
                     letterSpacing = 2.sp
@@ -177,7 +179,7 @@ fun LuckySpinSummaryPopup(
                     onClick = onSpinAgain,
                     enabled = canAffordSpinAgain,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = spinTier.color,
+                        containerColor = spinTier.accentColor,
                         disabledContainerColor = Color(0xFF333333)
                     ),
                     shape = RoundedCornerShape(50),
@@ -238,29 +240,33 @@ private fun WinCard(win: GroupedWin, index: Int) {
 
     Box(
         modifier = Modifier
+            .size(width = 80.dp, height = 110.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(16.dp))
             .background(bracketColor.copy(alpha = 0.1f))
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-            .widthIn(min = 80.dp),
+            .padding(horizontal = 4.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            // Count badge
-            if (win.count > 1) {
-                Text(
-                    text = "x${win.count}",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Black,
-                    color = Color(0xFF1A1A2E),
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // Count badge — always reserve space
+            Text(
+                text = if (win.count > 1) "x${win.count}" else "",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Black,
+                color = if (win.count > 1) Color(0xFF1A1A2E) else Color.Transparent,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .then(
+                        if (win.count > 1) Modifier.background(
                             Brush.linearGradient(listOf(Color(0xFFFFD700), Color(0xFFFF9100)))
-                        )
-                        .padding(horizontal = 7.dp, vertical = 1.dp)
-                )
-            }
+                        ) else Modifier
+                    )
+                    .padding(horizontal = 7.dp, vertical = 1.dp)
+            )
 
             Text(
                 text = giftEmoji(win.giftName),
@@ -280,18 +286,18 @@ private fun WinCard(win: GroupedWin, index: Int) {
                 text = "\uD83E\uDE99 ${(win.coinValue * win.count).formatWithCommas()}",
                 color = Color(0xFFFFD700),
                 fontSize = 11.sp,
-                fontWeight = FontWeight.ExtraBold
+                fontWeight = FontWeight.ExtraBold,
+                maxLines = 1
             )
 
-            if (isRarePlus) {
-                Text(
-                    text = win.bracket.name,
-                    fontSize = 7.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 1.5.sp,
-                    color = (RarityConfigs[win.bracket] ?: RarityConfigs[GiftBracket.COMMON]!!).glowColor
-                )
-            }
+            // Bracket label — always reserve space
+            Text(
+                text = if (isRarePlus) win.bracket.name else "",
+                fontSize = 7.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 1.5.sp,
+                color = if (isRarePlus) (RarityConfigs[win.bracket] ?: RarityConfigs[GiftBracket.COMMON]!!).glowColor else Color.Transparent
+            )
         }
     }
 }

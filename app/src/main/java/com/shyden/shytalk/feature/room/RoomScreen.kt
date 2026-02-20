@@ -185,13 +185,7 @@ fun RoomScreen(
         }
     }
 
-    // Sync gacha balance from user data
     val currentUser = uiState.allKnownUsers[uiState.currentUserId]
-    LaunchedEffect(currentUser?.shyCoins, currentUser?.pityCounter, currentUser?.luckScore) {
-        currentUser?.let { user ->
-            gachaViewModel.updateBalance(user.shyCoins, user.pityCounter, user.luckScore)
-        }
-    }
 
     // Observe broadcasts
     LaunchedEffect(Unit) {
@@ -701,6 +695,8 @@ fun RoomScreen(
                         .fillMaxHeight()
                         .fillMaxWidth(0.7f)
                 )
+            }
+
             // Floating action carousel (bottom-right, inside scaffold content to respect padding)
             if (uiState.hasJoined && !uiState.roomClosed) {
                 RoomActionCarousel(
@@ -710,7 +706,6 @@ fun RoomScreen(
                         .align(Alignment.BottomEnd)
                         .padding(bottom = 64.dp, end = 8.dp)
                 )
-            }
             }
         }
 
@@ -958,7 +953,8 @@ fun RoomScreen(
                 onAdvanceMultiSpin = gachaViewModel::advanceMultiSpin,
                 onSkipMultiSpin = gachaViewModel::skipMultiSpin,
                 onDismissResults = gachaViewModel::dismissResults,
-                onDismiss = { showGachaWheel = false }
+                onDismiss = { showGachaWheel = false },
+                onTestPurchase = { coins -> gachaViewModel.testPurchase(coins) }
             )
         }
 

@@ -3791,8 +3791,9 @@
             ${item.bracket ? `<span style="color:var(--text2);font-size:0.8em">[${escapeHtml(item.bracket)}]</span>` : ""}
             <span style="color:var(--text2);font-size:0.75em">(${escapeHtml(item.giftId)})</span>
           </span>
-          <div style="display:flex;gap:4px">
-            <button type="button" class="btn-sm" style="background:var(--danger)" onclick="removeBackpackItem('${escapeHtml(item.giftId)}')">Remove</button>
+          <div style="display:flex;gap:4px;align-items:center">
+            <input type="number" id="bp-rm-qty-${escapeHtml(item.giftId)}" min="1" max="${item.quantity}" value="${item.quantity}" style="width:50px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--bg2);color:var(--text1);text-align:center;font-size:0.85em">
+            <button type="button" class="btn-sm" style="background:var(--danger)" onclick="removeBackpackItem('${escapeHtml(item.giftId)}', ${item.quantity})">Remove</button>
           </div>
         </div>`
       ).join("");
@@ -3815,11 +3816,17 @@
     }
   }
 
-  window.removeBackpackItem = async function(giftId) {
-    if (!currentUid || !confirm("Remove this gift from backpack?")) return;
+  window.removeBackpackItem = async function(giftId, currentQty) {
+    if (!currentUid) return;
+    const input = $(`#bp-rm-qty-${giftId}`);
+    const removeQty = parseInt(input?.value) || currentQty;
+    if (removeQty <= 0) return;
+    const label = removeQty >= currentQty ? "all" : removeQty;
+    if (!confirm(`Remove ${label} of this gift from backpack?`)) return;
     try {
-      await apiCall("POST", `/api/users/${currentUid}/backpack`, { giftId, quantity: 0 });
-      showToast("Removed from backpack");
+      const newQty = Math.max(0, currentQty - removeQty);
+      await apiCall("POST", `/api/users/${currentUid}/backpack`, { giftId, quantity: newQty });
+      showToast(removeQty >= currentQty ? "Removed from backpack" : `Removed ${removeQty} (${newQty} remaining)`);
       loadBackpack(currentUid);
     } catch (err) {
       showToast(err.message, "error");

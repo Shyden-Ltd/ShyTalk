@@ -5,8 +5,10 @@ import com.shyden.shytalk.core.model.DailyRewardResult
 import com.shyden.shytalk.core.model.GachaResult
 import com.shyden.shytalk.core.model.Transaction
 import com.shyden.shytalk.core.util.Resource
+import kotlinx.coroutines.flow.Flow
 
 interface EconomyRepository {
+    fun observeBalance(): Flow<Long>
     suspend fun claimDailyReward(): Resource<DailyRewardResult>
     suspend fun pullGacha(pullCount: Int): Resource<GachaResult>
     suspend fun sendGift(recipientId: String, giftId: String): Resource<Map<String, Any?>>

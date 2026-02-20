@@ -9,22 +9,32 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -43,11 +53,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.DisposableEffect
+import com.shyden.shytalk.core.audio.GachaSoundPlayer
+import com.shyden.shytalk.core.model.CoinPackage
 import com.shyden.shytalk.core.model.GachaGift
+import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.model.GiftBracket
+import com.shyden.shytalk.core.model.Transaction
 import com.shyden.shytalk.core.ui.SuperShyGold
+import com.shyden.shytalk.feature.shop.CoinPackageCard
+import com.shyden.shytalk.feature.shop.formatNumber
+import com.shyden.shytalk.feature.shop.formatTimestamp
+import com.shyden.shytalk.feature.shop.transactionLabel
 import kotlinx.coroutines.delay
 import kotlin.math.pow
 
@@ -64,6 +84,7 @@ fun LuckySpinOverlay(
     onSkipMultiSpin: () -> Unit,
     onDismissResults: () -> Unit,
     onDismiss: () -> Unit,
+    onTestPurchase: (Int) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val winnableGifts = gachaState.winnableGifts
@@ -83,6 +104,17 @@ fun LuckySpinOverlay(
     var skipAnimation by remember { mutableStateOf(false) }
     var showSummary by remember { mutableStateOf(false) }
     var allWins by remember { mutableStateOf<List<GachaGift>>(emptyList()) }
+
+    // Sound lifecycle
+    DisposableEffect(Unit) {
+        GachaSoundPlayer.init()
+        onDispose { GachaSoundPlayer.release() }
+    }
+
+    // Inline panel states
+    var showCoinShop by remember { mutableStateOf(false) }
+    var showHistory by remember { mutableStateOf(false) }
+    var showPrizeList by remember { mutableStateOf(false) }
 
     // Screen shake
     val shakeX = remember { Animatable(0f) }
@@ -138,8 +170,6 @@ fun LuckySpinOverlay(
                 else { innerLitIndex = pos.second; outerLitIndex = -1 }
             }
             lastWin = win
-            phase = SpinPhase.CELEBRATING
-            celebrate(listOf(win))
             showSummary = true
             phase = SpinPhase.SHOW_SUMMARY
             return@LaunchedEffect
@@ -169,6 +199,7 @@ fun LuckySpinOverlay(
                 else { innerLitIndex = pos.second; outerLitIndex = -1 }
             }
 
+            GachaSoundPlayer.playTick(progress)
             step++
             if (progress >= 1f) break
             delay(interval)
@@ -181,16 +212,21 @@ fun LuckySpinOverlay(
         // Blink phase (3 cycles)
         repeat(3) {
             if (pos.first == Ring.OUTER) outerLitIndex = -1 else innerLitIndex = -1
+            GachaSoundPlayer.playBlinkClick()
             delay(130)
             if (pos.first == Ring.OUTER) outerLitIndex = pos.second else innerLitIndex = pos.second
+            GachaSoundPlayer.playBlinkClick()
             delay(130)
         }
 
         val key = "${if (pos.first == Ring.OUTER) "outer" else "inner"}-${pos.second}"
         wonSegments = setOf(key)
         lastWin = win
-        phase = SpinPhase.CELEBRATING
-        celebrate(listOf(win))
+        GachaSoundPlayer.playWinReveal(win.bracket)
+        if (win.bracket.ordinal >= GiftBracket.RARE.ordinal) {
+            GachaSoundPlayer.playHighTierFanfare()
+        }
+        // Show summary immediately — don't wait for celebration animation
         showSummary = true
         phase = SpinPhase.SHOW_SUMMARY
     }
@@ -216,8 +252,6 @@ fun LuckySpinOverlay(
             outerLitIndex = -1
             innerLitIndex = -1
             onSkipMultiSpin()
-            phase = SpinPhase.CELEBRATING
-            celebrate(results)
             showSummary = true
             phase = SpinPhase.SHOW_SUMMARY
             return@LaunchedEffect
@@ -247,6 +281,7 @@ fun LuckySpinOverlay(
                 if (step < sweepPhase) {
                     outerLitIndex = if (outerGifts.isNotEmpty()) step % outerGifts.size else -1
                     innerLitIndex = if (innerGifts.isNotEmpty()) (innerGifts.size - (step % innerGifts.size)) % innerGifts.size else -1
+                    GachaSoundPlayer.playTick(step.toFloat() / totalSteps)
                 } else {
                     val revealStep = step - sweepPhase
                     val revealIndex = ((revealStep.toFloat() / (totalSteps - sweepPhase)) * uniqueWins.size).toInt()
@@ -289,6 +324,7 @@ fun LuckySpinOverlay(
                         if (pos.first == Ring.OUTER) { outerLitIndex = pos.second; innerLitIndex = -1 }
                         else { innerLitIndex = pos.second; outerLitIndex = -1 }
                     }
+                    GachaSoundPlayer.playTick(p)
                     chaseStep++
                     if (p >= 1f) break
                     delay(25)
@@ -312,33 +348,44 @@ fun LuckySpinOverlay(
             onSkipMultiSpin()
         }
 
-        phase = SpinPhase.CELEBRATING
-        celebrate(results)
         spinProgress = null
+        val bestBracket = allWins.maxByOrNull { it.bracket.ordinal }?.bracket ?: GiftBracket.COMMON
+        GachaSoundPlayer.playWinReveal(bestBracket)
+        if (bestBracket.ordinal >= GiftBracket.RARE.ordinal) {
+            GachaSoundPlayer.playHighTierFanfare()
+        }
+        // Show summary immediately — don't wait for celebration animation
         showSummary = true
         phase = SpinPhase.SHOW_SUMMARY
     }
 
-    // Main overlay layout
+    // Main overlay layout — bottom-aligned opaque panel, room visible above
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black)
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() }
-            ) { /* consume taps on scrim */ }
             .graphicsLayer {
                 translationX = shakeX.value
                 translationY = shakeY.value
             },
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.BottomCenter
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
+            verticalArrangement = Arrangement.Bottom,
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Color.Black,
+                    RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+                )
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) { /* consume taps on panel */ }
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 16.dp)
         ) {
-            // Close + coin balance header
+            // Header: [X Close] ---- [History] [Prizes] [Balance pill]
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -354,23 +401,75 @@ fun LuckySpinOverlay(
                     Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
                 }
 
+                Spacer(modifier = Modifier.weight(1f))
+
+                // History icon
                 Surface(
-                    shape = RoundedCornerShape(30.dp),
-                    color = Color(0xFFFFD700).copy(alpha = 0.06f)
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color.White.copy(alpha = 0.06f),
+                    modifier = Modifier.clickable { showHistory = true }
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 5.dp)
+                    Text(
+                        "\uD83D\uDCCB",
+                        fontSize = 18.sp,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Prize catalog icon
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color.White.copy(alpha = 0.06f),
+                    modifier = Modifier.clickable { showPrizeList = true }
+                ) {
+                    Text(
+                        "\uD83C\uDFC6",
+                        fontSize = 18.sp,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Coin balance pill + add button
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = RoundedCornerShape(30.dp),
+                        color = Color(0xFFFFD700).copy(alpha = 0.06f)
                     ) {
-                        Text("\uD83E\uDE99", fontSize = 16.sp)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "${gachaState.coinBalance}",
-                            color = SuperShyGold,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 18.sp,
-                            letterSpacing = 1.sp
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 5.dp)
+                        ) {
+                            Text("\uD83E\uDE99", fontSize = 16.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "${gachaState.coinBalance}",
+                                color = SuperShyGold,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 18.sp,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFFFFD700).copy(alpha = 0.15f),
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clickable { showCoinShop = true }
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = "Buy coins",
+                                tint = SuperShyGold,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -390,8 +489,6 @@ fun LuckySpinOverlay(
                     )
                 )
             )
-
-            Spacer(modifier = Modifier.height(4.dp))
 
             // Skip animation toggle
             Row(
@@ -419,45 +516,22 @@ fun LuckySpinOverlay(
                 )
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(2.dp))
 
-            // Progress bar for multi-spin
-            spinProgress?.let { (current, total) ->
-                if (total > 1) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier.padding(horizontal = 32.dp)
-                    ) {
-                        LinearProgressIndicator(
-                            progress = { current.toFloat() / total },
-                            modifier = Modifier.weight(1f).height(6.dp),
-                            color = activeTier.color,
-                            trackColor = Color.White.copy(alpha = 0.07f)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "$current/$total",
-                            color = Color.White.copy(alpha = 0.35f),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
-            }
-
-            // The dual-ring wheel
+            // The dual-ring wheel — fill available width for a bigger wheel
             LuckySpinWheel(
                 outerGifts = outerGifts,
                 innerGifts = innerGifts,
                 outerLitIndex = outerLitIndex,
                 innerLitIndex = innerLitIndex,
                 wonSegments = wonSegments,
-                modifier = Modifier.size(300.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp)
+                    .aspectRatio(1f)
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             // Last win display
             lastWin?.let { win ->
@@ -475,87 +549,100 @@ fun LuckySpinOverlay(
                             fontSize = 14.sp
                         )
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                 }
             }
 
-            // Spin tier buttons
+            // Spin tier buttons — equal height via IntrinsicSize
             if (phase == SpinPhase.IDLE) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Min)
                 ) {
                     SpinTiers.forEach { tier ->
                         val canAfford = gachaState.coinBalance >= tier.cost
-                        val enabled = canAfford && !gachaState.isPulling
 
                         Button(
                             onClick = {
-                                activeTier = tier
-                                phase = SpinPhase.ANIMATING
-                                wonSegments = emptySet()
-                                outerLitIndex = -1
-                                innerLitIndex = -1
-                                lastWin = null
-                                showConfetti = false
-                                allWins = emptyList()
-                                when (tier.count) {
-                                    1 -> onSpin()
-                                    else -> onQuickSpin(tier.count)
+                                if (!canAfford) {
+                                    showCoinShop = true
+                                } else if (!gachaState.isPulling) {
+                                    activeTier = tier
+                                    phase = SpinPhase.ANIMATING
+                                    wonSegments = emptySet()
+                                    outerLitIndex = -1
+                                    innerLitIndex = -1
+                                    lastWin = null
+                                    showConfetti = false
+                                    allWins = emptyList()
+                                    GachaSoundPlayer.playSpinStart()
+                                    when (tier.count) {
+                                        1 -> onSpin()
+                                        else -> onQuickSpin(tier.count)
+                                    }
                                 }
                             },
-                            enabled = enabled,
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = tier.color.copy(alpha = 0.15f),
-                                disabledContainerColor = Color(0xFF222222)
+                                containerColor = if (canAfford) tier.color.copy(alpha = 0.15f)
+                                    else Color(0xFF222222)
                             ),
                             shape = RoundedCornerShape(20.dp),
+                            contentPadding = ButtonDefaults.ContentPadding,
                             modifier = Modifier
                                 .weight(1f)
-                                .height(80.dp)
+                                .heightIn(min = 72.dp)
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
                                 Text(
                                     text = tier.label,
-                                    fontSize = 22.sp,
+                                    fontSize = 18.sp,
                                     fontWeight = FontWeight.Black,
-                                    color = if (enabled) tier.color else Color.Gray,
+                                    color = if (canAfford) tier.color else Color.Gray,
                                     letterSpacing = 1.sp,
-                                    lineHeight = 24.sp
+                                    lineHeight = 20.sp,
+                                    maxLines = 1
                                 )
                                 Text(
                                     text = "SPIN",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (enabled) Color.White.copy(alpha = 0.55f) else Color.Gray.copy(alpha = 0.4f),
-                                    letterSpacing = 1.sp
+                                    color = if (canAfford) Color.White.copy(alpha = 0.55f) else Color.Gray.copy(alpha = 0.4f),
+                                    letterSpacing = 1.sp,
+                                    maxLines = 1
                                 )
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),
-                                    color = if (enabled) tier.color.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.03f)
+                                    color = if (canAfford) tier.color.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.03f)
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp)
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                                     ) {
-                                        Text("\uD83E\uDE99", fontSize = 11.sp)
+                                        Text("\uD83E\uDE99", fontSize = 11.sp, maxLines = 1)
                                         Text(
                                             text = "${tier.cost}",
-                                            fontSize = 13.sp,
+                                            fontSize = 11.sp,
                                             fontWeight = FontWeight.ExtraBold,
-                                            color = if (enabled) tier.color else Color.Gray
+                                            color = if (canAfford) tier.color else Color.Gray,
+                                            maxLines = 1
                                         )
                                     }
                                 }
-                                if (tier.boostedDrop) {
-                                    Text(
-                                        text = "BOOSTED",
-                                        fontSize = 8.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        letterSpacing = 1.5.sp,
-                                        color = if (enabled) tier.color else Color.Gray
-                                    )
-                                }
+                                // All buttons show the drop rate line — visible text only for boosted tier
+                                Text(
+                                    text = if (tier.boostedDrop) "INCREASED DROP RATE" else "",
+                                    fontSize = 7.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 0.5.sp,
+                                    color = if (canAfford) tier.color else Color.Gray,
+                                    maxLines = 1,
+                                    lineHeight = 9.sp
+                                )
                             }
                         }
                     }
@@ -623,12 +710,303 @@ fun LuckySpinOverlay(
                     // Trigger new spin
                     phase = SpinPhase.ANIMATING
                     activeTier = tier
+                    GachaSoundPlayer.playSpinStart()
                     when (tier.count) {
                         1 -> onSpin()
                         else -> onQuickSpin(tier.count)
                     }
                 }
             )
+        }
+
+        // Inline Coin Shop overlay
+        if (showCoinShop) {
+            InlineCoinShop(
+                coinPackages = gachaState.coinPackages,
+                onPurchase = { coins ->
+                    GachaSoundPlayer.playCoinPurchase()
+                    onTestPurchase(coins)
+                    showCoinShop = false
+                },
+                onDismiss = { showCoinShop = false }
+            )
+        }
+
+        // Inline Spin History overlay
+        if (showHistory) {
+            InlineSpinHistory(
+                transactions = gachaState.spinHistory,
+                onDismiss = { showHistory = false }
+            )
+        }
+
+        // Inline Prize Catalog overlay
+        if (showPrizeList) {
+            InlinePrizeCatalog(
+                gifts = gachaState.winnableGifts,
+                onDismiss = { showPrizeList = false }
+            )
+        }
+    }
+}
+
+@Composable
+private fun InlineCoinShop(
+    coinPackages: List<CoinPackage>,
+    onPurchase: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.85f))
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { /* consume taps */ },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Need more coins!",
+                    color = Color(0xFFFFD700),
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 20.sp
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (coinPackages.isEmpty()) {
+                Text(
+                    text = "No packages available",
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontSize = 14.sp
+                )
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.heightIn(max = 300.dp)
+                ) {
+                    items(coinPackages) { pkg ->
+                        CoinPackageCard(
+                            pkg = pkg,
+                            onClick = { onPurchase(pkg.totalCoins) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InlineSpinHistory(
+    transactions: List<Transaction>,
+    onDismiss: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.9f))
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { /* consume taps */ },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Spin History",
+                    color = Color.White,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 20.sp
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (transactions.isEmpty()) {
+                Text(
+                    text = "No spins yet",
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontSize = 14.sp
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 400.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(transactions) { tx ->
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color.White.copy(alpha = 0.05f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("\uD83C\uDFB0", fontSize = 18.sp)
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = tx.pullCount?.let { "x$it pull" } ?: "Pull",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        maxLines = 1
+                                    )
+                                    Text(
+                                        text = transactionLabel(tx),
+                                        color = Color.White.copy(alpha = 0.5f),
+                                        fontSize = 12.sp,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = formatTimestamp(tx.timestamp),
+                                        color = Color.White.copy(alpha = 0.3f),
+                                        fontSize = 11.sp,
+                                        maxLines = 1
+                                    )
+                                }
+                                Text(
+                                    text = "${tx.amount}",
+                                    color = if (tx.amount < 0) Color(0xFFFF5252) else Color(0xFF4CAF50),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text("\uD83E\uDE99", fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InlinePrizeCatalog(
+    gifts: List<Gift>,
+    onDismiss: () -> Unit
+) {
+    val sorted = remember(gifts) {
+        gifts.sortedByDescending { it.coinValue }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.9f))
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { /* consume taps */ },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Prizes",
+                    color = Color.White,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 20.sp
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            LazyColumn(
+                modifier = Modifier.heightIn(max = 400.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                items(sorted) { gift ->
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = (BracketColors[gift.bracket] ?: Color.Gray).copy(alpha = 0.08f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Bracket color indicator dot
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(
+                                        BracketColors[gift.bracket] ?: Color.Gray,
+                                        RoundedCornerShape(4.dp)
+                                    )
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(giftEmoji(gift.name), fontSize = 20.sp)
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = gift.name,
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                text = "\uD83E\uDE99 ${gift.coinValue}",
+                                color = Color(0xFFFFD700),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

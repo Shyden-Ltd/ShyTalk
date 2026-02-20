@@ -25,14 +25,14 @@ data class GachaResult(
                     bracket = (m["bracket"] as? String)?.let {
                         try { GiftBracket.valueOf(it) } catch (_: Exception) { GiftBracket.COMMON }
                     } ?: GiftBracket.COMMON,
-                    coinValue = (m["coinValue"] as? Long)?.toInt() ?: 0,
+                    coinValue = (m["coinValue"] as? Number)?.toInt() ?: 0,
                     iconUrl = m["iconUrl"] as? String ?: ""
                 )
             } ?: emptyList(),
-            coinsSpent = (map["coinsSpent"] as? Long)?.toInt() ?: 0,
-            newBalance = (map["newBalance"] as? Long) ?: 0,
-            newPityCounter = (map["newPityCounter"] as? Long)?.toInt() ?: 0,
-            newLuckScore = (map["newLuckScore"] as? Long)?.toInt() ?: 0
+            coinsSpent = (map["coinsSpent"] as? Number)?.toInt() ?: 0,
+            newBalance = (map["newBalance"] as? Number)?.toLong() ?: 0,
+            newPityCounter = (map["newPityCounter"] as? Number)?.toInt() ?: 0,
+            newLuckScore = (map["newLuckScore"] as? Number)?.toInt() ?: 0
         )
     }
 }

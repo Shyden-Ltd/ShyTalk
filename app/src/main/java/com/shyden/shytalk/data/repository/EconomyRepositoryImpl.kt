@@ -11,12 +11,26 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.functions.FirebaseFunctions
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
 class EconomyRepositoryImpl(
     private val firestore: FirebaseFirestore,
     private val functions: FirebaseFunctions
 ) : EconomyRepository {
+
+    override fun observeBalance(): Flow<Long> = callbackFlow {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid
+        if (uid == null) { close(); return@callbackFlow }
+        val reg = firestore.collection("users").document(uid)
+            .addSnapshotListener { snap, _ ->
+                val coins = snap?.getLong("shyCoins")
+                if (coins != null) trySend(coins)
+            }
+        awaitClose { reg.remove() }
+    }
 
     override suspend fun claimDailyReward(): Resource<DailyRewardResult> = firebaseCall("Failed to claim daily reward") {
         val result = functions.getHttpsCallable("claimDailyReward")
@@ -109,9 +123,8 @@ class EconomyRepositoryImpl(
     override suspend fun getAllTransactions(filterType: String?): Resource<List<Transaction>> = firebaseCall("Failed to load transactions") {
         val userId = FirebaseAuth.getInstance().currentUser?.uid
             ?: throw Exception("Not authenticated")
-        var query = firestore.collection("users").document(userId)
+        var query: Query = firestore.collection("users").document(userId)
             .collection("transactions")
-            .orderBy("timestamp", Query.Direction.DESCENDING)
         if (filterType != null) {
             query = query.whereEqualTo("type", filterType)
         }
@@ -119,7 +132,7 @@ class EconomyRepositoryImpl(
         snapshot.documents.mapNotNull { doc ->
             val data = doc.data ?: return@mapNotNull null
             Transaction.fromMap(data, doc.id)
-        }
+        }.sortedByDescending { it.timestamp }
     }
 
     override suspend fun addTestCoins(amount: Int): Resource<Map<String, Any?>> =

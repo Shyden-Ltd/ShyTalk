@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -26,6 +27,10 @@ import androidx.compose.ui.unit.dp
 fun ForceUpdateScreen() {
     val context = LocalContext.current
 
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -68,5 +73,6 @@ fun ForceUpdateScreen() {
         }) {
             Text("Update Now")
         }
+    }
     }
 }

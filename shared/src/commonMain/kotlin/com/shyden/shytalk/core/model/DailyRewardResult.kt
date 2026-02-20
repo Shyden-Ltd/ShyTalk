@@ -8,10 +8,10 @@ data class DailyRewardResult(
 ) {
     companion object {
         fun fromMap(map: Map<String, Any?>): DailyRewardResult = DailyRewardResult(
-            coinsAwarded = (map["coinsAwarded"] as? Long)?.toInt() ?: 0,
-            newStreak = (map["newStreak"] as? Long)?.toInt() ?: 0,
+            coinsAwarded = (map["coinsAwarded"] as? Number)?.toInt() ?: 0,
+            newStreak = (map["newStreak"] as? Number)?.toInt() ?: 0,
             isMilestone = map["isMilestone"] as? Boolean ?: false,
-            newBalance = (map["newBalance"] as? Long) ?: 0
+            newBalance = (map["newBalance"] as? Number)?.toLong() ?: 0
         )
     }
 }

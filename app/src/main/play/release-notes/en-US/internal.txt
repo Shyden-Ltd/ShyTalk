@@ -1,12 +1,12 @@
-v0.38 - Lucky Spin & Virtual Economy
+v0.39 - Sound Effects, Bug Fixes & Balance Tuning
 
-- Lucky Spin dual-ring wheel with light-chase animations
-- 1x, 10x, 100x spin tiers with confetti and screen shake
-- 27 gifts across 5 rarity tiers
-- Shy Coins wallet with test purchases
-- Shy Beans redemption (10% bonus at 2000+)
-- Transaction history
-- Daily rewards with streak milestones
-- Animated mini-wheel in room carousel
-- Firestore PITR and delete protection
-- Bug fixes and UI improvements
+- Synthesized sound effects for Lucky Spin (chase ticks, win fanfares, coin purchase)
+- High-tier fanfare for RARE+ wins
+- Backpack shows gift names, coin values, and total value
+- Uniform win card sizes in summary popup
+- Inline coin shop via + button on balance pill
+- Gacha drop rates rebalanced (harder high-tier)
+- Fixed coin balance showing 0 after spinning
+- Fixed daily reward showing 0 coins/streak
+- Fixed spin history not loading
+- Admin panel: partial backpack item removal
