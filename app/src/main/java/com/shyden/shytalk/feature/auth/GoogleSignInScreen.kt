@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
@@ -155,7 +156,7 @@ fun GoogleSignInScreen(
                 Spacer(modifier = Modifier.height(32.dp))
 
                 if (uiState.isLoading) {
-                    CircularProgressIndicator(color = CnyGold)
+                    CircularProgressIndicator(color = CnyGold, modifier = Modifier.testTag("signIn_loadingIndicator"))
                 } else {
                     Button(
                         onClick = {
@@ -189,7 +190,7 @@ fun GoogleSignInScreen(
                                 }
                             }
                         },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().testTag("signIn_googleButton"),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = CnyGold,
                             contentColor = Color.Black

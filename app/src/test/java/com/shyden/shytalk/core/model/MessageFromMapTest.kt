@@ -56,6 +56,26 @@ class MessageFromMapTest {
     }
 
     @Test
+    fun `fromMap parses GIFT type`() {
+        val map = mapOf<String, Any?>(
+            "type" to "GIFT",
+            "giftId" to "rose",
+            "giftIconUrl" to "https://example.com/rose.png"
+        )
+        val msg = Message.fromMap(map, "msg-1")
+        assertEquals(MessageType.GIFT, msg.type)
+        assertEquals("rose", msg.giftId)
+        assertEquals("https://example.com/rose.png", msg.giftIconUrl)
+    }
+
+    @Test
+    fun `fromMap defaults giftId and giftIconUrl when missing`() {
+        val msg = Message.fromMap(emptyMap(), "msg-1")
+        assertEquals("", msg.giftId)
+        assertEquals("", msg.giftIconUrl)
+    }
+
+    @Test
     fun `fromMap handles empty map with all defaults`() {
         val msg = Message.fromMap(emptyMap(), "msg-1")
         assertEquals("msg-1", msg.messageId)
@@ -63,6 +83,8 @@ class MessageFromMapTest {
         assertEquals("", msg.senderName)
         assertEquals("", msg.text)
         assertEquals(MessageType.TEXT, msg.type)
+        assertEquals("", msg.giftId)
+        assertEquals("", msg.giftIconUrl)
     }
 
     @Test
@@ -82,5 +104,23 @@ class MessageFromMapTest {
         assertEquals("Hello", map["text"])
         assertEquals(ts, map["createdAt"])
         assertEquals("SYSTEM", map["type"])
+    }
+
+    @Test
+    fun `toMap includes giftId and giftIconUrl for GIFT type`() {
+        val msg = Message(
+            messageId = "msg-1",
+            senderId = "user-1",
+            senderName = "Alice",
+            text = "Alice sent Rose to Bob",
+            createdAt = tsMillis,
+            type = MessageType.GIFT,
+            giftId = "rose",
+            giftIconUrl = "https://example.com/rose.png"
+        )
+        val map = msg.toMap()
+        assertEquals("GIFT", map["type"])
+        assertEquals("rose", map["giftId"])
+        assertEquals("https://example.com/rose.png", map["giftIconUrl"])
     }
 }

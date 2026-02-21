@@ -55,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
@@ -169,7 +170,7 @@ fun GroupSetupScreen(
                 value = uiState.groupName,
                 onValueChange = { viewModel.setGroupName(it) },
                 label = { Text("Group Name *") },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().testTag("groupSetup_nameField"),
                 singleLine = true
             )
 
@@ -379,7 +380,7 @@ fun GroupSetupScreen(
             // Create button
             Button(
                 onClick = { viewModel.createGroup() },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().testTag("groupSetup_createButton"),
                 enabled = uiState.groupName.isNotBlank() && !uiState.isCreating
             ) {
                 if (uiState.isCreating) {

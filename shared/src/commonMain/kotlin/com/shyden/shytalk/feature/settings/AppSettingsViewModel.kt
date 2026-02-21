@@ -39,6 +39,7 @@ data class AppSettingsUiState(
     val dndStartMinute: Int = 0,
     val dndEndHour: Int = 8,
     val dndEndMinute: Int = 0,
+    val minGiftAnimationValue: Int = 0,
     val cacheCleared: Boolean = false,
     val updateCheckResult: UpdateCheckResult? = null,
     val isCheckingUpdate: Boolean = false
@@ -89,7 +90,8 @@ class AppSettingsViewModel(
                             dndStartHour = user.dndStartHour,
                             dndStartMinute = user.dndStartMinute,
                             dndEndHour = user.dndEndHour,
-                            dndEndMinute = user.dndEndMinute
+                            dndEndMinute = user.dndEndMinute,
+                            minGiftAnimationValue = user.minGiftAnimationValue
                         )
                     }
                 }
@@ -229,6 +231,13 @@ class AppSettingsViewModel(
         applyOptimistic()
         viewModelScope.launch {
             userRepository.updateProfile(currentUserId, mapOf(key to value))
+        }
+    }
+
+    fun setMinGiftAnimationValue(value: Int) {
+        _uiState.update { it.copy(minGiftAnimationValue = value) }
+        viewModelScope.launch {
+            userRepository.updateProfile(currentUserId, mapOf("minGiftAnimationValue" to value))
         }
     }
 

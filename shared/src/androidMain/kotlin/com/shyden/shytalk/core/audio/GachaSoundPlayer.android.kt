@@ -3,13 +3,23 @@ package com.shyden.shytalk.core.audio
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
-import com.shyden.shytalk.core.model.GiftBracket
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.sin
 
 private const val SAMPLE_RATE = 44100
+
+/** Coin-value thresholds for sound tiers (replacing bracket tiers). */
+private enum class SoundTier { COMMON, UNCOMMON, RARE, EPIC, LEGENDARY }
+
+private fun soundTierForCoinValue(coinValue: Int): SoundTier = when {
+    coinValue < 50 -> SoundTier.COMMON
+    coinValue < 200 -> SoundTier.UNCOMMON
+    coinValue < 2000 -> SoundTier.RARE
+    coinValue < 10000 -> SoundTier.EPIC
+    else -> SoundTier.LEGENDARY
+}
 
 actual object GachaSoundPlayer {
 
@@ -18,7 +28,7 @@ actual object GachaSoundPlayer {
     private var coinPurchaseTrack: AudioTrack? = null
     private var highTierFanfareTrack: AudioTrack? = null
     private val tickTracks = arrayOfNulls<AudioTrack>(8)
-    private val winTracks = mutableMapOf<GiftBracket, AudioTrack>()
+    private val winTracks = mutableMapOf<SoundTier, AudioTrack>()
     private var initialized = false
 
     actual fun init() {
@@ -31,8 +41,8 @@ actual object GachaSoundPlayer {
         for (band in 0 until 8) {
             tickTracks[band] = buildTrack(generateTick(band))
         }
-        GiftBracket.entries.forEach { bracket ->
-            winTracks[bracket] = buildTrack(generateWinReveal(bracket))
+        SoundTier.entries.forEach { tier ->
+            winTracks[tier] = buildTrack(generateWinReveal(tier))
         }
     }
 
@@ -58,8 +68,8 @@ actual object GachaSoundPlayer {
         replay(tickTracks[band])
     }
 
-    actual fun playWinReveal(bracket: GiftBracket) {
-        replay(winTracks[bracket])
+    actual fun playWinReveal(coinValue: Int) {
+        replay(winTracks[soundTierForCoinValue(coinValue)])
     }
 
     // -- Playback helper --
@@ -100,7 +110,7 @@ actual object GachaSoundPlayer {
 
     // -- Sound generators --
 
-    /** Ascending chirp 220→1760Hz, 420ms, cos² attack/decay */
+    /** Ascending chirp 220->1760Hz, 420ms, cos² attack/decay */
     private fun generateSpinStart(): ShortArray {
         val durationMs = 420
         val numSamples = SAMPLE_RATE * durationMs / 1000
@@ -119,8 +129,7 @@ actual object GachaSoundPlayer {
             var envelope = 1f
             if (i < attackSamples) {
                 val x = (i.toFloat() / attackSamples * PI / 2).toFloat()
-                envelope = cos(x) * cos(x) // cos² ramp up  — actually this is wrong, cos²(0)=1
-                // cos² attack: starts at 0, ends at 1
+                envelope = cos(x) * cos(x)
                 val at = i.toFloat() / attackSamples
                 envelope = (sin(at * PI / 2) * sin(at * PI / 2)).toFloat()
             } else if (i > numSamples - decaySamples) {
@@ -132,7 +141,7 @@ actual object GachaSoundPlayer {
         return samples
     }
 
-    /** Short tick, pitch mapped to 8 bands (180→740Hz), 28ms */
+    /** Short tick, pitch mapped to 8 bands (180->740Hz), 28ms */
     private fun generateTick(band: Int): ShortArray {
         val durationMs = 28
         val numSamples = SAMPLE_RATE * durationMs / 1000
@@ -174,18 +183,18 @@ actual object GachaSoundPlayer {
         return samples
     }
 
-    /** Win reveal sound — complexity scales with rarity */
-    private fun generateWinReveal(bracket: GiftBracket): ShortArray {
-        return when (bracket) {
-            GiftBracket.COMMON -> generateWinCommon()
-            GiftBracket.UNCOMMON -> generateWinUncommon()
-            GiftBracket.RARE -> generateWinRare()
-            GiftBracket.EPIC -> generateWinEpic()
-            GiftBracket.LEGENDARY -> generateWinLegendary()
+    /** Win reveal sound — complexity scales with coin value tier */
+    private fun generateWinReveal(tier: SoundTier): ShortArray {
+        return when (tier) {
+            SoundTier.COMMON -> generateWinCommon()
+            SoundTier.UNCOMMON -> generateWinUncommon()
+            SoundTier.RARE -> generateWinRare()
+            SoundTier.EPIC -> generateWinEpic()
+            SoundTier.LEGENDARY -> generateWinLegendary()
         }
     }
 
-    /** COMMON: single C5 tone, 280ms */
+    /** COMMON (<50 coins): single C5 tone, 280ms */
     private fun generateWinCommon(): ShortArray {
         val durationMs = 280
         val numSamples = SAMPLE_RATE * durationMs / 1000
@@ -209,7 +218,7 @@ actual object GachaSoundPlayer {
         return samples
     }
 
-    /** UNCOMMON: C5+E5 chord, 420ms */
+    /** UNCOMMON (50-199 coins): C5+E5 chord, 420ms */
     private fun generateWinUncommon(): ShortArray {
         val durationMs = 420
         val numSamples = SAMPLE_RATE * durationMs / 1000
@@ -236,7 +245,7 @@ actual object GachaSoundPlayer {
         return samples
     }
 
-    /** RARE: C5+E5+G5 triad + shimmer, 600ms */
+    /** RARE (200-1999 coins): C5+E5+G5 triad + shimmer, 600ms */
     private fun generateWinRare(): ShortArray {
         val durationMs = 600
         val numSamples = SAMPLE_RATE * durationMs / 1000
@@ -268,7 +277,7 @@ actual object GachaSoundPlayer {
         return samples
     }
 
-    /** EPIC: A4+C#5+E5 + sub-bass 80Hz, 800ms */
+    /** EPIC (2000-9999 coins): A4+C#5+E5 + sub-bass 80Hz, 800ms */
     private fun generateWinEpic(): ShortArray {
         val durationMs = 800
         val numSamples = SAMPLE_RATE * durationMs / 1000
@@ -301,7 +310,7 @@ actual object GachaSoundPlayer {
         return samples
     }
 
-    /** LEGENDARY: 5-note chord + chirp overlay, 1200ms */
+    /** LEGENDARY (10000+ coins): 5-note chord + chirp overlay, 1200ms */
     private fun generateWinLegendary(): ShortArray {
         val durationMs = 1200
         val numSamples = SAMPLE_RATE * durationMs / 1000
@@ -343,14 +352,11 @@ actual object GachaSoundPlayer {
         val samples = ShortArray(numSamples)
         val amplitude = 0.32f
 
-        // 4-note ascending arpeggio: C4→E4→G4→C5, each ~350ms, overlapping
         val notes = doubleArrayOf(261.6, 329.6, 392.0, 523.3)
         val noteOnsets = intArrayOf(0, (numSamples * 0.18).toInt(), (numSamples * 0.36).toInt(), (numSamples * 0.52).toInt())
         val noteDuration = (numSamples * 0.55)
 
-        // Sub-bass impact at start
         var subPhase = 0.0
-        // Shimmer oscillator
         var shimmerPhase = 0.0
 
         val phases = DoubleArray(notes.size)
@@ -360,23 +366,19 @@ actual object GachaSoundPlayer {
             val t = i.toFloat() / numSamples
             var value = 0.0
 
-            // Sub-bass impact (60Hz, first 400ms, fast decay)
             subPhase += 2.0 * PI * 60.0 / SAMPLE_RATE
             val subEnv = if (i < SAMPLE_RATE * 400 / 1000) exp(-4.0 * i.toDouble() / (SAMPLE_RATE * 400 / 1000)) else 0.0
             value += sin(subPhase) * 0.25 * subEnv
 
-            // Arpeggio notes with octave harmonics
             for (n in notes.indices) {
                 val onset = noteOnsets[n]
                 if (i < onset) continue
                 val noteT = (i - onset).toDouble()
                 if (noteT > noteDuration) continue
 
-                val noteProgress = noteT / noteDuration
                 phases[n] += 2.0 * PI * notes[n] / SAMPLE_RATE
                 octavePhases[n] += 2.0 * PI * notes[n] * 2.0 / SAMPLE_RATE
 
-                // Attack 20ms, sustain, then decay
                 val attackSamp = SAMPLE_RATE * 20 / 1000
                 val noteEnv = if (noteT < attackSamp) {
                     val at = noteT / attackSamp
@@ -389,11 +391,9 @@ actual object GachaSoundPlayer {
                 value += (sin(phases[n]) * 0.7 + sin(octavePhases[n]) * 0.3) * noteEnv / notes.size
             }
 
-            // Shimmer (6Hz amplitude modulation, grows over time)
             shimmerPhase += 2.0 * PI * 6.0 / SAMPLE_RATE
             val shimmer = 1.0 + 0.12 * sin(shimmerPhase) * t
 
-            // Global envelope: quick attack, long sustain, gentle decay at end
             val globalEnv = if (i < SAMPLE_RATE * 30 / 1000) {
                 val at = i.toFloat() / (SAMPLE_RATE * 30 / 1000)
                 (sin(at * PI / 2) * sin(at * PI / 2)).toDouble()

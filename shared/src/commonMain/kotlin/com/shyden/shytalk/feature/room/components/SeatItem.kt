@@ -76,6 +76,7 @@ fun SeatItem(
     seatSize: Dp = 70.dp,
     onClick: () -> Unit,
     onTapUser: (() -> Unit)? = null,
+    aliases: Map<String, String> = emptyMap(),
     modifier: Modifier = Modifier
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -195,9 +196,10 @@ fun SeatItem(
             }
 
             // Nationality flag badge (overlapping avatar border, bottom-end)
-            if (seat.state == SeatState.OCCUPIED && user?.nationality != null) {
+            val nationality = user?.nationality
+            if (seat.state == SeatState.OCCUPIED && nationality != null) {
                 FlagBadge(
-                    countryCode = user.nationality!!,
+                    countryCode = nationality,
                     badgeSize = badgeSize,
                     modifier = Modifier.align(Alignment.BottomEnd)
                 )
@@ -232,7 +234,7 @@ fun SeatItem(
         )
 
         if (seat.state == SeatState.OCCUPIED && user != null) {
-            val name = user.displayName.ifEmpty { "User" }
+            val name = aliases[user.uid]?.ifEmpty { null } ?: user.displayName.ifEmpty { "User" }
             val isHostOrOwner = seatRole == RoomRole.OWNER || seatRole == RoomRole.HOST
             Row(
                 verticalAlignment = Alignment.CenterVertically,

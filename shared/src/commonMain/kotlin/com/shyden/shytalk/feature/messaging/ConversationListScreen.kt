@@ -38,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -99,7 +100,9 @@ fun ConversationListScreen(
             if (conversations.isEmpty()) {
                 // Empty state
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag("conversationList_emptyState"),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
@@ -162,6 +165,7 @@ fun ConversationListScreen(
                                 } else {
                                     com.shyden.shytalk.core.model.GroupRole.MEMBER
                                 },
+                                aliases = uiState.aliases,
                                 modifier = Modifier.combinedClickable(
                                     onClick = { navigateAction() },
                                     onLongClick = {

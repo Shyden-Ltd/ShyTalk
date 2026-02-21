@@ -3,6 +3,7 @@ package com.shyden.shytalk.feature.gacha
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.model.CoinPackage
+import com.shyden.shytalk.core.model.EconomyConfig
 import com.shyden.shytalk.core.model.GachaGift
 import com.shyden.shytalk.core.model.GachaResult
 import com.shyden.shytalk.core.model.Gift
@@ -23,7 +24,6 @@ data class GachaUiState(
     val pullResults: List<GachaGift> = emptyList(),
     val coinBalance: Long = 0,
     val pityCounter: Int = 0,
-    val luckScore: Int = 0,
     val isPulling: Boolean = false,
     val error: String? = null,
     val showResults: Boolean = false,
@@ -32,7 +32,9 @@ data class GachaUiState(
     val multiSpinResults: List<GachaGift> = emptyList(),
     val multiSpinIndex: Int = 0,
     val coinPackages: List<CoinPackage> = emptyList(),
-    val spinHistory: List<Transaction> = emptyList()
+    val spinHistory: List<Transaction> = emptyList(),
+    val pullCosts: Map<Int, Int> = emptyMap(),
+    val configLoaded: Boolean = false
 )
 
 class GachaViewModel(
@@ -49,6 +51,7 @@ class GachaViewModel(
     init {
         observeGiftCatalog()
         observeBalance()
+        observeConfig()
         loadCoinPackages()
         loadSpinHistory()
     }
@@ -61,7 +64,22 @@ class GachaViewModel(
                     _uiState.update {
                         it.copy(
                             giftCatalog = gifts,
-                            winnableGifts = gifts.filter { g -> g.baseDropRate > 0 }
+                            winnableGifts = gifts.filter { g -> g.coinValue > 0 }
+                        )
+                    }
+                }
+        }
+    }
+
+    private fun observeConfig() {
+        viewModelScope.launch {
+            economyRepository.observeEconomyConfig()
+                .catch { /* ignore */ }
+                .collect { config ->
+                    _uiState.update {
+                        it.copy(
+                            pullCosts = config.pullCosts,
+                            configLoaded = config.pullCosts.isNotEmpty()
                         )
                     }
                 }
@@ -106,8 +124,8 @@ class GachaViewModel(
         }
     }
 
-    fun updateBalance(coins: Long, pity: Int, luck: Int) {
-        _uiState.update { it.copy(coinBalance = coins, pityCounter = pity, luckScore = luck) }
+    fun updateBalance(coins: Long, pity: Int) {
+        _uiState.update { it.copy(coinBalance = coins, pityCounter = pity) }
     }
 
     fun pullSingle() = pull(1)
@@ -115,15 +133,31 @@ class GachaViewModel(
     fun pullHundred() = pull(100)
 
     private fun pull(count: Int) {
-        val cost = when (count) { 1 -> 10; 10 -> 100; 100 -> 1000; else -> return }
+        val cost = _uiState.value.pullCosts[count] ?: return
         if (_uiState.value.coinBalance < cost) {
             _uiState.update { it.copy(error = "Not enough coins") }
             return
         }
         viewModelScope.launch {
             _uiState.update { it.copy(isPulling = true, error = null, currentWin = null) }
-            when (val result = economyRepository.pullGacha(count)) {
+            when (val result = economyRepository.pullGacha(count, expectedCost = cost)) {
                 is Resource.Success -> {
+                    // Check if prices changed since we last loaded
+                    if (result.data.priceChanged) {
+                        val newCosts = result.data.currentPullCosts
+                        _uiState.update {
+                            it.copy(
+                                isPulling = false,
+                                pullCosts = newCosts ?: it.pullCosts,
+                                error = "Prices have changed! Please check the new costs and try again."
+                            )
+                        }
+                        return@launch
+                    }
+
+                    // Update pull costs from server response if available
+                    val latestCosts = result.data.currentPullCosts
+
                     pullBalanceSetAt = System.currentTimeMillis()
                     if (count == 1) {
                         _uiState.update {
@@ -131,11 +165,11 @@ class GachaViewModel(
                                 pullResults = result.data.gifts,
                                 coinBalance = result.data.newBalance,
                                 pityCounter = result.data.newPityCounter,
-                                luckScore = result.data.newLuckScore,
                                 isPulling = false,
                                 currentWin = result.data.gifts.firstOrNull(),
                                 isMultiSpin = false,
-                                showResults = false
+                                showResults = false,
+                                pullCosts = latestCosts ?: it.pullCosts
                             )
                         }
                     } else {
@@ -144,12 +178,12 @@ class GachaViewModel(
                                 pullResults = result.data.gifts,
                                 coinBalance = result.data.newBalance,
                                 pityCounter = result.data.newPityCounter,
-                                luckScore = result.data.newLuckScore,
                                 isPulling = false,
                                 isMultiSpin = true,
                                 multiSpinResults = result.data.gifts,
                                 multiSpinIndex = 0,
-                                showResults = true
+                                showResults = true,
+                                pullCosts = latestCosts ?: it.pullCosts
                             )
                         }
                     }

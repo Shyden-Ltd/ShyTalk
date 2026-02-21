@@ -23,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 
 const val CURRENT_LEGAL_VERSION = 1
@@ -98,7 +99,7 @@ fun LegalAcceptanceScreen(
             Button(
                 onClick = onAccept,
                 enabled = allChecked,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().testTag("legal_acceptButton")
             ) {
                 Text("Accept All & Continue")
             }
@@ -115,13 +116,15 @@ private fun LegalCheckRow(
     onCheckedChange: (Boolean) -> Unit,
     onViewDocument: () -> Unit
 ) {
+    val tag = title.replace("\\s+".toRegex(), "").replace("&", "And")
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Checkbox(
             checked = checked,
-            onCheckedChange = onCheckedChange
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.testTag("legal_checkbox_$tag")
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(

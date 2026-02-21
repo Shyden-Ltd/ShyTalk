@@ -1,225 +1,962 @@
 package com.shyden.shytalk.feature.room.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.BackpackItem
 import com.shyden.shytalk.core.model.Gift
-import com.shyden.shytalk.core.model.GiftBracket
-import com.shyden.shytalk.feature.gifting.GiftingUiState
+import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.feature.gifting.GiftingViewModel
+import kotlin.math.ceil
+
+private val CyanAccent = Color(0xFF00BCD4)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BackpackSheet(
     viewModel: GiftingViewModel,
-    recipientId: String = "",
-    recipientName: String = "",
+    seatedUsers: List<User> = emptyList(),
+    additionalUsers: List<User> = emptyList(),
     currentUserId: String = "",
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onNavigateToWallet: () -> Unit = {},
+    onLongPressGift: ((Gift) -> Unit)? = null
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val isSelfView = recipientId.isBlank() || recipientId == currentUserId
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetMaxWidth = Dp.Unspecified
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .height(420.dp)
+                .padding(horizontal = 12.dp)
         ) {
-            Text(
-                if (isSelfView) "Your Backpack" else "Send a gift to $recipientName",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+            // ── Recipient Row ──
+            val allRecipientUsers = remember(seatedUsers, additionalUsers) {
+                val seatedIds = seatedUsers.map { it.uid }.toSet()
+                seatedUsers + additionalUsers.filter { it.uid !in seatedIds }
+            }
+            RecipientRow(
+                seatedUsers = allRecipientUsers,
+                seatedUserIds = seatedUsers.map { it.uid }.toSet(),
+                currentUserId = currentUserId,
+                selectedRecipientIds = state.selectedRecipientIds,
+                isAllSelected = state.isAllSelected,
+                onToggleRecipient = { viewModel.toggleRecipient(it) },
+                onSelectAll = {
+                    val allIds = allRecipientUsers.map { it.uid }.toSet()
+                    viewModel.selectAllRecipients(allIds)
+                },
+                onDeselectAll = { viewModel.deselectAllRecipients() }
             )
-            Spacer(modifier = Modifier.height(12.dp))
 
-            if (state.backpackItems.isEmpty()) {
-                Text(
-                    "Your backpack is empty.\nSpin the wheel to get gifts!",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // ── Tab Row ──
+            TabRow(
+                selectedTabIndex = state.activeTab,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+            ) {
+                Tab(
+                    selected = state.activeTab == 0,
+                    onClick = { viewModel.setActiveTab(0) },
+                    text = { Text("Gifts") }
                 )
+                Tab(
+                    selected = state.activeTab == 1,
+                    onClick = { viewModel.setActiveTab(1) },
+                    text = { Text("Backpack") }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // ── Paged Grid ──
+            val items = if (state.activeTab == 0) {
+                state.giftCatalog.sortedByDescending { it.coinValue }.map { gift ->
+                    GridItem(gift = gift, ownedQuantity = state.backpackItems.find { it.giftId == gift.id }?.quantity ?: 0)
+                }
             } else {
-                val totalValue = remember(state.backpackItems, state.giftCatalog) {
-                    state.backpackItems.sumOf { item ->
-                        val coinValue = state.giftCatalog.find { it.id == item.giftId }?.coinValue ?: 0
-                        coinValue * item.quantity
-                    }
-                }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        "\uD83E\uDE99",
-                        fontSize = 14.sp
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "$totalValue",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFFFFD700)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "total value",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                val sortedItems = remember(state.backpackItems, state.giftCatalog) {
-                    state.backpackItems.sortedWith(
-                        compareByDescending<BackpackItem> { item ->
-                            state.giftCatalog.find { it.id == item.giftId }?.coinValue ?: 0
-                        }.thenBy { item ->
-                            state.giftCatalog.find { it.id == item.giftId }?.name ?: ""
-                        }
-                    )
-                }
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(4),
-                    contentPadding = PaddingValues(4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.height(250.dp)
-                ) {
-                    items(sortedItems) { item ->
-                        val gift = state.giftCatalog.find { it.id == item.giftId }
-                        if (gift != null) {
-                            BackpackGiftItem(
-                                gift = gift,
-                                quantity = item.quantity,
-                                isSelected = !isSelfView && state.selectedGiftId == item.giftId,
-                                onClick = {
-                                    if (!isSelfView) viewModel.selectGift(item.giftId)
-                                }
-                            )
+                state.backpackItems
+                    .mapNotNull { item ->
+                        state.giftCatalog.find { it.id == item.giftId }?.let { gift ->
+                            GridItem(gift = gift, ownedQuantity = item.quantity, backpackItem = item)
                         }
                     }
-                }
+                    .sortedByDescending { it.gift.coinValue }
+            }
 
-                if (!isSelfView) {
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Button(
-                        onClick = {
-                            state.selectedGiftId?.let { giftId ->
-                                viewModel.sendGift(recipientId, giftId)
-                            }
-                        },
-                        enabled = state.selectedGiftId != null && !state.isSending
+            Box(modifier = Modifier.weight(1f)) {
+                if (items.isEmpty() && state.activeTab == 1) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().height(160.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text(if (state.isSending) "Sending..." else "Send Gift")
+                        Text(
+                            "Your backpack is empty.\nSpin the wheel to get gifts!",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
                     }
+                } else {
+                    PagedGiftGrid(
+                        items = items,
+                        selectedGiftId = state.selectedGiftId,
+                        isBackpackTab = state.activeTab == 1,
+                        onSelectGift = { viewModel.selectGift(it) },
+                        onLongPressGift = onLongPressGift
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            // ── Bottom Bar ──
+            BottomBar(
+                state = state,
+                giftCatalog = state.giftCatalog,
+                isBackpackTab = state.activeTab == 1,
+                onNavigateToWallet = onNavigateToWallet,
+                onQuantityClick = { viewModel.toggleQuantityPicker() },
+                onSendClick = { viewModel.requestSend() },
+                onSendAllClick = if (state.activeTab == 1 && state.selectedRecipientIds.size == 1 && state.backpackItems.isNotEmpty()) {
+                    { viewModel.requestSendAll(state.selectedRecipientIds.first()) }
+                } else null
+            )
+
+            // ── Quantity Picker Popup ──
+            if (state.showQuantityPicker) {
+                QuantityPickerPopup(
+                    selectedGiftId = state.selectedGiftId,
+                    backpackItems = state.backpackItems,
+                    coinBalance = state.coinBalance,
+                    giftCatalog = state.giftCatalog,
+                    isBackpackTab = state.activeTab == 1,
+                    selectedQuantity = state.selectedQuantity,
+                    recipientCount = state.selectedRecipientIds.size.coerceAtLeast(1),
+                    onSelectQuantity = {
+                        viewModel.setQuantity(it)
+                        viewModel.toggleQuantityPicker()
+                    },
+                    onDismiss = { viewModel.toggleQuantityPicker() }
+                )
+            }
+
+            // ── Confirmation Dialog ──
+            if (state.showConfirmDialog) {
+                ConfirmSendDialog(
+                    state = state,
+                    giftCatalog = state.giftCatalog,
+                    isBackpackTab = state.activeTab == 1,
+                    onConfirm = { viewModel.confirmSend() },
+                    onDismiss = { viewModel.dismissConfirmDialog() }
+                )
+            }
+
+            // ── Send All Confirmation Dialog ──
+            if (state.showSendAllConfirm) {
+                val recipientId = state.sendAllRecipientId ?: ""
+                val recipientUser = (seatedUsers + additionalUsers).find { it.uid == recipientId }
+                val recipientName = recipientUser?.displayName ?: "this user"
+                val totalItems = state.backpackItems.sumOf { it.quantity }
+                val uniqueGifts = state.backpackItems.size
+
+                SendAllConfirmDialog(
+                    recipientName = recipientName,
+                    totalItems = totalItems,
+                    uniqueGifts = uniqueGifts,
+                    onConfirm = { viewModel.confirmSendAll() },
+                    onDismiss = { viewModel.dismissSendAllConfirm() }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
+}
+
+// ── Data class for grid items ──
+
+private data class GridItem(
+    val gift: Gift,
+    val ownedQuantity: Int = 0,
+    val backpackItem: BackpackItem? = null
+)
+
+// ── Recipient Row ──
+
+@Composable
+private fun RecipientRow(
+    seatedUsers: List<User>,
+    seatedUserIds: Set<String>,
+    currentUserId: String,
+    selectedRecipientIds: Set<String>,
+    isAllSelected: Boolean,
+    onToggleRecipient: (String) -> Unit,
+    onSelectAll: () -> Unit,
+    onDeselectAll: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+    ) {
+        Text(
+            "To",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(end = 8.dp)
+        )
+
+        val otherUsers = seatedUsers.filter { it.uid != currentUserId }
+
+        LazyRow(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            contentPadding = PaddingValues(end = 8.dp)
+        ) {
+            items(otherUsers, key = { it.uid }) { user ->
+                val isSelected = user.uid in selectedRecipientIds
+                // Only show seat badge for users actually in seats
+                val seatIndex = if (user.uid in seatedUserIds) {
+                    seatedUsers.indexOf(user)
+                } else null
+                RecipientAvatar(
+                    user = user,
+                    isSelected = isSelected,
+                    seatNumber = seatIndex,
+                    onClick = { onToggleRecipient(user.uid) }
+                )
+            }
+        }
+
+        // ALL button
+        if (otherUsers.isNotEmpty()) {
+            TextButton(
+                onClick = { if (isAllSelected) onDeselectAll() else onSelectAll() },
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                colors = ButtonDefaults.textButtonColors(
+                    containerColor = if (isAllSelected) CyanAccent.copy(alpha = 0.2f) else Color.Transparent,
+                    contentColor = if (isAllSelected) CyanAccent else MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                modifier = Modifier.height(32.dp)
+            ) {
+                Text("ALL", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
 
 @Composable
-private fun BackpackGiftItem(
-    gift: Gift,
-    quantity: Int,
+private fun RecipientAvatar(
+    user: User,
     isSelected: Boolean,
+    seatNumber: Int?,
     onClick: () -> Unit
 ) {
-    val bracketColor = when (gift.bracket) {
-        GiftBracket.COMMON -> Color.Gray
-        GiftBracket.UNCOMMON -> Color(0xFF4CAF50)
-        GiftBracket.RARE -> Color(0xFF2196F3)
-        GiftBracket.EPIC -> Color(0xFF9C27B0)
-        GiftBracket.LEGENDARY -> Color(0xFFFFD700)
-    }
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clickable(onClick = onClick)
+    ) {
+        val photoUrl = user.photoUrl
+        if (photoUrl != null) {
+            AsyncImage(
+                model = photoUrl,
+                contentDescription = user.displayName,
+                modifier = Modifier
+                    .size(40.dp)
+                    .align(Alignment.TopCenter)
+                    .clip(CircleShape)
+                    .border(
+                        width = 2.dp,
+                        color = if (isSelected) CyanAccent else MaterialTheme.colorScheme.outlineVariant,
+                        shape = CircleShape
+                    ),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .align(Alignment.TopCenter)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                    .border(
+                        width = 2.dp,
+                        color = if (isSelected) CyanAccent else MaterialTheme.colorScheme.outlineVariant,
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    user.displayName.take(1).uppercase(),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+        }
 
+        // Seat number badge
+        if (seatNumber != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "${seatNumber + 1}",
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+            }
+        }
+    }
+}
+
+// ── Paged Gift Grid ──
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun PagedGiftGrid(
+    items: List<GridItem>,
+    selectedGiftId: String?,
+    isBackpackTab: Boolean,
+    onSelectGift: (String?) -> Unit,
+    onLongPressGift: ((Gift) -> Unit)?
+) {
+    val pageSize = 8 // 4 cols × 2 rows
+    val pageCount = if (items.isEmpty()) 1 else ceil(items.size.toDouble() / pageSize).toInt()
+    val pagerState = rememberPagerState(pageCount = { pageCount })
+
+    Column {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxWidth().weight(1f)
+        ) { page ->
+            val pageItems = items.drop(page * pageSize).take(pageSize)
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                for (row in 0 until 2) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        for (col in 0 until 4) {
+                            val index = row * 4 + col
+                            if (index < pageItems.size) {
+                                val item = pageItems[index]
+                                Box(modifier = Modifier.weight(1f)) {
+                                    if (isBackpackTab) {
+                                        BackpackGiftCell(
+                                            item = item,
+                                            isSelected = selectedGiftId == item.gift.id,
+                                            onClick = {
+                                                onSelectGift(
+                                                    if (selectedGiftId == item.gift.id) null else item.gift.id
+                                                )
+                                            },
+                                            onLongClick = { onLongPressGift?.invoke(item.gift) }
+                                        )
+                                    } else {
+                                        ShopGiftCell(
+                                            item = item,
+                                            isSelected = selectedGiftId == item.gift.id,
+                                            onClick = {
+                                                onSelectGift(
+                                                    if (selectedGiftId == item.gift.id) null else item.gift.id
+                                                )
+                                            },
+                                            onLongClick = { onLongPressGift?.invoke(item.gift) }
+                                        )
+                                    }
+                                }
+                            } else {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Page indicator dots
+        if (pageCount > 1) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                repeat(pageCount) { i ->
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 3.dp)
+                            .size(if (i == pagerState.currentPage) 8.dp else 6.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (i == pagerState.currentPage) CyanAccent
+                                else MaterialTheme.colorScheme.outlineVariant
+                            )
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ── Gift Cells ──
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ShopGiftCell(
+    item: GridItem,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
+    val accentCol = giftAccentColor(item.gift)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
         modifier = Modifier
+            .aspectRatio(1f)
             .clip(RoundedCornerShape(8.dp))
             .border(
                 width = if (isSelected) 3.dp else 1.dp,
-                color = if (isSelected) MaterialTheme.colorScheme.primary else bracketColor.copy(alpha = 0.5f),
+                color = if (isSelected) CyanAccent else accentCol.copy(alpha = 0.5f),
                 shape = RoundedCornerShape(8.dp)
             )
-            .background(bracketColor.copy(alpha = 0.1f))
-            .clickable { onClick() }
-            .padding(6.dp)
+            .background(accentCol.copy(alpha = 0.1f))
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(4.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(bracketColor.copy(alpha = 0.2f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(gift.name.take(2), fontWeight = FontWeight.Bold, color = bracketColor, fontSize = 12.sp)
+        Box {
+            GiftIcon(gift = item.gift, size = 48)
+            if (item.ownedQuantity > 0) {
+                Text(
+                    "x${item.ownedQuantity}",
+                    fontSize = 7.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .background(accentCol, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 3.dp, vertical = 1.dp)
+                )
+            }
         }
         Text(
-            gift.name,
+            item.gift.name,
             style = MaterialTheme.typography.labelSmall,
             maxLines = 1,
             fontSize = 9.sp,
             overflow = TextOverflow.Ellipsis
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "\uD83E\uDE99",
-                fontSize = 8.sp
-            )
+            Text("\uD83E\uDE99", fontSize = 8.sp)
             Spacer(modifier = Modifier.width(1.dp))
             Text(
-                "${gift.coinValue}",
+                "${item.gift.coinValue}",
                 style = MaterialTheme.typography.labelSmall,
                 fontSize = 8.sp,
                 color = Color(0xFFFFD700),
                 maxLines = 1
             )
         }
-        Text("x$quantity", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = bracketColor)
     }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun BackpackGiftCell(
+    item: GridItem,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
+    val accentCol = giftAccentColor(item.gift)
+    val bp = item.backpackItem
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = Modifier
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(8.dp))
+            .border(
+                width = if (isSelected) 3.dp else 1.dp,
+                color = if (isSelected) CyanAccent else accentCol.copy(alpha = 0.5f),
+                shape = RoundedCornerShape(8.dp)
+            )
+            .background(accentCol.copy(alpha = 0.1f))
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(4.dp)
+    ) {
+        // Expiry progress bar
+        if (bp != null && bp.isExpiring) {
+            val fraction = (bp.remainingMs.toFloat() / (bp.expiresAt - bp.lastAcquired).coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
+            LinearProgressIndicator(
+                progress = { fraction },
+                modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)),
+                color = Color(0xFF4CAF50),
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            )
+        }
+
+        Box {
+            GiftIcon(gift = item.gift, size = 48)
+
+            // Red quantity badge
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .background(Color.Red),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "${item.ownedQuantity}",
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.White
+                )
+            }
+
+            // Countdown overlay
+            if (bp != null && bp.isExpiring) {
+                val remaining = bp.remainingMs
+                val label = formatCountdown(remaining)
+                Text(
+                    label,
+                    fontSize = 7.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(2.dp))
+                        .padding(horizontal = 2.dp)
+                )
+            }
+        }
+        Text(
+            item.gift.name,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            fontSize = 9.sp,
+            overflow = TextOverflow.Ellipsis
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("\uD83E\uDE99", fontSize = 8.sp)
+            Spacer(modifier = Modifier.width(1.dp))
+            Text(
+                "${item.gift.coinValue}",
+                style = MaterialTheme.typography.labelSmall,
+                fontSize = 8.sp,
+                color = Color(0xFFFFD700),
+                maxLines = 1
+            )
+        }
+    }
+}
+
+private fun formatCountdown(ms: Long): String {
+    val totalMinutes = ms / 60_000
+    val hours = totalMinutes / 60
+    val days = hours / 24
+    return when {
+        days > 0 -> "${days}d ${hours % 24}h"
+        hours > 0 -> "${hours}h ${totalMinutes % 60}m"
+        else -> "${totalMinutes}m"
+    }
+}
+
+// ── Bottom Bar ──
+
+@Composable
+private fun BottomBar(
+    state: com.shyden.shytalk.feature.gifting.GiftingUiState,
+    giftCatalog: List<Gift>,
+    isBackpackTab: Boolean,
+    onNavigateToWallet: () -> Unit,
+    onQuantityClick: () -> Unit,
+    onSendClick: () -> Unit,
+    onSendAllClick: (() -> Unit)? = null
+) {
+    val selectedGift = state.selectedGiftId?.let { id -> giftCatalog.find { it.id == id } }
+    val hasRecipients = state.selectedRecipientIds.isNotEmpty()
+    val canSend = selectedGift != null && hasRecipients && !state.isSending
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+    ) {
+        // Coin balance
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clickable { onNavigateToWallet() }
+        ) {
+            Text("\uD83E\uDE99", fontSize = 14.sp)
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                "${state.coinBalance}",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color(0xFFFFD700)
+            )
+            Spacer(modifier = Modifier.width(2.dp))
+            Text(
+                "+",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = CyanAccent
+            )
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        // Quantity chip
+        TextButton(
+            onClick = onQuantityClick,
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+            colors = ButtonDefaults.textButtonColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            ),
+            modifier = Modifier.height(36.dp)
+        ) {
+            Text(
+                "${state.selectedQuantity} \u25B2",
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        // Send All button (only on backpack tab with exactly 1 recipient)
+        if (onSendAllClick != null) {
+            Button(
+                onClick = onSendAllClick,
+                enabled = hasRecipients && !state.isSending,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFD32F2F),
+                    contentColor = Color.White,
+                    disabledContainerColor = Color(0xFFD32F2F).copy(alpha = 0.3f)
+                ),
+                modifier = Modifier.height(36.dp)
+            ) {
+                Text(
+                    "Send All",
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    fontSize = 12.sp
+                )
+            }
+            Spacer(modifier = Modifier.width(4.dp))
+        }
+
+        // Send button
+        Button(
+            onClick = onSendClick,
+            enabled = canSend,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = CyanAccent,
+                contentColor = Color.Black,
+                disabledContainerColor = CyanAccent.copy(alpha = 0.3f)
+            ),
+            modifier = Modifier.height(36.dp)
+        ) {
+            Text(
+                when {
+                    state.isSending -> "Sending..."
+                    else -> "Send"
+                },
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+// ── Quantity Picker Popup ──
+
+@Composable
+private fun QuantityPickerPopup(
+    selectedGiftId: String?,
+    backpackItems: List<BackpackItem>,
+    coinBalance: Long,
+    giftCatalog: List<Gift>,
+    isBackpackTab: Boolean,
+    selectedQuantity: Int,
+    recipientCount: Int,
+    onSelectQuantity: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val gift = selectedGiftId?.let { id -> giftCatalog.find { it.id == id } }
+    val ownedQty = selectedGiftId?.let { id -> backpackItems.find { it.giftId == id }?.quantity } ?: 0
+
+    val presets = buildList {
+        addAll(listOf(1, 10, 66, 520, 999, 1314))
+        if (isBackpackTab && ownedQty > 0) {
+            add(-1) // sentinel for "ALL"
+        }
+    }
+
+    Popup(
+        alignment = Alignment.BottomCenter,
+        onDismissRequest = onDismiss,
+        properties = PopupProperties(focusable = true)
+    ) {
+        Column(
+            modifier = Modifier
+                .widthIn(min = 120.dp)
+                .padding(bottom = 48.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            presets.forEach { preset ->
+                val isAll = preset == -1
+                val qty = if (isAll) ownedQty else preset
+                val label = if (isAll) "ALL ($ownedQty)" else "$preset"
+                val isSelected = qty == selectedQuantity
+
+                val enabled = if (gift == null) false else {
+                    val totalNeeded = qty * recipientCount
+                    if (isBackpackTab) totalNeeded <= ownedQty
+                    else (gift.coinValue.toLong() * totalNeeded) <= coinBalance
+                }
+
+                TextButton(
+                    onClick = { onSelectQuantity(qty) },
+                    enabled = enabled,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.textButtonColors(
+                        containerColor = if (isSelected) CyanAccent.copy(alpha = 0.2f) else Color.Transparent,
+                        contentColor = if (enabled) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    )
+                ) {
+                    Text(label, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
+                }
+            }
+        }
+    }
+}
+
+// ── Confirmation Dialog ──
+
+@Composable
+private fun ConfirmSendDialog(
+    state: com.shyden.shytalk.feature.gifting.GiftingUiState,
+    giftCatalog: List<Gift>,
+    isBackpackTab: Boolean,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val gift = state.selectedGiftId?.let { id -> giftCatalog.find { it.id == id } } ?: return
+    val recipientCount = state.selectedRecipientIds.size
+    val quantity = state.selectedQuantity
+    val totalItems = quantity * recipientCount
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Confirm Send") },
+        text = {
+            Column {
+                val headerText = if (recipientCount > 1)
+                    "Send ${quantity}x ${gift.name} to $recipientCount users"
+                else
+                    "Send ${quantity}x ${gift.name}"
+                Text(
+                    headerText,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                if (isBackpackTab) {
+                    val ownedQty = state.backpackItems.find { it.giftId == gift.id }?.quantity ?: 0
+                    Text("From backpack: $totalItems items")
+                    Text("You have: $ownedQty")
+                } else {
+                    val totalCost = gift.coinValue.toLong() * totalItems
+                    Text("Total cost: $totalCost coins")
+                    Text("Your balance: ${state.coinBalance} coins")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Confirm", color = CyanAccent)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+// ── Shared Composables ──
+
+@Composable
+fun GiftIcon(gift: Gift, size: Int) {
+    if (gift.iconUrl.isNotBlank()) {
+        AsyncImage(
+            model = gift.iconUrl,
+            contentDescription = gift.name,
+            modifier = Modifier.size(size.dp).clip(CircleShape),
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        val accentCol = giftAccentColor(gift)
+        Box(
+            modifier = Modifier
+                .size(size.dp)
+                .clip(CircleShape)
+                .background(accentCol.copy(alpha = 0.2f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                gift.name.take(2),
+                fontWeight = FontWeight.Bold,
+                color = accentCol,
+                fontSize = (size / 3).sp
+            )
+        }
+    }
+}
+
+// ── Send All Confirmation Dialog ──
+
+@Composable
+private fun SendAllConfirmDialog(
+    recipientName: String,
+    totalItems: Int,
+    uniqueGifts: Int,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                "\u26A0\uFE0F WARNING \u26A0\uFE0F",
+                color = Color(0xFFD32F2F),
+                fontWeight = FontWeight.Black,
+                fontSize = 20.sp
+            )
+        },
+        text = {
+            Column {
+                Text(
+                    "You are about to send your ENTIRE backpack to $recipientName.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    "This includes ALL $totalItems items across $uniqueGifts different gifts.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    "THIS ACTION CANNOT BE UNDONE.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Black,
+                    color = Color(0xFFD32F2F)
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFD32F2F),
+                    contentColor = Color.White
+                )
+            ) {
+                Text("I understand, send everything", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+/** Derive an accent color from gift coin value tier. */
+private fun giftAccentColor(gift: Gift): Color = when {
+    gift.coinValue < 50 -> Color(0xFF9E9E9E)
+    gift.coinValue < 200 -> Color(0xFF4CAF50)
+    gift.coinValue < 2000 -> Color(0xFF2196F3)
+    gift.coinValue < 10000 -> Color(0xFF9C27B0)
+    else -> Color(0xFFFF9800)
 }

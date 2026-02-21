@@ -1,7 +1,6 @@
 package com.shyden.shytalk.feature.gacha
 
 import com.shyden.shytalk.core.model.Gift
-import com.shyden.shytalk.core.model.GiftBracket
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -11,29 +10,27 @@ import org.junit.Test
 class SpinWheelSegmentTest {
 
     private val testGifts = listOf(
-        Gift(id = "c1", name = "Rose", baseDropRate = 20.0, bracket = GiftBracket.COMMON, order = 1),
-        Gift(id = "c2", name = "Heart", baseDropRate = 20.0, bracket = GiftBracket.COMMON, order = 2),
-        Gift(id = "u1", name = "Gift Box", baseDropRate = 15.0, bracket = GiftBracket.UNCOMMON, order = 3),
-        Gift(id = "u2", name = "Potion", baseDropRate = 15.0, bracket = GiftBracket.UNCOMMON, order = 4),
-        Gift(id = "r1", name = "Crown", baseDropRate = 10.0, bracket = GiftBracket.RARE, order = 5),
-        Gift(id = "r2", name = "Treasure", baseDropRate = 10.0, bracket = GiftBracket.RARE, order = 6),
-        Gift(id = "e1", name = "Mystery", baseDropRate = 5.0, bracket = GiftBracket.EPIC, order = 7),
-        Gift(id = "l1", name = "Jackpot", baseDropRate = 5.0, bracket = GiftBracket.LEGENDARY, order = 8)
+        Gift(id = "c1", name = "Rose", coinValue = 8, order = 1),
+        Gift(id = "c2", name = "Heart", coinValue = 10, order = 2),
+        Gift(id = "u1", name = "Gift Box", coinValue = 50, order = 3),
+        Gift(id = "u2", name = "Potion", coinValue = 80, order = 4),
+        Gift(id = "r1", name = "Crown", coinValue = 500, order = 5),
+        Gift(id = "r2", name = "Treasure", coinValue = 800, order = 6),
+        Gift(id = "e1", name = "Mystery", coinValue = 5000, order = 7),
+        Gift(id = "l1", name = "Jackpot", coinValue = 35000, order = 8)
     )
 
     @Test
-    fun `buildRingLayout puts COMMON and UNCOMMON in outer ring`() {
+    fun `buildRingLayout puts low value gifts in outer ring`() {
         val (outer, _) = buildRingLayout(testGifts)
-        assertTrue(outer.all { it.bracket == GiftBracket.COMMON || it.bracket == GiftBracket.UNCOMMON })
+        assertTrue(outer.all { it.coinValue < 500 })
         assertEquals(4, outer.size)
     }
 
     @Test
-    fun `buildRingLayout puts RARE EPIC LEGENDARY in inner ring`() {
+    fun `buildRingLayout puts high value gifts in inner ring`() {
         val (_, inner) = buildRingLayout(testGifts)
-        assertTrue(inner.all {
-            it.bracket == GiftBracket.RARE || it.bracket == GiftBracket.EPIC || it.bracket == GiftBracket.LEGENDARY
-        })
+        assertTrue(inner.all { it.coinValue >= 500 })
         assertEquals(4, inner.size)
     }
 
@@ -53,19 +50,19 @@ class SpinWheelSegmentTest {
     }
 
     @Test
-    fun `buildRingLayout handles only COMMON gifts`() {
-        val commonOnly = testGifts.filter { it.bracket == GiftBracket.COMMON }
-        val (outer, inner) = buildRingLayout(commonOnly)
-        assertEquals(2, outer.size)
+    fun `buildRingLayout handles only low value gifts`() {
+        val lowOnly = testGifts.filter { it.coinValue < 500 }
+        val (outer, inner) = buildRingLayout(lowOnly)
+        assertEquals(4, outer.size)
         assertTrue(inner.isEmpty())
     }
 
     @Test
-    fun `buildRingLayout handles only RARE gifts`() {
-        val rareOnly = testGifts.filter { it.bracket == GiftBracket.RARE }
-        val (outer, inner) = buildRingLayout(rareOnly)
+    fun `buildRingLayout handles only high value gifts`() {
+        val highOnly = testGifts.filter { it.coinValue >= 500 }
+        val (outer, inner) = buildRingLayout(highOnly)
         assertTrue(outer.isEmpty())
-        assertEquals(2, inner.size)
+        assertEquals(4, inner.size)
     }
 
     @Test

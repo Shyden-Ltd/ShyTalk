@@ -178,7 +178,7 @@ private fun MiniLuckySpinIcon(modifier: Modifier = Modifier) {
         val outerOuter = r - 1f
         val outerInner = r * 0.55f
         val outerAngle = 360f / outerSegments
-        val outerColors = listOf(Color(0xFF9E9E9E), Color(0xFF4CAF50), Color(0xFF9E9E9E), Color(0xFF4CAF50))
+        val outerColors = listOf(Color(0xFF9E9E9E), Color(0xFF757575), Color(0xFF9E9E9E), Color(0xFF757575))
         for (i in 0 until outerSegments) {
             val isLit = currentLit == i
             drawArc(
@@ -197,7 +197,7 @@ private fun MiniLuckySpinIcon(modifier: Modifier = Modifier) {
         val innerOuter = outerInner - 1f
         val innerInner = r * 0.22f
         val innerAngle = 360f / innerSegments
-        val innerColors = listOf(Color(0xFF2196F3), Color(0xFF9C27B0), Color(0xFFFFD700))
+        val innerColors = listOf(Color(0xFF9E9E9E), Color(0xFF757575), Color(0xFF9E9E9E))
         for (i in 0 until innerSegments) {
             val isLit = currentLit == (outerSegments + i)
             drawArc(

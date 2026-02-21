@@ -61,6 +61,7 @@ fun ParticipantListPanel(
     onDenyRequest: (SeatRequest) -> Unit = {},
     onInviteUser: (String, String) -> Unit = { _, _ -> },
     onDismiss: () -> Unit,
+    aliases: Map<String, String> = emptyMap(),
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -109,6 +110,7 @@ fun ParticipantListPanel(
                 items(voiceUsers, key = { it.user.uid }) { participant ->
                     ParticipantRow(
                         participant = participant,
+                        aliases = aliases,
                         onClick = { onUserClick(participant.user.uid) }
                     )
                 }
@@ -142,6 +144,7 @@ fun ParticipantListPanel(
                         onInvite = if (canInvite) {
                             { onInviteUser(participant.user.uid, participant.user.displayName) }
                         } else null,
+                        aliases = aliases,
                         onClick = { onUserClick(participant.user.uid) }
                     )
                 }
@@ -168,6 +171,7 @@ private fun ParticipantRow(
     onApprove: (() -> Unit)? = null,
     onDeny: (() -> Unit)? = null,
     onInvite: (() -> Unit)? = null,
+    aliases: Map<String, String> = emptyMap(),
     onClick: () -> Unit
 ) {
     Row(
@@ -204,7 +208,8 @@ private fun ParticipantRow(
                     )
                 }
             }
-            if (participant.user.nationality != null) {
+            val nationality = participant.user.nationality
+            if (nationality != null) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -212,7 +217,7 @@ private fun ParticipantRow(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = flagEmojiForCode(participant.user.nationality!!),
+                        text = flagEmojiForCode(nationality),
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp)
                     )
                 }
@@ -220,8 +225,9 @@ private fun ParticipantRow(
         }
 
         // Name
+        val resolvedName = aliases[participant.user.uid] ?: participant.user.displayName.ifEmpty { "Unknown" }
         StyledDisplayName(
-            displayName = participant.user.displayName.ifEmpty { "Unknown" },
+            displayName = resolvedName,
             isSuperShy = participant.user.isSuperShy,
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f)

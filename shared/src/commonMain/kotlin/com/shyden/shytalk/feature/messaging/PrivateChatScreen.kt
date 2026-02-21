@@ -64,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -170,7 +171,10 @@ fun PrivateChatScreen(
         topBar = {
             TopAppBar(
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.testTag("privateChat_backButton")
+                    ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
@@ -238,8 +242,10 @@ fun PrivateChatScreen(
                             }
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
+                                val resolvedName = otherUser?.uid?.let { uiState.aliases[it] }
+                                    ?: otherUser?.displayName ?: "Chat"
                                 StyledDisplayName(
-                                    displayName = otherUser?.displayName ?: "Chat",
+                                    displayName = resolvedName,
                                     isSuperShy = otherUser?.isSuperShy == true,
                                     style = MaterialTheme.typography.titleMedium
                                 )
@@ -691,7 +697,7 @@ fun PrivateChatScreen(
                                 }
                             },
                             placeholder = { Text("Message...") },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1f).testTag("privateChat_messageInput"),
                             maxLines = 4,
                             shape = RoundedCornerShape(24.dp)
                         )
@@ -708,7 +714,8 @@ fun PrivateChatScreen(
                                     messageText = ""
                                 }
                             },
-                            enabled = messageText.isNotBlank()
+                            enabled = messageText.isNotBlank(),
+                            modifier = Modifier.testTag("privateChat_sendButton")
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.Send,

@@ -19,40 +19,27 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.sp
 import com.shyden.shytalk.core.model.Gift
-import com.shyden.shytalk.core.model.GiftBracket
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
 
-val BracketColors = mapOf(
-    GiftBracket.COMMON to Color(0xFF9E9E9E),
-    GiftBracket.UNCOMMON to Color(0xFF4CAF50),
-    GiftBracket.RARE to Color(0xFF2196F3),
-    GiftBracket.EPIC to Color(0xFF9C27B0),
-    GiftBracket.LEGENDARY to Color(0xFFFFD700)
-)
-
-private val BracketAccentColors = mapOf(
-    GiftBracket.COMMON to Color(0xFF757575),
-    GiftBracket.UNCOMMON to Color(0xFF388E3C),
-    GiftBracket.RARE to Color(0xFF1976D2),
-    GiftBracket.EPIC to Color(0xFF7B1FA2),
-    GiftBracket.LEGENDARY to Color(0xFFFFC107)
-)
+/** Neutral segment color for all gifts (rarity removed). */
+private val SegmentColor = Color(0xFF9E9E9E)
+private val SegmentAccentColor = Color(0xFF757575)
 
 enum class Ring { OUTER, INNER }
 
 /**
- * Splits winnable gifts into outer (COMMON + UNCOMMON) and inner (RARE + EPIC + LEGENDARY)
+ * Splits winnable gifts into outer (coinValue < 500) and inner (coinValue >= 500)
  * rings, sorted by [Gift.order].
  */
 fun buildRingLayout(gifts: List<Gift>): Pair<List<Gift>, List<Gift>> {
     val outer = gifts
-        .filter { it.bracket == GiftBracket.COMMON || it.bracket == GiftBracket.UNCOMMON }
+        .filter { it.coinValue < 500 }
         .sortedBy { it.order }
     val inner = gifts
-        .filter { it.bracket == GiftBracket.RARE || it.bracket == GiftBracket.EPIC || it.bracket == GiftBracket.LEGENDARY }
+        .filter { it.coinValue >= 500 }
         .sortedBy { it.order }
     return outer to inner
 }
@@ -230,8 +217,8 @@ private fun DrawScope.drawRing(
         val isPrevWon = wonKey in wonSegments
         val isActive = isLit || isPrevWon
 
-        val baseColor = BracketColors[gift.bracket] ?: Color.Gray
-        val accentColor = BracketAccentColors[gift.bracket] ?: Color.DarkGray
+        val baseColor = SegmentColor
+        val accentColor = SegmentAccentColor
 
         val startAngleDeg = index * segmentAngle - 90f - segmentAngle / 2f
         val startAngleRad = startAngleDeg * (PI.toFloat() / 180f)

@@ -1,9 +1,15 @@
 package com.shyden.shytalk.testutil
 
 import com.shyden.shytalk.core.model.ChatRoom
+import com.shyden.shytalk.core.model.CurrencyType
 import com.shyden.shytalk.core.model.Conversation
 import com.shyden.shytalk.core.model.ConversationPreview
 import com.shyden.shytalk.core.model.ConversationSettings
+import com.shyden.shytalk.core.model.DailyRewardResult
+import com.shyden.shytalk.core.model.Gift
+import com.shyden.shytalk.core.model.GiftRankEntry
+import com.shyden.shytalk.core.model.GiftSender
+import com.shyden.shytalk.core.model.GiftWallEntry
 import com.shyden.shytalk.core.model.GroupPermissions
 import com.shyden.shytalk.core.model.Message
 import com.shyden.shytalk.core.model.MessageType
@@ -15,7 +21,10 @@ import com.shyden.shytalk.core.model.Seat
 import com.shyden.shytalk.core.model.SeatRequest
 import com.shyden.shytalk.core.model.SeatRequestStatus
 import com.shyden.shytalk.core.model.SeatState
+import com.shyden.shytalk.core.model.Transaction
+import com.shyden.shytalk.core.model.TransactionType
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.feature.messaging.Report
 
 object TestData {
 
@@ -274,5 +283,118 @@ object TestData {
         lastReadMessageId = lastReadMessageId,
         lastReadAt = lastReadAt,
         unreadCount = unreadCount
+    )
+
+    fun createTestGift(
+        id: String = "gift-1",
+        name: String = "Rose",
+        coinValue: Int = 10,
+        animationUrl: String = "",
+        soundUrl: String = "",
+        iconUrl: String = "",
+        order: Int = 1
+    ) = Gift(
+        id = id,
+        name = name,
+        coinValue = coinValue,
+        animationUrl = animationUrl,
+        soundUrl = soundUrl,
+        iconUrl = iconUrl,
+        order = order
+    )
+
+    fun createTestGiftWallEntry(
+        giftId: String = "gift-1",
+        receivedCount: Int = 5,
+        senders: Map<String, Int> = emptyMap(),
+        topSenderId: String? = null,
+        topSenderCount: Int = 0
+    ) = GiftWallEntry(
+        giftId = giftId,
+        receivedCount = receivedCount,
+        senders = senders,
+        topSenderId = topSenderId,
+        topSenderCount = topSenderCount
+    )
+
+    fun createTestTransaction(
+        id: String = "tx-1",
+        type: TransactionType = TransactionType.PURCHASE,
+        amount: Long = 100,
+        currency: CurrencyType = CurrencyType.COINS,
+        balanceAfter: Long = 900,
+        giftId: String? = null,
+        giftName: String? = null,
+        recipientId: String? = null,
+        senderId: String? = null,
+        pullCount: Int? = null,
+        details: String? = null,
+        timestamp: Long = BASE_TIMESTAMP
+    ) = Transaction(
+        id = id,
+        type = type,
+        amount = amount,
+        currency = currency,
+        balanceAfter = balanceAfter,
+        giftId = giftId,
+        giftName = giftName,
+        recipientId = recipientId,
+        senderId = senderId,
+        pullCount = pullCount,
+        details = details,
+        timestamp = timestamp
+    )
+
+    fun createTestDailyRewardResult(
+        coinsAwarded: Int = 50,
+        newStreak: Int = 1,
+        isMilestone: Boolean = false,
+        newBalance: Long = 150
+    ) = DailyRewardResult(
+        coinsAwarded = coinsAwarded,
+        newStreak = newStreak,
+        isMilestone = isMilestone,
+        newBalance = newBalance
+    )
+
+    fun createTestReport(
+        reportId: String = "report-1",
+        reporterId: String = "reporter-1",
+        reporterName: String = "Reporter",
+        reportedUserId: String = "reported-1",
+        reportedUserName: String = "Reported User",
+        reason: String = "Spam",
+        description: String = "Spamming messages",
+        type: String = "message",
+        status: String = "pending",
+        timestamp: Long = BASE_TIMESTAMP
+    ) = Report(
+        reportId = reportId,
+        reporterId = reporterId,
+        reporterName = reporterName,
+        reportedUserId = reportedUserId,
+        reportedUserName = reportedUserName,
+        reason = reason,
+        description = description,
+        type = type,
+        status = status,
+        timestamp = timestamp
+    )
+
+    fun createTestGiftSender(
+        userId: String = "sender-1",
+        count: Int = 3
+    ) = GiftSender(userId = userId, count = count)
+
+    fun createTestGiftRankEntry(
+        userId: String = "user-1",
+        count: Int = 10,
+        displayName: String = "Test User",
+        profilePhotoUrl: String? = null
+    ) = GiftRankEntry(
+        userId = userId,
+        count = count,
+        displayName = displayName,
+        profilePhotoUrl = profilePhotoUrl
     )
 }

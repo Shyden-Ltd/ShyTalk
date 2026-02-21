@@ -31,7 +31,8 @@ data class FollowListUiState(
     val pendingRemoveFollowerId: String? = null,
     val stalkers: List<ProfileVisitor> = emptyList(),
     val stalkerUsers: Map<String, User> = emptyMap(),
-    val stalkersLastViewedAt: Long = 0
+    val stalkersLastViewedAt: Long = 0,
+    val aliases: Map<String, String> = emptyMap()
 )
 
 enum class FollowTab { FOLLOWING, FOLLOWERS, STALKERS }
@@ -61,6 +62,16 @@ class FollowListViewModel(
         )
         loadData()
         observeUserUpdates()
+        loadAliases(currentUid)
+    }
+
+    private fun loadAliases(userId: String) {
+        viewModelScope.launch {
+            when (val result = userRepository.getAliases(userId)) {
+                is Resource.Success -> _uiState.update { it.copy(aliases = result.data) }
+                else -> {}
+            }
+        }
     }
 
     private fun observeUserUpdates() {

@@ -2,7 +2,6 @@ package com.shyden.shytalk.feature.room
 
 import com.shyden.shytalk.core.model.BackpackItem
 import com.shyden.shytalk.core.model.Gift
-import com.shyden.shytalk.core.model.GiftBracket
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -10,11 +9,11 @@ import org.junit.Test
 class BackpackSortingTest {
 
     private val giftCatalog = listOf(
-        Gift(id = "g1", name = "Rose", coinValue = 10, bracket = GiftBracket.COMMON),
-        Gift(id = "g2", name = "Crown", coinValue = 500, bracket = GiftBracket.RARE),
-        Gift(id = "g3", name = "Diamond", coinValue = 5000, bracket = GiftBracket.LEGENDARY),
-        Gift(id = "g4", name = "Potion", coinValue = 50, bracket = GiftBracket.UNCOMMON),
-        Gift(id = "g5", name = "Amulet", coinValue = 500, bracket = GiftBracket.RARE)
+        Gift(id = "g1", name = "Rose", coinValue = 10),
+        Gift(id = "g2", name = "Crown", coinValue = 500),
+        Gift(id = "g3", name = "Diamond", coinValue = 5000),
+        Gift(id = "g4", name = "Potion", coinValue = 50),
+        Gift(id = "g5", name = "Amulet", coinValue = 500)
     )
 
     /** Reproduces the exact sorting comparator used in BackpackSheet.kt */

@@ -215,7 +215,8 @@ private fun UserChip(user: User, borderColor: Color) {
                 .border(2.dp, borderColor, CircleShape),
             contentScale = ContentScale.Crop
         )
-        if (user.nationality != null) {
+        val nationality = user.nationality
+        if (nationality != null) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -223,7 +224,7 @@ private fun UserChip(user: User, borderColor: Color) {
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = flagEmojiForCode(user.nationality!!),
+                    text = flagEmojiForCode(nationality),
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 14.sp)
                 )
             }

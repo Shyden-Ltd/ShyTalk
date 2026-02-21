@@ -37,6 +37,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.feature.home.RoomListContent
 import com.shyden.shytalk.ui.theme.CnyGold
@@ -87,7 +88,7 @@ fun MainScreen(
                     },
                     actions = {
                         if (selectedTab == BottomNavTab.Profile) {
-                            IconButton(onClick = onNavigateToSettings) {
+                            IconButton(onClick = onNavigateToSettings, modifier = Modifier.testTag("main_settingsButton")) {
                                 Icon(Icons.Default.Settings, contentDescription = "Settings")
                             }
                         }
@@ -108,7 +109,8 @@ fun MainScreen(
                     selected = selectedTab == BottomNavTab.Rooms,
                     onClick = { selectedTabName = BottomNavTab.Rooms.name },
                     icon = { Icon(Icons.Default.MeetingRoom, contentDescription = null) },
-                    label = { Text("Rooms") }
+                    label = { Text("Rooms") },
+                    modifier = Modifier.testTag("main_roomsTab")
                 )
                 NavigationBarItem(
                     selected = selectedTab == BottomNavTab.Messages,
@@ -129,13 +131,15 @@ fun MainScreen(
                             Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null)
                         }
                     },
-                    label = { Text("Messages") }
+                    label = { Text("Messages") },
+                    modifier = Modifier.testTag("main_messagesTab")
                 )
                 NavigationBarItem(
                     selected = selectedTab == BottomNavTab.Profile,
                     onClick = { selectedTabName = BottomNavTab.Profile.name },
                     icon = { Icon(Icons.Default.Person, contentDescription = null) },
-                    label = { Text("Profile") }
+                    label = { Text("Profile") },
+                    modifier = Modifier.testTag("main_profileTab")
                 )
             }
         },
@@ -144,7 +148,8 @@ fun MainScreen(
                 BottomNavTab.Rooms -> {
                     FloatingActionButton(
                         onClick = { showCreateDialog = true },
-                        containerColor = MaterialTheme.colorScheme.primary
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.testTag("main_createRoomFab")
                     ) {
                         Icon(Icons.Default.Add, contentDescription = "Create Room")
                     }
@@ -152,7 +157,8 @@ fun MainScreen(
                 BottomNavTab.Messages -> {
                     FloatingActionButton(
                         onClick = onNavigateToNewMessage,
-                        containerColor = MaterialTheme.colorScheme.primary
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.testTag("main_newMessageFab")
                     ) {
                         Icon(Icons.Default.Edit, contentDescription = "New Message")
                     }

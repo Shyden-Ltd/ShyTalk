@@ -6,6 +6,13 @@ import com.shyden.shytalk.core.util.Resource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
 
+data class UserFlags(
+    val isSuspended: Boolean = false,
+    val suspensionEndDate: Long? = null,
+    val hasActiveWarning: Boolean = false,
+    val warningReason: String? = null
+)
+
 interface UserRepository {
     val userUpdates: SharedFlow<User>
     suspend fun createOrUpdateUser(user: User): Resource<Unit>
@@ -29,4 +36,10 @@ interface UserRepository {
     fun observeUsers(userIds: Set<String>): Flow<User>
     suspend fun submitSuspensionAppeal(userId: String, appealText: String): Resource<Unit>
     suspend fun liftExpiredSuspension(userId: String): Resource<Unit>
+    suspend fun getAliases(userId: String): Resource<Map<String, String>>
+    suspend fun setAlias(userId: String, targetUserId: String, alias: String): Resource<Unit>
+    suspend fun removeAlias(userId: String, targetUserId: String): Resource<Unit>
+    fun observeUserFlags(userId: String): Flow<UserFlags>
+    suspend fun acknowledgeWarning(userId: String): Resource<Unit>
+    suspend fun getWarningReason(userId: String): Resource<String?>
 }

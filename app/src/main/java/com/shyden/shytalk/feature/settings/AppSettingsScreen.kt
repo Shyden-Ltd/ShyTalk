@@ -46,6 +46,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -68,6 +69,7 @@ import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
@@ -166,6 +168,7 @@ fun AppSettingsScreen(
                 onSetDndStartMinute = { viewModel.setDndStartMinute(it) },
                 onSetDndEndHour = { viewModel.setDndEndHour(it) },
                 onSetDndEndMinute = { viewModel.setDndEndMinute(it) },
+                onSetMinGiftAnimationValue = { viewModel.setMinGiftAnimationValue(it) },
                 snackbarHostState = snackbarHostState
             )
             SettingsPage.Permissions -> PermissionsPage(
@@ -275,7 +278,10 @@ private fun SettingsMainPage(
             TopAppBar(
                 title = { Text("Settings") },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.testTag("settings_backButton")
+                    ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
@@ -329,7 +335,8 @@ private fun SettingsMainPage(
                 onClick = onSignOut,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 16.dp)
+                    .testTag("settings_signOutButton"),
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = MaterialTheme.colorScheme.error
                 )
@@ -642,6 +649,7 @@ private fun NotificationsPage(
     onSetDndStartMinute: (Int) -> Unit,
     onSetDndEndHour: (Int) -> Unit,
     onSetDndEndMinute: (Int) -> Unit,
+    onSetMinGiftAnimationValue: (Int) -> Unit,
     snackbarHostState: SnackbarHostState
 ) {
     SettingsSubPage(
@@ -807,6 +815,39 @@ private fun NotificationsPage(
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "Gift Animations",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = if (uiState.minGiftAnimationValue == 0) "Showing all gift animations"
+                       else "Only showing gift animations worth ${uiState.minGiftAnimationValue}+ coins",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Filter out animations for cheaper gifts in rooms.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            var sliderValue by remember(uiState.minGiftAnimationValue) {
+                mutableStateOf(uiState.minGiftAnimationValue.toFloat())
+            }
+            Slider(
+                value = sliderValue,
+                onValueChange = { sliderValue = it },
+                onValueChangeFinished = { onSetMinGiftAnimationValue(sliderValue.toInt()) },
+                valueRange = 0f..5000f,
+                steps = 9
+            )
 
             Spacer(modifier = Modifier.height(32.dp))
         }

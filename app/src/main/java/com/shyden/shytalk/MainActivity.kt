@@ -15,7 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.firestore.FirebaseFirestore
-import com.shyden.shytalk.core.room.ActiveRoomManager
+import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.core.room.RoomService
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.UserRepository
@@ -34,7 +34,7 @@ class MainActivity : ComponentActivity() {
 
     private val authRepository: AuthRepository by inject()
     private val userRepository: UserRepository by inject()
-    private val activeRoomManager: ActiveRoomManager by inject()
+    private val activeRoomManager: RoomLifecycleManager by inject()
 
     private val _navigateToRoom = mutableStateOf<String?>(null)
     private val _navigateToProfile = mutableStateOf<String?>(null)

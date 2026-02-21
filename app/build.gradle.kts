@@ -22,10 +22,10 @@ android {
         applicationId = "com.shyden.shytalk"
         minSdk = 28
         targetSdk = 36
-        versionCode = 39
-        versionName = "0.39"
+        versionCode = 40
+        versionName = "0.40"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.shyden.shytalk.ShyTalkTestRunner"
 
         ndk {
             debugSymbolLevel = "SYMBOL_TABLE"
@@ -68,6 +68,30 @@ android {
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
+        managedDevices {
+            localDevices {
+                create("pixel4a") {
+                    device = "Pixel 4a"
+                    apiLevel = 34
+                    systemImageSource = "aosp-atd"
+                }
+                create("pixel8") {
+                    device = "Pixel 8"
+                    apiLevel = 34
+                    systemImageSource = "aosp-atd"
+                }
+                create("pixel9ProXL") {
+                    device = "Pixel 9 Pro XL"
+                    apiLevel = 34
+                    systemImageSource = "aosp-atd"
+                }
+                create("pixelTablet") {
+                    device = "Pixel Tablet"
+                    apiLevel = 34
+                    systemImageSource = "aosp-atd"
+                }
+            }
+        }
     }
     packaging {
         jniLibs {
@@ -146,6 +170,10 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation("io.insert-koin:koin-test:4.1.1")
+    androidTestImplementation("io.insert-koin:koin-test-junit4:4.1.1")
+    androidTestImplementation(libs.kotlinx.coroutines.test)
+    androidTestImplementation("androidx.navigation:navigation-testing:2.9.7")
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

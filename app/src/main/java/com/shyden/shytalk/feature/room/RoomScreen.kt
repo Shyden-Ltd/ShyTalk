@@ -43,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -50,7 +51,6 @@ import com.shyden.shytalk.ui.components.CnyRoomBackground
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -69,10 +69,10 @@ import com.shyden.shytalk.feature.room.components.RoomToolbar
 import com.shyden.shytalk.feature.room.components.SeatGrid
 import com.shyden.shytalk.feature.room.components.UserCardPopup
 import androidx.activity.result.PickVisualMediaRequest
-import com.shyden.shytalk.core.model.Broadcast
-import com.shyden.shytalk.core.ui.BroadcastBanner
+import com.shyden.shytalk.core.model.Gift
+import com.shyden.shytalk.core.model.GiftEvent
 import com.shyden.shytalk.core.ui.GiftEffectOverlay
-import com.shyden.shytalk.data.repository.GiftRepository
+import com.shyden.shytalk.core.ui.GiftPreviewPopup
 import com.shyden.shytalk.feature.gacha.GachaViewModel
 import com.shyden.shytalk.feature.gacha.LuckySpinOverlay
 import com.shyden.shytalk.feature.gifting.GiftingViewModel
@@ -92,6 +92,7 @@ fun RoomScreen(
     onNavigateBack: () -> Unit,
     onNavigateToUserProfile: (String) -> Unit = {},
     onNavigateToChat: (String) -> Unit = {},
+    onNavigateToWallet: () -> Unit = {},
     viewModel: RoomViewModel = koinViewModel { parametersOf(roomId) }
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -100,10 +101,8 @@ fun RoomScreen(
     val gachaViewModel: GachaViewModel = koinInject()
     val giftingViewModel: GiftingViewModel = koinInject()
     val dailyRewardViewModel: DailyRewardViewModel = koinInject()
-    val giftRepository: GiftRepository = koinInject()
     val gachaState by gachaViewModel.uiState.collectAsStateWithLifecycle()
     val giftingState by giftingViewModel.uiState.collectAsStateWithLifecycle()
-    var latestBroadcast by remember { mutableStateOf<Broadcast?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     var showSettings by remember(roomId) { mutableStateOf(false) }
     var showUserCardForId by remember(roomId) { mutableStateOf<String?>(null) }
@@ -114,11 +113,9 @@ fun RoomScreen(
     var showGachaWheel by remember(roomId) { mutableStateOf(false) }
     var showDailyReward by remember(roomId) { mutableStateOf(false) }
     var showBackpackSheet by remember(roomId) { mutableStateOf(false) }
-    var backpackRecipientId by remember(roomId) { mutableStateOf("") }
-    var backpackRecipientName by remember(roomId) { mutableStateOf("") }
-    var showGiftEffect by remember { mutableStateOf(false) }
-    var giftEffectAnimUrl by remember { mutableStateOf("") }
-    var giftEffectSoundUrl by remember { mutableStateOf("") }
+    var additionalBackpackRecipient by remember(roomId) { mutableStateOf<com.shyden.shytalk.core.model.User?>(null) }
+    var previewGift by remember { mutableStateOf<Gift?>(null) }
+    val currentGiftEvent by viewModel.giftAnimationQueue.currentEvent.collectAsStateWithLifecycle()
     var pmImageResultHandler by remember { mutableStateOf<((List<ByteArray>) -> Unit)?>(null) }
     var pmStickerResultHandler by remember { mutableStateOf<((ByteArray) -> Unit)?>(null) }
     val reportEvidenceList = remember { mutableListOf<Pair<ByteArray, String>>() }
@@ -187,40 +184,27 @@ fun RoomScreen(
 
     val currentUser = uiState.allKnownUsers[uiState.currentUserId]
 
-    // Observe broadcasts
-    LaunchedEffect(Unit) {
-        giftRepository.observeBroadcasts()
-            .catch { /* ignore errors */ }
-            .collect { broadcasts ->
-                latestBroadcast = broadcasts.firstOrNull()
-            }
-    }
-
-    // Handle gift sending success - trigger effect
+    // Handle gift sending success — show toast (sheet stays open)
     LaunchedEffect(giftingState.sentGiftId) {
-        val giftId = giftingState.sentGiftId ?: return@LaunchedEffect
-        val gift = giftingState.giftCatalog.find { it.id == giftId }
-        if (gift != null) {
-            giftEffectAnimUrl = gift.animationUrl ?: ""
-            giftEffectSoundUrl = gift.soundUrl ?: ""
-            showGiftEffect = giftEffectAnimUrl.isNotBlank()
-            showBackpackSheet = false
-        }
+        val giftName = giftingState.sentGiftName ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar("Sent $giftName!")
         giftingViewModel.clearSentGift()
     }
 
     // Handle gacha win — trigger GiftEffectOverlay for RARE+ single wins
     LaunchedEffect(gachaState.currentWin) {
         val win = gachaState.currentWin ?: return@LaunchedEffect
-        if (win.bracket.ordinal >= com.shyden.shytalk.core.model.GiftBracket.RARE.ordinal) {
-            val gift = gachaState.giftCatalog.find { it.id == win.giftId }
-            if (gift != null && gift.animationUrl.isNotBlank()) {
-                // Delay so the wheel celebration finishes first
-                kotlinx.coroutines.delay(2600)
-                giftEffectAnimUrl = gift.animationUrl
-                giftEffectSoundUrl = gift.soundUrl
-                showGiftEffect = true
-            }
+        if (win.coinValue >= 500) {
+            // Delay so the wheel celebration finishes first
+            kotlinx.coroutines.delay(2600)
+            viewModel.giftAnimationQueue.enqueue(
+                GiftEvent(
+                    giftId = win.giftId,
+                    giftName = win.giftName,
+                    senderName = uiState.currentUserName,
+                    recipientName = uiState.currentUserName
+                )
+            )
         }
     }
 
@@ -597,10 +581,12 @@ fun RoomScreen(
                         onTapUser = { userId ->
                             showUserCardForId = userId
                         },
+                        aliases = uiState.aliases,
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
                             .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .testTag("room_seatGrid")
                     )
 
                     // Chat Panel (lower portion)
@@ -625,10 +611,14 @@ fun RoomScreen(
                         },
                         unreadCount = convListState.totalUnreadCount.toInt(),
                         onOpenBackpack = {
-                            backpackRecipientId = uiState.currentUserId
-                            backpackRecipientName = ""
                             showBackpackSheet = true
                         },
+                        editingMessageId = uiState.editingMessageId,
+                        editingMessageText = uiState.editingMessageText,
+                        onStartEditMessage = { messageId, text -> viewModel.startEditMessage(messageId, text) },
+                        onEditMessage = { viewModel.editMessage(it) },
+                        onCancelEdit = { viewModel.cancelEditMessage() },
+                        aliases = uiState.aliases,
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
@@ -691,6 +681,7 @@ fun RoomScreen(
                         viewModel.inviteUser(userId, userName)
                     },
                     onDismiss = { showParticipantPanel = false },
+                    aliases = uiState.aliases,
                     modifier = Modifier
                         .fillMaxHeight()
                         .fillMaxWidth(0.7f)
@@ -823,8 +814,11 @@ fun RoomScreen(
                     onSendGift = if (userId != uiState.currentUserId) {
                         {
                             showUserCardForId = null
-                            backpackRecipientId = userId
-                            backpackRecipientName = user.displayName
+                            giftingViewModel.deselectAllRecipients()
+                            giftingViewModel.toggleRecipient(userId)
+                            // If user is not seated, pass them as an additional recipient
+                            val isSeated = userId in seatedUserIds
+                            additionalBackpackRecipient = if (!isSeated) user else null
                             showBackpackSheet = true
                         }
                     } else null,
@@ -894,6 +888,9 @@ fun RoomScreen(
                     isSubmittingReport = uiState.isSubmittingReport,
                     isCompressingEvidence = isCompressingEvidence,
                     reportError = uiState.reportError,
+                    currentAlias = uiState.aliases[userId],
+                    onSetAlias = { alias -> viewModel.setAlias(userId, alias) },
+                    onRemoveAlias = { viewModel.removeAlias(userId) },
                     onDismiss = {
                         showUserCardForId = null
                         reportEvidenceList.clear()
@@ -932,10 +929,15 @@ fun RoomScreen(
         if (showBackpackSheet) {
             BackpackSheet(
                 viewModel = giftingViewModel,
-                recipientId = backpackRecipientId,
-                recipientName = backpackRecipientName,
+                seatedUsers = uiState.seatUsers.values.toList(),
+                additionalUsers = listOfNotNull(additionalBackpackRecipient),
                 currentUserId = uiState.currentUserId,
-                onDismiss = { showBackpackSheet = false }
+                onDismiss = {
+                    showBackpackSheet = false
+                    additionalBackpackRecipient = null
+                },
+                onNavigateToWallet = onNavigateToWallet,
+                onLongPressGift = { gift -> previewGift = gift }
             )
         }
 
@@ -971,19 +973,19 @@ fun RoomScreen(
             }
         }
 
-        // Broadcast Banner (top overlay)
-        BroadcastBanner(
-            broadcast = latestBroadcast,
-            modifier = Modifier.align(Alignment.TopCenter)
-        )
+        // Gift preview popup (long-press)
+        previewGift?.let { gift ->
+            GiftPreviewPopup(
+                gift = gift,
+                onDismiss = { previewGift = null }
+            )
+        }
 
-        // Full-screen gift effect overlay
-        if (showGiftEffect) {
+        // Full-screen gift effect overlay (room-wide via AnimationQueue)
+        currentGiftEvent?.let { event ->
             GiftEffectOverlay(
-                animationUrl = giftEffectAnimUrl,
-                soundUrl = giftEffectSoundUrl,
-                isVisible = true,
-                onFinished = { showGiftEffect = false },
+                event = event,
+                onFinished = { viewModel.giftAnimationQueue.onAnimationFinished() },
                 modifier = Modifier.fillMaxSize()
             )
         }

@@ -26,6 +26,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.compose.runtime.collectAsState
@@ -85,7 +86,7 @@ fun ProfileSetupScreen(
                 value = displayName,
                 onValueChange = { if (it.length <= 20) displayName = it },
                 label = { Text("Display Name") },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().testTag("profileSetup_displayNameField"),
                 singleLine = true,
                 supportingText = { Text("${displayName.length}/20") }
             )
@@ -95,7 +96,7 @@ fun ProfileSetupScreen(
             // Date of Birth picker
             OutlinedButton(
                 onClick = { showDatePicker = true },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().testTag("profileSetup_dobButton")
             ) {
                 Text(
                     text = if (selectedDateMillis != null) {
@@ -137,7 +138,7 @@ fun ProfileSetupScreen(
                     }
                 },
                 enabled = canContinue,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().testTag("profileSetup_continueButton")
             ) {
                 if (uiState.isLoading) {
                     CircularProgressIndicator(

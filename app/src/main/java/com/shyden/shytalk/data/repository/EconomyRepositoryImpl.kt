@@ -3,11 +3,11 @@ package com.shyden.shytalk.data.repository
 import com.google.firebase.auth.FirebaseAuth
 import com.shyden.shytalk.core.model.CoinPackage
 import com.shyden.shytalk.core.model.DailyRewardResult
+import com.shyden.shytalk.core.model.EconomyConfig
 import com.shyden.shytalk.core.model.GachaResult
 import com.shyden.shytalk.core.model.Transaction
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.functions.FirebaseFunctions
@@ -32,6 +32,19 @@ class EconomyRepositoryImpl(
         awaitClose { reg.remove() }
     }
 
+    @Suppress("UNCHECKED_CAST")
+    override fun observeEconomyConfig(): Flow<EconomyConfig> = callbackFlow {
+        val reg = firestore.collection("config").document("economy")
+            .addSnapshotListener { snap, _ ->
+                val data = snap?.data
+                if (data != null) {
+                    trySend(EconomyConfig.fromMap(data))
+                }
+                // Skip emission when data is null — wait for real server data
+            }
+        awaitClose { reg.remove() }
+    }
+
     override suspend fun claimDailyReward(): Resource<DailyRewardResult> = firebaseCall("Failed to claim daily reward") {
         val result = functions.getHttpsCallable("claimDailyReward")
             .call()
@@ -41,19 +54,56 @@ class EconomyRepositoryImpl(
         DailyRewardResult.fromMap(data)
     }
 
-    override suspend fun pullGacha(pullCount: Int): Resource<GachaResult> = firebaseCall("Failed to pull gacha") {
+    override suspend fun pullGacha(pullCount: Int, expectedCost: Int): Resource<GachaResult> = firebaseCall("Failed to pull gacha") {
         val result = functions.getHttpsCallable("pullGacha")
-            .call(mapOf("pullCount" to pullCount))
+            .call(mapOf("pullCount" to pullCount, "expectedCost" to expectedCost))
             .await()
         @Suppress("UNCHECKED_CAST")
         val data = result.data as Map<String, Any?>
         GachaResult.fromMap(data)
     }
 
-    override suspend fun sendGift(recipientId: String, giftId: String): Resource<Map<String, Any?>> =
+    override suspend fun sendGift(recipientId: String, giftId: String, quantity: Int): Resource<Map<String, Any?>> =
         firebaseCall("Failed to send gift") {
             val result = functions.getHttpsCallable("sendGift")
-                .call(mapOf("recipientId" to recipientId, "giftId" to giftId))
+                .call(mapOf("recipientId" to recipientId, "giftId" to giftId, "quantity" to quantity))
+                .await()
+            @Suppress("UNCHECKED_CAST")
+            result.data as Map<String, Any?>
+        }
+
+    override suspend fun sendGiftDirect(recipientId: String, giftId: String, quantity: Int): Resource<Map<String, Any?>> =
+        firebaseCall("Failed to send gift") {
+            val result = functions.getHttpsCallable("sendGiftDirect")
+                .call(mapOf("recipientId" to recipientId, "giftId" to giftId, "quantity" to quantity))
+                .await()
+            @Suppress("UNCHECKED_CAST")
+            result.data as Map<String, Any?>
+        }
+
+    override suspend fun sendGiftBatch(
+        recipientIds: List<String>,
+        giftId: String,
+        quantity: Int,
+        fromBackpack: Boolean
+    ): Resource<Map<String, Any?>> =
+        firebaseCall("Failed to send gift batch") {
+            val result = functions.getHttpsCallable("sendGiftBatch")
+                .call(mapOf(
+                    "recipientIds" to recipientIds,
+                    "giftId" to giftId,
+                    "quantity" to quantity,
+                    "fromBackpack" to fromBackpack
+                ))
+                .await()
+            @Suppress("UNCHECKED_CAST")
+            result.data as Map<String, Any?>
+        }
+
+    override suspend fun sendEntireBackpack(recipientId: String): Resource<Map<String, Any?>> =
+        firebaseCall("Failed to send entire backpack") {
+            val result = functions.getHttpsCallable("sendEntireBackpack")
+                .call(mapOf("recipientId" to recipientId))
                 .await()
             @Suppress("UNCHECKED_CAST")
             result.data as Map<String, Any?>
@@ -137,18 +187,10 @@ class EconomyRepositoryImpl(
 
     override suspend fun addTestCoins(amount: Int): Resource<Map<String, Any?>> =
         firebaseCall("Failed to add test coins") {
-            val userId = FirebaseAuth.getInstance().currentUser?.uid
-                ?: throw Exception("Not authenticated")
-            val userRef = firestore.collection("users").document(userId)
-            userRef.update("shyCoins", FieldValue.increment(amount.toLong())).await()
-            val txData = mapOf(
-                "type" to "PURCHASE",
-                "amount" to amount,
-                "currency" to "COINS",
-                "timestamp" to System.currentTimeMillis(),
-                "details" to "Test purchase (+$amount coins)"
-            )
-            userRef.collection("transactions").add(txData).await()
-            mapOf("success" to true, "coinsAdded" to amount)
+            val result = functions.getHttpsCallable("addTestCoins")
+                .call(mapOf("amount" to amount))
+                .await()
+            @Suppress("UNCHECKED_CAST")
+            result.data as Map<String, Any?>
         }
 }

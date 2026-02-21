@@ -275,6 +275,55 @@ class UserRepositoryImpl(
             usersCollection.document(userId).update(updates).await()
         }
 
+    override suspend fun getAliases(userId: String): Resource<Map<String, String>> =
+        firebaseCall("Failed to get aliases") {
+            val doc = usersCollection.document(userId).get().await()
+            if (!doc.exists()) return@firebaseCall emptyMap()
+            val data = doc.data ?: return@firebaseCall emptyMap()
+            @Suppress("UNCHECKED_CAST")
+            (data["aliases"] as? Map<String, String>) ?: emptyMap()
+        }
+
+    override suspend fun setAlias(userId: String, targetUserId: String, alias: String): Resource<Unit> =
+        firebaseCall("Failed to set alias") {
+            usersCollection.document(userId).update("aliases.$targetUserId", alias).await()
+        }
+
+    override suspend fun removeAlias(userId: String, targetUserId: String): Resource<Unit> =
+        firebaseCall("Failed to remove alias") {
+            usersCollection.document(userId).update("aliases.$targetUserId", FieldValue.delete()).await()
+        }
+
+    override fun observeUserFlags(userId: String): Flow<UserFlags> = callbackFlow {
+        val listener = usersCollection.document(userId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
+                val flags = UserFlags(
+                    isSuspended = snapshot.getBoolean("isSuspended") == true,
+                    suspensionEndDate = snapshot.getTimestamp("suspensionEndDate")?.toDate()?.time,
+                    hasActiveWarning = snapshot.getBoolean("hasActiveWarning") == true,
+                    warningReason = snapshot.getString("warningReason")
+                )
+                trySend(flags)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    override suspend fun acknowledgeWarning(userId: String): Resource<Unit> = firebaseCall("Failed to acknowledge warning") {
+        usersCollection.document(userId)
+            .update(
+                mapOf(
+                    "hasActiveWarning" to false,
+                    "warningAcceptedAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+    }
+
+    override suspend fun getWarningReason(userId: String): Resource<String?> = firebaseCall("Failed to get warning reason") {
+        val doc = usersCollection.document(userId).get().await()
+        doc.getString("warningReason")
+    }
+
     override fun observeUsers(userIds: Set<String>): Flow<User> {
         if (userIds.isEmpty()) return emptyFlow()
         return userIds.map { userId ->

@@ -14,6 +14,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -35,7 +36,7 @@ fun CreateRoomDialog(
                     value = roomName,
                     onValueChange = { if (it.length <= 50) roomName = it },
                     label = { Text("Room Name") },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().testTag("createRoom_nameField"),
                     singleLine = true
                 )
             }
@@ -43,7 +44,8 @@ fun CreateRoomDialog(
         confirmButton = {
             TextButton(
                 onClick = { onCreate(roomName) },
-                enabled = roomName.isNotBlank()
+                enabled = roomName.isNotBlank(),
+                modifier = Modifier.testTag("createRoom_createButton")
             ) {
                 Text("Create")
             }

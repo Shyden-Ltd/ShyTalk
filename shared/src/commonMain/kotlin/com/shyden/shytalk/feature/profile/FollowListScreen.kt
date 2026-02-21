@@ -45,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -106,12 +107,14 @@ fun FollowListScreen(
                 Tab(
                     selected = uiState.selectedTab == FollowTab.FOLLOWING,
                     onClick = { viewModel.selectTab(FollowTab.FOLLOWING) },
-                    text = { Text("Following (${uiState.following.size})") }
+                    text = { Text("Following (${uiState.following.size})") },
+                    modifier = Modifier.testTag("followList_followingTab")
                 )
                 Tab(
                     selected = uiState.selectedTab == FollowTab.FOLLOWERS,
                     onClick = { viewModel.selectTab(FollowTab.FOLLOWERS) },
-                    text = { Text("Followers (${uiState.followers.size})") }
+                    text = { Text("Followers (${uiState.followers.size})") },
+                    modifier = Modifier.testTag("followList_followersTab")
                 )
                 if (uiState.isOwnList) {
                     Tab(
@@ -162,6 +165,7 @@ fun FollowListScreen(
                                 visitor = visitor,
                                 user = visitorUser,
                                 isNew = isNew,
+                                aliases = uiState.aliases,
                                 onClick = { onNavigateToUserProfile(visitor.visitorId) }
                             )
                         }
@@ -216,6 +220,7 @@ fun FollowListScreen(
                                 onToggleFollow = { viewModel.toggleFollow(user.uid) },
                                 onRemoveFollower = { viewModel.removeFollower(user.uid) },
                                 onUndoRemove = { viewModel.undoRemoveFollower() },
+                                aliases = uiState.aliases,
                                 onClick = { onNavigateToUserProfile(user.uid) }
                             )
                         }
@@ -237,6 +242,7 @@ private fun FollowUserRow(
     onToggleFollow: () -> Unit,
     onRemoveFollower: () -> Unit = {},
     onUndoRemove: () -> Unit = {},
+    aliases: Map<String, String> = emptyMap(),
     onClick: () -> Unit
 ) {
     Row(
@@ -275,8 +281,9 @@ private fun FollowUserRow(
 
         // Name
         Column(modifier = Modifier.weight(1f)) {
+            val resolvedName = aliases[user.uid] ?: user.displayName.ifEmpty { "Unknown" }
             StyledDisplayName(
-                displayName = user.displayName.ifEmpty { "Unknown" },
+                displayName = resolvedName,
                 isSuperShy = user.isSuperShy,
                 style = MaterialTheme.typography.bodyLarge
             )
@@ -341,6 +348,7 @@ private fun StalkerUserRow(
     visitor: ProfileVisitor,
     user: User?,
     isNew: Boolean,
+    aliases: Map<String, String> = emptyMap(),
     onClick: () -> Unit
 ) {
     Row(
@@ -379,8 +387,11 @@ private fun StalkerUserRow(
 
         // Name and visit count
         Column(modifier = Modifier.weight(1f)) {
+            val resolvedName = aliases[visitor.visitorId]
+                ?: user?.displayName?.ifEmpty { "Unknown" }
+                ?: "Unknown"
             StyledDisplayName(
-                displayName = user?.displayName?.ifEmpty { "Unknown" } ?: "Unknown",
+                displayName = resolvedName,
                 isSuperShy = user?.isSuperShy == true,
                 style = MaterialTheme.typography.bodyLarge
             )

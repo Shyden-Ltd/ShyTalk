@@ -3,6 +3,7 @@ package com.shyden.shytalk.feature.room
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.model.ChatRoom
+import com.shyden.shytalk.core.model.GiftEvent
 import com.shyden.shytalk.core.model.Message
 import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.RoomState
@@ -10,6 +11,7 @@ import com.shyden.shytalk.core.model.SeatRequest
 import com.shyden.shytalk.core.model.SeatRequestStatus
 import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.ui.effects.AnimationQueue
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
@@ -98,7 +100,10 @@ data class RoomUiState(
     val seatActionStatus: SeatActionStatus = SeatActionStatus.Idle,
     val isSubmittingReport: Boolean = false,
     val reportSubmitted: Boolean = false,
-    val reportError: String? = null
+    val reportError: String? = null,
+    val editingMessageId: String? = null,
+    val editingMessageText: String = "",
+    val aliases: Map<String, String> = emptyMap()
 )
 
 class RoomViewModel(
@@ -140,6 +145,10 @@ class RoomViewModel(
     private var userObserverJob: Job? = null
     private var observedUserIds: Set<String> = emptySet()
 
+    // Gift animation queue — room-wide gift events
+    val giftAnimationQueue = AnimationQueue()
+    private var lastGiftEventTimestamp: Long = 0L
+
     // Message flood protection
     private val recentMessageTimestamps = ArrayDeque<Long>()
 
@@ -158,6 +167,7 @@ class RoomViewModel(
         )
         loadUserName()
         loadBlockedUsers()
+        loadAliases()
         observeRoom()
         observeMessages()
         observeVoiceState()
@@ -195,21 +205,23 @@ class RoomViewModel(
         userObserverJob?.cancel()
         if (userIds.isEmpty()) return
         userObserverJob = viewModelScope.launch {
-            userRepository.observeUsers(userIds).collect { updatedUser ->
-                val uid = updatedUser.uid
-                val cached = userCache[uid]
-                if (cached != null && cached != updatedUser) {
-                    userCache[uid] = updatedUser
-                    _uiState.update { state ->
-                        state.copy(
-                            seatUsers = state.seatUsers.replaceUser(updatedUser),
-                            participantUsers = state.participantUsers.replaceUser(updatedUser),
-                            allKnownUsers = state.allKnownUsers.replaceUser(updatedUser),
-                            currentUserName = if (uid == state.currentUserId) updatedUser.displayName else state.currentUserName
-                        )
+            userRepository.observeUsers(userIds)
+                .catch { e -> logE(TAG, "observeRemoteUserChanges error", e) }
+                .collect { updatedUser ->
+                    val uid = updatedUser.uid
+                    val cached = userCache[uid]
+                    if (cached != null && cached != updatedUser) {
+                        userCache[uid] = updatedUser
+                        _uiState.update { state ->
+                            state.copy(
+                                seatUsers = state.seatUsers.replaceUser(updatedUser),
+                                participantUsers = state.participantUsers.replaceUser(updatedUser),
+                                allKnownUsers = state.allKnownUsers.replaceUser(updatedUser),
+                                currentUserName = if (uid == state.currentUserId) updatedUser.displayName else state.currentUserName
+                            )
+                        }
                     }
                 }
-            }
         }
     }
 
@@ -317,6 +329,18 @@ class RoomViewModel(
                 autoRejoinAttempted = true
                 logW(TAG, "User not in participantIds but not banned — attempting auto-rejoin")
                 viewModelScope.launch {
+                    // Check if the current user was suspended — if so, don't rejoin
+                    try {
+                        val result = userRepository.getUser(userId)
+                        if (result is Resource.Success && result.data.isActivelySuspended) {
+                            logW(TAG, "User is suspended — aborting auto-rejoin")
+                            disconnectFromRoom()
+                            _uiState.update { it.copy(isLoading = false, shouldNavigateBack = true) }
+                            return@launch
+                        }
+                    } catch (e: Exception) {
+                        logE(TAG, "Failed to check suspension during auto-rejoin", e)
+                    }
                     roomRepository.joinRoom(roomId, userId)
                     presenceService.setPresence(roomId, userId)
                 }
@@ -487,6 +511,24 @@ class RoomViewModel(
         observeRemoteUserChanges(collectRoomUserIds(room, _uiState.value.currentUserId))
         handleOwnerAwayCountdown(room)
         refilterPendingRequests()
+        handleGiftEvent(room)
+    }
+
+    private fun handleGiftEvent(room: ChatRoom) {
+        val event = room.lastGiftEvent ?: return
+        if (lastGiftEventTimestamp == 0L) {
+            // First observation — skip only if event is old (>10s), otherwise play it
+            lastGiftEventTimestamp = event.timestamp
+            val now = com.shyden.shytalk.core.util.currentTimeMillis()
+            if (now - event.timestamp > 10_000) return
+        } else {
+            if (event.timestamp <= lastGiftEventTimestamp) return
+            lastGiftEventTimestamp = event.timestamp
+        }
+        // Respect per-user animation filter
+        val minValue = userCache[_uiState.value.currentUserId]?.minGiftAnimationValue ?: 0
+        if (event.coinValue < minValue) return
+        giftAnimationQueue.enqueue(event)
     }
 
     private fun checkBlockConflicts(room: ChatRoom) {
@@ -1202,6 +1244,18 @@ class RoomViewModel(
         }
     }
 
+    private fun loadAliases() {
+        viewModelScope.launch {
+            val userId = _uiState.value.currentUserId
+            when (val result = userRepository.getAliases(userId)) {
+                is Resource.Success -> {
+                    _uiState.update { it.copy(aliases = result.data) }
+                }
+                else -> {}
+            }
+        }
+    }
+
     private fun loadBlockedUsers() {
         viewModelScope.launch {
             val userId = _uiState.value.currentUserId
@@ -1274,6 +1328,53 @@ class RoomViewModel(
             ownerId = room.ownerId,
             totalVisitors = visitors
         )
+    }
+
+    fun startEditMessage(messageId: String, text: String) {
+        _uiState.update { it.copy(editingMessageId = messageId, editingMessageText = text) }
+    }
+
+    fun cancelEditMessage() {
+        _uiState.update { it.copy(editingMessageId = null, editingMessageText = "") }
+    }
+
+    fun editMessage(newText: String) {
+        val messageId = _uiState.value.editingMessageId ?: return
+        if (newText.isBlank()) return
+        _uiState.update { it.copy(editingMessageId = null, editingMessageText = "") }
+        viewModelScope.launch {
+            messageRepository.editMessage(roomId, messageId, newText.trim())
+        }
+    }
+
+    fun setAlias(targetUserId: String, alias: String) {
+        val userId = _uiState.value.currentUserId
+        viewModelScope.launch {
+            when (userRepository.setAlias(userId, targetUserId, alias)) {
+                is Resource.Success -> {
+                    _uiState.update { it.copy(aliases = it.aliases + (targetUserId to alias)) }
+                }
+                is Resource.Error -> {
+                    _uiState.update { it.copy(error = "Failed to set alias") }
+                }
+                is Resource.Loading -> {}
+            }
+        }
+    }
+
+    fun removeAlias(targetUserId: String) {
+        val userId = _uiState.value.currentUserId
+        viewModelScope.launch {
+            when (userRepository.removeAlias(userId, targetUserId)) {
+                is Resource.Success -> {
+                    _uiState.update { it.copy(aliases = it.aliases - targetUserId) }
+                }
+                is Resource.Error -> {
+                    _uiState.update { it.copy(error = "Failed to remove alias") }
+                }
+                is Resource.Loading -> {}
+            }
+        }
     }
 
     fun clearError() {

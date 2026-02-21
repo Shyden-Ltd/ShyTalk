@@ -52,6 +52,7 @@ fun ConversationListItem(
     groupName: String? = null,
     groupPhotoUrl: String? = null,
     currentUserRole: GroupRole = GroupRole.MEMBER,
+    aliases: Map<String, String> = emptyMap(),
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -125,8 +126,13 @@ fun ConversationListItem(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                val resolvedName = if (isGroup) {
+                    groupName ?: "Group"
+                } else {
+                    otherUser?.uid?.let { aliases[it] } ?: otherUser?.displayName ?: "Unknown"
+                }
                 StyledDisplayName(
-                    displayName = if (isGroup) groupName ?: "Group" else otherUser?.displayName ?: "Unknown",
+                    displayName = resolvedName,
                     isSuperShy = !isGroup && otherUser?.isSuperShy == true,
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.weight(1f, fill = false)

@@ -242,9 +242,11 @@ exports.onUserSuspended = onDocumentUpdated(
           await roomRef.update(updates);
           console.log(`Closed room ${roomDoc.id} (owner suspended)`);
         } else {
-          // Remove non-owner from room
+          // Remove non-owner from room and ban to prevent auto-rejoin
           const updates = {
             participantIds: FieldValue.arrayRemove(userId),
+            bannedUserIds: FieldValue.arrayUnion(userId),
+            [`kickInfo.${userId}`]: { reason: "Account suspended", kickerName: "System" },
           };
           const seats = room.seats || {};
           for (let i = 0; i < MAX_SEATS; i++) {
@@ -254,7 +256,7 @@ exports.onUserSuspended = onDocumentUpdated(
             }
           }
           await roomRef.update(updates);
-          console.log(`Removed ${userId} from room ${roomDoc.id}`);
+          console.log(`Removed and banned ${userId} from room ${roomDoc.id}`);
         }
       }
     } catch (err) {
@@ -826,25 +828,39 @@ exports.onModAction = onDocumentCreated(
 
 // ─── Monetization ───────────────────────────────────────────────
 
-const DAILY_BASE = 50;
-const MILESTONE_REWARDS = {
-  7: 100, 14: 200, 30: 500, 60: 1000, 90: 2000
+// Default economy config — overridden by Firestore config/economy document
+const DEFAULT_ECONOMY_CONFIG = {
+  beanConversionRate: 0.6,
+  beanRedeemBonusThreshold: 2000,
+  beanRedeemBonusMultiplier: 1.1,
+  pullCosts: { "1": 10, "10": 100, "100": 1000 },
+  broadcastSendThreshold: 5000,
+  broadcastWinThreshold: 5000,
+  dropRateExponent: 1.5,
+  pitySoftStart: 80,
+  pityHardLimit: 120,
+  pitySoftMaxShift: 0.15,
+  pityHighValueThreshold: 5000,
+  dailyBase: 50,
+  milestoneRewards: { "7": 100, "14": 200, "30": 500, "60": 1000, "90": 2000 },
 };
-function getDailyReward(day) {
-  return MILESTONE_REWARDS[day] || DAILY_BASE;
-}
-const MILESTONES = new Set([7, 14, 30, 60, 90]);
-const PULL_COSTS = { 1: 10, 10: 100, 100: 1000 };
 
-// Base drop rates: [Common, Uncommon, Rare, Epic, Legendary]
-const BASE_RATES = [0.74, 0.18, 0.06, 0.015, 0.005];
-const BRACKETS = ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"];
+async function loadEconomyConfig() {
+  const db = getFirestore();
+  const doc = await db.collection("config").doc("economy").get();
+  if (doc.exists) {
+    return { ...DEFAULT_ECONOMY_CONFIG, ...doc.data() };
+  }
+  return { ...DEFAULT_ECONOMY_CONFIG };
+}
 
 exports.claimDailyReward = onCall({ region: "asia-southeast1" }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in");
   const uid = request.auth.uid;
   const db = getFirestore();
   const userRef = db.collection("users").doc(uid);
+
+  const config = await loadEconomyConfig();
 
   return await db.runTransaction(async (tx) => {
     const userDoc = await tx.get(userRef);
@@ -860,8 +876,10 @@ exports.claimDailyReward = onCall({ region: "asia-southeast1" }, async (request)
     const lastDate = user.lastLoginDate || "";
     const newStreak = (lastDate === yesterday) ? (user.loginStreak || 0) + 1 : 1;
 
-    let reward = getDailyReward(newStreak);
-    const isMilestone = MILESTONES.has(newStreak);
+    const milestoneRewards = config.milestoneRewards || {};
+    const milestoneKeys = Object.keys(milestoneRewards).map(Number);
+    let reward = milestoneRewards[String(newStreak)] || config.dailyBase;
+    const isMilestone = milestoneKeys.includes(newStreak);
 
     // Super Shy 10% bonus (rounded up)
     if (user.isSuperShy) {
@@ -896,25 +914,48 @@ exports.pullGacha = onCall({ region: "asia-southeast1" }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in");
   const uid = request.auth.uid;
   const pullCount = request.data.pullCount;
+  const expectedCost = request.data.expectedCost;
 
   if (![1, 10, 100].includes(pullCount)) {
     throw new HttpsError("invalid-argument", "pullCount must be 1, 10, or 100");
   }
 
-  const cost = PULL_COSTS[pullCount];
   const db = getFirestore();
+  const config = await loadEconomyConfig();
+  const pullCosts = config.pullCosts || { "1": 10, "10": 100, "100": 1000 };
+  const cost = pullCosts[String(pullCount)];
+  if (!cost) throw new HttpsError("invalid-argument", "Invalid pull count");
+
+  // Price validation: if client sent expectedCost and it doesn't match, reject without charging
+  const currentPullCostsInt = {};
+  for (const [k, v] of Object.entries(pullCosts)) {
+    currentPullCostsInt[k] = v;
+  }
+  if (expectedCost != null && expectedCost !== cost) {
+    return {
+      priceChanged: true,
+      currentPullCosts: currentPullCostsInt,
+      gifts: [],
+      coinsSpent: 0,
+      newBalance: 0,
+      newPityCounter: 0,
+      newLuckScore: 0,
+    };
+  }
+
   const userRef = db.collection("users").doc(uid);
 
   // Load gift catalog
   const giftsSnap = await db.collection("gifts").orderBy("order").get();
   if (giftsSnap.empty) throw new HttpsError("failed-precondition", "Gift catalog not configured");
 
-  const giftsByBracket = {};
-  for (const b of BRACKETS) giftsByBracket[b] = [];
-  giftsSnap.docs.forEach((doc) => {
-    const g = { id: doc.id, ...doc.data() };
-    if (giftsByBracket[g.bracket]) giftsByBracket[g.bracket].push(g);
-  });
+  const allGifts = giftsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const winnableGifts = allGifts.filter((g) => g.coinValue > 0);
+  if (winnableGifts.length === 0) throw new HttpsError("failed-precondition", "No winnable gifts");
+
+  // Compute base weights: 1 / coinValue^exponent
+  const exponent = config.dropRateExponent;
+  const baseWeights = winnableGifts.map((g) => 1 / Math.pow(g.coinValue, exponent));
 
   return await db.runTransaction(async (tx) => {
     const userDoc = await tx.get(userRef);
@@ -929,66 +970,117 @@ exports.pullGacha = onCall({ region: "asia-southeast1" }, async (request) => {
     let luck = user.luckScore || 0;
     const results = [];
 
-    for (let i = 0; i < pullCount; i++) {
-      // Calculate effective rates
-      const rates = [...BASE_RATES];
+    const highValueThreshold = config.pityHighValueThreshold;
 
-      // Pity system
-      if (pity >= 150) {
-        // Hard pity: force Epic+
-        rates[0] = 0; rates[1] = 0; rates[2] = 0;
-        const epicLeg = BASE_RATES[3] + BASE_RATES[4];
-        rates[3] = BASE_RATES[3] / epicLeg;
-        rates[4] = BASE_RATES[4] / epicLeg;
-      } else if (pity >= 100) {
-        const pityBoost = (pity - 100) / 50; // 0→1 linear over 50 pulls
-        const shift = 0.10 * pityBoost;
-        rates[0] -= shift;
-        rates[3] += shift;
+    // Check for admin-guaranteed next pull (first pull only)
+    let guaranteedFirstPull = false;
+    if (user.guaranteedNextPull && user.guaranteedNextPull.giftId) {
+      const guaranteedGiftId = user.guaranteedNextPull.giftId;
+      const guaranteedGift = winnableGifts.find((g) => g.id === guaranteedGiftId);
+      if (guaranteedGift) {
+        results.push(guaranteedGift);
+        guaranteedFirstPull = true;
+        // Reset pity on high-value gift
+        if (guaranteedGift.coinValue >= highValueThreshold) {
+          pity = 0;
+        } else {
+          pity++;
+        }
       }
+      // Clear the guarantee field regardless (even if gift not found)
+      tx.update(userRef, { guaranteedNextPull: FieldValue.delete() });
+    }
 
-      // Luck boost (up to 5%)
-      const luckBoost = (luck / 100) * 0.05;
-      if (luckBoost > 0 && rates[0] > luckBoost) {
-        rates[0] -= luckBoost;
-        // Distribute proportionally across higher brackets
-        const higherTotal = rates[1] + rates[2] + rates[3] + rates[4];
-        if (higherTotal > 0) {
-          for (let b = 1; b < 5; b++) {
-            rates[b] += luckBoost * (rates[b] / higherTotal);
+    for (let i = guaranteedFirstPull ? 1 : 0; i < pullCount; i++) {
+      const weights = [...baseWeights];
+
+      // Pity system (coin-value-based)
+      if (pity >= config.pityHardLimit) {
+        // Hard pity: force high-value gifts only
+        for (let j = 0; j < winnableGifts.length; j++) {
+          if (winnableGifts[j].coinValue < highValueThreshold) {
+            weights[j] = 0;
+          }
+        }
+        // If no high-value gifts exist, keep all weights (safety)
+        if (weights.every((w) => w === 0)) {
+          for (let j = 0; j < weights.length; j++) weights[j] = baseWeights[j];
+        }
+      } else if (pity >= config.pitySoftStart) {
+        // Soft pity: linearly shift probability toward high-value gifts
+        const pityProgress = (pity - config.pitySoftStart) / (config.pityHardLimit - config.pitySoftStart);
+        const shift = config.pitySoftMaxShift * pityProgress;
+
+        // Calculate total weight of low and high value gifts
+        let lowTotal = 0;
+        let highTotal = 0;
+        for (let j = 0; j < winnableGifts.length; j++) {
+          if (winnableGifts[j].coinValue >= highValueThreshold) highTotal += weights[j];
+          else lowTotal += weights[j];
+        }
+
+        if (lowTotal > 0 && highTotal > 0) {
+          const totalWeight = lowTotal + highTotal;
+          const shiftAmount = shift * totalWeight;
+          // Reduce low-value weights proportionally, increase high-value
+          for (let j = 0; j < winnableGifts.length; j++) {
+            if (winnableGifts[j].coinValue >= highValueThreshold) {
+              weights[j] += shiftAmount * (weights[j] / highTotal);
+            } else {
+              weights[j] -= shiftAmount * (weights[j] / lowTotal);
+              if (weights[j] < 0) weights[j] = 0;
+            }
           }
         }
       }
 
-      // Normalize rates
-      const total = rates.reduce((s, r) => s + r, 0);
-      for (let b = 0; b < 5; b++) rates[b] /= total;
-
-      // Roll
-      const roll = Math.random();
-      let cumulative = 0;
-      let bracketIndex = 0;
-      for (let b = 0; b < 5; b++) {
-        cumulative += rates[b];
-        if (roll <= cumulative) { bracketIndex = b; break; }
+      // Luck boost (up to 5%): shift from cheapest gifts to everything else
+      const luckBoost = (luck / 100) * 0.05;
+      if (luckBoost > 0) {
+        const totalWeight = weights.reduce((s, w) => s + w, 0);
+        const shiftAmount = luckBoost * totalWeight;
+        // Find the cheapest gift(s) — reduce their weight
+        const minValue = Math.min(...winnableGifts.map((g) => g.coinValue));
+        let cheapTotal = 0;
+        let expensiveTotal = 0;
+        for (let j = 0; j < winnableGifts.length; j++) {
+          if (winnableGifts[j].coinValue === minValue) cheapTotal += weights[j];
+          else expensiveTotal += weights[j];
+        }
+        if (cheapTotal > shiftAmount && expensiveTotal > 0) {
+          for (let j = 0; j < winnableGifts.length; j++) {
+            if (winnableGifts[j].coinValue === minValue) {
+              weights[j] -= shiftAmount * (weights[j] / cheapTotal);
+            } else {
+              weights[j] += shiftAmount * (weights[j] / expensiveTotal);
+            }
+          }
+        }
       }
 
-      const bracket = BRACKETS[bracketIndex];
-      const gifts = giftsByBracket[bracket];
-      if (!gifts || gifts.length === 0) {
-        // Fallback to common
-        const fallback = giftsByBracket["COMMON"];
-        const gift = fallback[Math.floor(Math.random() * fallback.length)];
-        results.push(gift);
+      // Normalize to probabilities
+      const total = weights.reduce((s, w) => s + w, 0);
+      if (total <= 0) {
+        // Safety fallback
+        results.push(winnableGifts[0]);
         pity++;
         continue;
       }
 
-      const gift = gifts[Math.floor(Math.random() * gifts.length)];
+      // Roll
+      const roll = Math.random() * total;
+      let cumulative = 0;
+      let selectedIndex = 0;
+      for (let j = 0; j < weights.length; j++) {
+        cumulative += weights[j];
+        if (roll <= cumulative) { selectedIndex = j; break; }
+      }
+
+      const gift = winnableGifts[selectedIndex];
       results.push(gift);
 
-      // Reset pity on Epic+
-      if (bracketIndex >= 3) {
+      // Reset pity on high-value gift
+      if (gift.coinValue >= highValueThreshold) {
         pity = 0;
       } else {
         pity++;
@@ -1012,15 +1104,19 @@ exports.pullGacha = onCall({ region: "asia-southeast1" }, async (request) => {
     // Add gifts to backpack
     for (const gift of results) {
       const bpRef = userRef.collection("backpack").doc(gift.id);
-      tx.set(bpRef, {
+      const bpUpdate = {
         quantity: FieldValue.increment(1),
         lastAcquired: FieldValue.serverTimestamp(),
-      }, { merge: true });
+      };
+      if (gift.expiresAfterDays) {
+        bpUpdate.expiresAt = new Date(Date.now() + gift.expiresAfterDays * 86400000);
+      }
+      tx.set(bpRef, bpUpdate, { merge: true });
     }
 
     // Write transaction
     const txRef = userRef.collection("transactions").doc();
-    tx.set(txRef, {
+    const txRecord = {
       type: "GACHA_PULL",
       amount: -cost,
       currency: "COINS",
@@ -1028,13 +1124,16 @@ exports.pullGacha = onCall({ region: "asia-southeast1" }, async (request) => {
       pullCount,
       details: results.map((g) => g.name).join(", "),
       timestamp: FieldValue.serverTimestamp(),
-    });
+    };
+    if (guaranteedFirstPull) {
+      txRecord.guaranteed = true;
+    }
+    tx.set(txRef, txRecord);
 
     return {
       gifts: results.map((g) => ({
         giftId: g.id,
         giftName: g.name,
-        bracket: g.bracket,
         coinValue: g.coinValue,
         iconUrl: g.iconUrl || "",
       })),
@@ -1042,7 +1141,42 @@ exports.pullGacha = onCall({ region: "asia-southeast1" }, async (request) => {
       newBalance,
       newPityCounter: pity,
       newLuckScore: luck,
+      currentPullCosts: currentPullCostsInt,
     };
+  }).then(async (result) => {
+    // Broadcast qualifying gacha wins (outside transaction)
+    const winThreshold = config.broadcastWinThreshold;
+    const qualifyingGifts = result.gifts.filter((g) => g.coinValue >= winThreshold);
+
+    if (qualifyingGifts.length > 0) {
+      const winnerDoc = await userRef.get();
+      const winnerData = winnerDoc.data();
+      const broadcastsRef = db.collection("broadcasts");
+
+      for (const g of qualifyingGifts) {
+        await broadcastsRef.add({
+          type: "GACHA_WIN",
+          senderName: winnerData.displayName || "",
+          senderPhotoUrl: winnerData.profilePhotoUrl || null,
+          recipientName: "",
+          giftName: g.giftName,
+          giftIconUrl: g.iconUrl || "",
+          giftCoinValue: g.coinValue,
+          timestamp: FieldValue.serverTimestamp(),
+        });
+      }
+
+      // Keep only last 50 broadcasts
+      const oldBroadcasts = await broadcastsRef
+        .orderBy("timestamp", "desc")
+        .offset(50)
+        .get();
+      const batch = db.batch();
+      oldBroadcasts.docs.forEach((doc) => batch.delete(doc.ref));
+      if (!oldBroadcasts.empty) await batch.commit();
+    }
+
+    return result;
   });
 });
 
@@ -1050,6 +1184,7 @@ exports.sendGift = onCall({ region: "asia-southeast1" }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in");
   const senderUid = request.auth.uid;
   const { recipientId, giftId } = request.data;
+  const quantity = Math.max(1, Math.min(9999, parseInt(request.data.quantity) || 1));
 
   if (!recipientId || !giftId) {
     throw new HttpsError("invalid-argument", "recipientId and giftId required");
@@ -1067,12 +1202,15 @@ exports.sendGift = onCall({ region: "asia-southeast1" }, async (request) => {
   if (!giftDoc.exists) throw new HttpsError("not-found", "Gift not found");
   const gift = giftDoc.data();
 
+  const _sendGiftConfig = await loadEconomyConfig();
+  const _sendGiftBeanRate = _sendGiftConfig.beanConversionRate;
+
   return await db.runTransaction(async (tx) => {
     const bpRef = senderRef.collection("backpack").doc(giftId);
     const bpDoc = await tx.get(bpRef);
 
-    if (!bpDoc.exists || (bpDoc.data().quantity || 0) < 1) {
-      throw new HttpsError("failed-precondition", "Gift not in backpack");
+    if (!bpDoc.exists || (bpDoc.data().quantity || 0) < quantity) {
+      throw new HttpsError("failed-precondition", "Insufficient items in backpack");
     }
 
     const senderDoc = await tx.get(senderRef);
@@ -1081,10 +1219,10 @@ exports.sendGift = onCall({ region: "asia-southeast1" }, async (request) => {
 
     const sender = senderDoc.data();
     const recipient = recipientDoc.data();
-    const beanReward = Math.floor(gift.coinValue * 0.6);
+    const beanReward = Math.floor(gift.coinValue * _sendGiftBeanRate * quantity);
 
     // Decrement sender backpack
-    const newQty = (bpDoc.data().quantity || 0) - 1;
+    const newQty = (bpDoc.data().quantity || 0) - quantity;
     if (newQty <= 0) {
       tx.delete(bpRef);
     } else {
@@ -1094,8 +1232,8 @@ exports.sendGift = onCall({ region: "asia-southeast1" }, async (request) => {
     // Update recipient gift wall
     const wallRef = recipientRef.collection("giftWall").doc(giftId);
     tx.set(wallRef, {
-      receivedCount: FieldValue.increment(1),
-      [`senders.${senderUid}`]: FieldValue.increment(1),
+      receivedCount: FieldValue.increment(quantity),
+      [`senders.${senderUid}`]: FieldValue.increment(quantity),
     }, { merge: true });
 
     // Credit beans to recipient
@@ -1103,15 +1241,51 @@ exports.sendGift = onCall({ region: "asia-southeast1" }, async (request) => {
       shyBeans: FieldValue.increment(beanReward),
     });
 
+    // Write lastGiftEvent to room if sender is in a room
+    const roomId = sender.currentRoomId;
+    if (roomId) {
+      const roomRef = db.collection("rooms").doc(roomId);
+      tx.update(roomRef, {
+        lastGiftEvent: {
+          senderId: senderUid,
+          senderName: sender.displayName || "Someone",
+          recipientId,
+          recipientName: recipient.displayName || "Someone",
+          giftId,
+          giftName: gift.name,
+          coinValue: gift.coinValue,
+          timestamp: FieldValue.serverTimestamp(),
+        },
+      });
+
+      // Write gift chat message to room messages
+      const sName = sender.displayName || "Someone";
+      const rName = recipient.displayName || "Someone";
+      const qtyLabel = quantity > 1 ? `${quantity}x ` : "";
+      const msgRef = roomRef.collection("messages").doc();
+      tx.set(msgRef, {
+        messageId: msgRef.id,
+        senderId: senderUid,
+        senderName: sName,
+        text: `${sName} sent ${qtyLabel}${gift.name} to ${rName}`,
+        createdAt: FieldValue.serverTimestamp(),
+        type: "GIFT",
+        isEdited: false,
+        giftId,
+        giftIconUrl: gift.iconUrl || "",
+      });
+    }
+
     // Transaction records
     const senderTxRef = senderRef.collection("transactions").doc();
     tx.set(senderTxRef, {
       type: "GIFT_SENT",
-      amount: -1,
+      amount: -quantity,
       currency: "COINS",
       balanceAfter: sender.shyCoins || 0,
       giftId, giftName: gift.name,
       recipientId,
+      quantity,
       timestamp: FieldValue.serverTimestamp(),
     });
 
@@ -1123,13 +1297,14 @@ exports.sendGift = onCall({ region: "asia-southeast1" }, async (request) => {
       balanceAfter: (recipient.shyBeans || 0) + beanReward,
       giftId, giftName: gift.name,
       senderId: senderUid,
+      quantity,
       timestamp: FieldValue.serverTimestamp(),
     });
 
-    return { success: true, beanReward, giftName: gift.name };
+    return { success: true, beanReward, giftName: gift.name, quantity };
   }).then(async (result) => {
-    // Broadcast if eligible (outside transaction)
-    if (gift.broadcastEnabled) {
+    // Broadcast if gift value meets threshold (outside transaction)
+    if (gift.coinValue >= _sendGiftConfig.broadcastSendThreshold) {
       const senderDoc = await senderRef.get();
       const recipientDoc = await recipientRef.get();
       const senderData = senderDoc.data();
@@ -1137,16 +1312,171 @@ exports.sendGift = onCall({ region: "asia-southeast1" }, async (request) => {
 
       const broadcastsRef = db.collection("broadcasts");
       await broadcastsRef.add({
+        type: "GIFT_SEND",
         senderName: senderData.displayName || "",
         senderPhotoUrl: senderData.profilePhotoUrl || null,
         recipientName: recipientData.displayName || "",
         giftName: gift.name,
         giftIconUrl: gift.iconUrl || "",
         giftCoinValue: gift.coinValue,
+        quantity,
         timestamp: FieldValue.serverTimestamp(),
       });
 
       // Keep only last 50 broadcasts
+      const oldBroadcasts = await broadcastsRef
+        .orderBy("timestamp", "desc")
+        .offset(50)
+        .get();
+      const batch = db.batch();
+      oldBroadcasts.docs.forEach((doc) => batch.delete(doc.ref));
+      if (!oldBroadcasts.empty) await batch.commit();
+    }
+
+    return result;
+  });
+});
+
+exports.sendGiftDirect = onCall({ region: "asia-southeast1" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in");
+  const senderUid = request.auth.uid;
+  const { recipientId, giftId } = request.data;
+  const quantity = Math.max(1, Math.min(9999, parseInt(request.data.quantity) || 1));
+
+  if (!recipientId || !giftId) {
+    throw new HttpsError("invalid-argument", "recipientId and giftId required");
+  }
+  if (senderUid === recipientId) {
+    throw new HttpsError("invalid-argument", "Cannot send gift to yourself");
+  }
+
+  const db = getFirestore();
+  const senderRef = db.collection("users").doc(senderUid);
+  const recipientRef = db.collection("users").doc(recipientId);
+  const giftRef = db.collection("gifts").doc(giftId);
+
+  const giftDoc = await giftRef.get();
+  if (!giftDoc.exists) throw new HttpsError("not-found", "Gift not found");
+  const gift = giftDoc.data();
+  const totalCost = gift.coinValue * quantity;
+
+  const _directConfig = await loadEconomyConfig();
+  const _directBeanRate = _directConfig.beanConversionRate;
+
+  return await db.runTransaction(async (tx) => {
+    const senderDoc = await tx.get(senderRef);
+    const recipientDoc = await tx.get(recipientRef);
+    if (!senderDoc.exists) throw new HttpsError("not-found", "Sender not found");
+    if (!recipientDoc.exists) throw new HttpsError("not-found", "Recipient not found");
+
+    const sender = senderDoc.data();
+    const recipient = recipientDoc.data();
+
+    if ((sender.shyCoins || 0) < totalCost) {
+      throw new HttpsError("failed-precondition", "Insufficient coins");
+    }
+
+    const beanReward = Math.floor(gift.coinValue * _directBeanRate * quantity);
+    const newSenderCoins = (sender.shyCoins || 0) - totalCost;
+
+    // Deduct coins from sender
+    tx.update(senderRef, { shyCoins: newSenderCoins });
+
+    // Update recipient gift wall
+    const wallRef = recipientRef.collection("giftWall").doc(giftId);
+    tx.set(wallRef, {
+      receivedCount: FieldValue.increment(quantity),
+      [`senders.${senderUid}`]: FieldValue.increment(quantity),
+    }, { merge: true });
+
+    // Credit beans to recipient
+    tx.update(recipientRef, {
+      shyBeans: FieldValue.increment(beanReward),
+    });
+
+    // Write lastGiftEvent to room if sender is in a room
+    const roomId = sender.currentRoomId;
+    if (roomId) {
+      const roomRef = db.collection("rooms").doc(roomId);
+      tx.update(roomRef, {
+        lastGiftEvent: {
+          senderId: senderUid,
+          senderName: sender.displayName || "Someone",
+          recipientId,
+          recipientName: recipient.displayName || "Someone",
+          giftId,
+          giftName: gift.name,
+          coinValue: gift.coinValue,
+          timestamp: FieldValue.serverTimestamp(),
+        },
+      });
+
+      // Write gift chat message to room messages
+      const sName = sender.displayName || "Someone";
+      const rName = recipient.displayName || "Someone";
+      const qtyLabel = quantity > 1 ? `${quantity}x ` : "";
+      const msgRef = roomRef.collection("messages").doc();
+      tx.set(msgRef, {
+        messageId: msgRef.id,
+        senderId: senderUid,
+        senderName: sName,
+        text: `${sName} sent ${qtyLabel}${gift.name} to ${rName}`,
+        createdAt: FieldValue.serverTimestamp(),
+        type: "GIFT",
+        isEdited: false,
+        giftId,
+        giftIconUrl: gift.iconUrl || "",
+      });
+    }
+
+    // Transaction records
+    const senderTxRef = senderRef.collection("transactions").doc();
+    tx.set(senderTxRef, {
+      type: "GIFT_SENT",
+      amount: -totalCost,
+      currency: "COINS",
+      balanceAfter: newSenderCoins,
+      giftId, giftName: gift.name,
+      recipientId,
+      quantity,
+      details: `Sent ${quantity > 1 ? quantity + "x " : ""}${gift.name} directly (${totalCost} coins)`,
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    const recipientTxRef = recipientRef.collection("transactions").doc();
+    tx.set(recipientTxRef, {
+      type: "GIFT_RECEIVED",
+      amount: beanReward,
+      currency: "BEANS",
+      balanceAfter: (recipient.shyBeans || 0) + beanReward,
+      giftId, giftName: gift.name,
+      senderId: senderUid,
+      quantity,
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    return { success: true, beanReward, giftName: gift.name, coinsSpent: totalCost, quantity };
+  }).then(async (result) => {
+    // Broadcast if gift value meets threshold (outside transaction)
+    if (gift.coinValue >= _directConfig.broadcastSendThreshold) {
+      const senderDoc = await senderRef.get();
+      const recipientDoc = await recipientRef.get();
+      const senderData = senderDoc.data();
+      const recipientData = recipientDoc.data();
+
+      const broadcastsRef = db.collection("broadcasts");
+      await broadcastsRef.add({
+        type: "GIFT_SEND",
+        senderName: senderData.displayName || "",
+        senderPhotoUrl: senderData.profilePhotoUrl || null,
+        recipientName: recipientData.displayName || "",
+        giftName: gift.name,
+        giftIconUrl: gift.iconUrl || "",
+        giftCoinValue: gift.coinValue,
+        quantity,
+        timestamp: FieldValue.serverTimestamp(),
+      });
+
       const oldBroadcasts = await broadcastsRef
         .orderBy("timestamp", "desc")
         .offset(50)
@@ -1172,6 +1502,8 @@ exports.redeemBeans = onCall({ region: "asia-southeast1" }, async (request) => {
   const db = getFirestore();
   const userRef = db.collection("users").doc(uid);
 
+  const config = await loadEconomyConfig();
+
   return await db.runTransaction(async (tx) => {
     const userDoc = await tx.get(userRef);
     if (!userDoc.exists) throw new HttpsError("not-found", "User not found");
@@ -1181,7 +1513,10 @@ exports.redeemBeans = onCall({ region: "asia-southeast1" }, async (request) => {
       throw new HttpsError("failed-precondition", "Insufficient beans");
     }
 
-    const coins = amount >= 2000 ? Math.floor(amount * 1.1) : amount;
+    const threshold = config.beanRedeemBonusThreshold;
+    const multiplier = config.beanRedeemBonusMultiplier;
+    const hasBonus = amount >= threshold;
+    const coins = hasBonus ? Math.floor(amount * multiplier) : amount;
     const newBeans = (user.shyBeans || 0) - amount;
     const newCoins = (user.shyCoins || 0) + coins;
 
@@ -1190,13 +1525,14 @@ exports.redeemBeans = onCall({ region: "asia-southeast1" }, async (request) => {
       shyCoins: newCoins,
     });
 
+    const bonusPct = Math.round((multiplier - 1) * 100);
     const txRef = userRef.collection("transactions").doc();
     tx.set(txRef, {
       type: "BEAN_REDEEM",
       amount: coins,
       currency: "COINS",
       balanceAfter: newCoins,
-      details: `Redeemed ${amount} beans${amount >= 2000 ? " (10% bonus)" : ""}`,
+      details: `Redeemed ${amount} beans${hasBonus ? ` (${bonusPct}% bonus)` : ""}`,
       timestamp: FieldValue.serverTimestamp(),
     });
 
@@ -1383,33 +1719,33 @@ exports.seedCatalog = onCall({ region: "asia-southeast1" }, async (request) => {
   const db = getFirestore();
 
   const giftCatalog = [
-    { name: "Rose", coinValue: 8, baseDropRate: 0.70, bracket: "COMMON", order: 1 },
-    { name: "Heart", coinValue: 10, baseDropRate: 0.70, bracket: "COMMON", order: 2 },
-    { name: "Thumbs Up", coinValue: 12, baseDropRate: 0.70, bracket: "COMMON", order: 3 },
-    { name: "Star", coinValue: 15, baseDropRate: 0.70, bracket: "COMMON", order: 4 },
-    { name: "Smiley", coinValue: 18, baseDropRate: 0.70, bracket: "COMMON", order: 5 },
-    { name: "Coffee", coinValue: 20, baseDropRate: 0.70, bracket: "COMMON", order: 6 },
-    { name: "Candy", coinValue: 25, baseDropRate: 0.70, bracket: "COMMON", order: 7 },
-    { name: "Balloon", coinValue: 30, baseDropRate: 0.70, bracket: "COMMON", order: 8 },
-    { name: "Teddy Bear", coinValue: 50, baseDropRate: 0.20, bracket: "UNCOMMON", order: 9 },
-    { name: "Perfume", coinValue: 80, baseDropRate: 0.20, bracket: "UNCOMMON", order: 10 },
-    { name: "Diamond Ring", coinValue: 120, baseDropRate: 0.20, bracket: "UNCOMMON", order: 11 },
-    { name: "Bouquet", coinValue: 150, baseDropRate: 0.20, bracket: "UNCOMMON", order: 12 },
-    { name: "Fireworks", coinValue: 200, baseDropRate: 0.20, bracket: "UNCOMMON", order: 13 },
-    { name: "Music Box", coinValue: 300, baseDropRate: 0.20, bracket: "UNCOMMON", order: 14 },
-    { name: "Treasure Chest", coinValue: 500, baseDropRate: 0.08, bracket: "RARE", order: 15 },
-    { name: "Crown", coinValue: 800, baseDropRate: 0.08, bracket: "RARE", order: 16 },
-    { name: "Sports Car", coinValue: 1200, baseDropRate: 0.08, bracket: "RARE", order: 17 },
-    { name: "Yacht", coinValue: 1800, baseDropRate: 0.08, bracket: "RARE", order: 18 },
-    { name: "Dragon", coinValue: 2500, baseDropRate: 0.08, bracket: "RARE", order: 19 },
-    { name: "Phoenix", coinValue: 3500, baseDropRate: 0.08, bracket: "RARE", order: 20 },
-    { name: "Crystal Ball", coinValue: 5000, baseDropRate: 0.018, bracket: "EPIC", order: 21 },
-    { name: "Castle", coinValue: 8000, baseDropRate: 0.018, bracket: "EPIC", order: 22 },
-    { name: "Spaceship", coinValue: 12000, baseDropRate: 0.018, bracket: "EPIC", order: 23 },
-    { name: "Aurora", coinValue: 16000, baseDropRate: 0.018, bracket: "EPIC", order: 24 },
-    { name: "Galaxy Unicorn", coinValue: 20000, baseDropRate: 0.018, bracket: "EPIC", order: 25 },
-    { name: "ShyTalk Emblem", coinValue: 35000, baseDropRate: 0.002, bracket: "LEGENDARY", order: 26 },
-    { name: "Celestial Throne", coinValue: 52000, baseDropRate: 0.002, bracket: "LEGENDARY", order: 27 },
+    { name: "Rose", coinValue: 8, order: 1 },
+    { name: "Heart", coinValue: 10, order: 2 },
+    { name: "Thumbs Up", coinValue: 12, order: 3 },
+    { name: "Star", coinValue: 15, order: 4 },
+    { name: "Smiley", coinValue: 18, order: 5 },
+    { name: "Coffee", coinValue: 20, order: 6 },
+    { name: "Candy", coinValue: 25, order: 7 },
+    { name: "Balloon", coinValue: 30, order: 8 },
+    { name: "Teddy Bear", coinValue: 50, order: 9 },
+    { name: "Perfume", coinValue: 80, order: 10 },
+    { name: "Diamond Ring", coinValue: 120, order: 11 },
+    { name: "Bouquet", coinValue: 150, order: 12 },
+    { name: "Fireworks", coinValue: 200, order: 13 },
+    { name: "Music Box", coinValue: 300, order: 14 },
+    { name: "Treasure Chest", coinValue: 500, order: 15 },
+    { name: "Crown", coinValue: 800, order: 16 },
+    { name: "Sports Car", coinValue: 1200, order: 17 },
+    { name: "Yacht", coinValue: 1800, order: 18 },
+    { name: "Dragon", coinValue: 2500, order: 19 },
+    { name: "Phoenix", coinValue: 3500, order: 20 },
+    { name: "Crystal Ball", coinValue: 5000, order: 21 },
+    { name: "Castle", coinValue: 8000, order: 22 },
+    { name: "Spaceship", coinValue: 12000, order: 23 },
+    { name: "Aurora", coinValue: 16000, order: 24 },
+    { name: "Galaxy Unicorn", coinValue: 20000, order: 25 },
+    { name: "ShyTalk Emblem", coinValue: 35000, order: 26 },
+    { name: "Celestial Throne", coinValue: 52000, order: 27 },
   ];
 
   const coinPackages = [
@@ -1427,8 +1763,6 @@ exports.seedCatalog = onCall({ region: "asia-southeast1" }, async (request) => {
     const docId = gift.name.toLowerCase().replace(/\s+/g, "_");
     batch.set(db.collection("gifts").doc(docId), {
       ...gift,
-      beanValue: Math.floor(gift.coinValue * 0.6),
-      broadcastEnabled: gift.bracket === "LEGENDARY",
       animationUrl: "",
       soundUrl: "",
       iconUrl: "",
@@ -1444,10 +1778,407 @@ exports.seedCatalog = onCall({ region: "asia-southeast1" }, async (request) => {
     minVersionCode: 1,
   }, { merge: true });
 
+  // Economy config
+  batch.set(db.collection("config").doc("economy"), DEFAULT_ECONOMY_CONFIG, { merge: true });
+
   await batch.commit();
   return { giftsSeeded: giftCatalog.length, packagesSeeded: coinPackages.length, configSeeded: true };
 });
 
+
+// --- Batch gift sending (multiple recipients) ---
+exports.sendGiftBatch = onCall({ region: "asia-southeast1" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in");
+  const senderUid = request.auth.uid;
+  const { recipientIds, giftId, fromBackpack } = request.data;
+  const quantity = Math.max(1, Math.min(9999, parseInt(request.data.quantity) || 1));
+
+  if (!Array.isArray(recipientIds) || recipientIds.length < 1 || recipientIds.length > 8) {
+    throw new HttpsError("invalid-argument", "recipientIds must be an array of 1-8 user IDs");
+  }
+  if (!giftId) {
+    throw new HttpsError("invalid-argument", "giftId required");
+  }
+  if (recipientIds.includes(senderUid)) {
+    throw new HttpsError("invalid-argument", "Cannot send gift to yourself");
+  }
+
+  const db = getFirestore();
+  const senderRef = db.collection("users").doc(senderUid);
+  const giftRef = db.collection("gifts").doc(giftId);
+
+  const giftDoc = await giftRef.get();
+  if (!giftDoc.exists) throw new HttpsError("not-found", "Gift not found");
+  const gift = giftDoc.data();
+
+  const config = await loadEconomyConfig();
+  const beanRate = config.beanConversionRate;
+  const totalItems = quantity * recipientIds.length;
+
+  return await db.runTransaction(async (tx) => {
+    const senderDoc = await tx.get(senderRef);
+    if (!senderDoc.exists) throw new HttpsError("not-found", "Sender not found");
+    const sender = senderDoc.data();
+
+    // Validate resources
+    if (fromBackpack) {
+      const bpRef = senderRef.collection("backpack").doc(giftId);
+      const bpDoc = await tx.get(bpRef);
+      if (!bpDoc.exists || (bpDoc.data().quantity || 0) < totalItems) {
+        throw new HttpsError("failed-precondition", "Insufficient items in backpack");
+      }
+      const newQty = (bpDoc.data().quantity || 0) - totalItems;
+      if (newQty <= 0) {
+        tx.delete(bpRef);
+      } else {
+        tx.update(bpRef, { quantity: newQty });
+      }
+    } else {
+      const totalCost = gift.coinValue * totalItems;
+      if ((sender.shyCoins || 0) < totalCost) {
+        throw new HttpsError("failed-precondition", "Insufficient coins");
+      }
+      const newCoins = (sender.shyCoins || 0) - totalCost;
+      tx.update(senderRef, { shyCoins: newCoins });
+    }
+
+    // Read all recipients
+    const recipientDocs = [];
+    for (const rid of recipientIds) {
+      const rRef = db.collection("users").doc(rid);
+      const rDoc = await tx.get(rRef);
+      if (!rDoc.exists) throw new HttpsError("not-found", `Recipient ${rid} not found`);
+      recipientDocs.push({ ref: rRef, data: rDoc.data(), id: rid });
+    }
+
+    const beanPerRecipient = Math.floor(gift.coinValue * beanRate * quantity);
+    const sName = sender.displayName || "Someone";
+    const roomId = sender.currentRoomId;
+    const roomRef = roomId ? db.collection("rooms").doc(roomId) : null;
+
+    for (const r of recipientDocs) {
+      // Gift wall
+      const wallRef = r.ref.collection("giftWall").doc(giftId);
+      tx.set(wallRef, {
+        receivedCount: FieldValue.increment(quantity),
+        [`senders.${senderUid}`]: FieldValue.increment(quantity),
+      }, { merge: true });
+
+      // Beans
+      tx.update(r.ref, { shyBeans: FieldValue.increment(beanPerRecipient) });
+
+      // Recipient transaction
+      const rTxRef = r.ref.collection("transactions").doc();
+      tx.set(rTxRef, {
+        type: "GIFT_RECEIVED",
+        amount: beanPerRecipient,
+        currency: "BEANS",
+        balanceAfter: (r.data.shyBeans || 0) + beanPerRecipient,
+        giftId, giftName: gift.name,
+        senderId: senderUid,
+        quantity,
+        timestamp: FieldValue.serverTimestamp(),
+      });
+
+      // Room message per recipient
+      if (roomRef) {
+        const rName = r.data.displayName || "Someone";
+        const qtyLabel = quantity > 1 ? `${quantity}x ` : "";
+        const msgRef = roomRef.collection("messages").doc();
+        tx.set(msgRef, {
+          messageId: msgRef.id,
+          senderId: senderUid,
+          senderName: sName,
+          text: `${sName} sent ${qtyLabel}${gift.name} to ${rName}`,
+          createdAt: FieldValue.serverTimestamp(),
+          type: "GIFT",
+          isEdited: false,
+          giftId,
+          giftIconUrl: gift.iconUrl || "",
+        });
+      }
+    }
+
+    // Last gift event (use first recipient for animation)
+    if (roomRef && recipientDocs.length > 0) {
+      const firstR = recipientDocs[0];
+      const recipientLabel = recipientDocs.length > 1
+        ? `${firstR.data.displayName || "Someone"} +${recipientDocs.length - 1}`
+        : firstR.data.displayName || "Someone";
+      tx.update(roomRef, {
+        lastGiftEvent: {
+          senderId: senderUid,
+          senderName: sName,
+          recipientId: firstR.id,
+          recipientName: recipientLabel,
+          giftId,
+          giftName: gift.name,
+          coinValue: gift.coinValue,
+          timestamp: FieldValue.serverTimestamp(),
+        },
+      });
+    }
+
+    // Sender transaction
+    const totalCost = fromBackpack ? totalItems : gift.coinValue * totalItems;
+    const senderTxRef = senderRef.collection("transactions").doc();
+    tx.set(senderTxRef, {
+      type: "GIFT_SENT",
+      amount: fromBackpack ? -totalItems : -totalCost,
+      currency: fromBackpack ? "ITEMS" : "COINS",
+      balanceAfter: fromBackpack ? (sender.shyCoins || 0) : ((sender.shyCoins || 0) - totalCost),
+      giftId, giftName: gift.name,
+      recipientIds,
+      quantity,
+      totalRecipients: recipientIds.length,
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    return {
+      success: true,
+      giftName: gift.name,
+      quantity,
+      totalRecipients: recipientIds.length,
+      totalItems,
+    };
+  }).then(async (result) => {
+    // Broadcast if gift value meets threshold (outside transaction)
+    if (gift.coinValue >= config.broadcastSendThreshold) {
+      const senderDoc = await senderRef.get();
+      const senderData = senderDoc.data();
+      const firstRecipientRef = db.collection("users").doc(recipientIds[0]);
+      const firstRecipientDoc = await firstRecipientRef.get();
+      const firstRecipientData = firstRecipientDoc.data();
+      const recipientLabel = recipientIds.length > 1
+        ? `${firstRecipientData.displayName || "Someone"} +${recipientIds.length - 1}`
+        : firstRecipientData.displayName || "Someone";
+
+      const broadcastsRef = db.collection("broadcasts");
+      await broadcastsRef.add({
+        type: "GIFT_SEND",
+        senderName: senderData.displayName || "",
+        senderPhotoUrl: senderData.profilePhotoUrl || null,
+        recipientName: recipientLabel,
+        giftName: gift.name,
+        giftIconUrl: gift.iconUrl || "",
+        giftCoinValue: gift.coinValue,
+        quantity: quantity * recipientIds.length,
+        timestamp: FieldValue.serverTimestamp(),
+      });
+
+      // Keep only last 50 broadcasts
+      const oldBroadcasts = await broadcastsRef
+        .orderBy("timestamp", "desc")
+        .offset(50)
+        .get();
+      const batch = db.batch();
+      oldBroadcasts.docs.forEach((doc) => batch.delete(doc.ref));
+      if (!oldBroadcasts.empty) await batch.commit();
+    }
+
+    return result;
+  });
+});
+
+// --- Send entire backpack to a recipient ---
+exports.sendEntireBackpack = onCall({ region: "asia-southeast1" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in");
+  const senderUid = request.auth.uid;
+  const { recipientId } = request.data;
+
+  if (!recipientId) {
+    throw new HttpsError("invalid-argument", "recipientId required");
+  }
+  if (senderUid === recipientId) {
+    throw new HttpsError("invalid-argument", "Cannot send backpack to yourself");
+  }
+
+  const db = getFirestore();
+  const senderRef = db.collection("users").doc(senderUid);
+  const recipientRef = db.collection("users").doc(recipientId);
+
+  // Verify recipient exists
+  const recipientCheck = await recipientRef.get();
+  if (!recipientCheck.exists) throw new HttpsError("not-found", "Recipient not found");
+
+  const config = await loadEconomyConfig();
+  const beanRate = config.beanConversionRate;
+
+  // Read sender's full backpack (outside transaction to get all items)
+  const backpackSnap = await senderRef.collection("backpack").get();
+  const backpackItems = [];
+  for (const doc of backpackSnap.docs) {
+    const data = doc.data();
+    if ((data.quantity || 0) > 0) {
+      backpackItems.push({ giftId: doc.id, quantity: data.quantity });
+    }
+  }
+
+  if (backpackItems.length === 0) {
+    throw new HttpsError("failed-precondition", "Backpack is empty");
+  }
+
+  // Load gift catalog for each backpack item
+  const giftDetails = {};
+  for (const item of backpackItems) {
+    const giftDoc = await db.collection("gifts").doc(item.giftId).get();
+    if (giftDoc.exists) {
+      giftDetails[item.giftId] = giftDoc.data();
+    }
+  }
+
+  return await db.runTransaction(async (tx) => {
+    // Re-read sender and recipient inside transaction
+    const senderDoc = await tx.get(senderRef);
+    const recipientDoc = await tx.get(recipientRef);
+    if (!senderDoc.exists) throw new HttpsError("not-found", "Sender not found");
+    if (!recipientDoc.exists) throw new HttpsError("not-found", "Recipient not found");
+
+    const sender = senderDoc.data();
+    const recipient = recipientDoc.data();
+
+    // Re-read backpack items inside transaction for consistency
+    let totalBeanReward = 0;
+    let totalItemsSent = 0;
+    const giftsSent = [];
+
+    for (const item of backpackItems) {
+      const bpRef = senderRef.collection("backpack").doc(item.giftId);
+      const bpDoc = await tx.get(bpRef);
+      if (!bpDoc.exists) continue;
+
+      const currentQty = bpDoc.data().quantity || 0;
+      if (currentQty <= 0) continue;
+
+      const gift = giftDetails[item.giftId];
+      if (!gift) continue;
+
+      // Set sender quantity to 0 (delete the doc)
+      tx.delete(bpRef);
+
+      // Update recipient backpack (increment)
+      const recipientBpRef = recipientRef.collection("backpack").doc(item.giftId);
+      tx.set(recipientBpRef, {
+        quantity: FieldValue.increment(currentQty),
+        lastAcquired: FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      // Update recipient gift wall
+      const wallRef = recipientRef.collection("giftWall").doc(item.giftId);
+      tx.set(wallRef, {
+        receivedCount: FieldValue.increment(currentQty),
+        [`senders.${senderUid}`]: FieldValue.increment(currentQty),
+      }, { merge: true });
+
+      // Calculate beans
+      const beanReward = Math.floor(gift.coinValue * beanRate * currentQty);
+      totalBeanReward += beanReward;
+      totalItemsSent += currentQty;
+
+      giftsSent.push({
+        giftId: item.giftId,
+        giftName: gift.name,
+        quantity: currentQty,
+      });
+    }
+
+    if (totalItemsSent === 0) {
+      throw new HttpsError("failed-precondition", "Backpack is empty");
+    }
+
+    // Credit beans to recipient
+    tx.update(recipientRef, {
+      shyBeans: FieldValue.increment(totalBeanReward),
+    });
+
+    // Write sender transaction record
+    const senderTxRef = senderRef.collection("transactions").doc();
+    tx.set(senderTxRef, {
+      type: "BACKPACK_SENT",
+      amount: -totalItemsSent,
+      currency: "ITEMS",
+      balanceAfter: sender.shyCoins || 0,
+      recipientId,
+      totalItemsSent,
+      details: giftsSent.map((g) => `${g.quantity}x ${g.giftName}`).join(", "),
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    // Write recipient transaction record
+    const recipientTxRef = recipientRef.collection("transactions").doc();
+    tx.set(recipientTxRef, {
+      type: "BACKPACK_RECEIVED",
+      amount: totalBeanReward,
+      currency: "BEANS",
+      balanceAfter: (recipient.shyBeans || 0) + totalBeanReward,
+      senderId: senderUid,
+      totalItemsReceived: totalItemsSent,
+      details: giftsSent.map((g) => `${g.quantity}x ${g.giftName}`).join(", "),
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    return { totalItemsSent, giftsSent };
+  });
+});
+
+// --- Clean up expired backpack items (daily) ---
+exports.cleanExpiredBackpackItems = onSchedule(
+  { schedule: "every 24 hours", region: "asia-southeast1" },
+  async () => {
+    const db = getFirestore();
+    const now = new Date();
+    const expiredSnap = await db.collectionGroup("backpack")
+      .where("expiresAt", ">", new Date(0))
+      .where("expiresAt", "<=", now)
+      .get();
+
+    if (expiredSnap.empty) return;
+
+    const batchSize = 500;
+    const docs = expiredSnap.docs;
+    for (let i = 0; i < docs.length; i += batchSize) {
+      const batch = db.batch();
+      docs.slice(i, i + batchSize).forEach((doc) => batch.delete(doc.ref));
+      await batch.commit();
+    }
+    console.log(`Cleaned ${docs.length} expired backpack items`);
+  }
+);
+
+// --- Test Coins (development/testing only) ---
+exports.addTestCoins = onCall({ region: "asia-southeast1" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in");
+  const uid = request.auth.uid;
+  const { amount } = request.data;
+
+  if (!amount || typeof amount !== "number" || amount <= 0 || amount > 100000) {
+    throw new HttpsError("invalid-argument", "amount must be a positive number (max 100,000)");
+  }
+
+  const db = getFirestore();
+  const userRef = db.collection("users").doc(uid);
+
+  return await db.runTransaction(async (tx) => {
+    const userDoc = await tx.get(userRef);
+    if (!userDoc.exists) throw new HttpsError("not-found", "User not found");
+    const user = userDoc.data();
+    const newBalance = (user.shyCoins || 0) + amount;
+
+    tx.update(userRef, { shyCoins: newBalance });
+
+    const txDocRef = userRef.collection("transactions").doc();
+    tx.set(txDocRef, {
+      type: "PURCHASE",
+      amount: amount,
+      currency: "COINS",
+      balanceAfter: newBalance,
+      details: `Test purchase (+${amount} coins)`,
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    return { success: true, coinsAdded: amount, newBalance };
+  });
+});
 
 // --- Admin API ---
 const adminApp = require("./admin");

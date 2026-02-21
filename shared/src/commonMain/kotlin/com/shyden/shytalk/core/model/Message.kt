@@ -7,7 +7,8 @@ import com.shyden.shytalk.core.util.timestampToMillis
 enum class MessageType {
     TEXT,
     SYSTEM,
-    JOIN
+    JOIN,
+    GIFT
 }
 
 data class Message(
@@ -16,7 +17,10 @@ data class Message(
     val senderName: String = "",
     val text: String = "",
     val createdAt: Long = currentTimeMillis(),
-    val type: MessageType = MessageType.TEXT
+    val type: MessageType = MessageType.TEXT,
+    val isEdited: Boolean = false,
+    val giftId: String = "",
+    val giftIconUrl: String = ""
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
         "messageId" to messageId,
@@ -24,7 +28,10 @@ data class Message(
         "senderName" to senderName,
         "text" to text,
         "createdAt" to millisToTimestamp(createdAt),
-        "type" to type.name
+        "type" to type.name,
+        "isEdited" to isEdited,
+        "giftId" to giftId,
+        "giftIconUrl" to giftIconUrl
     )
 
     companion object {
@@ -36,7 +43,10 @@ data class Message(
             createdAt = timestampToMillis(map["createdAt"]),
             type = (map["type"] as? String)?.let {
                 try { MessageType.valueOf(it) } catch (_: Exception) { MessageType.TEXT }
-            } ?: MessageType.TEXT
+            } ?: MessageType.TEXT,
+            isEdited = map["isEdited"] as? Boolean ?: false,
+            giftId = map["giftId"] as? String ?: "",
+            giftIconUrl = map["giftIconUrl"] as? String ?: ""
         )
     }
 }

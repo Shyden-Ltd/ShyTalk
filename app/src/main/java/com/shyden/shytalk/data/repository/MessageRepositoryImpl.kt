@@ -89,4 +89,14 @@ class MessageRepositoryImpl(
         senderName: String,
         text: String
     ): Resource<Unit> = createAndSendMessage(roomId, senderId, senderName, text, MessageType.JOIN)
+
+    override suspend fun editMessage(
+        roomId: String,
+        messageId: String,
+        newText: String
+    ): Resource<Unit> = firebaseCall("Failed to edit message") {
+        messagesCollection(roomId).document(messageId).update(
+            mapOf("text" to newText, "isEdited" to true)
+        ).await()
+    }
 }

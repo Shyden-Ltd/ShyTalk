@@ -2,8 +2,11 @@ package com.shyden.shytalk.core.model
 
 import com.shyden.shytalk.core.util.timestampToMillis
 
+enum class BroadcastType { GIFT_SEND, GACHA_WIN }
+
 data class Broadcast(
     val id: String = "",
+    val type: BroadcastType = BroadcastType.GIFT_SEND,
     val senderName: String = "",
     val senderPhotoUrl: String? = null,
     val recipientName: String = "",
@@ -15,6 +18,9 @@ data class Broadcast(
     companion object {
         fun fromMap(map: Map<String, Any?>, id: String): Broadcast = Broadcast(
             id = id,
+            type = (map["type"] as? String)?.let {
+                try { BroadcastType.valueOf(it) } catch (_: Exception) { BroadcastType.GIFT_SEND }
+            } ?: BroadcastType.GIFT_SEND,
             senderName = map["senderName"] as? String ?: "",
             senderPhotoUrl = map["senderPhotoUrl"] as? String,
             recipientName = map["recipientName"] as? String ?: "",

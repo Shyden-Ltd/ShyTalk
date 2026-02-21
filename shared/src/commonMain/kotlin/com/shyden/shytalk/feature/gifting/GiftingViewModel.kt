@@ -23,7 +23,16 @@ data class GiftingUiState(
     val isSending: Boolean = false,
     val sentGiftName: String? = null,
     val sentGiftId: String? = null,
-    val error: String? = null
+    val error: String? = null,
+    val coinBalance: Long = 0,
+    val selectedQuantity: Int = 1,
+    val selectedRecipientIds: Set<String> = emptySet(),
+    val isAllSelected: Boolean = false,
+    val showQuantityPicker: Boolean = false,
+    val showConfirmDialog: Boolean = false,
+    val showSendAllConfirm: Boolean = false,
+    val sendAllRecipientId: String? = null,
+    val activeTab: Int = 0
 )
 
 class GiftingViewModel(
@@ -44,27 +53,118 @@ class GiftingViewModel(
         viewModelScope.launch {
             combine(
                 giftRepository.observeGiftCatalog(),
-                giftRepository.observeBackpack(userId)
-            ) { catalog, backpack ->
-                catalog to backpack
+                giftRepository.observeBackpack(userId),
+                economyRepository.observeBalance()
+            ) { catalog, backpack, balance ->
+                Triple(catalog, backpack, balance)
             }.catch { e ->
                 _uiState.update { it.copy(error = e.message) }
-            }.collect { (catalog, backpack) ->
+            }.collect { (catalog, backpack, balance) ->
+                val validBackpack = backpack.filter { !it.isExpired }
                 _uiState.update {
-                    it.copy(giftCatalog = catalog, backpackItems = backpack)
+                    it.copy(giftCatalog = catalog, backpackItems = validBackpack, coinBalance = balance)
                 }
             }
         }
     }
 
     fun selectGift(giftId: String?) {
-        _uiState.update { it.copy(selectedGiftId = giftId) }
+        _uiState.update { it.copy(selectedGiftId = giftId, selectedQuantity = 1) }
     }
 
+    fun setQuantity(quantity: Int) {
+        _uiState.update { it.copy(selectedQuantity = quantity.coerceAtLeast(1)) }
+    }
+
+    fun toggleQuantityPicker() {
+        _uiState.update { it.copy(showQuantityPicker = !it.showQuantityPicker) }
+    }
+
+    fun toggleRecipient(userId: String) {
+        _uiState.update {
+            val newSet = it.selectedRecipientIds.toMutableSet()
+            if (userId in newSet) newSet.remove(userId) else newSet.add(userId)
+            it.copy(selectedRecipientIds = newSet, isAllSelected = false)
+        }
+    }
+
+    fun selectAllRecipients(seatedUserIds: Set<String>) {
+        val currentUserId = authRepository.currentUserId ?: return
+        val filtered = seatedUserIds.filter { it != currentUserId }.toSet()
+        _uiState.update { it.copy(selectedRecipientIds = filtered, isAllSelected = true) }
+    }
+
+    fun deselectAllRecipients() {
+        _uiState.update { it.copy(selectedRecipientIds = emptySet(), isAllSelected = false) }
+    }
+
+    fun setActiveTab(tab: Int) {
+        _uiState.update { it.copy(activeTab = tab, selectedGiftId = null, selectedQuantity = 1) }
+    }
+
+    fun requestSend() {
+        val state = _uiState.value
+        if (state.selectedGiftId == null || state.selectedRecipientIds.isEmpty()) return
+        _uiState.update { it.copy(showConfirmDialog = true) }
+    }
+
+    fun dismissConfirmDialog() {
+        _uiState.update { it.copy(showConfirmDialog = false) }
+    }
+
+    fun confirmSend() {
+        val state = _uiState.value
+        val giftId = state.selectedGiftId ?: return
+        val recipients = state.selectedRecipientIds.toList()
+        val quantity = state.selectedQuantity
+        val isBackpackTab = state.activeTab == 1
+
+        _uiState.update { it.copy(showConfirmDialog = false, isSending = true, error = null) }
+
+        viewModelScope.launch {
+            val result = if (recipients.size == 1) {
+                val recipientId = recipients.first()
+                if (isBackpackTab) {
+                    economyRepository.sendGift(recipientId, giftId, quantity)
+                } else {
+                    economyRepository.sendGiftDirect(recipientId, giftId, quantity)
+                }
+            } else {
+                economyRepository.sendGiftBatch(recipients, giftId, quantity, fromBackpack = isBackpackTab)
+            }
+
+            when (result) {
+                is Resource.Success -> {
+                    val giftName = result.data["giftName"] as? String ?: ""
+                    _uiState.update {
+                        it.copy(
+                            isSending = false,
+                            selectedGiftId = null,
+                            selectedQuantity = 1,
+                            sentGiftName = giftName,
+                            sentGiftId = giftId
+                        )
+                    }
+                }
+                is Resource.Error -> {
+                    _uiState.update { it.copy(isSending = false, error = result.message) }
+                }
+                is Resource.Loading -> {}
+            }
+        }
+    }
+
+    /** Legacy single-recipient send (kept for backward compat) */
     fun sendGift(recipientId: String, giftId: String) {
+        val ownsGift = _uiState.value.backpackItems.any { it.giftId == giftId && it.quantity > 0 }
         viewModelScope.launch {
             _uiState.update { it.copy(isSending = true, error = null) }
-            when (val result = economyRepository.sendGift(recipientId, giftId)) {
+            val result = if (ownsGift) {
+                economyRepository.sendGift(recipientId, giftId)
+            } else {
+                economyRepository.sendGiftDirect(recipientId, giftId)
+            }
+            when (result) {
                 is Resource.Success -> {
                     val giftName = result.data["giftName"] as? String ?: ""
                     _uiState.update {
@@ -73,6 +173,39 @@ class GiftingViewModel(
                             selectedGiftId = null,
                             sentGiftName = giftName,
                             sentGiftId = giftId
+                        )
+                    }
+                }
+                is Resource.Error -> {
+                    _uiState.update { it.copy(isSending = false, error = result.message) }
+                }
+                is Resource.Loading -> {}
+            }
+        }
+    }
+
+    fun requestSendAll(recipientId: String) {
+        if (_uiState.value.backpackItems.isEmpty()) return
+        _uiState.update { it.copy(showSendAllConfirm = true, sendAllRecipientId = recipientId) }
+    }
+
+    fun dismissSendAllConfirm() {
+        _uiState.update { it.copy(showSendAllConfirm = false, sendAllRecipientId = null) }
+    }
+
+    fun confirmSendAll() {
+        val recipientId = _uiState.value.sendAllRecipientId ?: return
+        _uiState.update { it.copy(showSendAllConfirm = false, isSending = true, error = null) }
+
+        viewModelScope.launch {
+            when (val result = economyRepository.sendEntireBackpack(recipientId)) {
+                is Resource.Success -> {
+                    val totalSent = (result.data["totalItemsSent"] as? Number)?.toInt() ?: 0
+                    _uiState.update {
+                        it.copy(
+                            isSending = false,
+                            sendAllRecipientId = null,
+                            sentGiftName = "entire backpack ($totalSent items)"
                         )
                     }
                 }

@@ -47,7 +47,8 @@ private val GoldBorder = BorderStroke(1.dp, CnyGold.copy(alpha = 0.5f))
 fun RoomListItem(
     room: ChatRoom,
     seatUsers: Map<String, User>,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val occupiedSeats = remember(room.seats) {
         room.seats.values.count { it.state == SeatState.OCCUPIED }
@@ -79,7 +80,7 @@ fun RoomListItem(
     Card(
         border = GoldBorder,
         colors = CardDefaults.cardColors(),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
             .clickable(onClick = onClick)

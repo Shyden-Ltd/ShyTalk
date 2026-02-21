@@ -30,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.compose.runtime.collectAsState
@@ -171,7 +172,9 @@ fun RoomListContent(
                 if (uiState.rooms.isEmpty()) {
                     item {
                         Box(
-                            modifier = Modifier.fillParentMaxSize(),
+                            modifier = Modifier
+                                .fillParentMaxSize()
+                                .testTag("roomList_emptyState"),
                             contentAlignment = Alignment.Center
                         ) {
                             Column(
@@ -195,7 +198,8 @@ fun RoomListContent(
                         RoomListItem(
                             room = room,
                             seatUsers = uiState.seatUsers,
-                            onClick = { onNavigateToRoom(room.roomId) }
+                            onClick = { onNavigateToRoom(room.roomId) },
+                            modifier = Modifier.testTag("roomList_roomCard_${room.roomId}")
                         )
                     }
                 }

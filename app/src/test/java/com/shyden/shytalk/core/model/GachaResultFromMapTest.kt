@@ -13,7 +13,6 @@ class GachaResultFromMapTest {
                 mapOf(
                     "giftId" to "g1",
                     "giftName" to "Rose",
-                    "bracket" to "COMMON",
                     "coinValue" to 10L,
                     "iconUrl" to "https://example.com/rose.png"
                 )
@@ -29,7 +28,6 @@ class GachaResultFromMapTest {
         assertEquals(1, result.gifts.size)
         assertEquals("g1", result.gifts[0].giftId)
         assertEquals("Rose", result.gifts[0].giftName)
-        assertEquals(GiftBracket.COMMON, result.gifts[0].bracket)
         assertEquals(10, result.gifts[0].coinValue)
         assertEquals("https://example.com/rose.png", result.gifts[0].iconUrl)
         assertEquals(100, result.coinsSpent)
@@ -80,13 +78,13 @@ class GachaResultFromMapTest {
     }
 
     @Test
-    fun `fromMap handles invalid bracket string`() {
+    fun `fromMap ignores legacy bracket field`() {
         val map = mapOf<String, Any?>(
             "gifts" to listOf(
                 mapOf(
                     "giftId" to "g1",
                     "giftName" to "Rose",
-                    "bracket" to "INVALID_BRACKET",
+                    "bracket" to "COMMON",
                     "coinValue" to 10L
                 )
             )
@@ -94,30 +92,9 @@ class GachaResultFromMapTest {
 
         val result = GachaResult.fromMap(map)
 
-        assertEquals(GiftBracket.COMMON, result.gifts[0].bracket) // defaults to COMMON
-    }
-
-    @Test
-    fun `fromMap handles all bracket types`() {
-        val brackets = listOf("COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY")
-        val gifts = brackets.mapIndexed { i, bracket ->
-            mapOf(
-                "giftId" to "g$i",
-                "giftName" to "Gift $i",
-                "bracket" to bracket,
-                "coinValue" to (i * 100L)
-            )
-        }
-        val map = mapOf<String, Any?>("gifts" to gifts)
-
-        val result = GachaResult.fromMap(map)
-
-        assertEquals(5, result.gifts.size)
-        assertEquals(GiftBracket.COMMON, result.gifts[0].bracket)
-        assertEquals(GiftBracket.UNCOMMON, result.gifts[1].bracket)
-        assertEquals(GiftBracket.RARE, result.gifts[2].bracket)
-        assertEquals(GiftBracket.EPIC, result.gifts[3].bracket)
-        assertEquals(GiftBracket.LEGENDARY, result.gifts[4].bracket)
+        assertEquals(1, result.gifts.size)
+        assertEquals("g1", result.gifts[0].giftId)
+        assertEquals(10, result.gifts[0].coinValue)
     }
 
     @Test
@@ -126,7 +103,6 @@ class GachaResultFromMapTest {
             mapOf(
                 "giftId" to "g$i",
                 "giftName" to "Gift $i",
-                "bracket" to "COMMON",
                 "coinValue" to 10L
             )
         }
@@ -146,11 +122,11 @@ class GachaResultFromMapTest {
     fun `fromMap skips malformed gift entries`() {
         val map = mapOf<String, Any?>(
             "gifts" to listOf(
-                mapOf("giftId" to "g1", "giftName" to "Rose", "bracket" to "COMMON"),
+                mapOf("giftId" to "g1", "giftName" to "Rose"),
                 "not a map",
                 42,
                 null,
-                mapOf("giftId" to "g2", "giftName" to "Crown", "bracket" to "RARE")
+                mapOf("giftId" to "g2", "giftName" to "Crown")
             )
         )
 
@@ -174,7 +150,6 @@ class GachaResultFromMapTest {
         assertEquals(1, result.gifts.size)
         assertEquals("", result.gifts[0].giftId)
         assertEquals("", result.gifts[0].giftName)
-        assertEquals(GiftBracket.COMMON, result.gifts[0].bracket)
         assertEquals(0, result.gifts[0].coinValue)
         assertEquals("", result.gifts[0].iconUrl)
     }

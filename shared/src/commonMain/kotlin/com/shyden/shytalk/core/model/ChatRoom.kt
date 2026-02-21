@@ -23,7 +23,8 @@ data class ChatRoom(
     val voiceRoomName: String = "",
     val firstJoinTimestamps: Map<String, Long> = emptyMap(),
     val allTimeHostIds: Set<String> = emptySet(),
-    val allTimeSeatUserIds: Set<String> = emptySet()
+    val allTimeSeatUserIds: Set<String> = emptySet(),
+    val lastGiftEvent: GiftEvent? = null
 ) {
     fun resolveRole(userId: String): RoomRole = when {
         ownerId == userId -> RoomRole.OWNER
@@ -53,7 +54,19 @@ data class ChatRoom(
         "voiceRoomName" to voiceRoomName,
         "firstJoinTimestamps" to firstJoinTimestamps.mapValues { millisToTimestamp(it.value) },
         "allTimeHostIds" to allTimeHostIds.toList(),
-        "allTimeSeatUserIds" to allTimeSeatUserIds.toList()
+        "allTimeSeatUserIds" to allTimeSeatUserIds.toList(),
+        "lastGiftEvent" to lastGiftEvent?.let {
+            mapOf(
+                "senderId" to it.senderId,
+                "senderName" to it.senderName,
+                "recipientId" to it.recipientId,
+                "recipientName" to it.recipientName,
+                "giftId" to it.giftId,
+                "giftName" to it.giftName,
+                "coinValue" to it.coinValue,
+                "timestamp" to millisToTimestamp(it.timestamp)
+            )
+        }
     )
 
     companion object {
@@ -98,7 +111,11 @@ data class ChatRoom(
                     it.key.toString() to timestampToMillis(it.value)
                 } ?: emptyMap(),
                 allTimeHostIds = (map["allTimeHostIds"] as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet(),
-                allTimeSeatUserIds = (map["allTimeSeatUserIds"] as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet()
+                allTimeSeatUserIds = (map["allTimeSeatUserIds"] as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet(),
+                lastGiftEvent = (map["lastGiftEvent"] as? Map<*, *>)?.let { raw ->
+                    val typed = raw.entries.associate { (k, v) -> k.toString() to v }
+                    GiftEvent.fromMap(typed)
+                }
             )
         }
     }

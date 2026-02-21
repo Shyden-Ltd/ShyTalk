@@ -1790,33 +1790,33 @@ app.post("/api/gifts/seed", async (req, res) => {
   try {
     const db = getFirestore();
     const catalog = [
-      { name: "Rose", coinValue: 8, baseDropRate: 0.70, bracket: "COMMON", order: 1 },
-      { name: "Heart", coinValue: 10, baseDropRate: 0.70, bracket: "COMMON", order: 2 },
-      { name: "Thumbs Up", coinValue: 12, baseDropRate: 0.70, bracket: "COMMON", order: 3 },
-      { name: "Star", coinValue: 15, baseDropRate: 0.70, bracket: "COMMON", order: 4 },
-      { name: "Smiley", coinValue: 18, baseDropRate: 0.70, bracket: "COMMON", order: 5 },
-      { name: "Coffee", coinValue: 20, baseDropRate: 0.70, bracket: "COMMON", order: 6 },
-      { name: "Candy", coinValue: 25, baseDropRate: 0.70, bracket: "COMMON", order: 7 },
-      { name: "Balloon", coinValue: 30, baseDropRate: 0.70, bracket: "COMMON", order: 8 },
-      { name: "Teddy Bear", coinValue: 50, baseDropRate: 0.20, bracket: "UNCOMMON", order: 9 },
-      { name: "Perfume", coinValue: 80, baseDropRate: 0.20, bracket: "UNCOMMON", order: 10 },
-      { name: "Diamond Ring", coinValue: 120, baseDropRate: 0.20, bracket: "UNCOMMON", order: 11 },
-      { name: "Bouquet", coinValue: 150, baseDropRate: 0.20, bracket: "UNCOMMON", order: 12 },
-      { name: "Fireworks", coinValue: 200, baseDropRate: 0.20, bracket: "UNCOMMON", order: 13 },
-      { name: "Music Box", coinValue: 300, baseDropRate: 0.20, bracket: "UNCOMMON", order: 14 },
-      { name: "Treasure Chest", coinValue: 500, baseDropRate: 0.08, bracket: "RARE", order: 15 },
-      { name: "Crown", coinValue: 800, baseDropRate: 0.08, bracket: "RARE", order: 16 },
-      { name: "Sports Car", coinValue: 1200, baseDropRate: 0.08, bracket: "RARE", order: 17 },
-      { name: "Yacht", coinValue: 1800, baseDropRate: 0.08, bracket: "RARE", order: 18 },
-      { name: "Dragon", coinValue: 2500, baseDropRate: 0.08, bracket: "RARE", order: 19 },
-      { name: "Phoenix", coinValue: 3500, baseDropRate: 0.08, bracket: "RARE", order: 20 },
-      { name: "Crystal Ball", coinValue: 5000, baseDropRate: 0.018, bracket: "EPIC", order: 21 },
-      { name: "Castle", coinValue: 8000, baseDropRate: 0.018, bracket: "EPIC", order: 22 },
-      { name: "Spaceship", coinValue: 12000, baseDropRate: 0.018, bracket: "EPIC", order: 23 },
-      { name: "Aurora", coinValue: 16000, baseDropRate: 0.018, bracket: "EPIC", order: 24 },
-      { name: "Galaxy Unicorn", coinValue: 20000, baseDropRate: 0.018, bracket: "EPIC", order: 25 },
-      { name: "ShyTalk Emblem", coinValue: 35000, baseDropRate: 0.002, bracket: "LEGENDARY", order: 26 },
-      { name: "Celestial Throne", coinValue: 52000, baseDropRate: 0.002, bracket: "LEGENDARY", order: 27 },
+      { name: "Rose", coinValue: 8, order: 1 },
+      { name: "Heart", coinValue: 10, order: 2 },
+      { name: "Thumbs Up", coinValue: 12, order: 3 },
+      { name: "Star", coinValue: 15, order: 4 },
+      { name: "Smiley", coinValue: 18, order: 5 },
+      { name: "Coffee", coinValue: 20, order: 6 },
+      { name: "Candy", coinValue: 25, order: 7 },
+      { name: "Balloon", coinValue: 30, order: 8 },
+      { name: "Teddy Bear", coinValue: 50, order: 9 },
+      { name: "Perfume", coinValue: 80, order: 10 },
+      { name: "Diamond Ring", coinValue: 120, order: 11 },
+      { name: "Bouquet", coinValue: 150, order: 12 },
+      { name: "Fireworks", coinValue: 200, order: 13 },
+      { name: "Music Box", coinValue: 300, order: 14 },
+      { name: "Treasure Chest", coinValue: 500, order: 15 },
+      { name: "Crown", coinValue: 800, order: 16 },
+      { name: "Sports Car", coinValue: 1200, order: 17 },
+      { name: "Yacht", coinValue: 1800, order: 18 },
+      { name: "Dragon", coinValue: 2500, order: 19 },
+      { name: "Phoenix", coinValue: 3500, order: 20 },
+      { name: "Crystal Ball", coinValue: 5000, order: 21 },
+      { name: "Castle", coinValue: 8000, order: 22 },
+      { name: "Spaceship", coinValue: 12000, order: 23 },
+      { name: "Aurora", coinValue: 16000, order: 24 },
+      { name: "Galaxy Unicorn", coinValue: 20000, order: 25 },
+      { name: "ShyTalk Emblem", coinValue: 35000, order: 26 },
+      { name: "Celestial Throne", coinValue: 52000, order: 27 },
     ];
 
     const batch = db.batch();
@@ -1825,8 +1825,6 @@ app.post("/api/gifts/seed", async (req, res) => {
       const ref = db.collection("gifts").doc(docId);
       batch.set(ref, {
         ...gift,
-        beanValue: Math.floor(gift.coinValue * 0.6),
-        broadcastEnabled: gift.bracket === "LEGENDARY",
         animationUrl: "",
         soundUrl: "",
         iconUrl: "",
@@ -1892,7 +1890,6 @@ app.get("/api/users/:uid/backpack", async (req, res) => {
         giftId: doc.id,
         ...doc.data(),
         giftName: gift.name || doc.id,
-        bracket: gift.bracket || "",
         coinValue: gift.coinValue || 0,
         lastAcquired: doc.data().lastAcquired?.toDate?.()?.toISOString() || null,
       };
@@ -2108,6 +2105,513 @@ app.get("/api/users/:uid/transactions", async (req, res) => {
     return res.json({ transactions });
   } catch (err) {
     console.error("GET transactions error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── Bulk Cleanup Endpoints ───────────────────────────────────
+
+// POST /api/cleanup/all-backpacks
+app.post("/api/cleanup/all-backpacks", async (req, res) => {
+  try {
+    const db = getFirestore();
+    const usersSnap = await db.collection("users").select().get();
+    let usersCleared = 0;
+    let itemsDeleted = 0;
+
+    for (const userDoc of usersSnap.docs) {
+      const bpSnap = await userDoc.ref.collection("backpack").get();
+      if (bpSnap.empty) continue;
+
+      for (let i = 0; i < bpSnap.docs.length; i += 500) {
+        const batch = db.batch();
+        bpSnap.docs.slice(i, i + 500).forEach((doc) => batch.delete(doc.ref));
+        await batch.commit();
+      }
+      itemsDeleted += bpSnap.docs.length;
+      usersCleared++;
+    }
+
+    await writeAuditLog(db, {
+      adminUid: req.admin.uid,
+      action: "cleanup_all_backpacks",
+      note: `Cleared ${usersCleared} users, ${itemsDeleted} items`,
+    });
+
+    return res.json({ success: true, usersCleared, itemsDeleted });
+  } catch (err) {
+    console.error("POST cleanup/all-backpacks error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/cleanup/all-giftwalls
+app.post("/api/cleanup/all-giftwalls", async (req, res) => {
+  try {
+    const db = getFirestore();
+    const usersSnap = await db.collection("users").select().get();
+    let usersCleared = 0;
+    let itemsDeleted = 0;
+
+    for (const userDoc of usersSnap.docs) {
+      const gwSnap = await userDoc.ref.collection("giftWall").get();
+      if (gwSnap.empty) continue;
+
+      for (let i = 0; i < gwSnap.docs.length; i += 500) {
+        const batch = db.batch();
+        gwSnap.docs.slice(i, i + 500).forEach((doc) => batch.delete(doc.ref));
+        await batch.commit();
+      }
+      itemsDeleted += gwSnap.docs.length;
+      usersCleared++;
+    }
+
+    await writeAuditLog(db, {
+      adminUid: req.admin.uid,
+      action: "cleanup_all_giftwalls",
+      note: `Cleared ${usersCleared} users, ${itemsDeleted} items`,
+    });
+
+    return res.json({ success: true, usersCleared, itemsDeleted });
+  } catch (err) {
+    console.error("POST cleanup/all-giftwalls error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/cleanup/all-coins
+app.post("/api/cleanup/all-coins", async (req, res) => {
+  try {
+    const db = getFirestore();
+    const snap = await db.collection("users").where("shyCoins", ">", 0).get();
+    let usersCleared = 0;
+
+    for (let i = 0; i < snap.docs.length; i += 500) {
+      const batch = db.batch();
+      snap.docs.slice(i, i + 500).forEach((doc) => {
+        batch.update(doc.ref, { shyCoins: 0 });
+      });
+      await batch.commit();
+      usersCleared += Math.min(500, snap.docs.length - i);
+    }
+
+    await writeAuditLog(db, {
+      adminUid: req.admin.uid,
+      action: "cleanup_all_coins",
+      note: `Reset coins for ${usersCleared} users`,
+    });
+
+    return res.json({ success: true, usersCleared });
+  } catch (err) {
+    console.error("POST cleanup/all-coins error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/cleanup/all-beans
+app.post("/api/cleanup/all-beans", async (req, res) => {
+  try {
+    const db = getFirestore();
+    const snap = await db.collection("users").where("shyBeans", ">", 0).get();
+    let usersCleared = 0;
+
+    for (let i = 0; i < snap.docs.length; i += 500) {
+      const batch = db.batch();
+      snap.docs.slice(i, i + 500).forEach((doc) => {
+        batch.update(doc.ref, { shyBeans: 0 });
+      });
+      await batch.commit();
+      usersCleared += Math.min(500, snap.docs.length - i);
+    }
+
+    await writeAuditLog(db, {
+      adminUid: req.admin.uid,
+      action: "cleanup_all_beans",
+      note: `Reset beans for ${usersCleared} users`,
+    });
+
+    return res.json({ success: true, usersCleared });
+  } catch (err) {
+    console.error("POST cleanup/all-beans error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/cleanup/all-spin-history
+app.post("/api/cleanup/all-spin-history", async (req, res) => {
+  try {
+    const db = getFirestore();
+    const usersSnap = await db.collection("users").select().get();
+    let usersCleared = 0;
+    let txDeleted = 0;
+    let pityReset = 0;
+
+    for (const userDoc of usersSnap.docs) {
+      // Delete GACHA_PULL transactions
+      const txSnap = await userDoc.ref.collection("transactions")
+        .where("type", "==", "GACHA_PULL").get();
+      if (!txSnap.empty) {
+        for (let i = 0; i < txSnap.docs.length; i += 500) {
+          const batch = db.batch();
+          txSnap.docs.slice(i, i + 500).forEach((doc) => batch.delete(doc.ref));
+          await batch.commit();
+        }
+        txDeleted += txSnap.docs.length;
+        usersCleared++;
+      }
+
+      // Reset pity counter
+      const userData = (await userDoc.ref.get()).data();
+      if (userData && userData.pityCounter > 0) {
+        await userDoc.ref.update({ pityCounter: 0 });
+        pityReset++;
+      }
+    }
+
+    await writeAuditLog(db, {
+      adminUid: req.admin.uid,
+      action: "cleanup_all_spin_history",
+      note: `Cleared ${usersCleared} users, ${txDeleted} transactions, reset ${pityReset} pity counters`,
+    });
+
+    return res.json({ success: true, usersCleared, txDeleted, pityReset });
+  } catch (err) {
+    console.error("POST cleanup/all-spin-history error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Economy Config Endpoints ─────────────────────────────────
+
+const ECONOMY_CONFIG_FIELDS = {
+  beanConversionRate: "number",
+  beanRedeemBonusThreshold: "number",
+  beanRedeemBonusMultiplier: "number",
+  pullCosts: "object",
+  broadcastSendThreshold: "number",
+  broadcastWinThreshold: "number",
+  dropRateExponent: "number",
+  pitySoftStart: "number",
+  pityHardLimit: "number",
+  pitySoftMaxShift: "number",
+  pityHighValueThreshold: "number",
+  dailyBase: "number",
+  milestoneRewards: "object",
+};
+
+// GET /api/config/economy
+app.get("/api/config/economy", async (req, res) => {
+  try {
+    const db = getFirestore();
+    const doc = await db.collection("config").doc("economy").get();
+    if (!doc.exists) {
+      return res.json({ config: {} });
+    }
+    return res.json({ config: doc.data() });
+  } catch (err) {
+    console.error("GET config/economy error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PUT /api/config/economy
+app.put("/api/config/economy", async (req, res) => {
+  try {
+    const updates = req.body;
+    if (!updates || typeof updates !== "object" || Array.isArray(updates)) {
+      return res.status(400).json({ error: "Body must be a JSON object" });
+    }
+
+    const errors = [];
+    const validated = {};
+
+    for (const [key, value] of Object.entries(updates)) {
+      const expectedType = ECONOMY_CONFIG_FIELDS[key];
+      if (!expectedType) {
+        errors.push(`Unknown field: ${key}`);
+        continue;
+      }
+      if (expectedType === "number") {
+        if (typeof value !== "number" || !Number.isFinite(value)) {
+          errors.push(`${key} must be a finite number`);
+          continue;
+        }
+        if (value < 0) {
+          errors.push(`${key} must be non-negative`);
+          continue;
+        }
+      } else if (expectedType === "object") {
+        if (typeof value !== "object" || value === null || Array.isArray(value)) {
+          errors.push(`${key} must be an object`);
+          continue;
+        }
+        // Validate that all values are numbers
+        for (const [k, v] of Object.entries(value)) {
+          if (typeof v !== "number" || !Number.isFinite(v)) {
+            errors.push(`${key}.${k} must be a finite number`);
+          }
+        }
+      }
+      validated[key] = value;
+    }
+
+    if (errors.length > 0) {
+      return res.status(400).json({ error: errors.join("; ") });
+    }
+
+    if (Object.keys(validated).length === 0) {
+      return res.status(400).json({ error: "No valid fields to update" });
+    }
+
+    const db = getFirestore();
+    await db.collection("config").doc("economy").set(validated, { merge: true });
+
+    await writeAuditLog(db, {
+      adminUid: req.admin.uid,
+      action: "update_economy_config",
+      note: `Updated: ${Object.keys(validated).join(", ")}`,
+    });
+
+    return res.json({ success: true, updatedFields: Object.keys(validated) });
+  } catch (err) {
+    console.error("PUT config/economy error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── Gift CRUD ────────────────────────────────────────────────
+
+// PUT /api/gifts/:id — Update an existing gift
+app.put("/api/gifts/:id", async (req, res) => {
+  try {
+    const db = getFirestore();
+    const giftId = req.params.id;
+    const ref = db.collection("gifts").doc(giftId);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: "Gift not found" });
+
+    const allowed = ["name", "coinValue", "animationUrl", "soundUrl", "iconUrl", "order"];
+    const updates = {};
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) {
+        if (key === "coinValue" || key === "order") {
+          const v = Number(req.body[key]);
+          if (!Number.isFinite(v) || v < 0) return res.status(400).json({ error: `${key} must be a non-negative number` });
+          updates[key] = v;
+        } else {
+          updates[key] = String(req.body[key]);
+        }
+      }
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: "No valid fields to update" });
+    }
+
+    await ref.update(updates);
+
+    await writeAuditLog(db, {
+      adminUid: req.admin.uid,
+      action: "update_gift",
+      targetId: giftId,
+      note: `Updated gift ${giftId}: ${Object.keys(updates).join(", ")}`,
+    });
+
+    return res.json({ success: true, updatedFields: Object.keys(updates) });
+  } catch (err) {
+    console.error("PUT gift error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/gifts — Create a new gift
+app.post("/api/gifts", async (req, res) => {
+  try {
+    const db = getFirestore();
+    const { name, coinValue, animationUrl, soundUrl, iconUrl, order } = req.body;
+
+    if (!name || typeof name !== "string" || name.trim().length === 0) {
+      return res.status(400).json({ error: "name is required" });
+    }
+    if (coinValue === undefined || !Number.isFinite(Number(coinValue)) || Number(coinValue) < 0) {
+      return res.status(400).json({ error: "coinValue must be a non-negative number" });
+    }
+
+    const docId = name.trim().toLowerCase().replace(/\s+/g, "_");
+    const existing = await db.collection("gifts").doc(docId).get();
+    if (existing.exists) {
+      return res.status(409).json({ error: `Gift with ID "${docId}" already exists` });
+    }
+
+    const giftData = {
+      name: name.trim(),
+      coinValue: Number(coinValue),
+      animationUrl: animationUrl || "",
+      soundUrl: soundUrl || "",
+      iconUrl: iconUrl || "",
+      order: Number(order) || 0,
+    };
+
+    await db.collection("gifts").doc(docId).set(giftData);
+
+    await writeAuditLog(db, {
+      adminUid: req.admin.uid,
+      action: "create_gift",
+      targetId: docId,
+      note: `Created gift: ${name} (${coinValue} coins)`,
+    });
+
+    return res.json({ success: true, id: docId, gift: giftData });
+  } catch (err) {
+    console.error("POST gift error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /api/gifts/:id — Delete a gift from catalog
+app.delete("/api/gifts/:id", async (req, res) => {
+  try {
+    const db = getFirestore();
+    const giftId = req.params.id;
+    const ref = db.collection("gifts").doc(giftId);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: "Gift not found" });
+
+    const giftData = doc.data();
+    await ref.delete();
+
+    await writeAuditLog(db, {
+      adminUid: req.admin.uid,
+      action: "delete_gift",
+      targetId: giftId,
+      note: `Deleted gift: ${giftData.name || giftId}`,
+    });
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("DELETE gift error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// --- POST /api/users/:uid/guarantee-next-pull ---
+// Set a guaranteed gift for the user's next gacha pull
+app.post("/api/users/:uid/guarantee-next-pull", async (req, res) => {
+  try {
+    const { giftId } = req.body;
+    const uid = req.params.uid;
+
+    if (!giftId || typeof giftId !== "string") {
+      return res.status(400).json({ error: "giftId is required" });
+    }
+
+    const db = getFirestore();
+
+    // Validate gift exists
+    const giftDoc = await db.collection("gifts").doc(giftId).get();
+    if (!giftDoc.exists) {
+      return res.status(404).json({ error: "Gift not found in catalog" });
+    }
+
+    // Validate user exists
+    const userDoc = await db.collection("users").doc(uid).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const giftData = giftDoc.data();
+
+    await db.collection("users").doc(uid).update({
+      guaranteedNextPull: {
+        giftId,
+        setBy: req.admin.uid,
+        setAt: Timestamp.now(),
+      },
+    });
+
+    await writeAuditLog(db, {
+      adminUid: req.admin.uid,
+      action: "guarantee_next_pull",
+      targetUserId: uid,
+      note: `Guaranteed next pull: ${giftData.name} (${giftId}, ${giftData.coinValue} coins)`,
+    });
+
+    return res.json({
+      success: true,
+      giftId,
+      giftName: giftData.name,
+      coinValue: giftData.coinValue,
+    });
+  } catch (err) {
+    console.error("POST /api/users/:uid/guarantee-next-pull error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// --- DELETE /api/users/:uid/guarantee-next-pull ---
+// Revoke a pending guaranteed pull before it's used
+app.delete("/api/users/:uid/guarantee-next-pull", async (req, res) => {
+  try {
+    const uid = req.params.uid;
+    const db = getFirestore();
+
+    const userDoc = await db.collection("users").doc(uid).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    await db.collection("users").doc(uid).update({
+      guaranteedNextPull: FieldValue.delete(),
+    });
+
+    await writeAuditLog(db, {
+      adminUid: req.admin.uid,
+      action: "revoke_guarantee_next_pull",
+      targetUserId: uid,
+    });
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("DELETE /api/users/:uid/guarantee-next-pull error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// --- GET /api/users/:uid/guarantee-next-pull ---
+// Check current guarantee status for a user
+app.get("/api/users/:uid/guarantee-next-pull", async (req, res) => {
+  try {
+    const uid = req.params.uid;
+    const db = getFirestore();
+
+    const userDoc = await db.collection("users").doc(uid).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const userData = userDoc.data();
+    const guarantee = userData.guaranteedNextPull || null;
+
+    if (!guarantee) {
+      return res.json({ active: false });
+    }
+
+    // Enrich with gift info
+    const giftDoc = await db.collection("gifts").doc(guarantee.giftId).get();
+    const giftData = giftDoc.exists ? giftDoc.data() : null;
+
+    return res.json({
+      active: true,
+      giftId: guarantee.giftId,
+      giftName: giftData ? giftData.name : "Unknown",
+      coinValue: giftData ? giftData.coinValue : 0,
+      setBy: guarantee.setBy || null,
+      setAt: guarantee.setAt && typeof guarantee.setAt.toDate === "function"
+        ? guarantee.setAt.toDate().toISOString()
+        : guarantee.setAt || null,
+    });
+  } catch (err) {
+    console.error("GET /api/users/:uid/guarantee-next-pull error:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });

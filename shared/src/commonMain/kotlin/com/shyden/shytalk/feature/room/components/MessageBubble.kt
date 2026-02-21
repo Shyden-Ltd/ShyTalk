@@ -1,12 +1,15 @@
 package com.shyden.shytalk.feature.room.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -14,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
@@ -92,6 +96,7 @@ private fun UserAvatar(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MessageBubble(
     message: Message,
@@ -100,7 +105,9 @@ fun MessageBubble(
     isUserSeated: Boolean,
     isSelf: Boolean,
     onTapUser: () -> Unit,
-    onInvite: () -> Unit
+    onInvite: () -> Unit,
+    onEditMessage: (() -> Unit)? = null,
+    aliases: Map<String, String> = emptyMap()
 ) {
     val canInvite = (currentRole == RoomRole.OWNER || currentRole == RoomRole.HOST)
             && !isSelf && !isUserSeated && message.senderId != "system"
@@ -121,7 +128,7 @@ fun MessageBubble(
         MessageType.JOIN -> {
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxWidth(0.75f)
                     .padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.Start,
                 verticalAlignment = Alignment.CenterVertically
@@ -170,16 +177,17 @@ fun MessageBubble(
             }
         }
         MessageType.TEXT -> {
+            val resolvedName = aliases[message.senderId] ?: message.senderName
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxWidth(0.75f)
                     .padding(vertical = 2.dp),
                 horizontalArrangement = Arrangement.Start,
                 verticalAlignment = Alignment.Top
             ) {
                 UserAvatar(
                     photoUrl = user?.photoUrl,
-                    displayName = message.senderName,
+                    displayName = resolvedName,
                     nationality = user?.nationality,
                     size = 32.dp,
                     onClick = onTapUser
@@ -189,7 +197,7 @@ fun MessageBubble(
 
                 Column(modifier = Modifier.weight(1f)) {
                     StyledDisplayName(
-                        displayName = message.senderName,
+                        displayName = resolvedName,
                         isSuperShy = user?.isSuperShy ?: false,
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = MaterialTheme.colorScheme.primary
@@ -202,20 +210,75 @@ fun MessageBubble(
                             MaterialTheme.colorScheme.primaryContainer
                         } else {
                             MaterialTheme.colorScheme.surfaceVariant
+                        },
+                        modifier = if (isSelf && onEditMessage != null) {
+                            Modifier.combinedClickable(
+                                onClick = {},
+                                onLongClick = onEditMessage
+                            )
+                        } else {
+                            Modifier
                         }
                     ) {
-                        Text(
-                            text = message.text,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (isSelf) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                        )
+                        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                            Text(
+                                text = message.text,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (isSelf) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                            if (message.isEdited) {
+                                Text(
+                                    text = "edited",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontStyle = FontStyle.Italic,
+                                    color = if (isSelf) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
+            }
+        }
+        MessageType.GIFT -> {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (message.giftIconUrl.isNotEmpty()) {
+                    AsyncImage(
+                        model = message.giftIconUrl,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.CardGiftcard,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = message.text,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontStyle = FontStyle.Italic,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
         }
     }

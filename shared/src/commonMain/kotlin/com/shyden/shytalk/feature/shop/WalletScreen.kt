@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -48,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -92,7 +94,10 @@ fun WalletScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onNavigateToTransactions) {
+                    IconButton(
+                        onClick = onNavigateToTransactions,
+                        modifier = Modifier.testTag("wallet_transactionsButton")
+                    ) {
                         Icon(Icons.AutoMirrored.Filled.ReceiptLong, contentDescription = "Transaction History")
                     }
                 }
@@ -162,7 +167,7 @@ private fun CoinsTab(
             amount = coinBalance,
             icon = "\uD83E\uDE99",
             containerColor = MaterialTheme.colorScheme.primaryContainer,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().testTag("wallet_balance")
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -192,7 +197,7 @@ private fun CoinsTab(
             contentPadding = PaddingValues(0.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.height(300.dp)
+            modifier = Modifier.heightIn(max = 240.dp)
         ) {
             items(coinPackages) { pkg ->
                 val totalCoins = pkg.coins + pkg.bonusCoins
@@ -351,13 +356,15 @@ internal fun CoinPackageCard(pkg: CoinPackage, enabled: Boolean = true, onClick:
     Card(
         onClick = onClick,
         enabled = enabled,
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.heightIn(min = 72.dp)
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier.fillMaxSize().padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Text("${pkg.coins}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+            Text("${pkg.coins}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
             if (pkg.bonusCoins > 0) {
                 Text("+${pkg.bonusCoins} bonus", color = Color(0xFF4CAF50), style = MaterialTheme.typography.bodySmall)
             }

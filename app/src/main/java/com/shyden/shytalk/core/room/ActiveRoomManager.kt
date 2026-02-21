@@ -46,10 +46,10 @@ class ActiveRoomManager(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val _activeRoomId = MutableStateFlow<String?>(null)
-    val activeRoomId: StateFlow<String?> = _activeRoomId.asStateFlow()
+    override val activeRoomId: StateFlow<String?> = _activeRoomId.asStateFlow()
 
     private val _activeRoom = MutableStateFlow<ChatRoom?>(null)
-    val activeRoom: StateFlow<ChatRoom?> = _activeRoom.asStateFlow()
+    override val activeRoom: StateFlow<ChatRoom?> = _activeRoom.asStateFlow()
 
     private val _messages = MutableStateFlow<List<Message>>(emptyList())
     val messages: StateFlow<List<Message>> = _messages.asStateFlow()
@@ -90,12 +90,12 @@ class ActiveRoomManager(
         leaveSignals[roomId]?.await()
     }
 
-    var isAppInForeground: Boolean = false
+    override var isAppInForeground: Boolean = false
 
     var currentUserName: String = ""
         private set
 
-    val currentUserId: String
+    override val currentUserId: String
         get() = authRepository.currentUserId ?: ""
 
     override fun isInRoom(roomId: String): Boolean = _activeRoomId.value == roomId

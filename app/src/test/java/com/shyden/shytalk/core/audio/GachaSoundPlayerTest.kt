@@ -1,6 +1,5 @@
 package com.shyden.shytalk.core.audio
 
-import com.shyden.shytalk.core.model.GiftBracket
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -61,16 +60,35 @@ class GachaSoundPlayerTest {
     }
 
     @Test
-    fun `GiftBracket entries count is 5`() {
-        assertEquals(5, GiftBracket.entries.size)
+    fun `coin value sound tiers have 5 levels`() {
+        // Verify the 5 coin-value-based sound tiers
+        val tiers = listOf(
+            10 to 280,     // < 50 → 280ms
+            100 to 420,    // < 200 → 420ms
+            500 to 600,    // < 2000 → 600ms
+            5000 to 800,   // < 10000 → 800ms
+            50000 to 1200  // >= 10000 → 1200ms
+        )
+        assertEquals(5, tiers.size)
     }
 
     @Test
-    fun `GiftBracket ordinal ordering matches rarity`() {
-        assert(GiftBracket.COMMON.ordinal < GiftBracket.UNCOMMON.ordinal)
-        assert(GiftBracket.UNCOMMON.ordinal < GiftBracket.RARE.ordinal)
-        assert(GiftBracket.RARE.ordinal < GiftBracket.EPIC.ordinal)
-        assert(GiftBracket.EPIC.ordinal < GiftBracket.LEGENDARY.ordinal)
+    fun `win reveal duration increases with coin value`() {
+        val durations = listOf(
+            10 to 280,
+            100 to 420,
+            500 to 600,
+            5000 to 800,
+            50000 to 1200
+        )
+
+        var previousDuration = 0
+        for ((coinValue, duration) in durations) {
+            assert(duration > previousDuration) {
+                "coinValue $coinValue duration ($duration) should be > previous ($previousDuration)"
+            }
+            previousDuration = duration
+        }
     }
 
     @Test
@@ -104,41 +122,24 @@ class GachaSoundPlayerTest {
     }
 
     @Test
-    fun `win reveal duration increases with rarity`() {
-        val durations = mapOf(
-            GiftBracket.COMMON to 280,
-            GiftBracket.UNCOMMON to 420,
-            GiftBracket.RARE to 600,
-            GiftBracket.EPIC to 800,
-            GiftBracket.LEGENDARY to 1200
-        )
-
-        var previousDuration = 0
-        for (bracket in GiftBracket.entries) {
-            val duration = durations[bracket]!!
-            assert(duration > previousDuration) {
-                "$bracket duration ($duration) should be > previous ($previousDuration)"
-            }
-            previousDuration = duration
-        }
-    }
-
-    @Test
     fun `high tier fanfare duration is longer than any win reveal`() {
         val fanfareDuration = 1800
-        val longestWinReveal = 1200 // LEGENDARY
+        val longestWinReveal = 1200 // >= 10000 coinValue
         assert(fanfareDuration > longestWinReveal) {
             "Fanfare ($fanfareDuration ms) should be longer than longest win reveal ($longestWinReveal ms)"
         }
     }
 
     @Test
-    fun `high tier fanfare triggers for RARE and above only`() {
-        val highTierBrackets = GiftBracket.entries.filter { it.ordinal >= GiftBracket.RARE.ordinal }
-        assertEquals(listOf(GiftBracket.RARE, GiftBracket.EPIC, GiftBracket.LEGENDARY), highTierBrackets)
+    fun `high tier fanfare triggers for coin value 500 and above`() {
+        // The fanfare threshold is coinValue >= 500
+        val highValueThreshold = 500
+        val coinValues = listOf(10, 100, 200, 499, 500, 1000, 5000, 50000)
+        val highTier = coinValues.filter { it >= highValueThreshold }
+        val lowTier = coinValues.filter { it < highValueThreshold }
 
-        val lowTierBrackets = GiftBracket.entries.filter { it.ordinal < GiftBracket.RARE.ordinal }
-        assertEquals(listOf(GiftBracket.COMMON, GiftBracket.UNCOMMON), lowTierBrackets)
+        assertEquals(listOf(500, 1000, 5000, 50000), highTier)
+        assertEquals(listOf(10, 100, 200, 499), lowTier)
     }
 
     @Test

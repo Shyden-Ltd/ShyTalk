@@ -42,6 +42,7 @@ kotlin {
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.datetime)
             implementation(libs.androidx.lifecycle.viewmodel)
+            implementation(libs.androidx.lifecycle.runtime.compose)
             implementation(libs.koin.compose.viewmodel)
             implementation(libs.coil3.compose)
             implementation(libs.coil3.network.ktor)

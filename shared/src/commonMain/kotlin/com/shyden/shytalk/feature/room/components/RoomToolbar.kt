@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
@@ -52,7 +53,7 @@ fun RoomToolbar(
                         style = MaterialTheme.typography.titleMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
+                        modifier = Modifier.weight(1f, fill = false).testTag("room_roomName")
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Icon(
@@ -74,7 +75,10 @@ fun RoomToolbar(
             }
         },
         navigationIcon = {
-            IconButton(onClick = onBack) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier.testTag("room_backButton")
+            ) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go back")
             }
         },

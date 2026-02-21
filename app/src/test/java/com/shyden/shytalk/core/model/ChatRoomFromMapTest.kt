@@ -268,4 +268,77 @@ class ChatRoomFromMapTest {
         val expectedKeys = (0 until Constants.MAX_SEATS).map { it.toString() }.toSet()
         assertEquals(expectedKeys, ChatRoom.DEFAULT_SEATS.keys)
     }
+
+    // --- lastGiftEvent ---
+
+    @Test
+    fun `fromMap parses lastGiftEvent`() {
+        val map = mapOf<String, Any?>(
+            "lastGiftEvent" to mapOf(
+                "senderId" to "sender-1",
+                "senderName" to "Alice",
+                "recipientId" to "recipient-1",
+                "recipientName" to "Bob",
+                "giftId" to "crown",
+                "giftName" to "Crown",
+                "coinValue" to 800L,
+                "timestamp" to ts
+            )
+        )
+        val room = ChatRoom.fromMap(map, "room-1")
+        val event = room.lastGiftEvent
+        assertEquals("sender-1", event?.senderId)
+        assertEquals("Alice", event?.senderName)
+        assertEquals("recipient-1", event?.recipientId)
+        assertEquals("Bob", event?.recipientName)
+        assertEquals("crown", event?.giftId)
+        assertEquals("Crown", event?.giftName)
+        assertEquals(800, event?.coinValue)
+        assertEquals(tsMillis, event?.timestamp)
+    }
+
+    @Test
+    fun `fromMap defaults lastGiftEvent to null when missing`() {
+        val room = ChatRoom.fromMap(emptyMap(), "room-1")
+        assertNull(room.lastGiftEvent)
+    }
+
+    @Test
+    fun `fromMap defaults lastGiftEvent to null when null`() {
+        val map = mapOf<String, Any?>("lastGiftEvent" to null)
+        val room = ChatRoom.fromMap(map, "room-1")
+        assertNull(room.lastGiftEvent)
+    }
+
+    @Test
+    fun `toMap serializes lastGiftEvent`() {
+        val event = GiftEvent(
+            senderId = "s1",
+            senderName = "Alice",
+            recipientId = "r1",
+            recipientName = "Bob",
+            giftId = "rose",
+            giftName = "Rose",
+            coinValue = 10,
+            timestamp = tsMillis
+        )
+        val room = ChatRoom(roomId = "room-1", createdAt = tsMillis, lastGiftEvent = event)
+        val map = room.toMap()
+        @Suppress("UNCHECKED_CAST")
+        val eventMap = map["lastGiftEvent"] as Map<String, Any?>
+        assertEquals("s1", eventMap["senderId"])
+        assertEquals("Alice", eventMap["senderName"])
+        assertEquals("r1", eventMap["recipientId"])
+        assertEquals("Bob", eventMap["recipientName"])
+        assertEquals("rose", eventMap["giftId"])
+        assertEquals("Rose", eventMap["giftName"])
+        assertEquals(10, eventMap["coinValue"])
+    }
+
+    @Test
+    fun `toMap serializes null lastGiftEvent`() {
+        val room = ChatRoom(roomId = "room-1", createdAt = tsMillis, lastGiftEvent = null)
+        val map = room.toMap()
+        assertNull(map["lastGiftEvent"])
+    }
 }

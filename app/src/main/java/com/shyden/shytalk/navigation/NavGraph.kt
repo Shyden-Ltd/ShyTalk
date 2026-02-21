@@ -2,17 +2,23 @@ package com.shyden.shytalk.navigation
 
 import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.core.content.ContextCompat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -28,8 +34,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import com.google.firebase.firestore.FirebaseFirestore
-import com.shyden.shytalk.core.room.ActiveRoomManager
+import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.google.firebase.messaging.FirebaseMessaging
 import com.shyden.shytalk.core.util.Resource
@@ -70,7 +75,12 @@ import com.shyden.shytalk.feature.daily.DailyRewardDialog
 import com.shyden.shytalk.feature.daily.DailyRewardViewModel
 import com.shyden.shytalk.data.remote.BillingService
 import com.shyden.shytalk.feature.room.RoomScreen
+import com.shyden.shytalk.core.model.Broadcast
+import com.shyden.shytalk.core.ui.BroadcastBanner
+import com.shyden.shytalk.data.repository.GiftRepository
 import com.shyden.shytalk.feature.warning.WarningScreen
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import org.koin.compose.koinInject
@@ -89,7 +99,7 @@ fun NavGraph(
     startDestination: String,
     onSignOut: () -> Unit
 ) {
-    val activeRoomManager: ActiveRoomManager = koinInject()
+    val activeRoomManager: RoomLifecycleManager = koinInject()
     val authRepository: AuthRepository = koinInject()
     var currentUserId by remember { mutableStateOf(authRepository.currentUserId) }
 
@@ -102,35 +112,40 @@ fun NavGraph(
 
     // Real-time suspension + warning listener
     val uid = currentUserId
+    val userRepository: UserRepository = koinInject()
     if (uid != null) {
-        DisposableEffect(uid) {
-            val listener = FirebaseFirestore.getInstance()
-                .collection("users")
-                .document(uid)
-                .addSnapshotListener { snapshot, _ ->
-                    if (snapshot?.getBoolean("isSuspended") == true) {
-                        val endTimestamp = snapshot.getTimestamp("suspensionEndDate")
-                        val isActive = endTimestamp == null ||
-                            endTimestamp.toDate().time > System.currentTimeMillis()
-                        if (isActive) {
-                            onSignOut()
-                            navController.navigate(Screen.SignIn.route) {
-                                popUpTo(0) { inclusive = true }
-                            }
-                        }
-                    }
-                    // Check for active warning — navigate to warning screen
-                    if (snapshot?.getBoolean("hasActiveWarning") == true) {
-                        val currentRoute = navController.currentDestination?.route
-                        if (currentRoute != Screen.Warning.route) {
-                            navController.navigate(Screen.Warning.route) {
-                                popUpTo(0) { inclusive = true }
-                            }
+        LaunchedEffect(uid) {
+            userRepository.observeUserFlags(uid).collect { flags ->
+                if (flags.isSuspended) {
+                    val endDate = flags.suspensionEndDate
+                    val isActive = endDate == null ||
+                        endDate > System.currentTimeMillis()
+                    if (isActive) {
+                        onSignOut()
+                        navController.navigate(Screen.SignIn.route) {
+                            popUpTo(0) { inclusive = true }
                         }
                     }
                 }
-            onDispose { listener.remove() }
+                if (flags.hasActiveWarning) {
+                    val currentRoute = navController.currentDestination?.route
+                    if (currentRoute != Screen.Warning.route) {
+                        navController.navigate(Screen.Warning.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    // App-wide broadcast banner
+    val giftRepository: GiftRepository = koinInject()
+    var broadcastList by remember { mutableStateOf<List<Broadcast>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        giftRepository.observeBroadcasts()
+            .catch { /* ignore errors */ }
+            .collect { broadcastList = it }
     }
 
     fun navigateToRoom(roomId: String) {
@@ -146,6 +161,7 @@ fun NavGraph(
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     NavHost(
         navController = navController,
         startDestination = startDestination
@@ -242,10 +258,15 @@ fun NavGraph(
                 }
             }
 
+            // Only request system-level permissions from the production activity
+            // (tests use bare ComponentActivity where these prompts block the UI)
+            val isProductionApp = context is com.shyden.shytalk.MainActivity
             LaunchedEffect(Unit) {
-                if (!notificationPermissionRequested) {
+                if (!notificationPermissionRequested && isProductionApp) {
                     notificationPermissionRequested = true
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                    ) {
                         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                     }
                     if (!Settings.canDrawOverlays(context)) {
@@ -283,6 +304,15 @@ fun NavGraph(
             val conversationListViewModel: ConversationListViewModel = koinInject()
             val dailyRewardViewModel: DailyRewardViewModel = org.koin.compose.viewmodel.koinViewModel()
             var showDailyRewardDialog by rememberSaveable { mutableStateOf(true) }
+
+            // Trigger daily reward check when Main screen loads
+            LaunchedEffect(Unit) {
+                val userId = authRepository.currentUserId ?: return@LaunchedEffect
+                when (val result = userRepository.getUser(userId)) {
+                    is Resource.Success -> dailyRewardViewModel.checkAndShowDialog(result.data)
+                    else -> {}
+                }
+            }
 
             if (showDailyRewardDialog) {
                 DailyRewardDialog(
@@ -362,6 +392,9 @@ fun NavGraph(
                 },
                 onNavigateToChat = { otherUserId ->
                     navController.navigate(Screen.PrivateChat.createRoute(otherUserId))
+                },
+                onNavigateToWallet = {
+                    navController.navigate(Screen.Wallet.route)
                 }
             )
         }
@@ -732,9 +765,10 @@ fun NavGraph(
             var warningReason by remember { mutableStateOf<String?>(null) }
             LaunchedEffect(Unit) {
                 val userId = authRepository.currentUserId ?: return@LaunchedEffect
-                val doc = FirebaseFirestore.getInstance()
-                    .collection("users").document(userId).get().await()
-                warningReason = doc.getString("warningReason")
+                when (val result = warningUserRepo.getWarningReason(userId)) {
+                    is Resource.Success -> warningReason = result.data
+                    else -> {}
+                }
             }
 
             WarningScreen(
@@ -742,14 +776,7 @@ fun NavGraph(
                 onAccept = {
                     warningScope.launch {
                         val userId = authRepository.currentUserId ?: return@launch
-                        FirebaseFirestore.getInstance()
-                            .collection("users").document(userId)
-                            .update(
-                                mapOf(
-                                    "hasActiveWarning" to false,
-                                    "warningAcceptedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                )
-                            ).await()
+                        warningUserRepo.acknowledgeWarning(userId)
                         navController.navigate(Screen.Main.route) {
                             popUpTo(Screen.Warning.route) { inclusive = true }
                         }
@@ -761,4 +788,10 @@ fun NavGraph(
             )
         }
     }
+
+    BroadcastBanner(
+        broadcasts = broadcastList,
+        modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding()
+    )
+    } // Box
 }

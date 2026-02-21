@@ -1,7 +1,6 @@
 package com.shyden.shytalk.feature.gacha
 
 import androidx.compose.ui.graphics.Color
-import com.shyden.shytalk.core.model.GiftBracket
 
 data class SpinTier(
     val label: String,
@@ -12,10 +11,16 @@ data class SpinTier(
     val accentColor: Color
 )
 
-val SpinTiers = listOf(
+val DefaultSpinTiers = listOf(
     SpinTier("1x", 1, 10, false, Color(0xFFFFD700), Color(0xFFFF9100)),
     SpinTier("10x", 10, 100, false, Color(0xFF2979FF), Color(0xFF00B0FF)),
     SpinTier("100x", 100, 1000, true, Color(0xFFD500F9), Color(0xFFE040FB))
+)
+
+fun buildSpinTiers(pullCosts: Map<Int, Int>): List<SpinTier> = listOf(
+    SpinTier("1x", 1, pullCosts[1] ?: 10, false, Color(0xFFFFD700), Color(0xFFFF9100)),
+    SpinTier("10x", 10, pullCosts[10] ?: 100, false, Color(0xFF2979FF), Color(0xFF00B0FF)),
+    SpinTier("100x", 100, pullCosts[100] ?: 1000, true, Color(0xFFD500F9), Color(0xFFE040FB))
 )
 
 data class RarityConfig(
@@ -26,40 +31,41 @@ data class RarityConfig(
     val title: String
 )
 
-val RarityConfigs = mapOf(
-    GiftBracket.COMMON to RarityConfig(
+/** Coin-value-based rarity configs (replacing GiftBracket-keyed map). */
+fun rarityConfigForCoinValue(coinValue: Int): RarityConfig = when {
+    coinValue < 50 -> RarityConfig(
         glowColor = Color.White,
         burstCount = 40,
         shakeIntensity = 0f,
         flash = false,
         title = "You Won!"
-    ),
-    GiftBracket.UNCOMMON to RarityConfig(
-        glowColor = Color(0xFF2979FF),
+    )
+    coinValue < 200 -> RarityConfig(
+        glowColor = Color.White,
         burstCount = 70,
         shakeIntensity = 3f,
         flash = false,
         title = "Nice Win!"
-    ),
-    GiftBracket.RARE to RarityConfig(
-        glowColor = Color(0xFFFFD700),
+    )
+    coinValue < 2000 -> RarityConfig(
+        glowColor = Color.White,
         burstCount = 130,
         shakeIntensity = 5f,
         flash = true,
         title = "RARE WIN!"
-    ),
-    GiftBracket.EPIC to RarityConfig(
-        glowColor = Color(0xFFD500F9),
+    )
+    coinValue < 10000 -> RarityConfig(
+        glowColor = Color.White,
         burstCount = 180,
         shakeIntensity = 7f,
         flash = true,
         title = "EPIC WIN!"
-    ),
-    GiftBracket.LEGENDARY to RarityConfig(
-        glowColor = Color(0xFFFF1744),
+    )
+    else -> RarityConfig(
+        glowColor = Color.White,
         burstCount = 220,
         shakeIntensity = 10f,
         flash = true,
         title = "LEGENDARY!!"
     )
-)
+}

@@ -303,6 +303,42 @@ class UserFromMapTest {
         assertFalse(user.isActivelySuspended)
     }
 
+    // ===== minGiftAnimationValue =====
+
+    @Test
+    fun `fromMap parses minGiftAnimationValue`() {
+        val map = mapOf<String, Any?>("minGiftAnimationValue" to 500L)
+        val user = User.fromMap(map, "uid")
+        assertEquals(500, user.minGiftAnimationValue)
+    }
+
+    @Test
+    fun `fromMap defaults minGiftAnimationValue to 0 when missing`() {
+        val user = User.fromMap(emptyMap(), "uid")
+        assertEquals(0, user.minGiftAnimationValue)
+    }
+
+    @Test
+    fun `fromMap defaults minGiftAnimationValue to 0 when null`() {
+        val map = mapOf<String, Any?>("minGiftAnimationValue" to null)
+        val user = User.fromMap(map, "uid")
+        assertEquals(0, user.minGiftAnimationValue)
+    }
+
+    @Test
+    fun `toMap includes minGiftAnimationValue`() {
+        val user = User(minGiftAnimationValue = 1000)
+        val map = user.toMap()
+        assertEquals(1000, map["minGiftAnimationValue"])
+    }
+
+    @Test
+    fun `toMap defaults minGiftAnimationValue to 0`() {
+        val user = User()
+        val map = user.toMap()
+        assertEquals(0, map["minGiftAnimationValue"])
+    }
+
     @Test
     fun `fromMap of toMap roundtrip preserves suspension fields`() {
         val original = User(

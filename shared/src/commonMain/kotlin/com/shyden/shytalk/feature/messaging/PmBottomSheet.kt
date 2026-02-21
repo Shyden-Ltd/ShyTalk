@@ -156,7 +156,8 @@ private fun PmSheetListView(
                                 val otherUserId = cw.conversation.otherUserId(viewModel.currentUserId) ?: return@ConversationListItem
                                 onSelectConversation(otherUserId)
                             }
-                        }
+                        },
+                        aliases = uiState.aliases
                     )
                     HorizontalDivider(modifier = Modifier.padding(start = 80.dp))
                 }

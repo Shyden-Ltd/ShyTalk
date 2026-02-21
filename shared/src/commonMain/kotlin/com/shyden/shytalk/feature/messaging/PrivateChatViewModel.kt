@@ -74,7 +74,8 @@ data class PrivateChatUiState(
     val showStickerPicker: Boolean = false,
     val stickers: List<Sticker> = emptyList(),
     val isSystemConversation: Boolean = false,
-    val isRefreshing: Boolean = false
+    val isRefreshing: Boolean = false,
+    val aliases: Map<String, String> = emptyMap()
 )
 
 class PrivateChatViewModel(
@@ -105,10 +106,20 @@ class PrivateChatViewModel(
 
     init {
         if (currentUserId.isNotEmpty()) {
+            loadAliases()
             if (initialConversationId != null) {
                 initGroupChat(initialConversationId)
             } else if (otherUserId.isNotEmpty()) {
                 initOneOnOneChat()
+            }
+        }
+    }
+
+    private fun loadAliases() {
+        viewModelScope.launch {
+            when (val result = userRepository.getAliases(currentUserId)) {
+                is Resource.Success -> _uiState.update { it.copy(aliases = result.data) }
+                else -> {}
             }
         }
     }

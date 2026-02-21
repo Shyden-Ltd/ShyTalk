@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -61,7 +62,6 @@ import com.shyden.shytalk.core.audio.GachaSoundPlayer
 import com.shyden.shytalk.core.model.CoinPackage
 import com.shyden.shytalk.core.model.GachaGift
 import com.shyden.shytalk.core.model.Gift
-import com.shyden.shytalk.core.model.GiftBracket
 import com.shyden.shytalk.core.model.Transaction
 import com.shyden.shytalk.core.ui.SuperShyGold
 import com.shyden.shytalk.feature.shop.CoinPackageCard
@@ -100,7 +100,8 @@ fun LuckySpinOverlay(
     var showFlash by remember { mutableStateOf(false) }
     var flashColor by remember { mutableStateOf(Color.White) }
     var spinProgress by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-    var activeTier by remember { mutableStateOf(SpinTiers[0]) }
+    val spinTiers = remember(gachaState.pullCosts) { buildSpinTiers(gachaState.pullCosts) }
+    var activeTier by remember { mutableStateOf(spinTiers[0]) }
     var skipAnimation by remember { mutableStateOf(false) }
     var showSummary by remember { mutableStateOf(false) }
     var allWins by remember { mutableStateOf<List<GachaGift>>(emptyList()) }
@@ -128,8 +129,8 @@ fun LuckySpinOverlay(
     }
 
     suspend fun celebrate(results: List<GachaGift>, midSpin: Boolean = false) {
-        val bestBracket = results.maxByOrNull { it.bracket.ordinal }?.bracket ?: GiftBracket.COMMON
-        val config = RarityConfigs[bestBracket] ?: return
+        val bestCoinValue = results.maxByOrNull { it.coinValue }?.coinValue ?: 0
+        val config = rarityConfigForCoinValue(bestCoinValue)
         confettiCount = if (midSpin) config.burstCount / 2 else config.burstCount
         showConfetti = true
         if (config.flash) {
@@ -151,6 +152,14 @@ fun LuckySpinOverlay(
         showSummary = false
         spinProgress = null
         phase = SpinPhase.IDLE
+    }
+
+    // Recover from pull errors — if pulling finished with no results, reset to IDLE
+    LaunchedEffect(gachaState.isPulling) {
+        if (!gachaState.isPulling && phase == SpinPhase.ANIMATING
+            && gachaState.currentWin == null && gachaState.multiSpinResults.isEmpty()) {
+            resetBoard()
+        }
     }
 
     // Handle single spin result (1x)
@@ -222,8 +231,8 @@ fun LuckySpinOverlay(
         val key = "${if (pos.first == Ring.OUTER) "outer" else "inner"}-${pos.second}"
         wonSegments = setOf(key)
         lastWin = win
-        GachaSoundPlayer.playWinReveal(win.bracket)
-        if (win.bracket.ordinal >= GiftBracket.RARE.ordinal) {
+        GachaSoundPlayer.playWinReveal(win.coinValue)
+        if (win.coinValue >= 500) {
             GachaSoundPlayer.playHighTierFanfare()
         }
         // Show summary immediately — don't wait for celebration animation
@@ -336,8 +345,8 @@ fun LuckySpinOverlay(
                 newWon.add(key)
                 wonSegments = newWon.toSet()
 
-                // Brief celebration for RARE+
-                if (result.bracket.ordinal >= GiftBracket.RARE.ordinal) {
+                // Brief celebration for high-value gifts
+                if (result.coinValue >= 500) {
                     lastWin = result
                     celebrate(listOf(result), midSpin = true)
                 }
@@ -349,9 +358,9 @@ fun LuckySpinOverlay(
         }
 
         spinProgress = null
-        val bestBracket = allWins.maxByOrNull { it.bracket.ordinal }?.bracket ?: GiftBracket.COMMON
-        GachaSoundPlayer.playWinReveal(bestBracket)
-        if (bestBracket.ordinal >= GiftBracket.RARE.ordinal) {
+        val bestCoinValue = allWins.maxByOrNull { it.coinValue }?.coinValue ?: 0
+        GachaSoundPlayer.playWinReveal(bestCoinValue)
+        if (bestCoinValue >= 500) {
             GachaSoundPlayer.playHighTierFanfare()
         }
         // Show summary immediately — don't wait for celebration animation
@@ -383,6 +392,7 @@ fun LuckySpinOverlay(
                     interactionSource = remember { MutableInteractionSource() }
                 ) { /* consume taps on panel */ }
                 .padding(horizontal = 16.dp)
+                .navigationBarsPadding()
                 .padding(bottom = 16.dp)
         ) {
             // Header: [X Close] ---- [History] [Prizes] [Balance pill]
@@ -392,11 +402,9 @@ fun LuckySpinOverlay(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = {
-                    if (phase == SpinPhase.IDLE || phase == SpinPhase.SHOW_SUMMARY) {
-                        resetBoard()
-                        onDismissResults()
-                        onDismiss()
-                    }
+                    resetBoard()
+                    onDismissResults()
+                    onDismiss()
                 }) {
                     Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
                 }
@@ -493,7 +501,9 @@ fun LuckySpinOverlay(
             // Skip animation toggle
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .graphicsLayer { scaleX = 0.65f; scaleY = 0.65f }
             ) {
                 Switch(
                     checked = skipAnimation,
@@ -504,13 +514,13 @@ fun LuckySpinOverlay(
                         uncheckedThumbColor = Color(0xFF777777),
                         uncheckedTrackColor = Color(0xFF333333)
                     ),
-                    modifier = Modifier.height(24.dp)
+                    modifier = Modifier.height(20.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = "SKIP ANIMATION",
                     color = Color.White.copy(alpha = 0.3f),
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,
                     letterSpacing = 1.sp
                 )
@@ -554,14 +564,20 @@ fun LuckySpinOverlay(
             }
 
             // Spin tier buttons — equal height via IntrinsicSize
-            if (phase == SpinPhase.IDLE) {
+            if (phase == SpinPhase.IDLE && !gachaState.configLoaded) {
+                Text(
+                    text = "Loading prices...",
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontSize = 14.sp
+                )
+            } else if (phase == SpinPhase.IDLE && gachaState.configLoaded) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(IntrinsicSize.Min)
                 ) {
-                    SpinTiers.forEach { tier ->
+                    spinTiers.forEach { tier ->
                         val canAfford = gachaState.coinBalance >= tier.cost
 
                         Button(
@@ -966,7 +982,7 @@ private fun InlinePrizeCatalog(
                 items(sorted) { gift ->
                     Surface(
                         shape = RoundedCornerShape(10.dp),
-                        color = (BracketColors[gift.bracket] ?: Color.Gray).copy(alpha = 0.08f),
+                        color = Color(0xFF9E9E9E).copy(alpha = 0.08f),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -975,16 +991,6 @@ private fun InlinePrizeCatalog(
                                 .padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Bracket color indicator dot
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .background(
-                                        BracketColors[gift.bracket] ?: Color.Gray,
-                                        RoundedCornerShape(4.dp)
-                                    )
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
                             Text(giftEmoji(gift.name), fontSize = 20.sp)
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(

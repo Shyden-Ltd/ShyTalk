@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -50,6 +51,7 @@ fun DailyRewardDialog(
             viewModel.dismissDialog()
             onDismiss()
         },
+        modifier = Modifier.testTag("dailyReward_dialog"),
         icon = {
             Icon(
                 imageVector = Icons.Filled.CalendarMonth,
@@ -141,7 +143,8 @@ fun DailyRewardDialog(
             } else {
                 Button(
                     onClick = { viewModel.claimReward() },
-                    enabled = !state.isClaiming && !state.hasClaimedToday
+                    enabled = !state.isClaiming && !state.hasClaimedToday,
+                    modifier = Modifier.testTag("dailyReward_claimButton")
                 ) {
                     if (state.isClaiming) {
                         CircularProgressIndicator(

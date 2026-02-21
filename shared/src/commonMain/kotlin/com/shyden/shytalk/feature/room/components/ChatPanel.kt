@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,6 +19,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Backpack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material3.Badge
@@ -38,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.ui.theme.SpeakingGreen
 import com.shyden.shytalk.core.model.Message
@@ -61,10 +65,24 @@ fun ChatPanel(
     onToggleMessages: (() -> Unit)? = null,
     unreadCount: Int = 0,
     onOpenBackpack: (() -> Unit)? = null,
+    editingMessageId: String? = null,
+    editingMessageText: String = "",
+    onStartEditMessage: (messageId: String, text: String) -> Unit = { _, _ -> },
+    onEditMessage: (String) -> Unit = {},
+    onCancelEdit: () -> Unit = {},
+    aliases: Map<String, String> = emptyMap(),
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
+    val isEditing = editingMessageId != null
     var messageText by rememberSaveable { mutableStateOf("") }
+
+    // When entering edit mode, set the input field to the message being edited
+    LaunchedEffect(editingMessageId) {
+        if (editingMessageId != null) {
+            messageText = editingMessageText
+        }
+    }
 
     val seatedUserIds = remember(seats) {
         seats.values.asSequence()
@@ -102,7 +120,7 @@ fun ChatPanel(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .padding(horizontal = 8.dp)
+                .padding(start = 8.dp, end = 80.dp)
         ) {
             items(reversedMessages, key = { it.messageId }) { message ->
                 val senderUser = userMap[message.senderId]
@@ -115,7 +133,11 @@ fun ChatPanel(
                     isUserSeated = isUserSeated,
                     isSelf = isSelf,
                     onTapUser = { onTapUser(message.senderId) },
-                    onInvite = { onInviteUser(message.senderId, message.senderName) }
+                    onInvite = { onInviteUser(message.senderId, message.senderName) },
+                    onEditMessage = if (isSelf && message.type == com.shyden.shytalk.core.model.MessageType.TEXT) {
+                        { onStartEditMessage(message.messageId, message.text) }
+                    } else null,
+                    aliases = aliases
                 )
             }
         }
@@ -127,25 +149,46 @@ fun ChatPanel(
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (isEditing) {
+                IconButton(onClick = {
+                    messageText = ""
+                    onCancelEdit()
+                }) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Cancel edit",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+
             OutlinedTextField(
                 value = messageText,
                 onValueChange = { if (it.length <= 200) messageText = it },
-                placeholder = { Text("Type a message...") },
-                modifier = Modifier.weight(0.6f),
-                singleLine = true
+                placeholder = { Text(if (isEditing) "Edit message..." else "Type a message...") },
+                modifier = Modifier.weight(0.6f).testTag("room_chatInput"),
+                singleLine = true,
+                leadingIcon = if (isEditing) {
+                    { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                } else null
             )
 
             IconButton(
                 onClick = {
                     if (messageText.isNotBlank()) {
-                        onSendMessage(messageText)
+                        if (isEditing) {
+                            onEditMessage(messageText)
+                        } else {
+                            onSendMessage(messageText)
+                        }
                         messageText = ""
                     }
-                }
+                },
+                modifier = Modifier.testTag("room_sendButton")
             ) {
                 Icon(
                     Icons.AutoMirrored.Filled.Send,
-                    contentDescription = "Send",
+                    contentDescription = if (isEditing) "Save edit" else "Send",
                     tint = MaterialTheme.colorScheme.primary
                 )
             }

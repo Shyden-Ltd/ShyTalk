@@ -43,15 +43,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.GachaGift
-import com.shyden.shytalk.core.model.GiftBracket
 
 private data class GroupedWin(
     val giftId: String,
     val giftName: String,
-    val bracket: GiftBracket,
     val coinValue: Int,
-    val count: Int
+    val count: Int,
+    val iconUrl: String = ""
 )
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -70,20 +70,20 @@ fun LuckySpinSummaryPopup(
             if (existing != null) {
                 map[w.giftId] = existing.copy(count = existing.count + 1)
             } else {
-                map[w.giftId] = GroupedWin(w.giftId, w.giftName, w.bracket, w.coinValue, 1)
+                map[w.giftId] = GroupedWin(w.giftId, w.giftName, w.coinValue, 1, w.iconUrl)
             }
         }
         map.values
-            .sortedWith(compareByDescending<GroupedWin> { it.bracket.ordinal }.thenByDescending { it.coinValue })
+            .sortedWith(compareByDescending<GroupedWin> { it.coinValue })
             .toList()
     }
 
     val totalCoins = remember(wins) { wins.sumOf { it.coinValue } }
-    val bestBracket = remember(wins) {
-        wins.maxByOrNull { it.bracket.ordinal }?.bracket ?: GiftBracket.COMMON
+    val bestCoinValue = remember(wins) {
+        wins.maxByOrNull { it.coinValue }?.coinValue ?: 0
     }
-    val rarityConfig = RarityConfigs[bestBracket] ?: RarityConfigs[GiftBracket.COMMON]!!
-    val isRarePlus = bestBracket.ordinal >= GiftBracket.RARE.ordinal
+    val rarityConfig = rarityConfigForCoinValue(bestCoinValue)
+    val isHighValue = bestCoinValue >= 2000
 
     // Animated entrance
     var appeared by remember { mutableStateOf(false) }
@@ -122,15 +122,15 @@ fun LuckySpinSummaryPopup(
             ) {
                 // Title
                 Text(
-                    text = if (isRarePlus) rarityConfig.title else "Spin Results",
-                    fontSize = if (isRarePlus) 26.sp else 22.sp,
+                    text = if (isHighValue) rarityConfig.title else "Spin Results",
+                    fontSize = if (isHighValue) 26.sp else 22.sp,
                     fontWeight = FontWeight.Black,
                     color = rarityConfig.glowColor,
                     letterSpacing = 2.sp
                 )
 
                 Text(
-                    text = "${wins.size} SPIN${if (wins.size > 1) "S" else ""}${if (spinTier.boostedDrop) "  ★ INCREASED DROP RATE" else ""}",
+                    text = "${wins.size} SPIN${if (wins.size > 1) "S" else ""}${if (spinTier.boostedDrop) "  \u2605 INCREASED DROP RATE" else ""}",
                     color = Color.White.copy(alpha = 0.35f),
                     fontSize = 11.sp,
                     letterSpacing = 2.sp
@@ -157,10 +157,10 @@ fun LuckySpinSummaryPopup(
                 // Total coins
                 Text(
                     text = "\uD83E\uDE99 ${totalCoins.formatWithCommas()} Coins",
-                    fontSize = if (isRarePlus) 34.sp else 26.sp,
+                    fontSize = if (isHighValue) 34.sp else 26.sp,
                     fontWeight = FontWeight.Black,
                     style = MaterialTheme.typography.headlineLarge.copy(
-                        brush = if (bestBracket == GiftBracket.LEGENDARY) {
+                        brush = if (bestCoinValue >= 10000) {
                             Brush.linearGradient(
                                 listOf(Color(0xFFFFD700), Color(0xFFFF6B00), Color(0xFFFF1744), Color(0xFFFFD700))
                             )
@@ -188,7 +188,7 @@ fun LuckySpinSummaryPopup(
                         .height(48.dp)
                 ) {
                     Text(
-                        text = "${spinTier.label} SPIN AGAIN · \uD83E\uDE99${spinTier.cost}",
+                        text = "${spinTier.label} SPIN AGAIN \u00B7 \uD83E\uDE99${spinTier.cost}",
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 15.sp,
                         letterSpacing = 2.sp,
@@ -223,8 +223,7 @@ fun LuckySpinSummaryPopup(
 
 @Composable
 private fun WinCard(win: GroupedWin, index: Int) {
-    val bracketColor = BracketColors[win.bracket] ?: Color.Gray
-    val isRarePlus = win.bracket.ordinal >= GiftBracket.RARE.ordinal
+    val isHighValue = win.coinValue >= 2000
 
     // Staggered entrance
     var appeared by remember { mutableStateOf(false) }
@@ -238,12 +237,14 @@ private fun WinCard(win: GroupedWin, index: Int) {
         label = "cardScale$index"
     )
 
+    val cardColor = Color(0xFF9E9E9E)
+
     Box(
         modifier = Modifier
             .size(width = 80.dp, height = 110.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(16.dp))
-            .background(bracketColor.copy(alpha = 0.1f))
+            .background(cardColor.copy(alpha = 0.1f))
             .padding(horizontal = 4.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -268,10 +269,18 @@ private fun WinCard(win: GroupedWin, index: Int) {
                     .padding(horizontal = 7.dp, vertical = 1.dp)
             )
 
-            Text(
-                text = giftEmoji(win.giftName),
-                fontSize = 28.sp
-            )
+            if (win.iconUrl.isNotBlank()) {
+                AsyncImage(
+                    model = win.iconUrl,
+                    contentDescription = win.giftName,
+                    modifier = Modifier.size(36.dp)
+                )
+            } else {
+                Text(
+                    text = giftEmoji(win.giftName),
+                    fontSize = 28.sp
+                )
+            }
 
             Text(
                 text = win.giftName,
@@ -283,20 +292,20 @@ private fun WinCard(win: GroupedWin, index: Int) {
             )
 
             Text(
-                text = "\uD83E\uDE99 ${(win.coinValue * win.count).formatWithCommas()}",
+                text = "\uD83E\uDE99 ${win.coinValue.formatWithCommas()}",
                 color = Color(0xFFFFD700),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.ExtraBold,
                 maxLines = 1
             )
 
-            // Bracket label — always reserve space
+            // High-value label — always reserve space
             Text(
-                text = if (isRarePlus) win.bracket.name else "",
+                text = if (isHighValue) "HIGH VALUE" else "",
                 fontSize = 7.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = 1.5.sp,
-                color = if (isRarePlus) (RarityConfigs[win.bracket] ?: RarityConfigs[GiftBracket.COMMON]!!).glowColor else Color.Transparent
+                color = if (isHighValue) rarityConfigForCoinValue(win.coinValue).glowColor else Color.Transparent
             )
         }
     }

@@ -35,6 +35,7 @@ fun SeatGrid(
     showRequestSeat: Boolean = false,
     onSeatClick: (Int) -> Unit,
     onTapUser: (String) -> Unit = {},
+    aliases: Map<String, String> = emptyMap(),
     modifier: Modifier = Modifier
 ) {
     // Single pass: build occupied seats + optional request seat in one remember block
@@ -111,7 +112,8 @@ fun SeatGrid(
                 seatSize = cappedSeatSize,
                 requestSeatIndex = requestSeatIndex,
                 onSeatClick = onSeatClick,
-                onTapUser = onTapUser
+                onTapUser = onTapUser,
+                aliases = aliases
             )
             if (row2.isNotEmpty()) {
                 SeatRow(
@@ -148,7 +150,8 @@ private fun SeatRow(
     seatSize: Dp,
     requestSeatIndex: Int? = null,
     onSeatClick: (Int) -> Unit,
-    onTapUser: (String) -> Unit
+    onTapUser: (String) -> Unit,
+    aliases: Map<String, String> = emptyMap()
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -194,6 +197,7 @@ private fun SeatRow(
                     seatSize = seatSize,
                     onClick = { onSeatClick(seatIndex) },
                     onTapUser = seatUserId?.let { uid -> { onTapUser(uid) } },
+                    aliases = aliases,
                     modifier = Modifier.weight(1f)
                 )
             }

@@ -32,14 +32,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.Gift
-import com.shyden.shytalk.core.model.GiftBracket
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,7 +91,7 @@ fun GiftWallContent(
         contentPadding = PaddingValues(12.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = modifier
+        modifier = modifier.testTag("giftWall_grid")
     ) {
         items(state.giftCatalog) { gift ->
             val wallEntry = state.wallEntries.find { it.giftId == gift.id }
@@ -150,13 +152,7 @@ private fun GiftWallItem(
     isLit: Boolean,
     onClick: () -> Unit
 ) {
-    val bracketColor = when (gift.bracket) {
-        GiftBracket.COMMON -> Color.Gray
-        GiftBracket.UNCOMMON -> Color(0xFF4CAF50)
-        GiftBracket.RARE -> Color(0xFF2196F3)
-        GiftBracket.EPIC -> Color(0xFF9C27B0)
-        GiftBracket.LEGENDARY -> Color(0xFFFFD700)
-    }
+    val bracketColor = Color.Gray
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -174,22 +170,35 @@ private fun GiftWallItem(
             .clickable(enabled = isLit) { onClick() }
             .padding(8.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(
-                    if (isLit) bracketColor.copy(alpha = 0.2f)
-                    else Color.Gray.copy(alpha = 0.1f)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = gift.name.take(2),
-                fontWeight = FontWeight.Bold,
-                color = if (isLit) bracketColor else Color.Gray,
-                fontSize = 14.sp
+        if (gift.iconUrl.isNotBlank()) {
+            AsyncImage(
+                model = gift.iconUrl,
+                contentDescription = gift.name,
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .then(if (!isLit) Modifier.background(Color.Gray.copy(alpha = 0.3f)) else Modifier),
+                contentScale = ContentScale.Crop,
+                alpha = if (isLit) 1f else 0.4f
             )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (isLit) bracketColor.copy(alpha = 0.2f)
+                        else Color.Gray.copy(alpha = 0.1f)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = gift.name.take(2),
+                    fontWeight = FontWeight.Bold,
+                    color = if (isLit) bracketColor else Color.Gray,
+                    fontSize = 14.sp
+                )
+            }
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(

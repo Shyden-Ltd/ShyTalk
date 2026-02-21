@@ -33,7 +33,8 @@ data class ConversationListUiState(
     val isLoading: Boolean = true,
     val error: String? = null,
     val totalUnreadCount: Long = 0,
-    val searchQuery: String = ""
+    val searchQuery: String = "",
+    val aliases: Map<String, String> = emptyMap()
 )
 
 class ConversationListViewModel(
@@ -55,6 +56,16 @@ class ConversationListViewModel(
         if (currentUserId.isNotEmpty()) {
             observeConversations()
             loadModerationConfig()
+            loadAliases()
+        }
+    }
+
+    private fun loadAliases() {
+        viewModelScope.launch {
+            when (val result = userRepository.getAliases(currentUserId)) {
+                is Resource.Success -> _uiState.update { it.copy(aliases = result.data) }
+                else -> {}
+            }
         }
     }
 

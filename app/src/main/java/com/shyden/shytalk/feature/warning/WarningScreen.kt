@@ -22,6 +22,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -61,7 +62,8 @@ fun WarningScreen(
             Text(
                 text = "Official Warning",
                 style = MaterialTheme.typography.headlineMedium,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                modifier = Modifier.testTag("warning_title")
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -86,7 +88,10 @@ fun WarningScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            TextButton(onClick = onViewCommunityStandards) {
+            TextButton(
+                onClick = onViewCommunityStandards,
+                modifier = Modifier.testTag("warning_communityStandardsLink")
+            ) {
                 Text("View Community Standards")
             }
 
@@ -94,7 +99,7 @@ fun WarningScreen(
 
             Button(
                 onClick = onAccept,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().testTag("warning_acceptButton")
             ) {
                 Text("I Understand and Accept")
             }
