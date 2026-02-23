@@ -23,6 +23,7 @@ import com.shyden.shytalk.data.remote.VoiceConnectionState
 import com.shyden.shytalk.data.remote.VoiceService
 import com.shyden.shytalk.data.remote.PresenceService
 import com.shyden.shytalk.data.repository.AuthRepository
+import com.shyden.shytalk.data.repository.EconomyRepository
 import com.shyden.shytalk.data.repository.MessageRepository
 import com.shyden.shytalk.data.repository.ReportRepository
 import com.shyden.shytalk.data.repository.StorageRepository
@@ -82,6 +83,7 @@ data class RoomUiState(
     val speakingUserIds: Set<String> = emptySet(),
     val isVoiceJoined: Boolean = false,
     val isVoiceReady: Boolean = false,
+    val isVoiceUnavailable: Boolean = false,
     val pendingInvite: String? = null,
     val seatUsers: Map<String, User> = emptyMap(),
     val participantUsers: Map<String, User> = emptyMap(),
@@ -103,7 +105,10 @@ data class RoomUiState(
     val reportError: String? = null,
     val editingMessageId: String? = null,
     val editingMessageText: String = "",
-    val aliases: Map<String, String> = emptyMap()
+    val aliases: Map<String, String> = emptyMap(),
+    val maxRoomDurationMs: Long = Constants.MAX_ROOM_DURATION_MS,
+    val showExpiryUpsellDialog: Boolean = false,
+    val effectiveSeatCount: Int = Constants.MAX_SEATS
 )
 
 class RoomViewModel(
@@ -117,11 +122,13 @@ class RoomViewModel(
     private val presenceService: PresenceService,
     private val roomLifecycleManager: RoomLifecycleManager,
     private val reportRepository: ReportRepository,
-    private val storageRepository: StorageRepository
+    private val storageRepository: StorageRepository,
+    private val economyRepository: EconomyRepository
 ) : ViewModel() {
 
     companion object {
         private const val TAG = "RoomViewModel"
+        private const val VOICE_CONNECT_TIMEOUT_MS = 10_000L
     }
 
     private val _uiState = MutableStateFlow(RoomUiState())
@@ -144,6 +151,7 @@ class RoomViewModel(
     private var autoRejoinAttempted = false
     private var userObserverJob: Job? = null
     private var observedUserIds: Set<String> = emptySet()
+    private var expiryUpsellShown = false
 
     // Gift animation queue — room-wide gift events
     val giftAnimationQueue = AnimationQueue()
@@ -175,6 +183,7 @@ class RoomViewModel(
         observePendingRequests()
         observeMyRequest()
         observeUserUpdates()
+        observeEconomyConfig()
     }
 
     private fun observeUserUpdates() {
@@ -191,9 +200,61 @@ class RoomViewModel(
                             currentUserName = if (uid == state.currentUserId) updatedUser.displayName else state.currentUserName
                         )
                     }
+                    // Re-resolve room duration/seat limit if the room owner's Super Shy status changed
+                    val room = _uiState.value.room
+                    if (room != null && uid == room.ownerId) {
+                        resolveRoomDuration()
+                        resolveSeatLimit()
+                    }
                 }
             }
         }
+    }
+
+    private var lastEconomyConfig: com.shyden.shytalk.core.model.EconomyConfig? = null
+
+    private fun observeEconomyConfig() {
+        viewModelScope.launch {
+            economyRepository.observeEconomyConfig()
+                .catch { e -> logE(TAG, "observeEconomyConfig error", e) }
+                .collect { config ->
+                    lastEconomyConfig = config
+                    resolveRoomDuration()
+                    resolveSeatLimit()
+                }
+        }
+    }
+
+    private fun resolveRoomDuration() {
+        val config = lastEconomyConfig ?: return
+        val room = _uiState.value.room ?: return
+        val ownerUser = _uiState.value.allKnownUsers[room.ownerId]
+        val isSuperShy = ownerUser?.isSuperShy == true
+        val durationMinutes = if (isSuperShy) config.superShyRoomDurationMinutes
+                              else config.maxRoomDurationMinutes
+        val durationMs = durationMinutes.toLong() * 60 * 1000
+        _uiState.update { it.copy(maxRoomDurationMs = durationMs) }
+
+        // If duration increased (e.g. owner is Super Shy) and room is no longer near expiry,
+        // cancel any premature countdown/upsell that fired before user data loaded
+        val elapsed = currentTimeMillis() - room.createdAt
+        val remaining = durationMs - elapsed
+        if (remaining > Constants.ROOM_EXPIRY_COUNTDOWN_THRESHOLD_MS && roomExpiryCountdownJob?.isActive == true) {
+            roomExpiryCountdownJob?.cancel()
+            roomExpiryCountdownJob = null
+            expiryUpsellShown = false
+            _uiState.update { it.copy(showExpiryUpsellDialog = false, roomExpiryRemainingMs = 0L) }
+        }
+    }
+
+    private fun resolveSeatLimit() {
+        val config = lastEconomyConfig ?: return
+        val room = _uiState.value.room ?: return
+        val ownerUser = _uiState.value.allKnownUsers[room.ownerId]
+        val isSuperShy = ownerUser?.isSuperShy == true
+        val count = if (isSuperShy) Constants.MAX_SEATS
+                    else config.normalSeatCount.coerceIn(1, Constants.MAX_SEATS)
+        _uiState.update { it.copy(effectiveSeatCount = count) }
     }
 
     private fun Map<String, User>.replaceUser(user: User): Map<String, User> =
@@ -374,6 +435,13 @@ class RoomViewModel(
                     voiceService.setMicrophoneEnabled(shouldUnmute)
                     voiceService.setAudioMode(shouldUnmute)
                 }
+                // Timeout: unblock room if voice doesn't connect in time
+                viewModelScope.launch {
+                    delay(VOICE_CONNECT_TIMEOUT_MS)
+                    if (!_uiState.value.isVoiceReady) {
+                        _uiState.update { it.copy(isVoiceReady = true, isVoiceUnavailable = true) }
+                    }
+                }
             }
             // Detect owner return on first emission — without this, the ViewModel
             // waits for a second Firestore emission that may never come.
@@ -383,6 +451,7 @@ class RoomViewModel(
             loadParticipantUsers(room)
             observeRemoteUserChanges(collectRoomUserIds(room, userId))
             handleOwnerAwayCountdown(room)
+            resolveRoomDuration()
             handleRoomExpiryCountdown(room)
             return
         }
@@ -398,6 +467,7 @@ class RoomViewModel(
             loadParticipantUsers(room)
             observeRemoteUserChanges(collectRoomUserIds(room, userId))
             handleOwnerAwayCountdown(room)
+            resolveRoomDuration()
             handleRoomExpiryCountdown(room)
             // Owner re-entering OWNER_AWAY room
             if (room.ownerId == userId && room.state == RoomState.OWNER_AWAY) {
@@ -417,6 +487,7 @@ class RoomViewModel(
         loadParticipantUsers(room)
         observeRemoteUserChanges(collectRoomUserIds(room, userId))
         handleOwnerAwayCountdown(room)
+        resolveRoomDuration()
         handleRoomExpiryCountdown(room)
 
         // Owner re-entering an OWNER_AWAY room — trigger return immediately.
@@ -656,14 +727,22 @@ class RoomViewModel(
                         error = errorMsg ?: it.error
                     )
                 }
-                if (errorMsg != null) voiceService.clearError()
+                // Voice error before ready — unblock the room immediately
+                if (errorMsg != null) {
+                    if (!_uiState.value.isVoiceReady) {
+                        _uiState.update { it.copy(isVoiceReady = true, isVoiceUnavailable = true) }
+                    }
+                    voiceService.clearError()
+                }
             }
         }
         // Latch isVoiceReady — once connected, never hide the room again
         viewModelScope.launch {
             voiceService.connectionState.collect { connState ->
                 if (connState == VoiceConnectionState.CONNECTED) {
-                    _uiState.update { it.copy(isVoiceReady = true) }
+                    _uiState.update { it.copy(isVoiceReady = true, isVoiceUnavailable = false) }
+                } else if (connState == VoiceConnectionState.DISCONNECTED && _uiState.value.isVoiceReady) {
+                    _uiState.update { it.copy(isVoiceUnavailable = true) }
                 }
             }
         }
@@ -728,6 +807,13 @@ class RoomViewModel(
                 voiceService.joinRoom(voiceRoom, userId)
                 voiceService.setMicrophoneEnabled(false)
                 voiceService.setAudioMode(false)
+                // Timeout: unblock room if voice doesn't connect in time
+                viewModelScope.launch {
+                    delay(VOICE_CONNECT_TIMEOUT_MS)
+                    if (!_uiState.value.isVoiceReady) {
+                        _uiState.update { it.copy(isVoiceReady = true, isVoiceUnavailable = true) }
+                    }
+                }
             } else {
                 // No voice room — mark ready so the room UI is shown immediately
                 _uiState.update { it.copy(isVoiceReady = true) }
@@ -776,15 +862,25 @@ class RoomViewModel(
             roomExpiryCountdownJob?.cancel()
             return
         }
+        val maxDuration = _uiState.value.maxRoomDurationMs
         val elapsed = currentTimeMillis() - room.createdAt
-        val remaining = Constants.MAX_ROOM_DURATION_MS - elapsed
+        val remaining = maxDuration - elapsed
 
         if (remaining <= Constants.ROOM_EXPIRY_COUNTDOWN_THRESHOLD_MS) {
             if (roomExpiryCountdownJob?.isActive == true) return
+            // Show upsell dialog once when countdown starts for non-Super Shy owner
+            if (!expiryUpsellShown) {
+                expiryUpsellShown = true
+                val ownerUser = _uiState.value.allKnownUsers[room.ownerId]
+                if (ownerUser?.isSuperShy != true) {
+                    _uiState.update { it.copy(showExpiryUpsellDialog = true) }
+                }
+            }
             roomExpiryCountdownJob = viewModelScope.launch {
                 while (true) {
+                    val currentMax = _uiState.value.maxRoomDurationMs
                     val now = currentTimeMillis() - room.createdAt
-                    val left = Constants.MAX_ROOM_DURATION_MS - now
+                    val left = currentMax - now
                     if (left <= 0) {
                         if (_uiState.value.currentRole == RoomRole.OWNER) {
                             roomRepository.closeRoom(roomId)
@@ -838,6 +934,8 @@ class RoomViewModel(
         if (role == RoomRole.OWNER && seatIndex != Constants.OWNER_SEAT_INDEX) return
         // Non-owners cannot take the owner seat
         if (seatIndex == Constants.OWNER_SEAT_INDEX && role != RoomRole.OWNER) return
+        // Reject seats beyond the effective limit
+        if (seatIndex >= _uiState.value.effectiveSeatCount) return
 
         val seat = room.seats[seatIndex.toString()] ?: return
         if (seat.state == SeatState.OCCUPIED) return
@@ -911,7 +1009,9 @@ class RoomViewModel(
         val newMuteState = !seat.isMuted
         // Block unmute when voice is not connected — muting is always allowed
         if (!newMuteState && voiceService.connectionState.value != VoiceConnectionState.CONNECTED) {
-            _uiState.update { it.copy(error = "Voice not connected yet") }
+            val msg = if (_uiState.value.isVoiceUnavailable) "Voice is currently unavailable"
+                      else "Voice not connected yet"
+            _uiState.update { it.copy(error = msg) }
             return
         }
         val loadingMsg = if (newMuteState) "Muting..." else "Unmuting..."
@@ -1032,8 +1132,9 @@ class RoomViewModel(
         val room = _uiState.value.room ?: return
         if (room.pendingInvites[userId] == null) return
 
-        // Find first empty seat (skip owner seat)
-        val emptySeatIndex = (1 until Constants.MAX_SEATS).firstOrNull { i ->
+        // Find first empty seat within effective limit (skip owner seat)
+        val limit = _uiState.value.effectiveSeatCount
+        val emptySeatIndex = (1 until limit).firstOrNull { i ->
             val seat = room.seats[i.toString()]
             seat != null && seat.state != SeatState.OCCUPIED
         } ?: return
@@ -1158,6 +1259,13 @@ class RoomViewModel(
                 if (voiceRoom.isNotEmpty()) {
                     if (!voiceService.isJoined.value) {
                         voiceService.joinRoom(voiceRoom, userId)
+                        // Timeout: unblock room if voice doesn't reconnect in time
+                        viewModelScope.launch {
+                            delay(VOICE_CONNECT_TIMEOUT_MS)
+                            if (!_uiState.value.isVoiceReady) {
+                                _uiState.update { it.copy(isVoiceReady = true, isVoiceUnavailable = true) }
+                            }
+                        }
                     }
                     val mySeat = room.findUserSeat(userId)?.value
                     val shouldUnmute = mySeat != null && !mySeat.isMuted && _uiState.value.hasAudioPermission
@@ -1241,6 +1349,12 @@ class RoomViewModel(
         val hasNew = newUsers.any { it.key !in current }
         if (hasNew) {
             _uiState.update { it.copy(allKnownUsers = it.allKnownUsers + newUsers) }
+            // Re-resolve room duration/seat limit if the owner was just loaded
+            val room = _uiState.value.room
+            if (room != null && room.ownerId in newUsers) {
+                resolveRoomDuration()
+                resolveSeatLimit()
+            }
         }
     }
 
@@ -1380,6 +1494,13 @@ class RoomViewModel(
     fun clearError() {
         _uiState.update { it.copy(error = null) }
     }
+
+    fun dismissExpiryUpsellDialog() {
+        _uiState.update { it.copy(showExpiryUpsellDialog = false) }
+    }
+
+    val superShyDurationHours: Int
+        get() = (lastEconomyConfig?.superShyRoomDurationMinutes ?: 720) / 60
 
     fun reportUser(
         targetUserId: String,
@@ -1607,10 +1728,18 @@ class RoomViewModel(
         if (_uiState.value.seatActionStatus is SeatActionStatus.Loading) return
         val room = _uiState.value.room ?: return
         val userId = _uiState.value.currentUserId
+
+        // Already seated — just dismiss, don't re-seat
+        if (room.findUserSeat(userId) != null) {
+            dismissCurrentNotification()
+            return
+        }
+
+        val limit = _uiState.value.effectiveSeatCount
         val seat = room.seats[request.seatIndex.toString()]
-        val seatIndex = if (seat?.state == SeatState.OCCUPIED) {
-            // Original seat taken, find next available (skip owner seat)
-            (1 until Constants.MAX_SEATS).firstOrNull { i ->
+        val seatIndex = if (seat?.state == SeatState.OCCUPIED || request.seatIndex >= limit) {
+            // Original seat taken or beyond limit, find next available within limit
+            (1 until limit).firstOrNull { i ->
                 val s = room.seats[i.toString()]
                 s != null && s.state != SeatState.OCCUPIED
             }

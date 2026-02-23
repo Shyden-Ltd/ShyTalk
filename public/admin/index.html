@@ -350,13 +350,13 @@
         /* --- Read-only badge --- */
         .readonly-badge {
           display: inline-block;
-          font-size: 9px;
+          font-size: 10px;
           font-weight: 700;
-          color: var(--text2);
+          color: var(--warning);
           background: var(--surface2);
           border: 1px solid var(--border);
           border-radius: 4px;
-          padding: 1px 5px;
+          padding: 2px 6px;
           margin-left: 6px;
           vertical-align: middle;
           letter-spacing: 0.5px;
@@ -788,7 +788,7 @@
           object-fit: cover;
           vertical-align: middle;
         }
-        .gift-modified { background: rgba(108, 92, 231, 0.08) !important; }
+        .gift-modified { background: rgba(108, 92, 231, 0.08) !important; border-left: 4px solid var(--accent) !important; }
 
         /* --- Economy Panel --- */
         #economy-panel { display: none; }
@@ -2193,6 +2193,7 @@
                         <div>Floor: <span id="gcs-floor">100</span> | Warnings: <span
                                 id="gcs-warnings">0</span></div>
                         <div>Last deduction: <span id="gcs-last-deduction">Never</span></div>
+                        <div style="font-size:11px;color:var(--text2);margin-top:4px;opacity:0.7;">Score recovers +2/month from floor. <span style="color:#2ecc71;">80+</span> Good | <span style="color:#f1c40f;">60-79</span> Okay | <span style="color:#e67e22;">40-59</span> Warning | <span style="color:#e74c3c;">&lt;40</span> Critical</div>
                     </div>
                     <button type="button" class="btn-reset-gcs" id="reset-gcs-btn">Reset GCS
                     </button>
@@ -2475,6 +2476,7 @@
                 <button class="tab-btn active" data-report-filter="pending">Pending</button>
                 <button class="tab-btn" data-report-filter="resolved">Resolved</button>
                 <button class="tab-btn" data-report-filter="archived">Archived</button>
+                <span style="margin-left:auto;font-size:11px;color:var(--text2);opacity:0.7;">Keyboard: <kbd style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 4px;font-size:10px;">W</kbd> Warn <kbd style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 4px;font-size:10px;">S</kbd> Suspend <kbd style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 4px;font-size:10px;">D</kbd> Dismiss <kbd style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 4px;font-size:10px;">Enter</kbd> Resolve</span>
             </div>
 
             <!-- Report cards list -->
@@ -2495,12 +2497,15 @@
                     </button>
                 </div>
                 <span style="color:var(--text2);font-size:13px;" id="gifts-count"></span>
+                <span style="font-size:13px;margin-left:8px;" id="wheel-count"></span>
             </div>
             <div style="overflow-x:auto;max-height:70vh;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
                 <table class="gifts-table">
                     <thead>
                     <tr>
                         <th>Order</th>
+                        <th>Store</th>
+                        <th>Wheel</th>
                         <th>Icon</th>
                         <th>Name</th>
                         <th>Coin Value</th>
@@ -2541,7 +2546,7 @@
                     <h3>Gacha Drop Rates</h3>
                     <div class="field-group" style="margin-top:8px;">
                         <label>Drop Rate Exponent <span id="eco-dropRateExponent-val" style="font-weight:600;color:var(--accent)">1.5</span></label>
-                        <input type="range" min="1.0" max="2.5" step="0.1" id="eco-dropRateExponent" value="1.5">
+                        <input type="range" min="0.1" max="5.0" step="0.1" id="eco-dropRateExponent" value="1.5">
                         <small style="color:var(--text2);margin-top:2px;display:block">Controls how rare expensive gifts are. Lower = more generous drops, higher = cheap gifts dominate.</small>
                     </div>
                     <div class="field-group">
@@ -2598,6 +2603,17 @@
                     <div class="field-group">
                         <label>Gacha Win Threshold</label>
                         <input type="number" id="eco-broadcastWinThreshold" placeholder="5000">
+                    </div>
+                </div>
+                <div class="maintenance-card">
+                    <h3>Room Duration</h3>
+                    <div class="field-group" style="margin-top:8px;">
+                        <label>Max Room Duration (minutes)</label>
+                        <input type="number" id="eco-maxRoomDurationMinutes" placeholder="360">
+                    </div>
+                    <div class="field-group">
+                        <label>Super Shy Room Duration (minutes)</label>
+                        <input type="number" id="eco-superShyRoomDurationMinutes" placeholder="720">
                     </div>
                 </div>
             </div>
@@ -2672,10 +2688,16 @@
                     <button id="clear-spin-history-btn">Clear All Spin History</button>
                     <div class="maintenance-result" id="clear-spin-history-result"></div>
                 </div>
+                <div class="maintenance-card">
+                    <h3>Super Shy</h3>
+                    <p>Remove Super Shy status from all users (sets isSuperShy=false, clears expiry and tier).</p>
+                    <button id="clear-supershy-btn">Remove All Super Shy</button>
+                    <div class="maintenance-result" id="clear-supershy-result"></div>
+                </div>
                 <div class="maintenance-card nuclear">
                     <h3>&#9762; RESET ALL</h3>
                     <p>Runs every maintenance action above in sequence. This will wipe system messages,
-                        reports, warnings, orphaned storage, backpacks, gift walls, coins, beans, and spin history.</p>
+                        reports, warnings, orphaned storage, backpacks, gift walls, coins, beans, spin history, and Super Shy.</p>
                     <div class="nuclear-actions">
                         <span>System Messages</span>
                         <span>Reports</span>
@@ -2686,6 +2708,7 @@
                         <span>Coins</span>
                         <span>Beans</span>
                         <span>Spin History</span>
+                        <span>Super Shy</span>
                     </div>
                     <button id="reset-all-btn">RESET EVERYTHING</button>
                     <div class="maintenance-result" id="reset-all-result"></div>
@@ -2698,15 +2721,16 @@
             <div class="nuclear-dialog">
                 <div class="step-indicator" id="nuclear-step-label">Step 1 of 3</div>
                 <h2 id="nuclear-title">Are you sure?</h2>
-                <p id="nuclear-desc">This will run ALL 9 maintenance actions and permanently delete
+                <p id="nuclear-desc">This will run ALL 10 maintenance actions and permanently delete
                     system messages, reports, warnings, orphaned files, backpacks, gift walls, coins,
-                    beans, and spin history for every user. This cannot be undone.</p>
+                    beans, spin history, and Super Shy for every user. This cannot be undone.</p>
                 <div id="nuclear-input-wrap" style="display:none;">
                     <input type="text" id="nuclear-confirm-input" placeholder="Type here..." autocomplete="off">
                 </div>
                 <div class="btn-row" id="nuclear-btn-row">
                     <button class="btn-cancel" id="nuclear-cancel">Cancel</button>
                     <button class="btn-confirm" id="nuclear-proceed">I understand, continue</button>
+                    <button id="nuclear-mute" style="padding:6px 12px;background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px;" title="Mute/unmute sounds">Mute</button>
                 </div>
                 <div class="nuclear-progress" id="nuclear-progress">
                     <div class="nuke-bar-wrap">
@@ -2728,6 +2752,7 @@
                     <div class="step" id="np-coins">&#9679; Empty coins</div>
                     <div class="step" id="np-beans">&#9679; Empty beans</div>
                     <div class="step" id="np-spin-history">&#9679; Clear spin history</div>
+                    <div class="step" id="np-supershy">&#9679; Remove Super Shy</div>
                 </div>
             </div>
         </div>
@@ -2930,7 +2955,7 @@
       clearTimeout(toastTimer);
       toast.textContent = msg;
       toast.className = `toast ${type} visible`;
-      toastTimer = setTimeout(() => toast.classList.remove("visible"), 4000);
+      toastTimer = setTimeout(() => toast.classList.remove("visible"), type === "error" ? 7000 : 4000);
     }
 
     // --- Auth ---
@@ -5045,12 +5070,20 @@
       const tbody = $("#gifts-tbody");
       tbody.innerHTML = "";
       $("#gifts-count").textContent = `${giftsCache.length} gifts`;
+      const wheelCount = giftsCache.filter(g => g.coinValue > 0 && g.showOnWheel !== false).length;
+      const wheelEl = $("#wheel-count");
+      wheelEl.textContent = `(${wheelCount}/16 on wheel)`;
+      wheelEl.style.color = wheelCount === 16 ? "var(--success, #4caf50)" : "var(--danger, #f44336)";
+      wheelEl.style.fontWeight = wheelCount === 16 ? "normal" : "bold";
+      wheelEl.title = `Gacha wheel has 16 slots. Gifts with coinValue > 0 and "On Wheel" checked count toward this total. Currently ${wheelCount} qualifying.`;
 
       for (const gift of giftsCache) {
         const tr = document.createElement("tr");
         tr.dataset.giftId = gift.id;
         tr.innerHTML = `
           <td><input type="number" class="gift-order-input" data-field="order" value="${gift.order || 0}"></td>
+          <td style="text-align:center"><input type="checkbox" data-field="showInStore" ${gift.showInStore !== false ? 'checked' : ''}></td>
+          <td style="text-align:center"><input type="checkbox" data-field="showOnWheel" ${gift.showOnWheel !== false ? 'checked' : ''}></td>
           <td>${gift.iconUrl ? `<img src="${escapeHtml(gift.iconUrl)}" class="gift-icon-preview" onerror="this.style.display='none'">` : '<span style="color:var(--text2)">—</span>'}</td>
           <td><input type="text" class="gift-name-input" data-field="name" value="${escapeHtml(gift.name || "")}"></td>
           <td><input type="number" class="gift-value-input" data-field="coinValue" value="${gift.coinValue || 0}"></td>
@@ -5107,7 +5140,7 @@
         showToast(`Gift "${updates.name}" saved`, "success");
 
         // Refresh icon preview
-        const iconTd = tr.children[1];
+        const iconTd = tr.children[3];
         const iconUrl = updates.iconUrl;
         if (iconUrl) {
           iconTd.innerHTML = `<img src="${escapeHtml(iconUrl)}" class="gift-icon-preview" onerror="this.style.display='none'">`;
@@ -5180,7 +5213,8 @@
     const ECO_NUMBER_FIELDS = [
       "beanConversionRate", "beanRedeemBonusThreshold", "beanRedeemBonusMultiplier",
       "dropRateExponent", "pitySoftStart", "pityHardLimit", "pitySoftMaxShift",
-      "pityHighValueThreshold", "dailyBase", "broadcastSendThreshold", "broadcastWinThreshold"
+      "pityHighValueThreshold", "dailyBase", "broadcastSendThreshold", "broadcastWinThreshold",
+      "maxRoomDurationMinutes", "superShyRoomDurationMinutes", "normalSeatCount"
     ];
     const ECO_JSON_FIELDS = ["milestoneRewards"];
     const PULL_COST_KEYS = ["1", "10", "100"];
@@ -5453,6 +5487,36 @@
       btn.textContent = "Clear All Spin History";
     });
 
+    // Clear All Super Shy
+    $("#clear-supershy-btn").addEventListener("click", async () => {
+      const btn = $("#clear-supershy-btn");
+      const result = $("#clear-supershy-result");
+      if (!confirm("Remove Super Shy from ALL users? This cannot be undone.")) return;
+
+      btn.disabled = true;
+      btn.textContent = "Removing...";
+      result.style.display = "none";
+
+      try {
+        const token = await auth.currentUser.getIdToken();
+        const resp = await fetch(`${API_BASE}/api/cleanup/all-supershy`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || "Request failed");
+        result.className = "maintenance-result success";
+        result.textContent = `Removed Super Shy from ${data.usersCleared} users`;
+        result.style.display = "block";
+      } catch (err) {
+        result.className = "maintenance-result error";
+        result.textContent = err.message;
+        result.style.display = "block";
+      }
+      btn.disabled = false;
+      btn.textContent = "Remove All Super Shy";
+    });
+
     // =====================================================
     // --- Reset All (nuclear) ---
     // =====================================================
@@ -5475,9 +5539,18 @@
       // --- Web Audio: warning beep (confirmation steps) ---
       let beepCtx = null;
       let beepInterval = null;
+      let soundMuted = false;
+
+      // Mute button
+      const muteBtn = $("#nuclear-mute");
+      muteBtn.addEventListener("click", () => {
+        soundMuted = !soundMuted;
+        muteBtn.textContent = soundMuted ? "Unmute" : "Mute";
+        if (soundMuted) { stopBeep(); stopSiren(); }
+      });
 
       function startBeep() {
-        if (beepCtx) return;
+        if (beepCtx || soundMuted) return;
         beepCtx = new (window.AudioContext || window.webkitAudioContext)();
         function playTone() {
           if (!beepCtx) return;
@@ -5509,39 +5582,39 @@
       let sirenLfo = null;
 
       function startSiren() {
-        if (sirenCtx) return;
+        if (sirenCtx || soundMuted) return;
         sirenCtx = new (window.AudioContext || window.webkitAudioContext)();
         sirenGain = sirenCtx.createGain();
-        sirenGain.gain.value = 0.22;
+        sirenGain.gain.value = 0.18;
         sirenGain.connect(sirenCtx.destination);
 
-        // Oscillator 1: klaxon horn — two-tone alternating blast
+        // Oscillator 1: air-raid siren — smooth sweeping pitch
         sirenOsc1 = sirenCtx.createOscillator();
-        sirenOsc1.type = "square";
-        sirenOsc1.frequency.value = 260;
+        sirenOsc1.type = "sawtooth";
+        sirenOsc1.frequency.value = 400;
         const now = sirenCtx.currentTime;
-        for (let i = 0; i < 200; i++) {
-          const t = now + i * 0.5;
-          const lo = 260, hi = 380;
-          sirenOsc1.frequency.setValueAtTime(i % 2 === 0 ? lo : hi, t);
+        for (let i = 0; i < 60; i++) {
+          const t = now + i * 3;
+          sirenOsc1.frequency.linearRampToValueAtTime(900, t + 1.5);
+          sirenOsc1.frequency.linearRampToValueAtTime(400, t + 3);
         }
         sirenOsc1.connect(sirenGain);
         sirenOsc1.start();
 
-        // Oscillator 2: sub-bass rumble for menace
+        // Oscillator 2: low drone for dread
         sirenOsc2 = sirenCtx.createOscillator();
-        sirenOsc2.type = "triangle";
-        sirenOsc2.frequency.value = 80;
+        sirenOsc2.type = "sine";
+        sirenOsc2.frequency.value = 55;
         const gain2 = sirenCtx.createGain();
-        gain2.gain.value = 0.10;
+        gain2.gain.value = 0.15;
         sirenOsc2.connect(gain2);
         gain2.connect(sirenCtx.destination);
 
-        // LFO: rhythmic pulsing on/off at 2 Hz
+        // LFO: slow throb at 0.5 Hz
         sirenLfo = sirenCtx.createOscillator();
-        sirenLfo.frequency.value = 2;
+        sirenLfo.frequency.value = 0.5;
         const lfoGain = sirenCtx.createGain();
-        lfoGain.gain.value = 0.22;
+        lfoGain.gain.value = 0.15;
         sirenLfo.connect(lfoGain);
         lfoGain.connect(sirenGain.gain);
         sirenLfo.start();
@@ -5715,6 +5788,7 @@
             { id: "np-coins", endpoint: "all-coins", label: "Coins" },
             { id: "np-beans", endpoint: "all-beans", label: "Beans" },
             { id: "np-spin-history", endpoint: "all-spin-history", label: "Spin history" },
+            { id: "np-supershy", endpoint: "all-supershy", label: "Super Shy" },
           ];
 
           let failed = 0;
@@ -5724,6 +5798,7 @@
             const stepEl = $(`#${action.id}`);
             stepEl.className = "step running";
             stepEl.innerHTML = "&#9679; " + action.label + "...";
+            stepLabel.textContent = `${completed + 1}/${actions.length}: ${action.label}...`;
             try {
               const resp = await fetch(`${API_BASE}/api/cleanup/${action.endpoint}`, {
                 method: "POST",

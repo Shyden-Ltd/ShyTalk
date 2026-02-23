@@ -1,5 +1,6 @@
 package com.shyden.shytalk.feature.profile
 
+import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.model.ProfileVisitor
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.AuthRepository
@@ -11,10 +12,14 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.job
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -36,10 +41,18 @@ class FollowListViewModelTest {
     private val currentUserId = "current-user"
     private val profileUserId = "current-user" // viewing own list
 
+    private val activeViewModels = mutableListOf<FollowListViewModel>()
+
     @Before
     fun setup() {
         every { authRepository.currentUserId } returns currentUserId
         every { userRepository.userUpdates } returns MutableSharedFlow()
+    }
+
+    @After
+    fun tearDown() = runBlocking {
+        activeViewModels.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() }
+        activeViewModels.clear()
     }
 
     private fun createViewModel(
@@ -51,7 +64,7 @@ class FollowListViewModelTest {
             initialTab = initialTab,
             authRepository = authRepository,
             userRepository = userRepository
-        )
+        ).also { activeViewModels.add(it) }
     }
 
     private fun setupProfileWithFollowers() {
@@ -65,6 +78,169 @@ class FollowListViewModelTest {
         )
         coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(profileUser)
         coEvery { userRepository.getUsers(any()) } returns Resource.Success(listOf(followerA, followerB))
+    }
+
+    // ===== Empty List Tests =====
+
+    @Test
+    fun `load followers - empty list shows empty state`() = runTest {
+        val profileUser = TestData.createTestUser(
+            uid = currentUserId,
+            displayName = "Current User",
+            followerIds = emptySet(),
+            followingIds = setOf("following-1")
+        )
+        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(profileUser)
+        coEvery { userRepository.getUsers(any()) } returns Resource.Success(
+            listOf(TestData.createTestUser(uid = "following-1", displayName = "Following 1"))
+        )
+
+        val vm = createViewModel(initialTab = "followers")
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.followers.isEmpty())
+        assertFalse(vm.uiState.value.isLoading)
+        assertNull(vm.uiState.value.error)
+    }
+
+    @Test
+    fun `load following - empty list shows empty state`() = runTest {
+        val profileUser = TestData.createTestUser(
+            uid = currentUserId,
+            displayName = "Current User",
+            followerIds = setOf("follower-a"),
+            followingIds = emptySet()
+        )
+        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(profileUser)
+        coEvery { userRepository.getUsers(any()) } returns Resource.Success(
+            listOf(TestData.createTestUser(uid = "follower-a", displayName = "Alice"))
+        )
+
+        val vm = createViewModel(initialTab = "following")
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.following.isEmpty())
+        assertFalse(vm.uiState.value.isLoading)
+        assertNull(vm.uiState.value.error)
+    }
+
+    // ===== Error Loading List Tests =====
+
+    @Test
+    fun `error loading list shows error message`() = runTest {
+        coEvery { userRepository.getUser(currentUserId) } returns Resource.Error("Network error")
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        assertEquals("Network error", vm.uiState.value.error)
+        assertFalse(vm.uiState.value.isLoading)
+        assertTrue(vm.uiState.value.followers.isEmpty())
+        assertTrue(vm.uiState.value.following.isEmpty())
+    }
+
+    // ===== Follow/Unfollow from List Tests =====
+
+    @Test
+    fun `follow user from followers list updates state`() = runTest {
+        setupProfileWithFollowers()
+        coEvery { userRepository.followUser(any(), any()) } returns Resource.Success(Unit)
+        val vm = createViewModel(initialTab = "followers")
+        advanceUntilIdle()
+
+        // follower-a is in the followers list but current user is not following them
+        assertFalse(vm.uiState.value.currentUserFollowingIds.contains("follower-a"))
+
+        vm.toggleFollow("follower-a")
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.currentUserFollowingIds.contains("follower-a"))
+        coVerify { userRepository.followUser(currentUserId, "follower-a") }
+    }
+
+    @Test
+    fun `unfollow user from following list updates state`() = runTest {
+        val profileUser = TestData.createTestUser(
+            uid = currentUserId,
+            displayName = "Current User",
+            followerIds = emptySet(),
+            followingIds = setOf("following-1")
+        )
+        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(profileUser)
+        coEvery { userRepository.getUsers(any()) } returns Resource.Success(
+            listOf(TestData.createTestUser(uid = "following-1", displayName = "Following 1"))
+        )
+        coEvery { userRepository.unfollowUser(any(), any()) } returns Resource.Success(Unit)
+
+        val vm = createViewModel(initialTab = "following")
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.currentUserFollowingIds.contains("following-1"))
+
+        vm.toggleFollow("following-1")
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.currentUserFollowingIds.contains("following-1"))
+        coVerify { userRepository.unfollowUser(currentUserId, "following-1") }
+    }
+
+    // ===== Load Followers for Other User Tests =====
+
+    @Test
+    fun `load followers for other user - not own list`() = runTest {
+        val otherUser = "other-user"
+        val followerA = TestData.createTestUser(uid = "follower-a", displayName = "Alice")
+        val followerB = TestData.createTestUser(uid = "follower-b", displayName = "Bob")
+        val profileUser = TestData.createTestUser(
+            uid = otherUser,
+            displayName = "Other User",
+            followerIds = setOf("follower-a", "follower-b"),
+            followingIds = setOf("following-1")
+        )
+        val currentUser = TestData.createTestUser(
+            uid = currentUserId,
+            displayName = "Current User",
+            followingIds = setOf("follower-a")
+        )
+        coEvery { userRepository.getUser(otherUser) } returns Resource.Success(profileUser)
+        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(currentUser)
+        coEvery { userRepository.getUsers(any()) } returns Resource.Success(
+            listOf(followerA, followerB, TestData.createTestUser(uid = "following-1", displayName = "F1"))
+        )
+
+        val vm = createViewModel(profileUid = otherUser, initialTab = "followers")
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.isOwnList)
+        assertEquals(2, vm.uiState.value.followers.size)
+        assertFalse(vm.uiState.value.isLoading)
+        // Current user's follow state should be loaded for button rendering
+        assertTrue(vm.uiState.value.currentUserFollowingIds.contains("follower-a"))
+    }
+
+    @Test
+    fun `load followers for other user with hidden following`() = runTest {
+        val otherUser = "other-user"
+        val profileUser = TestData.createTestUser(
+            uid = otherUser,
+            displayName = "Other User",
+            followerIds = setOf("follower-a"),
+            followingIds = setOf("following-1"),
+            hideFollowing = true
+        )
+        val currentUser = TestData.createTestUser(uid = currentUserId, displayName = "Current User")
+        coEvery { userRepository.getUser(otherUser) } returns Resource.Success(profileUser)
+        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(currentUser)
+        coEvery { userRepository.getUsers(any()) } returns Resource.Success(
+            listOf(TestData.createTestUser(uid = "follower-a", displayName = "Alice"))
+        )
+
+        val vm = createViewModel(profileUid = otherUser, initialTab = "following")
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.followingHidden)
+        assertTrue(vm.uiState.value.following.isEmpty())
+        assertEquals(1, vm.uiState.value.followers.size)
     }
 
     // ===== Remove Follower Tests =====
@@ -412,5 +588,87 @@ class FollowListViewModelTest {
 
         assertTrue(vm.uiState.value.stalkers.isEmpty())
         assertTrue(vm.uiState.value.stalkerUsers.isEmpty())
+    }
+
+    // ===== toggleFollow — unfollow path =====
+
+    @Test
+    fun `toggleFollow - unfollow removes from followingIds`() = runTest {
+        // Setup: current user is already following target-user
+        val profileUser = TestData.createTestUser(
+            uid = currentUserId,
+            displayName = "Current User",
+            followerIds = setOf("follower-a"),
+            followingIds = setOf("target-user")
+        )
+        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(profileUser)
+        coEvery { userRepository.getUsers(any()) } returns Resource.Success(
+            listOf(
+                TestData.createTestUser(uid = "follower-a", displayName = "Follower A"),
+                TestData.createTestUser(uid = "target-user", displayName = "Target User")
+            )
+        )
+        coEvery { userRepository.unfollowUser(any(), any()) } returns Resource.Success(Unit)
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.currentUserFollowingIds.contains("target-user"))
+
+        vm.toggleFollow("target-user")
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.currentUserFollowingIds.contains("target-user"))
+        coVerify { userRepository.unfollowUser(currentUserId, "target-user") }
+    }
+
+    @Test
+    fun `toggleFollow - unfollow error reverts state`() = runTest {
+        val profileUser = TestData.createTestUser(
+            uid = currentUserId,
+            displayName = "Current User",
+            followerIds = setOf("follower-a"),
+            followingIds = setOf("target-user")
+        )
+        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(profileUser)
+        coEvery { userRepository.getUsers(any()) } returns Resource.Success(
+            listOf(
+                TestData.createTestUser(uid = "follower-a", displayName = "Follower A"),
+                TestData.createTestUser(uid = "target-user", displayName = "Target User")
+            )
+        )
+        coEvery { userRepository.unfollowUser(any(), any()) } returns Resource.Error("network fail")
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.currentUserFollowingIds.contains("target-user"))
+
+        vm.toggleFollow("target-user")
+        advanceUntilIdle()
+
+        // State should revert back to following
+        assertTrue(vm.uiState.value.currentUserFollowingIds.contains("target-user"))
+        assertEquals("network fail", vm.uiState.value.error)
+    }
+
+    // ===== toggleFollow — follow error revert =====
+
+    @Test
+    fun `toggleFollow - follow error reverts state`() = runTest {
+        setupProfileWithFollowers()
+        coEvery { userRepository.followUser(any(), any()) } returns Resource.Error("follow failed")
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.currentUserFollowingIds.contains("new-target"))
+
+        vm.toggleFollow("new-target")
+        advanceUntilIdle()
+
+        // State should revert back to not-following
+        assertFalse(vm.uiState.value.currentUserFollowingIds.contains("new-target"))
+        assertEquals("follow failed", vm.uiState.value.error)
     }
 }

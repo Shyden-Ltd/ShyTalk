@@ -63,7 +63,8 @@ data class User(
     val lastLoginDate: String? = null,
     val lastLoginRewardDate: String? = null,
     val aliases: Map<String, String> = emptyMap(),
-    val minGiftAnimationValue: Int = 0
+    val minGiftAnimationValue: Int = 0,
+    val hasClaimedSuperShyTrial: Boolean = false
 ) {
     val isActivelySuspended: Boolean
         get() {
@@ -131,7 +132,8 @@ data class User(
         "lastLoginDate" to lastLoginDate,
         "lastLoginRewardDate" to lastLoginRewardDate,
         "aliases" to aliases,
-        "minGiftAnimationValue" to minGiftAnimationValue
+        "minGiftAnimationValue" to minGiftAnimationValue,
+        "hasClaimedSuperShyTrial" to hasClaimedSuperShyTrial
     )
 
     companion object {
@@ -202,7 +204,8 @@ data class User(
                 ?.entries
                 ?.mapNotNull { (k, v) -> (k as? String)?.let { key -> (v as? String)?.let { value -> key to value } } }
                 ?.toMap() ?: emptyMap(),
-            minGiftAnimationValue = (map["minGiftAnimationValue"] as? Long)?.toInt() ?: 0
+            minGiftAnimationValue = (map["minGiftAnimationValue"] as? Long)?.toInt() ?: 0,
+            hasClaimedSuperShyTrial = map["hasClaimedSuperShyTrial"] as? Boolean ?: false
         )
     }
 }

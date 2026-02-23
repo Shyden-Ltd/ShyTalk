@@ -214,4 +214,75 @@ class EconomyRepositoryImplTest {
         assertTrue(result is Resource.Success)
         assertEquals(1, (result as Resource.Success).data.size)
     }
+
+    @Test
+    fun `sendGiftBatch failure returns Error`() = runTest {
+        val callable = mockk<HttpsCallableReference>()
+        every { callable.call(any()) } returns Tasks.forException(RuntimeException("Batch failed"))
+        every { functions.getHttpsCallable("sendGiftBatch") } returns callable
+
+        val result = repo.sendGiftBatch(listOf("r1", "r2"), "gift-1", 1, false)
+
+        assertTrue(result is Resource.Error)
+    }
+
+    @Test
+    fun `addTestCoins failure returns Error`() = runTest {
+        val callable = mockk<HttpsCallableReference>()
+        every { callable.call(any()) } returns Tasks.forException(RuntimeException("Not allowed"))
+        every { functions.getHttpsCallable("addTestCoins") } returns callable
+
+        val result = repo.addTestCoins(100)
+
+        assertTrue(result is Resource.Error)
+    }
+
+    @Test
+    fun `claimSuperShyTrial failure returns Error`() = runTest {
+        val callable = mockk<HttpsCallableReference>()
+        every { callable.call() } returns Tasks.forException(RuntimeException("Already claimed"))
+        every { functions.getHttpsCallable("claimSuperShyTrial") } returns callable
+
+        val result = repo.claimSuperShyTrial()
+
+        assertTrue(result is Resource.Error)
+    }
+
+    @Test
+    fun `activateSuperShyTrial failure returns Error`() = runTest {
+        val callable = mockk<HttpsCallableReference>()
+        every { callable.call() } returns Tasks.forException(RuntimeException("No trial"))
+        every { functions.getHttpsCallable("activateSuperShyTrial") } returns callable
+
+        val result = repo.activateSuperShyTrial()
+
+        assertTrue(result is Resource.Error)
+    }
+
+    @Test
+    fun `getCoinPackages returns single package correctly`() = runTest {
+        val query = mockk<Query>(relaxed = true)
+        val snapshot = mockk<QuerySnapshot>()
+
+        val doc = mockk<DocumentSnapshot>()
+        every { doc.id } returns "pkg1"
+        every { doc.data } returns mapOf(
+            "productId" to "coins_2000", "coins" to 2000L, "bonusCoins" to 200L,
+            "displayPrice" to "$9.99", "order" to 1L, "isActive" to true
+        )
+
+        every { snapshot.documents } returns listOf(doc)
+        every { coinPackagesCollection.whereEqualTo("isActive", true) } returns query
+        every { query.get() } returns Tasks.forResult(snapshot)
+
+        val result = repo.getCoinPackages()
+
+        assertTrue(result is Resource.Success)
+        val packages = (result as Resource.Success).data
+        assertEquals(1, packages.size)
+        assertEquals("coins_2000", packages[0].productId)
+        assertEquals(2000, packages[0].coins)
+        assertEquals(200, packages[0].bonusCoins)
+        assertEquals("$9.99", packages[0].displayPrice)
+    }
 }

@@ -17,7 +17,10 @@ import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.remote.VoiceConnectionState
 import com.shyden.shytalk.data.remote.VoiceService
 import com.shyden.shytalk.data.remote.PresenceService
+import com.shyden.shytalk.core.model.EconomyConfig
+import com.shyden.shytalk.core.model.GiftEvent
 import com.shyden.shytalk.data.repository.AuthRepository
+import com.shyden.shytalk.data.repository.EconomyRepository
 import com.shyden.shytalk.data.repository.MessageRepository
 import com.shyden.shytalk.data.repository.ReportRepository
 import com.shyden.shytalk.data.repository.StorageRepository
@@ -64,7 +67,9 @@ class RoomViewModelTest {
     private val roomLifecycleManager = mockk<RoomLifecycleManager>(relaxed = true)
     private val reportRepository = mockk<ReportRepository>(relaxed = true)
     private val storageRepository = mockk<StorageRepository>(relaxed = true)
+    private val economyRepository = mockk<EconomyRepository>(relaxed = true)
 
+    private val economyConfigFlow = MutableStateFlow(EconomyConfig())
     private val roomFlow = MutableStateFlow<ChatRoom?>(null)
     private val messagesFlow = MutableStateFlow<List<Message>>(emptyList())
     private val speakingFlow = MutableStateFlow<Set<String>>(emptySet())
@@ -113,6 +118,7 @@ class RoomViewModelTest {
         every { seatRequestRepository.getRequestsByUser(any(), any()) } returns myRequestsFlow
         every { roomLifecycleManager.isInRoom(any()) } returns false
         every { roomLifecycleManager.disconnectedUserIds } returns MutableStateFlow(emptySet())
+        every { economyRepository.observeEconomyConfig() } returns economyConfigFlow
     }
 
     /** Wraps runTest to cancel viewModelScope before runTest drains pending delays. */
@@ -138,7 +144,8 @@ class RoomViewModelTest {
             presenceService = presenceService,
             roomLifecycleManager = roomLifecycleManager,
             reportRepository = reportRepository,
-            storageRepository = storageRepository
+            storageRepository = storageRepository,
+            economyRepository = economyRepository
         )
     }
 
@@ -1146,7 +1153,7 @@ class RoomViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { roomRepository.toggleMute(any(), any(), any()) }
-        assertEquals("Voice not connected yet", viewModel.uiState.value.error)
+        assertEquals("Voice is currently unavailable", viewModel.uiState.value.error)
     }
 
     @Test
@@ -1709,6 +1716,18 @@ class RoomViewModelTest {
         val notif = viewModel.uiState.value.activeNotification
         assertTrue(notif is RoomNotification.InviteReceived)
         assertEquals(ownerId, (notif as RoomNotification.InviteReceived).inviterUserId)
+    }
+
+    @Test
+    fun `declineInvite calls roomRepository cancelInvite`() = roomTest {
+        viewModel = createViewModel()
+        emitRoomAsAttendee()
+        advanceUntilIdle()
+
+        viewModel.declineInvite()
+        advanceUntilIdle()
+
+        coVerify { roomRepository.cancelInvite("room-1", currentUserId) }
     }
 
     // ===== Owner Can Kick/Force-Mute Hosts (v0.18 fix) =====
@@ -2812,6 +2831,168 @@ class RoomViewModelTest {
         assertEquals("Joiner", viewModel.uiState.value.allKnownUsers["joiner-1"]?.displayName)
     }
 
+    // ===== reportUser Tests =====
+
+    @Test
+    fun `reportUser - success calls storageRepo and reportRepo`() = roomTest {
+        coEvery { storageRepository.uploadImage(any(), any(), any(), any()) } returns
+            Resource.Success("https://img.url/evidence.jpg")
+        coEvery {
+            reportRepository.reportUser(
+                reporterId = any(), reporterName = any(), reporterUniqueId = any(),
+                reportedUserId = any(), reportedUserName = any(), reportedUserUniqueId = any(),
+                conversationId = any(), reason = any(), description = any(), evidenceUrls = any()
+            )
+        } returns Resource.Success(Unit)
+
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceUntilIdle()
+
+        val targetUser = TestData.createTestUser(uid = "target-1", displayName = "Target")
+        coEvery { userRepository.getUser("target-1") } returns Resource.Success(targetUser)
+
+        val imageData = byteArrayOf(1, 2, 3)
+        viewModel.reportUser("target-1", "Spam", "Spamming", listOf(imageData to "image/png"))
+        advanceUntilIdle()
+
+        coVerify { storageRepository.uploadImage(currentUserId, "report_evidence", imageData, "image/png") }
+        coVerify {
+            reportRepository.reportUser(
+                reporterId = currentUserId,
+                reporterName = "Current User",
+                reporterUniqueId = any(),
+                reportedUserId = "target-1",
+                reportedUserName = "Target",
+                reportedUserUniqueId = any(),
+                conversationId = "",
+                reason = "Spam",
+                description = "Spamming",
+                evidenceUrls = listOf("https://img.url/evidence.jpg")
+            )
+        }
+        assertTrue(viewModel.uiState.value.reportSubmitted)
+        assertFalse(viewModel.uiState.value.isSubmittingReport)
+    }
+
+    @Test
+    fun `reportUser - error when target user not found`() = roomTest {
+        coEvery { userRepository.getUser("missing-user") } returns Resource.Error("Not found")
+
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceUntilIdle()
+
+        viewModel.reportUser("missing-user", "Spam", "Spamming")
+        advanceUntilIdle()
+
+        assertEquals("Could not submit report", viewModel.uiState.value.reportError)
+        assertFalse(viewModel.uiState.value.isSubmittingReport)
+    }
+
+    // ===== editMessage Tests =====
+
+    @Test
+    fun `startEditMessage sets edit state`() = roomTest {
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceUntilIdle()
+
+        viewModel.startEditMessage("msg-1", "Hello world")
+
+        assertEquals("msg-1", viewModel.uiState.value.editingMessageId)
+        assertEquals("Hello world", viewModel.uiState.value.editingMessageText)
+    }
+
+    @Test
+    fun `cancelEditMessage clears edit state`() = roomTest {
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceUntilIdle()
+
+        viewModel.startEditMessage("msg-1", "Hello world")
+        viewModel.cancelEditMessage()
+
+        assertNull(viewModel.uiState.value.editingMessageId)
+        assertEquals("", viewModel.uiState.value.editingMessageText)
+    }
+
+    @Test
+    fun `editMessage success calls messageRepository`() = roomTest {
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceUntilIdle()
+
+        viewModel.startEditMessage("msg-1", "old text")
+        viewModel.editMessage("new text")
+        advanceUntilIdle()
+
+        coVerify { messageRepository.editMessage("room-1", "msg-1", "new text") }
+        assertNull(viewModel.uiState.value.editingMessageId)
+    }
+
+    @Test
+    fun `editMessage with blank text is a no-op`() = roomTest {
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceUntilIdle()
+
+        viewModel.startEditMessage("msg-1", "old text")
+        viewModel.editMessage("   ")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { messageRepository.editMessage(any(), any(), any()) }
+    }
+
+    // ===== alias Tests =====
+
+    @Test
+    fun `setAlias success updates aliases in state`() = roomTest {
+        coEvery { userRepository.setAlias(any(), any(), any()) } returns Resource.Success(Unit)
+
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceUntilIdle()
+
+        viewModel.setAlias("target-1", "My Friend")
+        advanceUntilIdle()
+
+        assertEquals("My Friend", viewModel.uiState.value.aliases["target-1"])
+    }
+
+    @Test
+    fun `setAlias error sets error state`() = roomTest {
+        coEvery { userRepository.setAlias(any(), any(), any()) } returns Resource.Error("fail")
+
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceUntilIdle()
+
+        viewModel.setAlias("target-1", "Nickname")
+        advanceUntilIdle()
+
+        assertEquals("Failed to set alias", viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun `removeAlias success removes from state`() = roomTest {
+        coEvery { userRepository.setAlias(any(), any(), any()) } returns Resource.Success(Unit)
+        coEvery { userRepository.removeAlias(any(), any()) } returns Resource.Success(Unit)
+
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceUntilIdle()
+
+        viewModel.setAlias("target-1", "My Friend")
+        advanceUntilIdle()
+        assertEquals("My Friend", viewModel.uiState.value.aliases["target-1"])
+
+        viewModel.removeAlias("target-1")
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.aliases.containsKey("target-1"))
+    }
+
     @Test
     fun `disconnectedUserIds - does not include owner during OWNER_AWAY`() = roomTest {
         val disconnectedFlow = MutableStateFlow<Set<String>>(emptySet())
@@ -2831,5 +3012,793 @@ class RoomViewModelTest {
 
         // disconnectedUserIds should NOT contain the owner (dimming handled in UI layer now)
         assertFalse(viewModel.uiState.value.disconnectedUserIds.contains(ownerId))
+    }
+
+    // ===== acceptApprovedRequest — already seated bug fix =====
+
+    @Test
+    fun `acceptApprovedRequest - already seated dismisses notification without re-seating`() = roomTest {
+        viewModel = createViewModel()
+        // Emit room where current user is already seated
+        val seats = TestData.createDefaultSeats().toMutableMap()
+        seats["3"] = TestData.createTestSeat(userId = currentUserId)
+        emitRoomAsAttendee(TestData.createTestRoom(
+            ownerId = ownerId,
+            participantIds = setOf(ownerId, currentUserId),
+            seats = seats
+        ))
+        advanceUntilIdle()
+
+        val request = TestData.createTestSeatRequest(
+            userId = currentUserId, userName = "Current User", seatIndex = 5,
+            status = SeatRequestStatus.APPROVED
+        )
+
+        viewModel.acceptApprovedRequest(request)
+        advanceUntilIdle()
+
+        // Should NOT have called takeSeat since user is already seated
+        coVerify(exactly = 0) { roomRepository.takeSeat("room-1", any(), currentUserId) }
+    }
+
+    // ===== Room expiry — config-based duration =====
+
+    @Test
+    fun `room expiry - uses economy config duration`() = roomTest {
+        // Set economy config to 2-hour rooms
+        economyConfigFlow.value = EconomyConfig(maxRoomDurationMinutes = 120)
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        // Room created 119 minutes ago — should be within countdown threshold
+        val nearExpiryRoom = TestData.createTestRoom(
+            ownerId = currentUserId,
+            createdAt = System.currentTimeMillis() - (119 * 60 * 1000L)
+        )
+        emitRoomAsOwner(nearExpiryRoom)
+        advanceTimeBy(1001L)
+
+        val remaining = viewModel.uiState.value.roomExpiryRemainingMs
+        assertTrue("Expected remaining > 0 but was $remaining", remaining > 0)
+
+        // Advance through remaining time so loop finishes
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `room expiry - Super Shy owner gets extended duration`() = roomTest {
+        // Set economy config with Super Shy duration
+        economyConfigFlow.value = EconomyConfig(
+            maxRoomDurationMinutes = 360,
+            superShyRoomDurationMinutes = 720
+        )
+
+        // Mock owner as Super Shy user
+        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(
+            TestData.createTestUser(uid = currentUserId, displayName = "Owner", isSuperShy = true)
+        )
+
+        viewModel = createViewModel()
+        // Room created 5 hours ago — within 6h default but well before 12h Super Shy
+        val room = TestData.createTestRoom(
+            ownerId = currentUserId,
+            createdAt = System.currentTimeMillis() - (5 * 60 * 60 * 1000L)
+        )
+        emitRoomAsOwner(room)
+        advanceUntilIdle()
+
+        // maxRoomDurationMs should be 12 hours (720 minutes)
+        assertEquals(720L * 60 * 1000, viewModel.uiState.value.maxRoomDurationMs)
+        // Room should NOT have been closed — still has 7 hours left
+        coVerify(exactly = 0) { roomRepository.closeRoom(any()) }
+    }
+
+    // ===== Expiry Upsell Dialog =====
+
+    @Test
+    fun `expiry upsell - shows dialog when countdown starts for non-SuperShy owner`() = roomTest {
+        economyConfigFlow.value = EconomyConfig(maxRoomDurationMinutes = 360)
+
+        // Owner is NOT Super Shy
+        coEvery { userRepository.getUser(ownerId) } returns Resource.Success(
+            TestData.createTestUser(uid = ownerId, displayName = "Owner", isSuperShy = false)
+        )
+
+        viewModel = createViewModel()
+        advanceTimeBy(100L)
+
+        // Room near expiry (within 5min threshold)
+        val nearExpiryRoom = TestData.createTestRoom(
+            ownerId = ownerId,
+            participantIds = setOf(ownerId, currentUserId),
+            createdAt = System.currentTimeMillis() - (360 * 60 * 1000L) + 120_000L
+        )
+        emitRoomAsAttendee(nearExpiryRoom)
+        advanceTimeBy(1100L)
+
+        assertTrue(viewModel.uiState.value.showExpiryUpsellDialog)
+    }
+
+    @Test
+    fun `expiry upsell - does NOT show for Super Shy owner`() = roomTest {
+        economyConfigFlow.value = EconomyConfig(
+            maxRoomDurationMinutes = 360,
+            superShyRoomDurationMinutes = 720
+        )
+
+        // Owner IS Super Shy
+        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(
+            TestData.createTestUser(uid = currentUserId, displayName = "Current User", isSuperShy = true)
+        )
+
+        viewModel = createViewModel()
+        advanceTimeBy(100L)
+
+        // Room near expiry of normal duration, but owner is Super Shy so gets 720min
+        val room = TestData.createTestRoom(
+            ownerId = currentUserId,
+            createdAt = System.currentTimeMillis() - (360 * 60 * 1000L) + 120_000L
+        )
+        emitRoomAsOwner(room)
+        // Let user data load into allKnownUsers and resolveRoomDuration to pick up Super Shy status
+        advanceTimeBy(100L)
+        advanceTimeBy(1100L)
+
+        // Should NOT show — Super Shy owner gets extended duration, room not near expiry
+        assertFalse(viewModel.uiState.value.showExpiryUpsellDialog)
+    }
+
+    @Test
+    fun `expiry upsell - shows only once per session`() = roomTest {
+        economyConfigFlow.value = EconomyConfig(maxRoomDurationMinutes = 360)
+
+        coEvery { userRepository.getUser(ownerId) } returns Resource.Success(
+            TestData.createTestUser(uid = ownerId, displayName = "Owner", isSuperShy = false)
+        )
+
+        viewModel = createViewModel()
+        advanceTimeBy(100L)
+
+        val nearExpiryRoom = TestData.createTestRoom(
+            ownerId = ownerId,
+            participantIds = setOf(ownerId, currentUserId),
+            createdAt = System.currentTimeMillis() - (360 * 60 * 1000L) + 120_000L
+        )
+        emitRoomAsAttendee(nearExpiryRoom)
+        advanceTimeBy(1100L)
+
+        assertTrue(viewModel.uiState.value.showExpiryUpsellDialog)
+
+        // Dismiss
+        viewModel.dismissExpiryUpsellDialog()
+        assertFalse(viewModel.uiState.value.showExpiryUpsellDialog)
+
+        // Re-emit room — dialog should NOT re-appear
+        roomFlow.value = null
+        advanceTimeBy(100L)
+        roomFlow.value = nearExpiryRoom
+        advanceTimeBy(1100L)
+
+        assertFalse(viewModel.uiState.value.showExpiryUpsellDialog)
+    }
+
+    @Test
+    fun `dismissExpiryUpsellDialog clears the flag`() = roomTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        // Manually verify dismiss works on default state
+        viewModel.dismissExpiryUpsellDialog()
+        assertFalse(viewModel.uiState.value.showExpiryUpsellDialog)
+    }
+
+    // ===== Seat Limits =====
+
+    @Test
+    fun `effectiveSeatCount - normal user gets normalSeatCount from config`() = roomTest {
+        economyConfigFlow.value = EconomyConfig(normalSeatCount = 5)
+
+        // Owner is NOT Super Shy
+        coEvery { userRepository.getUser(ownerId) } returns Resource.Success(
+            TestData.createTestUser(uid = ownerId, displayName = "Owner", isSuperShy = false)
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val room = TestData.createTestRoom(
+            ownerId = ownerId,
+            participantIds = setOf(ownerId, currentUserId)
+        )
+        emitRoomAsAttendee(room)
+        advanceUntilIdle()
+
+        assertEquals(5, viewModel.uiState.value.effectiveSeatCount)
+    }
+
+    @Test
+    fun `effectiveSeatCount - Super Shy owner gets MAX_SEATS`() = roomTest {
+        economyConfigFlow.value = EconomyConfig(normalSeatCount = 5)
+
+        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(
+            TestData.createTestUser(uid = currentUserId, displayName = "Current User", isSuperShy = true)
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val room = TestData.createTestRoom(ownerId = currentUserId)
+        emitRoomAsOwner(room)
+        advanceUntilIdle()
+
+        assertEquals(Constants.MAX_SEATS, viewModel.uiState.value.effectiveSeatCount)
+    }
+
+    @Test
+    fun `takeSeat - rejects index beyond effectiveSeatCount`() = roomTest {
+        economyConfigFlow.value = EconomyConfig(normalSeatCount = 5)
+
+        coEvery { userRepository.getUser(ownerId) } returns Resource.Success(
+            TestData.createTestUser(uid = ownerId, displayName = "Owner", isSuperShy = false)
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val room = TestData.createTestRoom(
+            ownerId = ownerId,
+            participantIds = setOf(ownerId, currentUserId),
+            hostIds = setOf(currentUserId)
+        )
+        emitRoomAsHost(room)
+        advanceUntilIdle()
+
+        // Seat 5 is beyond the limit of 5 (indices 0-4)
+        viewModel.takeSeat(5)
+        advanceUntilIdle()
+
+        // Should NOT have called takeSeat on the repository
+        coVerify(exactly = 0) { roomRepository.takeSeat(any(), 5, any()) }
+    }
+
+    // ===== Voice Resilience Tests =====
+
+    @Test
+    fun `voice timeout - room unblocks after 10s when voice never connects`() = roomTest {
+        // Start with voice disconnected so isVoiceReady stays false
+        connectionStateFlow.value = VoiceConnectionState.DISCONNECTED
+
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        // Use advanceTimeBy(1) to process pending coroutines without advancing through the 10s delay
+        advanceTimeBy(1)
+
+        // Before timeout: room should be blocked (hasJoined=true but isVoiceReady=false)
+        assertTrue(viewModel.uiState.value.hasJoined)
+        assertFalse(viewModel.uiState.value.isVoiceReady)
+
+        // Advance past the 10s timeout
+        advanceTimeBy(11_000L)
+
+        // After timeout: room should be unblocked with voice unavailable
+        assertTrue(viewModel.uiState.value.isVoiceReady)
+        assertTrue(viewModel.uiState.value.isVoiceUnavailable)
+    }
+
+    @Test
+    fun `voice error - room unblocks immediately when voice error arrives`() = roomTest {
+        connectionStateFlow.value = VoiceConnectionState.DISCONNECTED
+
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceTimeBy(1)
+
+        assertFalse(viewModel.uiState.value.isVoiceReady)
+
+        // Emit a voice error — room should unblock immediately (before the 10s timeout)
+        voiceErrorFlow.value = "Voice join failed"
+        advanceTimeBy(1)
+
+        // Room should unblock immediately with voice unavailable
+        assertTrue(viewModel.uiState.value.isVoiceReady)
+        assertTrue(viewModel.uiState.value.isVoiceUnavailable)
+    }
+
+    @Test
+    fun `voice reconnects - isVoiceUnavailable clears on CONNECTED`() = roomTest {
+        connectionStateFlow.value = VoiceConnectionState.DISCONNECTED
+
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+
+        // Trigger timeout to set isVoiceUnavailable
+        advanceTimeBy(11_000L)
+        assertTrue(viewModel.uiState.value.isVoiceUnavailable)
+
+        // Voice reconnects
+        connectionStateFlow.value = VoiceConnectionState.CONNECTED
+        advanceTimeBy(1)
+
+        // Banner should be gone
+        assertTrue(viewModel.uiState.value.isVoiceReady)
+        assertFalse(viewModel.uiState.value.isVoiceUnavailable)
+    }
+
+    @Test
+    fun `voice disconnects mid-session - isVoiceUnavailable becomes true`() = roomTest {
+        // Start connected
+        connectionStateFlow.value = VoiceConnectionState.CONNECTED
+
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isVoiceReady)
+        assertFalse(viewModel.uiState.value.isVoiceUnavailable)
+
+        // Disconnect mid-session
+        connectionStateFlow.value = VoiceConnectionState.DISCONNECTED
+        advanceUntilIdle()
+
+        // Room stays visible but voice is marked unavailable
+        assertTrue(viewModel.uiState.value.isVoiceReady)
+        assertTrue(viewModel.uiState.value.isVoiceUnavailable)
+    }
+
+    @Test
+    fun `unmute blocked when voice unavailable - shows correct error`() = roomTest {
+        connectionStateFlow.value = VoiceConnectionState.CONNECTED
+
+        viewModel = createViewModel()
+        val seats = TestData.createSeatsWithOwner(currentUserId).toMutableMap()
+        // Owner is on seat 0, muted — so toggleSelfMute will attempt to unmute
+        seats["0"] = TestData.createTestSeat(userId = currentUserId, isMuted = true)
+        emitRoomAsOwner(TestData.createTestRoom(ownerId = currentUserId, seats = seats))
+        advanceUntilIdle()
+
+        // Disconnect mid-session to trigger isVoiceUnavailable
+        connectionStateFlow.value = VoiceConnectionState.DISCONNECTED
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isVoiceUnavailable)
+
+        viewModel.toggleSelfMute(0) // try to unmute
+        advanceUntilIdle()
+
+        assertEquals("Voice is currently unavailable", viewModel.uiState.value.error)
+    }
+
+    // ===== Gift Event Handling Tests =====
+
+    @Test
+    fun `gift event - enqueues fresh event into animation queue`() = roomTest {
+        viewModel = createViewModel()
+        // First emission triggers handleFirstJoin -> joinRoom -> hasJoined = true
+        val baseRoom = TestData.createTestRoom(ownerId = currentUserId)
+        emitRoomAsOwner(baseRoom)
+        advanceTimeBy(100L)
+
+        // Second emission triggers handleNormalUpdate -> handleGiftEvent
+        val freshEvent = GiftEvent(
+            senderId = "sender-1",
+            senderName = "Sender",
+            recipientId = "recipient-1",
+            recipientName = "Recipient",
+            giftId = "gift-1",
+            giftName = "Rose",
+            coinValue = 10,
+            timestamp = System.currentTimeMillis()
+        )
+        roomFlow.value = baseRoom.copy(lastGiftEvent = freshEvent)
+        advanceTimeBy(100L)
+
+        assertNotNull(viewModel.giftAnimationQueue.currentEvent.value)
+        assertEquals(freshEvent.giftId, viewModel.giftAnimationQueue.currentEvent.value?.giftId)
+    }
+
+    @Test
+    fun `gift event - skips old event on first observation`() = roomTest {
+        viewModel = createViewModel()
+        val baseRoom = TestData.createTestRoom(ownerId = currentUserId)
+        emitRoomAsOwner(baseRoom)
+        advanceTimeBy(100L)
+
+        // Event timestamp is > 10s ago — should be skipped on first observation
+        val oldEvent = GiftEvent(
+            senderId = "sender-1",
+            senderName = "Sender",
+            recipientId = "recipient-1",
+            recipientName = "Recipient",
+            giftId = "gift-old",
+            giftName = "Rose",
+            coinValue = 10,
+            timestamp = System.currentTimeMillis() - 20_000
+        )
+        roomFlow.value = baseRoom.copy(lastGiftEvent = oldEvent)
+        advanceTimeBy(100L)
+
+        assertNull(viewModel.giftAnimationQueue.currentEvent.value)
+    }
+
+    @Test
+    fun `gift event - skips duplicate timestamp`() = roomTest {
+        viewModel = createViewModel()
+        val baseRoom = TestData.createTestRoom(ownerId = currentUserId)
+        emitRoomAsOwner(baseRoom)
+        advanceTimeBy(100L)
+
+        val eventTimestamp = System.currentTimeMillis()
+        val firstEvent = GiftEvent(
+            senderId = "sender-1",
+            senderName = "Sender",
+            recipientId = "recipient-1",
+            recipientName = "Recipient",
+            giftId = "gift-1",
+            giftName = "Rose",
+            coinValue = 10,
+            timestamp = eventTimestamp
+        )
+
+        // First event emission — enqueued
+        roomFlow.value = baseRoom.copy(lastGiftEvent = firstEvent)
+        advanceTimeBy(100L)
+        assertNotNull(viewModel.giftAnimationQueue.currentEvent.value)
+
+        // Consume the first event so the queue is empty again
+        viewModel.giftAnimationQueue.onAnimationFinished()
+        assertNull(viewModel.giftAnimationQueue.currentEvent.value)
+
+        // Second emission with SAME timestamp — should be skipped as duplicate
+        val duplicateEvent = firstEvent.copy(giftName = "Tulip")
+        roomFlow.value = baseRoom.copy(lastGiftEvent = duplicateEvent, name = "Room v2")
+        advanceTimeBy(100L)
+
+        assertNull(viewModel.giftAnimationQueue.currentEvent.value)
+    }
+
+    @Test
+    fun `gift event - respects minGiftAnimationValue filter`() = roomTest {
+        // Mock current user with minGiftAnimationValue = 100
+        val userWithFilter = TestData.createTestUser(
+            uid = currentUserId,
+            displayName = "Current User"
+        ).copy(minGiftAnimationValue = 100)
+        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(userWithFilter)
+
+        viewModel = createViewModel()
+        val baseRoom = TestData.createTestRoom(
+            ownerId = currentUserId,
+            participantIds = setOf(currentUserId)
+        )
+        emitRoomAsOwner(baseRoom)
+        advanceTimeBy(100L)
+
+        // Event coinValue (50) is below minGiftAnimationValue (100) — should be filtered out
+        val cheapEvent = GiftEvent(
+            senderId = "sender-1",
+            senderName = "Sender",
+            recipientId = "recipient-1",
+            recipientName = "Recipient",
+            giftId = "gift-cheap",
+            giftName = "Rose",
+            coinValue = 50,
+            timestamp = System.currentTimeMillis()
+        )
+        roomFlow.value = baseRoom.copy(lastGiftEvent = cheapEvent)
+        advanceTimeBy(100L)
+
+        assertNull(viewModel.giftAnimationQueue.currentEvent.value)
+    }
+
+    @Test
+    fun `gift event - null lastGiftEvent is ignored`() = roomTest {
+        viewModel = createViewModel()
+        val baseRoom = TestData.createTestRoom(ownerId = currentUserId)
+        emitRoomAsOwner(baseRoom)
+        advanceTimeBy(100L)
+
+        // Emit room update with null lastGiftEvent (the default)
+        roomFlow.value = baseRoom.copy(name = "Updated Room")
+        advanceTimeBy(100L)
+
+        assertNull(viewModel.giftAnimationQueue.currentEvent.value)
+    }
+
+    // ===== confirmJoinDespiteBlock Tests =====
+
+    @Test
+    fun `confirmJoinDespiteBlock - clears warning and joins room`() = roomTest {
+        viewModel = createViewModel()
+
+        // Emit room where room owner has blocked current user
+        val ownerWithBlock = TestData.createTestUser(
+            uid = ownerId,
+            displayName = "Owner",
+            blockedUserIds = setOf(currentUserId)
+        )
+        coEvery { userRepository.getUser(ownerId) } returns Resource.Success(ownerWithBlock)
+        roomFlow.value = TestData.createTestRoom(
+            ownerId = ownerId,
+            participantIds = setOf(ownerId)
+        )
+        advanceTimeBy(100L)
+
+        // Block warning should be shown
+        assertNotNull(viewModel.uiState.value.blockWarning)
+        assertTrue(viewModel.uiState.value.blockWarning is BlockWarning.BlockedByRoomOwner)
+
+        // Confirm join despite block
+        viewModel.confirmJoinDespiteBlock()
+        advanceTimeBy(100L)
+
+        // Block warning should be cleared and user should have joined
+        assertNull(viewModel.uiState.value.blockWarning)
+        assertTrue(viewModel.uiState.value.hasJoined)
+    }
+
+    // ===== clearReportSubmitted Tests =====
+
+    @Test
+    fun `clearReportSubmitted clears reportSubmitted and reportError`() = roomTest {
+        coEvery {
+            reportRepository.reportUser(
+                reporterId = any(), reporterName = any(), reporterUniqueId = any(),
+                reportedUserId = any(), reportedUserName = any(), reportedUserUniqueId = any(),
+                conversationId = any(), reason = any(), description = any(), evidenceUrls = any()
+            )
+        } returns Resource.Success(Unit)
+        val targetUser = TestData.createTestUser(uid = "target-1", displayName = "Target")
+        coEvery { userRepository.getUser("target-1") } returns Resource.Success(targetUser)
+
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceTimeBy(100L)
+
+        viewModel.reportUser("target-1", "Spam", "Spamming")
+        advanceTimeBy(100L)
+
+        assertTrue(viewModel.uiState.value.reportSubmitted)
+
+        viewModel.clearReportSubmitted()
+
+        assertFalse(viewModel.uiState.value.reportSubmitted)
+        assertNull(viewModel.uiState.value.reportError)
+    }
+
+    // ===== setRoomScreenVisible Tests =====
+
+    @Test
+    fun `setRoomScreenVisible delegates to roomLifecycleManager`() = roomTest {
+        viewModel = createViewModel()
+        advanceTimeBy(100L)
+
+        viewModel.setRoomScreenVisible(true)
+        verify { roomLifecycleManager.setRoomScreenVisible(true) }
+
+        viewModel.setRoomScreenVisible(false)
+        verify { roomLifecycleManager.setRoomScreenVisible(false) }
+    }
+
+    // ===== inviteFromMessage Tests =====
+
+    @Test
+    fun `inviteFromMessage delegates to inviteUser`() = roomTest {
+        viewModel = createViewModel()
+        emitRoomAsOwner(TestData.createTestRoom(
+            ownerId = currentUserId,
+            participantIds = setOf(currentUserId, "sender-1")
+        ))
+        advanceTimeBy(100L)
+
+        viewModel.inviteFromMessage("sender-1", "Sender")
+        advanceTimeBy(100L)
+
+        coVerify { roomRepository.sendInvite("room-1", "sender-1", currentUserId) }
+    }
+
+    // ===== superShyDurationHours Tests =====
+
+    @Test
+    fun `superShyDurationHours returns default when no config`() = roomTest {
+        viewModel = createViewModel()
+        advanceTimeBy(100L)
+
+        // Default: 720 / 60 = 12
+        assertEquals(12, viewModel.superShyDurationHours)
+    }
+
+    @Test
+    fun `superShyDurationHours uses economy config value`() = roomTest {
+        economyConfigFlow.value = EconomyConfig(superShyRoomDurationMinutes = 1440)
+
+        viewModel = createViewModel()
+        advanceTimeBy(100L)
+
+        assertEquals(24, viewModel.superShyDurationHours)
+    }
+
+    // ===== editMessage edge case =====
+
+    @Test
+    fun `editMessage without editingMessageId is a no-op`() = roomTest {
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceTimeBy(100L)
+
+        // Don't call startEditMessage first — editingMessageId is null
+        viewModel.editMessage("some text")
+        advanceTimeBy(100L)
+
+        coVerify(exactly = 0) { messageRepository.editMessage(any(), any(), any()) }
+    }
+
+    // ===== forceMuteUser edge case =====
+
+    @Test
+    fun `forceMuteUser - skips when user is already muted`() = roomTest {
+        viewModel = createViewModel()
+        val seats = TestData.createSeatsWithOwner(currentUserId).toMutableMap()
+        seats["3"] = TestData.createTestSeat(userId = "attendee-1", isMuted = true)
+        emitRoomAsOwner(TestData.createTestRoom(
+            ownerId = currentUserId,
+            participantIds = setOf(currentUserId, "attendee-1"),
+            seats = seats
+        ))
+        advanceTimeBy(100L)
+
+        viewModel.forceMuteUser(3)
+        advanceTimeBy(100L)
+
+        // Should NOT call toggleMute since user is already muted
+        coVerify(exactly = 0) { roomRepository.toggleMute(any(), eq(3), any()) }
+    }
+
+    // ===== sendMessage flood protection Tests =====
+
+    @Test
+    fun `sendMessage - flood protection triggers on rapid messages`() = roomTest {
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceTimeBy(100L)
+
+        // Send messages rapidly — should eventually trigger flood protection
+        viewModel.sendMessage("msg1")
+        viewModel.sendMessage("msg2")
+
+        // One of the two should be blocked by FLOOD_COOLDOWN_MS
+        val error = viewModel.uiState.value.error
+        assertNotNull(error)
+        assertTrue(error!!.contains("Slow down") || error.contains("Too many"))
+    }
+
+    // ===== unblockUser error sets error message =====
+
+    @Test
+    fun `unblockUser - error sets error message`() = roomTest {
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceTimeBy(100L)
+        coEvery { userRepository.unblockUser(currentUserId, "target") } returns Resource.Error("fail")
+
+        viewModel.unblockUser("target")
+        advanceTimeBy(100L)
+
+        assertEquals("Failed to unblock user", viewModel.uiState.value.error)
+    }
+
+    // ===== removeAlias error =====
+
+    @Test
+    fun `removeAlias error sets error state`() = roomTest {
+        coEvery { userRepository.removeAlias(any(), any()) } returns Resource.Error("fail")
+
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceTimeBy(100L)
+
+        viewModel.removeAlias("target-1")
+        advanceTimeBy(100L)
+
+        assertEquals("Failed to remove alias", viewModel.uiState.value.error)
+    }
+
+    // ===== reportUser - evidence upload failure =====
+
+    @Test
+    fun `reportUser - evidence upload failure sets error`() = roomTest {
+        coEvery { storageRepository.uploadImage(any(), any(), any(), any()) } returns
+            Resource.Error("Upload failed")
+
+        val targetUser = TestData.createTestUser(uid = "target-1", displayName = "Target")
+        coEvery { userRepository.getUser("target-1") } returns Resource.Success(targetUser)
+
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceTimeBy(100L)
+
+        val imageData = byteArrayOf(1, 2, 3)
+        viewModel.reportUser("target-1", "Spam", "Spamming", listOf(imageData to "image/png"))
+        advanceTimeBy(100L)
+
+        assertEquals("Failed to upload evidence", viewModel.uiState.value.reportError)
+        assertFalse(viewModel.uiState.value.isSubmittingReport)
+    }
+
+    // ===== reportUser - report submission failure =====
+
+    @Test
+    fun `reportUser - submission failure sets error`() = roomTest {
+        coEvery {
+            reportRepository.reportUser(
+                reporterId = any(), reporterName = any(), reporterUniqueId = any(),
+                reportedUserId = any(), reportedUserName = any(), reportedUserUniqueId = any(),
+                conversationId = any(), reason = any(), description = any(), evidenceUrls = any()
+            )
+        } returns Resource.Error("Server error")
+
+        val targetUser = TestData.createTestUser(uid = "target-1", displayName = "Target")
+        coEvery { userRepository.getUser("target-1") } returns Resource.Success(targetUser)
+
+        viewModel = createViewModel()
+        emitRoomAsOwner()
+        advanceTimeBy(100L)
+
+        viewModel.reportUser("target-1", "Spam", "Spamming")
+        advanceTimeBy(100L)
+
+        assertEquals("Failed to submit report", viewModel.uiState.value.reportError)
+        assertFalse(viewModel.uiState.value.isSubmittingReport)
+    }
+
+    // ===== acceptApprovedRequest fallback seat =====
+
+    @Test
+    fun `acceptApprovedRequest - falls back to next available seat when original is occupied`() = roomTest {
+        viewModel = createViewModel()
+        val seats = TestData.createSeatsWithOwner(ownerId).toMutableMap()
+        seats["3"] = TestData.createTestSeat(userId = "someone-else") // original seat occupied
+        // seat 1 is empty (next available)
+        emitRoomAsAttendee(TestData.createTestRoom(
+            ownerId = ownerId,
+            participantIds = setOf(ownerId, currentUserId),
+            seats = seats
+        ))
+        advanceTimeBy(100L)
+
+        val request = TestData.createTestSeatRequest(
+            userId = currentUserId, userName = "Current User", seatIndex = 3,
+            status = SeatRequestStatus.APPROVED
+        )
+
+        viewModel.acceptApprovedRequest(request)
+        advanceTimeBy(100L)
+
+        // Should take seat 1 (next available, since seat 3 is occupied)
+        coVerify { roomRepository.takeSeat("room-1", 1, currentUserId) }
+    }
+
+    @Test
+    fun `acceptApprovedRequest - no seats available shows error`() = roomTest {
+        viewModel = createViewModel()
+        val seats = (0 until Constants.MAX_SEATS).associate {
+            it.toString() to TestData.createTestSeat(userId = "user-$it")
+        }
+        emitRoomAsAttendee(TestData.createTestRoom(
+            ownerId = ownerId,
+            participantIds = setOf(ownerId, currentUserId),
+            seats = seats
+        ))
+        advanceTimeBy(100L)
+
+        val request = TestData.createTestSeatRequest(
+            userId = currentUserId, userName = "Current User", seatIndex = 3,
+            status = SeatRequestStatus.APPROVED
+        )
+
+        viewModel.acceptApprovedRequest(request)
+        advanceTimeBy(100L)
+
+        assertEquals("No seats available", viewModel.uiState.value.error)
     }
 }

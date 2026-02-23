@@ -19,6 +19,7 @@ import com.shyden.shytalk.core.crop.CropInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -52,10 +53,7 @@ import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.AccountBalanceWallet
-import android.app.Activity
 import android.content.Intent
-import com.android.billingclient.api.BillingClient
-import com.shyden.shytalk.data.remote.BillingService
 import org.koin.compose.koinInject
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
@@ -250,42 +248,9 @@ fun ProfileScreen(
     val user = uiState.user
     val isOwn = uiState.isOwnProfile
 
-    // Billing setup for Super Shy purchases
-    val billingService: BillingService = koinInject()
-    val billingScope = rememberCoroutineScope()
-    val activity = LocalContext.current as? Activity
-
-    LaunchedEffect(Unit) {
-        billingService.purchaseEvents.collect { result ->
-            if (result.success) {
-                viewModel.validateSuperShyPurchase(result.productId, result.purchaseToken)
-            } else if (result.errorMessage != null) {
-                snackbarHostState.showSnackbar(result.errorMessage!!)
-            }
-        }
-    }
-
-    val onPurchaseSuperShy: (String) -> Unit = { productId ->
-        if (activity != null) {
-            billingScope.launch {
-                val type = if (productId == "super_shy_lifetime")
-                    BillingClient.ProductType.INAPP
-                else BillingClient.ProductType.SUBS
-
-                val products = billingService.queryProducts(listOf(productId), type)
-                val details = products.firstOrNull()
-                if (details == null) {
-                    snackbarHostState.showSnackbar("Product not available")
-                    return@launch
-                }
-
-                val offerToken = if (type == BillingClient.ProductType.SUBS) {
-                    details.subscriptionOfferDetails?.firstOrNull()?.offerToken
-                } else null
-
-                billingService.launchPurchaseFlow(activity, details, offerToken)
-            }
-        }
+    // Test purchase for Super Shy — bypasses BillingClient, calls validatePurchase directly
+    val onTestPurchaseSuperShy: (String) -> Unit = { productId ->
+        viewModel.testPurchaseSuperShy(productId)
     }
 
     // If this is embedded in a tab (no scaffold needed), just render the content
@@ -318,7 +283,8 @@ fun ProfileScreen(
                 onNavigateToRoom = onNavigateToRoom,
                 onNavigateToChat = onNavigateToChat,
                 onNavigateToWallet = onNavigateToWallet,
-                onPurchaseSuperShy = onPurchaseSuperShy,
+                onTestPurchaseSuperShy = onTestPurchaseSuperShy,
+                onClaimTrial = { viewModel.claimSuperShyTrial() },
                 snackbarHostState = snackbarHostState,
                 modifier = Modifier.fillMaxSize()
             )
@@ -383,7 +349,8 @@ fun ProfileScreen(
                 onNavigateToRoom = onNavigateToRoom,
                 onNavigateToChat = onNavigateToChat,
                 onNavigateToWallet = onNavigateToWallet,
-                onPurchaseSuperShy = onPurchaseSuperShy,
+                onTestPurchaseSuperShy = onTestPurchaseSuperShy,
+                onClaimTrial = { viewModel.claimSuperShyTrial() },
                 snackbarHostState = snackbarHostState,
                 modifier = Modifier
                     .fillMaxSize()
@@ -528,7 +495,8 @@ private fun ProfileContent(
     onNavigateToRoom: ((String) -> Unit)? = null,
     onNavigateToChat: ((String) -> Unit)? = null,
     onNavigateToWallet: (() -> Unit)? = null,
-    onPurchaseSuperShy: (String) -> Unit = {},
+    onTestPurchaseSuperShy: ((String) -> Unit)? = null,
+    onClaimTrial: (() -> Unit)? = null,
     snackbarHostState: SnackbarHostState,
     modifier: Modifier = Modifier
 ) {
@@ -1294,10 +1262,11 @@ private fun ProfileContent(
     if (showSuperShySheet) {
         SuperShyBottomSheet(
             user = user,
-            onPurchase = { productId ->
+            onTestPurchase = if (onTestPurchaseSuperShy != null) { productId ->
                 showSuperShySheet = false
-                onPurchaseSuperShy(productId)
-            },
+                onTestPurchaseSuperShy(productId)
+            } else null,
+            onClaimTrial = onClaimTrial,
             onDismiss = { showSuperShySheet = false }
         )
     }
@@ -1354,7 +1323,9 @@ private fun BackpackItemCell(
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
         modifier = modifier
+            .aspectRatio(1f)
             .clip(RoundedCornerShape(12.dp))
             .background(cellColor.copy(alpha = 0.06f))
             .border(1.dp, cellColor.copy(alpha = 0.15f), RoundedCornerShape(12.dp))

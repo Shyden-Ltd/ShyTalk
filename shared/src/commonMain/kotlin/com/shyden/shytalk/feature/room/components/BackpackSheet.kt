@@ -36,6 +36,7 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +60,7 @@ import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.BackpackItem
 import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.feature.gifting.GiftingViewModel
 import kotlin.math.ceil
 
@@ -109,6 +111,12 @@ fun BackpackSheet(
             Spacer(modifier = Modifier.height(8.dp))
 
             // ── Tab Row ──
+            val backpackValue = remember(state.backpackItems, state.giftCatalog) {
+                state.backpackItems.sumOf { bp ->
+                    val gift = state.giftCatalog.find { it.id == bp.giftId }
+                    (gift?.coinValue?.toLong() ?: 0L) * bp.quantity
+                }
+            }
             TabRow(
                 selectedTabIndex = state.activeTab,
                 modifier = Modifier
@@ -118,12 +126,38 @@ fun BackpackSheet(
                 Tab(
                     selected = state.activeTab == 0,
                     onClick = { viewModel.setActiveTab(0) },
-                    text = { Text("Gifts") }
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Gifts")
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("\uD83E\uDE99", fontSize = 10.sp)
+                            Text(
+                                formatLargeNumber(state.coinBalance),
+                                fontSize = 10.sp,
+                                color = Color(0xFFFFD700),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 )
                 Tab(
                     selected = state.activeTab == 1,
                     onClick = { viewModel.setActiveTab(1) },
-                    text = { Text("Backpack") }
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Backpack")
+                            if (backpackValue > 0) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("\uD83E\uDE99", fontSize = 10.sp)
+                                Text(
+                                    formatLargeNumber(backpackValue),
+                                    fontSize = 10.sp,
+                                    color = Color(0xFFFFD700),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
                 )
             }
 
@@ -131,8 +165,8 @@ fun BackpackSheet(
 
             // ── Paged Grid ──
             val items = if (state.activeTab == 0) {
-                state.giftCatalog.sortedByDescending { it.coinValue }.map { gift ->
-                    GridItem(gift = gift, ownedQuantity = state.backpackItems.find { it.giftId == gift.id }?.quantity ?: 0)
+                state.giftCatalog.filter { it.showInStore }.sortedByDescending { it.coinValue }.map { gift ->
+                    GridItem(gift = gift)
                 }
             } else {
                 state.backpackItems
@@ -169,17 +203,32 @@ fun BackpackSheet(
             }
 
             // ── Bottom Bar ──
-            BottomBar(
-                state = state,
-                giftCatalog = state.giftCatalog,
-                isBackpackTab = state.activeTab == 1,
-                onNavigateToWallet = onNavigateToWallet,
-                onQuantityClick = { viewModel.toggleQuantityPicker() },
-                onSendClick = { viewModel.requestSend() },
-                onSendAllClick = if (state.activeTab == 1 && state.selectedRecipientIds.size == 1 && state.backpackItems.isNotEmpty()) {
-                    { viewModel.requestSendAll(state.selectedRecipientIds.first()) }
-                } else null
-            )
+            val isTrialSelected = state.activeTab == 1 && state.selectedGiftId == Constants.SUPER_SHY_TRIAL_ID
+            if (isTrialSelected) {
+                // Trial item: show Use button only, no quantity/send-all
+                BottomBar(
+                    state = state,
+                    giftCatalog = state.giftCatalog,
+                    isBackpackTab = true,
+                    onNavigateToWallet = onNavigateToWallet,
+                    onQuantityClick = {},
+                    onSendClick = { viewModel.activateTrial() },
+                    onSendAllClick = null,
+                    sendLabel = "Use"
+                )
+            } else {
+                BottomBar(
+                    state = state,
+                    giftCatalog = state.giftCatalog,
+                    isBackpackTab = state.activeTab == 1,
+                    onNavigateToWallet = onNavigateToWallet,
+                    onQuantityClick = { viewModel.toggleQuantityPicker() },
+                    onSendClick = { viewModel.requestSend() },
+                    onSendAllClick = if (state.activeTab == 1 && state.selectedRecipientIds.size == 1 && state.backpackItems.isNotEmpty()) {
+                        { viewModel.requestSendAll(state.selectedRecipientIds.first()) }
+                    } else null
+                )
+            }
 
             // ── Quantity Picker Popup ──
             if (state.showQuantityPicker) {
@@ -217,14 +266,27 @@ fun BackpackSheet(
                 val recipientName = recipientUser?.displayName ?: "this user"
                 val totalItems = state.backpackItems.sumOf { it.quantity }
                 val uniqueGifts = state.backpackItems.size
+                val totalValue = state.backpackItems.sumOf { bp ->
+                    val gift = state.giftCatalog.find { it.id == bp.giftId }
+                    (gift?.coinValue?.toLong() ?: 0L) * bp.quantity
+                }
 
                 SendAllConfirmDialog(
                     recipientName = recipientName,
                     totalItems = totalItems,
                     uniqueGifts = uniqueGifts,
+                    totalValue = totalValue,
                     onConfirm = { viewModel.confirmSendAll() },
                     onDismiss = { viewModel.dismissSendAllConfirm() }
                 )
+            }
+
+            // ── Navigate to Wallet ──
+            LaunchedEffect(state.navigateToWallet) {
+                if (state.navigateToWallet) {
+                    onNavigateToWallet()
+                    viewModel.clearNavigateToWallet()
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -492,21 +554,7 @@ private fun ShopGiftCell(
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(4.dp)
     ) {
-        Box {
-            GiftIcon(gift = item.gift, size = 48)
-            if (item.ownedQuantity > 0) {
-                Text(
-                    "x${item.ownedQuantity}",
-                    fontSize = 7.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color.White,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .background(accentCol, RoundedCornerShape(4.dp))
-                        .padding(horizontal = 3.dp, vertical = 1.dp)
-                )
-            }
-        }
+        GiftIcon(gift = item.gift, size = 48)
         Text(
             item.gift.name,
             style = MaterialTheme.typography.labelSmall,
@@ -643,7 +691,8 @@ private fun BottomBar(
     onNavigateToWallet: () -> Unit,
     onQuantityClick: () -> Unit,
     onSendClick: () -> Unit,
-    onSendAllClick: (() -> Unit)? = null
+    onSendAllClick: (() -> Unit)? = null,
+    sendLabel: String? = null
 ) {
     val selectedGift = state.selectedGiftId?.let { id -> giftCatalog.find { it.id == id } }
     val hasRecipients = state.selectedRecipientIds.isNotEmpty()
@@ -731,6 +780,7 @@ private fun BottomBar(
             Text(
                 when {
                     state.isSending -> "Sending..."
+                    sendLabel != null -> sendLabel
                     else -> "Send"
                 },
                 fontWeight = FontWeight.Bold,
@@ -786,9 +836,10 @@ private fun QuantityPickerPopup(
                 val isSelected = qty == selectedQuantity
 
                 val enabled = if (gift == null) false else {
-                    val totalNeeded = qty * recipientCount
-                    if (isBackpackTab) totalNeeded <= ownedQty
-                    else (gift.coinValue.toLong() * totalNeeded) <= coinBalance
+                    if (isBackpackTab) {
+                        val totalNeeded = qty * recipientCount
+                        totalNeeded <= ownedQty
+                    } else true
                 }
 
                 TextButton(
@@ -899,6 +950,7 @@ private fun SendAllConfirmDialog(
     recipientName: String,
     totalItems: Int,
     uniqueGifts: Int,
+    totalValue: Long = 0L,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -924,6 +976,15 @@ private fun SendAllConfirmDialog(
                     "This includes ALL $totalItems items across $uniqueGifts different gifts.",
                     style = MaterialTheme.typography.bodyMedium
                 )
+                if (totalValue > 0) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Total value: \uD83E\uDE99 $totalValue coins",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFFFD700)
+                    )
+                }
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
                     "THIS ACTION CANNOT BE UNDONE.",
@@ -950,6 +1011,14 @@ private fun SendAllConfirmDialog(
             }
         }
     )
+}
+
+/** Format large numbers in abbreviated form (e.g. 1.2K, 3.5M). */
+private fun formatLargeNumber(value: Long): String = when {
+    value >= 1_000_000_000 -> "${"%.1f".format(value / 1_000_000_000.0)}B"
+    value >= 1_000_000 -> "${"%.1f".format(value / 1_000_000.0)}M"
+    value >= 10_000 -> "${"%.1f".format(value / 1_000.0)}K"
+    else -> "$value"
 }
 
 /** Derive an accent color from gift coin value tier. */

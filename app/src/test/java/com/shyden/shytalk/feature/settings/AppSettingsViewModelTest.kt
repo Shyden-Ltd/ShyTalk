@@ -1,5 +1,7 @@
 package com.shyden.shytalk.feature.settings
 
+import androidx.lifecycle.viewModelScope
+import com.shyden.shytalk.core.model.PmPrivacy
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.remote.AppConfigService
 import com.shyden.shytalk.data.repository.AuthRepository
@@ -10,9 +12,14 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.job
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -32,6 +39,7 @@ class AppSettingsViewModelTest {
     private val appConfigService = mockk<AppConfigService>(relaxed = true)
 
     private val currentUserId = "current-user"
+    private val activeViewModels = mutableListOf<AppSettingsViewModel>()
 
     @Before
     fun setup() {
@@ -42,12 +50,18 @@ class AppSettingsViewModelTest {
         coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
     }
 
+    @After
+    fun tearDown() = runBlocking {
+        activeViewModels.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() }
+        activeViewModels.clear()
+    }
+
     private fun createViewModel(): AppSettingsViewModel {
         return AppSettingsViewModel(
             appConfigService = appConfigService,
             authRepository = authRepository,
             userRepository = userRepository
-        )
+        ).also { activeViewModels.add(it) }
     }
 
     // ===== init / loadSettings =====
@@ -287,5 +301,332 @@ class AppSettingsViewModelTest {
         // Manually set a result to simulate
         vm.dismissUpdateResult()
         assertNull(vm.uiState.value.updateCheckResult)
+    }
+
+    // ===== setPmPrivacy =====
+
+    @Test
+    fun `setPmPrivacy - success updates state to new privacy`() = runTest {
+        coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Success(Unit)
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        assertEquals(PmPrivacy.EVERYONE, vm.uiState.value.pmPrivacy)
+
+        vm.setPmPrivacy(PmPrivacy.FOLLOWERS_ONLY)
+        advanceUntilIdle()
+
+        assertEquals(PmPrivacy.FOLLOWERS_ONLY, vm.uiState.value.pmPrivacy)
+        coVerify { userRepository.updateProfile(currentUserId, mapOf("pmPrivacy" to "FOLLOWERS_ONLY")) }
+    }
+
+    @Test
+    fun `setPmPrivacy - error reverts to original value`() = runTest {
+        coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Error("fail")
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        assertEquals(PmPrivacy.EVERYONE, vm.uiState.value.pmPrivacy)
+
+        vm.setPmPrivacy(PmPrivacy.NO_ONE)
+        advanceUntilIdle()
+
+        assertEquals(PmPrivacy.EVERYONE, vm.uiState.value.pmPrivacy)
+        assertEquals("Failed to update privacy setting", vm.uiState.value.error)
+    }
+
+    // ===== checkForUpdates =====
+
+    @Test
+    fun `checkForUpdates - up to date when current version equals latest`() = runTest {
+        every { appConfigService.currentVersionCode } returns 10
+        coEvery { appConfigService.getLatestVersionInfo() } returns Resource.Success(Pair(10, "1.0.0"))
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.checkForUpdates()
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.isCheckingUpdate)
+        assertEquals(UpdateCheckResult.UpToDate, vm.uiState.value.updateCheckResult)
+    }
+
+    @Test
+    fun `checkForUpdates - up to date when current version greater than latest`() = runTest {
+        every { appConfigService.currentVersionCode } returns 15
+        coEvery { appConfigService.getLatestVersionInfo() } returns Resource.Success(Pair(10, "1.0.0"))
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.checkForUpdates()
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.isCheckingUpdate)
+        assertEquals(UpdateCheckResult.UpToDate, vm.uiState.value.updateCheckResult)
+    }
+
+    @Test
+    fun `checkForUpdates - update available when current version less than latest`() = runTest {
+        every { appConfigService.currentVersionCode } returns 5
+        coEvery { appConfigService.getLatestVersionInfo() } returns Resource.Success(Pair(10, "2.0.0"))
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.checkForUpdates()
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.isCheckingUpdate)
+        val result = vm.uiState.value.updateCheckResult
+        assertTrue(result is UpdateCheckResult.UpdateAvailable)
+        assertEquals("2.0.0", (result as UpdateCheckResult.UpdateAvailable).versionName)
+    }
+
+    @Test
+    fun `checkForUpdates - error from service`() = runTest {
+        coEvery { appConfigService.getLatestVersionInfo() } returns Resource.Error("network error")
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.checkForUpdates()
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.isCheckingUpdate)
+        val result = vm.uiState.value.updateCheckResult
+        assertTrue(result is UpdateCheckResult.Error)
+        assertEquals("Failed to check for updates", (result as UpdateCheckResult.Error).message)
+    }
+
+    // ===== toggle methods (via togglePrivacySetting) =====
+
+    @Test
+    fun `togglePmNotifications - optimistic toggle on`() = runTest {
+        coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Success(Unit)
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.pmNotificationsEnabled)
+
+        vm.togglePmNotifications()
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.pmNotificationsEnabled)
+        coVerify { userRepository.updateProfile(currentUserId, mapOf("pmNotificationsEnabled" to false)) }
+    }
+
+    @Test
+    fun `togglePmSound - error reverts`() = runTest {
+        coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Error("fail")
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.pmSoundEnabled)
+
+        vm.togglePmSound()
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.pmSoundEnabled)
+        assertEquals("Failed to update privacy setting", vm.uiState.value.error)
+    }
+
+    @Test
+    fun `togglePmPreview - optimistic toggle off`() = runTest {
+        coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Success(Unit)
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.pmNotificationPreview)
+
+        vm.togglePmPreview()
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.pmNotificationPreview)
+        coVerify { userRepository.updateProfile(currentUserId, mapOf("pmNotificationPreview" to false)) }
+    }
+
+    @Test
+    fun `togglePmTimestamps - optimistic toggle off`() = runTest {
+        coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Success(Unit)
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.pmShowTimestamps)
+
+        vm.togglePmTimestamps()
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.pmShowTimestamps)
+        coVerify { userRepository.updateProfile(currentUserId, mapOf("pmShowTimestamps" to false)) }
+    }
+
+    @Test
+    fun `togglePmDateSeparators - optimistic toggle off`() = runTest {
+        coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Success(Unit)
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.pmShowDateSeparators)
+
+        vm.togglePmDateSeparators()
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.pmShowDateSeparators)
+        coVerify { userRepository.updateProfile(currentUserId, mapOf("pmShowDateSeparators" to false)) }
+    }
+
+    @Test
+    fun `toggleDnd - optimistic toggle on`() = runTest {
+        coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Success(Unit)
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        assertFalse(vm.uiState.value.dndEnabled)
+
+        vm.toggleDnd()
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.dndEnabled)
+        coVerify { userRepository.updateProfile(currentUserId, mapOf("dndEnabled" to true)) }
+    }
+
+    // ===== DND time setters =====
+
+    @Test
+    fun `setDndStartHour updates state`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.setDndStartHour(23)
+
+        assertEquals(23, vm.uiState.value.dndStartHour)
+        coVerify { userRepository.updateProfile(currentUserId, mapOf("dndStartHour" to 23)) }
+    }
+
+    @Test
+    fun `setDndStartMinute updates state`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.setDndStartMinute(45)
+
+        assertEquals(45, vm.uiState.value.dndStartMinute)
+        coVerify { userRepository.updateProfile(currentUserId, mapOf("dndStartMinute" to 45)) }
+    }
+
+    @Test
+    fun `setDndEndHour updates state`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.setDndEndHour(10)
+
+        assertEquals(10, vm.uiState.value.dndEndHour)
+        coVerify { userRepository.updateProfile(currentUserId, mapOf("dndEndHour" to 10)) }
+    }
+
+    @Test
+    fun `setDndEndMinute updates state`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.setDndEndMinute(30)
+
+        assertEquals(30, vm.uiState.value.dndEndMinute)
+        coVerify { userRepository.updateProfile(currentUserId, mapOf("dndEndMinute" to 30)) }
+    }
+
+    // ===== setMinGiftAnimationValue =====
+
+    @Test
+    fun `setMinGiftAnimationValue updates state`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.setMinGiftAnimationValue(500)
+
+        assertEquals(500, vm.uiState.value.minGiftAnimationValue)
+        coVerify { userRepository.updateProfile(currentUserId, mapOf("minGiftAnimationValue" to 500)) }
+    }
+
+    // ===== clearCache calls appConfigService =====
+
+    @Test
+    fun `clearCache calls appConfigService clearAppCache`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.clearCache()
+
+        verify { appConfigService.clearAppCache() }
+        assertTrue(vm.uiState.value.cacheCleared)
+    }
+
+    // ===== unblockUser with no auth user =====
+
+    @Test
+    fun `unblockUser does nothing when no auth user`() = runTest {
+        every { authRepository.currentUserId } returns null
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.unblockUser("blocked-1")
+        advanceUntilIdle()
+
+        // currentUserId is "" so unblockUser("", "blocked-1") is called
+        // The important thing is it doesn't crash
+        assertNull(vm.uiState.value.user)
+    }
+
+    // ===== togglePmNotifications error reverts =====
+
+    @Test
+    fun `togglePmNotifications - error reverts`() = runTest {
+        coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Error("fail")
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.pmNotificationsEnabled)
+
+        vm.togglePmNotifications()
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.pmNotificationsEnabled)
+        assertEquals("Failed to update privacy setting", vm.uiState.value.error)
+    }
+
+    // ===== toggleDnd error reverts =====
+
+    @Test
+    fun `toggleDnd - error reverts`() = runTest {
+        coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Error("fail")
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        assertFalse(vm.uiState.value.dndEnabled)
+
+        vm.toggleDnd()
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.dndEnabled)
+        assertEquals("Failed to update privacy setting", vm.uiState.value.error)
+    }
+
+    // ===== init loads pmPrivacy from user =====
+
+    @Test
+    fun `init loads pmPrivacy FOLLOWERS_ONLY from user`() = runTest {
+        val user = TestData.createTestUser(uid = currentUserId).copy(
+            pmPrivacy = PmPrivacy.FOLLOWERS_ONLY
+        )
+        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        assertEquals(PmPrivacy.FOLLOWERS_ONLY, vm.uiState.value.pmPrivacy)
     }
 }

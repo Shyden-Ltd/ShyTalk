@@ -1,5 +1,6 @@
 package com.shyden.shytalk.feature.auth
 
+import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.DeviceRepository
@@ -12,8 +13,12 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.job
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -35,12 +40,20 @@ class AuthViewModelTest {
 
     private val testDob = 946684800000L // 2000-01-01
 
+    private val activeViewModels = mutableListOf<AuthViewModel>()
+
+    @After
+    fun tearDown() = runBlocking {
+        activeViewModels.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() }
+        activeViewModels.clear()
+    }
+
     private fun createViewModel() = AuthViewModel(
         authRepository = authRepository,
         userRepository = userRepository,
         deviceRepository = deviceRepository,
         deviceId = deviceId
-    )
+    ).also { activeViewModels.add(it) }
 
     @Test
     fun `init - not authenticated stays default`() = runTest {
@@ -424,5 +437,198 @@ class AuthViewModelTest {
 
         assertFalse(vm.uiState.value.suspensionCanAppeal)
         assertEquals("pending", vm.uiState.value.suspensionAppealStatus)
+    }
+
+    @Test
+    fun `submitAppeal - failure sets error`() = runTest {
+        every { authRepository.isAuthenticated } returns true
+        every { authRepository.currentUserId } returns userId
+        coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(userId)
+        coEvery { userRepository.userExists(userId) } returns Resource.Success(true)
+        coEvery { userRepository.getUser(userId) } returns Resource.Success(
+            TestData.createTestUser(
+                uid = userId,
+                isSuspended = true,
+                suspensionEndDate = System.currentTimeMillis() + 86_400_000L,
+                suspensionCanAppeal = true
+            )
+        )
+        coEvery { userRepository.submitSuspensionAppeal(userId, any()) } returns Resource.Error("network error")
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.suspensionCanAppeal)
+
+        vm.submitAppeal("Please unsuspend me")
+        advanceUntilIdle()
+
+        assertEquals("Failed to submit appeal", vm.uiState.value.error)
+        assertFalse(vm.uiState.value.isLoading)
+        // suspensionCanAppeal should still be true since appeal failed
+        assertTrue(vm.uiState.value.suspensionCanAppeal)
+    }
+
+    // ===== Additional Google sign-in error scenarios =====
+
+    @Test
+    fun `signInWithGoogle - network error sets error and stops loading`() = runTest {
+        every { authRepository.isAuthenticated } returns false
+        every { authRepository.currentUserId } returns null
+        coEvery { authRepository.signInWithGoogleIdToken("bad-token") } returns Resource.Error("Network unavailable")
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.signInWithGoogle("bad-token")
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals("Network unavailable", state.error)
+        assertFalse(state.isAuthenticated)
+        assertFalse(state.isLoading)
+    }
+
+    @Test
+    fun `signInWithGoogle - clears previous error before attempting`() = runTest {
+        every { authRepository.isAuthenticated } returns false
+        every { authRepository.currentUserId } returns null
+        coEvery { authRepository.signInWithGoogleIdToken("token1") } returns Resource.Error("first error")
+        coEvery { authRepository.signInWithGoogleIdToken("token2") } returns Resource.Success(userId)
+        coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(null)
+        coEvery { userRepository.userExists(userId) } returns Resource.Success(false)
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.signInWithGoogle("token1")
+        advanceUntilIdle()
+        assertEquals("first error", vm.uiState.value.error)
+
+        vm.signInWithGoogle("token2")
+        advanceUntilIdle()
+        assertNull(vm.uiState.value.error)
+        assertTrue(vm.uiState.value.isAuthenticated)
+    }
+
+    // ===== Apple sign-in device lock =====
+
+    @Test
+    fun `signInWithApple - device locked to different user`() = runTest {
+        every { authRepository.isAuthenticated } returns false
+        every { authRepository.currentUserId } returns null
+        coEvery { authRepository.signInWithAppleIdToken("token", "nonce") } returns Resource.Success(userId)
+        coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success("other-user")
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.signInWithApple("token", "nonce")
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.isDeviceLocked)
+        assertFalse(vm.uiState.value.isAuthenticated)
+    }
+
+    // ===== signOut clears error and suspension state =====
+
+    @Test
+    fun `signOut clears error state`() = runTest {
+        every { authRepository.isAuthenticated } returns false
+        every { authRepository.currentUserId } returns null
+        coEvery { authRepository.signInWithGoogleIdToken("token") } returns Resource.Error("auth failed")
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.signInWithGoogle("token")
+        advanceUntilIdle()
+        assertEquals("auth failed", vm.uiState.value.error)
+
+        vm.signOut()
+
+        assertNull(vm.uiState.value.error)
+        assertFalse(vm.uiState.value.isAuthenticated)
+    }
+
+    @Test
+    fun `signOut clears suspension state`() = runTest {
+        every { authRepository.isAuthenticated } returns true
+        every { authRepository.currentUserId } returns userId
+        coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(userId)
+        coEvery { userRepository.userExists(userId) } returns Resource.Success(true)
+        coEvery { userRepository.getUser(userId) } returns Resource.Success(
+            TestData.createTestUser(
+                uid = userId,
+                isSuspended = true,
+                suspensionEndDate = System.currentTimeMillis() + 86_400_000L,
+                suspensionCanAppeal = true
+            )
+        )
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.isSuspended)
+
+        vm.signOut()
+
+        assertFalse(vm.uiState.value.isSuspended)
+        assertFalse(vm.uiState.value.isAuthenticated)
+        assertNull(vm.uiState.value.suspensionReason)
+    }
+
+    // ===== userExists error =====
+
+    @Test
+    fun `signInWithGoogle - userExists error defaults to hasProfile false`() = runTest {
+        every { authRepository.isAuthenticated } returns false
+        every { authRepository.currentUserId } returns null
+        coEvery { authRepository.signInWithGoogleIdToken("token") } returns Resource.Success(userId)
+        coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(userId)
+        coEvery { userRepository.userExists(userId) } returns Resource.Error("Firestore down")
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.signInWithGoogle("token")
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertTrue(state.isAuthenticated)
+        assertFalse(state.hasProfile)
+        assertFalse(state.isLoading)
+    }
+
+    // ===== init with currentUserId null =====
+
+    @Test
+    fun `init - authenticated but currentUserId null stops loading`() = runTest {
+        every { authRepository.isAuthenticated } returns true
+        every { authRepository.currentUserId } returns null
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.isAuthenticated)
+        assertFalse(vm.uiState.value.isLoading)
+    }
+
+    // ===== Apple sign-in with existing user and DOB =====
+
+    @Test
+    fun `signInWithApple - existing user with DOB sets all flags`() = runTest {
+        every { authRepository.isAuthenticated } returns false
+        every { authRepository.currentUserId } returns null
+        coEvery { authRepository.signInWithAppleIdToken("token", "nonce") } returns Resource.Success(userId)
+        coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(userId)
+        coEvery { userRepository.userExists(userId) } returns Resource.Success(true)
+        coEvery { userRepository.getUser(userId) } returns Resource.Success(
+            TestData.createTestUser(uid = userId, dateOfBirth = testDob)
+        )
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.signInWithApple("token", "nonce")
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.isAuthenticated)
+        assertTrue(vm.uiState.value.hasProfile)
+        assertTrue(vm.uiState.value.hasDOB)
     }
 }

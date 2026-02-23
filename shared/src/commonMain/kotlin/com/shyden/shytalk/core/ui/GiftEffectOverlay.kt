@@ -54,7 +54,8 @@ fun GiftEffectOverlay(
             label = label,
             durationMs = durationMs,
             onFinished = dismiss,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
+            eventId = event.eventId
         )
     }
 }

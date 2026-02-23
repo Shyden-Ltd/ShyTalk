@@ -69,4 +69,10 @@ class FakeEconomyRepository : EconomyRepository {
 
     override suspend fun addTestCoins(amount: Int): Resource<Map<String, Any?>> =
         Resource.Success(mapOf("success" to true))
+
+    override suspend fun claimSuperShyTrial(): Resource<Map<String, Any?>> =
+        Resource.Success(mapOf("success" to true))
+
+    override suspend fun activateSuperShyTrial(): Resource<Map<String, Any?>> =
+        Resource.Success(mapOf("success" to true))
 }

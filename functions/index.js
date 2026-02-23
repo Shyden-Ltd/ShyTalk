@@ -834,7 +834,7 @@ const DEFAULT_ECONOMY_CONFIG = {
   beanRedeemBonusThreshold: 2000,
   beanRedeemBonusMultiplier: 1.1,
   pullCosts: { "1": 10, "10": 100, "100": 1000 },
-  broadcastSendThreshold: 5000,
+  broadcastSendThreshold: 0,
   broadcastWinThreshold: 5000,
   dropRateExponent: 1.5,
   pitySoftStart: 80,
@@ -950,7 +950,7 @@ exports.pullGacha = onCall({ region: "asia-southeast1" }, async (request) => {
   if (giftsSnap.empty) throw new HttpsError("failed-precondition", "Gift catalog not configured");
 
   const allGifts = giftsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-  const winnableGifts = allGifts.filter((g) => g.coinValue > 0);
+  const winnableGifts = allGifts.filter((g) => g.coinValue > 0 && g.showOnWheel !== false).slice(0, 16);
   if (winnableGifts.length === 0) throw new HttpsError("failed-precondition", "No winnable gifts");
 
   // Compute base weights: 1 / coinValue^exponent
@@ -1188,6 +1188,9 @@ exports.sendGift = onCall({ region: "asia-southeast1" }, async (request) => {
 
   if (!recipientId || !giftId) {
     throw new HttpsError("invalid-argument", "recipientId and giftId required");
+  }
+  if (giftId === "super_shy_trial") {
+    throw new HttpsError("invalid-argument", "Trial items cannot be transferred");
   }
   if (senderUid === recipientId) {
     throw new HttpsError("invalid-argument", "Cannot send gift to yourself");
@@ -1799,6 +1802,9 @@ exports.sendGiftBatch = onCall({ region: "asia-southeast1" }, async (request) =>
   if (!giftId) {
     throw new HttpsError("invalid-argument", "giftId required");
   }
+  if (giftId === "super_shy_trial") {
+    throw new HttpsError("invalid-argument", "Trial items cannot be transferred");
+  }
   if (recipientIds.includes(senderUid)) {
     throw new HttpsError("invalid-argument", "Cannot send gift to yourself");
   }
@@ -1816,14 +1822,28 @@ exports.sendGiftBatch = onCall({ region: "asia-southeast1" }, async (request) =>
   const totalItems = quantity * recipientIds.length;
 
   return await db.runTransaction(async (tx) => {
+    // --- All reads first (Firestore requires reads before writes) ---
     const senderDoc = await tx.get(senderRef);
     if (!senderDoc.exists) throw new HttpsError("not-found", "Sender not found");
     const sender = senderDoc.data();
 
-    // Validate resources
+    let bpDoc = null;
     if (fromBackpack) {
       const bpRef = senderRef.collection("backpack").doc(giftId);
-      const bpDoc = await tx.get(bpRef);
+      bpDoc = await tx.get(bpRef);
+    }
+
+    const recipientDocs = [];
+    for (const rid of recipientIds) {
+      const rRef = db.collection("users").doc(rid);
+      const rDoc = await tx.get(rRef);
+      if (!rDoc.exists) throw new HttpsError("not-found", `Recipient ${rid} not found`);
+      recipientDocs.push({ ref: rRef, data: rDoc.data(), id: rid });
+    }
+
+    // --- All writes after reads ---
+    if (fromBackpack) {
+      const bpRef = senderRef.collection("backpack").doc(giftId);
       if (!bpDoc.exists || (bpDoc.data().quantity || 0) < totalItems) {
         throw new HttpsError("failed-precondition", "Insufficient items in backpack");
       }
@@ -1840,15 +1860,6 @@ exports.sendGiftBatch = onCall({ region: "asia-southeast1" }, async (request) =>
       }
       const newCoins = (sender.shyCoins || 0) - totalCost;
       tx.update(senderRef, { shyCoins: newCoins });
-    }
-
-    // Read all recipients
-    const recipientDocs = [];
-    for (const rid of recipientIds) {
-      const rRef = db.collection("users").doc(rid);
-      const rDoc = await tx.get(rRef);
-      if (!rDoc.exists) throw new HttpsError("not-found", `Recipient ${rid} not found`);
-      recipientDocs.push({ ref: rRef, data: rDoc.data(), id: rid });
     }
 
     const beanPerRecipient = Math.floor(gift.coinValue * beanRate * quantity);
@@ -2008,6 +2019,8 @@ exports.sendEntireBackpack = onCall({ region: "asia-southeast1" }, async (reques
   const backpackSnap = await senderRef.collection("backpack").get();
   const backpackItems = [];
   for (const doc of backpackSnap.docs) {
+    // Skip trial items — they are non-transferable
+    if (doc.id === "super_shy_trial") continue;
     const data = doc.data();
     if ((data.quantity || 0) > 0) {
       backpackItems.push({ giftId: doc.id, quantity: data.quantity });
@@ -2028,7 +2041,7 @@ exports.sendEntireBackpack = onCall({ region: "asia-southeast1" }, async (reques
   }
 
   return await db.runTransaction(async (tx) => {
-    // Re-read sender and recipient inside transaction
+    // ── All reads first ──
     const senderDoc = await tx.get(senderRef);
     const recipientDoc = await tx.get(recipientRef);
     if (!senderDoc.exists) throw new HttpsError("not-found", "Sender not found");
@@ -2037,14 +2050,19 @@ exports.sendEntireBackpack = onCall({ region: "asia-southeast1" }, async (reques
     const sender = senderDoc.data();
     const recipient = recipientDoc.data();
 
-    // Re-read backpack items inside transaction for consistency
+    const bpDocs = [];
+    for (const item of backpackItems) {
+      const bpRef = senderRef.collection("backpack").doc(item.giftId);
+      const bpDoc = await tx.get(bpRef);
+      bpDocs.push({ item, bpRef, bpDoc });
+    }
+
+    // ── All writes after reads ──
     let totalBeanReward = 0;
     let totalItemsSent = 0;
     const giftsSent = [];
 
-    for (const item of backpackItems) {
-      const bpRef = senderRef.collection("backpack").doc(item.giftId);
-      const bpDoc = await tx.get(bpRef);
+    for (const { item, bpRef, bpDoc } of bpDocs) {
       if (!bpDoc.exists) continue;
 
       const currentQty = bpDoc.data().quantity || 0;
@@ -2053,24 +2071,20 @@ exports.sendEntireBackpack = onCall({ region: "asia-southeast1" }, async (reques
       const gift = giftDetails[item.giftId];
       if (!gift) continue;
 
-      // Set sender quantity to 0 (delete the doc)
       tx.delete(bpRef);
 
-      // Update recipient backpack (increment)
       const recipientBpRef = recipientRef.collection("backpack").doc(item.giftId);
       tx.set(recipientBpRef, {
         quantity: FieldValue.increment(currentQty),
         lastAcquired: FieldValue.serverTimestamp(),
       }, { merge: true });
 
-      // Update recipient gift wall
       const wallRef = recipientRef.collection("giftWall").doc(item.giftId);
       tx.set(wallRef, {
         receivedCount: FieldValue.increment(currentQty),
         [`senders.${senderUid}`]: FieldValue.increment(currentQty),
       }, { merge: true });
 
-      // Calculate beans
       const beanReward = Math.floor(gift.coinValue * beanRate * currentQty);
       totalBeanReward += beanReward;
       totalItemsSent += currentQty;
@@ -2086,12 +2100,32 @@ exports.sendEntireBackpack = onCall({ region: "asia-southeast1" }, async (reques
       throw new HttpsError("failed-precondition", "Backpack is empty");
     }
 
-    // Credit beans to recipient
     tx.update(recipientRef, {
       shyBeans: FieldValue.increment(totalBeanReward),
     });
 
-    // Write sender transaction record
+    // Write gift chat message to room
+    const roomId = sender.currentRoomId;
+    if (roomId) {
+      const roomRef = db.collection("rooms").doc(roomId);
+      const sName = sender.displayName || "Someone";
+      const rName = recipient.displayName || "Someone";
+      const giftList = giftsSent.map((g) => `${g.quantity}x ${g.giftName}`).join(", ");
+
+      const msgRef = roomRef.collection("messages").doc();
+      tx.set(msgRef, {
+        messageId: msgRef.id,
+        senderId: senderUid,
+        senderName: sName,
+        text: `${sName} sent entire backpack to ${rName}: ${giftList}`,
+        createdAt: FieldValue.serverTimestamp(),
+        type: "GIFT",
+        isEdited: false,
+        giftId: "backpack",
+        giftIconUrl: "",
+      });
+    }
+
     const senderTxRef = senderRef.collection("transactions").doc();
     tx.set(senderTxRef, {
       type: "BACKPACK_SENT",
@@ -2104,7 +2138,6 @@ exports.sendEntireBackpack = onCall({ region: "asia-southeast1" }, async (reques
       timestamp: FieldValue.serverTimestamp(),
     });
 
-    // Write recipient transaction record
     const recipientTxRef = recipientRef.collection("transactions").doc();
     tx.set(recipientTxRef, {
       type: "BACKPACK_RECEIVED",
@@ -2117,7 +2150,44 @@ exports.sendEntireBackpack = onCall({ region: "asia-southeast1" }, async (reques
       timestamp: FieldValue.serverTimestamp(),
     });
 
-    return { totalItemsSent, giftsSent };
+    return {
+      totalItemsSent,
+      giftsSent,
+      _roomId: roomId || null,
+      _senderName: sender.displayName || "Someone",
+      _recipientName: recipient.displayName || "Someone",
+    };
+  }).then(async (result) => {
+    // Queue gift animations one per gift type so each plays in sequence
+    if (result._roomId && result.giftsSent.length > 0) {
+      const roomRef = db.collection("rooms").doc(result._roomId);
+      const sorted = [...result.giftsSent].sort((a, b) => {
+        const aVal = giftDetails[a.giftId]?.coinValue || 0;
+        const bVal = giftDetails[b.giftId]?.coinValue || 0;
+        return bVal - aVal;
+      });
+
+      for (const g of sorted) {
+        const details = giftDetails[g.giftId];
+        if (!details) continue;
+        await roomRef.update({
+          lastGiftEvent: {
+            senderId: senderUid,
+            senderName: result._senderName,
+            recipientId,
+            recipientName: result._recipientName,
+            giftId: g.giftId,
+            giftName: g.giftName,
+            coinValue: details.coinValue,
+            timestamp: FieldValue.serverTimestamp(),
+          },
+        });
+        // Small delay so client listener detects each distinct event
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+
+    return { totalItemsSent: result.totalItemsSent, giftsSent: result.giftsSent };
   });
 });
 
@@ -2177,6 +2247,97 @@ exports.addTestCoins = onCall({ region: "asia-southeast1" }, async (request) => 
     });
 
     return { success: true, coinsAdded: amount, newBalance };
+  });
+});
+
+// --- Super Shy Trial ---
+exports.claimSuperShyTrial = onCall({ region: "asia-southeast1" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in");
+  const uid = request.auth.uid;
+
+  const db = getFirestore();
+  const userRef = db.collection("users").doc(uid);
+
+  return await db.runTransaction(async (tx) => {
+    const userDoc = await tx.get(userRef);
+    if (!userDoc.exists) throw new HttpsError("not-found", "User not found");
+
+    const userData = userDoc.data();
+    if (userData.hasClaimedSuperShyTrial) {
+      throw new HttpsError("already-exists", "Trial already claimed");
+    }
+
+    // Mark trial as claimed
+    tx.update(userRef, { hasClaimedSuperShyTrial: true });
+
+    // Create backpack item
+    const bpRef = userRef.collection("backpack").doc("super_shy_trial");
+    tx.set(bpRef, { quantity: 1 });
+
+    // Record transaction
+    const txDocRef = userRef.collection("transactions").doc();
+    tx.set(txDocRef, {
+      type: "TRIAL_CLAIM",
+      amount: 0,
+      currency: "COINS",
+      balanceAfter: userData.shyCoins || 0,
+      details: "Claimed free Super Shy 1-month trial",
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    return { success: true };
+  });
+});
+
+exports.activateSuperShyTrial = onCall({ region: "asia-southeast1" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in");
+  const uid = request.auth.uid;
+
+  const db = getFirestore();
+  const userRef = db.collection("users").doc(uid);
+  const bpRef = userRef.collection("backpack").doc("super_shy_trial");
+
+  return await db.runTransaction(async (tx) => {
+    const userDoc = await tx.get(userRef);
+    const bpDoc = await tx.get(bpRef);
+
+    if (!userDoc.exists) throw new HttpsError("not-found", "User not found");
+    if (!bpDoc.exists || (bpDoc.data().quantity || 0) < 1) {
+      throw new HttpsError("failed-precondition", "No trial item in backpack");
+    }
+
+    const userData = userDoc.data();
+
+    // Delete backpack item
+    tx.delete(bpRef);
+
+    // Set Super Shy — don't downgrade existing tier
+    const now = Date.now();
+    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+    const currentExpiry = userData.superShyExpiry ? userData.superShyExpiry.toMillis() : 0;
+    const newExpiry = Math.max(currentExpiry, now + thirtyDays);
+    const currentTier = userData.superShyTier;
+    // Only set trial tier if user has no existing tier or it's already trial
+    const newTier = (currentTier && currentTier !== "trial") ? currentTier : "trial";
+
+    tx.update(userRef, {
+      isSuperShy: true,
+      superShyExpiry: new Date(newExpiry),
+      superShyTier: newTier,
+    });
+
+    // Record transaction
+    const txDocRef = userRef.collection("transactions").doc();
+    tx.set(txDocRef, {
+      type: "TRIAL_ACTIVATE",
+      amount: 0,
+      currency: "COINS",
+      balanceAfter: userData.shyCoins || 0,
+      details: "Activated Super Shy 1-month trial",
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    return { success: true, newTier, newExpiry };
   });
 });
 

@@ -24,4 +24,6 @@ interface EconomyRepository {
     suspend fun getRecentTransactions(limit: Int = 10): Resource<List<Transaction>>
     suspend fun getAllTransactions(filterType: String? = null): Resource<List<Transaction>>
     suspend fun addTestCoins(amount: Int): Resource<Map<String, Any?>>
+    suspend fun claimSuperShyTrial(): Resource<Map<String, Any?>>
+    suspend fun activateSuperShyTrial(): Resource<Map<String, Any?>>
 }

@@ -69,7 +69,7 @@ class UserToMapTest {
     fun `toMap contains exactly 56 keys`() {
         val user = TestData.createTestUser()
         val map = user.toMap()
-        assertEquals(56, map.size)
+        assertEquals(57, map.size)
     }
 
     @Test
@@ -91,7 +91,7 @@ class UserToMapTest {
             "dndEndHour", "dndEndMinute",
             "shyCoins", "shyBeans", "isSuperShy", "superShyExpiry", "superShyTier",
             "luckScore", "pityCounter", "loginStreak", "lastLoginDate", "lastLoginRewardDate",
-            "aliases", "minGiftAnimationValue"
+            "aliases", "minGiftAnimationValue", "hasClaimedSuperShyTrial"
         )
         val user = TestData.createTestUser()
         assertEquals(expectedKeys, user.toMap().keys)
@@ -245,5 +245,99 @@ class UserToMapTest {
         assertEquals(false, map["suspensionCanAppeal"])
         assertNull(map["suspendedBy"])
         assertNull(map["suspensionAppealStatus"])
+    }
+
+    @Test
+    fun `toMap then fromMap roundtrip preserves all fields`() {
+        val original = User(
+            uid = "user-1",
+            displayName = "Alice",
+            avatarUrl = "https://avatar.png",
+            profilePhotoUrl = "https://profile.png",
+            coverPhotoUrl = "https://cover.png",
+            description = "Hello world",
+            nationality = "GB",
+            uniqueId = 99999L,
+            blockedUserIds = setOf("b1", "b2"),
+            followingIds = setOf("f1"),
+            followerIds = setOf("f2"),
+            dateOfBirth = TestData.BASE_TIMESTAMP,
+            hideFollowing = true,
+            hideOnlineStatus = true,
+            hideAge = true,
+            email = "alice@example.com",
+            currentRoomId = "room-1",
+            lastRoomName = "My Room",
+            userType = UserType.MEMBER,
+            createdAt = TestData.BASE_TIMESTAMP,
+            lastSeenAt = TestData.LATER_TIMESTAMP,
+            stalkerCount = 10,
+            newStalkerCount = 3,
+            stalkersLastViewedAt = TestData.BASE_TIMESTAMP,
+            isSuspended = true,
+            suspensionReason = "Spam",
+            suspensionStartDate = TestData.BASE_TIMESTAMP,
+            suspensionEndDate = TestData.LATER_TIMESTAMP,
+            suspensionCanAppeal = true,
+            suspendedBy = "admin-1",
+            suspensionAppealStatus = "pending",
+            fcmTokens = listOf("token-1", "token-2"),
+            pmNotificationsEnabled = false,
+            pmPrivacy = PmPrivacy.FOLLOWERS_ONLY,
+            pmSoundEnabled = false,
+            pmShowTimestamps = false,
+            pmShowDateSeparators = false,
+            pmNotificationPreview = false,
+            acceptedLegalVersion = 2,
+            dndEnabled = true,
+            dndStartHour = 23,
+            dndStartMinute = 30,
+            dndEndHour = 7,
+            dndEndMinute = 15,
+            shyCoins = 5000,
+            shyBeans = 1200,
+            isSuperShy = true,
+            superShyExpiry = TestData.LATER_TIMESTAMP,
+            superShyTier = "monthly",
+            luckScore = 42,
+            pityCounter = 7,
+            loginStreak = 5,
+            lastLoginDate = "2026-02-23",
+            lastLoginRewardDate = "2026-02-22",
+            aliases = mapOf("room-1" to "DJ Alice"),
+            minGiftAnimationValue = 500,
+            hasClaimedSuperShyTrial = true
+        )
+
+        // Simulate Firestore type coercion: Firestore returns all numbers as Long
+        val firestoreMap = original.toMap().mapValues { (_, v) ->
+            when (v) {
+                is Int -> v.toLong()
+                else -> v
+            }
+        }
+        val roundtripped = User.fromMap(firestoreMap, "user-1")
+
+        assertEquals(original, roundtripped)
+    }
+
+    @Test
+    fun `fromMap with extra unexpected fields ignores them`() {
+        val map = mapOf<String, Any?>(
+            "displayName" to "Bob",
+            "createdAt" to Timestamp(Date(TestData.BASE_TIMESTAMP)),
+            "lastSeenAt" to Timestamp(Date(TestData.BASE_TIMESTAMP)),
+            "unexpectedField1" to "should be ignored",
+            "unexpectedField2" to 999L,
+            "anotherExtra" to listOf("a", "b"),
+            "randomBool" to true
+        )
+
+        val user = User.fromMap(map, "user-1")
+
+        assertEquals("user-1", user.uid)
+        assertEquals("Bob", user.displayName)
+        assertEquals(TestData.BASE_TIMESTAMP, user.createdAt)
+        assertEquals(TestData.BASE_TIMESTAMP, user.lastSeenAt)
     }
 }

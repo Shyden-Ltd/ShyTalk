@@ -1,5 +1,6 @@
 package com.shyden.shytalk.feature.messaging
 
+import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.AuthRepository
@@ -11,9 +12,13 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.job
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -32,6 +37,8 @@ class NewMessageViewModelTest {
     private val userRepository = mockk<UserRepository>(relaxed = true)
     private val authRepository = mockk<AuthRepository>(relaxed = true)
 
+    private val activeViewModels = mutableListOf<NewMessageViewModel>()
+
     @Before
     fun setup() {
         every { authRepository.currentUserId } returns "me"
@@ -39,8 +46,15 @@ class NewMessageViewModelTest {
         coEvery { pmRepository.getOwnedGroupCount("me") } returns Resource.Success(0)
     }
 
+    @After
+    fun tearDown() = runBlocking {
+        activeViewModels.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() }
+        activeViewModels.clear()
+    }
+
     private fun createViewModel(): NewMessageViewModel {
         return NewMessageViewModel(pmRepository, userRepository, authRepository)
+            .also { activeViewModels.add(it) }
     }
 
     @Test
@@ -228,5 +242,83 @@ class NewMessageViewModelTest {
 
         vm.clearError()
         assertNull(vm.uiState.value.error)
+    }
+
+    // ===== Search with no results =====
+
+    @Test
+    fun `getFilteredUsers with non-matching query returns empty list`() = runTest {
+        val currentUser = TestData.createTestUser(
+            uid = "me",
+            followerIds = setOf("u1", "u2")
+        )
+        coEvery { userRepository.getUser("me") } returns Resource.Success(currentUser)
+        coEvery { userRepository.getUsers(any()) } returns Resource.Success(
+            listOf(
+                TestData.createTestUser(uid = "u1", displayName = "Alice"),
+                TestData.createTestUser(uid = "u2", displayName = "Bob")
+            )
+        )
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.setSearchQuery("Zzzzz")
+        val filtered = vm.getFilteredUsers()
+        assertTrue(filtered.isEmpty())
+    }
+
+    // ===== Search with special characters =====
+
+    @Test
+    fun `getFilteredUsers with special characters does not crash`() = runTest {
+        val currentUser = TestData.createTestUser(
+            uid = "me",
+            followerIds = setOf("u1")
+        )
+        coEvery { userRepository.getUser("me") } returns Resource.Success(currentUser)
+        coEvery { userRepository.getUsers(any()) } returns Resource.Success(
+            listOf(TestData.createTestUser(uid = "u1", displayName = "Alice"))
+        )
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        // Various special characters that could break regex or string matching
+        vm.setSearchQuery(".*+?[]{}()")
+        val filtered = vm.getFilteredUsers()
+        assertTrue(filtered.isEmpty())
+
+        vm.setSearchQuery("Ali")
+        val filtered2 = vm.getFilteredUsers()
+        assertEquals(1, filtered2.size)
+    }
+
+    // ===== Select user then deselect clears selection =====
+
+    @Test
+    fun `select user then deselect clears selection completely`() = runTest {
+        coEvery { userRepository.getUser("me") } returns Resource.Success(
+            TestData.createTestUser(uid = "me", followerIds = setOf("u1", "u2"))
+        )
+        coEvery { userRepository.getUsers(any()) } returns Resource.Success(
+            listOf(
+                TestData.createTestUser(uid = "u1"),
+                TestData.createTestUser(uid = "u2")
+            )
+        )
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        // Select two users
+        vm.toggleSelection("u1")
+        vm.toggleSelection("u2")
+        assertEquals(setOf("u1", "u2"), vm.uiState.value.selectedIds)
+
+        // Deselect both
+        vm.toggleSelection("u1")
+        vm.toggleSelection("u2")
+        assertTrue(vm.uiState.value.selectedIds.isEmpty())
     }
 }

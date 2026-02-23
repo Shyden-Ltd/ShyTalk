@@ -2,6 +2,7 @@ package com.shyden.shytalk.core.model
 
 import com.google.firebase.Timestamp
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Date
 
@@ -113,5 +114,58 @@ class GiftEventFromMapTest {
         )
         val event = GiftEvent.fromMap(map)
         assertEquals("sender-1", event.senderId)
+    }
+
+    @Test
+    fun `fromMap with missing fields returns defaults for absent keys`() {
+        val map = mapOf<String, Any?>(
+            "senderId" to "sender-1",
+            "giftId" to "crown"
+        )
+        val event = GiftEvent.fromMap(map)
+
+        assertEquals("sender-1", event.senderId)
+        assertEquals("", event.senderName)
+        assertEquals("", event.recipientId)
+        assertEquals("", event.recipientName)
+        assertEquals("crown", event.giftId)
+        assertEquals("", event.giftName)
+        assertEquals(0, event.coinValue)
+        assertEquals(0L, event.timestamp)
+    }
+
+    @Test
+    fun `fromMap with wrong types returns defaults for string and numeric fields`() {
+        val map = mapOf<String, Any?>(
+            "senderId" to 12345L,
+            "senderName" to true,
+            "recipientId" to listOf("a"),
+            "recipientName" to 99.9,
+            "giftId" to mapOf("nested" to "value"),
+            "giftName" to 0,
+            "coinValue" to "not a number"
+        )
+        val event = GiftEvent.fromMap(map)
+
+        assertEquals("", event.senderId)
+        assertEquals("", event.senderName)
+        assertEquals("", event.recipientId)
+        assertEquals("", event.recipientName)
+        assertEquals("", event.giftId)
+        assertEquals("", event.giftName)
+        assertEquals(0, event.coinValue)
+    }
+
+    @Test
+    fun `fromMap with unrecognized timestamp type falls back to current time`() {
+        // timestampToMillis returns currentTimeMillis() for unrecognized types
+        val before = System.currentTimeMillis()
+        val map = mapOf<String, Any?>(
+            "timestamp" to "not a timestamp"
+        )
+        val event = GiftEvent.fromMap(map)
+        val after = System.currentTimeMillis()
+
+        assertTrue(event.timestamp in before..after)
     }
 }

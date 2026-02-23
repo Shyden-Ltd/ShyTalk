@@ -1,5 +1,6 @@
 package com.shyden.shytalk.feature.home
 
+import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.model.ChatRoom
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.AuthRepository
@@ -13,11 +14,15 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.job
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -40,6 +45,8 @@ class HomeViewModelTest {
     private val roomsFlow = MutableSharedFlow<List<ChatRoom>>()
     private val currentUserId = "current-user"
 
+    private val activeViewModels = mutableListOf<HomeViewModel>()
+
     @Before
     fun setup() {
         every { authRepository.currentUserId } returns currentUserId
@@ -48,11 +55,17 @@ class HomeViewModelTest {
         coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
     }
 
+    @After
+    fun tearDown() = runBlocking {
+        activeViewModels.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() }
+        activeViewModels.clear()
+    }
+
     private fun createViewModel() = HomeViewModel(
         roomRepository = roomRepository,
         authRepository = authRepository,
         userRepository = userRepository
-    )
+    ).also { activeViewModels.add(it) }
 
     @Test
     fun `room owned by blocked user is excluded`() = runTest {
@@ -229,6 +242,91 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun `rooms the user participates in are sorted first`() = runTest {
+        coEvery { userRepository.getUsers(any()) } returns Resource.Success(
+            listOf(
+                TestData.createTestUser(uid = "owner-a"),
+                TestData.createTestUser(uid = "owner-b")
+            )
+        )
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val roomA = TestData.createTestRoom(
+            roomId = "room-a",
+            ownerId = "owner-a",
+            participantIds = setOf("owner-a") // user NOT participating
+        )
+        val roomB = TestData.createTestRoom(
+            roomId = "room-b",
+            ownerId = "owner-b",
+            participantIds = setOf("owner-b", currentUserId) // user participating
+        )
+        roomsFlow.emit(listOf(roomA, roomB))
+        advanceUntilIdle()
+
+        val rooms = vm.uiState.value.rooms
+        assertEquals(2, rooms.size)
+        assertEquals("room-b", rooms[0].roomId) // user's room sorted first
+        assertEquals("room-a", rooms[1].roomId)
+    }
+
+    @Test
+    fun `empty rooms list shows empty state`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        roomsFlow.emit(emptyList())
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.rooms.isEmpty())
+        assertFalse(vm.uiState.value.isLoading)
+    }
+
+    @Test
+    fun `multiple rooms with mixed blocked and normal owners`() = runTest {
+        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(setOf("blocked-owner"))
+        coEvery { userRepository.getUsers(any()) } returns Resource.Success(
+            listOf(
+                TestData.createTestUser(uid = "good-owner"),
+                TestData.createTestUser(uid = "blocked-owner")
+            )
+        )
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val goodRoom = TestData.createTestRoom(roomId = "room-1", ownerId = "good-owner")
+        val blockedRoom = TestData.createTestRoom(roomId = "room-2", ownerId = "blocked-owner")
+        roomsFlow.emit(listOf(goodRoom, blockedRoom))
+        advanceUntilIdle()
+
+        val rooms = vm.uiState.value.rooms
+        assertEquals(1, rooms.size)
+        assertEquals("room-1", rooms[0].roomId)
+    }
+
+    @Test
+    fun `own room is sorted first`() = runTest {
+        coEvery { userRepository.getUsers(any()) } returns Resource.Success(
+            listOf(
+                TestData.createTestUser(uid = "other-owner"),
+                TestData.createTestUser(uid = currentUserId)
+            )
+        )
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val otherRoom = TestData.createTestRoom(roomId = "room-other", ownerId = "other-owner")
+        val myRoom = TestData.createTestRoom(roomId = "room-mine", ownerId = currentUserId)
+        roomsFlow.emit(listOf(otherRoom, myRoom))
+        advanceUntilIdle()
+
+        val rooms = vm.uiState.value.rooms
+        assertEquals(2, rooms.size)
+        assertEquals("room-mine", rooms[0].roomId) // own room first
+    }
+
+    @Test
     fun `setActive starts periodic refresh`() = runTest {
         val vm = createViewModel()
         advanceUntilIdle()
@@ -243,5 +341,161 @@ class HomeViewModelTest {
         coVerify(atLeast = 2) { userRepository.getBlockedUserIds(currentUserId) }
 
         vm.setActive(false)
+    }
+
+    // ===== createRoom - auth guard =====
+
+    @Test
+    fun `createRoom with null auth user does nothing`() = runTest {
+        every { authRepository.currentUserId } returns null
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.createRoom("My Room")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { roomRepository.createRoom(any(), any()) }
+    }
+
+    // ===== createRoom - persists lastRoomName via updateProfile =====
+
+    @Test
+    fun `createRoom persists lastRoomName via updateProfile`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+        coEvery { roomRepository.createRoom(any(), any()) } returns Resource.Success("new-id")
+
+        vm.createRoom("Persisted Room")
+        advanceUntilIdle()
+
+        coVerify { userRepository.updateProfile(currentUserId, match { it["lastRoomName"] == "Persisted Room" }) }
+    }
+
+    // ===== seatUsers populated for occupied seats =====
+
+    @Test
+    fun `seatUsers map is populated for occupied seats in visible rooms`() = runTest {
+        val seatedUser = TestData.createTestUser(uid = "seated-user")
+        val owner = TestData.createTestUser(uid = "room-owner")
+        coEvery { userRepository.getUsers(any()) } returns Resource.Success(listOf(owner, seatedUser))
+
+        val seats = TestData.createSeatsWithOwner("room-owner").toMutableMap()
+        seats["1"] = TestData.createTestSeat(userId = "seated-user")
+        val room = TestData.createTestRoom(
+            ownerId = "room-owner",
+            seats = seats,
+            participantIds = setOf("room-owner", "seated-user")
+        )
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        roomsFlow.emit(listOf(room))
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.seatUsers.containsKey("seated-user"))
+        assertEquals(seatedUser, vm.uiState.value.seatUsers["seated-user"])
+    }
+
+    // ===== setActive(false) stops refresh =====
+
+    @Test
+    fun `setActive false stops periodic refresh`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+        roomsFlow.emit(emptyList())
+        advanceUntilIdle()
+
+        vm.setActive(true)
+        vm.setActive(false)
+
+        advanceTimeBy(HomeViewModel.REFRESH_INTERVAL_MS * 2)
+        runCurrent()
+
+        // Should only have initial load call, no new periodic calls after deactivation
+        coVerify(atMost = 2) { userRepository.getBlockedUserIds(currentUserId) }
+    }
+
+    // ===== refreshRooms clears cache so users are re-fetched =====
+
+    @Test
+    fun `refreshRooms clears user cache and re-fetches users`() = runTest {
+        coEvery { userRepository.getUsers(any()) } returns Resource.Success(
+            listOf(TestData.createTestUser(uid = "owner-x"))
+        )
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        roomsFlow.emit(listOf(TestData.createTestRoom(ownerId = "owner-x")))
+        advanceUntilIdle()
+
+        // First emission fetched users
+        coVerify(exactly = 1) { userRepository.getUsers(any()) }
+
+        vm.refreshRooms()
+        advanceUntilIdle()
+
+        // After refresh, cache cleared so users re-fetched
+        coVerify(exactly = 2) { userRepository.getUsers(any()) }
+    }
+
+    // ===== observeRooms error =====
+
+    @Test
+    fun `observeRooms flow error sets error state`() = runTest {
+        val errorFlow = kotlinx.coroutines.flow.flow<List<ChatRoom>> {
+            throw RuntimeException("stream failed")
+        }
+        every { roomRepository.getActiveRooms() } returns errorFlow
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        assertEquals("stream failed", vm.uiState.value.error)
+        assertFalse(vm.uiState.value.isLoading)
+    }
+
+    // ===== loadLastRoomName populates state from user =====
+
+    @Test
+    fun `init loads lastRoomName from user profile`() = runTest {
+        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(
+            TestData.createTestUser(uid = currentUserId).copy(lastRoomName = "Saved Room")
+        )
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        assertEquals("Saved Room", vm.uiState.value.lastRoomName)
+    }
+
+    // ===== signOut with null user =====
+
+    @Test
+    fun `signOut calls authRepository even without rooms`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.signOut()
+
+        verify { authRepository.signOut() }
+    }
+
+    // ===== createRoom sets isLoading during operation =====
+
+    @Test
+    fun `createRoom clears previous error before starting`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+        coEvery { roomRepository.createRoom(any(), any()) } returns Resource.Error("first error")
+        vm.createRoom("Room1")
+        advanceUntilIdle()
+        assertNotNull(vm.uiState.value.error)
+
+        coEvery { roomRepository.createRoom(any(), any()) } returns Resource.Success("room-2")
+        vm.createRoom("Room2")
+        advanceUntilIdle()
+
+        assertNull(vm.uiState.value.error)
+        assertEquals("room-2", vm.uiState.value.createdRoomId)
     }
 }

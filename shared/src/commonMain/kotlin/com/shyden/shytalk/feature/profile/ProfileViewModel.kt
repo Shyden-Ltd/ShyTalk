@@ -486,4 +486,39 @@ class ProfileViewModel(
             }
         }
     }
+
+    fun claimSuperShyTrial() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            when (val result = economyRepository.claimSuperShyTrial()) {
+                is Resource.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            user = it.user?.copy(hasClaimedSuperShyTrial = true)
+                        )
+                    }
+                }
+                is Resource.Error -> {
+                    _uiState.update { it.copy(isLoading = false, error = result.message ?: "Failed to claim trial") }
+                }
+                is Resource.Loading -> {}
+            }
+        }
+    }
+
+    fun testPurchaseSuperShy(productId: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            when (val result = economyRepository.purchaseSubscription(productId, "test_token")) {
+                is Resource.Success -> {
+                    loadProfile(null)
+                }
+                is Resource.Error -> {
+                    _uiState.update { it.copy(isLoading = false, error = result.message ?: "Test purchase failed") }
+                }
+                is Resource.Loading -> {}
+            }
+        }
+    }
 }

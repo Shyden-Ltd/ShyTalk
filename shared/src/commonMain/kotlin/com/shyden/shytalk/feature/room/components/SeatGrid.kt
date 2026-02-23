@@ -33,19 +33,25 @@ fun SeatGrid(
     disconnectedUserIds: Set<String> = emptySet(),
     isOwnerAway: Boolean = false,
     showRequestSeat: Boolean = false,
+    effectiveSeatCount: Int = Constants.MAX_SEATS,
     onSeatClick: (Int) -> Unit,
     onTapUser: (String) -> Unit = {},
     aliases: Map<String, String> = emptyMap(),
     modifier: Modifier = Modifier
 ) {
+    // Filter seats to only those within the effective limit
+    val visibleSeats = remember(seats, effectiveSeatCount) {
+        seats.filterKeys { (it.toIntOrNull() ?: Int.MAX_VALUE) < effectiveSeatCount }
+    }
+
     // Single pass: build occupied seats + optional request seat in one remember block
-    val (displaySeats, requestSeatIndex) = remember(seats, showRequestSeat) {
-        val occupied = seats.entries
+    val (displaySeats, requestSeatIndex) = remember(visibleSeats, showRequestSeat) {
+        val occupied = visibleSeats.entries
             .filter { it.value.state == SeatState.OCCUPIED }
             .sortedBy { it.key.toIntOrNull() ?: 0 }
 
         if (showRequestSeat) {
-            val firstEmpty = seats.entries
+            val firstEmpty = visibleSeats.entries
                 .filter { it.value.state == SeatState.EMPTY }
                 .minByOrNull { it.key.toIntOrNull() ?: Int.MAX_VALUE }
             if (firstEmpty != null) {

@@ -1,12 +1,11 @@
-v0.39 - Sound Effects & Bug Fixes
+v0.41 - Gacha, Gifting & UI Fixes
 
-- Sound effects for Lucky Spin (ticks, fanfares, coin ding)
-- High-tier fanfare for RARE+ wins
-- Backpack: names, coin values, total value, sorted
-- Uniform win card sizes in summary popup
-- Inline coin shop via + button on balance pill
-- Gacha drop rates rebalanced (harder high-tier)
-- Fixed coin balance showing 0 after spinning
-- Fixed daily reward showing 0 coins/streak
-- Fixed spin history not loading
-- Admin: partial backpack item removal
+- Gacha wheel locked to 16 slots (CF + client)
+- Admin: showOnWheel toggle now saves correctly
+- Broadcast banner for ALL gift sends (not just 5000+)
+- Send-all plays queued animations per gift type
+- Gift wall shows ALL gifts (locked/unlocked)
+- Backpack shows all items regardless of store visibility
+- Perfect square cells: gift wall, backpack, profile
+- System/gift messages no longer hidden under carousel
+- Admin dashboard UX: keyboard hints, GCS legend, mute, longer error toasts, gift row indicators

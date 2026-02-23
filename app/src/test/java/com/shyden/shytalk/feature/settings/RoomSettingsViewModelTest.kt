@@ -1,5 +1,7 @@
 package com.shyden.shytalk.feature.settings
 
+import androidx.lifecycle.viewModelScope
+import com.shyden.shytalk.core.model.Seat
 import com.shyden.shytalk.core.model.SeatRequest
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.AuthRepository
@@ -13,10 +15,14 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.job
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -40,6 +46,7 @@ class RoomSettingsViewModelTest {
     private val currentUserId = "current-user"
     private val ownerId = "owner-1"
     private val roomId = "room-1"
+    private val activeViewModels = mutableListOf<RoomSettingsViewModel>()
 
     @Before
     fun setup() {
@@ -47,12 +54,18 @@ class RoomSettingsViewModelTest {
         every { seatRequestRepository.getPendingRequests(any()) } returns flowOf(emptyList())
     }
 
+    @After
+    fun tearDown() = runBlocking {
+        activeViewModels.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() }
+        activeViewModels.clear()
+    }
+
     private fun createViewModel() = RoomSettingsViewModel(
         roomRepository = roomRepository,
         seatRequestRepository = seatRequestRepository,
         authRepository = authRepository,
         userRepository = userRepository
-    )
+    ).also { activeViewModels.add(it) }
 
     private fun loadRoomAsOwner(vm: RoomSettingsViewModel, requireApproval: Boolean = false) {
         val roomFlow = MutableStateFlow(TestData.createTestRoom(
@@ -554,5 +567,277 @@ class RoomSettingsViewModelTest {
         assertNotNull(vm.uiState.value.error)
         vm.clearError()
         assertNull(vm.uiState.value.error)
+    }
+
+    // ===== leaveSeat =====
+
+    @Test
+    fun `leaveSeat - non-owner in seat succeeds`() = runTest {
+        // current-user is a host seated in seat 2
+        val seats = TestData.createSeatsWithOwner(ownerId).toMutableMap()
+        seats["2"] = TestData.createTestSeat(userId = currentUserId)
+        val roomFlow = MutableStateFlow(TestData.createTestRoom(
+            roomId = roomId,
+            ownerId = ownerId,
+            hostIds = setOf(currentUserId),
+            participantIds = setOf(ownerId, currentUserId),
+            seats = seats
+        ))
+        every { roomRepository.getRoomFlow(roomId) } returns roomFlow
+        val vm = createViewModel()
+        vm.loadRoom(roomId)
+        advanceUntilIdle()
+
+        vm.leaveSeat()
+        advanceUntilIdle()
+
+        coVerify { roomRepository.leaveSeat(roomId, 2) }
+    }
+
+    @Test
+    fun `leaveSeat - owner is prevented from leaving`() = runTest {
+        val vm = createViewModel()
+        loadRoomAsOwner(vm)
+        advanceUntilIdle()
+
+        vm.leaveSeat()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { roomRepository.leaveSeat(any(), any()) }
+    }
+
+    @Test
+    fun `leaveSeat - user not in a seat is no-op`() = runTest {
+        val vm = createViewModel()
+        loadRoomAsHost(vm)
+        advanceUntilIdle()
+
+        // current-user is a host but not seated
+        vm.leaveSeat()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { roomRepository.leaveSeat(any(), any()) }
+    }
+
+    // ===== requestSeat =====
+
+    @Test
+    fun `requestSeat - host takes seat directly without approval`() = runTest {
+        // Room with an empty seat at index 1, current user is host
+        val vm = createViewModel()
+        loadRoomAsHost(vm, requireApproval = false)
+        advanceUntilIdle()
+
+        vm.requestSeat()
+        advanceUntilIdle()
+
+        coVerify { roomRepository.takeSeat(roomId, any(), currentUserId) }
+        coVerify(exactly = 0) { seatRequestRepository.createRequest(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `requestSeat - host takes seat even when requireApproval ON`() = runTest {
+        val vm = createViewModel()
+        loadRoomAsHost(vm, requireApproval = true)
+        advanceUntilIdle()
+
+        vm.requestSeat()
+        advanceUntilIdle()
+
+        coVerify { roomRepository.takeSeat(roomId, any(), currentUserId) }
+        coVerify(exactly = 0) { seatRequestRepository.createRequest(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `requestSeat - attendee blocked when requireApproval ON`() = runTest {
+        val vm = createViewModel()
+        // Attendee in a room with requireApproval enabled
+        val roomFlow = MutableStateFlow(TestData.createTestRoom(
+            roomId = roomId,
+            ownerId = ownerId,
+            requireApproval = true,
+            participantIds = setOf(ownerId, currentUserId)
+        ))
+        every { roomRepository.getRoomFlow(roomId) } returns roomFlow
+        vm.loadRoom(roomId)
+        advanceUntilIdle()
+
+        vm.requestSeat()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { roomRepository.takeSeat(any(), any(), any()) }
+        coVerify(exactly = 0) { seatRequestRepository.createRequest(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `requestSeat - attendee in non-approval room creates seat request`() = runTest {
+        val vm = createViewModel()
+        val roomFlow = MutableStateFlow(TestData.createTestRoom(
+            roomId = roomId,
+            ownerId = ownerId,
+            requireApproval = false,
+            participantIds = setOf(ownerId, currentUserId)
+        ))
+        every { roomRepository.getRoomFlow(roomId) } returns roomFlow
+        vm.loadRoom(roomId)
+        advanceUntilIdle()
+
+        vm.requestSeat()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { roomRepository.takeSeat(any(), any(), eq(currentUserId)) }
+        coVerify { seatRequestRepository.createRequest(eq(roomId), eq(currentUserId), any(), any()) }
+    }
+
+    @Test
+    fun `requestSeat - no empty seats is no-op`() = runTest {
+        // Fill all seats
+        val seats = mutableMapOf<String, Seat>()
+        for (i in 0 until 8) {
+            seats[i.toString()] = TestData.createTestSeat(userId = "user-$i")
+        }
+        val roomFlow = MutableStateFlow(TestData.createTestRoom(
+            roomId = roomId,
+            ownerId = ownerId,
+            hostIds = setOf(currentUserId),
+            seats = seats
+        ))
+        every { roomRepository.getRoomFlow(roomId) } returns roomFlow
+        val vm = createViewModel()
+        vm.loadRoom(roomId)
+        advanceUntilIdle()
+
+        vm.requestSeat()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { roomRepository.takeSeat(any(), any(), any()) }
+        coVerify(exactly = 0) { seatRequestRepository.createRequest(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `requestSeat - owner is prevented from requesting`() = runTest {
+        val vm = createViewModel()
+        loadRoomAsOwner(vm)
+        advanceUntilIdle()
+
+        vm.requestSeat()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { roomRepository.takeSeat(roomId, any(), currentUserId) }
+        coVerify(exactly = 0) { seatRequestRepository.createRequest(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `requestSeat - already seated user is no-op`() = runTest {
+        // current-user is a host already seated
+        val seats = TestData.createSeatsWithOwner(ownerId).toMutableMap()
+        seats["2"] = TestData.createTestSeat(userId = currentUserId)
+        val roomFlow = MutableStateFlow(TestData.createTestRoom(
+            roomId = roomId,
+            ownerId = ownerId,
+            hostIds = setOf(currentUserId),
+            seats = seats
+        ))
+        every { roomRepository.getRoomFlow(roomId) } returns roomFlow
+        val vm = createViewModel()
+        vm.loadRoom(roomId)
+        advanceUntilIdle()
+
+        vm.requestSeat()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { roomRepository.takeSeat(roomId, any(), currentUserId) }
+        coVerify(exactly = 0) { seatRequestRepository.createRequest(any(), any(), any(), any()) }
+    }
+
+    // ===== toggleRequireApproval success =====
+
+    @Test
+    fun `toggleRequireApproval - owner toggles successfully and room flow updates`() = runTest {
+        val roomFlow = MutableStateFlow(TestData.createTestRoom(
+            roomId = roomId,
+            ownerId = currentUserId,
+            requireApproval = false
+        ))
+        every { roomRepository.getRoomFlow(roomId) } returns roomFlow
+
+        val vm = createViewModel()
+        vm.loadRoom(roomId)
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.room!!.requireApproval)
+
+        vm.toggleRequireApproval()
+        advanceUntilIdle()
+
+        coVerify { roomRepository.setRequireApproval(roomId, true) }
+        assertNull(vm.uiState.value.error)
+    }
+
+    // ===== loadRoom sets room state =====
+
+    @Test
+    fun `loadRoom sets room and pendingRequests in state`() = runTest {
+        val request = TestData.createTestSeatRequest(requestId = "req-pending")
+        every { seatRequestRepository.getPendingRequests(roomId) } returns flowOf(listOf(request))
+
+        val vm = createViewModel()
+        loadRoomAsOwner(vm)
+        advanceUntilIdle()
+
+        assertNotNull(vm.uiState.value.room)
+        assertEquals(roomId, vm.uiState.value.room!!.roomId)
+        assertEquals(1, vm.uiState.value.pendingRequests.size)
+        assertEquals("req-pending", vm.uiState.value.pendingRequests[0].requestId)
+    }
+
+    // ===== closeRoom - owner closes successfully =====
+
+    @Test
+    fun `closeRoom - owner closes and no error is set`() = runTest {
+        val vm = createViewModel()
+        loadRoomAsOwner(vm)
+        advanceUntilIdle()
+
+        vm.closeRoom()
+        advanceUntilIdle()
+
+        coVerify { roomRepository.closeRoom(roomId) }
+        assertNull(vm.uiState.value.error)
+    }
+
+    // ===== denyRequest - host can deny =====
+
+    @Test
+    fun `denyRequest - host calls repository`() = runTest {
+        val vm = createViewModel()
+        loadRoomAsHost(vm)
+        advanceUntilIdle()
+        val request = TestData.createTestSeatRequest()
+
+        vm.denyRequest(request)
+        advanceUntilIdle()
+
+        coVerify { seatRequestRepository.denyRequest(roomId, request.requestId, currentUserId) }
+    }
+
+    // ===== inviteUser - already invited is no-op =====
+
+    @Test
+    fun `inviteUser - already invited user is no-op`() = runTest {
+        val roomFlow = MutableStateFlow(TestData.createTestRoom(
+            roomId = roomId,
+            ownerId = currentUserId,
+            pendingInvites = mapOf("user-2" to currentUserId)
+        ))
+        every { roomRepository.getRoomFlow(roomId) } returns roomFlow
+        val vm = createViewModel()
+        vm.loadRoom(roomId)
+        advanceUntilIdle()
+
+        vm.inviteUser("user-2", "User 2")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { roomRepository.sendInvite(any(), any(), any()) }
     }
 }

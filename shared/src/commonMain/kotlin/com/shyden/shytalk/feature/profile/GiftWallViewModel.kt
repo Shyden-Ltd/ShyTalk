@@ -40,7 +40,7 @@ class GiftWallViewModel(
     private fun observeData() {
         viewModelScope.launch {
             combine(
-                giftRepository.observeGiftCatalog(),
+                giftRepository.observeAllGifts(),
                 giftRepository.observeGiftWall(userId)
             ) { catalog, wall ->
                 catalog to wall

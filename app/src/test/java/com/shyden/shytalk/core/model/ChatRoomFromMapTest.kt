@@ -341,4 +341,102 @@ class ChatRoomFromMapTest {
         val map = room.toMap()
         assertNull(map["lastGiftEvent"])
     }
+
+    // --- Additional edge cases ---
+
+    @Test
+    fun `fromMap with empty seats map produces all default seats`() {
+        val map = mapOf<String, Any?>(
+            "seats" to emptyMap<String, Any>()
+        )
+        val room = ChatRoom.fromMap(map, "room-1")
+        assertEquals(Constants.MAX_SEATS, room.seats.size)
+        room.seats.values.forEach { seat ->
+            assertNull(seat.userId)
+            assertEquals(SeatState.EMPTY, seat.state)
+            assertFalse(seat.isMuted)
+        }
+    }
+
+    @Test
+    fun `fromMap with null participantIds defaults to empty set`() {
+        val map = mapOf<String, Any?>(
+            "participantIds" to null
+        )
+        val room = ChatRoom.fromMap(map, "room-1")
+        assertEquals(emptySet<String>(), room.participantIds)
+    }
+
+    @Test
+    fun `fromMap with lastGiftEvent partial map populates known fields with defaults for rest`() {
+        val map = mapOf<String, Any?>(
+            "lastGiftEvent" to mapOf(
+                "senderId" to "sender-1",
+                "giftId" to "rose"
+            )
+        )
+        val room = ChatRoom.fromMap(map, "room-1")
+        val event = room.lastGiftEvent
+
+        assertEquals("sender-1", event?.senderId)
+        assertEquals("", event?.senderName)
+        assertEquals("", event?.recipientId)
+        assertEquals("", event?.recipientName)
+        assertEquals("rose", event?.giftId)
+        assertEquals("", event?.giftName)
+        assertEquals(0, event?.coinValue)
+        assertEquals(0L, event?.timestamp)
+    }
+
+    @Test
+    fun `fromMap with null hostIds defaults to empty set`() {
+        val map = mapOf<String, Any?>(
+            "hostIds" to null
+        )
+        val room = ChatRoom.fromMap(map, "room-1")
+        assertEquals(emptySet<String>(), room.hostIds)
+    }
+
+    @Test
+    fun `fromMap with null bannedUserIds defaults to empty set`() {
+        val map = mapOf<String, Any?>(
+            "bannedUserIds" to null
+        )
+        val room = ChatRoom.fromMap(map, "room-1")
+        assertEquals(emptySet<String>(), room.bannedUserIds)
+    }
+
+    @Test
+    fun `fromMap with null seats produces all default seats`() {
+        val map = mapOf<String, Any?>(
+            "seats" to null
+        )
+        val room = ChatRoom.fromMap(map, "room-1")
+        assertEquals(Constants.MAX_SEATS, room.seats.size)
+        room.seats.values.forEach { seat ->
+            assertNull(seat.userId)
+            assertEquals(SeatState.EMPTY, seat.state)
+        }
+    }
+
+    @Test
+    fun `fromMap with kickInfo map parses correctly`() {
+        val map = mapOf<String, Any?>(
+            "kickInfo" to mapOf(
+                "user-1" to mapOf("reason" to "spam", "kickedBy" to "owner-1")
+            )
+        )
+        val room = ChatRoom.fromMap(map, "room-1")
+        assertEquals("spam", room.kickInfo["user-1"]?.get("reason"))
+        assertEquals("owner-1", room.kickInfo["user-1"]?.get("kickedBy"))
+    }
+
+    @Test
+    fun `fromMap with null kickInfo defaults to empty map`() {
+        val map = mapOf<String, Any?>(
+            "kickInfo" to null
+        )
+        val room = ChatRoom.fromMap(map, "room-1")
+        assertEquals(emptyMap<String, Map<String, String>>(), room.kickInfo)
+    }
 }

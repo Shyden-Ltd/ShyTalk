@@ -38,11 +38,12 @@ fun GiftAnimation(
     label: String,
     durationMs: Long,
     onFinished: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    eventId: Long = 0L
 ) {
     val progress = remember { Animatable(0f) }
 
-    LaunchedEffect(giftId) {
+    LaunchedEffect(eventId, giftId) {
         progress.snapTo(0f)
         progress.animateTo(
             targetValue = 1f,

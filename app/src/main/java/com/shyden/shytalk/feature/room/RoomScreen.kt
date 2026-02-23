@@ -54,6 +54,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material3.Icon
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.RoomState
@@ -115,6 +118,7 @@ fun RoomScreen(
     var showBackpackSheet by remember(roomId) { mutableStateOf(false) }
     var additionalBackpackRecipient by remember(roomId) { mutableStateOf<com.shyden.shytalk.core.model.User?>(null) }
     var previewGift by remember { mutableStateOf<Gift?>(null) }
+    var showSuperShySheet by remember(roomId) { mutableStateOf(false) }
     val currentGiftEvent by viewModel.giftAnimationQueue.currentEvent.collectAsStateWithLifecycle()
     var pmImageResultHandler by remember { mutableStateOf<((List<ByteArray>) -> Unit)?>(null) }
     var pmStickerResultHandler by remember { mutableStateOf<((ByteArray) -> Unit)?>(null) }
@@ -184,11 +188,11 @@ fun RoomScreen(
 
     val currentUser = uiState.allKnownUsers[uiState.currentUserId]
 
-    // Handle gift sending success — show toast (sheet stays open)
+    // Clear gift sending state (chat message from Cloud Function is sufficient feedback)
     LaunchedEffect(giftingState.sentGiftId) {
-        val giftName = giftingState.sentGiftName ?: return@LaunchedEffect
-        snackbarHostState.showSnackbar("Sent $giftName!")
-        giftingViewModel.clearSentGift()
+        if (giftingState.sentGiftName != null) {
+            giftingViewModel.clearSentGift()
+        }
     }
 
     // Handle gacha win — trigger GiftEffectOverlay for RARE+ single wins
@@ -228,6 +232,15 @@ fun RoomScreen(
     DisposableEffect(Unit) {
         viewModel.setRoomScreenVisible(true)
         onDispose { viewModel.setRoomScreenVisible(false) }
+    }
+
+    // Keep screen on while in room
+    val activity = LocalContext.current as? android.app.Activity
+    DisposableEffect(Unit) {
+        activity?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {
+            activity?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
     }
 
     // Audio permission handling
@@ -554,6 +567,30 @@ fun RoomScreen(
                         )
                     }
 
+                    // Voice Unavailable Banner
+                    if (uiState.isVoiceUnavailable) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFFFFF3E0))
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                Icons.Default.MicOff,
+                                contentDescription = null,
+                                tint = Color(0xFFE65100),
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                            Text(
+                                text = "Voice chat is temporarily unavailable",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFE65100)
+                            )
+                        }
+                    }
+
                     // Seat Grid (upper portion — only occupied seats)
                     val isCurrentUserSeated = uiState.currentUserId in seatedUserIds
                     val showRequestSeat = !isCurrentUserSeated
@@ -570,6 +607,7 @@ fun RoomScreen(
                         disconnectedUserIds = uiState.disconnectedUserIds,
                         isOwnerAway = uiState.room?.state == RoomState.OWNER_AWAY,
                         showRequestSeat = showRequestSeat,
+                        effectiveSeatCount = uiState.effectiveSeatCount,
                         onSeatClick = { seatIndex ->
                             val seat = uiState.room?.seats?.get(seatIndex.toString())
                             if (seat?.userId == uiState.currentUserId) {
@@ -597,6 +635,7 @@ fun RoomScreen(
                         seats = uiState.room?.seats ?: emptyMap(),
                         userMap = userMap,
                         isOwnerOrHost = isOwnerOrHost,
+                        isVoiceUnavailable = uiState.isVoiceUnavailable,
                         onToggleMic = { seatIndex -> viewModel.toggleSelfMute(seatIndex) },
                         onSendMessage = { viewModel.sendMessage(it) },
                         onTapUser = { userId ->
@@ -978,6 +1017,24 @@ fun RoomScreen(
             GiftPreviewPopup(
                 gift = gift,
                 onDismiss = { previewGift = null }
+            )
+        }
+
+        // Expiry upsell dialog
+        if (uiState.showExpiryUpsellDialog) {
+            com.shyden.shytalk.feature.room.components.ExpiryUpsellDialog(
+                isViewerSuperShy = currentUser?.isSuperShy == true,
+                superShyDurationHours = viewModel.superShyDurationHours,
+                onDismiss = { viewModel.dismissExpiryUpsellDialog() },
+                onOpenSuperShy = { showSuperShySheet = true }
+            )
+        }
+
+        // Super Shy bottom sheet (opened from expiry upsell)
+        if (showSuperShySheet && currentUser != null) {
+            com.shyden.shytalk.feature.shop.SuperShyBottomSheet(
+                user = currentUser,
+                onDismiss = { showSuperShySheet = false }
             )
         }
 

@@ -1,5 +1,6 @@
 package com.shyden.shytalk.feature.gifting
 
+import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.model.BackpackItem
 import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.util.Resource
@@ -12,10 +13,14 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.job
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -49,16 +54,24 @@ class GiftingViewModelTest {
         BackpackItem(giftId = "crown", quantity = 1)
     )
 
+    private val activeViewModels = mutableListOf<GiftingViewModel>()
+
     @Before
     fun setup() {
         every { authRepository.currentUserId } returns "user-1"
-        every { giftRepository.observeGiftCatalog() } returns catalogFlow
+        every { giftRepository.observeAllGifts() } returns catalogFlow
         every { giftRepository.observeBackpack("user-1") } returns backpackFlow
         every { economyRepository.observeBalance() } returns balanceFlow
     }
 
+    @After
+    fun tearDown() = runBlocking {
+        activeViewModels.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() }
+        activeViewModels.clear()
+    }
+
     private fun createViewModel(): GiftingViewModel {
-        return GiftingViewModel(giftRepository, economyRepository, authRepository)
+        return GiftingViewModel(giftRepository, economyRepository, authRepository).also { activeViewModels.add(it) }
     }
 
     @Test
@@ -366,6 +379,7 @@ class GiftingViewModelTest {
             economyRepository.sendGiftDirect("user-2", "dragon", 1)
         } returns Resource.Success(mapOf("giftName" to "Dragon"))
 
+        balanceFlow.value = 10000L
         val vm = createViewModel()
         catalogFlow.emit(sampleCatalog)
         backpackFlow.emit(sampleBackpack)
@@ -378,6 +392,29 @@ class GiftingViewModelTest {
         advanceUntilIdle()
 
         coVerify { economyRepository.sendGiftDirect("user-2", "dragon", 1) }
+    }
+
+    @Test
+    fun `confirmSend on gifts tab with insufficient coins sets navigateToWallet`() = runTest {
+        balanceFlow.value = 100L
+        val vm = createViewModel()
+        catalogFlow.emit(sampleCatalog)
+        backpackFlow.emit(sampleBackpack)
+        advanceUntilIdle()
+
+        vm.setActiveTab(0)
+        vm.selectGift("dragon") // costs 5000
+        vm.toggleRecipient("user-2")
+        vm.requestSend()
+        vm.confirmSend()
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.navigateToWallet)
+        assertFalse(vm.uiState.value.isSending)
+        assertFalse(vm.uiState.value.showConfirmDialog)
+
+        vm.clearNavigateToWallet()
+        assertFalse(vm.uiState.value.navigateToWallet)
     }
 
     @Test
@@ -520,6 +557,61 @@ class GiftingViewModelTest {
         assertEquals("entire backpack (4 items)", state.sentGiftName)
     }
 
+    // --- toggleQuantityPicker, setActiveTab, requestSend edge cases ---
+
+    @Test
+    fun `toggleQuantityPicker toggles showQuantityPicker`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.showQuantityPicker)
+
+        vm.toggleQuantityPicker()
+        assertTrue(vm.uiState.value.showQuantityPicker)
+
+        vm.toggleQuantityPicker()
+        assertFalse(vm.uiState.value.showQuantityPicker)
+    }
+
+    @Test
+    fun `setActiveTab changes tab and resets selection`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.selectGift("rose")
+        vm.setQuantity(5)
+        assertEquals("rose", vm.uiState.value.selectedGiftId)
+        assertEquals(5, vm.uiState.value.selectedQuantity)
+
+        vm.setActiveTab(1)
+
+        assertEquals(1, vm.uiState.value.activeTab)
+        assertNull(vm.uiState.value.selectedGiftId)
+        assertEquals(1, vm.uiState.value.selectedQuantity)
+    }
+
+    @Test
+    fun `requestSend with no recipients does nothing`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.selectGift("rose") // gift selected but no recipients
+        vm.requestSend()
+
+        assertFalse(vm.uiState.value.showConfirmDialog)
+    }
+
+    @Test
+    fun `requestSend with no gift selected does nothing`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.toggleRecipient("user-2") // recipient selected but no gift
+        vm.requestSend()
+
+        assertFalse(vm.uiState.value.showConfirmDialog)
+    }
+
     @Test
     fun `confirmSendAll error sets error state`() = runTest {
         coEvery { economyRepository.sendEntireBackpack("user-2") } returns
@@ -537,5 +629,56 @@ class GiftingViewModelTest {
         val state = vm.uiState.value
         assertFalse(state.isSending)
         assertEquals("Backpack is empty", state.error)
+    }
+
+    // --- activateTrial tests ---
+
+    @Test
+    fun `activateTrial - success updates state with success message`() = runTest {
+        coEvery { economyRepository.activateSuperShyTrial() } returns
+            Resource.Success(mapOf("status" to "activated"))
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.activateTrial()
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertFalse(state.isSending)
+        assertNull(state.selectedGiftId)
+        assertEquals("Super Shy Trial activated!", state.sentGiftName)
+        assertNull(state.error)
+    }
+
+    @Test
+    fun `activateTrial - error updates state with error message`() = runTest {
+        coEvery { economyRepository.activateSuperShyTrial() } returns Resource.Error("Already active")
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.activateTrial()
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertFalse(state.isSending)
+        assertEquals("Already active", state.error)
+    }
+
+    @Test
+    fun `activateTrial - sets isSending true while in progress`() = runTest {
+        coEvery { economyRepository.activateSuperShyTrial() } returns
+            Resource.Success(mapOf("status" to "activated"))
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.activateTrial()
+        // isSending is set synchronously before the coroutine completes
+        advanceUntilIdle()
+
+        // After completion, isSending should be false again
+        assertFalse(vm.uiState.value.isSending)
     }
 }

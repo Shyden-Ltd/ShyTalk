@@ -1828,6 +1828,8 @@ app.post("/api/gifts/seed", async (req, res) => {
         animationUrl: "",
         soundUrl: "",
         iconUrl: "",
+        showInStore: true,
+        showOnWheel: gift.order <= 16,
       }, { merge: true });
     }
     await batch.commit();
@@ -2281,6 +2283,39 @@ app.post("/api/cleanup/all-spin-history", async (req, res) => {
   }
 });
 
+// POST /api/cleanup/all-supershy
+app.post("/api/cleanup/all-supershy", async (req, res) => {
+  try {
+    const db = getFirestore();
+    const snap = await db.collection("users").where("isSuperShy", "==", true).get();
+    let usersCleared = 0;
+
+    for (let i = 0; i < snap.docs.length; i += 500) {
+      const batch = db.batch();
+      snap.docs.slice(i, i + 500).forEach((doc) => {
+        batch.update(doc.ref, {
+          isSuperShy: false,
+          superShyExpiry: null,
+          superShyTier: null,
+        });
+      });
+      await batch.commit();
+      usersCleared += Math.min(500, snap.docs.length - i);
+    }
+
+    await writeAuditLog(db, {
+      adminUid: req.admin.uid,
+      action: "cleanup_all_supershy",
+      note: `Removed Super Shy from ${usersCleared} users`,
+    });
+
+    return res.json({ success: true, usersCleared });
+  } catch (err) {
+    console.error("POST cleanup/all-supershy error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Economy Config Endpoints ─────────────────────────────────
 
 const ECONOMY_CONFIG_FIELDS = {
@@ -2297,6 +2332,9 @@ const ECONOMY_CONFIG_FIELDS = {
   pityHighValueThreshold: "number",
   dailyBase: "number",
   milestoneRewards: "object",
+  maxRoomDurationMinutes: "number",
+  superShyRoomDurationMinutes: "number",
+  normalSeatCount: "number",
 };
 
 // GET /api/config/economy
@@ -2390,7 +2428,7 @@ app.put("/api/gifts/:id", async (req, res) => {
     const doc = await ref.get();
     if (!doc.exists) return res.status(404).json({ error: "Gift not found" });
 
-    const allowed = ["name", "coinValue", "animationUrl", "soundUrl", "iconUrl", "order"];
+    const allowed = ["name", "coinValue", "animationUrl", "soundUrl", "iconUrl", "order", "showInStore", "showOnWheel"];
     const updates = {};
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
@@ -2398,6 +2436,8 @@ app.put("/api/gifts/:id", async (req, res) => {
           const v = Number(req.body[key]);
           if (!Number.isFinite(v) || v < 0) return res.status(400).json({ error: `${key} must be a non-negative number` });
           updates[key] = v;
+        } else if (key === "showInStore" || key === "showOnWheel") {
+          updates[key] = !!req.body[key];
         } else {
           updates[key] = String(req.body[key]);
         }
@@ -2450,6 +2490,7 @@ app.post("/api/gifts", async (req, res) => {
       soundUrl: soundUrl || "",
       iconUrl: iconUrl || "",
       order: Number(order) || 0,
+      showInStore: true,
     };
 
     await db.collection("gifts").doc(docId).set(giftData);

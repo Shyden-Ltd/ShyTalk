@@ -35,6 +35,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -58,6 +59,7 @@ fun ChatPanel(
     seats: Map<String, Seat>,
     userMap: Map<String, User>,
     isOwnerOrHost: Boolean = false,
+    isVoiceUnavailable: Boolean = false,
     onToggleMic: (Int) -> Unit = {},
     onSendMessage: (String) -> Unit,
     onTapUser: (String) -> Unit,
@@ -99,11 +101,16 @@ fun ChatPanel(
     val isSeated = currentSeatEntry != null
     val isSelfMuted = currentSeatEntry?.value?.isMuted ?: false
 
-    // Auto-scroll: with reverseLayout=true, index 0 is the bottom (newest message).
-    // When a new message is inserted at index 0, the previous first visible shifts to
-    // index 1, so use <= 1 to still count that as "at bottom".
+    // Track whether user is near the bottom continuously via snapshotFlow
+    val isNearBottom = remember { mutableStateOf(true) }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex }
+            .collect { index -> isNearBottom.value = index <= 2 }
+    }
+
+    // Auto-scroll when new messages arrive and user is near bottom
     LaunchedEffect(messages.size) {
-        if (listState.firstVisibleItemIndex <= 1) {
+        if (isNearBottom.value) {
             listState.animateScrollToItem(0)
         }
     }
@@ -199,9 +206,11 @@ fun ChatPanel(
                     currentSeatEntry?.key?.toIntOrNull()?.let { onToggleMic(it) }
                 }) {
                     Icon(
-                        imageVector = if (isSelfMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                        contentDescription = if (isSelfMuted) "Unmute" else "Mute",
-                        tint = if (isSelfMuted) MaterialTheme.colorScheme.error else SpeakingGreen
+                        imageVector = if (isVoiceUnavailable || isSelfMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                        contentDescription = if (isVoiceUnavailable) "Voice unavailable" else if (isSelfMuted) "Unmute" else "Mute",
+                        tint = if (isVoiceUnavailable) MaterialTheme.colorScheme.onSurfaceVariant
+                              else if (isSelfMuted) MaterialTheme.colorScheme.error
+                              else SpeakingGreen
                     )
                 }
             }

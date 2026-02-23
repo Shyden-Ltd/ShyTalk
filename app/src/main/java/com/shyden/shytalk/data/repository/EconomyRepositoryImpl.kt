@@ -193,4 +193,22 @@ class EconomyRepositoryImpl(
             @Suppress("UNCHECKED_CAST")
             result.data as Map<String, Any?>
         }
+
+    override suspend fun claimSuperShyTrial(): Resource<Map<String, Any?>> =
+        firebaseCall("Failed to claim trial") {
+            val result = functions.getHttpsCallable("claimSuperShyTrial")
+                .call()
+                .await()
+            @Suppress("UNCHECKED_CAST")
+            result.data as Map<String, Any?>
+        }
+
+    override suspend fun activateSuperShyTrial(): Resource<Map<String, Any?>> =
+        firebaseCall("Failed to activate trial") {
+            val result = functions.getHttpsCallable("activateSuperShyTrial")
+                .call()
+                .await()
+            @Suppress("UNCHECKED_CAST")
+            result.data as Map<String, Any?>
+        }
 }

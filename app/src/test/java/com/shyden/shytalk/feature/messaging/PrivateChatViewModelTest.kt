@@ -3,9 +3,12 @@ package com.shyden.shytalk.feature.messaging
 import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.model.Conversation
 import com.shyden.shytalk.core.model.ConversationSettings
+import com.shyden.shytalk.core.model.GroupPermissions
+import com.shyden.shytalk.core.model.MessageEdit
 import com.shyden.shytalk.core.model.PmPrivacy
 import com.shyden.shytalk.core.model.PrivateMessage
 import com.shyden.shytalk.core.model.PrivateMessageType
+import com.shyden.shytalk.core.model.SystemMessageConfig
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.ModerationFilter
 import com.shyden.shytalk.core.util.Resource
@@ -25,7 +28,10 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.job
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -63,8 +69,8 @@ class PrivateChatViewModelTest {
     private val typingFlow = MutableSharedFlow<Boolean>()
 
     @After
-    fun tearDown() {
-        activeViewModels.forEach { it.viewModelScope.cancel() }
+    fun tearDown() = runBlocking {
+        activeViewModels.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() }
         activeViewModels.clear()
     }
 
@@ -144,7 +150,7 @@ class PrivateChatViewModelTest {
             authRepository = mockk { every { currentUserId } returns null },
             typingRepository = typingRepository,
             reportRepository = reportRepository
-        )
+        ).also { activeViewModels.add(it) }
         advanceUntilIdle()
 
         // Should not have loaded anything
@@ -752,7 +758,7 @@ class PrivateChatViewModelTest {
             typingRepository = typingRepository,
             reportRepository = reportRepository,
             initialConversationId = "group-conv"
-        )
+        ).also { activeViewModels.add(it) }
         advanceUntilIdle()
 
         val state = vm.uiState.value
@@ -924,7 +930,7 @@ class PrivateChatViewModelTest {
             typingRepository = typingRepository,
             reportRepository = reportRepository,
             initialConversationId = "group-conv"
-        )
+        ).also { activeViewModels.add(it) }
         advanceUntilIdle()
 
         vm.updateGroupName("New Name")
@@ -970,7 +976,7 @@ class PrivateChatViewModelTest {
             typingRepository = typingRepository,
             reportRepository = reportRepository,
             initialConversationId = "group-conv"
-        )
+        ).also { activeViewModels.add(it) }
         advanceUntilIdle()
 
         vm.leaveGroup()
@@ -1230,5 +1236,580 @@ class PrivateChatViewModelTest {
 
         // Cancel viewModelScope to prevent coroutines leaking past Dispatchers.resetMain()
         vm.viewModelScope.cancel()
+    }
+
+    // ===== Toggle Mute =====
+
+    @Test
+    fun `toggleMute calls muteConversation with true when currently unmuted`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+        // State starts with isMuted = false
+        vm.toggleMute()
+        advanceUntilIdle()
+        coVerify { pmRepository.muteConversation(conversationId, currentUserId, true) }
+    }
+
+    @Test
+    fun `toggleMute calls muteConversation with false when currently muted`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+        settingsFlow.emit(ConversationSettings(userId = currentUserId, isMuted = true))
+        advanceUntilIdle()
+        vm.toggleMute()
+        advanceUntilIdle()
+        coVerify { pmRepository.muteConversation(conversationId, currentUserId, false) }
+    }
+
+    // ===== Toggle Pin =====
+
+    @Test
+    fun `togglePin calls pinConversation with true when currently unpinned`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.togglePin()
+        advanceUntilIdle()
+        coVerify { pmRepository.pinConversation(conversationId, currentUserId, true) }
+    }
+
+    @Test
+    fun `togglePin calls pinConversation with false when currently pinned`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+        settingsFlow.emit(ConversationSettings(userId = currentUserId, isPinned = true))
+        advanceUntilIdle()
+        vm.togglePin()
+        advanceUntilIdle()
+        coVerify { pmRepository.pinConversation(conversationId, currentUserId, false) }
+    }
+
+    // ===== Hide Conversation =====
+
+    @Test
+    fun `hideConversation calls repository`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.hideConversation()
+        advanceUntilIdle()
+        coVerify { pmRepository.hideConversation(conversationId, currentUserId) }
+    }
+
+    // ===== Recall Message =====
+
+    @Test
+    fun `recallMessage calls repository`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.recallMessage("msg-1")
+        advanceUntilIdle()
+        coVerify { pmRepository.recallMessage(conversationId, "msg-1") }
+    }
+
+    // ===== Mute Group Member =====
+
+    @Test
+    fun `muteGroupMember success reloads mutes`() = runTest {
+        coEvery { pmRepository.muteGroupMember(conversationId, "target-user", any(), any()) } returns Resource.Success(Unit)
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.muteGroupMember("target-user", Constants.MUTE_DURATION_5MIN, "spam")
+        advanceUntilIdle()
+        coVerify { pmRepository.muteGroupMember(conversationId, "target-user", Constants.MUTE_DURATION_5MIN, "spam") }
+    }
+
+    @Test
+    fun `muteGroupMember failure sets error`() = runTest {
+        coEvery { pmRepository.muteGroupMember(conversationId, "target-user", any(), any()) } returns Resource.Error("fail")
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.muteGroupMember("target-user", Constants.MUTE_DURATION_5MIN, null)
+        advanceUntilIdle()
+        assertEquals("Failed to mute member", vm.uiState.value.error)
+    }
+
+    // ===== Unmute Group Member =====
+
+    @Test
+    fun `unmuteGroupMember success reloads mutes`() = runTest {
+        coEvery { pmRepository.unmuteGroupMember(conversationId, "target-user") } returns Resource.Success(Unit)
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.unmuteGroupMember("target-user")
+        advanceUntilIdle()
+        coVerify { pmRepository.unmuteGroupMember(conversationId, "target-user") }
+    }
+
+    @Test
+    fun `unmuteGroupMember failure sets error`() = runTest {
+        coEvery { pmRepository.unmuteGroupMember(conversationId, "target-user") } returns Resource.Error("fail")
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.unmuteGroupMember("target-user")
+        advanceUntilIdle()
+        assertEquals("Failed to unmute member", vm.uiState.value.error)
+    }
+
+    // ===== Hide Message =====
+
+    @Test
+    fun `hideMessage success sends mod action message`() = runTest {
+        coEvery { pmRepository.hideMessage(conversationId, "msg-1", currentUserId) } returns Resource.Success(Unit)
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.hideMessage("msg-1")
+        advanceUntilIdle()
+        coVerify { pmRepository.hideMessage(conversationId, "msg-1", currentUserId) }
+    }
+
+    @Test
+    fun `hideMessage failure sets error`() = runTest {
+        coEvery { pmRepository.hideMessage(conversationId, "msg-1", currentUserId) } returns Resource.Error("fail")
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.hideMessage("msg-1")
+        advanceUntilIdle()
+        assertEquals("Failed to hide message", vm.uiState.value.error)
+    }
+
+    // ===== Transfer Ownership =====
+
+    @Test
+    fun `transferOwnership success reinitializes group`() = runTest {
+        coEvery { pmRepository.transferOwnership(conversationId, "new-owner") } returns Resource.Success(Unit)
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.transferOwnership("new-owner")
+        advanceUntilIdle()
+        coVerify { pmRepository.transferOwnership(conversationId, "new-owner") }
+    }
+
+    @Test
+    fun `transferOwnership failure sets error`() = runTest {
+        coEvery { pmRepository.transferOwnership(conversationId, "new-owner") } returns Resource.Error("fail")
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.transferOwnership("new-owner")
+        advanceUntilIdle()
+        assertEquals("Failed to transfer ownership", vm.uiState.value.error)
+    }
+
+    // ===== Update Group Roles =====
+
+    @Test
+    fun `updateGroupRoles success reinitializes group`() = runTest {
+        coEvery { pmRepository.updateGroupRoles(conversationId, listOf("admin1"), listOf("mod1")) } returns Resource.Success(Unit)
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.updateGroupRoles(listOf("admin1"), listOf("mod1"))
+        advanceUntilIdle()
+        coVerify { pmRepository.updateGroupRoles(conversationId, listOf("admin1"), listOf("mod1")) }
+    }
+
+    @Test
+    fun `updateGroupRoles failure sets error`() = runTest {
+        coEvery { pmRepository.updateGroupRoles(conversationId, any(), any()) } returns Resource.Error("fail")
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.updateGroupRoles(listOf("a"), listOf("m"))
+        advanceUntilIdle()
+        assertEquals("Failed to update roles", vm.uiState.value.error)
+    }
+
+    // ===== Send Room Invite =====
+
+    @Test
+    fun `sendRoomInvite calls repository`() = runTest {
+        coEvery { pmRepository.sendRoomInviteMessage(any(), any(), any(), any(), any()) } returns Resource.Success(Unit)
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.sendRoomInvite("room-1", "Cool Room")
+        advanceUntilIdle()
+        coVerify { pmRepository.sendRoomInviteMessage(conversationId, currentUserId, any(), "room-1", "Cool Room") }
+    }
+
+    @Test
+    fun `sendRoomInvite failure sets error`() = runTest {
+        coEvery { pmRepository.sendRoomInviteMessage(any(), any(), any(), any(), any()) } returns Resource.Error("fail")
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.sendRoomInvite("room-1", "Room")
+        advanceUntilIdle()
+        assertEquals("Failed to send room invite", vm.uiState.value.error)
+    }
+
+    // ===== Leave Group =====
+
+    @Test
+    fun `leaveGroup as non-admin calls removeGroupParticipant`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+        // Default state has isAdmin = false
+        vm.leaveGroup()
+        advanceUntilIdle()
+        coVerify { pmRepository.removeGroupParticipant(conversationId, currentUserId) }
+    }
+
+    // ===== Update Group Permissions =====
+
+    @Test
+    fun `updateGroupPermissions calls repository`() = runTest {
+        val perms = GroupPermissions()
+        coEvery { pmRepository.updateGroupPermissions(conversationId, perms) } returns Resource.Success(Unit)
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.updateGroupPermissions(perms)
+        advanceUntilIdle()
+        coVerify { pmRepository.updateGroupPermissions(conversationId, perms) }
+    }
+
+    // ===== Update Group Description =====
+
+    @Test
+    fun `updateGroupDescription calls repository`() = runTest {
+        coEvery { pmRepository.updateGroupDescription(conversationId, "New desc") } returns Resource.Success(Unit)
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.updateGroupDescription("New desc")
+        advanceUntilIdle()
+        coVerify { pmRepository.updateGroupDescription(conversationId, "New desc") }
+    }
+
+    // ===== Update Group Photo =====
+
+    @Test
+    fun `updateGroupPhoto calls repository`() = runTest {
+        coEvery { pmRepository.updateGroupPhoto(conversationId, "https://photo.url") } returns Resource.Success(Unit)
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.updateGroupPhoto("https://photo.url")
+        advanceUntilIdle()
+        coVerify { pmRepository.updateGroupPhoto(conversationId, "https://photo.url") }
+    }
+
+    // ===== Update System Message Config =====
+
+    @Test
+    fun `updateSystemMessageConfig calls repository`() = runTest {
+        val config = SystemMessageConfig()
+        coEvery { pmRepository.updateSystemMessageConfig(conversationId, config) } returns Resource.Success(Unit)
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.updateSystemMessageConfig(config)
+        advanceUntilIdle()
+        coVerify { pmRepository.updateSystemMessageConfig(conversationId, config) }
+    }
+
+    // ===== Update Mod Notify Mode =====
+
+    @Test
+    fun `updateModNotifyMode calls repository`() = runTest {
+        coEvery { pmRepository.updateModNotifyMode(conversationId, "ALL_ADMINS") } returns Resource.Success(Unit)
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.updateModNotifyMode("ALL_ADMINS")
+        advanceUntilIdle()
+        coVerify { pmRepository.updateModNotifyMode(conversationId, "ALL_ADMINS") }
+    }
+
+    // ===== Add/Remove Group Participant =====
+
+    @Test
+    fun `addGroupParticipant calls repository`() = runTest {
+        coEvery { pmRepository.addGroupParticipant(conversationId, "new-user") } returns Resource.Success(Unit)
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.addGroupParticipant("new-user")
+        advanceUntilIdle()
+        coVerify { pmRepository.addGroupParticipant(conversationId, "new-user") }
+    }
+
+    @Test
+    fun `removeGroupParticipant calls repository`() = runTest {
+        coEvery { pmRepository.removeGroupParticipant(conversationId, "target-user") } returns Resource.Success(Unit)
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.removeGroupParticipant("target-user")
+        advanceUntilIdle()
+        coVerify { pmRepository.removeGroupParticipant(conversationId, "target-user") }
+    }
+
+    @Test
+    fun `updateGroupName calls repository`() = runTest {
+        coEvery { pmRepository.updateGroupName(conversationId, "New Name") } returns Resource.Success(Unit)
+        val vm = createViewModel()
+        advanceUntilIdle()
+        vm.updateGroupName("New Name")
+        advanceUntilIdle()
+        coVerify { pmRepository.updateGroupName(conversationId, "New Name") }
+    }
+
+    // ===== markMessagesAsRead =====
+
+    @Test
+    fun `markMessagesAsRead calls repo when last message from other user is unread`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val otherMsg = TestData.createTestPrivateMessage(
+            messageId = "msg-other",
+            senderId = otherUserId,
+            readBy = emptyList()
+        )
+        messagesFlow.emit(listOf(otherMsg))
+        advanceUntilIdle()
+
+        vm.markMessagesAsRead()
+        advanceUntilIdle()
+
+        coVerify { pmRepository.markAsRead(conversationId, currentUserId, "msg-other") }
+    }
+
+    @Test
+    fun `markMessagesAsRead does not call repo when no messages from other user`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val myMsg = TestData.createTestPrivateMessage(
+            messageId = "msg-mine",
+            senderId = currentUserId
+        )
+        messagesFlow.emit(listOf(myMsg))
+        advanceUntilIdle()
+
+        vm.markMessagesAsRead()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { pmRepository.markAsRead(any(), any(), any()) }
+    }
+
+    @Test
+    fun `markMessagesAsRead does not call repo when already read`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val otherMsg = TestData.createTestPrivateMessage(
+            messageId = "msg-other",
+            senderId = otherUserId,
+            readBy = listOf(currentUserId)
+        )
+        messagesFlow.emit(listOf(otherMsg))
+        advanceUntilIdle()
+
+        vm.markMessagesAsRead()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { pmRepository.markAsRead(any(), any(), any()) }
+    }
+
+    // ===== refreshMessages =====
+
+    @Test
+    fun `refreshMessages sets isRefreshing and re-subscribes`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.refreshMessages()
+        // isRefreshing should be set immediately
+        assertTrue(vm.uiState.value.isRefreshing)
+
+        advanceUntilIdle()
+
+        // After delay completes, isRefreshing should be cleared
+        assertFalse(vm.uiState.value.isRefreshing)
+    }
+
+    // ===== getEditHistory =====
+
+    @Test
+    fun `getEditHistory returns edit history from repository`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val edits = listOf(
+            MessageEdit(editId = "e1", previousText = "old text", editedAt = 1000L),
+            MessageEdit(editId = "e2", previousText = "older text", editedAt = 500L)
+        )
+        coEvery { pmRepository.getEditHistory(conversationId, "msg-1") } returns Resource.Success(edits)
+
+        val result = vm.getEditHistory("msg-1")
+
+        assertEquals(2, result.size)
+        assertEquals("old text", result[0].previousText)
+        coVerify { pmRepository.getEditHistory(conversationId, "msg-1") }
+    }
+
+    @Test
+    fun `getEditHistory returns empty list on error`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        coEvery { pmRepository.getEditHistory(conversationId, "msg-1") } returns Resource.Error("not found")
+
+        val result = vm.getEditHistory("msg-1")
+
+        assertTrue(result.isEmpty())
+    }
+
+    // ===== deleteSticker =====
+
+    @Test
+    fun `deleteSticker calls stickerStorage removeSticker and refreshes list`() = runTest {
+        every { stickerStorage.getStickers() } returns emptyList()
+
+        val vm = createViewModelWithStickerStorage()
+        advanceUntilIdle()
+
+        vm.deleteSticker("s1")
+
+        verify { stickerStorage.removeSticker("s1") }
+        verify { stickerStorage.getStickers() }
+    }
+
+    @Test
+    fun `deleteSticker does nothing without stickerStorage`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.deleteSticker("s1")
+
+        verify(exactly = 0) { stickerStorage.removeSticker(any()) }
+    }
+
+    // ===== moveStickerToFront =====
+
+    @Test
+    fun `moveStickerToFront calls stickerStorage moveSticker and refreshes list`() = runTest {
+        every { stickerStorage.getStickers() } returns emptyList()
+
+        val vm = createViewModelWithStickerStorage()
+        advanceUntilIdle()
+
+        vm.moveStickerToFront("s1")
+
+        verify { stickerStorage.moveSticker("s1", 0) }
+        verify { stickerStorage.getStickers() }
+    }
+
+    @Test
+    fun `moveStickerToFront does nothing without stickerStorage`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.moveStickerToFront("s1")
+
+        verify(exactly = 0) { stickerStorage.moveSticker(any(), any()) }
+    }
+
+    // ===== submitEdit error =====
+
+    @Test
+    fun `submitEdit error sets error state`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val msg = TestData.createTestPrivateMessage(
+            messageId = "msg-edit-err",
+            senderId = currentUserId,
+            createdAt = System.currentTimeMillis()
+        )
+        vm.startEditing(msg)
+
+        coEvery { pmRepository.editMessage(any(), any(), any()) } returns Resource.Error("edit failed")
+        vm.submitEdit("Updated text")
+        advanceUntilIdle()
+
+        assertEquals("Failed to edit message", vm.uiState.value.error)
+        assertNull(vm.uiState.value.editingMessageId)
+    }
+
+    @Test
+    fun `submitEdit success clears editing state`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val msg = TestData.createTestPrivateMessage(
+            messageId = "msg-edit-ok",
+            senderId = currentUserId,
+            createdAt = System.currentTimeMillis()
+        )
+        vm.startEditing(msg)
+        assertEquals("msg-edit-ok", vm.uiState.value.editingMessageId)
+
+        coEvery { pmRepository.editMessage(any(), any(), any()) } returns Resource.Success(Unit)
+        vm.submitEdit("New text")
+        advanceUntilIdle()
+
+        assertNull(vm.uiState.value.editingMessageId)
+        assertEquals("", vm.uiState.value.editingOriginalText)
+        assertNull(vm.uiState.value.error)
+    }
+
+    @Test
+    fun `submitEdit rejects empty text`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val msg = TestData.createTestPrivateMessage(
+            messageId = "msg-edit-empty",
+            senderId = currentUserId,
+            createdAt = System.currentTimeMillis()
+        )
+        vm.startEditing(msg)
+
+        vm.submitEdit("   ")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { pmRepository.editMessage(any(), any(), any()) }
+    }
+
+    // ===== Delete / Recall removes message from live list =====
+
+    @Test
+    fun `recallMessage success removes message via flow update`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val msg1 = TestData.createTestPrivateMessage(messageId = "m1", createdAt = 1_000L)
+        val msg2 = TestData.createTestPrivateMessage(messageId = "m2", createdAt = 2_000L)
+        messagesFlow.emit(listOf(msg1, msg2))
+        advanceUntilIdle()
+        assertEquals(2, vm.uiState.value.messages.size)
+
+        coEvery { pmRepository.recallMessage(any(), any()) } returns Resource.Success(Unit)
+        vm.recallMessage("m1")
+        advanceUntilIdle()
+
+        coVerify { pmRepository.recallMessage(conversationId, "m1") }
+        // Simulate Firestore removing the message from the live flow
+        messagesFlow.emit(listOf(msg2))
+        advanceUntilIdle()
+
+        assertEquals(1, vm.uiState.value.messages.size)
+        assertEquals("m2", vm.uiState.value.messages[0].messageId)
+    }
+
+    // ===== Typing indicator =====
+
+    @Test
+    fun `onTextChanged sends typing indicator with correct params`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.onTextChanged()
+
+        verify { typingRepository.setTyping(conversationId, currentUserId, true) }
+    }
+
+    // ===== Empty message not sent =====
+
+    @Test
+    fun `sendMessage with whitespace-only text does not send`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.sendMessage("   \t  ")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { pmRepository.sendTextMessage(any(), any(), any(), any(), any(), any(), any()) }
     }
 }

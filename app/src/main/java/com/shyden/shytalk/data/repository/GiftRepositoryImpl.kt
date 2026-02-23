@@ -19,6 +19,24 @@ class GiftRepositoryImpl(
 
     override fun observeGiftCatalog(): Flow<List<Gift>> = callbackFlow {
         val listener = firestore.collection("gifts")
+            .whereEqualTo("showInStore", true)
+            .orderBy("order")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                val gifts = snapshot?.documents?.mapNotNull { doc ->
+                    val data = doc.data ?: return@mapNotNull null
+                    Gift.fromMap(data, doc.id)
+                } ?: emptyList()
+                trySend(gifts)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    override fun observeAllGifts(): Flow<List<Gift>> = callbackFlow {
+        val listener = firestore.collection("gifts")
             .orderBy("order")
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {

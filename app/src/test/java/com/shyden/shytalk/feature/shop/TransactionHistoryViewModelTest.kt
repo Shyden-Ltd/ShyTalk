@@ -1,5 +1,6 @@
 package com.shyden.shytalk.feature.shop
 
+import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.model.TransactionType
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.EconomyRepository
@@ -9,8 +10,12 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.job
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -25,6 +30,7 @@ class TransactionHistoryViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val economyRepository = mockk<EconomyRepository>(relaxed = true)
+    private val activeViewModels = mutableListOf<TransactionHistoryViewModel>()
 
     private val sampleTransactions = listOf(
         TestData.createTestTransaction(id = "tx-1", type = TransactionType.PURCHASE, timestamp = 3000),
@@ -35,8 +41,14 @@ class TransactionHistoryViewModelTest {
         TestData.createTestTransaction(id = "tx-6", type = TransactionType.BEAN_REDEEM, timestamp = 300)
     )
 
+    @After
+    fun tearDown() = runBlocking {
+        activeViewModels.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() }
+        activeViewModels.clear()
+    }
+
     private fun createViewModel(): TransactionHistoryViewModel {
-        return TransactionHistoryViewModel(economyRepository)
+        return TransactionHistoryViewModel(economyRepository).also { activeViewModels.add(it) }
     }
 
     @Test
@@ -157,6 +169,41 @@ class TransactionHistoryViewModelTest {
 
         assertNull(vm.uiState.value.selectedFilter)
         assertEquals(6, vm.uiState.value.transactions.size)
+    }
+
+    // ===== Empty transaction list state =====
+
+    @Test
+    fun `empty transaction list shows empty state without error`() = runTest {
+        coEvery { economyRepository.getAllTransactions(null) } returns Resource.Success(emptyList())
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertTrue(state.transactions.isEmpty())
+        assertFalse(state.isLoading)
+        assertNull(state.error)
+    }
+
+    // ===== Transactions sorted by date =====
+
+    @Test
+    fun `transactions preserve server order most recent first`() = runTest {
+        val transactions = listOf(
+            TestData.createTestTransaction(id = "tx-new", type = TransactionType.PURCHASE, timestamp = 5000),
+            TestData.createTestTransaction(id = "tx-mid", type = TransactionType.DAILY_REWARD, timestamp = 3000),
+            TestData.createTestTransaction(id = "tx-old", type = TransactionType.GACHA_PULL, timestamp = 1000)
+        )
+        coEvery { economyRepository.getAllTransactions(null) } returns Resource.Success(transactions)
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val ids = vm.uiState.value.transactions.map { it.id }
+        assertEquals(listOf("tx-new", "tx-mid", "tx-old"), ids)
+        assertTrue(vm.uiState.value.transactions[0].timestamp > vm.uiState.value.transactions[1].timestamp)
+        assertTrue(vm.uiState.value.transactions[1].timestamp > vm.uiState.value.transactions[2].timestamp)
     }
 
     @Test

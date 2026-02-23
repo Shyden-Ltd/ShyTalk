@@ -8,7 +8,9 @@ data class Gift(
     val soundUrl: String = "",
     val iconUrl: String = "",
     val order: Int = 0,
-    val expiresAfterDays: Int? = null
+    val expiresAfterDays: Int? = null,
+    val showInStore: Boolean = true,
+    val showOnWheel: Boolean = true
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
         "name" to name,
@@ -17,10 +19,22 @@ data class Gift(
         "soundUrl" to soundUrl,
         "iconUrl" to iconUrl,
         "order" to order,
-        "expiresAfterDays" to expiresAfterDays
+        "expiresAfterDays" to expiresAfterDays,
+        "showInStore" to showInStore,
+        "showOnWheel" to showOnWheel
     )
 
     companion object {
+        val SUPER_SHY_TRIAL = Gift(
+            id = "super_shy_trial",
+            name = "Super Shy Trial",
+            coinValue = 0,
+            iconUrl = "",
+            order = -1,
+            showInStore = false,
+            showOnWheel = false
+        )
+
         fun fromMap(map: Map<String, Any?>, id: String): Gift = Gift(
             id = id,
             name = map["name"] as? String ?: "",
@@ -29,7 +43,9 @@ data class Gift(
             soundUrl = map["soundUrl"] as? String ?: "",
             iconUrl = map["iconUrl"] as? String ?: "",
             order = (map["order"] as? Long)?.toInt() ?: 0,
-            expiresAfterDays = (map["expiresAfterDays"] as? Long)?.toInt()
+            expiresAfterDays = (map["expiresAfterDays"] as? Long)?.toInt(),
+            showInStore = map["showInStore"] as? Boolean ?: true,
+            showOnWheel = map["showOnWheel"] as? Boolean ?: true
         )
     }
 }

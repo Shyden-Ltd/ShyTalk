@@ -52,7 +52,8 @@ object TestData {
         suspensionEndDate: Long? = null,
         suspensionCanAppeal: Boolean = false,
         suspendedBy: String? = null,
-        suspensionAppealStatus: String? = null
+        suspensionAppealStatus: String? = null,
+        isSuperShy: Boolean = false
     ) = User(
         uid = uid,
         displayName = displayName,
@@ -76,7 +77,8 @@ object TestData {
         suspensionEndDate = suspensionEndDate,
         suspensionCanAppeal = suspensionCanAppeal,
         suspendedBy = suspendedBy,
-        suspensionAppealStatus = suspensionAppealStatus
+        suspensionAppealStatus = suspensionAppealStatus,
+        isSuperShy = isSuperShy
     )
 
     fun createTestProfileVisitor(

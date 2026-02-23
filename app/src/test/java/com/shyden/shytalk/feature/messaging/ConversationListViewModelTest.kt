@@ -1,5 +1,6 @@
 package com.shyden.shytalk.feature.messaging
 
+import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.model.ConversationSettings
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.AuthRepository
@@ -12,10 +13,14 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.job
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -37,6 +42,8 @@ class ConversationListViewModelTest {
     private val currentUserId = "current-user"
     private val conversationsFlow = MutableSharedFlow<List<com.shyden.shytalk.core.model.Conversation>>()
 
+    private val activeViewModels = mutableListOf<ConversationListViewModel>()
+
     @Before
     fun setup() {
         every { authRepository.currentUserId } returns currentUserId
@@ -48,12 +55,18 @@ class ConversationListViewModelTest {
         every { pmRepository.getConversations(currentUserId) } returns conversationsFlow
     }
 
+    @After
+    fun tearDown() = runBlocking {
+        activeViewModels.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() }
+        activeViewModels.clear()
+    }
+
     private fun createViewModel(): ConversationListViewModel {
         return ConversationListViewModel(
             pmRepository = pmRepository,
             userRepository = userRepository,
             authRepository = authRepository
-        )
+        ).also { activeViewModels.add(it) }
     }
 
     // ===== Init =====
@@ -75,7 +88,7 @@ class ConversationListViewModelTest {
             pmRepository = pmRepository,
             userRepository = userRepository,
             authRepository = mockk { every { currentUserId } returns null }
-        )
+        ).also { activeViewModels.add(it) }
         advanceUntilIdle()
 
         assertEquals("", vm.currentUserId)
@@ -117,7 +130,7 @@ class ConversationListViewModelTest {
             pmRepository = pmRepository,
             userRepository = userRepository,
             authRepository = authRepository
-        )
+        ).also { activeViewModels.add(it) }
         advanceUntilIdle()
 
         assertFalse(vm.uiState.value.isLoading)
@@ -452,6 +465,164 @@ class ConversationListViewModelTest {
         assertTrue(filtered[0].isGroup)
     }
 
+    // ===== Mark Conversation Read =====
+
+    @Test
+    fun `markConversationRead sets unread count to zero`() = runTest {
+        val otherUser = TestData.createTestUser(uid = "other-user", displayName = "Other")
+        coEvery { userRepository.getUsers(listOf("other-user")) } returns Resource.Success(listOf(otherUser))
+
+        val settings = TestData.createTestConversationSettings(userId = currentUserId, unreadCount = 5)
+        coEvery { pmRepository.getConversationSettings("conv-1", currentUserId) } returns Resource.Success(settings)
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val conv = TestData.createTestConversation(
+            conversationId = "conv-1",
+            participantIds = listOf(currentUserId, "other-user")
+        )
+        conversationsFlow.emit(listOf(conv))
+        advanceUntilIdle()
+
+        assertEquals(5L, vm.uiState.value.conversations[0].settings?.unreadCount)
+
+        vm.markConversationRead("conv-1")
+
+        val cw = vm.uiState.value.conversations.find { it.conversation.conversationId == "conv-1" }
+        assertEquals(0L, cw?.settings?.unreadCount)
+    }
+
+    @Test
+    fun `markConversationRead updates totalUnreadCount`() = runTest {
+        val user1 = TestData.createTestUser(uid = "user-a")
+        val user2 = TestData.createTestUser(uid = "user-b")
+        coEvery { userRepository.getUsers(any()) } returns Resource.Success(listOf(user1, user2))
+
+        val settings1 = TestData.createTestConversationSettings(userId = currentUserId, unreadCount = 5)
+        val settings2 = TestData.createTestConversationSettings(userId = currentUserId, unreadCount = 3)
+
+        coEvery { pmRepository.getConversationSettings("conv-1", currentUserId) } returns Resource.Success(settings1)
+        coEvery { pmRepository.getConversationSettings("conv-2", currentUserId) } returns Resource.Success(settings2)
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val conv1 = TestData.createTestConversation(
+            conversationId = "conv-1",
+            participantIds = listOf(currentUserId, "user-a")
+        )
+        val conv2 = TestData.createTestConversation(
+            conversationId = "conv-2",
+            participantIds = listOf(currentUserId, "user-b")
+        )
+        conversationsFlow.emit(listOf(conv1, conv2))
+        advanceUntilIdle()
+
+        assertEquals(8L, vm.uiState.value.totalUnreadCount)
+
+        vm.markConversationRead("conv-1")
+
+        assertEquals(3L, vm.uiState.value.totalUnreadCount)
+    }
+
+    // ===== Muted conversations in list but marked =====
+
+    @Test
+    fun `muted conversations appear in list with isMuted flag`() = runTest {
+        val user1 = TestData.createTestUser(uid = "user-a")
+        val user2 = TestData.createTestUser(uid = "user-b")
+        coEvery { userRepository.getUsers(any()) } returns Resource.Success(listOf(user1, user2))
+
+        val mutedSettings = TestData.createTestConversationSettings(userId = currentUserId, isMuted = true)
+        val normalSettings = TestData.createTestConversationSettings(userId = currentUserId, isMuted = false)
+
+        coEvery { pmRepository.getConversationSettings("conv-muted", currentUserId) } returns Resource.Success(mutedSettings)
+        coEvery { pmRepository.getConversationSettings("conv-normal", currentUserId) } returns Resource.Success(normalSettings)
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val convMuted = TestData.createTestConversation(
+            conversationId = "conv-muted",
+            participantIds = listOf(currentUserId, "user-a")
+        )
+        val convNormal = TestData.createTestConversation(
+            conversationId = "conv-normal",
+            participantIds = listOf(currentUserId, "user-b")
+        )
+        conversationsFlow.emit(listOf(convMuted, convNormal))
+        advanceUntilIdle()
+
+        assertEquals(2, vm.uiState.value.conversations.size)
+        val muted = vm.uiState.value.conversations.find { it.conversation.conversationId == "conv-muted" }
+        val normal = vm.uiState.value.conversations.find { it.conversation.conversationId == "conv-normal" }
+        assertTrue(muted?.settings?.isMuted == true)
+        assertFalse(normal?.settings?.isMuted == true)
+    }
+
+    // ===== Empty conversations list =====
+
+    @Test
+    fun `empty conversations list results in empty state`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        conversationsFlow.emit(emptyList())
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.isLoading)
+        assertTrue(vm.uiState.value.conversations.isEmpty())
+        assertEquals(0L, vm.uiState.value.totalUnreadCount)
+        assertNull(vm.uiState.value.error)
+    }
+
+    // ===== Multiple pinned conversations sort before unpinned =====
+
+    @Test
+    fun `multiple pinned conversations all appear before unpinned`() = runTest {
+        val user1 = TestData.createTestUser(uid = "user-a")
+        val user2 = TestData.createTestUser(uid = "user-b")
+        val user3 = TestData.createTestUser(uid = "user-c")
+        coEvery { userRepository.getUsers(any()) } returns Resource.Success(listOf(user1, user2, user3))
+
+        val pinnedSettings = TestData.createTestConversationSettings(userId = currentUserId, isPinned = true)
+        val normalSettings = TestData.createTestConversationSettings(userId = currentUserId, isPinned = false)
+
+        coEvery { pmRepository.getConversationSettings("conv-pinned-1", currentUserId) } returns Resource.Success(pinnedSettings)
+        coEvery { pmRepository.getConversationSettings("conv-pinned-2", currentUserId) } returns Resource.Success(pinnedSettings)
+        coEvery { pmRepository.getConversationSettings("conv-normal", currentUserId) } returns Resource.Success(normalSettings)
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val convNormal = TestData.createTestConversation(
+            conversationId = "conv-normal",
+            participantIds = listOf(currentUserId, "user-a"),
+            lastMessageAt = 3_000_000_000L // most recent but not pinned
+        )
+        val convPinned1 = TestData.createTestConversation(
+            conversationId = "conv-pinned-1",
+            participantIds = listOf(currentUserId, "user-b"),
+            lastMessageAt = 1_000_000_000L
+        )
+        val convPinned2 = TestData.createTestConversation(
+            conversationId = "conv-pinned-2",
+            participantIds = listOf(currentUserId, "user-c"),
+            lastMessageAt = 2_000_000_000L
+        )
+        conversationsFlow.emit(listOf(convNormal, convPinned1, convPinned2))
+        advanceUntilIdle()
+
+        val ids = vm.uiState.value.conversations.map { it.conversation.conversationId }
+        assertEquals(3, ids.size)
+        // Both pinned conversations should appear before the normal one
+        assertTrue(ids.indexOf("conv-pinned-1") < ids.indexOf("conv-normal"))
+        assertTrue(ids.indexOf("conv-pinned-2") < ids.indexOf("conv-normal"))
+        // Among pinned, more recent lastMessageAt should come first
+        assertTrue(ids.indexOf("conv-pinned-2") < ids.indexOf("conv-pinned-1"))
+    }
+
     // ===== clearError =====
 
     @Test
@@ -464,7 +635,7 @@ class ConversationListViewModelTest {
             pmRepository = pmRepository,
             userRepository = userRepository,
             authRepository = authRepository
-        )
+        ).also { activeViewModels.add(it) }
         advanceUntilIdle()
         assertEquals("error", vm.uiState.value.error)
 

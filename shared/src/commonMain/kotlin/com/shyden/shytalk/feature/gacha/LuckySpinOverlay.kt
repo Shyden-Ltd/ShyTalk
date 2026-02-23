@@ -287,7 +287,7 @@ fun LuckySpinOverlay(
             }
 
             for (step in 0..totalSteps) {
-                if (step < sweepPhase) {
+                if (step < sweepPhase || uniqueWins.isEmpty()) {
                     outerLitIndex = if (outerGifts.isNotEmpty()) step % outerGifts.size else -1
                     innerLitIndex = if (innerGifts.isNotEmpty()) (innerGifts.size - (step % innerGifts.size)) % innerGifts.size else -1
                     GachaSoundPlayer.playTick(step.toFloat() / totalSteps)

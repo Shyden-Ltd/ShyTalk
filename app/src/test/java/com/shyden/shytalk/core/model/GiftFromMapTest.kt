@@ -131,4 +131,38 @@ class GiftFromMapTest {
 
         assertNull(map["expiresAfterDays"])
     }
+
+    @Test
+    fun `fromMap parses showOnWheel true`() {
+        val map = mapOf<String, Any?>("name" to "Rose", "showOnWheel" to true)
+        val gift = Gift.fromMap(map, "rose")
+        assertEquals(true, gift.showOnWheel)
+    }
+
+    @Test
+    fun `fromMap parses showOnWheel false`() {
+        val map = mapOf<String, Any?>("name" to "Rose", "showOnWheel" to false)
+        val gift = Gift.fromMap(map, "rose")
+        assertEquals(false, gift.showOnWheel)
+    }
+
+    @Test
+    fun `fromMap defaults showOnWheel to true when missing`() {
+        val gift = Gift.fromMap(emptyMap(), "test")
+        assertEquals(true, gift.showOnWheel)
+    }
+
+    @Test
+    fun `toMap includes showOnWheel`() {
+        val gift = Gift(id = "rose", name = "Rose", showOnWheel = false)
+        val map = gift.toMap()
+        assertEquals(false, map["showOnWheel"])
+    }
+
+    @Test
+    fun `toMap defaults showOnWheel to true`() {
+        val gift = Gift(id = "rose", name = "Rose")
+        val map = gift.toMap()
+        assertEquals(true, map["showOnWheel"])
+    }
 }

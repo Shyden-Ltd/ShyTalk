@@ -155,4 +155,77 @@ class GiftRepositoryImplTest {
 
         assertTrue(ranking.isEmpty())
     }
+
+    @Test
+    fun `getGiftWallSenders handles non-Long sender counts`() = runTest {
+        mockGiftWallDoc("user-1", "gift-1", true, mapOf(
+            "senders" to mapOf("alice" to 5L, "bob" to "not a number", "charlie" to null)
+        ))
+
+        val senders = repo.getGiftWallSenders("user-1", "gift-1")
+
+        assertEquals(1, senders.size)
+        assertEquals("alice", senders[0].userId)
+        assertEquals(5, senders[0].count)
+    }
+
+    @Test
+    fun `getGiftWallSenders handles empty senders map`() = runTest {
+        mockGiftWallDoc("user-1", "gift-1", true, mapOf(
+            "senders" to emptyMap<String, Any>()
+        ))
+
+        val senders = repo.getGiftWallSenders("user-1", "gift-1")
+
+        assertTrue(senders.isEmpty())
+    }
+
+    @Test
+    fun `getGiftRanking skips entries with missing userId`() = runTest {
+        mockRankingDoc("gift-1", true, mapOf(
+            "rankings" to listOf(
+                mapOf("userId" to "u1", "count" to 100L, "displayName" to "User 1"),
+                mapOf("count" to 50L, "displayName" to "Missing UID"),
+                mapOf("userId" to null, "count" to 30L)
+            )
+        ))
+
+        val ranking = repo.getGiftRanking("gift-1")
+
+        assertEquals(1, ranking.size)
+        assertEquals("u1", ranking[0].userId)
+    }
+
+    @Test
+    fun `getGiftRanking handles entries with missing optional fields`() = runTest {
+        mockRankingDoc("gift-1", true, mapOf(
+            "rankings" to listOf(
+                mapOf("userId" to "u1")
+            )
+        ))
+
+        val ranking = repo.getGiftRanking("gift-1")
+
+        assertEquals(1, ranking.size)
+        assertEquals("u1", ranking[0].userId)
+        assertEquals(0, ranking[0].count)
+        assertEquals("", ranking[0].displayName)
+        assertEquals(null, ranking[0].profilePhotoUrl)
+    }
+
+    @Test
+    fun `getGiftRanking skips non-map entries in rankings list`() = runTest {
+        mockRankingDoc("gift-1", true, mapOf(
+            "rankings" to listOf(
+                "not a map",
+                42L,
+                mapOf("userId" to "u1", "count" to 10L)
+            )
+        ))
+
+        val ranking = repo.getGiftRanking("gift-1")
+
+        assertEquals(1, ranking.size)
+        assertEquals("u1", ranking[0].userId)
+    }
 }

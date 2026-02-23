@@ -118,7 +118,7 @@ val appModule = module {
     viewModel { ProfileViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { RequiredDOBViewModel(get(), get()) }
     viewModel { params -> FollowListViewModel(params[0], params[1], get(), get()) }
-    viewModel { params -> RoomViewModel(params[0], get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    viewModel { params -> RoomViewModel(params[0], get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { AppSettingsViewModel(get(), get(), get()) }
     viewModel { RoomSettingsViewModel(get(), get(), get(), get()) }
     viewModel { ConversationListViewModel(get(), get(), get()) }

@@ -1,5 +1,6 @@
 package com.shyden.shytalk.feature.shop
 
+import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.model.CoinPackage
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Resource
@@ -11,8 +12,12 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.job
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -31,6 +36,8 @@ class WalletViewModelTest {
     private val economyRepository = mockk<EconomyRepository>(relaxed = true)
     private val userRepository = mockk<UserRepository>(relaxed = true)
     private val authRepository = mockk<AuthRepository>(relaxed = true)
+
+    private val activeViewModels = mutableListOf<WalletViewModel>()
 
     private val samplePackages = listOf(
         CoinPackage(id = "p1", productId = "coins_100", coins = 100, bonusCoins = 0, displayPrice = "$0.99"),
@@ -54,8 +61,14 @@ class WalletViewModelTest {
         coEvery { userRepository.getUser("u1") } returns Resource.Success(sampleUser)
     }
 
+    @After
+    fun tearDown() = runBlocking {
+        activeViewModels.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() }
+        activeViewModels.clear()
+    }
+
     private fun createViewModel(): WalletViewModel {
-        return WalletViewModel(economyRepository, userRepository, authRepository)
+        return WalletViewModel(economyRepository, userRepository, authRepository).also { activeViewModels.add(it) }
     }
 
     @Test
@@ -248,6 +261,69 @@ class WalletViewModelTest {
         advanceUntilIdle()
 
         assertEquals("Payment failed", vm.uiState.value.error)
+        assertFalse(vm.uiState.value.isPurchasing)
+    }
+
+    // ===== Coin packages order preserved =====
+
+    @Test
+    fun `coin packages preserve order from repository`() = runTest {
+        val packages = listOf(
+            CoinPackage(id = "p3", productId = "coins_1000", coins = 1000, bonusCoins = 100, displayPrice = "$9.99", order = 3),
+            CoinPackage(id = "p1", productId = "coins_100", coins = 100, bonusCoins = 0, displayPrice = "$0.99", order = 1),
+            CoinPackage(id = "p2", productId = "coins_500", coins = 500, bonusCoins = 50, displayPrice = "$4.99", order = 2)
+        )
+        coEvery { economyRepository.getCoinPackages() } returns Resource.Success(packages)
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val ids = vm.uiState.value.coinPackages.map { it.id }
+        assertEquals(listOf("p3", "p1", "p2"), ids)
+    }
+
+    // ===== Purchase success updates balance =====
+
+    @Test
+    fun `onPurchaseCompleted success reloads user balance`() = runTest {
+        coEvery {
+            economyRepository.purchaseCoins("coins_100", "token123")
+        } returns Resource.Success(emptyMap())
+
+        // After purchase, loadData will re-fetch user with updated balance
+        val updatedUser = sampleUser.copy(shyCoins = 350)
+        coEvery { userRepository.getUser("u1") } returnsMany listOf(
+            Resource.Success(sampleUser),
+            Resource.Success(updatedUser)
+        )
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        assertEquals(250L, vm.uiState.value.coinBalance)
+
+        vm.onPurchaseCompleted("coins_100", "token123", isSubscription = false)
+        advanceUntilIdle()
+
+        assertEquals(350L, vm.uiState.value.coinBalance)
+        assertEquals("Purchase successful!", vm.uiState.value.successMessage)
+    }
+
+    // ===== Purchase error shows error message =====
+
+    @Test
+    fun `onPurchaseCompleted coin purchase failure shows error and clears purchasing`() = runTest {
+        coEvery {
+            economyRepository.purchaseCoins("coins_100", "bad")
+        } returns Resource.Error("Insufficient funds")
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.onPurchaseCompleted("coins_100", "bad", isSubscription = false)
+        advanceUntilIdle()
+
+        assertEquals("Insufficient funds", vm.uiState.value.error)
         assertFalse(vm.uiState.value.isPurchasing)
     }
 

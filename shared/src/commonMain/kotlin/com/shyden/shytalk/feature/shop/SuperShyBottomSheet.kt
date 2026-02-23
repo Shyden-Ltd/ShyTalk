@@ -39,9 +39,13 @@ import com.shyden.shytalk.core.ui.SuperShyGold
 @Composable
 fun SuperShyBottomSheet(
     user: User,
-    onPurchase: (String) -> Unit,
+    onPurchase: (String) -> Unit = {},
+    onTestPurchase: ((String) -> Unit)? = null,
+    onClaimTrial: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
+    val effectivePurchase: (String) -> Unit = onTestPurchase ?: onPurchase
+
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -50,6 +54,25 @@ fun SuperShyBottomSheet(
                 .padding(bottom = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Testing mode banner
+            if (onTestPurchase != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFFFFF3E0)
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        "Testing mode \u2014 no real money is charged. Tap a plan to instantly activate Super Shy.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFE65100),
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
             // Header
             Icon(
                 Icons.Filled.Star,
@@ -71,7 +94,9 @@ fun SuperShyBottomSheet(
                 "Gold display name everywhere",
                 "Star badge next to name",
                 "+10% daily login coins (rounded up)",
-                "Exclusive profile frame"
+                "Exclusive profile frame",
+                "Extended room duration (12 hours)",
+                "Full room of 8 seats"
             )
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -183,11 +208,51 @@ fun SuperShyBottomSheet(
                     tier = "Lifetime",
                     price = "$99.99",
                     description = "One-time payment",
-                    onClick = { onPurchase("super_shy_lifetime") },
+                    onClick = { effectivePurchase("super_shy_lifetime") },
                     modifier = Modifier.fillMaxWidth()
                 )
             } else {
-                // Not Super Shy — show all pricing
+                // Not Super Shy — show trial card + all pricing
+                if (onClaimTrial != null && !user.hasClaimedSuperShyTrial) {
+                    Card(
+                        onClick = {
+                            onClaimTrial()
+                            onDismiss()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = SuperShyGold.copy(alpha = 0.15f)
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                Icons.Filled.AutoAwesome,
+                                contentDescription = null,
+                                tint = SuperShyGold,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                "Free 1-Month Trial",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = SuperShyGold
+                            )
+                            Text(
+                                "Tap to claim — goes to your backpack",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
                 Text(
                     "Choose a plan",
                     style = MaterialTheme.typography.titleSmall,
@@ -202,14 +267,14 @@ fun SuperShyBottomSheet(
                         tier = "Monthly",
                         price = "$4.99",
                         description = "per month",
-                        onClick = { onPurchase("super_shy_monthly") },
+                        onClick = { effectivePurchase("super_shy_monthly") },
                         modifier = Modifier.weight(1f)
                     )
                     SuperShyPricingCard(
                         tier = "Yearly",
                         price = "$39.99",
                         description = "per year",
-                        onClick = { onPurchase("super_shy_yearly") },
+                        onClick = { effectivePurchase("super_shy_yearly") },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -218,7 +283,7 @@ fun SuperShyBottomSheet(
                     tier = "Lifetime",
                     price = "$99.99",
                     description = "One-time payment",
-                    onClick = { onPurchase("super_shy_lifetime") },
+                    onClick = { effectivePurchase("super_shy_lifetime") },
                     modifier = Modifier.fillMaxWidth()
                 )
             }

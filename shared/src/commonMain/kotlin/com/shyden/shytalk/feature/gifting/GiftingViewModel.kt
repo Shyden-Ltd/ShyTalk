@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.model.BackpackItem
 import com.shyden.shytalk.core.model.Gift
+import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.EconomyRepository
@@ -32,7 +33,8 @@ data class GiftingUiState(
     val showConfirmDialog: Boolean = false,
     val showSendAllConfirm: Boolean = false,
     val sendAllRecipientId: String? = null,
-    val activeTab: Int = 0
+    val activeTab: Int = 0,
+    val navigateToWallet: Boolean = false
 )
 
 class GiftingViewModel(
@@ -52,7 +54,7 @@ class GiftingViewModel(
         val userId = authRepository.currentUserId ?: return
         viewModelScope.launch {
             combine(
-                giftRepository.observeGiftCatalog(),
+                giftRepository.observeAllGifts(),
                 giftRepository.observeBackpack(userId),
                 economyRepository.observeBalance()
             ) { catalog, backpack, balance ->
@@ -61,8 +63,15 @@ class GiftingViewModel(
                 _uiState.update { it.copy(error = e.message) }
             }.collect { (catalog, backpack, balance) ->
                 val validBackpack = backpack.filter { !it.isExpired }
+                // Inject trial gift into catalog if user has it in backpack
+                val hasTrial = validBackpack.any { it.giftId == Constants.SUPER_SHY_TRIAL_ID }
+                val effectiveCatalog = if (hasTrial && catalog.none { it.id == Constants.SUPER_SHY_TRIAL_ID }) {
+                    catalog + Gift.SUPER_SHY_TRIAL
+                } else {
+                    catalog
+                }
                 _uiState.update {
-                    it.copy(giftCatalog = catalog, backpackItems = validBackpack, coinBalance = balance)
+                    it.copy(giftCatalog = effectiveCatalog, backpackItems = validBackpack, coinBalance = balance)
                 }
             }
         }
@@ -118,6 +127,15 @@ class GiftingViewModel(
         val recipients = state.selectedRecipientIds.toList()
         val quantity = state.selectedQuantity
         val isBackpackTab = state.activeTab == 1
+
+        if (!isBackpackTab) {
+            val gift = state.giftCatalog.find { it.id == giftId } ?: return
+            val totalCost = gift.coinValue.toLong() * quantity * recipients.size
+            if (totalCost > state.coinBalance) {
+                _uiState.update { it.copy(showConfirmDialog = false, navigateToWallet = true) }
+                return
+            }
+        }
 
         _uiState.update { it.copy(showConfirmDialog = false, isSending = true, error = null) }
 
@@ -217,8 +235,33 @@ class GiftingViewModel(
         }
     }
 
+    fun activateTrial() {
+        _uiState.update { it.copy(isSending = true, error = null) }
+        viewModelScope.launch {
+            when (val result = economyRepository.activateSuperShyTrial()) {
+                is Resource.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            isSending = false,
+                            selectedGiftId = null,
+                            sentGiftName = "Super Shy Trial activated!"
+                        )
+                    }
+                }
+                is Resource.Error -> {
+                    _uiState.update { it.copy(isSending = false, error = result.message) }
+                }
+                is Resource.Loading -> {}
+            }
+        }
+    }
+
     fun clearSentGift() {
         _uiState.update { it.copy(sentGiftName = null, sentGiftId = null) }
+    }
+
+    fun clearNavigateToWallet() {
+        _uiState.update { it.copy(navigateToWallet = false) }
     }
 
     fun clearError() {

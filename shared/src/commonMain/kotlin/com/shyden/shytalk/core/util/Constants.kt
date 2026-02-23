@@ -8,7 +8,7 @@ object Constants {
     const val PRESENCE_TIMEOUT_MS = 15_000L // 15 seconds
     const val ROOM_NOTIFICATION_ID = 1001
     const val ROOM_NOTIFICATION_CHANNEL_ID = "room_service_channel"
-    const val MAX_ROOM_DURATION_MS = 3 * 60 * 60 * 1000L // 3 hours
+    const val MAX_ROOM_DURATION_MS = 6 * 60 * 60 * 1000L // 6 hours
     const val ROOM_EXPIRY_COUNTDOWN_THRESHOLD_MS = 300_000L // 5 minutes before expiry
     const val ACTIVE_ROOMS_QUERY_LIMIT = 100L
 
@@ -56,6 +56,9 @@ object Constants {
     // Report evidence
     const val EVIDENCE_MAX_SIZE_BYTES = 20 * 1024 * 1024L   // 20 MB
     const val EVIDENCE_VIDEO_TARGET_BYTES = 18 * 1024 * 1024L // 18 MB (leave headroom)
+
+    // Super Shy trial
+    const val SUPER_SHY_TRIAL_ID = "super_shy_trial"
 
     // System user
     const val SYSTEM_USER_ID = "SHYTALK_SYSTEM"

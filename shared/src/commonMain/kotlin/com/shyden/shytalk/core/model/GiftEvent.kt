@@ -1,6 +1,7 @@
 package com.shyden.shytalk.core.model
 
 import com.shyden.shytalk.core.util.timestampToMillis
+import kotlin.random.Random
 
 data class GiftEvent(
     val senderId: String = "",
@@ -10,7 +11,8 @@ data class GiftEvent(
     val giftId: String = "",
     val giftName: String = "",
     val coinValue: Int = 0,
-    val timestamp: Long = 0
+    val timestamp: Long = 0,
+    val eventId: Long = Random.nextLong()
 ) {
     companion object {
         fun fromMap(map: Map<String, Any?>): GiftEvent = GiftEvent(

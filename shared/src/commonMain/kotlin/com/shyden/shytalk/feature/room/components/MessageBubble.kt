@@ -121,7 +121,7 @@ fun MessageBubble(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxWidth(0.75f)
                     .padding(vertical = 4.dp)
             )
         }
@@ -250,7 +250,7 @@ fun MessageBubble(
         MessageType.GIFT -> {
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxWidth(0.75f)
                     .padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically

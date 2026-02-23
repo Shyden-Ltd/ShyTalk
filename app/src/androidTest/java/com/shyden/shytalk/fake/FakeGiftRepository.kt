@@ -18,6 +18,7 @@ class FakeGiftRepository : GiftRepository {
     val broadcasts = MutableStateFlow<List<Broadcast>>(emptyList())
 
     override fun observeGiftCatalog(): Flow<List<Gift>> = catalog
+    override fun observeAllGifts(): Flow<List<Gift>> = catalog
     override fun observeBackpack(userId: String): Flow<List<BackpackItem>> = backpack
     override fun observeGiftWall(userId: String): Flow<List<GiftWallEntry>> = giftWall
     override fun observeBroadcasts(): Flow<List<Broadcast>> = broadcasts

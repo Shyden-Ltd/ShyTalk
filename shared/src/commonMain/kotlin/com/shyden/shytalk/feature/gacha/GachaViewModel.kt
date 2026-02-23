@@ -58,17 +58,33 @@ class GachaViewModel(
 
     private fun observeGiftCatalog() {
         viewModelScope.launch {
-            giftRepository.observeGiftCatalog()
+            giftRepository.observeAllGifts()
                 .catch { e -> _uiState.update { it.copy(error = e.message) } }
                 .collect { gifts ->
+                    val wheelGifts = gifts.filter { g -> g.showOnWheel && g.coinValue > 0 }
                     _uiState.update {
                         it.copy(
                             giftCatalog = gifts,
-                            winnableGifts = gifts.filter { g -> g.coinValue > 0 }
+                            winnableGifts = padToWheelSize(wheelGifts)
                         )
                     }
                 }
         }
+    }
+
+    /** Pads or trims the gift list to exactly [WHEEL_SIZE] items by repeating. */
+    private fun padToWheelSize(gifts: List<Gift>): List<Gift> {
+        if (gifts.isEmpty()) return emptyList()
+        if (gifts.size >= WHEEL_SIZE) return gifts.take(WHEEL_SIZE)
+        val padded = mutableListOf<Gift>()
+        while (padded.size < WHEEL_SIZE) {
+            padded.addAll(gifts)
+        }
+        return padded.take(WHEEL_SIZE)
+    }
+
+    companion object {
+        const val WHEEL_SIZE = 16
     }
 
     private fun observeConfig() {

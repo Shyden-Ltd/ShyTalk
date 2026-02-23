@@ -92,4 +92,95 @@ class EconomyConfigFromMapTest {
         // Falls back to empty map
         assertTrue(config.pullCosts.isEmpty())
     }
+
+    @Test
+    fun `fromMap with partial fields keeps defaults for missing ones`() {
+        val map = mapOf<String, Any?>(
+            "beanConversionRate" to 0.8,
+            "normalSeatCount" to 8L
+        )
+
+        val config = EconomyConfig.fromMap(map)
+
+        assertEquals(0.8, config.beanConversionRate, 0.001)
+        assertEquals(8, config.normalSeatCount)
+        // Missing fields retain defaults
+        assertTrue(config.pullCosts.isEmpty())
+        assertEquals(5000, config.broadcastSendThreshold)
+        assertEquals(5000, config.broadcastWinThreshold)
+        assertEquals(360, config.maxRoomDurationMinutes)
+        assertEquals(720, config.superShyRoomDurationMinutes)
+    }
+
+    @Test
+    fun `fromMap with empty map returns all defaults including room and seat fields`() {
+        val config = EconomyConfig.fromMap(emptyMap())
+
+        assertEquals(0.6, config.beanConversionRate, 0.001)
+        assertTrue(config.pullCosts.isEmpty())
+        assertEquals(5000, config.broadcastSendThreshold)
+        assertEquals(5000, config.broadcastWinThreshold)
+        assertEquals(360, config.maxRoomDurationMinutes)
+        assertEquals(720, config.superShyRoomDurationMinutes)
+        assertEquals(5, config.normalSeatCount)
+    }
+
+    @Test
+    fun `fromMap parses room duration and seat count from Long`() {
+        val map = mapOf<String, Any?>(
+            "maxRoomDurationMinutes" to 120L,
+            "superShyRoomDurationMinutes" to 480L,
+            "normalSeatCount" to 3L
+        )
+
+        val config = EconomyConfig.fromMap(map)
+
+        assertEquals(120, config.maxRoomDurationMinutes)
+        assertEquals(480, config.superShyRoomDurationMinutes)
+        assertEquals(3, config.normalSeatCount)
+    }
+
+    @Test
+    fun `fromMap with null values for all fields returns defaults`() {
+        val map = mapOf<String, Any?>(
+            "beanConversionRate" to null,
+            "pullCosts" to null,
+            "broadcastSendThreshold" to null,
+            "broadcastWinThreshold" to null,
+            "maxRoomDurationMinutes" to null,
+            "superShyRoomDurationMinutes" to null,
+            "normalSeatCount" to null
+        )
+
+        val config = EconomyConfig.fromMap(map)
+
+        assertEquals(0.6, config.beanConversionRate, 0.001)
+        assertTrue(config.pullCosts.isEmpty())
+        assertEquals(5000, config.broadcastSendThreshold)
+        assertEquals(5000, config.broadcastWinThreshold)
+        assertEquals(360, config.maxRoomDurationMinutes)
+        assertEquals(720, config.superShyRoomDurationMinutes)
+        assertEquals(5, config.normalSeatCount)
+    }
+
+    @Test
+    fun `fromMap with wrong types returns defaults`() {
+        val map = mapOf<String, Any?>(
+            "beanConversionRate" to "not a number",
+            "broadcastSendThreshold" to "bad",
+            "broadcastWinThreshold" to true,
+            "maxRoomDurationMinutes" to listOf(1),
+            "superShyRoomDurationMinutes" to mapOf("a" to "b"),
+            "normalSeatCount" to false
+        )
+
+        val config = EconomyConfig.fromMap(map)
+
+        assertEquals(0.6, config.beanConversionRate, 0.001)
+        assertEquals(5000, config.broadcastSendThreshold)
+        assertEquals(5000, config.broadcastWinThreshold)
+        assertEquals(360, config.maxRoomDurationMinutes)
+        assertEquals(720, config.superShyRoomDurationMinutes)
+        assertEquals(5, config.normalSeatCount)
+    }
 }
