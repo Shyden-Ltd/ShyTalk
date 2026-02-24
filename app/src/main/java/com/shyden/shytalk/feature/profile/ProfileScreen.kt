@@ -304,21 +304,7 @@ fun ProfileScreen(
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
-                    actions = {
-                        val context = LocalContext.current
-                        IconButton(onClick = {
-                            val user = uiState.user ?: return@IconButton
-                            val shareText = "Check out ${user.displayName}'s profile on ShyTalk!\nhttps://shytalk.shyden.co.uk/profile/${user.uid}"
-                            val sendIntent = Intent().apply {
-                                action = Intent.ACTION_SEND
-                                putExtra(Intent.EXTRA_TEXT, shareText)
-                                type = "text/plain"
-                            }
-                            context.startActivity(Intent.createChooser(sendIntent, "Share Profile"))
-                        }) {
-                            Icon(Icons.Default.Share, contentDescription = "Share profile")
-                        }
-                    }
+                    actions = {}
                 )
             }
         ) { padding ->

@@ -411,26 +411,6 @@
 
 ---
 
-## Phase 21: Share Profile Link
-
-### TC-21.1: Share button on profile
-- [ ] Navigate to another user's profile
-- [ ] Tap the share icon in the top bar
-- [ ] Verify Android share sheet opens
-- [ ] Verify share text contains: profile name + `https://shytalk.shyden.co.uk/profile/{userId}`
-
-### TC-21.2: Deep link opens profile
-- [ ] Share a profile link to yourself (e.g., via clipboard)
-- [ ] Open the link
-- [ ] Verify ShyTalk opens and navigates to the correct user profile
-
-### TC-21.3: Deep link cold start
-- [ ] Force-close ShyTalk
-- [ ] Tap a profile deep link
-- [ ] Verify app launches and navigates to the profile after auth check
-
----
-
 ## Phase 22: Do Not Disturb Schedule
 
 ### TC-22.1: Enable DND
@@ -530,4 +510,4 @@
 - All Firestore document checks can be done via Firebase Console
 - For DND testing, you may need to adjust device time or set DND window to current time
 - Cloud Function logs viewable via `firebase functions:log`
-- For deep link testing, use `adb shell am start -a android.intent.action.VIEW -d "https://shytalk.shyden.co.uk/profile/USER_ID" com.shyden.shytalk`
+- For deep link testing, use `adb shell am start` with the appropriate intent URI

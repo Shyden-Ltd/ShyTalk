@@ -38,7 +38,6 @@ class MainActivity : ComponentActivity() {
     private val activeRoomManager: RoomLifecycleManager by inject()
 
     private val _navigateToRoom = mutableStateOf<String?>(null)
-    private val _navigateToProfile = mutableStateOf<String?>(null)
     private val _navigateToChat = mutableStateOf<Pair<String, Boolean>?>(null) // (id, isGroup)
     private val _showLeaveConfirmation = mutableStateOf(false)
 
@@ -105,8 +104,6 @@ class MainActivity : ComponentActivity() {
                             val navController = rememberNavController()
                             val navigateToRoomId by _navigateToRoom
 
-                            val navigateToProfileId by _navigateToProfile
-
                             LaunchedEffect(navigateToRoomId) {
                                 val roomId = navigateToRoomId
                                 if (roomId != null) {
@@ -114,16 +111,6 @@ class MainActivity : ComponentActivity() {
                                         launchSingleTop = true
                                     }
                                     _navigateToRoom.value = null
-                                }
-                            }
-
-                            LaunchedEffect(navigateToProfileId) {
-                                val profileId = navigateToProfileId
-                                if (profileId != null) {
-                                    navController.navigate(Screen.UserProfile.createRoute(profileId)) {
-                                        launchSingleTop = true
-                                    }
-                                    _navigateToProfile.value = null
                                 }
                             }
 
@@ -231,16 +218,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleRoomIntent(intent: Intent?) {
-        // Handle deep links (https://shytalk.shyden.co.uk/profile/{userId})
-        val data = intent?.data
-        if (data != null && data.host == "shytalk.shyden.co.uk") {
-            val pathSegments = data.pathSegments
-            if (pathSegments.size >= 2 && pathSegments[0] == "profile") {
-                _navigateToProfile.value = pathSegments[1]
-                return
-            }
-        }
-
         // Handle PM notification tap (navigateTo=chat)
         val navigateTo = intent?.getStringExtra("navigateTo")
         if (navigateTo == "chat") {

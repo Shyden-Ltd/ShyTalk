@@ -1,4 +1,4 @@
-v0.43 - Gacha UX Overhaul, Daily Gift Rewards & QoL
+v0.44 - Gacha UX Overhaul, Daily Gift Rewards & QoL
 
 - Gacha spin results now show inline instead of fullscreen
 - Spin buttons stay visible during animation
@@ -10,4 +10,5 @@ v0.43 - Gacha UX Overhaul, Daily Gift Rewards & QoL
 - Keyboard dismisses when tapping outside chat input
 - Fixed duplicate seat notification when access granted
 - Removed all rarity tier terminology from gacha
+- Removed share profile button and deep links
 - Admin panel: wheel threshold, guarantee pull, send backpack
