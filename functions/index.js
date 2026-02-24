@@ -878,35 +878,74 @@ exports.claimDailyReward = onCall({ region: "asia-southeast1" }, async (request)
 
     const milestoneRewards = config.milestoneRewards || {};
     const milestoneKeys = Object.keys(milestoneRewards).map(Number);
-    let reward = milestoneRewards[String(newStreak)] || config.dailyBase;
+    const rawReward = milestoneRewards[String(newStreak)];
     const isMilestone = milestoneKeys.includes(newStreak);
 
-    // Super Shy 10% bonus (rounded up)
-    if (user.isSuperShy) {
-      reward = Math.ceil(reward * 1.1);
+    // Determine reward type: gift object or coin amount
+    let coinReward = 0;
+    let giftReward = null; // { giftId, quantity }
+
+    if (rawReward && typeof rawReward === "object" && rawReward.type === "gift") {
+      giftReward = { giftId: rawReward.giftId, quantity: rawReward.quantity || 1 };
+    } else {
+      // Number (legacy) or {type:"coins", amount} or fallback to dailyBase
+      coinReward = (typeof rawReward === "number") ? rawReward
+        : (rawReward && rawReward.amount) ? rawReward.amount
+        : config.dailyBase;
+      // Super Shy 10% bonus (rounded up)
+      if (user.isSuperShy) {
+        coinReward = Math.ceil(coinReward * 1.1);
+      }
     }
 
-    const newBalance = (user.shyCoins || 0) + reward;
+    const newBalance = (user.shyCoins || 0) + coinReward;
 
-    tx.update(userRef, {
-      shyCoins: newBalance,
+    const userUpdate = {
       loginStreak: newStreak,
       lastLoginDate: today,
       lastLoginRewardDate: today,
-    });
+    };
+    if (coinReward > 0) userUpdate.shyCoins = newBalance;
+    tx.update(userRef, userUpdate);
+
+    // Add gift to backpack if gift reward
+    let giftName = null;
+    if (giftReward) {
+      const bpRef = userRef.collection("backpack").doc(giftReward.giftId);
+      tx.set(bpRef, {
+        quantity: FieldValue.increment(giftReward.quantity),
+        lastAcquired: FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      // Look up gift name from gifts collection (outside transaction read)
+      giftName = giftReward.giftId;
+    }
 
     // Write transaction record
     const txRef = userRef.collection("transactions").doc();
-    tx.set(txRef, {
+    const txRecord = {
       type: "DAILY_REWARD",
-      amount: reward,
-      currency: "COINS",
-      balanceAfter: newBalance,
-      details: `Day ${newStreak}${isMilestone ? " (milestone)" : ""}`,
       timestamp: FieldValue.serverTimestamp(),
-    });
+    };
+    if (giftReward) {
+      txRecord.amount = giftReward.quantity;
+      txRecord.currency = "GIFT";
+      txRecord.details = `Day ${newStreak} (milestone) — ${giftReward.quantity}x ${giftReward.giftId}`;
+      txRecord.balanceAfter = newBalance;
+    } else {
+      txRecord.amount = coinReward;
+      txRecord.currency = "COINS";
+      txRecord.balanceAfter = newBalance;
+      txRecord.details = `Day ${newStreak}${isMilestone ? " (milestone)" : ""}`;
+    }
+    tx.set(txRef, txRecord);
 
-    return { coinsAwarded: reward, newStreak, isMilestone, newBalance };
+    const result = { coinsAwarded: coinReward, newStreak, isMilestone, newBalance };
+    if (giftReward) {
+      result.giftId = giftReward.giftId;
+      result.giftQuantity = giftReward.quantity;
+    }
+    return result;
   });
 });
 
@@ -2285,7 +2324,7 @@ exports.claimSuperShyTrial = onCall({ region: "asia-southeast1" }, async (reques
       amount: 0,
       currency: "COINS",
       balanceAfter: userData.shyCoins || 0,
-      details: "Claimed free Super Shy 1-month trial",
+      details: "Claimed 30 days of Super Shy",
       timestamp: FieldValue.serverTimestamp(),
     });
 
@@ -2319,7 +2358,8 @@ exports.activateSuperShyTrial = onCall({ region: "asia-southeast1" }, async (req
     const now = Date.now();
     const thirtyDays = 30 * 24 * 60 * 60 * 1000;
     const currentExpiry = userData.superShyExpiry ? userData.superShyExpiry.toMillis() : 0;
-    const newExpiry = Math.max(currentExpiry, now + thirtyDays);
+    const baseTime = Math.max(currentExpiry, now);
+    const newExpiry = baseTime + thirtyDays;
     const currentTier = userData.superShyTier;
     // Only set trial tier if user has no existing tier or it's already trial
     const newTier = (currentTier && currentTier !== "trial") ? currentTier : "trial";
@@ -2337,7 +2377,7 @@ exports.activateSuperShyTrial = onCall({ region: "asia-southeast1" }, async (req
       amount: 0,
       currency: "COINS",
       balanceAfter: userData.shyCoins || 0,
-      details: "Activated Super Shy 1-month trial",
+      details: "Activated 30 days of Super Shy",
       timestamp: FieldValue.serverTimestamp(),
     });
 

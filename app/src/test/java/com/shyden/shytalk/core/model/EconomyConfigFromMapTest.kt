@@ -33,6 +33,7 @@ class EconomyConfigFromMapTest {
         assertTrue(config.pullCosts.isEmpty())
         assertEquals(5000, config.broadcastSendThreshold)
         assertEquals(5000, config.broadcastWinThreshold)
+        assertEquals(18888, config.wheelInnerThreshold)
     }
 
     @Test
@@ -79,6 +80,7 @@ class EconomyConfigFromMapTest {
 
         assertEquals(5000, config.broadcastSendThreshold)
         assertEquals(5000, config.broadcastWinThreshold)
+        assertEquals(18888, config.wheelInnerThreshold)
     }
 
     @Test
@@ -123,6 +125,7 @@ class EconomyConfigFromMapTest {
         assertEquals(360, config.maxRoomDurationMinutes)
         assertEquals(720, config.superShyRoomDurationMinutes)
         assertEquals(5, config.normalSeatCount)
+        assertEquals(18888, config.wheelInnerThreshold)
     }
 
     @Test
@@ -149,7 +152,8 @@ class EconomyConfigFromMapTest {
             "broadcastWinThreshold" to null,
             "maxRoomDurationMinutes" to null,
             "superShyRoomDurationMinutes" to null,
-            "normalSeatCount" to null
+            "normalSeatCount" to null,
+            "wheelInnerThreshold" to null
         )
 
         val config = EconomyConfig.fromMap(map)
@@ -161,6 +165,7 @@ class EconomyConfigFromMapTest {
         assertEquals(360, config.maxRoomDurationMinutes)
         assertEquals(720, config.superShyRoomDurationMinutes)
         assertEquals(5, config.normalSeatCount)
+        assertEquals(18888, config.wheelInnerThreshold)
     }
 
     @Test
@@ -171,7 +176,8 @@ class EconomyConfigFromMapTest {
             "broadcastWinThreshold" to true,
             "maxRoomDurationMinutes" to listOf(1),
             "superShyRoomDurationMinutes" to mapOf("a" to "b"),
-            "normalSeatCount" to false
+            "normalSeatCount" to false,
+            "wheelInnerThreshold" to "not a number"
         )
 
         val config = EconomyConfig.fromMap(map)
@@ -182,5 +188,28 @@ class EconomyConfigFromMapTest {
         assertEquals(360, config.maxRoomDurationMinutes)
         assertEquals(720, config.superShyRoomDurationMinutes)
         assertEquals(5, config.normalSeatCount)
+        assertEquals(18888, config.wheelInnerThreshold)
+    }
+
+    @Test
+    fun `fromMap parses wheelInnerThreshold`() {
+        val map = mapOf<String, Any?>(
+            "wheelInnerThreshold" to 5000L
+        )
+
+        val config = EconomyConfig.fromMap(map)
+
+        assertEquals(5000, config.wheelInnerThreshold)
+    }
+
+    @Test
+    fun `fromMap parses wheelInnerThreshold from Int`() {
+        val map = mapOf<String, Any?>(
+            "wheelInnerThreshold" to 10000
+        )
+
+        val config = EconomyConfig.fromMap(map)
+
+        assertEquals(10000, config.wheelInnerThreshold)
     }
 }

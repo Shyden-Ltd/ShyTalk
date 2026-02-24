@@ -25,6 +25,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -224,12 +228,21 @@ fun SuperShyBottomSheet(
                 }
             } else {
                 // Not Super Shy — show trial card + all pricing
-                if (onClaimTrial != null && !user.hasClaimedSuperShyTrial) {
+                var claiming by remember { mutableStateOf(false) }
+                var claimed by remember { mutableStateOf(false) }
+                // Detect when claim succeeds (user object updates while we were claiming)
+                if (claiming && user.hasClaimedSuperShyTrial && !claimed) {
+                    claimed = true
+                }
+                if (onClaimTrial != null && (!user.hasClaimedSuperShyTrial || claimed)) {
                     Card(
                         onClick = {
-                            onClaimTrial()
-                            onDismiss()
+                            if (!claiming && !claimed) {
+                                claiming = true
+                                onClaimTrial()
+                            }
                         },
+                        enabled = !claiming && !claimed,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(
@@ -249,17 +262,43 @@ fun SuperShyBottomSheet(
                                 modifier = Modifier.size(24.dp)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                "Free 1-Month Trial",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = SuperShyGold
-                            )
-                            Text(
-                                "Tap to claim — goes to your backpack",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            when {
+                                claimed -> {
+                                    Text(
+                                        "Claimed!",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = SuperShyGold
+                                    )
+                                    Text(
+                                        "To activate it, find it in your backpack while in a chat room.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                                claiming -> {
+                                    Text(
+                                        "Claiming...",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = SuperShyGold
+                                    )
+                                }
+                                else -> {
+                                    Text(
+                                        "Claim 30 Days Free",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = SuperShyGold
+                                    )
+                                    Text(
+                                        "Tap to claim — added to your backpack",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.height(12.dp))

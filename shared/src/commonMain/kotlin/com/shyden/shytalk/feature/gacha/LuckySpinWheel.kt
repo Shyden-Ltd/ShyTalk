@@ -31,15 +31,15 @@ private val SegmentAccentColor = Color(0xFF757575)
 enum class Ring { OUTER, INNER }
 
 /**
- * Splits winnable gifts into outer (coinValue < 500) and inner (coinValue >= 500)
+ * Splits winnable gifts into outer (below [innerThreshold]) and inner (at or above)
  * rings, sorted by [Gift.order].
  */
-fun buildRingLayout(gifts: List<Gift>): Pair<List<Gift>, List<Gift>> {
+fun buildRingLayout(gifts: List<Gift>, innerThreshold: Int = 18888): Pair<List<Gift>, List<Gift>> {
     val outer = gifts
-        .filter { it.coinValue < 500 }
+        .filter { it.coinValue < innerThreshold }
         .sortedBy { it.order }
     val inner = gifts
-        .filter { it.coinValue >= 500 }
+        .filter { it.coinValue >= innerThreshold }
         .sortedBy { it.order }
     return outer to inner
 }

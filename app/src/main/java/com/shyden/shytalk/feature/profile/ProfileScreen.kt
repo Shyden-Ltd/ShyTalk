@@ -996,6 +996,13 @@ private fun ProfileContent(
                                 .clip(CircleShape)
                                 .background(SpeakingGreen)
                         )
+                    } else if (uiState.lastActiveText != null) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = uiState.lastActiveText!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                     Spacer(modifier = Modifier.weight(1f))
                     if (isOwn) {

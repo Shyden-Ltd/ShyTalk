@@ -7,7 +7,8 @@ data class EconomyConfig(
     val broadcastWinThreshold: Int = 5000,
     val maxRoomDurationMinutes: Int = 360,
     val superShyRoomDurationMinutes: Int = 720,
-    val normalSeatCount: Int = 5
+    val normalSeatCount: Int = 5,
+    val wheelInnerThreshold: Int = 18888
 ) {
     companion object {
         fun fromMap(map: Map<String, Any?>): EconomyConfig {
@@ -31,7 +32,8 @@ data class EconomyConfig(
                 broadcastWinThreshold = (map["broadcastWinThreshold"] as? Number)?.toInt() ?: 5000,
                 maxRoomDurationMinutes = (map["maxRoomDurationMinutes"] as? Number)?.toInt() ?: 360,
                 superShyRoomDurationMinutes = (map["superShyRoomDurationMinutes"] as? Number)?.toInt() ?: 720,
-                normalSeatCount = (map["normalSeatCount"] as? Number)?.toInt() ?: 5
+                normalSeatCount = (map["normalSeatCount"] as? Number)?.toInt() ?: 5,
+                wheelInnerThreshold = (map["wheelInnerThreshold"] as? Number)?.toInt() ?: 18888
             )
         }
     }

@@ -37,6 +37,7 @@ data class ProfileUiState(
     val followerCount: Int = 0,
     val followingCount: Int = 0,
     val isOnline: Boolean = false,
+    val lastActiveText: String? = null,
     val hideFollowing: Boolean = false,
     val activeRoomId: String? = null,
     val stalkerCount: Int = 0,
@@ -66,6 +67,26 @@ class ProfileViewModel(
         observeUserUpdates()
     }
 
+    /**
+     * Returns a human-readable "last active" string, or null if the user is online
+     * or has hidden their online status.
+     */
+    private fun computeLastActiveText(user: com.shyden.shytalk.core.model.User): String? {
+        if (user.hideOnlineStatus) return null
+        val elapsed = currentTimeMillis() - user.lastSeenAt
+        if (elapsed < Constants.ONLINE_THRESHOLD_MS) return null // currently online
+        val minutes = elapsed / 60_000L
+        val hours = minutes / 60
+        val days = hours / 24
+        return when {
+            days > 30 -> "Active 30+ days ago"
+            days >= 1 -> "Active ${days}d ago"
+            hours >= 1 -> "Active ${hours}h ago"
+            minutes >= 1 -> "Active ${minutes}m ago"
+            else -> "Active just now"
+        }
+    }
+
     private fun observeUserUpdates() {
         viewModelScope.launch {
             userRepository.userUpdates.collect { updatedUser ->
@@ -80,6 +101,7 @@ class ProfileViewModel(
                             followerCount = updatedUser.followerIds.size,
                             followingCount = updatedUser.followingIds.size,
                             isOnline = isOnline,
+                            lastActiveText = computeLastActiveText(updatedUser),
                             activeRoomId = activeRoomId,
                             stalkerCount = if (state.isOwnProfile) updatedUser.stalkerCount.toInt() else state.stalkerCount,
                             newStalkerCount = if (state.isOwnProfile) updatedUser.newStalkerCount.toInt() else state.newStalkerCount
@@ -154,6 +176,7 @@ class ProfileViewModel(
                                 followerCount = followerCount,
                                 followingCount = followingCount,
                                 isOnline = isOnline,
+                                lastActiveText = computeLastActiveText(user),
                                 hideFollowing = user.hideFollowing,
                                 activeRoomId = activeRoomId
                             )
@@ -172,6 +195,7 @@ class ProfileViewModel(
                                 followerCount = followerCount,
                                 followingCount = followingCount,
                                 isOnline = isOnline,
+                                lastActiveText = computeLastActiveText(user),
                                 hideFollowing = user.hideFollowing,
                                 activeRoomId = activeRoomId,
                                 stalkerCount = user.stalkerCount.toInt(),
@@ -490,18 +514,14 @@ class ProfileViewModel(
 
     fun claimSuperShyTrial() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
             when (val result = economyRepository.claimSuperShyTrial()) {
                 is Resource.Success -> {
                     _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            user = it.user?.copy(hasClaimedSuperShyTrial = true)
-                        )
+                        it.copy(user = it.user?.copy(hasClaimedSuperShyTrial = true))
                     }
                 }
                 is Resource.Error -> {
-                    _uiState.update { it.copy(isLoading = false, error = result.message ?: "Failed to claim trial") }
+                    _uiState.update { it.copy(error = result.message ?: "Failed to claim trial") }
                 }
                 is Resource.Loading -> {}
             }

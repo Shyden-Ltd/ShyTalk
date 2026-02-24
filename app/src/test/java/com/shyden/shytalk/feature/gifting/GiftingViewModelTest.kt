@@ -647,7 +647,7 @@ class GiftingViewModelTest {
         val state = vm.uiState.value
         assertFalse(state.isSending)
         assertNull(state.selectedGiftId)
-        assertEquals("Super Shy Trial activated!", state.sentGiftName)
+        assertEquals("Super Shy activated! +30 days", state.sentGiftName)
         assertNull(state.error)
     }
 

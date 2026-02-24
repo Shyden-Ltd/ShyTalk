@@ -2329,6 +2329,35 @@ app.post("/api/cleanup/all-supershy", async (req, res) => {
   }
 });
 
+// POST /api/cleanup/all-appeals
+app.post("/api/cleanup/all-appeals", async (req, res) => {
+  try {
+    const db = getFirestore();
+    let appealsDeleted = 0;
+
+    const snap = await db.collection("suspensionAppeals").get();
+    for (let i = 0; i < snap.docs.length; i += 500) {
+      const batch = db.batch();
+      snap.docs.slice(i, i + 500).forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+      appealsDeleted += Math.min(500, snap.docs.length - i);
+    }
+
+    await writeAuditLog(db, {
+      adminUid: req.admin.uid,
+      action: "cleanup_all_appeals",
+      note: `Deleted ${appealsDeleted} suspension appeals`,
+    });
+
+    return res.json({ success: true, appealsDeleted });
+  } catch (err) {
+    console.error("POST cleanup/all-appeals error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Economy Config Endpoints ─────────────────────────────────
 
 const ECONOMY_CONFIG_FIELDS = {
@@ -2348,6 +2377,7 @@ const ECONOMY_CONFIG_FIELDS = {
   maxRoomDurationMinutes: "number",
   superShyRoomDurationMinutes: "number",
   normalSeatCount: "number",
+  wheelInnerThreshold: "number",
 };
 
 // GET /api/config/economy

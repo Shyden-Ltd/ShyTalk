@@ -4,7 +4,9 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,12 +14,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material.icons.filled.Backpack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
@@ -29,21 +34,27 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.gestures.detectTapGestures
+import kotlinx.coroutines.launch
 import com.shyden.shytalk.ui.theme.SpeakingGreen
 import com.shyden.shytalk.core.model.Message
 import com.shyden.shytalk.core.model.RoomRole
@@ -101,17 +112,29 @@ fun ChatPanel(
     val isSeated = currentSeatEntry != null
     val isSelfMuted = currentSeatEntry?.value?.isMuted ?: false
 
-    // Track whether user is near the bottom continuously via snapshotFlow
-    val isNearBottom = remember { mutableStateOf(true) }
+    // Track whether the user has scrolled away from the bottom
+    var hasNewMessages by remember { mutableStateOf(false) }
+    var lastSeenSize by remember { mutableIntStateOf(messages.size) }
+    val coroutineScope = rememberCoroutineScope()
+
     LaunchedEffect(listState) {
         snapshotFlow { listState.firstVisibleItemIndex }
-            .collect { index -> isNearBottom.value = index <= 2 }
+            .collect { index ->
+                if (index <= 1) hasNewMessages = false
+            }
     }
 
-    // Auto-scroll when new messages arrive and user is near bottom
+    // Auto-scroll when new messages arrive and user is near the bottom.
     LaunchedEffect(messages.size) {
-        if (isNearBottom.value) {
+        if (messages.size <= lastSeenSize) {
+            lastSeenSize = messages.size
+            return@LaunchedEffect
+        }
+        lastSeenSize = messages.size
+        if (listState.firstVisibleItemIndex <= 2) {
             listState.animateScrollToItem(0)
+        } else {
+            hasNewMessages = true
         }
     }
 
@@ -120,32 +143,60 @@ fun ChatPanel(
     val focusManager = LocalFocusManager.current
 
     Column(modifier = modifier) {
-        LazyColumn(
-            state = listState,
-            reverseLayout = true,
-            verticalArrangement = Arrangement.Bottom,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .padding(start = 8.dp, end = 80.dp)
+        Box(
+            modifier = Modifier.fillMaxWidth().weight(1f)
+                .pointerInput(Unit) { detectTapGestures { focusManager.clearFocus() } }
         ) {
-            items(reversedMessages, key = { it.messageId }) { message ->
-                val senderUser = userMap[message.senderId]
-                val isSelf = message.senderId == currentUserId
-                val isUserSeated = message.senderId in seatedUserIds
-                MessageBubble(
-                    message = message,
-                    user = senderUser,
-                    currentRole = currentRole,
-                    isUserSeated = isUserSeated,
-                    isSelf = isSelf,
-                    onTapUser = { onTapUser(message.senderId) },
-                    onInvite = { onInviteUser(message.senderId, message.senderName) },
-                    onEditMessage = if (isSelf && message.type == com.shyden.shytalk.core.model.MessageType.TEXT) {
-                        { onStartEditMessage(message.messageId, message.text) }
-                    } else null,
-                    aliases = aliases
-                )
+            LazyColumn(
+                state = listState,
+                reverseLayout = true,
+                verticalArrangement = Arrangement.Bottom,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .matchParentSize()
+                    .padding(start = 8.dp, end = 80.dp)
+            ) {
+                items(reversedMessages, key = { it.messageId }) { message ->
+                    val senderUser = userMap[message.senderId]
+                    val isSelf = message.senderId == currentUserId
+                    val isUserSeated = message.senderId in seatedUserIds
+                    MessageBubble(
+                        message = message,
+                        user = senderUser,
+                        currentRole = currentRole,
+                        isUserSeated = isUserSeated,
+                        isSelf = isSelf,
+                        onTapUser = { onTapUser(message.senderId) },
+                        onInvite = { onInviteUser(message.senderId, message.senderName) },
+                        onEditMessage = if (isSelf && message.type == com.shyden.shytalk.core.model.MessageType.TEXT) {
+                            { onStartEditMessage(message.messageId, message.text) }
+                        } else null,
+                        aliases = aliases
+                    )
+                }
+            }
+
+            // "New messages" chip when user has scrolled up
+            if (hasNewMessages) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shadowElevation = 4.dp,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 8.dp)
+                        .clickable {
+                            hasNewMessages = false
+                            coroutineScope.launch { listState.animateScrollToItem(0) }
+                        }
+                ) {
+                    Text(
+                        text = "New messages",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
             }
         }
 
@@ -173,32 +224,25 @@ fun ChatPanel(
                 value = messageText,
                 onValueChange = { if (it.length <= 200) messageText = it },
                 placeholder = { Text(if (isEditing) "Edit message..." else "Type a message...") },
-                modifier = Modifier.weight(0.6f).testTag("room_chatInput"),
+                modifier = Modifier.weight(1f).testTag("room_chatInput"),
                 singleLine = true,
                 leadingIcon = if (isEditing) {
                     { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                } else null
-            )
-
-            IconButton(
-                onClick = {
-                    if (messageText.isNotBlank()) {
-                        if (isEditing) {
-                            onEditMessage(messageText)
-                        } else {
-                            onSendMessage(messageText)
+                } else null,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(
+                    onSend = {
+                        if (messageText.isNotBlank()) {
+                            if (isEditing) {
+                                onEditMessage(messageText)
+                            } else {
+                                onSendMessage(messageText)
+                            }
+                            messageText = ""
                         }
-                        messageText = ""
                     }
-                },
-                modifier = Modifier.testTag("room_sendButton")
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Send,
-                    contentDescription = if (isEditing) "Save edit" else "Send",
-                    tint = MaterialTheme.colorScheme.primary
                 )
-            }
+            )
 
             if (isSeated) {
                 IconButton(onClick = {

@@ -88,7 +88,10 @@ fun LuckySpinOverlay(
     modifier: Modifier = Modifier
 ) {
     val winnableGifts = gachaState.winnableGifts
-    val (outerGifts, innerGifts) = remember(winnableGifts) { buildRingLayout(winnableGifts) }
+    val innerThreshold = gachaState.wheelInnerThreshold
+    val (outerGifts, innerGifts) = remember(winnableGifts, innerThreshold) {
+        buildRingLayout(winnableGifts, innerThreshold)
+    }
 
     var phase by remember { mutableStateOf(SpinPhase.IDLE) }
     var outerLitIndex by remember { mutableIntStateOf(-1) }
@@ -375,6 +378,17 @@ fun LuckySpinOverlay(
             .graphicsLayer {
                 translationX = shakeX.value
                 translationY = shakeY.value
+            }
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) {
+                // Tap outside the panel to close (only when idle)
+                if (phase == SpinPhase.IDLE && !showCoinShop && !showHistory && !showPrizeList && !showSummary) {
+                    resetBoard()
+                    onDismissResults()
+                    onDismiss()
+                }
             },
         contentAlignment = Alignment.BottomCenter
     ) {
@@ -528,49 +542,86 @@ fun LuckySpinOverlay(
 
             Spacer(modifier = Modifier.height(2.dp))
 
-            // The dual-ring wheel — fill available width for a bigger wheel
-            LuckySpinWheel(
-                outerGifts = outerGifts,
-                innerGifts = innerGifts,
-                outerLitIndex = outerLitIndex,
-                innerLitIndex = innerLitIndex,
-                wonSegments = wonSegments,
+            // Fixed-size area: same aspect ratio as the wheel so the panel doesn't resize
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp)
-                    .aspectRatio(1f)
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // Last win display
-            lastWin?.let { win ->
-                if (phase != SpinPhase.IDLE && !showSummary) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
+                    .aspectRatio(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                if (showSummary && allWins.isNotEmpty()) {
+                    LuckySpinSummaryPopup(
+                        wins = allWins,
+                        spinTier = activeTier,
+                        canAffordSpinAgain = gachaState.coinBalance >= activeTier.cost,
+                        onClose = {
+                            resetBoard()
+                            onDismissResults()
+                        },
+                        onSpinAgain = {
+                            val tier = activeTier
+                            resetBoard()
+                            onDismissResults()
+                            phase = SpinPhase.ANIMATING
+                            activeTier = tier
+                            GachaSoundPlayer.playSpinStart()
+                            when (tier.count) {
+                                1 -> onSpin()
+                                else -> onQuickSpin(tier.count)
+                            }
+                        }
+                    )
+                } else {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxSize()
                     ) {
-                        Text(giftEmoji(win.giftName), fontSize = 22.sp)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "${win.giftName} — \uD83E\uDE99${win.coinValue}",
-                            color = Color(0xFFFFD700),
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 14.sp
+                        LuckySpinWheel(
+                            outerGifts = outerGifts,
+                            innerGifts = innerGifts,
+                            outerLitIndex = outerLitIndex,
+                            innerLitIndex = innerLitIndex,
+                            wonSegments = wonSegments,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(1f)
                         )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        lastWin?.let { win ->
+                            if (phase != SpinPhase.IDLE) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Text(giftEmoji(win.giftName), fontSize = 22.sp)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "${win.giftName} — \uD83E\uDE99${win.coinValue}",
+                                        color = Color(0xFFFFD700),
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 14.sp
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                            }
+                        }
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
                 }
             }
 
             // Spin tier buttons — equal height via IntrinsicSize
-            if (phase == SpinPhase.IDLE && !gachaState.configLoaded) {
+            if (!gachaState.configLoaded && phase == SpinPhase.IDLE) {
                 Text(
                     text = "Loading prices...",
                     color = Color.White.copy(alpha = 0.5f),
                     fontSize = 14.sp
                 )
-            } else if (phase == SpinPhase.IDLE && gachaState.configLoaded) {
+            } else if (gachaState.configLoaded) {
+                val spinning = phase == SpinPhase.ANIMATING || phase == SpinPhase.CELEBRATING
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier
@@ -582,6 +633,7 @@ fun LuckySpinOverlay(
 
                         Button(
                             onClick = {
+                                if (spinning) return@Button
                                 if (!canAfford) {
                                     showCoinShop = true
                                 } else if (!gachaState.isPulling) {
@@ -601,8 +653,7 @@ fun LuckySpinOverlay(
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (canAfford) tier.color.copy(alpha = 0.15f)
-                                    else Color(0xFF222222)
+                                containerColor = tier.color.copy(alpha = 0.15f)
                             ),
                             shape = RoundedCornerShape(20.dp),
                             contentPadding = ButtonDefaults.ContentPadding,
@@ -618,7 +669,7 @@ fun LuckySpinOverlay(
                                     text = tier.label,
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Black,
-                                    color = if (canAfford) tier.color else Color.Gray,
+                                    color = tier.color,
                                     letterSpacing = 1.sp,
                                     lineHeight = 20.sp,
                                     maxLines = 1
@@ -627,13 +678,13 @@ fun LuckySpinOverlay(
                                     text = "SPIN",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (canAfford) Color.White.copy(alpha = 0.55f) else Color.Gray.copy(alpha = 0.4f),
+                                    color = Color.White.copy(alpha = 0.55f),
                                     letterSpacing = 1.sp,
                                     maxLines = 1
                                 )
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),
-                                    color = if (canAfford) tier.color.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.03f)
+                                    color = tier.color.copy(alpha = 0.12f)
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
@@ -644,7 +695,7 @@ fun LuckySpinOverlay(
                                             text = "${tier.cost}",
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.ExtraBold,
-                                            color = if (canAfford) tier.color else Color.Gray,
+                                            color = tier.color,
                                             maxLines = 1
                                         )
                                     }
@@ -654,22 +705,17 @@ fun LuckySpinOverlay(
                                     text = if (tier.boostedDrop) "INCREASED DROP RATE" else "",
                                     fontSize = 7.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = 0.5.sp,
-                                    color = if (canAfford) tier.color else Color.Gray,
+                                    letterSpacing = 0.sp,
+                                    color = tier.color,
                                     maxLines = 1,
-                                    lineHeight = 9.sp
+                                    lineHeight = 9.sp,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Visible,
+                                    softWrap = false
                                 )
                             }
                         }
                     }
                 }
-            } else if (phase == SpinPhase.ANIMATING) {
-                Text(
-                    text = "Spinning...",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
             }
 
             // Collect All button when celebrating (pre-summary)
@@ -706,32 +752,6 @@ fun LuckySpinOverlay(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(flashColor)
-            )
-        }
-
-        // Summary popup
-        if (showSummary && allWins.isNotEmpty()) {
-            LuckySpinSummaryPopup(
-                wins = allWins,
-                spinTier = activeTier,
-                canAffordSpinAgain = gachaState.coinBalance >= activeTier.cost,
-                onClose = {
-                    resetBoard()
-                    onDismissResults()
-                },
-                onSpinAgain = {
-                    val tier = activeTier
-                    resetBoard()
-                    onDismissResults()
-                    // Trigger new spin
-                    phase = SpinPhase.ANIMATING
-                    activeTier = tier
-                    GachaSoundPlayer.playSpinStart()
-                    when (tier.count) {
-                        1 -> onSpin()
-                        else -> onQuickSpin(tier.count)
-                    }
-                }
             )
         }
 

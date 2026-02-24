@@ -244,7 +244,7 @@ class GiftingViewModel(
                         it.copy(
                             isSending = false,
                             selectedGiftId = null,
-                            sentGiftName = "Super Shy Trial activated!"
+                            sentGiftName = "Super Shy activated! +30 days"
                         )
                     }
                 }

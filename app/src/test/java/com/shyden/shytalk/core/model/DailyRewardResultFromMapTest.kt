@@ -85,4 +85,37 @@ class DailyRewardResultFromMapTest {
         assertFalse(DailyRewardResult.fromMap(mapFalse).isMilestone)
         assertFalse(DailyRewardResult.fromMap(mapMissing).isMilestone)
     }
+
+    @Test
+    fun `gift reward fields parse correctly`() {
+        val map = mapOf<String, Any?>(
+            "coinsAwarded" to 0,
+            "newStreak" to 7,
+            "isMilestone" to true,
+            "newBalance" to 100L,
+            "giftId" to "rose",
+            "giftQuantity" to 3
+        )
+        val result = DailyRewardResult.fromMap(map)
+
+        assertEquals("rose", result.giftId)
+        assertEquals(3, result.giftQuantity)
+        assertTrue(result.isGiftReward)
+        assertEquals(0, result.coinsAwarded)
+    }
+
+    @Test
+    fun `coin reward has no gift fields`() {
+        val map = mapOf<String, Any?>(
+            "coinsAwarded" to 100,
+            "newStreak" to 7,
+            "isMilestone" to true,
+            "newBalance" to 500L
+        )
+        val result = DailyRewardResult.fromMap(map)
+
+        assertFalse(result.isGiftReward)
+        assertEquals(null, result.giftId)
+        assertEquals(0, result.giftQuantity)
+    }
 }

@@ -70,12 +70,21 @@ fun DailyRewardDialog(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 if (state.reward != null) {
                     val reward = state.reward!!
-                    Text(
-                        text = "+${reward.coinsAwarded} coins!",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = SuperShyGold
-                    )
+                    if (reward.isGiftReward) {
+                        Text(
+                            text = "${reward.giftQuantity}x ${reward.giftId}",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = SuperShyGold
+                        )
+                    } else {
+                        Text(
+                            text = "+${reward.coinsAwarded} coins!",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = SuperShyGold
+                        )
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("Day ${reward.newStreak} streak")
                     if (reward.isMilestone) {

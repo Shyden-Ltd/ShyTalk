@@ -782,7 +782,7 @@ private fun BottomBar(
         ) {
             Text(
                 when {
-                    state.isSending -> "Sending..."
+                    state.isSending -> if (isSelfUse) "Using..." else "Sending..."
                     sendLabel != null -> sendLabel
                     else -> "Send"
                 },

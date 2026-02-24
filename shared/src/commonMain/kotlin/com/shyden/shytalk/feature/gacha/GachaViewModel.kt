@@ -34,7 +34,8 @@ data class GachaUiState(
     val coinPackages: List<CoinPackage> = emptyList(),
     val spinHistory: List<Transaction> = emptyList(),
     val pullCosts: Map<Int, Int> = emptyMap(),
-    val configLoaded: Boolean = false
+    val configLoaded: Boolean = false,
+    val wheelInnerThreshold: Int = 18888
 )
 
 class GachaViewModel(
@@ -95,7 +96,8 @@ class GachaViewModel(
                     _uiState.update {
                         it.copy(
                             pullCosts = config.pullCosts,
-                            configLoaded = config.pullCosts.isNotEmpty()
+                            configLoaded = config.pullCosts.isNotEmpty(),
+                            wheelInnerThreshold = config.wheelInnerThreshold
                         )
                     }
                 }

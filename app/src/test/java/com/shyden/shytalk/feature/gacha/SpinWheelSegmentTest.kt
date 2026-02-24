@@ -22,14 +22,14 @@ class SpinWheelSegmentTest {
 
     @Test
     fun `buildRingLayout puts low value gifts in outer ring`() {
-        val (outer, _) = buildRingLayout(testGifts)
+        val (outer, _) = buildRingLayout(testGifts, innerThreshold = 500)
         assertTrue(outer.all { it.coinValue < 500 })
         assertEquals(4, outer.size)
     }
 
     @Test
     fun `buildRingLayout puts high value gifts in inner ring`() {
-        val (_, inner) = buildRingLayout(testGifts)
+        val (_, inner) = buildRingLayout(testGifts, innerThreshold = 500)
         assertTrue(inner.all { it.coinValue >= 500 })
         assertEquals(4, inner.size)
     }
@@ -37,7 +37,7 @@ class SpinWheelSegmentTest {
     @Test
     fun `buildRingLayout sorts by order field`() {
         val shuffled = testGifts.shuffled()
-        val (outer, inner) = buildRingLayout(shuffled)
+        val (outer, inner) = buildRingLayout(shuffled, innerThreshold = 500)
         assertEquals(listOf(1, 2, 3, 4), outer.map { it.order })
         assertEquals(listOf(5, 6, 7, 8), inner.map { it.order })
     }
@@ -52,7 +52,7 @@ class SpinWheelSegmentTest {
     @Test
     fun `buildRingLayout handles only low value gifts`() {
         val lowOnly = testGifts.filter { it.coinValue < 500 }
-        val (outer, inner) = buildRingLayout(lowOnly)
+        val (outer, inner) = buildRingLayout(lowOnly, innerThreshold = 500)
         assertEquals(4, outer.size)
         assertTrue(inner.isEmpty())
     }
@@ -60,14 +60,14 @@ class SpinWheelSegmentTest {
     @Test
     fun `buildRingLayout handles only high value gifts`() {
         val highOnly = testGifts.filter { it.coinValue >= 500 }
-        val (outer, inner) = buildRingLayout(highOnly)
+        val (outer, inner) = buildRingLayout(highOnly, innerThreshold = 500)
         assertTrue(outer.isEmpty())
         assertEquals(4, inner.size)
     }
 
     @Test
     fun `resolveWinPosition finds gift in outer ring`() {
-        val (outer, inner) = buildRingLayout(testGifts)
+        val (outer, inner) = buildRingLayout(testGifts, innerThreshold = 500)
         val result = resolveWinPosition("c1", outer, inner)
         assertNotNull(result)
         assertEquals(Ring.OUTER, result!!.first)
@@ -76,7 +76,7 @@ class SpinWheelSegmentTest {
 
     @Test
     fun `resolveWinPosition finds gift in inner ring`() {
-        val (outer, inner) = buildRingLayout(testGifts)
+        val (outer, inner) = buildRingLayout(testGifts, innerThreshold = 500)
         val result = resolveWinPosition("r1", outer, inner)
         assertNotNull(result)
         assertEquals(Ring.INNER, result!!.first)
@@ -85,14 +85,14 @@ class SpinWheelSegmentTest {
 
     @Test
     fun `resolveWinPosition returns null for unknown ID`() {
-        val (outer, inner) = buildRingLayout(testGifts)
+        val (outer, inner) = buildRingLayout(testGifts, innerThreshold = 500)
         val result = resolveWinPosition("nonexistent", outer, inner)
         assertNull(result)
     }
 
     @Test
     fun `resolveWinPosition returns correct index for later gift`() {
-        val (outer, inner) = buildRingLayout(testGifts)
+        val (outer, inner) = buildRingLayout(testGifts, innerThreshold = 500)
         val result = resolveWinPosition("l1", outer, inner)
         assertNotNull(result)
         assertEquals(Ring.INNER, result!!.first)

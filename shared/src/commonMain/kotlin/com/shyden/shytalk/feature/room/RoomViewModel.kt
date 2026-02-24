@@ -1594,9 +1594,18 @@ class RoomViewModel(
         when (notification) {
             is RoomNotification.SeatRequestReceived ->
                 if (notification.request.requestId in processedRequestIds) return
-            is RoomNotification.RequestApproved ->
+            is RoomNotification.RequestApproved -> {
                 if (notification.request.requestId in processedApprovalIds) return
-            is RoomNotification.InviteReceived -> {}
+                // Approved request supersedes any pending invite — remove it from queue
+                notificationQueue.removeAll { it is RoomNotification.InviteReceived }
+            }
+            is RoomNotification.InviteReceived -> {
+                // Suppress invite if a RequestApproved is already active or queued
+                // (the approved-request dialog already tells the user they can sit)
+                val approvedActive = _uiState.value.activeNotification is RoomNotification.RequestApproved
+                val approvedQueued = notificationQueue.any { it is RoomNotification.RequestApproved }
+                if (approvedActive || approvedQueued) return
+            }
         }
         if (notificationQueue.any { it.id == notification.id }) return
         if (_uiState.value.activeNotification?.id == notification.id) return

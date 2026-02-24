@@ -126,6 +126,9 @@ fun RoomSettingsSheet(
             }
 
             // Gift Animations filter (per-user setting)
+            var sliderValue by remember(uiState.minGiftAnimationValue) {
+                mutableStateOf(uiState.minGiftAnimationValue.toFloat())
+            }
             Text(
                 text = "Gift Animations",
                 style = MaterialTheme.typography.titleSmall,
@@ -133,8 +136,8 @@ fun RoomSettingsSheet(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = if (uiState.minGiftAnimationValue == 0) "Showing all gift animations"
-                       else "Only showing animations worth ${uiState.minGiftAnimationValue}+ coins",
+                text = if (sliderValue.toInt() == 0) "Showing all gift animations"
+                       else "Only showing animations worth ${sliderValue.toInt()}+ coins",
                 style = MaterialTheme.typography.bodyMedium
             )
             Spacer(modifier = Modifier.height(4.dp))
@@ -144,14 +147,12 @@ fun RoomSettingsSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(8.dp))
-            var sliderValue by remember(uiState.minGiftAnimationValue) {
-                mutableStateOf(uiState.minGiftAnimationValue.toFloat())
-            }
             Slider(
                 value = sliderValue,
                 onValueChange = { sliderValue = it },
                 onValueChangeFinished = { viewModel.setMinGiftAnimationValue(sliderValue.toInt()) },
-                valueRange = 0f..10000f
+                valueRange = 0f..10000f,
+                modifier = Modifier.padding(horizontal = 24.dp)
             )
 
             Spacer(modifier = Modifier.height(16.dp))

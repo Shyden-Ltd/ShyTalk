@@ -132,10 +132,13 @@
         .main-content {
           flex: 1;
           padding: 24px;
-          max-width: 800px;
-          margin: 0 auto;
           width: 100%;
+          max-width: 1400px;
+          margin: 0 auto;
         }
+
+        /* Narrow panels (form-heavy) get a comfortable reading width */
+        #user-form, .search-bar { max-width: 800px; }
 
         /* --- Search --- */
         .search-bar {
@@ -789,10 +792,204 @@
           vertical-align: middle;
         }
         .gift-modified { background: rgba(108, 92, 231, 0.08) !important; border-left: 4px solid var(--accent) !important; }
+        .gift-new { background: rgba(46, 204, 113, 0.10) !important; border-left: 4px solid var(--success) !important; }
+        .gift-deleted { background: rgba(231, 76, 60, 0.10) !important; border-left: 4px solid var(--danger) !important; }
+        .gift-deleted td { text-decoration: line-through; color: var(--text2); }
+        .gift-deleted input, .gift-deleted select { pointer-events: none; opacity: 0.4; }
+
+        .gift-undo-del-btn { background: var(--warning); color: #fff; }
+        .gift-undo-del-btn:hover { background: #e67e22; }
+        .gift-remove-btn { background: var(--danger); color: #fff; }
+        .gift-remove-btn:hover { background: #c0392b; }
+
+        #gift-apply-btn {
+          background: var(--accent);
+          color: #fff;
+          padding: 8px 18px;
+          border: none;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 13px;
+          font-weight: 600;
+          display: none;
+        }
+        #gift-apply-btn:hover { background: var(--accent-hover); }
+        #gift-apply-btn .badge {
+          display: inline-block;
+          background: #fff;
+          color: var(--accent);
+          font-size: 11px;
+          font-weight: 700;
+          padding: 1px 7px;
+          border-radius: 10px;
+          margin-left: 6px;
+        }
+
+        #gift-discard-btn {
+          background: transparent;
+          color: var(--text2);
+          padding: 8px 16px;
+          border: 1px solid var(--border);
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 13px;
+          font-weight: 600;
+          display: none;
+          margin-left: 8px;
+        }
+        #gift-discard-btn:hover { background: var(--surface2); color: var(--text); }
+
+        .gift-confirm-overlay {
+          display: none;
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.75);
+          z-index: 9999;
+          justify-content: center;
+          align-items: center;
+        }
+        .gift-confirm-overlay.visible { display: flex; }
+
+        .gift-confirm-dialog {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: 12px;
+          padding: 28px;
+          max-width: 520px;
+          width: 92%;
+          max-height: 80vh;
+          overflow-y: auto;
+        }
+        .gift-confirm-dialog h2 {
+          margin: 0 0 16px;
+          font-size: 18px;
+        }
+        .gift-confirm-warning {
+          background: rgba(231, 76, 60, 0.12);
+          border: 1px solid var(--danger);
+          border-radius: 6px;
+          padding: 10px 14px;
+          color: var(--danger);
+          font-size: 13px;
+          font-weight: 600;
+          margin-bottom: 16px;
+        }
+        .gift-confirm-ok {
+          background: rgba(46, 204, 113, 0.12);
+          border: 1px solid var(--success);
+          border-radius: 6px;
+          padding: 10px 14px;
+          color: var(--success);
+          font-size: 13px;
+          font-weight: 600;
+          margin-bottom: 16px;
+        }
+        .gift-confirm-section {
+          margin-bottom: 14px;
+        }
+        .gift-confirm-section h4 {
+          font-size: 13px;
+          color: var(--text2);
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          margin-bottom: 6px;
+          border-bottom: 1px solid var(--border);
+          padding-bottom: 4px;
+        }
+        .gift-confirm-section ul {
+          list-style: none;
+          padding: 0;
+        }
+        .gift-confirm-section li {
+          font-size: 13px;
+          padding: 4px 0;
+          color: var(--text);
+        }
+        .gift-confirm-section li .change-detail {
+          color: var(--text2);
+          font-size: 12px;
+        }
+        .gift-confirm-buttons {
+          display: flex;
+          gap: 12px;
+          justify-content: flex-end;
+          margin-top: 20px;
+        }
+        .gift-confirm-buttons button {
+          padding: 10px 24px;
+          border: none;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 600;
+        }
+        .gift-confirm-cancel {
+          background: var(--surface2);
+          color: var(--text2);
+          border: 1px solid var(--border) !important;
+        }
+        .gift-confirm-cancel:hover { background: var(--border); color: var(--text); }
+        .gift-confirm-submit {
+          background: var(--accent);
+          color: #fff;
+        }
+        .gift-confirm-submit:hover { background: var(--accent-hover); }
+        .gift-confirm-submit:disabled { opacity: 0.3; cursor: not-allowed; }
 
         /* --- Economy Panel --- */
         #economy-panel { display: none; }
         #economy-panel.visible { display: block; }
+
+        /* Milestone rewards editor */
+        .milestone-rows { margin-top: 8px; }
+        .milestone-row {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          margin-bottom: 6px;
+          flex-wrap: wrap;
+        }
+        .milestone-row input, .milestone-row select {
+          background: var(--surface2);
+          border: 1px solid var(--border);
+          color: var(--text);
+          padding: 5px 8px;
+          border-radius: 4px;
+          font-size: 13px;
+          outline: none;
+        }
+        .milestone-row input:focus, .milestone-row select:focus { border-color: var(--accent); }
+        .milestone-row .ms-day { width: 65px; }
+        .milestone-row .ms-type { width: 90px; }
+        .milestone-row .ms-amount { width: 80px; }
+        .milestone-row .ms-gift-select { flex: 1; min-width: 120px; }
+        .milestone-row .ms-qty { width: 55px; }
+        .milestone-row .ms-swap-btn,
+        .milestone-row .ms-remove-btn {
+          padding: 4px 8px;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 600;
+          flex-shrink: 0;
+        }
+        .milestone-row .ms-swap-btn { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
+        .milestone-row .ms-swap-btn:hover { background: var(--border); color: var(--text); }
+        .milestone-row .ms-remove-btn { background: var(--danger); color: #fff; }
+        .milestone-row .ms-remove-btn:hover { background: #c0392b; }
+        .ms-add-btn {
+          padding: 5px 12px;
+          background: var(--success);
+          color: #fff;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 600;
+          margin-top: 4px;
+        }
+        .ms-add-btn:hover { background: #27ae60; }
 
         /* --- Spin Monitor Panel --- */
         #monitor-panel { display: none; }
@@ -1999,6 +2196,29 @@
           opacity: 0.6;
           margin-left: 4px;
         }
+
+        /* --- Responsive --- */
+        @media (max-width: 768px) {
+          .main-content { padding: 12px; }
+          .header { padding: 12px 16px; }
+          .header h1 { font-size: 16px; }
+          .tab-btn { padding: 5px 10px; font-size: 12px; }
+          .gifts-toolbar { flex-direction: column; align-items: flex-start; gap: 8px; }
+          .gifts-table .gift-name-input { width: 90px; }
+          .gifts-table .gift-url-input { width: 80px; }
+          .gifts-table th, .gifts-table td { padding: 6px 6px; font-size: 12px; }
+          .gift-confirm-dialog { padding: 20px 16px; }
+          .maintenance-grid { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 480px) {
+          .main-content { padding: 8px; }
+          .header { padding: 10px 12px; }
+          .tab-btn { padding: 4px 8px; font-size: 11px; }
+          .gifts-table .gift-url-input { width: 60px; font-size: 11px; }
+          .gifts-table .gift-order-input { width: 40px; }
+          .gift-actions button { padding: 3px 6px; font-size: 11px; }
+        }
     </style>
 </head>
 <body>
@@ -2487,19 +2707,21 @@
         <div id="gifts-panel">
             <h2 style="margin-bottom: 16px;">Gift Catalog</h2>
             <p style="color:var(--text2);margin-bottom:12px;">Manage the gift catalog stored in the
-                <code>gifts</code> collection. Changes affect the gacha and gift-sending systems
-                immediately.</p>
+                <code>gifts</code> collection. Edits are staged locally — click <strong>Apply Changes</strong> to commit them.</p>
             <div class="gifts-toolbar">
-                <div>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     <button class="gift-add-btn" id="gift-add-btn">+ Add Gift</button>
                     <button class="gift-add-btn" id="gift-seed-btn"
-                            style="background:var(--warning);margin-left:8px;">Seed Defaults
-                    </button>
+                            style="background:var(--warning);">Seed Defaults</button>
+                    <button id="gift-apply-btn">Apply Changes <span class="badge">0</span></button>
+                    <button id="gift-discard-btn">Discard</button>
                 </div>
-                <span style="color:var(--text2);font-size:13px;" id="gifts-count"></span>
-                <span style="font-size:13px;margin-left:8px;" id="wheel-count"></span>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="color:var(--text2);font-size:13px;" id="gifts-count"></span>
+                    <span style="font-size:13px;" id="wheel-count"></span>
+                </div>
             </div>
-            <div style="overflow-x:auto;max-height:70vh;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
+            <div style="overflow-x:auto;max-height:calc(100vh - 220px);overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
                 <table class="gifts-table">
                     <thead>
                     <tr>
@@ -2517,6 +2739,19 @@
                     </thead>
                     <tbody id="gifts-tbody"></tbody>
                 </table>
+            </div>
+        </div>
+
+        <!-- Gift batch-apply confirmation overlay -->
+        <div class="gift-confirm-overlay" id="gift-confirm-overlay">
+            <div class="gift-confirm-dialog">
+                <h2 id="gift-confirm-title">Review Changes</h2>
+                <div id="gift-confirm-wheel-status"></div>
+                <div id="gift-confirm-body"></div>
+                <div class="gift-confirm-buttons">
+                    <button class="gift-confirm-cancel" id="gift-confirm-cancel">Cancel</button>
+                    <button class="gift-confirm-submit" id="gift-confirm-submit">Confirm</button>
+                </div>
             </div>
         </div>
 
@@ -2561,6 +2796,11 @@
                         <label>100 Spins</label>
                         <input type="number" id="eco-pullCost-100" placeholder="1000">
                     </div>
+                    <div class="field-group">
+                        <label>Wheel Inner Ring Threshold</label>
+                        <input type="number" id="eco-wheelInnerThreshold" placeholder="18888">
+                        <small style="color:var(--text2);margin-top:2px;display:block">Gifts with coin value at or above this appear on the inner ring of the gacha wheel.</small>
+                    </div>
                 </div>
                 <div class="maintenance-card">
                     <h3>Pity System</h3>
@@ -2589,9 +2829,9 @@
                         <input type="number" id="eco-dailyBase" placeholder="50">
                     </div>
                     <div class="field-group">
-                        <label>Milestone Rewards (JSON)</label>
-                        <input type="text" id="eco-milestoneRewards"
-                               placeholder='{"7":100,"14":200,"30":500,"60":1000,"90":2000}'>
+                        <label>Milestone Rewards</label>
+                        <div class="milestone-rows" id="milestone-rows"></div>
+                        <button type="button" class="ms-add-btn" id="ms-add-btn">+ Add Milestone</button>
                     </div>
                 </div>
                 <div class="maintenance-card">
@@ -2648,6 +2888,12 @@
                     <div class="maintenance-result" id="clear-warnings-result"></div>
                 </div>
                 <div class="maintenance-card">
+                    <h3>Appeals</h3>
+                    <p>Delete all suspension appeals (pending, approved, rejected).</p>
+                    <button id="clear-appeals-btn">Delete All Appeals</button>
+                    <div class="maintenance-result" id="clear-appeals-result"></div>
+                </div>
+                <div class="maintenance-card">
                     <h3>Storage</h3>
                     <p>Audit storage usage and purge orphaned files (PM images, stickers, report
                         evidence). Profile and cover photos are not affected.</p>
@@ -2697,11 +2943,12 @@
                 <div class="maintenance-card nuclear">
                     <h3>&#9762; RESET ALL</h3>
                     <p>Runs every maintenance action above in sequence. This will wipe system messages,
-                        reports, warnings, orphaned storage, backpacks, gift walls, coins, beans, spin history, and Super Shy.</p>
+                        reports, warnings, orphaned storage, backpacks, gift walls, coins, beans, spin history, Super Shy, and appeals.</p>
                     <div class="nuclear-actions">
                         <span>System Messages</span>
                         <span>Reports</span>
                         <span>Warnings</span>
+                        <span>Appeals</span>
                         <span>Orphaned Storage</span>
                         <span>Backpacks</span>
                         <span>Gift Walls</span>
@@ -2721,9 +2968,9 @@
             <div class="nuclear-dialog">
                 <div class="step-indicator" id="nuclear-step-label">Step 1 of 3</div>
                 <h2 id="nuclear-title">Are you sure?</h2>
-                <p id="nuclear-desc">This will run ALL 10 maintenance actions and permanently delete
+                <p id="nuclear-desc">This will run ALL 11 maintenance actions and permanently delete
                     system messages, reports, warnings, orphaned files, backpacks, gift walls, coins,
-                    beans, spin history, and Super Shy for every user. This cannot be undone.</p>
+                    beans, spin history, Super Shy, and appeals for every user. This cannot be undone.</p>
                 <div id="nuclear-input-wrap" style="display:none;">
                     <input type="text" id="nuclear-confirm-input" placeholder="Type here..." autocomplete="off">
                 </div>
@@ -2746,6 +2993,7 @@
                     <div class="step" id="np-system-msgs">&#9679; Clear system messages</div>
                     <div class="step" id="np-reports">&#9679; Clear reports</div>
                     <div class="step" id="np-warnings">&#9679; Clear warnings</div>
+                    <div class="step" id="np-appeals">&#9679; Delete appeals</div>
                     <div class="step" id="np-storage">&#9679; Purge orphaned storage</div>
                     <div class="step" id="np-backpacks">&#9679; Empty backpacks</div>
                     <div class="step" id="np-giftwalls">&#9679; Empty gift walls</div>
@@ -5053,143 +5301,337 @@
       }
     });
 
-    // --- Gift Catalog Management ---
+    // --- Gift Catalog Management (batch-edit) ---
     let giftsCache = [];
+    let pendingEdits = {};        // { giftId: { field: newValue, ... } }
+    let pendingDeletes = new Set();
+    let pendingAdds = [];         // [{ tempId, name, coinValue, order, ... }]
 
     async function loadGifts() {
       try {
         const data = await apiCall("GET", "/api/gifts");
         giftsCache = data.gifts || [];
+        clearPendingState();
         renderGiftsTable();
       } catch (err) {
         showToast("Failed to load gifts: " + err.message, "error");
       }
     }
 
-    function renderGiftsTable() {
-      const tbody = $("#gifts-tbody");
-      tbody.innerHTML = "";
-      $("#gifts-count").textContent = `${giftsCache.length} gifts`;
-      const wheelCount = giftsCache.filter(g => g.coinValue > 0 && g.showOnWheel !== false).length;
+    function clearPendingState() {
+      pendingEdits = {};
+      pendingDeletes = new Set();
+      pendingAdds = [];
+    }
+
+    /** Build the effective gift list after applying all pending changes */
+    function getEffectiveGifts() {
+      const result = [];
+      for (const g of giftsCache) {
+        if (pendingDeletes.has(g.id)) continue;
+        const edits = pendingEdits[g.id];
+        if (edits) {
+          result.push({ ...g, ...edits });
+        } else {
+          result.push({ ...g });
+        }
+      }
+      for (const a of pendingAdds) {
+        result.push({ ...a });
+      }
+      return result;
+    }
+
+    function getEffectiveWheelCount() {
+      return getEffectiveGifts().filter(g => g.coinValue > 0 && g.showOnWheel !== false).length;
+    }
+
+    function getPendingChangeCount() {
+      return Object.keys(pendingEdits).length + pendingDeletes.size + pendingAdds.length;
+    }
+
+    function updatePendingUI() {
+      const count = getPendingChangeCount();
+      const applyBtn = $("#gift-apply-btn");
+      const discardBtn = $("#gift-discard-btn");
+      applyBtn.style.display = count > 0 ? "inline-block" : "none";
+      discardBtn.style.display = count > 0 ? "inline-block" : "none";
+      applyBtn.querySelector(".badge").textContent = count;
+
+      // Update wheel count from effective gifts
+      const wheelCount = getEffectiveWheelCount();
+      const effective = getEffectiveGifts();
       const wheelEl = $("#wheel-count");
       wheelEl.textContent = `(${wheelCount}/16 on wheel)`;
       wheelEl.style.color = wheelCount === 16 ? "var(--success, #4caf50)" : "var(--danger, #f44336)";
       wheelEl.style.fontWeight = wheelCount === 16 ? "normal" : "bold";
-      wheelEl.title = `Gacha wheel has 16 slots. Gifts with coinValue > 0 and "On Wheel" checked count toward this total. Currently ${wheelCount} qualifying.`;
+      wheelEl.title = `Gacha wheel has 16 slots. Currently ${wheelCount} qualifying.`;
 
+      // Update total count (effective)
+      $("#gifts-count").textContent = `${effective.length} gifts`;
+    }
+
+    function renderGiftsTable() {
+      const tbody = $("#gifts-tbody");
+      tbody.innerHTML = "";
+      updatePendingUI();
+
+      // Existing gifts
       for (const gift of giftsCache) {
+        const isDeleted = pendingDeletes.has(gift.id);
+        const edits = pendingEdits[gift.id];
+        const isModified = !!edits;
+        const effective = isModified ? { ...gift, ...edits } : gift;
+
         const tr = document.createElement("tr");
         tr.dataset.giftId = gift.id;
+        if (isDeleted) tr.classList.add("gift-deleted");
+        else if (isModified) tr.classList.add("gift-modified");
+
         tr.innerHTML = `
-          <td><input type="number" class="gift-order-input" data-field="order" value="${gift.order || 0}"></td>
-          <td style="text-align:center"><input type="checkbox" data-field="showInStore" ${gift.showInStore !== false ? 'checked' : ''}></td>
-          <td style="text-align:center"><input type="checkbox" data-field="showOnWheel" ${gift.showOnWheel !== false ? 'checked' : ''}></td>
-          <td>${gift.iconUrl ? `<img src="${escapeHtml(gift.iconUrl)}" class="gift-icon-preview" onerror="this.style.display='none'">` : '<span style="color:var(--text2)">—</span>'}</td>
-          <td><input type="text" class="gift-name-input" data-field="name" value="${escapeHtml(gift.name || "")}"></td>
-          <td><input type="number" class="gift-value-input" data-field="coinValue" value="${gift.coinValue || 0}"></td>
-          <td><input type="text" class="gift-url-input" data-field="animationUrl" value="${escapeHtml(gift.animationUrl || "")}" placeholder="URL"></td>
-          <td><input type="text" class="gift-url-input" data-field="soundUrl" value="${escapeHtml(gift.soundUrl || "")}" placeholder="URL"></td>
-          <td><input type="text" class="gift-url-input" data-field="iconUrl" value="${escapeHtml(gift.iconUrl || "")}" placeholder="URL"></td>
+          <td><input type="number" class="gift-order-input" data-field="order" value="${effective.order || 0}"></td>
+          <td style="text-align:center"><input type="checkbox" data-field="showInStore" ${effective.showInStore !== false ? 'checked' : ''}></td>
+          <td style="text-align:center"><input type="checkbox" data-field="showOnWheel" ${effective.showOnWheel !== false ? 'checked' : ''}></td>
+          <td>${effective.iconUrl ? `<img src="${escapeHtml(effective.iconUrl)}" class="gift-icon-preview" onerror="this.style.display='none'">` : '<span style="color:var(--text2)">\u2014</span>'}</td>
+          <td><input type="text" class="gift-name-input" data-field="name" value="${escapeHtml(effective.name || "")}"></td>
+          <td><input type="number" class="gift-value-input" data-field="coinValue" value="${effective.coinValue || 0}"></td>
+          <td><input type="text" class="gift-url-input" data-field="animationUrl" value="${escapeHtml(effective.animationUrl || "")}" placeholder="URL"></td>
+          <td><input type="text" class="gift-url-input" data-field="soundUrl" value="${escapeHtml(effective.soundUrl || "")}" placeholder="URL"></td>
+          <td><input type="text" class="gift-url-input" data-field="iconUrl" value="${escapeHtml(effective.iconUrl || "")}" placeholder="URL"></td>
           <td class="gift-actions">
-            <button class="gift-save-btn" data-gift-id="${gift.id}">Save</button>
-            <button class="gift-delete-btn" data-gift-id="${gift.id}">Del</button>
+            ${isDeleted
+              ? `<button class="gift-undo-del-btn" data-gift-id="${gift.id}">Undo</button>`
+              : `<button class="gift-delete-btn" data-gift-id="${gift.id}">Del</button>`
+            }
           </td>
         `;
 
-        // Track modifications
-        const inputs = tr.querySelectorAll("input, select");
-        inputs.forEach(inp => {
-          inp.addEventListener("change", () => tr.classList.add("gift-modified"));
-          inp.addEventListener("input", () => tr.classList.add("gift-modified"));
-        });
+        // Wire input change handlers for existing gifts
+        if (!isDeleted) {
+          for (const inp of tr.querySelectorAll("[data-field]")) {
+            const handler = () => {
+              const field = inp.dataset.field;
+              let newVal;
+              if (inp.type === "checkbox") newVal = inp.checked;
+              else if (inp.type === "number") newVal = Number(inp.value) || 0;
+              else newVal = inp.value;
+
+              // Compare to original
+              let origVal = gift[field];
+              if (origVal === undefined || origVal === null) {
+                origVal = inp.type === "checkbox" ? true : inp.type === "number" ? 0 : "";
+              }
+
+              if (!pendingEdits[gift.id]) pendingEdits[gift.id] = {};
+              if (newVal === origVal) {
+                delete pendingEdits[gift.id][field];
+                if (Object.keys(pendingEdits[gift.id]).length === 0) delete pendingEdits[gift.id];
+              } else {
+                pendingEdits[gift.id][field] = newVal;
+              }
+
+              // Update row styling
+              tr.classList.toggle("gift-modified", !!pendingEdits[gift.id]);
+              updatePendingUI();
+            };
+            inp.addEventListener("change", handler);
+            inp.addEventListener("input", handler);
+          }
+        }
 
         tbody.appendChild(tr);
       }
 
-      // Wire save buttons
-      for (const btn of tbody.querySelectorAll(".gift-save-btn")) {
-        btn.addEventListener("click", () => saveGift(btn.dataset.giftId));
-      }
-      for (const btn of tbody.querySelectorAll(".gift-delete-btn")) {
-        btn.addEventListener("click", () => deleteGift(btn.dataset.giftId));
-      }
-    }
+      // Pending new gifts
+      for (const add of pendingAdds) {
+        const tr = document.createElement("tr");
+        tr.dataset.tempId = add.tempId;
+        tr.classList.add("gift-new");
 
-    async function saveGift(giftId) {
-      const tr = document.querySelector(`tr[data-gift-id="${giftId}"]`);
-      if (!tr) return;
-      const btn = tr.querySelector(".gift-save-btn");
-      btn.disabled = true;
-      btn.textContent = "...";
+        tr.innerHTML = `
+          <td><input type="number" class="gift-order-input" data-field="order" value="${add.order || 0}"></td>
+          <td style="text-align:center"><input type="checkbox" data-field="showInStore" ${add.showInStore !== false ? 'checked' : ''}></td>
+          <td style="text-align:center"><input type="checkbox" data-field="showOnWheel" ${add.showOnWheel !== false ? 'checked' : ''}></td>
+          <td><span style="color:var(--text2)">\u2014</span></td>
+          <td><input type="text" class="gift-name-input" data-field="name" value="${escapeHtml(add.name || "")}" placeholder="Gift name"></td>
+          <td><input type="number" class="gift-value-input" data-field="coinValue" value="${add.coinValue || 0}"></td>
+          <td><input type="text" class="gift-url-input" data-field="animationUrl" value="${escapeHtml(add.animationUrl || "")}" placeholder="URL"></td>
+          <td><input type="text" class="gift-url-input" data-field="soundUrl" value="${escapeHtml(add.soundUrl || "")}" placeholder="URL"></td>
+          <td><input type="text" class="gift-url-input" data-field="iconUrl" value="${escapeHtml(add.iconUrl || "")}" placeholder="URL"></td>
+          <td class="gift-actions">
+            <button class="gift-remove-btn" data-temp-id="${add.tempId}">Remove</button>
+          </td>
+        `;
 
-      try {
-        const updates = {};
+        // Wire input change handlers for new gifts
         for (const inp of tr.querySelectorAll("[data-field]")) {
-          const field = inp.dataset.field;
-          if (inp.type === "checkbox") {
-            updates[field] = inp.checked;
-          } else if (inp.type === "number") {
-            updates[field] = Number(inp.value) || 0;
-          } else {
-            updates[field] = inp.value;
-          }
+          const handler = () => {
+            const field = inp.dataset.field;
+            if (inp.type === "checkbox") add[field] = inp.checked;
+            else if (inp.type === "number") add[field] = Number(inp.value) || 0;
+            else add[field] = inp.value;
+            updatePendingUI();
+          };
+          inp.addEventListener("change", handler);
+          inp.addEventListener("input", handler);
         }
 
-        await apiCall("PUT", `/api/gifts/${giftId}`, updates);
-        tr.classList.remove("gift-modified");
-        showToast(`Gift "${updates.name}" saved`, "success");
-
-        // Refresh icon preview
-        const iconTd = tr.children[3];
-        const iconUrl = updates.iconUrl;
-        if (iconUrl) {
-          iconTd.innerHTML = `<img src="${escapeHtml(iconUrl)}" class="gift-icon-preview" onerror="this.style.display='none'">`;
-        } else {
-          iconTd.innerHTML = '<span style="color:var(--text2)">—</span>';
-        }
-      } catch (err) {
-        showToast("Save failed: " + err.message, "error");
+        tbody.appendChild(tr);
       }
 
-      btn.disabled = false;
-      btn.textContent = "Save";
-    }
-
-    async function deleteGift(giftId) {
-      const gift = giftsCache.find(g => g.id === giftId);
-      if (!confirm(`Delete gift "${gift?.name || giftId}"? This cannot be undone.`)) return;
-
-      try {
-        await apiCall("DELETE", `/api/gifts/${giftId}`);
-        showToast(`Gift "${gift?.name || giftId}" deleted`, "success");
-        loadGifts();
-      } catch (err) {
-        showToast("Delete failed: " + err.message, "error");
-      }
-    }
-
-    // Add new gift
-    $("#gift-add-btn").addEventListener("click", async () => {
-      const name = prompt("Gift name:");
-      if (!name || !name.trim()) return;
-
-      const coinValue = prompt("Coin value:", "10");
-      if (coinValue === null) return;
-
-      try {
-        await apiCall("POST", "/api/gifts", {
-          name: name.trim(),
-          coinValue: Number(coinValue) || 0,
-          order: giftsCache.length + 1,
+      // Wire delete / undo-delete / remove buttons
+      for (const btn of tbody.querySelectorAll(".gift-delete-btn")) {
+        btn.addEventListener("click", () => {
+          pendingDeletes.add(btn.dataset.giftId);
+          renderGiftsTable();
         });
-        showToast(`Gift "${name}" created`, "success");
-        loadGifts();
-      } catch (err) {
-        showToast("Create failed: " + err.message, "error");
       }
+      for (const btn of tbody.querySelectorAll(".gift-undo-del-btn")) {
+        btn.addEventListener("click", () => {
+          pendingDeletes.delete(btn.dataset.giftId);
+          renderGiftsTable();
+        });
+      }
+      for (const btn of tbody.querySelectorAll(".gift-remove-btn")) {
+        btn.addEventListener("click", () => {
+          pendingAdds = pendingAdds.filter(a => a.tempId !== btn.dataset.tempId);
+          renderGiftsTable();
+        });
+      }
+    }
+
+    // --- Add Gift (local) ---
+    $("#gift-add-btn").addEventListener("click", () => {
+      const maxOrder = Math.max(0, ...giftsCache.map(g => g.order || 0), ...pendingAdds.map(a => a.order || 0));
+      pendingAdds.push({
+        tempId: `new_${Date.now()}`,
+        name: "",
+        coinValue: 0,
+        order: maxOrder + 1,
+        showInStore: true,
+        showOnWheel: true,
+        animationUrl: "",
+        soundUrl: "",
+        iconUrl: "",
+      });
+      renderGiftsTable();
     });
 
-    // Seed defaults
+    // --- Discard ---
+    $("#gift-discard-btn").addEventListener("click", () => {
+      clearPendingState();
+      renderGiftsTable();
+      showToast("All pending changes discarded", "info");
+    });
+
+    // --- Apply Changes (show confirmation) ---
+    $("#gift-apply-btn").addEventListener("click", () => {
+      showGiftConfirmation();
+    });
+
+    function showGiftConfirmation() {
+      const wheelCount = getEffectiveWheelCount();
+      const effective = getEffectiveGifts();
+      const wheelOk = wheelCount === 16;
+
+      // Wheel status
+      const statusEl = $("#gift-confirm-wheel-status");
+      if (wheelOk) {
+        statusEl.className = "gift-confirm-ok";
+        statusEl.textContent = `Wheel: ${wheelCount}/16 \u2014 ready`;
+      } else {
+        statusEl.className = "gift-confirm-warning";
+        statusEl.textContent = `\u26A0 Wheel: ${wheelCount}/16 \u2014 need exactly 16 items on the wheel`;
+      }
+
+      // Build body
+      let html = "";
+      // New gifts
+      if (pendingAdds.length > 0) {
+        html += `<div class="gift-confirm-section"><h4>New Gifts (${pendingAdds.length})</h4><ul>`;
+        for (const a of pendingAdds) {
+          html += `<li>+ ${escapeHtml(a.name || "(unnamed)")} <span class="change-detail">(${a.coinValue} coins)</span></li>`;
+        }
+        html += "</ul></div>";
+      }
+
+      // Modified gifts
+      const editIds = Object.keys(pendingEdits);
+      if (editIds.length > 0) {
+        html += `<div class="gift-confirm-section"><h4>Modified Gifts (${editIds.length})</h4><ul>`;
+        for (const id of editIds) {
+          const orig = giftsCache.find(g => g.id === id);
+          const changes = pendingEdits[id];
+          const fieldDescs = Object.entries(changes).map(([field, newVal]) => {
+            let origVal = orig[field];
+            if (origVal === undefined || origVal === null) {
+              origVal = typeof newVal === "boolean" ? true : typeof newVal === "number" ? 0 : "";
+            }
+            return `${field}: ${origVal}\u2192${newVal}`;
+          }).join(", ");
+          html += `<li>\u270E ${escapeHtml(orig?.name || id)} <span class="change-detail">${escapeHtml(fieldDescs)}</span></li>`;
+        }
+        html += "</ul></div>";
+      }
+
+      // Deleted gifts
+      if (pendingDeletes.size > 0) {
+        html += `<div class="gift-confirm-section"><h4>Deleted Gifts (${pendingDeletes.size})</h4><ul>`;
+        for (const id of pendingDeletes) {
+          const orig = giftsCache.find(g => g.id === id);
+          html += `<li>\u2715 ${escapeHtml(orig?.name || id)}</li>`;
+        }
+        html += "</ul></div>";
+      }
+
+      const totalChanges = getPendingChangeCount();
+      $("#gift-confirm-title").textContent = `Review Changes (${totalChanges} total)`;
+      $("#gift-confirm-body").innerHTML = html;
+      $("#gift-confirm-submit").disabled = !wheelOk;
+      $("#gift-confirm-overlay").classList.add("visible");
+    }
+
+    $("#gift-confirm-cancel").addEventListener("click", () => {
+      $("#gift-confirm-overlay").classList.remove("visible");
+    });
+
+    $("#gift-confirm-submit").addEventListener("click", async () => {
+      const submitBtn = $("#gift-confirm-submit");
+      const cancelBtn = $("#gift-confirm-cancel");
+      submitBtn.disabled = true;
+      cancelBtn.disabled = true;
+      submitBtn.textContent = "Applying...";
+
+      try {
+        // 1. Creates
+        for (const add of pendingAdds) {
+          const { tempId, ...payload } = add;
+          await apiCall("POST", "/api/gifts", payload);
+        }
+
+        // 2. Updates
+        for (const [giftId, changes] of Object.entries(pendingEdits)) {
+          await apiCall("PUT", `/api/gifts/${giftId}`, changes);
+        }
+
+        // 3. Deletes
+        for (const giftId of pendingDeletes) {
+          await apiCall("DELETE", `/api/gifts/${giftId}`);
+        }
+
+        showToast(`${getPendingChangeCount()} changes applied successfully`, "success");
+        $("#gift-confirm-overlay").classList.remove("visible");
+        loadGifts(); // refresh from server
+      } catch (err) {
+        showToast("Apply failed: " + err.message + " — pending changes kept for retry", "error");
+      }
+
+      submitBtn.disabled = false;
+      cancelBtn.disabled = false;
+      submitBtn.textContent = "Confirm";
+    });
+
+    // --- Seed defaults (immediate, reloads table) ---
     $("#gift-seed-btn").addEventListener("click", async () => {
       if (!confirm("Seed the default 27-gift catalog? Existing gifts with the same names will be merged.")) return;
       const btn = $("#gift-seed-btn");
@@ -5199,7 +5641,7 @@
       try {
         await apiCall("POST", "/api/gifts/seed");
         showToast("Default gifts seeded", "success");
-        loadGifts();
+        loadGifts(); // loadGifts clears pending state
       } catch (err) {
         showToast("Seed failed: " + err.message, "error");
       }
@@ -5214,9 +5656,10 @@
       "beanConversionRate", "beanRedeemBonusThreshold", "beanRedeemBonusMultiplier",
       "dropRateExponent", "pitySoftStart", "pityHardLimit", "pitySoftMaxShift",
       "pityHighValueThreshold", "dailyBase", "broadcastSendThreshold", "broadcastWinThreshold",
-      "maxRoomDurationMinutes", "superShyRoomDurationMinutes", "normalSeatCount"
+      "maxRoomDurationMinutes", "superShyRoomDurationMinutes", "normalSeatCount",
+      "wheelInnerThreshold"
     ];
-    const ECO_JSON_FIELDS = ["milestoneRewards"];
+    const ECO_JSON_FIELDS = [];
     const PULL_COST_KEYS = ["1", "10", "100"];
 
     async function loadEconomyConfig() {
@@ -5258,10 +5701,127 @@
           const el = $(`#eco-${f}`);
           if (el) el.value = config[f] ? JSON.stringify(config[f]) : "";
         }
+        // Milestone rewards
+        loadMilestoneUI(config.milestoneRewards || {});
       } catch (err) {
         showToast("Failed to load economy config: " + err.message, "error");
       }
     }
+
+    // --- Milestone Rewards Editor ---
+    let milestoneData = []; // [{ day, type, amount, giftId, quantity }]
+
+    function loadMilestoneUI(obj) {
+      milestoneData = [];
+      for (const [day, val] of Object.entries(obj).sort((a, b) => Number(a[0]) - Number(b[0]))) {
+        if (typeof val === "number") {
+          milestoneData.push({ day: Number(day), type: "coins", amount: val, giftId: "", quantity: 1 });
+        } else if (val && typeof val === "object") {
+          if (val.type === "gift") {
+            milestoneData.push({ day: Number(day), type: "gift", amount: 0, giftId: val.giftId || "", quantity: val.quantity || 1 });
+          } else {
+            milestoneData.push({ day: Number(day), type: "coins", amount: val.amount || 0, giftId: "", quantity: 1 });
+          }
+        }
+      }
+      renderMilestoneRows();
+    }
+
+    function buildGiftOptions() {
+      // Use giftsCache from the gift catalog (loaded when gifts tab is visited)
+      return giftsCache.map(g => `<option value="${escapeHtml(g.id)}">${escapeHtml(g.name || g.id)} (${g.coinValue} coins)</option>`).join("");
+    }
+
+    function renderMilestoneRows() {
+      const container = $("#milestone-rows");
+      container.innerHTML = "";
+      const giftOpts = buildGiftOptions();
+      milestoneData.forEach((row, idx) => {
+        const div = document.createElement("div");
+        div.className = "milestone-row";
+        const isGift = row.type === "gift";
+        div.innerHTML = `
+          <span style="color:var(--text2);font-size:12px;width:28px;text-align:right;flex-shrink:0">Day</span>
+          <input type="number" class="ms-day" min="1" value="${row.day}" data-idx="${idx}" data-field="day">
+          <select class="ms-type" data-idx="${idx}" data-field="type">
+            <option value="coins" ${!isGift ? "selected" : ""}>Coins</option>
+            <option value="gift" ${isGift ? "selected" : ""}>Gift</option>
+          </select>
+          ${isGift ? `
+            <select class="ms-gift-select" data-idx="${idx}" data-field="giftId">
+              <option value="">Select gift...</option>
+              ${giftOpts}
+            </select>
+            <span style="color:var(--text2);font-size:12px;flex-shrink:0">&times;</span>
+            <input type="number" class="ms-qty" min="1" value="${row.quantity}" data-idx="${idx}" data-field="quantity">
+          ` : `
+            <input type="number" class="ms-amount" min="0" value="${row.amount}" data-idx="${idx}" data-field="amount" placeholder="Coins">
+          `}
+          ${idx > 0 ? `<button type="button" class="ms-swap-btn" data-idx="${idx}" title="Swap with row above">\u2191</button>` : '<span style="width:28px"></span>'}
+          <button type="button" class="ms-remove-btn" data-idx="${idx}" title="Remove">\u2715</button>
+        `;
+        container.appendChild(div);
+
+        // Set gift select value after DOM insertion
+        if (isGift && row.giftId) {
+          const sel = div.querySelector(".ms-gift-select");
+          if (sel) sel.value = row.giftId;
+        }
+      });
+
+      // Wire events
+      for (const el of container.querySelectorAll("[data-field]")) {
+        el.addEventListener("change", () => {
+          const idx = Number(el.dataset.idx);
+          const field = el.dataset.field;
+          if (field === "type") {
+            milestoneData[idx].type = el.value;
+            renderMilestoneRows(); // re-render to swap input type
+          } else if (field === "day") {
+            milestoneData[idx].day = Number(el.value) || 1;
+          } else if (field === "amount") {
+            milestoneData[idx].amount = Number(el.value) || 0;
+          } else if (field === "giftId") {
+            milestoneData[idx].giftId = el.value;
+          } else if (field === "quantity") {
+            milestoneData[idx].quantity = Math.max(1, Number(el.value) || 1);
+          }
+        });
+      }
+      for (const btn of container.querySelectorAll(".ms-swap-btn")) {
+        btn.addEventListener("click", () => {
+          const idx = Number(btn.dataset.idx);
+          [milestoneData[idx - 1], milestoneData[idx]] = [milestoneData[idx], milestoneData[idx - 1]];
+          renderMilestoneRows();
+        });
+      }
+      for (const btn of container.querySelectorAll(".ms-remove-btn")) {
+        btn.addEventListener("click", () => {
+          milestoneData.splice(Number(btn.dataset.idx), 1);
+          renderMilestoneRows();
+        });
+      }
+    }
+
+    function collectMilestoneRewards() {
+      const obj = {};
+      for (const row of milestoneData) {
+        const key = String(row.day);
+        if (row.type === "gift") {
+          if (!row.giftId) continue; // skip incomplete rows
+          obj[key] = { type: "gift", giftId: row.giftId, quantity: row.quantity || 1 };
+        } else {
+          obj[key] = row.amount;
+        }
+      }
+      return obj;
+    }
+
+    $("#ms-add-btn").addEventListener("click", () => {
+      const maxDay = milestoneData.length > 0 ? Math.max(...milestoneData.map(r => r.day)) : 0;
+      milestoneData.push({ day: maxDay + 7, type: "coins", amount: 100, giftId: "", quantity: 1 });
+      renderMilestoneRows();
+    });
 
     $("#eco-pitySoftMaxShift").addEventListener("input", (e) => {
       $("#eco-pitySoftMaxShift-val").textContent = e.target.value;
@@ -5310,6 +5870,8 @@
             }
           }
         }
+        // Milestone rewards
+        updates.milestoneRewards = collectMilestoneRewards();
 
         if (Object.keys(updates).length === 0) throw new Error("No fields to save");
 
@@ -5515,6 +6077,36 @@
       }
       btn.disabled = false;
       btn.textContent = "Remove All Super Shy";
+    });
+
+    // Clear All Appeals
+    $("#clear-appeals-btn").addEventListener("click", async () => {
+      const btn = $("#clear-appeals-btn");
+      const result = $("#clear-appeals-result");
+      if (!confirm("Delete ALL suspension appeals? This cannot be undone.")) return;
+
+      btn.disabled = true;
+      btn.textContent = "Deleting...";
+      result.style.display = "none";
+
+      try {
+        const token = await auth.currentUser.getIdToken();
+        const resp = await fetch(`${API_BASE}/api/cleanup/all-appeals`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || "Request failed");
+        result.className = "maintenance-result success";
+        result.textContent = `Deleted ${data.appealsDeleted} appeals`;
+        result.style.display = "block";
+      } catch (err) {
+        result.className = "maintenance-result error";
+        result.textContent = err.message;
+        result.style.display = "block";
+      }
+      btn.disabled = false;
+      btn.textContent = "Delete All Appeals";
     });
 
     // =====================================================
@@ -5737,7 +6329,7 @@
           step = 2;
           stepLabel.textContent = "Step 2 of 3";
           title.textContent = "This is your last warning";
-          desc.textContent = "Every user will lose their coins, beans, backpack items, gift wall, spin history, and warnings. All reports and system messages will be deleted. Orphaned files will be purged.";
+          desc.textContent = "Every user will lose their coins, beans, backpack items, gift wall, spin history, and warnings. All reports, system messages, and appeals will be deleted. Orphaned files will be purged.";
           proceedBtn.textContent = "Continue to final step";
           return;
         }
@@ -5768,7 +6360,7 @@
           title.textContent = "Resetting everything";
           desc.textContent = "Do not close this page.";
           progress.classList.add("visible");
-          updateNukeBar(0, 9);
+          updateNukeBar(0, 11);
           startParticles();
           startSirenLights();
 
@@ -5782,6 +6374,7 @@
             { id: "np-system-msgs", endpoint: "all-system-conversations", label: "System messages" },
             { id: "np-reports", endpoint: "all-reports", label: "Reports" },
             { id: "np-warnings", endpoint: "all-warnings", label: "Warnings" },
+            { id: "np-appeals", endpoint: "all-appeals", label: "Appeals" },
             { id: "np-storage", endpoint: "orphaned-storage", label: "Orphaned storage", body: { folders: ["pm_images/", "stickers/", "report_evidence/"] } },
             { id: "np-backpacks", endpoint: "all-backpacks", label: "Backpacks" },
             { id: "np-giftwalls", endpoint: "all-giftwalls", label: "Gift walls" },
@@ -5833,7 +6426,7 @@
           title.textContent = failed ? "Some actions failed" : "All done";
           desc.textContent = failed
             ? `${actions.length - failed} of ${actions.length} actions succeeded. Check the results below.`
-            : "All 9 maintenance actions completed successfully.";
+            : "All 11 maintenance actions completed successfully.";
           btnRow.style.display = "flex";
           proceedBtn.style.display = "none";
           cancelBtn.textContent = "Close";

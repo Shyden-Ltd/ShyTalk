@@ -76,34 +76,26 @@ class SpinTierTest {
     }
 
     @Test
-    fun `rarityConfigForCoinValue covers all tiers`() {
-        // Each tier boundary returns a config
-        val common = rarityConfigForCoinValue(10)
-        val uncommon = rarityConfigForCoinValue(100)
-        val rare = rarityConfigForCoinValue(500)
-        val epic = rarityConfigForCoinValue(5000)
-        val legendary = rarityConfigForCoinValue(50000)
-
-        assertEquals("You Won!", common.title)
-        assertEquals("Nice Win!", uncommon.title)
-        assertEquals("RARE WIN!", rare.title)
-        assertEquals("EPIC WIN!", epic.title)
-        assertEquals("LEGENDARY!!", legendary.title)
+    fun `rarityConfigForCoinValue all tiers use Spin Results title`() {
+        val values = listOf(10, 100, 500, 5000, 50000)
+        for (v in values) {
+            assertEquals("Spin Results", rarityConfigForCoinValue(v).title)
+        }
     }
 
     @Test
-    fun `rarityConfigForCoinValue LEGENDARY has highest shake intensity`() {
-        val legendary = rarityConfigForCoinValue(50000)
+    fun `rarityConfigForCoinValue highest tier has highest shake intensity`() {
+        val highest = rarityConfigForCoinValue(50000)
         val others = listOf(10, 100, 500, 5000).map { rarityConfigForCoinValue(it) }
         val maxOther = others.maxOf { it.shakeIntensity }
-        assertTrue(legendary.shakeIntensity > maxOther)
+        assertTrue(highest.shakeIntensity > maxOther)
     }
 
     @Test
-    fun `rarityConfigForCoinValue COMMON has no flash and no shake`() {
-        val common = rarityConfigForCoinValue(10)
-        assertFalse(common.flash)
-        assertEquals(0f, common.shakeIntensity)
+    fun `rarityConfigForCoinValue lowest tier has no flash and no shake`() {
+        val lowest = rarityConfigForCoinValue(10)
+        assertFalse(lowest.flash)
+        assertEquals(0f, lowest.shakeIntensity)
     }
 
     @Test
@@ -116,5 +108,43 @@ class SpinTierTest {
                 burstCounts[i] < burstCounts[i + 1]
             )
         }
+    }
+
+    @Test
+    fun `rarityConfigForCoinValue titles contain no rarity terminology`() {
+        val forbidden = listOf("rare", "epic", "legendary", "uncommon", "common", "mythic")
+        val values = listOf(1, 10, 49, 50, 100, 199, 200, 500, 1999, 2000, 5000, 9999, 10000, 50000)
+        for (v in values) {
+            val title = rarityConfigForCoinValue(v).title.lowercase()
+            for (word in forbidden) {
+                assertFalse(
+                    "Title for coinValue=$v ('${rarityConfigForCoinValue(v).title}') contains forbidden word '$word'",
+                    title.contains(word)
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `rarityConfigForCoinValue shake intensity increases with value`() {
+        val values = listOf(10, 100, 500, 5000, 50000)
+        val shakes = values.map { rarityConfigForCoinValue(it).shakeIntensity }
+        for (i in 0 until shakes.size - 1) {
+            assertTrue(
+                "shake at ${values[i]} (${shakes[i]}) should be <= shake at ${values[i+1]} (${shakes[i+1]})",
+                shakes[i] <= shakes[i + 1]
+            )
+        }
+    }
+
+    @Test
+    fun `rarityConfigForCoinValue boundary values are in correct tier`() {
+        // Just below each boundary
+        assertEquals(rarityConfigForCoinValue(49).burstCount, rarityConfigForCoinValue(10).burstCount)
+        assertEquals(rarityConfigForCoinValue(199).burstCount, rarityConfigForCoinValue(50).burstCount)
+        assertEquals(rarityConfigForCoinValue(1999).burstCount, rarityConfigForCoinValue(200).burstCount)
+        assertEquals(rarityConfigForCoinValue(9999).burstCount, rarityConfigForCoinValue(2000).burstCount)
+        // At and above top boundary
+        assertEquals(rarityConfigForCoinValue(10000).burstCount, rarityConfigForCoinValue(100000).burstCount)
     }
 }

@@ -1682,6 +1682,29 @@ describe("POST /api/cleanup/all-supershy", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// Cleanup All Appeals
+// ═══════════════════════════════════════════════════════════════
+
+describe("POST /api/cleanup/all-appeals", () => {
+  test("deletes all suspension appeals", async () => {
+    mockSuspensionAppeals["a1"] = { userId: "u1", status: "pending", appealText: "Please unban" };
+    mockSuspensionAppeals["a2"] = { userId: "u2", status: "approved", appealText: "I'm sorry" };
+    mockSuspensionAppeals["a3"] = { userId: "u3", status: "rejected", appealText: "It was unfair" };
+
+    const res = await request("POST", "/api/cleanup/all-appeals", {}, "valid");
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.appealsDeleted).toBe(3);
+  });
+
+  test("returns 0 when no appeals exist", async () => {
+    const res = await request("POST", "/api/cleanup/all-appeals", {}, "valid");
+    expect(res.status).toBe(200);
+    expect(res.body.appealsDeleted).toBe(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
 // Cleanup System Conversations
 // ═══════════════════════════════════════════════════════════════
 

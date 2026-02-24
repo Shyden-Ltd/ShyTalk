@@ -408,6 +408,56 @@ describe("claimDailyReward", () => {
     // 50 * 1.1 = 55.00000000000001 in JS floating-point, Math.ceil → 56
     expect(result.coinsAwarded).toBe(56);
   });
+
+  test("gift milestone reward adds to backpack", async () => {
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+    mockUsers["user-1"] = { lastLoginDate: yesterday, loginStreak: 6, shyCoins: 100 };
+    mockConfig["economy"] = {
+      dailyBase: 50,
+      milestoneRewards: { "7": { type: "gift", giftId: "rose", quantity: 3 } }
+    };
+
+    const result = await callOnCall("claimDailyReward", "user-1");
+
+    expect(result.newStreak).toBe(7);
+    expect(result.isMilestone).toBe(true);
+    expect(result.coinsAwarded).toBe(0);
+    expect(result.giftId).toBe("rose");
+    expect(result.giftQuantity).toBe(3);
+    // Balance unchanged (gift reward, no coins)
+    expect(result.newBalance).toBe(100);
+  });
+
+  test("gift milestone reward defaults quantity to 1", async () => {
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+    mockUsers["user-1"] = { lastLoginDate: yesterday, loginStreak: 13, shyCoins: 50 };
+    mockConfig["economy"] = {
+      dailyBase: 50,
+      milestoneRewards: { "14": { type: "gift", giftId: "crown" } }
+    };
+
+    const result = await callOnCall("claimDailyReward", "user-1");
+
+    expect(result.giftId).toBe("crown");
+    expect(result.giftQuantity).toBe(1);
+    expect(result.coinsAwarded).toBe(0);
+  });
+
+  test("non-milestone day with gift milestones still awards base coins", async () => {
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+    mockUsers["user-1"] = { lastLoginDate: yesterday, loginStreak: 5, shyCoins: 200 };
+    mockConfig["economy"] = {
+      dailyBase: 50,
+      milestoneRewards: { "7": { type: "gift", giftId: "rose", quantity: 1 } }
+    };
+
+    const result = await callOnCall("claimDailyReward", "user-1");
+
+    expect(result.newStreak).toBe(6);
+    expect(result.coinsAwarded).toBe(50);
+    expect(result.giftId).toBeUndefined();
+    expect(result.newBalance).toBe(250);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════

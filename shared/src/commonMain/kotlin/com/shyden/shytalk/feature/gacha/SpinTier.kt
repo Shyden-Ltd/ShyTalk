@@ -31,41 +31,41 @@ data class RarityConfig(
     val title: String
 )
 
-/** Coin-value-based rarity configs (replacing GiftBracket-keyed map). */
+/** Coin-value-based celebration configs — effects scale with value. */
 fun rarityConfigForCoinValue(coinValue: Int): RarityConfig = when {
     coinValue < 50 -> RarityConfig(
         glowColor = Color.White,
         burstCount = 40,
         shakeIntensity = 0f,
         flash = false,
-        title = "You Won!"
+        title = "Spin Results"
     )
     coinValue < 200 -> RarityConfig(
         glowColor = Color.White,
         burstCount = 70,
         shakeIntensity = 3f,
         flash = false,
-        title = "Nice Win!"
+        title = "Spin Results"
     )
     coinValue < 2000 -> RarityConfig(
         glowColor = Color.White,
         burstCount = 130,
         shakeIntensity = 5f,
         flash = true,
-        title = "RARE WIN!"
+        title = "Spin Results"
     )
     coinValue < 10000 -> RarityConfig(
         glowColor = Color.White,
         burstCount = 180,
         shakeIntensity = 7f,
         flash = true,
-        title = "EPIC WIN!"
+        title = "Spin Results"
     )
     else -> RarityConfig(
         glowColor = Color.White,
         burstCount = 220,
         shakeIntensity = 10f,
         flash = true,
-        title = "LEGENDARY!!"
+        title = "Spin Results"
     )
 }

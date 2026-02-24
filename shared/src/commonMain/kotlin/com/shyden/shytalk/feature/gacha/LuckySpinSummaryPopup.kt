@@ -82,8 +82,6 @@ fun LuckySpinSummaryPopup(
     val bestCoinValue = remember(wins) {
         wins.maxByOrNull { it.coinValue }?.coinValue ?: 0
     }
-    val rarityConfig = rarityConfigForCoinValue(bestCoinValue)
-    val isHighValue = bestCoinValue >= 2000
 
     // Animated entrance
     var appeared by remember { mutableStateOf(false) }
@@ -94,38 +92,26 @@ fun LuckySpinSummaryPopup(
         label = "summaryScale"
     )
 
-    Box(
+    Surface(
         modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() }
-            ) { /* consume taps */ },
-        contentAlignment = Alignment.Center
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
+        shape = RoundedCornerShape(20.dp),
+        color = Color(0xFF1A1A3E).copy(alpha = 0.6f),
     ) {
-        Surface(
-            modifier = Modifier
-                .widthIn(max = 420.dp)
-                .fillMaxWidth(0.94f)
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                },
-            shape = RoundedCornerShape(28.dp),
-            color = Color(0xFF1A1A3E),
-            shadowElevation = 16.dp
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 32.dp)
-            ) {
                 // Title
                 Text(
-                    text = if (isHighValue) rarityConfig.title else "Spin Results",
-                    fontSize = if (isHighValue) 26.sp else 22.sp,
+                    text = "Spin Results",
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.Black,
-                    color = rarityConfig.glowColor,
+                    color = Color.White,
                     letterSpacing = 2.sp
                 )
 
@@ -157,18 +143,12 @@ fun LuckySpinSummaryPopup(
                 // Total coins
                 Text(
                     text = "\uD83E\uDE99 ${totalCoins.formatWithCommas()} Coins",
-                    fontSize = if (isHighValue) 34.sp else 26.sp,
+                    fontSize = 26.sp,
                     fontWeight = FontWeight.Black,
                     style = MaterialTheme.typography.headlineLarge.copy(
-                        brush = if (bestCoinValue >= 10000) {
-                            Brush.linearGradient(
-                                listOf(Color(0xFFFFD700), Color(0xFFFF6B00), Color(0xFFFF1744), Color(0xFFFFD700))
-                            )
-                        } else {
-                            Brush.linearGradient(
-                                listOf(Color(0xFFFFD700), Color(0xFFFF9100))
-                            )
-                        }
+                        brush = Brush.linearGradient(
+                            listOf(Color(0xFFFFD700), Color(0xFFFF9100))
+                        )
                     )
                 )
 
@@ -218,13 +198,10 @@ fun LuckySpinSummaryPopup(
                 }
             }
         }
-    }
 }
 
 @Composable
 private fun WinCard(win: GroupedWin, index: Int) {
-    val isHighValue = win.coinValue >= 2000
-
     // Staggered entrance
     var appeared by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { appeared = true }
@@ -241,7 +218,7 @@ private fun WinCard(win: GroupedWin, index: Int) {
 
     Box(
         modifier = Modifier
-            .size(width = 80.dp, height = 110.dp)
+            .size(80.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(16.dp))
             .background(cardColor.copy(alpha = 0.1f))
@@ -297,15 +274,6 @@ private fun WinCard(win: GroupedWin, index: Int) {
                 fontSize = 11.sp,
                 fontWeight = FontWeight.ExtraBold,
                 maxLines = 1
-            )
-
-            // High-value label — always reserve space
-            Text(
-                text = if (isHighValue) "HIGH VALUE" else "",
-                fontSize = 7.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 1.5.sp,
-                color = if (isHighValue) rarityConfigForCoinValue(win.coinValue).glowColor else Color.Transparent
             )
         }
     }

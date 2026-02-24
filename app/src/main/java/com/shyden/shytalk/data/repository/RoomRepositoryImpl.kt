@@ -122,15 +122,20 @@ class RoomRepositoryImpl(
             val room = snapshot.data?.let { ChatRoom.fromMap(it, snapshot.id) }
                 ?: throw Exception("Room not found")
 
-            // User already in a seat — no-op (prevents duplicate seating)
+            // User already in a seat — already seated, nothing to do
             if (room.findUserSeat(userId) != null) return@runTransaction
 
-            // Target seat occupied — abort
-            val seat = room.seats[seatIndex.toString()]
-            if (seat?.state == SeatState.OCCUPIED) return@runTransaction
+            // Pick the requested seat, or fall back to any empty seat
+            val targetSeat = seatIndex.takeIf {
+                val s = room.seats[it.toString()]
+                s != null && s.state != SeatState.OCCUPIED
+            } ?: (1 until Constants.MAX_SEATS).firstOrNull { i ->
+                val s = room.seats[i.toString()]
+                s != null && s.state != SeatState.OCCUPIED
+            } ?: return@runTransaction // no seats available at all
 
             val updates = clearUserSeats(room, userId)
-            updates["seats.$seatIndex"] = Seat(userId = userId, state = SeatState.OCCUPIED, isMuted = true).toMap()
+            updates["seats.$targetSeat"] = Seat(userId = userId, state = SeatState.OCCUPIED, isMuted = true).toMap()
             updates["allTimeSeatUserIds"] = FieldValue.arrayUnion(userId)
             transaction.update(docRef, updates)
         }.await()

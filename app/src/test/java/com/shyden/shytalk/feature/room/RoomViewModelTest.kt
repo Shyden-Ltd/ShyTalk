@@ -1747,6 +1747,89 @@ class RoomViewModelTest {
         coVerify { roomRepository.cancelInvite("room-1", currentUserId) }
     }
 
+    @Test
+    fun `invite suppressed when approved request is already active`() = roomTest {
+        viewModel = createViewModel()
+        emitRoomAsAttendee()
+        advanceUntilIdle()
+
+        // Seed the suppression snapshot with empty first emission
+        myRequestsFlow.value = emptyList()
+        advanceUntilIdle()
+
+        // Freshly approved request triggers RequestApproved notification
+        val approvedRequest = TestData.createTestSeatRequest(
+            userId = currentUserId,
+            userName = "Current User",
+            status = SeatRequestStatus.APPROVED,
+            createdAt = System.currentTimeMillis() - 10_000L
+        )
+        myRequestsFlow.value = listOf(approvedRequest)
+        advanceUntilIdle()
+
+        // Confirm RequestApproved is showing
+        assertTrue(viewModel.uiState.value.activeNotification is RoomNotification.RequestApproved)
+
+        // Now a room update arrives with a pending invite for the same user
+        val roomWithInvite = TestData.createTestRoom(
+            ownerId = ownerId,
+            participantIds = setOf(ownerId, currentUserId),
+            pendingInvites = mapOf(currentUserId to ownerId)
+        )
+        roomFlow.value = roomWithInvite
+        advanceUntilIdle()
+
+        // The active notification should still be RequestApproved (invite suppressed)
+        val notif = viewModel.uiState.value.activeNotification
+        assertTrue(
+            "Expected RequestApproved but got $notif",
+            notif is RoomNotification.RequestApproved
+        )
+    }
+
+    @Test
+    fun `approved request removes queued invite`() = roomTest {
+        viewModel = createViewModel()
+        // First room emit triggers handleFirstJoin (no invite yet)
+        emitRoomAsAttendee()
+        advanceUntilIdle()
+
+        // Second room emit with pending invite — triggers handleNormalUpdate
+        val roomWithInvite = TestData.createTestRoom(
+            ownerId = ownerId,
+            participantIds = setOf(ownerId, currentUserId),
+            pendingInvites = mapOf(currentUserId to ownerId)
+        )
+        roomFlow.value = roomWithInvite
+        advanceUntilIdle()
+
+        // InviteReceived is the active notification
+        assertTrue(
+            "Expected InviteReceived but got ${viewModel.uiState.value.activeNotification}",
+            viewModel.uiState.value.activeNotification is RoomNotification.InviteReceived
+        )
+
+        // Now a freshly approved request arrives
+        val approvedRequest = TestData.createTestSeatRequest(
+            userId = currentUserId,
+            userName = "Current User",
+            status = SeatRequestStatus.APPROVED,
+            createdAt = System.currentTimeMillis() - 10_000L
+        )
+        myRequestsFlow.value = listOf(approvedRequest)
+        advanceUntilIdle()
+
+        // Dismiss the InviteReceived — RequestApproved should be next
+        viewModel.dismissCurrentNotification()
+        advanceUntilIdle()
+
+        val notif = viewModel.uiState.value.activeNotification
+        assertTrue(
+            "Expected RequestApproved after dismissing invite but got $notif",
+            notif is RoomNotification.RequestApproved
+        )
+    }
+
     // ===== Owner Can Kick/Force-Mute Hosts (v0.18 fix) =====
 
     @Test
