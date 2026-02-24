@@ -1,12 +1,13 @@
-v0.42 - Room Speed-up, Broadcasts & Quality of Life
+v0.43 - Gacha UX Overhaul, Daily Gift Rewards & QoL
 
-- LiveKit token pre-warming for faster room joins
-- Soft update dialog on launch (no extra network call)
-- Broadcast banners show gift quantity (3x Crown)
-- Cross-room broadcast banners restored
-- Super Shy purchase stays on sheet (no blank screen)
-- Self-destruct TTS countdown (opt-in in Settings)
-- ShyBeans redemption supports large balances (Long)
-- Broadcast banner repositioned above seats
-- Buy coins sheet available inside rooms
-- Invite shows error if person left the room
+- Gacha spin results now show inline instead of fullscreen
+- Spin buttons stay visible during animation
+- Tap outside gacha panel to close
+- Configurable gacha wheel inner ring threshold (admin)
+- Daily rewards can now grant gifts for milestones
+- Super Shy trial claim shows success confirmation
+- Backpack "Use" button shows "Using..." feedback
+- Keyboard dismisses when tapping outside chat input
+- Fixed duplicate seat notification when access granted
+- Removed all rarity tier terminology from gacha
+- Admin panel: wheel threshold, guarantee pull, send backpack
