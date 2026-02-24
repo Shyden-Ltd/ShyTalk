@@ -1,14 +1,13 @@
-v0.44 - Gacha UX Overhaul, Daily Gift Rewards & QoL
+v0.44 - Gacha UX, Daily Gifts & QoL
 
-- Gacha spin results now show inline instead of fullscreen
+- Spin results show inline instead of fullscreen
 - Spin buttons stay visible during animation
 - Tap outside gacha panel to close
-- Configurable gacha wheel inner ring threshold (admin)
-- Daily rewards can now grant gifts for milestones
-- Super Shy trial claim shows success confirmation
-- Backpack "Use" button shows "Using..." feedback
-- Keyboard dismisses when tapping outside chat input
-- Fixed duplicate seat notification when access granted
-- Removed all rarity tier terminology from gacha
-- Removed share profile button and deep links
-- Admin panel: wheel threshold, guarantee pull, send backpack
+- Configurable wheel inner ring threshold
+- Daily rewards can grant gifts for milestones
+- Super Shy trial shows success message
+- Backpack "Use" shows "Using..." feedback
+- Keyboard dismisses on tap outside chat
+- Fixed duplicate seat notification
+- Removed rarity terms and share profile
+- Kotlin upgraded to 2.3.10
