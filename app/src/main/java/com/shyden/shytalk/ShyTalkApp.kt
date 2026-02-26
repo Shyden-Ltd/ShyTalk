@@ -28,7 +28,7 @@ class ShyTalkApp : Application(), SingletonImageLoader.Factory {
             .diskCache {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache").toOkioPath())
-                    .maxSizeBytes(50L * 1024 * 1024)
+                    .maxSizeBytes(512L * 1024 * 1024)
                     .build()
             }
             .components {

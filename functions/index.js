@@ -6,8 +6,8 @@ const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getDatabase } = require("firebase-admin/database");
-const { getStorage } = require("firebase-admin/storage");
 const { AccessToken } = require("livekit-server-sdk");
+const { S3Client, ListObjectsV2Command, DeleteObjectsCommand } = require("@aws-sdk/client-s3");
 
 initializeApp();
 
@@ -17,11 +17,19 @@ const livekitApiSecret = defineSecret("LIVEKIT_API_SECRET");
 const MAX_SEATS = 8;
 const OWNER_SEAT_INDEX = 0;
 
-// Extract a storage path from a Firebase Storage download URL
+// Extract a storage path from a Firebase Storage download URL (legacy — kept for reference)
 function extractStoragePath(url) {
   if (!url) return null;
   const match = url.match(/\/o\/(.+?)\?/);
   return match ? decodeURIComponent(match[1]) : null;
+}
+
+// Extract an R2 object key from a public R2 URL
+// e.g. "https://images.shytalk.shyden.co.uk/profile_photos/uid/123.jpg" → "profile_photos/uid/123.jpg"
+function extractR2Key(url) {
+  const prefix = "https://images.shytalk.shyden.co.uk/";
+  if (!url || !url.startsWith(prefix)) return null;
+  return url.slice(prefix.length);
 }
 
 exports.generateLiveKitToken = onCall({ secrets: [livekitApiKey, livekitApiSecret] }, async (request) => {
@@ -622,13 +630,13 @@ exports.archiveOldReports = onSchedule(
   }
 );
 
-// --- Scheduled: Daily orphaned-storage cleanup ---
+// --- Scheduled: Daily orphaned-storage cleanup (uses Cloudflare R2 via S3-compatible API) ---
 async function cleanupOrphanedFiles() {
   const db = getFirestore();
-  const referencedPaths = new Set();
+  const referencedKeys = new Set();
 
   // Hardcoded system asset
-  referencedPaths.add("system/shytalk_icon.webp");
+  referencedKeys.add("system/shytalk_icon.webp");
 
   // Users → profilePhotoUrl, coverPhotoUrl, _preSuspension.*
   const usersSnap = await db.collection("users").get();
@@ -641,8 +649,8 @@ async function cleanupOrphanedFiles() {
       data._preSuspension && data._preSuspension.coverPhotoUrl,
     ];
     for (const url of urls) {
-      const path = extractStoragePath(url);
-      if (path) referencedPaths.add(path);
+      const key = extractR2Key(url);
+      if (key) referencedKeys.add(key);
     }
   }
 
@@ -650,21 +658,21 @@ async function cleanupOrphanedFiles() {
   const convsSnap = await db.collection("conversations").get();
   for (const doc of convsSnap.docs) {
     const data = doc.data();
-    const gPath = extractStoragePath(data.groupPhotoUrl);
-    if (gPath) referencedPaths.add(gPath);
+    const gKey = extractR2Key(data.groupPhotoUrl);
+    if (gKey) referencedKeys.add(gKey);
 
     const imageSnap = await doc.ref.collection("messages").where("type", "==", "IMAGE").get();
     for (const msgDoc of imageSnap.docs) {
       for (const url of (msgDoc.data().imageUrls || [])) {
-        const p = extractStoragePath(url);
-        if (p) referencedPaths.add(p);
+        const k = extractR2Key(url);
+        if (k) referencedKeys.add(k);
       }
     }
 
     const stickerSnap = await doc.ref.collection("messages").where("type", "==", "STICKER").get();
     for (const msgDoc of stickerSnap.docs) {
-      const p = extractStoragePath(msgDoc.data().stickerUrl);
-      if (p) referencedPaths.add(p);
+      const k = extractR2Key(msgDoc.data().stickerUrl);
+      if (k) referencedKeys.add(k);
     }
   }
 
@@ -673,30 +681,56 @@ async function cleanupOrphanedFiles() {
     const snap = await db.collection(col).get();
     for (const doc of snap.docs) {
       for (const url of (doc.data().evidenceUrls || [])) {
-        const p = extractStoragePath(url);
-        if (p) referencedPaths.add(p);
+        const k = extractR2Key(url);
+        if (k) referencedKeys.add(k);
       }
     }
   }
 
-  // List and delete orphaned files across all storage folders
-  const bucket = getStorage().bucket();
+  // List and delete orphaned objects in R2 via S3-compatible API
+  const s3 = new S3Client({
+    region: "auto",
+    endpoint: `https://${process.env.CF_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId: process.env.R2_ACCESS_KEY,
+      secretAccessKey: process.env.R2_SECRET_KEY,
+    },
+  });
+  const bucketName = "shytalk-media";
   const folders = ["pm_images/", "stickers/", "report_evidence/", "profile_photos/", "cover_photos/", "group_photos/"];
   const results = {};
   let totalDeleted = 0;
 
   for (const folder of folders) {
-    const [files] = await bucket.getFiles({ prefix: folder });
-    let deleted = 0;
-    for (const file of files) {
-      if (!referencedPaths.has(file.name)) {
-        await file.delete();
-        deleted++;
+    // Paginate through all objects in the folder
+    const allKeys = [];
+    let continuationToken;
+    do {
+      const listResp = await s3.send(new ListObjectsV2Command({
+        Bucket: bucketName,
+        Prefix: folder,
+        ContinuationToken: continuationToken,
+      }));
+      for (const obj of (listResp.Contents || [])) {
+        allKeys.push(obj.Key);
       }
+      continuationToken = listResp.IsTruncated ? listResp.NextContinuationToken : undefined;
+    } while (continuationToken);
+
+    const toDelete = allKeys.filter((k) => !referencedKeys.has(k));
+
+    // Batch delete — up to 1000 per request (S3 limit)
+    for (let i = 0; i < toDelete.length; i += 1000) {
+      const batch = toDelete.slice(i, i + 1000).map((k) => ({ Key: k }));
+      await s3.send(new DeleteObjectsCommand({
+        Bucket: bucketName,
+        Delete: { Objects: batch },
+      }));
     }
-    results[folder.replace("/", "")] = { total: files.length, deleted };
-    totalDeleted += deleted;
-    console.log(`${folder}: ${deleted}/${files.length} files deleted`);
+
+    results[folder.replace("/", "")] = { total: allKeys.length, deleted: toDelete.length };
+    totalDeleted += toDelete.length;
+    console.log(`${folder}: ${toDelete.length}/${allKeys.length} files deleted`);
   }
 
   console.log(`Orphaned storage cleanup complete: ${totalDeleted} files deleted`);

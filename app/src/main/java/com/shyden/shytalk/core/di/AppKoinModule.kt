@@ -4,9 +4,10 @@ import android.provider.Settings
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.storage.FirebaseStorage
+import com.shyden.shytalk.BuildConfig
 import com.shyden.shytalk.core.room.ActiveRoomManager
 import com.shyden.shytalk.core.room.RoomLifecycleManager
+import okhttp3.OkHttpClient
 import com.shyden.shytalk.data.local.StickerStorage
 import com.shyden.shytalk.data.remote.LiveKitTokenService
 import com.shyden.shytalk.data.remote.LiveKitVoiceService
@@ -74,8 +75,10 @@ val appModule = module {
     // Firebase instances
     single { FirebaseAuth.getInstance() }
     single { FirebaseFirestore.getInstance() }
-    single { FirebaseStorage.getInstance() }
     single { FirebaseDatabase.getInstance("https://shytalk-7ba69-default-rtdb.asia-southeast1.firebasedatabase.app") }
+
+    // HTTP client
+    single { OkHttpClient.Builder().build() }
 
     // Device ID
     single(named("deviceId")) {
@@ -98,7 +101,7 @@ val appModule = module {
     singleOf(::RoomRepositoryImpl) bind RoomRepository::class
     singleOf(::MessageRepositoryImpl) bind MessageRepository::class
     singleOf(::SeatRequestRepositoryImpl) bind SeatRequestRepository::class
-    singleOf(::StorageRepositoryImpl) bind StorageRepository::class
+    single<StorageRepository> { StorageRepositoryImpl(get(), BuildConfig.WORKER_URL, get()) }
     singleOf(::DeviceRepositoryImpl) bind DeviceRepository::class
     singleOf(::PrivateMessageRepositoryImpl) bind PrivateMessageRepository::class
     singleOf(::ReportRepositoryImpl) bind ReportRepository::class

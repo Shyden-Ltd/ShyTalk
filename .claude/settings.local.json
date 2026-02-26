@@ -3,7 +3,8 @@
     "allow": [
       "WebSearch",
       "WebFetch",
-      "Bash"
+      "Bash",
+      "mcp__ide__getDiagnostics"
     ]
   }
 }

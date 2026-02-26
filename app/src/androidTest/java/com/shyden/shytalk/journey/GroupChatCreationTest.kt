@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.shyden.shytalk.navigation.Screen
@@ -41,6 +42,6 @@ class GroupChatCreationTest {
             startDestination = Screen.GroupSetup.createRoute("test-user-2")
         )
         composeTestRule.waitForTag("groupSetup_createButton")
-        composeTestRule.onNodeWithTag("groupSetup_createButton").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("groupSetup_createButton").performScrollTo().assertIsDisplayed()
     }
 }

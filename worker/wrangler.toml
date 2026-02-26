@@ -1,0 +1,7 @@
+name = "shytalk-storage"
+main = "index.js"
+compatibility_date = "2025-01-01"
+
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "shytalk-media"

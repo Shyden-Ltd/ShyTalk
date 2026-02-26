@@ -1,70 +1,192 @@
 package com.shyden.shytalk.data.repository
 
-import com.google.firebase.storage.FirebaseStorage
-import com.google.firebase.storage.StorageReference
+import com.google.android.gms.tasks.Tasks
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.GetTokenResult
 import com.shyden.shytalk.core.util.Resource
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.test.runTest
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.ResponseBody
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.IOException
 
 class StorageRepositoryImplTest {
 
-    private lateinit var storage: FirebaseStorage
-    private lateinit var storageRef: StorageReference
-    private lateinit var fileRef: StorageReference
+    private lateinit var auth: FirebaseAuth
+    private lateinit var user: FirebaseUser
+    private lateinit var tokenResult: GetTokenResult
+    private lateinit var httpClient: OkHttpClient
+    private lateinit var mockCall: Call
     private lateinit var repo: StorageRepositoryImpl
+
+    private val workerUrl = "https://shytalk-storage.workers.dev"
 
     @Before
     fun setup() {
-        storage = mockk(relaxed = true)
-        storageRef = mockk(relaxed = true)
-        fileRef = mockk(relaxed = true)
-        every { storage.reference } returns storageRef
-        every { storageRef.child(any()) } returns fileRef
-        repo = StorageRepositoryImpl(storage)
+        auth = mockk()
+        user = mockk()
+        tokenResult = mockk()
+        httpClient = mockk()
+        mockCall = mockk()
+
+        every { auth.currentUser } returns user
+        every { user.getIdToken(false) } returns Tasks.forResult(tokenResult)
+        every { tokenResult.token } returns "test-id-token"
+        every { httpClient.newCall(any()) } returns mockCall
+        every { mockCall.cancel() } just Runs
+
+        repo = StorageRepositoryImpl(
+            httpClient = httpClient,
+            workerUrl = workerUrl,
+            auth = auth
+        )
+    }
+
+    // Helpers for building mocked responses
+    private fun successEnqueue(body: String) {
+        every { mockCall.enqueue(any()) } answers {
+            val response = mockk<Response>(relaxed = true)
+            val responseBody = mockk<ResponseBody>(relaxed = true)
+            every { response.isSuccessful } returns true
+            every { response.code } returns 200
+            every { response.body } returns responseBody
+            every { responseBody.string() } returns body
+            firstArg<Callback>().onResponse(mockCall, response)
+        }
+    }
+
+    private fun errorEnqueue(code: Int) {
+        every { mockCall.enqueue(any()) } answers {
+            val response = mockk<Response>(relaxed = true)
+            val responseBody = mockk<ResponseBody>(relaxed = true)
+            every { response.isSuccessful } returns false
+            every { response.code } returns code
+            every { response.body } returns responseBody
+            every { responseBody.string() } returns """{"error":"Error $code"}"""
+            firstArg<Callback>().onResponse(mockCall, response)
+        }
+    }
+
+    private fun failureEnqueue(message: String = "Connection refused") {
+        every { mockCall.enqueue(any()) } answers {
+            firstArg<Callback>().onFailure(mockCall, IOException(message))
+        }
+    }
+
+    // --- uploadImage ---
+
+    @Test
+    fun `uploadImage returns Success with URL from worker response`() = runTest {
+        val expectedUrl = "https://images.shytalk.shyden.co.uk/profile_photos/user-1/123.jpg"
+        successEnqueue("""{"url":"$expectedUrl"}""")
+
+        val result = repo.uploadImage("user-1", "profile_photos", byteArrayOf(1, 2, 3))
+
+        assertTrue(result is Resource.Success)
+        assertEquals(expectedUrl, (result as Resource.Success).data)
     }
 
     @Test
-    fun `uploadImage returns Error when putBytes throws`() = runTest {
-        every { fileRef.putBytes(any(), any()) } throws RuntimeException("Upload failed")
+    fun `uploadImage sends Authorization header with ID token`() = runTest {
+        val requestSlot = slot<Request>()
+        every { httpClient.newCall(capture(requestSlot)) } returns mockCall
+        successEnqueue("""{"url":"https://images.shytalk.shyden.co.uk/x/y.jpg"}""")
 
-        val result = repo.uploadImage("user-1", "avatars", byteArrayOf(1, 2, 3))
+        repo.uploadImage("user-1", "profile_photos", byteArrayOf(1, 2, 3))
+
+        assertEquals("Bearer test-id-token", requestSlot.captured.header("Authorization"))
+    }
+
+    @Test
+    fun `uploadImage sends multipart POST to worker upload endpoint`() = runTest {
+        val requestSlot = slot<Request>()
+        every { httpClient.newCall(capture(requestSlot)) } returns mockCall
+        successEnqueue("""{"url":"https://images.shytalk.shyden.co.uk/x/y.jpg"}""")
+
+        repo.uploadImage("user-1", "profile_photos", byteArrayOf(1, 2, 3))
+
+        val captured = requestSlot.captured
+        assertEquals("POST", captured.method)
+        assertTrue(captured.url.toString().endsWith("/upload"))
+        assertTrue(captured.body is MultipartBody)
+    }
+
+    @Test
+    fun `uploadImage returns Error on HTTP error response`() = runTest {
+        errorEnqueue(401)
+
+        val result = repo.uploadImage("user-1", "profile_photos", byteArrayOf(1, 2, 3))
 
         assertTrue(result is Resource.Error)
-        assertTrue((result as Resource.Error).message.contains("Upload failed"))
+        assertTrue((result as Resource.Error).message.contains("401"))
     }
 
     @Test
-    fun `uploadImage constructs correct storage path`() = runTest {
-        every { fileRef.putBytes(any(), any()) } throws RuntimeException("stop here")
+    fun `uploadImage returns Error when network call fails`() = runTest {
+        failureEnqueue()
 
-        repo.uploadImage("user-1", "avatars", byteArrayOf(1, 2, 3))
+        val result = repo.uploadImage("user-1", "profile_photos", byteArrayOf(1, 2, 3))
 
-        // Verify the child path includes userId and avatars prefix
-        io.mockk.verify { storageRef.child(match { it.startsWith("avatars/user-1/") && it.endsWith(".jpg") }) }
+        assertTrue(result is Resource.Error)
     }
 
     // --- deleteImageByUrl ---
 
     @Test
-    fun `deleteImageByUrl calls delete on reference from url`() = runTest {
-        val urlRef = mockk<StorageReference>(relaxed = true)
-        every { storage.getReferenceFromUrl("https://firebase.storage/photo.jpg") } returns urlRef
-        every { urlRef.delete() } returns com.google.android.gms.tasks.Tasks.forResult(null)
+    fun `deleteImageByUrl sends DELETE request with extracted key`() = runTest {
+        val requestSlot = slot<Request>()
+        every { httpClient.newCall(capture(requestSlot)) } returns mockCall
+        successEnqueue("""{"ok":true}""")
 
-        repo.deleteImageByUrl("https://firebase.storage/photo.jpg")
+        repo.deleteImageByUrl("https://images.shytalk.shyden.co.uk/profile_photos/user-1/123.jpg")
 
-        io.mockk.verify { urlRef.delete() }
+        val captured = requestSlot.captured
+        assertEquals("DELETE", captured.method)
+        assertTrue(captured.url.toString().contains("profile_photos"))
+        assertTrue(captured.url.toString().contains("123.jpg"))
+    }
+
+    @Test
+    fun `deleteImageByUrl sends Authorization header`() = runTest {
+        val requestSlot = slot<Request>()
+        every { httpClient.newCall(capture(requestSlot)) } returns mockCall
+        successEnqueue("""{"ok":true}""")
+
+        repo.deleteImageByUrl("https://images.shytalk.shyden.co.uk/profile_photos/user-1/123.jpg")
+
+        assertEquals("Bearer test-id-token", requestSlot.captured.header("Authorization"))
     }
 
     @Test
     fun `deleteImageByUrl swallows exception silently`() = runTest {
-        every { storage.getReferenceFromUrl(any()) } throws IllegalArgumentException("invalid url")
+        failureEnqueue()
 
-        // Should not throw
-        repo.deleteImageByUrl("bad-url")
+        // Should not throw even on network failure
+        repo.deleteImageByUrl("https://images.shytalk.shyden.co.uk/profile_photos/user-1/123.jpg")
+    }
+
+    @Test
+    fun `deleteImageByUrl does nothing when auth user is null`() = runTest {
+        every { auth.currentUser } returns null
+
+        // Should return without making any network call
+        repo.deleteImageByUrl("https://images.shytalk.shyden.co.uk/profile_photos/user-1/123.jpg")
+
+        verify(exactly = 0) { httpClient.newCall(any()) }
     }
 }
