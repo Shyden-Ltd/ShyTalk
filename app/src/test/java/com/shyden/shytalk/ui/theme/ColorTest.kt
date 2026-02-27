@@ -8,38 +8,28 @@ import org.junit.Test
 class ColorTest {
 
     @Test
-    fun `CnyGold has correct hex value`() {
-        assertEquals(Color(0xFFF0C246), CnyGold)
-    }
-
-    @Test
     fun `SpeakingGreen has correct hex value`() {
         assertEquals(Color(0xFF4CAF50), SpeakingGreen)
     }
 
     @Test
-    fun `light theme primary is CNY red`() {
-        assertEquals(Color(0xFFC62828), ShyTalkPrimary)
+    fun `light theme primary is MD3 purple`() {
+        assertEquals(Color(0xFF6750A4), ShyTalkPrimary)
     }
 
     @Test
-    fun `light theme tertiary is CNY gold accent`() {
-        assertEquals(Color(0xFFC9973A), ShyTalkTertiary)
+    fun `light theme tertiary is MD3 mauve`() {
+        assertEquals(Color(0xFF7D5260), ShyTalkTertiary)
     }
 
     @Test
-    fun `dark theme tertiary is brighter gold`() {
-        assertEquals(Color(0xFFF0C246), ShyTalkTertiaryDark)
+    fun `dark theme tertiary is pink`() {
+        assertEquals(Color(0xFFEFB8C8), ShyTalkTertiaryDark)
     }
 
     @Test
-    fun `dark theme primary container is deep red`() {
-        assertEquals(Color(0xFF930009), ShyTalkPrimaryContainerDark)
-    }
-
-    @Test
-    fun `CnyGold is fully opaque`() {
-        assertEquals(1f, CnyGold.alpha)
+    fun `dark theme primary container is deep purple`() {
+        assertEquals(Color(0xFF4F378B), ShyTalkPrimaryContainerDark)
     }
 
     @Test

@@ -54,6 +54,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -84,11 +86,17 @@ fun BackpackSheet(
         onDismissRequest = onDismiss,
         sheetMaxWidth = Dp.Unspecified
     ) {
+        val density = LocalDensity.current
+        val screenHeightDp = with(density) {
+            LocalWindowInfo.current.containerSize.height.toDp()
+        }
+        // Use a taller fraction on short screens so grid items stay full-size
+        val sheetFraction = if (screenHeightDp < 700.dp) 0.55f else 0.42f
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.65f)
-                .padding(horizontal = 12.dp)
+                .fillMaxHeight(sheetFraction)
+                .padding(horizontal = 8.dp)
         ) {
             // ── Recipient Row ──
             val allRecipientUsers = remember(seatedUsers, additionalUsers) {
@@ -109,7 +117,7 @@ fun BackpackSheet(
                 onDeselectAll = { viewModel.deselectAllRecipients() }
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(2.dp))
 
             // ── Tab Row ──
             val backpackValue = remember(state.backpackItems, state.giftCatalog) {
@@ -162,7 +170,7 @@ fun BackpackSheet(
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(2.dp))
 
             // ── Paged Grid ──
             val items = if (state.activeTab == 0) {
@@ -291,7 +299,7 @@ fun BackpackSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(2.dp))
         }
     }
 }
@@ -461,13 +469,13 @@ private fun PagedGiftGrid(
         ) { page ->
             val pageItems = items.drop(page * pageSize).take(pageSize)
             Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                modifier = Modifier.fillMaxWidth().fillMaxHeight().padding(horizontal = 2.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 for (row in 0 until 2) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         for (col in 0 until 4) {
                             val index = row * 4 + col
@@ -554,9 +562,9 @@ private fun ShopGiftCell(
             )
             .background(accentCol.copy(alpha = 0.1f))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(4.dp)
+            .padding(2.dp)
     ) {
-        GiftIcon(gift = item.gift, size = 48)
+        GiftIcon(gift = item.gift, size = 36)
         Text(
             item.gift.name,
             style = MaterialTheme.typography.labelSmall,
@@ -602,7 +610,7 @@ private fun BackpackGiftCell(
             )
             .background(accentCol.copy(alpha = 0.1f))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(4.dp)
+            .padding(2.dp)
     ) {
         // Expiry progress bar
         if (bp != null && bp.isExpiring) {
@@ -616,7 +624,7 @@ private fun BackpackGiftCell(
         }
 
         Box {
-            GiftIcon(gift = item.gift, size = 48)
+            GiftIcon(gift = item.gift, size = 36)
 
             // Red quantity badge
             Box(
@@ -839,11 +847,10 @@ private fun QuantityPickerPopup(
                 val label = if (isAll) "ALL ($ownedQty)" else "$preset"
                 val isSelected = qty == selectedQuantity
 
-                val enabled = if (gift == null) false else {
-                    if (isBackpackTab) {
-                        val totalNeeded = qty * recipientCount
-                        totalNeeded <= ownedQty
-                    } else true
+                val enabled = if (isBackpackTab) {
+                    gift != null && qty * recipientCount <= ownedQty
+                } else {
+                    true
                 }
 
                 TextButton(
@@ -1025,11 +1032,5 @@ private fun formatLargeNumber(value: Long): String = when {
     else -> "$value"
 }
 
-/** Derive an accent color from gift coin value tier. */
-private fun giftAccentColor(gift: Gift): Color = when {
-    gift.coinValue < 50 -> Color(0xFF9E9E9E)
-    gift.coinValue < 200 -> Color(0xFF4CAF50)
-    gift.coinValue < 2000 -> Color(0xFF2196F3)
-    gift.coinValue < 10000 -> Color(0xFF9C27B0)
-    else -> Color(0xFFFF9800)
-}
+/** Neutral accent color for all gifts (rarity tiers removed). */
+private fun giftAccentColor(@Suppress("UNUSED_PARAMETER") gift: Gift): Color = Color(0xFF9E9E9E)

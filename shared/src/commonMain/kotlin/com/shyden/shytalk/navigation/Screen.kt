@@ -15,7 +15,6 @@ sealed class Screen(val route: String) {
     }
     data object RequiredDOB : Screen("required_dob")
     data object PrivacyPolicy : Screen("privacy_policy")
-    data object LunarNewYear : Screen("lunar_new_year")
     data object Settings : Screen("settings")
     data object PrivateChat : Screen("chat/{otherUserId}") {
         fun createRoute(otherUserId: String) = "chat/$otherUserId"

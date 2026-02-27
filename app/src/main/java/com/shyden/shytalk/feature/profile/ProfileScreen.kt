@@ -115,7 +115,6 @@ import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.countryNameForCode
 import com.shyden.shytalk.core.util.flagEmojiForCode
 import com.shyden.shytalk.ui.components.FlagBadge
-import com.shyden.shytalk.ui.theme.CnyGold
 import com.shyden.shytalk.ui.theme.SpeakingGreen
 import kotlinx.coroutines.launch
 
@@ -859,16 +858,6 @@ private fun ProfileContent(
             }
 
         }
-
-        // CNY badge
-        Text(
-            text = "\uD83D\uDC0E 2026",
-            style = MaterialTheme.typography.labelSmall,
-            color = CnyGold,
-            modifier = Modifier
-                .offset(y = (-40).dp)
-                .padding(start = 130.dp)
-        )
 
         // Profile info section
         Column(

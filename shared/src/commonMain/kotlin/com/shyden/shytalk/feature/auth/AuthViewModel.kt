@@ -6,6 +6,7 @@ import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.DeviceRepository
 import com.shyden.shytalk.data.repository.UserRepository
+import com.shyden.shytalk.feature.legal.CURRENT_LEGAL_VERSION
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,6 +19,7 @@ data class AuthUiState(
     val isAuthenticated: Boolean = false,
     val hasProfile: Boolean = false,
     val hasDOB: Boolean = false,
+    val needsLegalAcceptance: Boolean = false,
     val isDeviceLocked: Boolean = false,
     val isSuspended: Boolean = false,
     val suspensionReason: String? = null,
@@ -153,7 +155,8 @@ class AuthViewModel(
                                     isLoading = false,
                                     isAuthenticated = true,
                                     hasProfile = true,
-                                    hasDOB = user.dateOfBirth != null
+                                    hasDOB = user.dateOfBirth != null,
+                                    needsLegalAcceptance = user.acceptedLegalVersion < CURRENT_LEGAL_VERSION
                                 )
                             }
                         }

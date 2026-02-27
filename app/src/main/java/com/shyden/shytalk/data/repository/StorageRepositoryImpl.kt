@@ -32,7 +32,8 @@ class StorageRepositoryImpl(
         contentType: String
     ): Resource<String> {
         return try {
-            val idToken = auth.currentUser!!.getIdToken(false).await().token!!
+            val idToken = auth.currentUser?.getIdToken(false)?.await()?.token
+                ?: return Resource.Error("Not signed in")
             val requestBody = MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
                 .addFormDataPart(

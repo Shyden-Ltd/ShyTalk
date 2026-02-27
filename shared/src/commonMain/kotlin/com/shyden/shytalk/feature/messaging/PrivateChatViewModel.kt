@@ -411,8 +411,8 @@ class PrivateChatViewModel(
         val messages = _uiState.value.messages
         if (conversationId.isEmpty() || messages.isEmpty()) return
 
-        // Find the last message from the other user
-        val lastOtherMessage = messages.lastOrNull { it.senderId == otherUserId } ?: return
+        // Find the last message not sent by the current user (works for both 1-on-1 and group)
+        val lastOtherMessage = messages.lastOrNull { it.senderId != currentUserId } ?: return
         if (currentUserId in lastOtherMessage.readBy) return
 
         viewModelScope.launch {

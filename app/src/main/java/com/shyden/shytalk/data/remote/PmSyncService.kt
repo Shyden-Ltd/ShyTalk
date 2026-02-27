@@ -5,15 +5,19 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.shyden.shytalk.R
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.PrivateMessageRepository
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
@@ -31,30 +35,57 @@ class PmSyncService : Service() {
 
     private val pmRepository: PrivateMessageRepository by inject()
     private val authRepository: AuthRepository by inject()
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val supervisorJob = SupervisorJob()
+    private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        android.util.Log.e("PmSyncService", "Coroutine exception", throwable)
+    }
+    private val serviceScope = CoroutineScope(supervisorJob + Dispatchers.IO + exceptionHandler)
     private var conversationsJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, createNotification())
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    createNotification(),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, createNotification())
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("PmSyncService", "startForeground failed", e)
+            stopSelf()
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val userId = authRepository.currentUserId
-        if (userId != null) {
-            conversationsJob?.cancel()
-            conversationsJob = serviceScope.launch {
-                pmRepository.getConversations(userId).collect { /* keep listener alive */ }
+        if (userId == null) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        conversationsJob?.cancel()
+        conversationsJob = serviceScope.launch {
+            while (true) {
+                try {
+                    pmRepository.getConversations(userId).collect { /* keep listener alive */ }
+                } catch (e: Exception) {
+                    android.util.Log.e("PmSyncService", "Conversations collection failed, retrying in 30s", e)
+                    delay(30_000)
+                }
             }
         }
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
         conversationsJob?.cancel()
+        supervisorJob.cancel()
         super.onDestroy()
     }
 

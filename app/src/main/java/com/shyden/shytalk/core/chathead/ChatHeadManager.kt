@@ -35,8 +35,6 @@ class ChatHeadManager(
     private var isShowing = false
 
     private val density = context.resources.displayMetrics.density
-    private val screenWidthPx = context.resources.displayMetrics.widthPixels
-    private val screenHeightPx = context.resources.displayMetrics.heightPixels
     private val bubbleSizePx = (BUBBLE_SIZE_DP * density).toInt()
     private val edgeMarginPx = (EDGE_MARGIN_DP * density).toInt()
     private val closeZoneHeightPx = (CLOSE_ZONE_HEIGHT_DP * density).toInt()
@@ -302,9 +300,21 @@ class ChatHeadManager(
         closeZoneParams = null
     }
 
-    private fun getScreenWidth(): Int = screenWidthPx
+    private fun getScreenWidth(): Int {
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            windowManager.currentWindowMetrics.bounds.width()
+        } else {
+            context.resources.displayMetrics.widthPixels
+        }
+    }
 
-    private fun getScreenHeight(): Int = screenHeightPx
+    private fun getScreenHeight(): Int {
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            windowManager.currentWindowMetrics.bounds.height()
+        } else {
+            context.resources.displayMetrics.heightPixels
+        }
+    }
 
     companion object {
         private const val BUBBLE_SIZE_DP = 80

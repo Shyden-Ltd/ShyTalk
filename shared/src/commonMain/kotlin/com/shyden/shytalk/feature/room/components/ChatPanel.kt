@@ -20,9 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Backpack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
@@ -120,7 +118,7 @@ fun ChatPanel(
     LaunchedEffect(listState) {
         snapshotFlow { listState.firstVisibleItemIndex }
             .collect { index ->
-                if (index <= 1) hasNewMessages = false
+                if (index <= 2) hasNewMessages = false
             }
     }
 
@@ -133,6 +131,7 @@ fun ChatPanel(
         lastSeenSize = messages.size
         if (listState.firstVisibleItemIndex <= 2) {
             listState.animateScrollToItem(0)
+            hasNewMessages = false
         } else {
             hasNewMessages = true
         }
@@ -223,32 +222,44 @@ fun ChatPanel(
             OutlinedTextField(
                 value = messageText,
                 onValueChange = { if (it.length <= 200) messageText = it },
-                placeholder = { Text(if (isEditing) "Edit message..." else "Type a message...") },
+                placeholder = { Text(if (isEditing) "Edit message..." else "Message...") },
                 modifier = Modifier.weight(1f).testTag("room_chatInput"),
-                singleLine = true,
+                maxLines = 4,
+                shape = RoundedCornerShape(24.dp),
                 leadingIcon = if (isEditing) {
                     { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                } else null,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(
-                    onSend = {
-                        if (messageText.isNotBlank()) {
-                            if (isEditing) {
-                                onEditMessage(messageText)
-                            } else {
-                                onSendMessage(messageText)
-                            }
-                            messageText = ""
-                        }
-                    }
-                )
+                } else null
             )
+            Spacer(modifier = Modifier.width(4.dp))
+            IconButton(
+                onClick = {
+                    if (messageText.isNotBlank()) {
+                        if (isEditing) {
+                            onEditMessage(messageText)
+                        } else {
+                            onSendMessage(messageText)
+                        }
+                        messageText = ""
+                    }
+                },
+                enabled = messageText.isNotBlank()
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.Send,
+                    contentDescription = "Send",
+                    tint = if (messageText.isNotBlank()) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
             if (isSeated) {
-                IconButton(onClick = {
-                    focusManager.clearFocus()
-                    currentSeatEntry?.key?.toIntOrNull()?.let { onToggleMic(it) }
-                }) {
+                IconButton(
+                    onClick = {
+                        focusManager.clearFocus()
+                        currentSeatEntry?.key?.toIntOrNull()?.let { onToggleMic(it) }
+                    },
+                    enabled = !isVoiceUnavailable
+                ) {
                     Icon(
                         imageVector = if (isVoiceUnavailable || isSelfMuted) Icons.Default.MicOff else Icons.Default.Mic,
                         contentDescription = if (isVoiceUnavailable) "Voice unavailable" else if (isSelfMuted) "Unmute" else "Mute",

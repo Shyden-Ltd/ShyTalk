@@ -20,6 +20,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -139,7 +141,8 @@ fun PrivateMessageBubble(
 
     val isMediaOnly = !message.isRecalled && (
         (message.type == PrivateMessageType.STICKER && !message.stickerUrl.isNullOrEmpty()) ||
-        (message.type == PrivateMessageType.IMAGE && (message.imageUrls.isNotEmpty() || message.localImageData.isNotEmpty()) && message.text.isBlank())
+        (message.type == PrivateMessageType.IMAGE && (message.imageUrls.isNotEmpty() || message.localImageData.isNotEmpty()) && message.text.isBlank()) ||
+        (message.type == PrivateMessageType.ROOM_INVITE && !message.roomInviteId.isNullOrEmpty())
     )
 
     val isSending = message.sendStatus == SendStatus.SENDING
@@ -177,7 +180,7 @@ fun PrivateMessageBubble(
             Spacer(modifier = Modifier.width(4.dp))
         }
 
-        Box {
+        Column {
             Column(
                 modifier = Modifier
                     .widthIn(max = 280.dp)
@@ -267,36 +270,58 @@ fun PrivateMessageBubble(
                         )
                     }
 
-                    // Room invite card
+                    // Room invite card — styled like RoomListItem
                     if (message.type == PrivateMessageType.ROOM_INVITE && !message.roomInviteId.isNullOrEmpty()) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (isSent) MaterialTheme.colorScheme.primaryContainer
-                                else MaterialTheme.colorScheme.secondaryContainer,
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
+                                .widthIn(min = 220.dp, max = 280.dp)
+                                .height(100.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.primaryContainer)
                                 .clickable { onRoomInviteTap?.invoke(message.roomInviteId!!) }
                         ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Text(
-                                    text = "Room Invite",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (isSent) MaterialTheme.colorScheme.onPrimaryContainer
-                                        else MaterialTheme.colorScheme.onSecondaryContainer
-                                )
+                            // Gradient overlay
+                            Box(
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
+                                            startY = 30f
+                                        )
+                                    )
+                            )
+                            // Room info
+                            Column(
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.Bottom
+                            ) {
                                 Text(
                                     text = message.roomInviteName ?: "Room",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = if (isSent) MaterialTheme.colorScheme.onPrimaryContainer
-                                        else MaterialTheme.colorScheme.onSecondaryContainer
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = "Tap to join",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (isSent) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                                        else MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = Color.White.copy(alpha = 0.8f)
                                 )
                             }
+                            // Person icon at top-right
+                            Icon(
+                                Icons.Default.Person,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(8.dp)
+                                    .size(24.dp),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
                         }
                     }
 

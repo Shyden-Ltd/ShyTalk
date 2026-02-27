@@ -392,6 +392,12 @@ exports.sendPmNotification = onDocumentCreated(
 
       if (settingsDoc.exists) {
         const settings = settingsDoc.data();
+
+        // Skip unread increment if recipient has already read past this message
+        if (settings.lastReadAt && message.createdAt && settings.lastReadAt >= message.createdAt) {
+          continue;
+        }
+
         if (settings.isMuted) {
           // Still increment unread count even if muted
           await settingsRef.update({ unreadCount: FieldValue.increment(1) });

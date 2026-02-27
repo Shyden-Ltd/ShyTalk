@@ -1,6 +1,5 @@
 package com.shyden.shytalk.feature.home
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -11,7 +10,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
@@ -34,7 +32,6 @@ import com.shyden.shytalk.core.model.ChatRoom
 import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.flagEmojiForCode
-import com.shyden.shytalk.ui.theme.CnyGold
 
 private val BottomGradient = Brush.verticalGradient(
     colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
@@ -42,7 +39,6 @@ private val BottomGradient = Brush.verticalGradient(
 )
 
 private val WhiteAlpha80 = Color.White.copy(alpha = 0.8f)
-private val GoldBorder = BorderStroke(1.dp, CnyGold.copy(alpha = 0.5f))
 
 @Composable
 fun RoomListItem(
@@ -79,7 +75,6 @@ fun RoomListItem(
     }
 
     Card(
-        border = GoldBorder,
         colors = CardDefaults.cardColors(),
         modifier = modifier
             .fillMaxWidth()
@@ -182,15 +177,6 @@ fun RoomListItem(
                     }
                 }
             }
-
-            // Lantern corner decoration
-            Text(
-                text = "\uD83C\uDFEE",
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(x = (-6).dp, y = 4.dp)
-            )
         }
     }
 }

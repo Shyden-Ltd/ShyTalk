@@ -6,16 +6,14 @@
 <title>ShyTalk — Coming Soon</title>
 <style>
   :root {
-    --bg: #1a0a0a;
-    --surface: #2a1215;
-    --border: #5c2028;
-    --text: #fde8d0;
-    --text2: #c9a87c;
-    --red: #d4263e;
-    --red-glow: #ff3350;
-    --gold: #f0c246;
-    --gold-dim: #c9973a;
-    --lantern: #e63946;
+    --bg: #0f0d15;
+    --surface: #1c1a24;
+    --border: #3a3550;
+    --text: #e8e0f0;
+    --text2: #a89ec0;
+    --primary: #6750a4;
+    --primary-glow: #9a82db;
+    --accent: #d0bcff;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -32,7 +30,7 @@
     position: relative;
   }
 
-  /* Radial red glow behind content */
+  /* Subtle radial glow behind content */
   body::before {
     content: "";
     position: fixed;
@@ -41,58 +39,8 @@
     width: 600px;
     height: 600px;
     transform: translate(-50%, -50%);
-    background: radial-gradient(circle, rgba(212,38,62,0.15) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(103,80,164,0.15) 0%, transparent 70%);
     pointer-events: none;
-  }
-
-  /* Floating lanterns */
-  .lantern {
-    position: fixed;
-    font-size: 2.5rem;
-    opacity: 0.35;
-    animation: sway 4s ease-in-out infinite;
-    pointer-events: none;
-    filter: drop-shadow(0 0 12px rgba(230,57,70,0.5));
-  }
-  .lantern:nth-child(1) { top: 6%; left: 8%; animation-delay: 0s; }
-  .lantern:nth-child(2) { top: 4%; right: 10%; animation-delay: 1.2s; font-size: 2rem; }
-  .lantern:nth-child(3) { top: 12%; left: 25%; animation-delay: 2.4s; font-size: 1.8rem; opacity: 0.25; }
-  .lantern:nth-child(4) { top: 8%; right: 28%; animation-delay: 0.8s; font-size: 2.2rem; opacity: 0.3; }
-
-  @keyframes sway {
-    0%, 100% { transform: rotate(-3deg) translateY(0); }
-    50% { transform: rotate(3deg) translateY(-8px); }
-  }
-
-  /* Falling sparkles */
-  .sparkle {
-    position: fixed;
-    width: 3px;
-    height: 3px;
-    background: var(--gold);
-    border-radius: 50%;
-    opacity: 0;
-    pointer-events: none;
-    animation: fall linear infinite;
-  }
-  .sparkle:nth-child(5)  { left: 5%;  animation-duration: 6s;   animation-delay: 0s; }
-  .sparkle:nth-child(6)  { left: 12%; animation-duration: 8s;   animation-delay: 1s; }
-  .sparkle:nth-child(7)  { left: 22%; animation-duration: 7s;   animation-delay: 3s; }
-  .sparkle:nth-child(8)  { left: 30%; animation-duration: 9s;   animation-delay: 2s; }
-  .sparkle:nth-child(9)  { left: 38%; animation-duration: 6.5s; animation-delay: 4s; }
-  .sparkle:nth-child(10) { left: 46%; animation-duration: 7.5s; animation-delay: 1.5s; }
-  .sparkle:nth-child(11) { left: 54%; animation-duration: 8.5s; animation-delay: 0.5s; }
-  .sparkle:nth-child(12) { left: 62%; animation-duration: 6.8s; animation-delay: 2.5s; }
-  .sparkle:nth-child(13) { left: 70%; animation-duration: 7.2s; animation-delay: 3.5s; }
-  .sparkle:nth-child(14) { left: 78%; animation-duration: 8.2s; animation-delay: 0.8s; }
-  .sparkle:nth-child(15) { left: 85%; animation-duration: 6.3s; animation-delay: 1.8s; }
-  .sparkle:nth-child(16) { left: 93%; animation-duration: 7.8s; animation-delay: 4.2s; }
-
-  @keyframes fall {
-    0%   { transform: translateY(-10px); opacity: 0; }
-    10%  { opacity: 0.8; }
-    90%  { opacity: 0.3; }
-    100% { transform: translateY(100vh); opacity: 0; }
   }
 
   .container {
@@ -103,22 +51,6 @@
     z-index: 1;
   }
 
-  /* Horse zodiac symbol with galloping animation */
-  .zodiac {
-    font-size: 4rem;
-    margin-bottom: 0.5rem;
-    filter: drop-shadow(0 0 20px rgba(240,194,70,0.4));
-    animation: gallop 2s ease-in-out infinite;
-    display: inline-block;
-  }
-
-  @keyframes gallop {
-    0%, 100% { transform: translateX(0) translateY(0); }
-    25% { transform: translateX(6px) translateY(-8px); }
-    50% { transform: translateX(0) translateY(0); }
-    75% { transform: translateX(-6px) translateY(-5px); }
-  }
-
   .logo {
     font-size: 3.5rem;
     font-weight: 700;
@@ -127,34 +59,14 @@
   }
 
   .logo span {
-    color: var(--gold);
-    text-shadow: 0 0 24px rgba(240,194,70,0.3);
+    color: var(--accent);
+    text-shadow: 0 0 24px rgba(208,188,255,0.3);
   }
 
   .tagline {
     color: var(--text2);
     font-size: 1.1rem;
-    margin-bottom: 0.5rem;
-  }
-
-  .cny-greeting {
-    font-size: 0.9rem;
-    color: var(--gold-dim);
-    margin-bottom: 0.5rem;
-    letter-spacing: 0.08em;
-  }
-
-  .cny-greeting .horse-char {
-    font-size: 1.1rem;
-    color: var(--gold);
-  }
-
-  .cny-calligraphy {
-    font-size: 1.6rem;
-    color: var(--gold);
     margin-bottom: 1.5rem;
-    letter-spacing: 0.15em;
-    text-shadow: 0 0 16px rgba(240,194,70,0.3);
   }
 
   .badge {
@@ -172,16 +84,16 @@
     display: inline-block;
     width: 8px;
     height: 8px;
-    background: var(--red);
+    background: var(--primary);
     border-radius: 50%;
     margin-right: 0.5rem;
     animation: pulse 2s ease-in-out infinite;
-    box-shadow: 0 0 6px var(--red-glow);
+    box-shadow: 0 0 6px var(--primary-glow);
   }
 
   @keyframes pulse {
-    0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--red-glow); }
-    50% { opacity: 0.4; box-shadow: 0 0 2px var(--red-glow); }
+    0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--primary-glow); }
+    50% { opacity: 0.4; box-shadow: 0 0 2px var(--primary-glow); }
   }
 
   .links {
@@ -200,66 +112,23 @@
   }
 
   .links a:hover {
-    color: var(--gold);
+    color: var(--accent);
   }
 
   .links .coming-soon-link {
     opacity: 0.5;
     cursor: default;
   }
-
-  /* Corner ornaments */
-  .ornament {
-    position: fixed;
-    font-size: 1.4rem;
-    opacity: 0.2;
-    pointer-events: none;
-    color: var(--gold);
-  }
-  .ornament.tl { top: 1.5rem; left: 1.5rem; }
-  .ornament.tr { top: 1.5rem; right: 1.5rem; }
-  .ornament.bl { bottom: 1.5rem; left: 1.5rem; }
-  .ornament.br { bottom: 1.5rem; right: 1.5rem; }
 </style>
 </head>
 <body>
-  <!-- Lanterns -->
-  <div class="lantern">&#x1F3EE;</div>
-  <div class="lantern">&#x1F3EE;</div>
-  <div class="lantern">&#x1F3EE;</div>
-  <div class="lantern">&#x1F3EE;</div>
-
-  <!-- Gold sparkles (12 particles) -->
-  <div class="sparkle"></div>
-  <div class="sparkle"></div>
-  <div class="sparkle"></div>
-  <div class="sparkle"></div>
-  <div class="sparkle"></div>
-  <div class="sparkle"></div>
-  <div class="sparkle"></div>
-  <div class="sparkle"></div>
-  <div class="sparkle"></div>
-  <div class="sparkle"></div>
-  <div class="sparkle"></div>
-  <div class="sparkle"></div>
-
-  <!-- Corner ornaments -->
-  <div class="ornament tl">&#x2726; &#x1F3EE;</div>
-  <div class="ornament tr">&#x1F3EE; &#x2726;</div>
-  <div class="ornament bl">&#x2726; &#x1F3EE;</div>
-  <div class="ornament br">&#x1F3EE; &#x2726;</div>
-
   <div class="container">
-    <div class="zodiac">&#x1F40E;</div>
     <div class="logo">Shy<span>Talk</span></div>
     <p class="tagline">Voice chat rooms, reimagined.</p>
-    <p class="cny-greeting"><span class="horse-char">&#x99AC;</span> Year of the Horse 2026 <span class="horse-char">&#x99AC;</span></p>
-    <p class="cny-calligraphy">&#x606D;&#x559C;&#x767C;&#x8CA1;</p>
     <div class="badge"><span class="dot"></span>Coming Soon</div>
     <div class="links">
       <a href="https://play.google.com/store/apps/details?id=com.shyden.shytalk">Google Play</a>
       <a class="coming-soon-link" title="Coming soon to iOS">App Store (Coming Soon)</a>
-      <a href="/lunar-new-year.html">Learn about Lunar New Year</a>
     </div>
   </div>
 </body>

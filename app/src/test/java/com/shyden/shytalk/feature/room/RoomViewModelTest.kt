@@ -1157,6 +1157,7 @@ class RoomViewModelTest {
     @Test
     fun `toggleSelfMute - rejects unmute when voice not connected`() = roomTest {
         viewModel = createViewModel()
+        viewModel.onAudioPermissionResult(true)
         val seats = TestData.createSeatsWithOwner(currentUserId).toMutableMap()
         // Owner is on seat 0, muted
         seats["0"] = TestData.createTestSeat(userId = currentUserId, isMuted = true)
@@ -2582,6 +2583,7 @@ class RoomViewModelTest {
     @Test
     fun `toggleSelfMute - unmute shows Unmuted message`() = roomTest {
         viewModel = createViewModel()
+        viewModel.onAudioPermissionResult(true)
         val seats = TestData.createSeatsWithOwner(currentUserId).toMutableMap()
         seats["0"] = TestData.createTestSeat(userId = currentUserId, isMuted = true)
         emitRoomAsOwner(TestData.createTestRoom(ownerId = currentUserId, seats = seats))
@@ -3451,6 +3453,7 @@ class RoomViewModelTest {
         connectionStateFlow.value = VoiceConnectionState.CONNECTED
 
         viewModel = createViewModel()
+        viewModel.onAudioPermissionResult(true)
         val seats = TestData.createSeatsWithOwner(currentUserId).toMutableMap()
         // Owner is on seat 0, muted — so toggleSelfMute will attempt to unmute
         seats["0"] = TestData.createTestSeat(userId = currentUserId, isMuted = true)

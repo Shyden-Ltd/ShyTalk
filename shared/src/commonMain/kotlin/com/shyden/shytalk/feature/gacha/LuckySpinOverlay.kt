@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,11 +23,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -57,7 +56,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.audio.GachaSoundPlayer
 import com.shyden.shytalk.core.model.CoinPackage
 import com.shyden.shytalk.core.model.GachaGift
@@ -766,10 +770,10 @@ fun LuckySpinOverlay(
         if (showCoinShop) {
             InlineCoinShop(
                 coinPackages = gachaState.coinPackages,
+                coinBalance = gachaState.coinBalance,
                 onPurchase = { coins ->
                     GachaSoundPlayer.playCoinPurchase()
                     onTestPurchase(coins)
-                    showCoinShop = false
                 },
                 onDismiss = { showCoinShop = false }
             )
@@ -779,6 +783,7 @@ fun LuckySpinOverlay(
         if (showHistory) {
             InlineSpinHistory(
                 transactions = gachaState.spinHistory,
+                gifts = gachaState.winnableGifts,
                 onDismiss = { showHistory = false }
             )
         }
@@ -796,6 +801,7 @@ fun LuckySpinOverlay(
 @Composable
 private fun InlineCoinShop(
     coinPackages: List<CoinPackage>,
+    coinBalance: Long,
     onPurchase: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -831,7 +837,14 @@ private fun InlineCoinShop(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "\uD83E\uDE99 $coinBalance",
+                color = Color.White.copy(alpha = 0.7f),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             if (coinPackages.isEmpty()) {
                 Text(
@@ -861,22 +874,32 @@ private fun InlineCoinShop(
 @Composable
 private fun InlineSpinHistory(
     transactions: List<Transaction>,
+    gifts: List<Gift>,
     onDismiss: () -> Unit
 ) {
+    val iconLookup = remember(gifts) { gifts.associateBy({ it.name }, { it.iconUrl }) }
+    val sorted = remember(transactions) { transactions.sortedByDescending { it.timestamp } }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.9f))
+            .background(Color.Black.copy(alpha = 0.6f))
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }
-            ) { /* consume taps */ },
+            ) { onDismiss() },
         contentAlignment = Alignment.Center
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp)
+                .fillMaxWidth(0.9f)
+                .fillMaxHeight(0.55f)
+                .background(Color(0xFF1A1A2E), RoundedCornerShape(16.dp))
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) { /* consume taps on panel */ }
+                .padding(16.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -894,64 +917,113 @@ private fun InlineSpinHistory(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            if (transactions.isEmpty()) {
+            if (sorted.isEmpty()) {
                 Text(
                     text = "No spins yet",
                     color = Color.White.copy(alpha = 0.5f),
                     fontSize = 14.sp
                 )
             } else {
-                LazyColumn(
-                    modifier = Modifier.heightIn(max = 320.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
                 ) {
-                    items(transactions) { tx ->
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = Color.White.copy(alpha = 0.05f),
-                            modifier = Modifier.fillMaxWidth()
+                    sorted.forEach { tx ->
+                        val giftNames = tx.details
+                            ?.split(",")
+                            ?.map { it.trim() }
+                            ?.filter { it.isNotBlank() }
+                            ?: emptyList()
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
+                            // Pull count badge
+                            val pulls = tx.pullCount ?: 1
+                            Box(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                    .size(28.dp)
+                                    .background(Color(0xFFE53935), RoundedCornerShape(6.dp)),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Text("\uD83C\uDFB0", fontSize = 18.sp)
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "${pulls}x",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            // Gift icons row + names
+                            Column(modifier = Modifier.weight(1f)) {
+                                if (giftNames.isNotEmpty()) {
+                                    // Show gift icons in a row (max 10 visible)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        giftNames.take(10).forEach { name ->
+                                            val url = iconLookup[name]
+                                            if (url != null && url.isNotBlank()) {
+                                                AsyncImage(
+                                                    model = url,
+                                                    contentDescription = name,
+                                                    modifier = Modifier
+                                                        .size(22.dp)
+                                                        .clip(CircleShape),
+                                                    contentScale = ContentScale.Crop
+                                                )
+                                            } else {
+                                                Text(giftEmoji(name), fontSize = 14.sp)
+                                            }
+                                        }
+                                        if (giftNames.size > 10) {
+                                            Text(
+                                                "+${giftNames.size - 10}",
+                                                fontSize = 10.sp,
+                                                color = Color.White.copy(alpha = 0.5f),
+                                                modifier = Modifier.align(Alignment.CenterVertically)
+                                            )
+                                        }
+                                    }
+                                    // Gift names summary
+                                    val grouped = giftNames.groupingBy { it }.eachCount()
+                                    val summary = grouped.entries
+                                        .sortedByDescending { it.value }
+                                        .joinToString(", ") { (name, count) ->
+                                            if (count > 1) "${count}x $name" else name
+                                        }
                                     Text(
-                                        text = tx.pullCount?.let { "x$it pull" } ?: "Pull",
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp,
-                                        maxLines = 1
-                                    )
-                                    Text(
-                                        text = transactionLabel(tx),
-                                        color = Color.White.copy(alpha = 0.5f),
-                                        fontSize = 12.sp,
+                                        text = summary,
+                                        color = Color.White.copy(alpha = 0.7f),
+                                        fontSize = 10.sp,
                                         maxLines = 2,
                                         overflow = TextOverflow.Ellipsis
                                     )
+                                } else {
                                     Text(
-                                        text = formatTimestamp(tx.timestamp),
-                                        color = Color.White.copy(alpha = 0.3f),
-                                        fontSize = 11.sp,
-                                        maxLines = 1
+                                        "${pulls}x Pull",
+                                        color = Color.White.copy(alpha = 0.7f),
+                                        fontSize = 11.sp
                                     )
                                 }
-                                Text(
-                                    text = "${tx.amount}",
-                                    color = if (tx.amount < 0) Color(0xFFFF5252) else Color(0xFF4CAF50),
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
-                                )
-                                Spacer(modifier = Modifier.width(2.dp))
-                                Text("\uD83E\uDE99", fontSize = 12.sp)
                             }
+
+                            // Cost
+                            Text(
+                                text = "\uD83E\uDE99 ${kotlin.math.abs(tx.amount)}",
+                                color = Color(0xFFFFD700),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }
@@ -1002,40 +1074,66 @@ private fun InlinePrizeCatalog(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            LazyColumn(
-                modifier = Modifier.heightIn(max = 320.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState())
             ) {
-                items(sorted) { gift ->
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFF9E9E9E).copy(alpha = 0.08f),
+                sorted.chunked(4).forEach { row ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(giftEmoji(gift.name), fontSize = 20.sp)
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = gift.name,
-                                color = Color.White,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 14.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text(
-                                text = "\uD83E\uDE99 ${gift.coinValue}",
-                                color = Color(0xFFFFD700),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp,
-                                maxLines = 1
-                            )
+                        row.forEach { gift ->
+                            Box(modifier = Modifier.weight(1f)) {
+                                Box(
+                                    modifier = Modifier
+                                        .aspectRatio(1f)
+                                        .background(
+                                            Color(0xFF9E9E9E).copy(alpha = 0.1f),
+                                            RoundedCornerShape(8.dp)
+                                        )
+                                        .padding(4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center,
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+                                        if (gift.iconUrl.isNotBlank()) {
+                                            AsyncImage(
+                                                model = gift.iconUrl,
+                                                contentDescription = gift.name,
+                                                modifier = Modifier.size(36.dp)
+                                            )
+                                        } else {
+                                            Text(giftEmoji(gift.name), fontSize = 24.sp)
+                                        }
+                                        Text(
+                                            text = gift.name,
+                                            color = Color.White,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            textAlign = TextAlign.Center,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "\uD83E\uDE99 ${gift.coinValue}",
+                                            color = Color(0xFFFFD700),
+                                            fontSize = 8.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        repeat(4 - row.size) {
+                            Spacer(modifier = Modifier.weight(1f))
                         }
                     }
                 }

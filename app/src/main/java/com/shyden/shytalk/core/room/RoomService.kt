@@ -1,14 +1,19 @@
 package com.shyden.shytalk.core.room
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.shyden.shytalk.MainActivity
 import com.shyden.shytalk.R
 import com.shyden.shytalk.core.chathead.ChatHeadManager
@@ -94,7 +99,21 @@ class RoomService : Service() {
             return START_NOT_STICKY
         }
 
-        startForeground(Constants.ROOM_NOTIFICATION_ID, buildNotification(roomId, "Voice Room"))
+        val notification = buildNotification(roomId, "Voice Room")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val hasMicPermission = ContextCompat.checkSelfPermission(
+                this, Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+            val serviceType = if (hasMicPermission) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            } else {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            }
+            startForeground(Constants.ROOM_NOTIFICATION_ID, notification, serviceType)
+        } else {
+            startForeground(Constants.ROOM_NOTIFICATION_ID, notification)
+        }
         observeRoom()
         observeRoomScreenVisibility()
         observeRoomClosed()

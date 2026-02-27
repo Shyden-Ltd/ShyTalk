@@ -26,7 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 
-const val CURRENT_LEGAL_VERSION = 1
+const val CURRENT_LEGAL_VERSION = 3
 
 @Composable
 fun LegalAcceptanceScreen(

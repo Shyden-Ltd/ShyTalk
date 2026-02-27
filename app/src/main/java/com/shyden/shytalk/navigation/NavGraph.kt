@@ -43,7 +43,6 @@ import com.shyden.shytalk.data.repository.UserRepository
 import com.shyden.shytalk.data.remote.PmSyncService
 import com.shyden.shytalk.data.remote.VoiceService
 import com.shyden.shytalk.feature.auth.GoogleSignInScreen
-import com.shyden.shytalk.feature.home.LunarNewYearScreen
 import com.shyden.shytalk.feature.legal.CURRENT_LEGAL_VERSION
 import com.shyden.shytalk.feature.legal.CommunityStandardsScreen
 import com.shyden.shytalk.feature.legal.LegalAcceptanceScreen
@@ -155,13 +154,19 @@ fun NavGraph(
     ) {
         composable(Screen.SignIn.route) {
             GoogleSignInScreen(
-                onAuthSuccess = { hasProfile, hasDOB ->
+                onAuthSuccess = { hasProfile, hasDOB, needsLegalAcceptance ->
                     when {
                         !hasProfile -> navController.navigate(Screen.ProfileSetup.route) {
                             popUpTo(Screen.SignIn.route) { inclusive = true }
                         }
                         !hasDOB -> navController.navigate(Screen.RequiredDOB.route) {
                             popUpTo(Screen.SignIn.route) { inclusive = true }
+                        }
+                        needsLegalAcceptance -> {
+                            navController.navigate(Screen.Main.route) {
+                                popUpTo(Screen.SignIn.route) { inclusive = true }
+                            }
+                            navController.navigate(Screen.LegalAcceptance.route)
                         }
                         else -> navController.navigate(Screen.Main.route) {
                             popUpTo(Screen.SignIn.route) { inclusive = true }
@@ -199,30 +204,10 @@ fun NavGraph(
             val scope = rememberCoroutineScope()
             var notificationPermissionRequested by rememberSaveable { mutableStateOf(false) }
             var showOverlayDialog by rememberSaveable { mutableStateOf(false) }
-            var legalCheckDone by rememberSaveable { mutableStateOf(false) }
 
-            val notificationPermissionLauncher = rememberLauncherForActivityResult(
-                ActivityResultContracts.RequestPermission()
+            val permissionLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.RequestMultiplePermissions()
             ) { /* granted or denied — no action needed */ }
-
-            // Legal acceptance check
-            LaunchedEffect(Unit) {
-                if (!legalCheckDone) {
-                    val userId = authRepository.currentUserId
-                    if (userId != null) {
-                        when (val result = userRepository.getUser(userId)) {
-                            is Resource.Success -> {
-                                if (result.data.acceptedLegalVersion < CURRENT_LEGAL_VERSION) {
-                                    navController.navigate(Screen.LegalAcceptance.route)
-                                    return@LaunchedEffect
-                                }
-                            }
-                            else -> {}
-                        }
-                    }
-                    legalCheckDone = true
-                }
-            }
 
             // Save FCM token on login
             LaunchedEffect(Unit) {
@@ -251,10 +236,17 @@ fun NavGraph(
             LaunchedEffect(Unit) {
                 if (!notificationPermissionRequested && isProductionApp) {
                     notificationPermissionRequested = true
+                    val permissionsToRequest = mutableListOf<String>()
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
                     ) {
-                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                        permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
+                    }
+                    if (permissionsToRequest.isNotEmpty()) {
+                        permissionLauncher.launch(permissionsToRequest.toTypedArray())
                     }
                     if (!Settings.canDrawOverlays(context)) {
                         showOverlayDialog = true
@@ -291,6 +283,7 @@ fun NavGraph(
             val conversationListViewModel: ConversationListViewModel = koinInject()
             val dailyRewardViewModel: DailyRewardViewModel = org.koin.compose.viewmodel.koinViewModel()
             var showDailyRewardDialog by rememberSaveable { mutableStateOf(true) }
+            val dailyRewardState by dailyRewardViewModel.uiState.collectAsState()
 
             // Trigger daily reward check when Main screen loads
             LaunchedEffect(Unit) {
@@ -301,7 +294,7 @@ fun NavGraph(
                 }
             }
 
-            if (showDailyRewardDialog) {
+            if (showDailyRewardDialog && dailyRewardState.showDialog && !dailyRewardState.hasClaimedToday) {
                 DailyRewardDialog(
                     viewModel = dailyRewardViewModel,
                     onDismiss = { showDailyRewardDialog = false }
@@ -328,9 +321,6 @@ fun NavGraph(
                 },
                 onNavigateToSettings = {
                     navController.navigate(Screen.Settings.route)
-                },
-                onNavigateToLunarNewYear = {
-                    navController.navigate(Screen.LunarNewYear.route)
                 },
                 onNavigateToNewMessage = {
                     navController.navigate(Screen.NewMessage.route)
@@ -532,12 +522,6 @@ fun NavGraph(
                         popUpTo(Screen.Main.route) { inclusive = true }
                     }
                 }
-            )
-        }
-
-        composable(Screen.LunarNewYear.route) {
-            LunarNewYearScreen(
-                onNavigateBack = { navController.safePopBackStack() }
             )
         }
 

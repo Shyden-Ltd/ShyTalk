@@ -17,15 +17,15 @@
 
     <!-- Three dots (typing/chat indicator) - fading opacity -->
     <path
-        android:fillColor="#C62828"
+        android:fillColor="#6750A4"
         android:fillAlpha="0.7"
         android:pathData="M42.8,49 A2.2,2.2,0,1,1,47.2,49 A2.2,2.2,0,1,1,42.8,49 Z" />
     <path
-        android:fillColor="#C62828"
+        android:fillColor="#6750A4"
         android:fillAlpha="0.5"
         android:pathData="M48.8,49 A2.2,2.2,0,1,1,53.2,49 A2.2,2.2,0,1,1,48.8,49 Z" />
     <path
-        android:fillColor="#C62828"
+        android:fillColor="#6750A4"
         android:fillAlpha="0.35"
         android:pathData="M54.8,49 A2.2,2.2,0,1,1,59.2,49 A2.2,2.2,0,1,1,54.8,49 Z" />
 

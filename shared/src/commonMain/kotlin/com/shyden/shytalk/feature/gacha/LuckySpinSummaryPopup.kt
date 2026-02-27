@@ -4,21 +4,18 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -55,7 +52,6 @@ private data class GroupedWin(
     val iconUrl: String = ""
 )
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LuckySpinSummaryPopup(
     wins: List<GachaGift>,
@@ -105,12 +101,12 @@ fun LuckySpinSummaryPopup(
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp)
         ) {
                 // Title
                 Text(
                     text = "Spin Results",
-                    fontSize = 22.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Black,
                     color = Color.White,
                     letterSpacing = 2.sp,
@@ -121,34 +117,45 @@ fun LuckySpinSummaryPopup(
                 Text(
                     text = "${wins.size} SPIN${if (wins.size > 1) "S" else ""}${if (spinTier.boostedDrop) "  \u2605 INCREASED DROP RATE" else ""}",
                     color = Color.White.copy(alpha = 0.35f),
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     letterSpacing = 2.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-                // Gift cards grid
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                // Gift cards grid — 4 columns with perfect squares
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(if (grouped.size > 8) 200.dp else 140.dp)
                         .verticalScroll(rememberScrollState())
                 ) {
-                    grouped.forEachIndexed { index, win ->
-                        WinCard(win = win, index = index)
+                    grouped.chunked(4).forEach { row ->
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            row.forEachIndexed { index, win ->
+                                Box(modifier = Modifier.weight(1f)) {
+                                    WinCard(win = win, index = index)
+                                }
+                            }
+                            // Fill remaining slots with spacers
+                            repeat(4 - row.size) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Total coins
                 Text(
                     text = "\uD83E\uDE99 ${totalCoins.formatWithCommas()} Coins",
-                    fontSize = 26.sp,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Black,
                     style = MaterialTheme.typography.headlineLarge.copy(
                         brush = Brush.linearGradient(
@@ -157,7 +164,7 @@ fun LuckySpinSummaryPopup(
                     )
                 )
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Spin again button
                 Button(
@@ -170,18 +177,18 @@ fun LuckySpinSummaryPopup(
                     shape = RoundedCornerShape(50),
                     modifier = Modifier
                         .fillMaxWidth(0.8f)
-                        .height(48.dp)
+                        .height(40.dp)
                 ) {
                     Text(
                         text = "${spinTier.label} SPIN AGAIN \u00B7 \uD83E\uDE99${spinTier.cost}",
                         fontWeight = FontWeight.ExtraBold,
-                        fontSize = 15.sp,
+                        fontSize = 13.sp,
                         letterSpacing = 2.sp,
                         color = if (canAffordSpinAgain) Color.White else Color.Gray
                     )
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 // Close button
                 Button(
@@ -192,13 +199,13 @@ fun LuckySpinSummaryPopup(
                     shape = RoundedCornerShape(50),
                     modifier = Modifier
                         .fillMaxWidth(0.6f)
-                        .height(40.dp)
+                        .height(34.dp)
                 ) {
                     Text(
                         text = "Close",
                         color = Color.White.copy(alpha = 0.6f),
                         fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
+                        fontSize = 12.sp
                     )
                 }
             }
@@ -219,15 +226,13 @@ private fun WinCard(win: GroupedWin, index: Int) {
         label = "cardScale$index"
     )
 
-    val cardColor = Color(0xFF9E9E9E)
-
     Box(
         modifier = Modifier
-            .size(80.dp)
+            .aspectRatio(1f)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(RoundedCornerShape(16.dp))
-            .background(cardColor.copy(alpha = 0.1f))
-            .padding(horizontal = 4.dp, vertical = 6.dp),
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFF9E9E9E).copy(alpha = 0.1f))
+            .padding(2.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -235,22 +240,6 @@ private fun WinCard(win: GroupedWin, index: Int) {
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxSize()
         ) {
-            // Count badge — always reserve space
-            Text(
-                text = if (win.count > 1) "x${win.count}" else "",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Black,
-                color = if (win.count > 1) Color(0xFF1A1A2E) else Color.Transparent,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .then(
-                        if (win.count > 1) Modifier.background(
-                            Brush.linearGradient(listOf(Color(0xFFFFD700), Color(0xFFFF9100)))
-                        ) else Modifier
-                    )
-                    .padding(horizontal = 7.dp, vertical = 1.dp)
-            )
-
             if (win.iconUrl.isNotBlank()) {
                 AsyncImage(
                     model = win.iconUrl,
@@ -260,26 +249,47 @@ private fun WinCard(win: GroupedWin, index: Int) {
             } else {
                 Text(
                     text = giftEmoji(win.giftName),
-                    fontSize = 22.sp
+                    fontSize = 20.sp
                 )
             }
 
             Text(
                 text = win.giftName,
                 color = Color.White,
-                fontSize = 10.sp,
+                fontSize = 8.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
-                maxLines = 1
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
 
             Text(
-                text = "\uD83E\uDE99 ${win.coinValue.formatWithCommas()}",
+                text = "\uD83E\uDE99${win.coinValue.formatWithCommas()}",
                 color = Color(0xFFFFD700),
-                fontSize = 11.sp,
+                fontSize = 7.sp,
                 fontWeight = FontWeight.ExtraBold,
-                maxLines = 1
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
+        }
+
+        // Overlapping quantity badge at top-end
+        if (win.count > 1) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(18.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(Color(0xFFE53935)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "x${win.count}",
+                    fontSize = 7.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color.White
+                )
+            }
         }
     }
 }

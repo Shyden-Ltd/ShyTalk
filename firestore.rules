@@ -55,7 +55,10 @@ service cloud.firestore {
 
     // Conversations
     match /conversations/{conversationId} {
-      allow read: if request.auth != null
+      // get: allow on non-existent docs (existence check before create)
+      allow get: if request.auth != null;
+      // list: only participants can query conversations
+      allow list: if request.auth != null
                   && request.auth.uid in resource.data.participantIds;
       allow create: if request.auth != null;
       allow update: if request.auth != null
@@ -72,7 +75,10 @@ service cloud.firestore {
         }
       }
       match /settings/{userId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read: if request.auth != null && request.auth.uid == userId;
+        // create: any participant can init default settings for others during group creation
+        allow create: if request.auth != null;
+        allow update: if request.auth != null && request.auth.uid == userId;
       }
       match /mutes/{userId} {
         allow read: if request.auth != null;

@@ -1,7 +1,6 @@
 package com.shyden.shytalk.feature.auth
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,7 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -25,7 +23,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -37,18 +34,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.shyden.shytalk.feature.suspension.SuspensionScreen
-import com.shyden.shytalk.ui.components.CnyRoomBackground
-import com.shyden.shytalk.ui.theme.CnyGold
 import kotlinx.coroutines.launch
 
 private const val WEB_CLIENT_ID =
     "517834977595-cdu78p6q7vg57utpsvtik04c195lbh8b.apps.googleusercontent.com"
 
-private val SubtitleWhite = Color.White.copy(alpha = 0.85f)
-
 @Composable
 fun GoogleSignInScreen(
-    onAuthSuccess: (hasProfile: Boolean, hasDOB: Boolean) -> Unit,
+    onAuthSuccess: (hasProfile: Boolean, hasDOB: Boolean, needsLegalAcceptance: Boolean) -> Unit,
     viewModel: AuthViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -59,7 +52,7 @@ fun GoogleSignInScreen(
 
     LaunchedEffect(uiState.isAuthenticated, uiState.isSuspended) {
         if (uiState.isAuthenticated && !uiState.isSuspended) {
-            onAuthSuccess(uiState.hasProfile, uiState.hasDOB)
+            onAuthSuccess(uiState.hasProfile, uiState.hasDOB, uiState.needsLegalAcceptance)
         }
     }
 
@@ -102,102 +95,71 @@ fun GoogleSignInScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        // Festive animated background
-        CnyRoomBackground(modifier = Modifier.fillMaxSize())
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 32.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "ShyTalk",
+                style = MaterialTheme.typography.headlineLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
 
-        Scaffold(
-            containerColor = Color.Transparent,
-            snackbarHost = { SnackbarHost(snackbarHostState) }
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(horizontal = 32.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "\uD83C\uDFEE \uD83D\uDC0E \uD83C\uDFEE",
-                    style = MaterialTheme.typography.displayLarge
-                )
+            Spacer(modifier = Modifier.height(8.dp))
 
-                Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Voice chat rooms, reimagined.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
-                Text(
-                    text = "ShyTalk",
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = CnyGold
-                )
+            Spacer(modifier = Modifier.height(32.dp))
 
-                Spacer(modifier = Modifier.height(8.dp))
+            if (uiState.isLoading) {
+                CircularProgressIndicator(modifier = Modifier.testTag("signIn_loadingIndicator"))
+            } else {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            try {
+                                val googleIdOption = GetGoogleIdOption.Builder()
+                                    .setFilterByAuthorizedAccounts(false)
+                                    .setServerClientId(WEB_CLIENT_ID)
+                                    .build()
 
-                Text(
-                    text = "Happy New Year! Connect through voice",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = SubtitleWhite
-                )
+                                val request = GetCredentialRequest.Builder()
+                                    .addCredentialOption(googleIdOption)
+                                    .build()
 
-                Text(
-                    text = "Year of the Horse 2026",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = CnyGold
-                )
+                                val result = credentialManager.getCredential(
+                                    request = request,
+                                    context = context
+                                )
 
-                Spacer(modifier = Modifier.height(4.dp))
+                                val googleIdToken = GoogleIdTokenCredential
+                                    .createFrom(result.credential.data)
+                                    .idToken
 
-                Text(
-                    text = "\u606D\u559C\u767C\u8CA1",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = CnyGold
-                )
-
-                Spacer(modifier = Modifier.height(32.dp))
-
-                if (uiState.isLoading) {
-                    CircularProgressIndicator(color = CnyGold, modifier = Modifier.testTag("signIn_loadingIndicator"))
-                } else {
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                try {
-                                    val googleIdOption = GetGoogleIdOption.Builder()
-                                        .setFilterByAuthorizedAccounts(false)
-                                        .setServerClientId(WEB_CLIENT_ID)
-                                        .build()
-
-                                    val request = GetCredentialRequest.Builder()
-                                        .addCredentialOption(googleIdOption)
-                                        .build()
-
-                                    val result = credentialManager.getCredential(
-                                        request = request,
-                                        context = context
-                                    )
-
-                                    val googleIdToken = GoogleIdTokenCredential
-                                        .createFrom(result.credential.data)
-                                        .idToken
-
-                                    viewModel.signInWithGoogle(googleIdToken)
-                                } catch (_: GetCredentialCancellationException) {
-                                    // User cancelled - do nothing
-                                } catch (e: Exception) {
-                                    snackbarHostState.showSnackbar(
-                                        e.message ?: "Google sign-in failed"
-                                    )
-                                }
+                                viewModel.signInWithGoogle(googleIdToken)
+                            } catch (_: GetCredentialCancellationException) {
+                                // User cancelled - do nothing
+                            } catch (e: Exception) {
+                                snackbarHostState.showSnackbar(
+                                    e.message ?: "Google sign-in failed"
+                                )
                             }
-                        },
-                        modifier = Modifier.fillMaxWidth().testTag("signIn_googleButton"),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = CnyGold,
-                            contentColor = Color.Black
-                        )
-                    ) {
-                        Text("Sign in with Google")
-                    }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().testTag("signIn_googleButton")
+                ) {
+                    Text("Sign in with Google")
                 }
             }
         }

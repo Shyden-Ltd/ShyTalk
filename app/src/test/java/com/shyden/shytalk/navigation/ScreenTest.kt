@@ -60,11 +60,6 @@ class ScreenTest {
     }
 
     @Test
-    fun `LunarNewYear has correct route`() {
-        assertEquals("lunar_new_year", Screen.LunarNewYear.route)
-    }
-
-    @Test
     fun `Settings has correct route`() {
         assertEquals("settings", Screen.Settings.route)
     }
@@ -125,7 +120,6 @@ class ScreenTest {
             Screen.FollowList.route,
             Screen.RequiredDOB.route,
             Screen.PrivacyPolicy.route,
-            Screen.LunarNewYear.route,
             Screen.Settings.route,
             Screen.PrivateChat.route,
             Screen.GroupChat.route,

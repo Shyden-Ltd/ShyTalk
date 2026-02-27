@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -50,7 +52,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import com.shyden.shytalk.ui.components.CnyRoomBackground
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -548,9 +549,6 @@ fun RoomScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Animated CNY Canvas background
-        CnyRoomBackground(modifier = Modifier.fillMaxSize())
-
         Scaffold(
             containerColor = Color.Transparent,
             snackbarHost = {
@@ -591,6 +589,7 @@ fun RoomScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
+                    .consumeWindowInsets(padding)
             ) {
                 val closedSummary = uiState.roomClosedSummary
             if (uiState.roomClosed && closedSummary != null) {
@@ -656,7 +655,7 @@ fun RoomScreen(
                     )
                 }
             } else if (uiState.hasJoined) {
-                Column(modifier = Modifier.fillMaxSize()) {
+                Column(modifier = Modifier.fillMaxSize().imePadding()) {
                     // Owner Away Banner
                     if (uiState.room?.state == RoomState.OWNER_AWAY) {
                         OwnerAwayBanner(
@@ -733,7 +732,16 @@ fun RoomScreen(
                         userMap = userMap,
                         isOwnerOrHost = isOwnerOrHost,
                         isVoiceUnavailable = uiState.isVoiceUnavailable,
-                        onToggleMic = { seatIndex -> viewModel.toggleSelfMute(seatIndex) },
+                        onToggleMic = { seatIndex ->
+                            val hasMic = ContextCompat.checkSelfPermission(
+                                context, Manifest.permission.RECORD_AUDIO
+                            ) == PackageManager.PERMISSION_GRANTED
+                            if (hasMic) {
+                                viewModel.toggleSelfMute(seatIndex)
+                            } else {
+                                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            }
+                        },
                         onSendMessage = { viewModel.sendMessage(it) },
                         onTapUser = { userId ->
                             showUserCardForId = userId

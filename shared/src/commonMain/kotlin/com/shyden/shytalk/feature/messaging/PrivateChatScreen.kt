@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -119,9 +120,18 @@ fun PrivateChatScreen(
         onDispose { viewModel.closeStickerPicker() }
     }
 
-    // Auto-scroll to bottom when new messages arrive (key on last message ID, not size)
-    LaunchedEffect(uiState.messages.lastOrNull()?.messageId) {
-        if (uiState.messages.isNotEmpty()) {
+    // Scroll to the most recent message on initial load
+    var hasScrolledToBottom by remember { mutableStateOf(false) }
+    LaunchedEffect(uiState.messages.size) {
+        if (uiState.messages.isNotEmpty() && !hasScrolledToBottom) {
+            listState.scrollToItem(uiState.messages.size - 1)
+            hasScrolledToBottom = true
+        }
+    }
+
+    // Always scroll to bottom when new messages arrive (sent or received)
+    LaunchedEffect(uiState.messages.size, uiState.messages.lastOrNull()?.messageId) {
+        if (uiState.messages.isNotEmpty() && hasScrolledToBottom) {
             listState.animateScrollToItem(uiState.messages.size - 1)
         }
     }
@@ -137,7 +147,7 @@ fun PrivateChatScreen(
     }
 
     // Mark messages as read when viewing
-    LaunchedEffect(uiState.messages) {
+    LaunchedEffect(uiState.messages.size, uiState.messages.lastOrNull()?.messageId) {
         viewModel.markMessagesAsRead()
     }
 
@@ -320,20 +330,22 @@ fun PrivateChatScreen(
                                         }
                                     )
                                 }
-                                HorizontalDivider()
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            "Delete Conversation",
-                                            color = MaterialTheme.colorScheme.error
-                                        )
-                                    },
-                                    onClick = {
-                                        showOverflowMenu = false
-                                        viewModel.hideConversation()
-                                        onNavigateBack()
-                                    }
-                                )
+                                if (!uiState.isGroup) {
+                                    HorizontalDivider()
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                "Delete Conversation",
+                                                color = MaterialTheme.colorScheme.error
+                                            )
+                                        },
+                                        onClick = {
+                                            showOverflowMenu = false
+                                            viewModel.hideConversation()
+                                            onNavigateBack()
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -345,6 +357,7 @@ fun PrivateChatScreen(
             modifier = modifier
                 .fillMaxSize()
                 .padding(padding)
+                .consumeWindowInsets(padding)
                 .imePadding()
         ) {
             // Blocked banner

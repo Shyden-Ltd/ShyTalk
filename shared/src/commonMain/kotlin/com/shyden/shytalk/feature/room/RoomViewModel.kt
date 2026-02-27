@@ -720,9 +720,10 @@ class RoomViewModel(
                 Triple(speaking, joined, errorMsg)
             }.distinctUntilChanged()
             .collect { (speaking, joined, errorMsg) ->
+                val isUnavailable = _uiState.value.isVoiceUnavailable
                 _uiState.update {
                     it.copy(
-                        speakingUserIds = speaking,
+                        speakingUserIds = if (isUnavailable) emptySet() else speaking,
                         isVoiceJoined = joined,
                         error = errorMsg ?: it.error
                     )
@@ -730,7 +731,7 @@ class RoomViewModel(
                 // Voice error before ready — unblock the room immediately
                 if (errorMsg != null) {
                     if (!_uiState.value.isVoiceReady) {
-                        _uiState.update { it.copy(isVoiceReady = true, isVoiceUnavailable = true) }
+                        _uiState.update { it.copy(isVoiceReady = true, isVoiceUnavailable = true, speakingUserIds = emptySet()) }
                     }
                     voiceService.clearError()
                 }
@@ -742,7 +743,7 @@ class RoomViewModel(
                 if (connState == VoiceConnectionState.CONNECTED) {
                     _uiState.update { it.copy(isVoiceReady = true, isVoiceUnavailable = false) }
                 } else if (connState == VoiceConnectionState.DISCONNECTED && _uiState.value.isVoiceReady) {
-                    _uiState.update { it.copy(isVoiceUnavailable = true) }
+                    _uiState.update { it.copy(isVoiceUnavailable = true, speakingUserIds = emptySet()) }
                 }
             }
         }
@@ -1021,6 +1022,11 @@ class RoomViewModel(
         if (seat.userId != userId) return
 
         val newMuteState = !seat.isMuted
+        // Block unmute without mic permission
+        if (!newMuteState && !_uiState.value.hasAudioPermission) {
+            _uiState.update { it.copy(error = "Microphone permission required. Please grant it in Settings.") }
+            return
+        }
         // Block unmute when voice is not connected — muting is always allowed
         if (!newMuteState && voiceService.connectionState.value != VoiceConnectionState.CONNECTED) {
             val msg = if (_uiState.value.isVoiceUnavailable) "Voice is currently unavailable"

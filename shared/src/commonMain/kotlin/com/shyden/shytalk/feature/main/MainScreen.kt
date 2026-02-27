@@ -1,11 +1,7 @@
 package com.shyden.shytalk.feature.main
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -13,7 +9,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MeetingRoom
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -36,12 +31,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.model.ChatRoom
 import com.shyden.shytalk.feature.home.RoomListContent
-import com.shyden.shytalk.ui.theme.CnyGold
 
 enum class BottomNavTab(val label: String) {
     Rooms("Rooms"),
@@ -57,7 +49,6 @@ fun MainScreen(
     onNavigateToUserProfile: (String) -> Unit,
     onNavigateToFollowList: (String, String) -> Unit,
     onNavigateToSettings: () -> Unit,
-    onNavigateToLunarNewYear: () -> Unit = {},
     onNavigateToNewMessage: () -> Unit = {},
     onNavigateToWallet: () -> Unit = {},
     messagesContent: @Composable (Modifier) -> Unit = {},
@@ -69,41 +60,27 @@ fun MainScreen(
     var showCreateDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val topBarGradient = remember(primaryColor) {
-        Brush.horizontalGradient(listOf(primaryColor, CnyGold, primaryColor))
-    }
-
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            Column {
-                TopAppBar(
-                    title = {
-                        Text(
-                            when (selectedTab) {
-                                BottomNavTab.Rooms -> "\uD83D\uDC0E\uD83C\uDFEE"
-                                BottomNavTab.Messages -> "Messages"
-                                BottomNavTab.Profile -> "Profile"
-                            }
-                        )
-                    },
-                    actions = {
-                        if (selectedTab == BottomNavTab.Profile) {
-                            IconButton(onClick = onNavigateToSettings, modifier = Modifier.testTag("main_settingsButton")) {
-                                Icon(Icons.Default.Settings, contentDescription = "Settings")
-                            }
+            TopAppBar(
+                title = {
+                    Text(
+                        when (selectedTab) {
+                            BottomNavTab.Rooms -> "Rooms"
+                            BottomNavTab.Messages -> "Messages"
+                            BottomNavTab.Profile -> "Profile"
+                        }
+                    )
+                },
+                actions = {
+                    if (selectedTab == BottomNavTab.Profile) {
+                        IconButton(onClick = onNavigateToSettings, modifier = Modifier.testTag("main_settingsButton")) {
+                            Icon(Icons.Default.Settings, contentDescription = "Settings")
                         }
                     }
-                )
-                // Red-gold gradient decoration strip
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(2.dp)
-                        .background(topBarGradient)
-                )
-            }
+                }
+            )
         },
         bottomBar = {
             NavigationBar {
@@ -174,7 +151,6 @@ fun MainScreen(
                 RoomListContent(
                     onNavigateToRoom = onNavigateToRoom,
                     onPrewarmRoom = onPrewarmRoom,
-                    onNavigateToLunarNewYear = onNavigateToLunarNewYear,
                     snackbarHostState = snackbarHostState,
                     showCreateDialog = showCreateDialog,
                     onDismissCreateDialog = { showCreateDialog = false },

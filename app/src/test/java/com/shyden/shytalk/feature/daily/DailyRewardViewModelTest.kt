@@ -74,7 +74,7 @@ class DailyRewardViewModelTest {
     }
 
     @Test
-    fun `checkAndShowDialog hides dialog when already claimed today`() = runTest {
+    fun `checkAndShowDialog shows dialog even when already claimed today`() = runTest {
         val vm = createViewModel()
         // Use java.time to compute today's date in the same format as the VM
         val today = java.time.LocalDate.now().toString()
@@ -86,7 +86,7 @@ class DailyRewardViewModelTest {
         vm.checkAndShowDialog(user)
 
         val state = vm.uiState.value
-        assertFalse(state.showDialog)
+        assertTrue(state.showDialog) // Calendar always visible
         assertTrue(state.hasClaimedToday)
         assertEquals(3, state.currentStreak)
     }
@@ -155,7 +155,7 @@ class DailyRewardViewModelTest {
 
         vm.checkAndShowDialog(user)
         assertTrue(vm.uiState.value.hasClaimedToday)
-        assertFalse(vm.uiState.value.showDialog)
+        assertTrue(vm.uiState.value.showDialog) // Calendar always visible
 
         // Even if somehow claimReward is called when already claimed
         vm.claimReward()

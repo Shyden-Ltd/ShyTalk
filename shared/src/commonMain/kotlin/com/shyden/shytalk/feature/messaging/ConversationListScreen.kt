@@ -188,13 +188,15 @@ fun ConversationListScreen(
                                         viewModel.pinConversation(cId)
                                     }
                                 )
-                                DropdownMenuItem(
-                                    text = { Text("Delete Conversation") },
-                                    onClick = {
-                                        contextMenuConversationId = null
-                                        showDeleteConfirm = cId
-                                    }
-                                )
+                                if (!conversationWithUser.isGroup) {
+                                    DropdownMenuItem(
+                                        text = { Text("Delete Conversation") },
+                                        onClick = {
+                                            contextMenuConversationId = null
+                                            showDeleteConfirm = cId
+                                        }
+                                    )
+                                }
                             }
                         }
                         HorizontalDivider(modifier = Modifier.padding(start = 80.dp))

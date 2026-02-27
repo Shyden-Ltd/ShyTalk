@@ -151,7 +151,7 @@ class LiveKitVoiceService(
                     }
                     is RoomEvent.FailedToConnect -> {
                         Log.e(TAG, "Failed to connect: ${event.error}")
-                        _error.value = "Voice connection failed: ${event.error.message}"
+                        _error.value = "Voice is temporarily unavailable"
                         _connectionState.value = VoiceConnectionState.DISCONNECTED
                         _isJoined.value = false
                         isSwitchingAudioType = false
@@ -199,7 +199,7 @@ class LiveKitVoiceService(
                 tokenService.fetchToken(roomName, userId)
             } catch (e: Exception) {
                 Log.w(TAG, "Token fetch failed", e)
-                _error.value = "Token fetch failed — check Cloud Function deployment"
+                _error.value = "Voice is temporarily unavailable"
                 null
             }
         }
@@ -215,7 +215,7 @@ class LiveKitVoiceService(
         try {
             val serverUrl = BuildConfig.LIVEKIT_SERVER_URL
             if (serverUrl.isBlank()) {
-                _error.value = "LiveKit server URL not configured"
+                _error.value = "Voice is temporarily unavailable"
                 currentRoomName = null
                 currentUserId = null
                 return@withLock
@@ -225,7 +225,7 @@ class LiveKitVoiceService(
             Log.d(TAG, "Connected successfully")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to connect", e)
-            _error.value = "Voice connection failed: ${e.message}"
+            _error.value = "Voice is temporarily unavailable"
             currentRoomName = null
             currentUserId = null
             cachedToken = null
@@ -311,7 +311,7 @@ class LiveKitVoiceService(
             tokenService.fetchToken(roomName, userId)
         } catch (e: Exception) {
             Log.e(TAG, "Token fetch failed during audio switch", e)
-            _error.value = "Audio switch failed: token fetch error"
+            _error.value = "Voice is temporarily unavailable"
             return@withLock
         }
 
@@ -339,7 +339,7 @@ class LiveKitVoiceService(
             Log.d(TAG, "Audio type switched successfully (voiceMode=$targetVoiceMode)")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to switch audio type", e)
-            _error.value = "Audio switch failed: ${e.message}"
+            _error.value = "Voice is temporarily unavailable"
             isSwitchingAudioType = false
             _isJoined.value = false
             _connectionState.value = VoiceConnectionState.DISCONNECTED

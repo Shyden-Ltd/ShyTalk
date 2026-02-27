@@ -26,7 +26,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import com.shyden.shytalk.feature.privacy.PrivacyPolicyScreen
+import com.shyden.shytalk.core.util.DeviceSecurityChecker
+import com.shyden.shytalk.feature.security.UnsafeDeviceScreen
 import com.shyden.shytalk.feature.update.ForceUpdateScreen
 import com.shyden.shytalk.navigation.NavGraph
 import com.shyden.shytalk.navigation.Screen
@@ -49,18 +50,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-
         setContent {
             ShyTalkTheme(darkTheme = true) {
-                var privacyAccepted by remember {
-                    mutableStateOf(prefs.getBoolean(KEY_PRIVACY_ACCEPTED, false))
-                }
                 var updateRequired by remember { mutableStateOf(false) }
                 var checkComplete by remember { mutableStateOf(false) }
                 var softUpdateAvailable by remember { mutableStateOf<String?>(null) }
+                var isUnsafe by remember { mutableStateOf(false) }
 
                 LaunchedEffect(Unit) {
+                    isUnsafe = DeviceSecurityChecker.isUnsafe()
                     try {
                         val doc = FirebaseFirestore.getInstance()
                             .collection("config")
@@ -83,23 +81,10 @@ class MainActivity : ComponentActivity() {
                 }
 
                 when {
-                    // Privacy policy must be accepted first
-                    !privacyAccepted -> {
-                        PrivacyPolicyScreen(
-                            onAccept = {
-                                prefs.edit().putBoolean(KEY_PRIVACY_ACCEPTED, true).apply()
-                                privacyAccepted = true
-                            },
-                            onDecline = {
-                                finishAffinity()
-                            }
-                        )
-                    }
-                    // Normal app flow
-                    checkComplete -> {
-                        if (updateRequired) {
-                            ForceUpdateScreen()
-                        } else {
+                    !checkComplete -> { /* loading */ }
+                    isUnsafe -> { UnsafeDeviceScreen() }
+                    updateRequired -> { ForceUpdateScreen() }
+                    else -> {
                             val navController = rememberNavController()
                             val navigateToRoomId by _navigateToRoom
 
@@ -160,7 +145,6 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                             }
-                        }
                     }
                 }
 
@@ -224,8 +208,6 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
-        private const val PREFS_NAME = "shytalk_prefs"
-        private const val KEY_PRIVACY_ACCEPTED = "privacy_policy_accepted"
         private const val LAST_SEEN_INTERVAL_MS = 180_000L // 3 minutes
     }
 

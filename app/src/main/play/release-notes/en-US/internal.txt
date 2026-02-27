@@ -1,8 +1,8 @@
-v0.45 - Bug Fixes & Improvements
+v0.46 — Security & Chat Improvements
 
-- Fixed stalkers not detecting profile visits
-- SuperShy gating: stalkers tab requires SuperShy subscription
-- Fixed activity indicator stopping after login
-- Keyboard auto-dismisses when opening gacha overlay
-- UI improvements for low-resolution screens
-- Added E2E test infrastructure for 42 device configurations
+- Block rooted devices and emulators for enhanced security
+- Chats now open at the most recent message
+- New messages always scroll to the latest in private and group chats
+- Fixed message reactions overlapping text in chat bubbles
+- Fixed "New messages" indicator staying visible after reading all messages
+- Migrated image storage to Cloudflare R2 for faster loading

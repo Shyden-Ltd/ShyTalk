@@ -15,9 +15,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -87,24 +87,23 @@ fun GiftWallContent(
     onDismissDetails: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val scrollState = rememberScrollState()
+    val items = state.giftCatalog
+
     Column(
         modifier = modifier
             .testTag("giftWall_grid")
-            .verticalScroll(scrollState)
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(4.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        val rows = state.giftCatalog.chunked(4)
-        for (row in rows) {
+        items.chunked(4).forEach { row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                for (gift in row) {
+                row.forEach { gift ->
                     val wallEntry = state.wallEntries.find { it.giftId == gift.id }
                     val hasReceived = wallEntry != null && wallEntry.receivedCount > 0
-
                     Box(modifier = Modifier.weight(1f)) {
                         GiftWallItem(
                             gift = gift,
@@ -114,7 +113,6 @@ fun GiftWallContent(
                         )
                     }
                 }
-                // Fill remaining slots if row has < 4 items
                 repeat(4 - row.size) {
                     Spacer(modifier = Modifier.weight(1f))
                 }
@@ -185,7 +183,7 @@ private fun GiftWallItem(
                 shape = RoundedCornerShape(8.dp)
             )
             .clickable(enabled = isLit) { onClick() }
-            .padding(8.dp)
+            .padding(4.dp)
     ) {
         Box(contentAlignment = Alignment.Center) {
             if (gift.iconUrl.isNotBlank()) {
@@ -193,7 +191,7 @@ private fun GiftWallItem(
                     model = gift.iconUrl,
                     contentDescription = gift.name,
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(32.dp)
                         .clip(CircleShape)
                         .then(if (!isLit) Modifier.background(Color.Gray.copy(alpha = 0.3f)) else Modifier),
                     contentScale = ContentScale.Crop,
@@ -202,7 +200,7 @@ private fun GiftWallItem(
             } else {
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(32.dp)
                         .clip(CircleShape)
                         .background(
                             if (isLit) bracketColor.copy(alpha = 0.2f)
@@ -222,17 +220,18 @@ private fun GiftWallItem(
             if (!isLit) {
                 Text(
                     text = "\uD83D\uDEAB",
-                    fontSize = 20.sp,
+                    fontSize = 16.sp,
                     modifier = Modifier.align(Alignment.Center)
                 )
             }
         }
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = gift.name,
             style = MaterialTheme.typography.labelSmall,
             maxLines = 1,
             textAlign = TextAlign.Center,
+            fontSize = 9.sp,
             color = if (isLit) MaterialTheme.colorScheme.onSurface else Color.Gray
         )
         if (receivedCount > 0) {

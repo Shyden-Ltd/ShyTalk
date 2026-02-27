@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -156,11 +157,11 @@ fun SuperShyBottomSheet(
                     )
                 ) {
                     Column(
-                        modifier = Modifier.padding(20.dp),
+                        modifier = Modifier.fillMaxWidth().padding(20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Icon(
-                            Icons.Filled.AutoAwesome,
+                            Icons.Filled.Shield,
                             contentDescription = null,
                             tint = SuperShyGold,
                             modifier = Modifier.size(32.dp)
@@ -171,7 +172,8 @@ fun SuperShyBottomSheet(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = SuperShyGold,
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }
@@ -263,7 +265,7 @@ fun SuperShyBottomSheet(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Icon(
-                                Icons.Filled.AutoAwesome,
+                                Icons.Filled.Shield,
                                 contentDescription = null,
                                 tint = SuperShyGold,
                                 modifier = Modifier.size(24.dp)
