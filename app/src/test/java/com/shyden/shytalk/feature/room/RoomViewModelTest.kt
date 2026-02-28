@@ -117,6 +117,9 @@ class RoomViewModelTest {
         every { seatRequestRepository.getPendingRequests(any()) } returns pendingRequestsFlow
         every { seatRequestRepository.getRequestsByUser(any(), any()) } returns myRequestsFlow
         every { roomLifecycleManager.isInRoom(any()) } returns false
+        every { roomLifecycleManager.activeRoom } returns MutableStateFlow<ChatRoom?>(null)
+        every { roomLifecycleManager.activeMessages } returns MutableStateFlow(emptyList())
+        every { roomLifecycleManager.sharedUserCache } returns emptyMap()
         every { roomLifecycleManager.disconnectedUserIds } returns MutableStateFlow(emptySet())
         every { economyRepository.observeEconomyConfig() } returns economyConfigFlow
     }

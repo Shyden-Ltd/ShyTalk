@@ -63,6 +63,7 @@ async function assembleConversation(env, conversationId) {
   const modIds = participants.filter(p => p.role === 'MOD').map(p => p.user_id);
 
   return {
+    id: conv.id,
     conversationId: conv.id,
     participantIds,
     lastMessage: conv.last_message_text != null ? {
@@ -105,6 +106,7 @@ async function assembleConversation(env, conversationId) {
  */
 function buildMessage(row) {
   return {
+    id: row.id,
     messageId: row.id,
     senderId: row.sender_id,
     senderName: row.sender_name || '',
@@ -513,7 +515,7 @@ function registerConversationRoutes(router) {
   // ── Get edit history ──
   router.get('/api/conversations/:id/messages/:msgId/edits', async (request, env, params) => {
     const { results } = await env.DB.prepare(`
-      SELECT id AS editId, previous_text AS previousText, edited_at AS editedAt
+      SELECT id, id AS editId, previous_text AS previousText, edited_at AS editedAt
       FROM message_edits WHERE message_id = ? AND conversation_id = ?
       ORDER BY edited_at DESC
     `).bind(params.msgId, params.id).all();

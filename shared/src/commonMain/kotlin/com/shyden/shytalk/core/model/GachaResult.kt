@@ -1,5 +1,7 @@
 package com.shyden.shytalk.core.model
 
+import com.shyden.shytalk.core.util.asBool
+
 data class GachaGift(
     val giftId: String = "",
     val giftName: String = "",
@@ -41,7 +43,7 @@ data class GachaResult(
                 newBalance = (map["newBalance"] as? Number)?.toLong() ?: 0,
                 newPityCounter = (map["newPityCounter"] as? Number)?.toInt() ?: 0,
                 newLuckScore = (map["newLuckScore"] as? Number)?.toInt() ?: 0,
-                priceChanged = map["priceChanged"] as? Boolean ?: false,
+                priceChanged = map["priceChanged"].asBool(),
                 currentPullCosts = parsedCosts
             )
         }

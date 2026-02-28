@@ -1,5 +1,7 @@
 package com.shyden.shytalk.core.model
 
+import com.shyden.shytalk.core.util.asBool
+
 data class DailyRewardResult(
     val coinsAwarded: Int = 0,
     val newStreak: Int = 0,
@@ -14,7 +16,7 @@ data class DailyRewardResult(
         fun fromMap(map: Map<String, Any?>): DailyRewardResult = DailyRewardResult(
             coinsAwarded = (map["coinsAwarded"] as? Number)?.toInt() ?: 0,
             newStreak = (map["newStreak"] as? Number)?.toInt() ?: 0,
-            isMilestone = map["isMilestone"] as? Boolean ?: false,
+            isMilestone = map["isMilestone"].asBool(),
             newBalance = (map["newBalance"] as? Number)?.toLong() ?: 0,
             giftId = map["giftId"] as? String,
             giftQuantity = (map["giftQuantity"] as? Number)?.toInt() ?: 0

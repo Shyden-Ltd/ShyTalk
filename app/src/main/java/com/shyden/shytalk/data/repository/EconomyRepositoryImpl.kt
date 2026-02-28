@@ -32,10 +32,7 @@ class EconomyRepositoryImpl(
 
     override fun observeEconomyConfig(): Flow<EconomyConfig> = flow {
         val json = api.get("/api/config/economy")
-        val data = json.optJSONObject("value")
-        if (data != null) {
-            emit(EconomyConfig.fromMap(data.toMap()))
-        }
+        emit(EconomyConfig.fromMap(json.toMap()))
     }
 
     override suspend fun claimDailyReward(): Resource<DailyRewardResult> = firebaseCall("Failed to claim daily reward") {

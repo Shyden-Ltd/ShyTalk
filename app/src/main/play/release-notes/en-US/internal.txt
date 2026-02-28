@@ -1,8 +1,6 @@
-v0.46 — Security & Chat Improvements
+v0.47 — Performance & Bug Fixes
 
-- Block rooted devices and emulators for enhanced security
-- Chats now open at the most recent message
-- New messages always scroll to the latest in private and group chats
-- Fixed message reactions overlapping text in chat bubbles
-- Fixed "New messages" indicator staying visible after reading all messages
-- Migrated image storage to Cloudflare R2 for faster loading
+- Room re-entry is now instant — cached room data, messages and user profiles load immediately
+- Fixed chat head not showing room owner's photo when leaving a room
+- Improved image caching reliability across app restarts
+- Backend API response parsing improvements for faster data loading

@@ -1,5 +1,7 @@
 package com.shyden.shytalk.core.model
 
+import com.shyden.shytalk.core.util.asBool
+
 data class Seat(
     val userId: String? = null,
     val state: SeatState = SeatState.EMPTY,
@@ -23,7 +25,7 @@ data class Seat(
             state = (map["state"] as? String)?.let {
                 try { SeatState.valueOf(it) } catch (_: Exception) { SeatState.EMPTY }
             } ?: SeatState.EMPTY,
-            isMuted = map["isMuted"] as? Boolean ?: false
+            isMuted = map["isMuted"].asBool()
         )
     }
 }

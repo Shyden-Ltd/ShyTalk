@@ -87,7 +87,10 @@ async function handleUpload(request, env, uid) {
 
   const bytes = await file.arrayBuffer();
   await env.R2_BUCKET.put(key, bytes, {
-    httpMetadata: { contentType },
+    httpMetadata: {
+      contentType,
+      cacheControl: "public, max-age=31536000, immutable",
+    },
   });
 
   return Response.json({ url: `https://images.shytalk.shyden.co.uk/${key}` });

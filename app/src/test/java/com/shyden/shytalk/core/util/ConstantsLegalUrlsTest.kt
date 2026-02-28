@@ -42,11 +42,10 @@ class ConstantsLegalUrlsTest {
     }
 
     @Test
-    fun `CYBER_BULLYING_URL uses HTTPS and ends with html`() {
+    fun `CYBER_BULLYING_URL uses HTTPS`() {
         assertTrue(Constants.CYBER_BULLYING_URL.startsWith("https://"))
-        assertTrue(Constants.CYBER_BULLYING_URL.endsWith(".html"))
         assertEquals(
-            "https://shytalk.shyden.co.uk/cyber-bullying.html",
+            "https://shytalk.shyden.co.uk/cyber-bullying",
             Constants.CYBER_BULLYING_URL
         )
     }
@@ -60,11 +59,10 @@ class ConstantsLegalUrlsTest {
     }
 
     @Test
-    fun `all legal URLs end with html extension`() {
+    fun `legal URLs from GitHub Pages end with html extension`() {
         assertTrue(Constants.PRIVACY_POLICY_URL.endsWith(".html"))
         assertTrue(Constants.TERMS_URL.endsWith(".html"))
         assertTrue(Constants.COMMUNITY_GUIDELINES_URL.endsWith(".html"))
-        assertTrue(Constants.CYBER_BULLYING_URL.endsWith(".html"))
     }
 
     @Test

@@ -1,7 +1,6 @@
 package com.shyden.shytalk.core.model
 
 import com.shyden.shytalk.core.util.currentTimeMillis
-import com.shyden.shytalk.core.util.millisToTimestamp
 import com.shyden.shytalk.core.util.timestampToMillis
 
 enum class SeatRequestStatus {
@@ -26,9 +25,9 @@ data class SeatRequest(
         "userName" to userName,
         "seatIndex" to seatIndex,
         "status" to status.name,
-        "createdAt" to millisToTimestamp(createdAt),
+        "createdAt" to createdAt,
         "resolvedBy" to resolvedBy,
-        "resolvedAt" to resolvedAt?.let { millisToTimestamp(it) }
+        "resolvedAt" to resolvedAt
     )
 
     companion object {

@@ -1,6 +1,6 @@
 package com.shyden.shytalk.core.model
 
-import com.shyden.shytalk.core.util.millisToTimestamp
+import com.shyden.shytalk.core.util.asBool
 import com.shyden.shytalk.core.util.timestampToMillis
 
 data class ConversationSettings(
@@ -17,20 +17,20 @@ data class ConversationSettings(
         "userId" to userId,
         "isMuted" to isMuted,
         "isHidden" to isHidden,
-        "hiddenAt" to hiddenAt?.let { millisToTimestamp(it) },
+        "hiddenAt" to hiddenAt,
         "isPinned" to isPinned,
         "lastReadMessageId" to lastReadMessageId,
-        "lastReadAt" to millisToTimestamp(lastReadAt),
+        "lastReadAt" to lastReadAt,
         "unreadCount" to unreadCount
     )
 
     companion object {
         fun fromMap(map: Map<String, Any?>, userId: String): ConversationSettings = ConversationSettings(
             userId = userId,
-            isMuted = map["isMuted"] as? Boolean ?: false,
-            isHidden = map["isHidden"] as? Boolean ?: false,
+            isMuted = map["isMuted"].asBool(),
+            isHidden = map["isHidden"].asBool(),
             hiddenAt = map["hiddenAt"]?.let { timestampToMillis(it) },
-            isPinned = map["isPinned"] as? Boolean ?: false,
+            isPinned = map["isPinned"].asBool(),
             lastReadMessageId = map["lastReadMessageId"] as? String ?: "",
             lastReadAt = map["lastReadAt"]?.let { timestampToMillis(it) } ?: 0,
             unreadCount = (map["unreadCount"] as? Long) ?: 0

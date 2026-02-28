@@ -1,5 +1,6 @@
 package com.shyden.shytalk.core.model
 
+import com.shyden.shytalk.core.util.asBool
 import com.shyden.shytalk.core.util.timestampToMillis
 
 data class MuteInfo(
@@ -28,7 +29,7 @@ data class MuteInfo(
             reason = map["reason"] as? String,
             mutedAt = (map["mutedAt"] as? Long) ?: map["mutedAt"]?.let { timestampToMillis(it) } ?: 0L,
             expiresAt = map["expiresAt"]?.let { (it as? Long) ?: timestampToMillis(it) },
-            isActive = map["isActive"] as? Boolean ?: true
+            isActive = map["isActive"].asBool(true)
         )
     }
 }

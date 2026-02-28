@@ -27,14 +27,16 @@ class ShyTalkApp : Application(), SingletonImageLoader.Factory {
             }
             .diskCache {
                 DiskCache.Builder()
-                    .directory(cacheDir.resolve("image_cache").toOkioPath())
+                    // Use filesDir instead of cacheDir — filesDir is never auto-cleaned
+                    // by the OS, ensuring images persist between app launches.
+                    .directory(filesDir.resolve("image_cache").toOkioPath())
                     .maxSizeBytes(512L * 1024 * 1024)
                     .build()
             }
             .components {
                 add(AnimatedImageDecoder.Factory())
             }
-            .crossfade(true)
+            .crossfade(150)
             .build()
     }
 
@@ -45,6 +47,10 @@ class ShyTalkApp : Application(), SingletonImageLoader.Factory {
             androidContext(this@ShyTalkApp)
             modules(appModule)
         }
+
+        // Clean up old cache directory (migrated to filesDir/image_cache)
+        val oldCache = cacheDir.resolve("image_cache")
+        if (oldCache.exists()) oldCache.deleteRecursively()
 
         val notificationManager = getSystemService(NotificationManager::class.java)
 

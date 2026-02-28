@@ -1,7 +1,6 @@
 package com.shyden.shytalk.core.model
 
 import com.shyden.shytalk.core.util.currentTimeMillis
-import com.shyden.shytalk.core.util.millisToTimestamp
 import com.shyden.shytalk.core.util.timestampToMillis
 
 data class ProfileVisitor(
@@ -13,8 +12,8 @@ data class ProfileVisitor(
     fun toMap(): Map<String, Any?> = mapOf(
         "visitorId" to visitorId,
         "visitCount" to visitCount,
-        "lastVisitedAt" to millisToTimestamp(lastVisitedAt),
-        "firstVisitedAt" to millisToTimestamp(firstVisitedAt)
+        "lastVisitedAt" to lastVisitedAt,
+        "firstVisitedAt" to firstVisitedAt
     )
 
     companion object {

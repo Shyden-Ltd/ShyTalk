@@ -1,5 +1,7 @@
 package com.shyden.shytalk.core.model
 
+import com.shyden.shytalk.core.util.asBool
+
 data class Gift(
     val id: String = "",
     val name: String = "",
@@ -44,8 +46,8 @@ data class Gift(
             iconUrl = map["iconUrl"] as? String ?: "",
             order = (map["order"] as? Long)?.toInt() ?: 0,
             expiresAfterDays = (map["expiresAfterDays"] as? Long)?.toInt(),
-            showInStore = map["showInStore"] as? Boolean ?: true,
-            showOnWheel = map["showOnWheel"] as? Boolean ?: true
+            showInStore = map["showInStore"].asBool(true),
+            showOnWheel = map["showOnWheel"].asBool(true)
         )
     }
 }

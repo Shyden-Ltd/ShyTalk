@@ -1,11 +1,9 @@
 package com.shyden.shytalk.core.model
 
-import com.google.firebase.Timestamp
 import com.shyden.shytalk.testutil.TestData
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
-import java.util.Date
 
 class UserToMapTest {
 
@@ -50,12 +48,11 @@ class UserToMapTest {
     @Test
     fun `toMap preserves timestamp values`() {
         val millis = 1_500_000_000_000L
-        val expectedTs = Timestamp(Date(millis))
         val user = User(uid = "u1", displayName = "X", createdAt = millis, lastSeenAt = millis)
         val map = user.toMap()
 
-        assertEquals(expectedTs, map["createdAt"])
-        assertEquals(expectedTs, map["lastSeenAt"])
+        assertEquals(millis, map["createdAt"])
+        assertEquals(millis, map["lastSeenAt"])
     }
 
     @Test
@@ -118,10 +115,9 @@ class UserToMapTest {
     @Test
     fun `toMap includes dateOfBirth when set`() {
         val dobMillis = 946684800000L // 2000-01-01
-        val expectedTs = Timestamp(Date(dobMillis))
         val user = User(dateOfBirth = dobMillis)
         val map = user.toMap()
-        assertEquals(expectedTs, map["dateOfBirth"])
+        assertEquals(dobMillis, map["dateOfBirth"])
     }
 
     @Test
@@ -166,7 +162,7 @@ class UserToMapTest {
         val map = user.toMap()
         assertEquals(5L, map["stalkerCount"])
         assertEquals(2L, map["newStalkerCount"])
-        assertEquals(Timestamp(Date(TestData.BASE_TIMESTAMP)), map["stalkersLastViewedAt"])
+        assertEquals(TestData.BASE_TIMESTAMP, map["stalkersLastViewedAt"])
     }
 
     @Test
@@ -205,8 +201,8 @@ class UserToMapTest {
         assertEquals(user.uniqueId, map["uniqueId"])
         assertEquals(user.blockedUserIds.toList(), map["blockedUserIds"])
         assertEquals(user.email, map["email"])
-        assertEquals(Timestamp(Date(user.createdAt)), map["createdAt"])
-        assertEquals(Timestamp(Date(user.lastSeenAt)), map["lastSeenAt"])
+        assertEquals(user.createdAt, map["createdAt"])
+        assertEquals(user.lastSeenAt, map["lastSeenAt"])
     }
 
     // ===== Suspension fields =====
@@ -227,8 +223,8 @@ class UserToMapTest {
 
         assertEquals(true, map["isSuspended"])
         assertEquals("Spam", map["suspensionReason"])
-        assertEquals(Timestamp(Date(startMillis)), map["suspensionStartDate"])
-        assertEquals(Timestamp(Date(endMillis)), map["suspensionEndDate"])
+        assertEquals(startMillis, map["suspensionStartDate"])
+        assertEquals(endMillis, map["suspensionEndDate"])
         assertEquals(true, map["suspensionCanAppeal"])
         assertEquals("admin-1", map["suspendedBy"])
     }
@@ -325,8 +321,8 @@ class UserToMapTest {
     fun `fromMap with extra unexpected fields ignores them`() {
         val map = mapOf<String, Any?>(
             "displayName" to "Bob",
-            "createdAt" to Timestamp(Date(TestData.BASE_TIMESTAMP)),
-            "lastSeenAt" to Timestamp(Date(TestData.BASE_TIMESTAMP)),
+            "createdAt" to TestData.BASE_TIMESTAMP,
+            "lastSeenAt" to TestData.BASE_TIMESTAMP,
             "unexpectedField1" to "should be ignored",
             "unexpectedField2" to 999L,
             "anotherExtra" to listOf("a", "b"),

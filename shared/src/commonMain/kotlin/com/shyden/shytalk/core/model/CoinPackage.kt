@@ -1,5 +1,7 @@
 package com.shyden.shytalk.core.model
 
+import com.shyden.shytalk.core.util.asBool
+
 data class CoinPackage(
     val id: String = "",
     val productId: String = "",
@@ -19,7 +21,7 @@ data class CoinPackage(
             bonusCoins = (map["bonusCoins"] as? Long)?.toInt() ?: 0,
             displayPrice = map["displayPrice"] as? String ?: "",
             order = (map["order"] as? Long)?.toInt() ?: 0,
-            isActive = map["isActive"] as? Boolean ?: true
+            isActive = map["isActive"].asBool(true)
         )
     }
 }

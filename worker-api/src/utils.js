@@ -81,8 +81,7 @@ function normalizeKeys(obj) {
  */
 async function parseBody(request) {
   try {
-    const body = await request.json();
-    return normalizeKeys(body);
+    return await request.json();
   } catch {
     return null;
   }
@@ -173,6 +172,7 @@ module.exports = {
   todayStr,
   yesterdayStr,
   parseBody,
+  normalizeKeys,
   matchRoute,
   Router,
   extractR2Key,

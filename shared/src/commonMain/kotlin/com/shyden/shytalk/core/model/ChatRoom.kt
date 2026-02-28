@@ -1,8 +1,8 @@
 package com.shyden.shytalk.core.model
 
 import com.shyden.shytalk.core.util.Constants
+import com.shyden.shytalk.core.util.asBool
 import com.shyden.shytalk.core.util.currentTimeMillis
-import com.shyden.shytalk.core.util.millisToTimestamp
 import com.shyden.shytalk.core.util.timestampToMillis
 
 data class ChatRoom(
@@ -41,9 +41,9 @@ data class ChatRoom(
         "name" to name,
         "ownerId" to ownerId,
         "state" to state.name,
-        "ownerLeftAt" to ownerLeftAt?.let { millisToTimestamp(it) },
-        "createdAt" to millisToTimestamp(createdAt),
-        "closedAt" to closedAt?.let { millisToTimestamp(it) },
+        "ownerLeftAt" to ownerLeftAt,
+        "createdAt" to createdAt,
+        "closedAt" to closedAt,
         "participantIds" to participantIds.toList(),
         "hostIds" to hostIds.toList(),
         "requireApproval" to requireApproval,
@@ -52,7 +52,7 @@ data class ChatRoom(
         "pendingInvites" to pendingInvites,
         "seats" to seats.mapValues { it.value.toMap() },
         "voiceRoomName" to voiceRoomName,
-        "firstJoinTimestamps" to firstJoinTimestamps.mapValues { millisToTimestamp(it.value) },
+        "firstJoinTimestamps" to firstJoinTimestamps,
         "allTimeHostIds" to allTimeHostIds.toList(),
         "allTimeSeatUserIds" to allTimeSeatUserIds.toList(),
         "lastGiftEvent" to lastGiftEvent?.let {
@@ -64,7 +64,7 @@ data class ChatRoom(
                 "giftId" to it.giftId,
                 "giftName" to it.giftName,
                 "coinValue" to it.coinValue,
-                "timestamp" to millisToTimestamp(it.timestamp)
+                "timestamp" to it.timestamp
             )
         }
     )
@@ -95,7 +95,7 @@ data class ChatRoom(
                 closedAt = map["closedAt"]?.let { timestampToMillis(it) },
                 participantIds = (map["participantIds"] as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet(),
                 hostIds = (map["hostIds"] as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet(),
-                requireApproval = map["requireApproval"] as? Boolean ?: false,
+                requireApproval = map["requireApproval"].asBool(),
                 bannedUserIds = (map["bannedUserIds"] as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet(),
                 kickInfo = (map["kickInfo"] as? Map<*, *>)?.entries?.associate { entry ->
                     entry.key.toString() to ((entry.value as? Map<*, *>)?.entries?.associate {

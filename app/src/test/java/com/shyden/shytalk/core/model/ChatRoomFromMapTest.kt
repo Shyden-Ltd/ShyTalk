@@ -150,7 +150,7 @@ class ChatRoomFromMapTest {
         assertEquals("My Room", map["name"])
         assertEquals("owner-1", map["ownerId"])
         assertEquals("ACTIVE", map["state"])
-        assertEquals(ts, map["createdAt"])
+        assertEquals(tsMillis, map["createdAt"])
         assertEquals(true, map["requireApproval"])
     }
 

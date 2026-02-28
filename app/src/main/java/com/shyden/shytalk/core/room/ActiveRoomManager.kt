@@ -7,6 +7,7 @@ import com.shyden.shytalk.core.model.Message
 import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.RoomState
 import com.shyden.shytalk.core.model.SeatState
+import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.remote.VoiceConnectionState
@@ -53,6 +54,14 @@ class ActiveRoomManager(
 
     private val _messages = MutableStateFlow<List<Message>>(emptyList())
     val messages: StateFlow<List<Message>> = _messages.asStateFlow()
+    override val activeMessages: StateFlow<List<Message>> = _messages.asStateFlow()
+
+    private val _sharedUserCache = mutableMapOf<String, User>()
+    override val sharedUserCache: Map<String, User> get() = _sharedUserCache
+
+    override fun updateSharedUserCache(users: Map<String, User>) {
+        _sharedUserCache.putAll(users)
+    }
 
     private val _ownerAwayRemainingMs = MutableStateFlow(0L)
     val ownerAwayRemainingMs: StateFlow<Long> = _ownerAwayRemainingMs.asStateFlow()
@@ -145,6 +154,7 @@ class ActiveRoomManager(
         _ownerAwayRemainingMs.value = 0L
         _roomClosed.value = false
         _disconnectedUserIds.value = emptySet()
+        _sharedUserCache.clear()
         RoomService.stop(context)
     }
 
@@ -242,6 +252,7 @@ class ActiveRoomManager(
         _activeRoomId.value = null
         _activeRoom.value = null
         _messages.value = emptyList()
+        _sharedUserCache.clear()
         _ownerAwayRemainingMs.value = 0L
         _roomClosed.value = false
         _disconnectedUserIds.value = emptySet()

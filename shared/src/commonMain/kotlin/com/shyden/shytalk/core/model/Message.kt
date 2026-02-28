@@ -1,7 +1,7 @@
 package com.shyden.shytalk.core.model
 
+import com.shyden.shytalk.core.util.asBool
 import com.shyden.shytalk.core.util.currentTimeMillis
-import com.shyden.shytalk.core.util.millisToTimestamp
 import com.shyden.shytalk.core.util.timestampToMillis
 
 enum class MessageType {
@@ -27,7 +27,7 @@ data class Message(
         "senderId" to senderId,
         "senderName" to senderName,
         "text" to text,
-        "createdAt" to millisToTimestamp(createdAt),
+        "createdAt" to createdAt,
         "type" to type.name,
         "isEdited" to isEdited,
         "giftId" to giftId,
@@ -44,7 +44,7 @@ data class Message(
             type = (map["type"] as? String)?.let {
                 try { MessageType.valueOf(it) } catch (_: Exception) { MessageType.TEXT }
             } ?: MessageType.TEXT,
-            isEdited = map["isEdited"] as? Boolean ?: false,
+            isEdited = map["isEdited"].asBool(),
             giftId = map["giftId"] as? String ?: "",
             giftIconUrl = map["giftIconUrl"] as? String ?: ""
         )

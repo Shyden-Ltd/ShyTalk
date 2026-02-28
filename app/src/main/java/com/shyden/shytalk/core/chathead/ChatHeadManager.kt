@@ -13,8 +13,10 @@ import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.ImageView
 import android.widget.TextView
-import coil3.load
+import coil3.SingletonImageLoader
+import coil3.request.ImageRequest
 import coil3.request.transformations
+import coil3.target.ImageViewTarget
 import coil3.transform.CircleCropTransformation
 import com.shyden.shytalk.R
 import kotlin.math.abs
@@ -160,9 +162,14 @@ class ChatHeadManager(
             photoView.visibility = View.VISIBLE
             micIcon.visibility = View.GONE
 
-            photoView.load(ownerPhotoUrl) {
-                transformations(CircleCropTransformation())
-            }
+            // Use explicit ImageRequest with the Service context — ImageView.load()
+            // doesn't work for overlay views because they have no ViewTreeLifecycleOwner.
+            val request = ImageRequest.Builder(context)
+                .data(ownerPhotoUrl)
+                .transformations(CircleCropTransformation())
+                .target(ImageViewTarget(photoView))
+                .build()
+            SingletonImageLoader.get(context).enqueue(request)
         } else {
             photoView.visibility = View.GONE
             micIcon.visibility = View.VISIBLE

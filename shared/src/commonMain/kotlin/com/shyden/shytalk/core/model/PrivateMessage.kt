@@ -1,7 +1,7 @@
 package com.shyden.shytalk.core.model
 
+import com.shyden.shytalk.core.util.asBool
 import com.shyden.shytalk.core.util.currentTimeMillis
-import com.shyden.shytalk.core.util.millisToTimestamp
 import com.shyden.shytalk.core.util.timestampToMillis
 
 enum class PrivateMessageType {
@@ -52,8 +52,8 @@ data class PrivateMessage(
         "text" to text,
         "imageUrls" to imageUrls,
         "type" to type.name,
-        "createdAt" to millisToTimestamp(createdAt),
-        "editedAt" to editedAt?.let { millisToTimestamp(it) },
+        "createdAt" to createdAt,
+        "editedAt" to editedAt,
         "editCount" to editCount,
         "readBy" to readBy,
         "replyToMessageId" to replyToMessageId,
@@ -95,8 +95,8 @@ data class PrivateMessage(
                 val users = (value as? List<*>)?.filterIsInstance<String>() ?: return@mapNotNull null
                 emoji to users
             }?.toMap() ?: emptyMap(),
-            isRecalled = map["isRecalled"] as? Boolean ?: false,
-            isHidden = map["isHidden"] as? Boolean ?: false,
+            isRecalled = map["isRecalled"].asBool(),
+            isHidden = map["isHidden"].asBool(),
             hiddenBy = map["hiddenBy"] as? String
         )
     }

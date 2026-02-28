@@ -1,7 +1,7 @@
 package com.shyden.shytalk.core.model
 
+import com.shyden.shytalk.core.util.asBool
 import com.shyden.shytalk.core.util.currentTimeMillis
-import com.shyden.shytalk.core.util.millisToTimestamp
 import com.shyden.shytalk.core.util.timestampToMillis
 
 data class ConversationPreview(
@@ -15,7 +15,7 @@ data class ConversationPreview(
         "text" to text,
         "senderId" to senderId,
         "senderName" to senderName,
-        "createdAt" to millisToTimestamp(createdAt),
+        "createdAt" to createdAt,
         "type" to type
     )
 
@@ -72,8 +72,8 @@ data class Conversation(
         put("conversationId", conversationId)
         put("participantIds", participantIds)
         put("lastMessage", lastMessage?.toMap())
-        put("lastMessageAt", millisToTimestamp(lastMessageAt))
-        put("createdAt", millisToTimestamp(createdAt))
+        put("lastMessageAt", lastMessageAt)
+        put("createdAt", createdAt)
         put("isGroup", isGroup)
         put("isClosed", isClosed)
         if (isGroup) {
@@ -105,7 +105,7 @@ data class Conversation(
             },
             lastMessageAt = timestampToMillis(map["lastMessageAt"]),
             createdAt = timestampToMillis(map["createdAt"]),
-            isGroup = map["isGroup"] as? Boolean ?: false,
+            isGroup = map["isGroup"].asBool(),
             groupName = map["groupName"] as? String,
             groupPhotoUrl = map["groupPhotoUrl"] as? String,
             groupAdminIds = (map["groupAdminIds"] as? List<*>)
@@ -114,7 +114,7 @@ data class Conversation(
                 ?.filterIsInstance<String>() ?: emptyList(),
             groupDescription = map["groupDescription"] as? String,
             createdBy = map["createdBy"] as? String,
-            isClosed = map["isClosed"] as? Boolean ?: false,
+            isClosed = map["isClosed"].asBool(),
             permissions = (map["permissions"] as? Map<String, Any?>)?.let {
                 GroupPermissions.fromMap(it)
             } ?: GroupPermissions(),

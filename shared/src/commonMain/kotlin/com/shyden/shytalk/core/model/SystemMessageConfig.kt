@@ -1,5 +1,7 @@
 package com.shyden.shytalk.core.model
 
+import com.shyden.shytalk.core.util.asBool
+
 data class SystemMessageConfig(
     val showJoins: Boolean = true,
     val showLeaves: Boolean = true,
@@ -15,10 +17,10 @@ data class SystemMessageConfig(
 
     companion object {
         fun fromMap(map: Map<String, Any?>): SystemMessageConfig = SystemMessageConfig(
-            showJoins = map["showJoins"] as? Boolean ?: true,
-            showLeaves = map["showLeaves"] as? Boolean ?: true,
-            showRoleChanges = map["showRoleChanges"] as? Boolean ?: true,
-            showPermissionChanges = map["showPermissionChanges"] as? Boolean ?: true
+            showJoins = map["showJoins"].asBool(true),
+            showLeaves = map["showLeaves"].asBool(true),
+            showRoleChanges = map["showRoleChanges"].asBool(true),
+            showPermissionChanges = map["showPermissionChanges"].asBool(true)
         )
     }
 }

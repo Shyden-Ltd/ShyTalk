@@ -15,7 +15,7 @@ class AndroidAppConfigService(
     override suspend fun getLatestVersionInfo(): Resource<Triple<Int, Int, String>> {
         return try {
             val json = api.get("/api/config/app")
-            val data = json.optJSONObject("value")?.toMap() ?: emptyMap()
+            val data = json.toMap()
             val minVersionCode = (data["minVersionCode"] as? Number)?.toInt() ?: 0
             val latestVersionCode = (data["latestVersionCode"] as? Number)?.toInt() ?: 0
             val latestVersionName = data["latestVersionName"] as? String ?: ""

@@ -102,7 +102,7 @@ class MessageFromMapTest {
         assertEquals("user-1", map["senderId"])
         assertEquals("Alice", map["senderName"])
         assertEquals("Hello", map["text"])
-        assertEquals(ts, map["createdAt"])
+        assertEquals(tsMillis, map["createdAt"])
         assertEquals("SYSTEM", map["type"])
     }
 

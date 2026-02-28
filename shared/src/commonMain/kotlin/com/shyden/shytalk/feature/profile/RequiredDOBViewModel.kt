@@ -3,7 +3,6 @@ package com.shyden.shytalk.feature.profile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.util.Resource
-import com.shyden.shytalk.core.util.millisToTimestamp
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,7 +29,7 @@ class RequiredDOBViewModel(
         val userId = authRepository.currentUserId ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            when (userRepository.updateProfile(userId, mapOf("dateOfBirth" to millisToTimestamp(dateOfBirthMillis)))) {
+            when (userRepository.updateProfile(userId, mapOf("dateOfBirth" to dateOfBirthMillis))) {
                 is Resource.Success -> {
                     _uiState.update { it.copy(isLoading = false, saved = true) }
                 }

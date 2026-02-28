@@ -164,6 +164,8 @@ class RoomService : Service() {
                             ownerPhotoUrl = url
                             chatHeadManager?.updatePhoto(url)
                         }
+                        is Resource.Error -> {}
+
                         else -> {}
                     }
                 }

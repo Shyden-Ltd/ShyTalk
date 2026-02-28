@@ -416,10 +416,7 @@ fun CoinPurchaseSheetContent(
                         CoinPackageCard(
                             pkg = pkg,
                             enabled = !isPurchasing,
-                            onClick = {
-                                onTestPurchase(totalCoins)
-                                onDismiss()
-                            }
+                            onClick = { onTestPurchase(totalCoins) }
                         )
                     }
                 }

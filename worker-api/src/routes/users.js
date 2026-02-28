@@ -28,7 +28,7 @@
  * POST   /api/device-bindings         → Bind device
  */
 
-const { json, jsonError, generateId, now, parseBody } = require('../utils');
+const { json, jsonError, generateId, now, parseBody, normalizeKeys } = require('../utils');
 
 function registerUserRoutes(router) {
   // ── Get user profile ──
@@ -60,8 +60,9 @@ function registerUserRoutes(router) {
       return jsonError('Cannot update another user', 403);
     }
 
-    const body = await parseBody(request);
-    if (!body) return jsonError('Invalid JSON body', 400);
+    const rawBody = await parseBody(request);
+    if (!rawBody) return jsonError('Invalid JSON body', 400);
+    const body = normalizeKeys(rawBody);
 
     // Only allow whitelisted fields
     const allowedFields = [
@@ -72,7 +73,7 @@ function registerUserRoutes(router) {
       'hide_following', 'hide_online_status', 'hide_age',
       'self_destruct_alert_enabled', 'min_gift_animation_value',
       'dnd_enabled', 'dnd_start_hour', 'dnd_start_minute', 'dnd_end_hour', 'dnd_end_minute',
-      'accepted_legal_version', 'current_room_id',
+      'accepted_legal_version', 'current_room_id', 'last_room_name',
     ];
 
     const updates = {};
@@ -95,8 +96,10 @@ function registerUserRoutes(router) {
 
   // ── Create or update user ──
   router.post('/api/users', async (request, env) => {
-    const body = await parseBody(request);
-    if (!body || !body.uid) return jsonError('uid required', 400);
+    const rawBody = await parseBody(request);
+    if (!rawBody) return jsonError('uid required', 400);
+    const body = normalizeKeys(rawBody);
+    if (!body.uid) return jsonError('uid required', 400);
 
     const uid = body.uid;
     if (request.auth.uid !== uid) {
@@ -223,19 +226,20 @@ function registerUserRoutes(router) {
   // ── Batch get users ──
   router.post('/api/users/batch', async (request, env) => {
     const body = await parseBody(request);
-    if (!body?.userIds || !Array.isArray(body.userIds)) {
-      return jsonError('userIds array required', 400);
+    const ids = body?.uids || body?.userIds;
+    if (!ids || !Array.isArray(ids)) {
+      return jsonError('uids array required', 400);
     }
 
-    const ids = body.userIds.slice(0, 100); // cap at 100
-    if (ids.length === 0) return json([]);
+    const capped = ids.slice(0, 100);
+    if (capped.length === 0) return json({ users: [] });
 
-    const placeholders = ids.map(() => '?').join(',');
+    const placeholders = capped.map(() => '?').join(',');
     const { results } = await env.DB.prepare(
       `SELECT * FROM users WHERE uid IN (${placeholders})`
-    ).bind(...ids).all();
+    ).bind(...capped).all();
 
-    return json(results);
+    return json({ users: results });
   });
 
   // ── Record profile visit (stalker) ──

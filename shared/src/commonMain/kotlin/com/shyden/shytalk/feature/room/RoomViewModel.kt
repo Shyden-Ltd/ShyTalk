@@ -307,35 +307,55 @@ class RoomViewModel(
     }
 
     private fun observeRoom() {
+        // Instant re-entry: seed ViewModel user cache from the shared cache that
+        // survives ViewModel destruction, then process cached room data immediately.
+        val sharedUsers = roomLifecycleManager.sharedUserCache
+        if (sharedUsers.isNotEmpty()) {
+            userCache.putAll(sharedUsers)
+        }
+
+        val cached = roomLifecycleManager.activeRoom.value
+        if (cached != null && cached.roomId == roomId && cached.state != RoomState.CLOSED) {
+            // Also seed messages from ActiveRoomManager so the chat is visible instantly
+            val cachedMessages = roomLifecycleManager.activeMessages.value
+            if (cachedMessages.isNotEmpty()) {
+                allMessages = cachedMessages
+                updateFilteredMessages()
+            }
+            processRoomEmission(cached)
+        }
+
         viewModelScope.launch {
             roomRepository.getRoomFlow(roomId)
                 .catch { e ->
                     _uiState.update { it.copy(isLoading = false, error = e.message) }
                 }
-                .collect { room ->
-                    if (room == null || room.state == RoomState.CLOSED) {
-                        handleRoomClosed(room)
-                        return@collect
-                    }
-
-                    lastKnownRoom = room
-                    val userId = _uiState.value.currentUserId
-
-                    if (_uiState.value.hasJoined && handleKickedOrRemoved(room, userId)) {
-                        return@collect
-                    }
-
-                    val role = room.resolveRole(userId)
-
-                    if (!blockCheckDone && !_uiState.value.hasJoined) {
-                        handleFirstJoin(room, userId, role)
-                        return@collect
-                    }
-
-                    handleOwnerReturnDetection(room, userId)
-                    handleNormalUpdate(room, userId, role)
-                }
+                .collect { room -> processRoomEmission(room) }
         }
+    }
+
+    private fun processRoomEmission(room: ChatRoom?) {
+        if (room == null || room.state == RoomState.CLOSED) {
+            handleRoomClosed(room)
+            return
+        }
+
+        lastKnownRoom = room
+        val userId = _uiState.value.currentUserId
+
+        if (_uiState.value.hasJoined && handleKickedOrRemoved(room, userId)) {
+            return
+        }
+
+        val role = room.resolveRole(userId)
+
+        if (!blockCheckDone && !_uiState.value.hasJoined) {
+            handleFirstJoin(room, userId, role)
+            return
+        }
+
+        handleOwnerReturnDetection(room, userId)
+        handleNormalUpdate(room, userId, role)
     }
 
     private fun handleRoomClosed(room: ChatRoom?) {
@@ -1360,6 +1380,8 @@ class RoomViewModel(
             when (val result = userRepository.getUsers(newUserIds)) {
                 is Resource.Success -> {
                     result.data.forEach { user -> userCache[user.uid] = user }
+                    // Persist to shared cache so re-entry skips these API calls
+                    roomLifecycleManager.updateSharedUserCache(userCache)
                 }
                 else -> {}
             }

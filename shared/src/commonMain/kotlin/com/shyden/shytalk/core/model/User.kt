@@ -1,7 +1,7 @@
 package com.shyden.shytalk.core.model
 
+import com.shyden.shytalk.core.util.asBool
 import com.shyden.shytalk.core.util.currentTimeMillis
-import com.shyden.shytalk.core.util.millisToTimestamp
 import com.shyden.shytalk.core.util.timestampToMillis
 
 data class User(
@@ -89,7 +89,7 @@ data class User(
         "blockedUserIds" to blockedUserIds.toList(),
         "followingIds" to followingIds.toList(),
         "followerIds" to followerIds.toList(),
-        "dateOfBirth" to dateOfBirth?.let { millisToTimestamp(it) },
+        "dateOfBirth" to dateOfBirth,
         "hideFollowing" to hideFollowing,
         "hideOnlineStatus" to hideOnlineStatus,
         "hideAge" to hideAge,
@@ -97,15 +97,15 @@ data class User(
         "currentRoomId" to currentRoomId,
         "lastRoomName" to lastRoomName,
         "userType" to userType.name,
-        "createdAt" to millisToTimestamp(createdAt),
-        "lastSeenAt" to millisToTimestamp(lastSeenAt),
+        "createdAt" to createdAt,
+        "lastSeenAt" to lastSeenAt,
         "stalkerCount" to stalkerCount,
         "newStalkerCount" to newStalkerCount,
-        "stalkersLastViewedAt" to millisToTimestamp(stalkersLastViewedAt),
+        "stalkersLastViewedAt" to stalkersLastViewedAt,
         "isSuspended" to isSuspended,
         "suspensionReason" to suspensionReason,
-        "suspensionStartDate" to suspensionStartDate?.let { millisToTimestamp(it) },
-        "suspensionEndDate" to suspensionEndDate?.let { millisToTimestamp(it) },
+        "suspensionStartDate" to suspensionStartDate,
+        "suspensionEndDate" to suspensionEndDate,
         "suspensionCanAppeal" to suspensionCanAppeal,
         "suspendedBy" to suspendedBy,
         "suspensionAppealStatus" to suspensionAppealStatus,
@@ -125,7 +125,7 @@ data class User(
         "shyCoins" to shyCoins,
         "shyBeans" to shyBeans,
         "isSuperShy" to isSuperShy,
-        "superShyExpiry" to superShyExpiry?.let { millisToTimestamp(it) },
+        "superShyExpiry" to superShyExpiry,
         "superShyTier" to superShyTier,
         "luckScore" to luckScore,
         "pityCounter" to pityCounter,
@@ -155,9 +155,9 @@ data class User(
             followerIds = (map["followerIds"] as? List<*>)
                 ?.filterIsInstance<String>()?.toSet() ?: emptySet(),
             dateOfBirth = map["dateOfBirth"]?.let { timestampToMillis(it) },
-            hideFollowing = map["hideFollowing"] as? Boolean ?: false,
-            hideOnlineStatus = map["hideOnlineStatus"] as? Boolean ?: false,
-            hideAge = map["hideAge"] as? Boolean ?: false,
+            hideFollowing = map["hideFollowing"].asBool(),
+            hideOnlineStatus = map["hideOnlineStatus"].asBool(),
+            hideAge = map["hideAge"].asBool(),
             email = map["email"] as? String,
             currentRoomId = map["currentRoomId"] as? String,
             lastRoomName = map["lastRoomName"] as? String,
@@ -169,32 +169,32 @@ data class User(
             stalkerCount = (map["stalkerCount"] as? Long) ?: 0,
             newStalkerCount = (map["newStalkerCount"] as? Long) ?: 0,
             stalkersLastViewedAt = map["stalkersLastViewedAt"]?.let { timestampToMillis(it) } ?: 0,
-            isSuspended = map["isSuspended"] as? Boolean ?: false,
+            isSuspended = map["isSuspended"].asBool(),
             suspensionReason = map["suspensionReason"] as? String,
             suspensionStartDate = map["suspensionStartDate"]?.let { timestampToMillis(it) },
             suspensionEndDate = map["suspensionEndDate"]?.let { timestampToMillis(it) },
-            suspensionCanAppeal = map["suspensionCanAppeal"] as? Boolean ?: false,
+            suspensionCanAppeal = map["suspensionCanAppeal"].asBool(),
             suspendedBy = map["suspendedBy"] as? String,
             suspensionAppealStatus = map["suspensionAppealStatus"] as? String,
             fcmTokens = (map["fcmTokens"] as? List<*>)
                 ?.filterIsInstance<String>() ?: emptyList(),
-            pmNotificationsEnabled = map["pmNotificationsEnabled"] as? Boolean ?: true,
+            pmNotificationsEnabled = map["pmNotificationsEnabled"].asBool(true),
             pmPrivacy = (map["pmPrivacy"] as? String)?.let {
                 try { PmPrivacy.valueOf(it) } catch (_: Exception) { PmPrivacy.EVERYONE }
             } ?: PmPrivacy.EVERYONE,
-            pmSoundEnabled = map["pmSoundEnabled"] as? Boolean ?: true,
-            pmShowTimestamps = map["pmShowTimestamps"] as? Boolean ?: true,
-            pmShowDateSeparators = map["pmShowDateSeparators"] as? Boolean ?: true,
-            pmNotificationPreview = map["pmNotificationPreview"] as? Boolean ?: true,
+            pmSoundEnabled = map["pmSoundEnabled"].asBool(true),
+            pmShowTimestamps = map["pmShowTimestamps"].asBool(true),
+            pmShowDateSeparators = map["pmShowDateSeparators"].asBool(true),
+            pmNotificationPreview = map["pmNotificationPreview"].asBool(true),
             acceptedLegalVersion = (map["acceptedLegalVersion"] as? Long)?.toInt() ?: 0,
-            dndEnabled = map["dndEnabled"] as? Boolean ?: false,
+            dndEnabled = map["dndEnabled"].asBool(),
             dndStartHour = (map["dndStartHour"] as? Long)?.toInt() ?: 22,
             dndStartMinute = (map["dndStartMinute"] as? Long)?.toInt() ?: 0,
             dndEndHour = (map["dndEndHour"] as? Long)?.toInt() ?: 8,
             dndEndMinute = (map["dndEndMinute"] as? Long)?.toInt() ?: 0,
             shyCoins = (map["shyCoins"] as? Long) ?: 0,
             shyBeans = (map["shyBeans"] as? Long) ?: 0,
-            isSuperShy = map["isSuperShy"] as? Boolean ?: false,
+            isSuperShy = map["isSuperShy"].asBool(),
             superShyExpiry = map["superShyExpiry"]?.let { timestampToMillis(it) },
             superShyTier = map["superShyTier"] as? String,
             luckScore = (map["luckScore"] as? Long)?.toInt() ?: 0,
@@ -207,8 +207,8 @@ data class User(
                 ?.mapNotNull { (k, v) -> (k as? String)?.let { key -> (v as? String)?.let { value -> key to value } } }
                 ?.toMap() ?: emptyMap(),
             minGiftAnimationValue = (map["minGiftAnimationValue"] as? Long)?.toInt() ?: 0,
-            selfDestructAlertEnabled = map["selfDestructAlertEnabled"] as? Boolean ?: false,
-            hasClaimedSuperShyTrial = map["hasClaimedSuperShyTrial"] as? Boolean ?: false
+            selfDestructAlertEnabled = map["selfDestructAlertEnabled"].asBool(),
+            hasClaimedSuperShyTrial = map["hasClaimedSuperShyTrial"].asBool()
         )
     }
 }

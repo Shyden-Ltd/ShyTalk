@@ -56,8 +56,8 @@ class ProfileVisitorFromMapTest {
         val map = visitor.toMap()
         assertEquals("visitor-1", map["visitorId"])
         assertEquals(3L, map["visitCount"])
-        assertEquals(ts, map["lastVisitedAt"])
-        assertEquals(ts, map["firstVisitedAt"])
+        assertEquals(tsMillis, map["lastVisitedAt"])
+        assertEquals(tsMillis, map["firstVisitedAt"])
     }
 
     @Test

@@ -1,6 +1,5 @@
 package com.shyden.shytalk.core.model
 
-import com.shyden.shytalk.core.util.millisToTimestamp
 import com.shyden.shytalk.core.util.timestampToMillis
 
 data class MessageEdit(
@@ -10,7 +9,7 @@ data class MessageEdit(
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
         "previousText" to previousText,
-        "editedAt" to millisToTimestamp(editedAt)
+        "editedAt" to editedAt
     )
 
     companion object {
