@@ -15,7 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.navigation.compose.rememberNavController
-import com.google.firebase.firestore.FirebaseFirestore
+import com.shyden.shytalk.core.room.ActiveRoomManager
 import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.core.room.RoomService
 import com.shyden.shytalk.data.repository.AuthRepository
@@ -27,12 +27,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import com.shyden.shytalk.core.util.DeviceSecurityChecker
+import com.shyden.shytalk.core.util.Resource
+import com.shyden.shytalk.data.remote.AppConfigService
 import com.shyden.shytalk.feature.security.UnsafeDeviceScreen
 import com.shyden.shytalk.feature.update.ForceUpdateScreen
 import com.shyden.shytalk.navigation.NavGraph
 import com.shyden.shytalk.navigation.Screen
 import com.shyden.shytalk.ui.theme.ShyTalkTheme
-import kotlinx.coroutines.tasks.await
 import org.koin.android.ext.android.inject
 
 class MainActivity : ComponentActivity() {
@@ -40,6 +41,7 @@ class MainActivity : ComponentActivity() {
     private val authRepository: AuthRepository by inject()
     private val userRepository: UserRepository by inject()
     private val activeRoomManager: RoomLifecycleManager by inject()
+    private val appConfigService: AppConfigService by inject()
 
     private val _navigateToRoom = mutableStateOf<String?>(null)
     private val _navigateToChat = mutableStateOf<Pair<String, Boolean>?>(null) // (id, isGroup)
@@ -59,23 +61,18 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(Unit) {
                     isUnsafe = DeviceSecurityChecker.isUnsafe()
-                    try {
-                        val doc = FirebaseFirestore.getInstance()
-                            .collection("config")
-                            .document("app")
-                            .get()
-                            .await()
-                        val minVersion = (doc.getLong("minVersionCode") ?: 0).toInt()
-                        updateRequired = BuildConfig.VERSION_CODE < minVersion
-                        if (!updateRequired) {
-                            val latestVersion = (doc.getLong("latestVersionCode") ?: 0).toInt()
-                            if (BuildConfig.VERSION_CODE < latestVersion) {
-                                softUpdateAvailable = doc.getString("latestVersionName")
-                                    ?: "v$latestVersion"
+                    when (val result = appConfigService.getLatestVersionInfo()) {
+                        is Resource.Success -> {
+                            val (minVersionCode, latestVersionCode, latestVersionName) = result.data
+                            updateRequired = appConfigService.currentVersionCode < minVersionCode
+                            if (!updateRequired && appConfigService.currentVersionCode < latestVersionCode) {
+                                softUpdateAvailable = latestVersionName.ifEmpty { "v$latestVersionCode" }
                             }
                         }
-                    } catch (_: Exception) {
-                        updateRequired = false
+                        is Resource.Error -> {
+                            updateRequired = false
+                        }
+                        is Resource.Loading -> { /* wait */ }
                     }
                     checkComplete = true
                 }
@@ -221,15 +218,29 @@ class MainActivity : ComponentActivity() {
         val navigateTo = intent?.getStringExtra("navigateTo")
         if (navigateTo == "chat") {
             val isGroup = intent.getBooleanExtra("isGroup", false)
-            if (isGroup) {
-                val conversationId = intent.getStringExtra("conversationId")
-                if (conversationId != null) {
-                    _navigateToChat.value = conversationId to true
+            val inRoom = activeRoomManager.activeRoomId.value != null
+
+            if (inRoom) {
+                // User is in a room — open PmBottomSheet within the room instead of navigating away
+                val mgr = activeRoomManager as? ActiveRoomManager
+                if (isGroup) {
+                    val conversationId = intent.getStringExtra("conversationId")
+                    if (conversationId != null) mgr?.requestOpenPm(groupConversationId = conversationId)
+                } else {
+                    val otherUserId = intent.getStringExtra("otherUserId")
+                    if (otherUserId != null) mgr?.requestOpenPm(userId = otherUserId)
                 }
             } else {
-                val otherUserId = intent.getStringExtra("otherUserId")
-                if (otherUserId != null) {
-                    _navigateToChat.value = otherUserId to false
+                if (isGroup) {
+                    val conversationId = intent.getStringExtra("conversationId")
+                    if (conversationId != null) {
+                        _navigateToChat.value = conversationId to true
+                    }
+                } else {
+                    val otherUserId = intent.getStringExtra("otherUserId")
+                    if (otherUserId != null) {
+                        _navigateToChat.value = otherUserId to false
+                    }
                 }
             }
             return

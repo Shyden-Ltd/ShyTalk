@@ -26,6 +26,7 @@ data class DailyRewardUiState(
     val currentStreak: Int = 0,
     val isClaiming: Boolean = false,
     val showDialog: Boolean = false,
+    val showCelebration: Boolean = false,
     val error: String? = null,
     val dailyBase: Int = 50,
     val milestoneRewards: Map<Int, MilestoneReward> = emptyMap(),
@@ -108,6 +109,8 @@ class DailyRewardViewModel(
                             hasClaimedToday = true,
                             currentStreak = result.data.newStreak,
                             isClaiming = false,
+                            showDialog = false,
+                            showCelebration = true,
                             claimedDaysThisMonth = it.claimedDaysThisMonth + todayDay
                         )
                     }
@@ -122,5 +125,9 @@ class DailyRewardViewModel(
 
     fun dismissDialog() {
         _uiState.update { it.copy(showDialog = false) }
+    }
+
+    fun dismissCelebration() {
+        _uiState.update { it.copy(showCelebration = false) }
     }
 }

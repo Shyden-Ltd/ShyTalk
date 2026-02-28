@@ -1,40 +1,62 @@
 package com.shyden.shytalk.data.repository
 
 import com.shyden.shytalk.core.model.SeatRequest
-import com.shyden.shytalk.core.model.SeatRequestStatus
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
-import com.shyden.shytalk.core.util.currentTimeMillis
-import com.google.firebase.Timestamp
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.channels.awaitClose
+import com.shyden.shytalk.core.util.toMap
+import com.shyden.shytalk.data.remote.PresenceService
+import com.shyden.shytalk.data.remote.RoomEvent
+import com.shyden.shytalk.data.remote.WorkerApiClient
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.tasks.await
-import java.util.UUID
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.transform
+import org.json.JSONObject
 
 class SeatRequestRepositoryImpl(
-    private val firestore: FirebaseFirestore
+    private val api: WorkerApiClient,
+    private val presenceService: PresenceService
 ) : SeatRequestRepository {
 
-    private fun requestsCollection(roomId: String) =
-        firestore.collection("rooms").document(roomId).collection("seatRequests")
-
-    override fun getPendingRequests(roomId: String): Flow<List<SeatRequest>> = callbackFlow {
-        val listener = requestsCollection(roomId)
-            .whereEqualTo("status", SeatRequestStatus.PENDING.name)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    close(error)
-                    return@addSnapshotListener
-                }
-                val requests = snapshot?.documents?.mapNotNull { doc ->
-                    doc.data?.let { SeatRequest.fromMap(it, doc.id) }
-                } ?: emptyList()
-                trySend(requests)
+    override fun getPendingRequests(roomId: String): Flow<List<SeatRequest>> = merge(
+        // Slow fallback poll (10s)
+        flow { while (true) { emit(Unit); delay(10_000) } },
+        // Immediate refetch on seat request events
+        presenceService.roomEvents
+            .filter { it is RoomEvent.SeatRequestUpdated }
+            .map { }
+    ).transform {
+        try {
+            val arr = api.getArray("/api/rooms/$roomId/seat-requests")
+            val requests = (0 until arr.length()).mapNotNull { i ->
+                val obj = arr.getJSONObject(i)
+                SeatRequest.fromMap(obj.toMap(), obj.getString("requestId"))
             }
-        awaitClose { listener.remove() }
-    }
+            emit(requests)
+        } catch (_: Exception) { }
+    }.distinctUntilChanged()
+
+    override fun getRequestsByUser(roomId: String, userId: String): Flow<List<SeatRequest>> = merge(
+        // Slow fallback poll (10s)
+        flow { while (true) { emit(Unit); delay(10_000) } },
+        // Immediate refetch on seat request events
+        presenceService.roomEvents
+            .filter { it is RoomEvent.SeatRequestUpdated }
+            .map { }
+    ).transform {
+        try {
+            val arr = api.getArray("/api/rooms/$roomId/seat-requests/user/$userId")
+            val requests = (0 until arr.length()).mapNotNull { i ->
+                val obj = arr.getJSONObject(i)
+                SeatRequest.fromMap(obj.toMap(), obj.getString("requestId"))
+            }
+            emit(requests)
+        } catch (_: Exception) { }
+    }.distinctUntilChanged()
 
     override suspend fun createRequest(
         roomId: String,
@@ -42,35 +64,11 @@ class SeatRequestRepositoryImpl(
         userName: String,
         seatIndex: Int
     ): Resource<Unit> = firebaseCall("Failed to create seat request") {
-        // Check if user already has a pending request
-        val existing = requestsCollection(roomId)
-            .whereEqualTo("userId", userId)
-            .whereEqualTo("status", SeatRequestStatus.PENDING.name)
-            .limit(1)
-            .get()
-            .await()
-        if (!existing.isEmpty) {
-            // Refresh the stale request so snapshot listeners re-fire for observers
-            existing.documents.first().reference.update(
-                mapOf(
-                    "seatIndex" to seatIndex,
-                    "userName" to userName,
-                    "createdAt" to Timestamp.now()
-                )
-            ).await()
-            return@firebaseCall
+        val body = JSONObject().apply {
+            put("userName", userName)
+            put("seatIndex", seatIndex)
         }
-
-        val requestId = UUID.randomUUID().toString()
-        val request = SeatRequest(
-            requestId = requestId,
-            userId = userId,
-            userName = userName,
-            seatIndex = seatIndex,
-            status = SeatRequestStatus.PENDING,
-            createdAt = currentTimeMillis()
-        )
-        requestsCollection(roomId).document(requestId).set(request.toMap()).await()
+        api.post("/api/rooms/$roomId/seat-requests", body)
     }
 
     override suspend fun approveRequest(
@@ -78,26 +76,9 @@ class SeatRequestRepositoryImpl(
         requestId: String,
         resolvedBy: String
     ): Resource<SeatRequest> = firebaseCall("Failed to approve request") {
-        val docRef = requestsCollection(roomId).document(requestId)
-        val resolvedAt = Timestamp.now()
-        // Read + update in a single transaction (eliminates separate read-after-write)
-        firestore.runTransaction { transaction ->
-            val snapshot = transaction.get(docRef)
-            val data = snapshot.data ?: throw Exception("Request not found")
-            transaction.update(docRef, mapOf(
-                "status" to SeatRequestStatus.APPROVED.name,
-                "resolvedBy" to resolvedBy,
-                "resolvedAt" to resolvedAt
-            ))
-            SeatRequest.fromMap(
-                data + mapOf(
-                    "status" to SeatRequestStatus.APPROVED.name,
-                    "resolvedBy" to resolvedBy,
-                    "resolvedAt" to resolvedAt
-                ),
-                snapshot.id
-            )
-        }.await()
+        val body = JSONObject().apply { put("resolvedBy", resolvedBy) }
+        val json = api.post("/api/rooms/$roomId/seat-requests/$requestId/approve", body)
+        SeatRequest.fromMap(json.toMap(), json.getString("requestId"))
     }
 
     override suspend fun denyRequest(
@@ -105,31 +86,8 @@ class SeatRequestRepositoryImpl(
         requestId: String,
         resolvedBy: String
     ): Resource<Unit> = firebaseCall("Failed to deny request") {
-        requestsCollection(roomId).document(requestId).update(
-            mapOf(
-                "status" to SeatRequestStatus.DENIED.name,
-                "resolvedBy" to resolvedBy,
-                "resolvedAt" to Timestamp.now()
-            )
-        ).await()
-    }
-
-    override fun getRequestsByUser(roomId: String, userId: String): Flow<List<SeatRequest>> = callbackFlow {
-        val listener = requestsCollection(roomId)
-            .whereEqualTo("userId", userId)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    close(error)
-                    return@addSnapshotListener
-                }
-                val requests = snapshot?.documents?.mapNotNull { doc ->
-                    doc.data?.let { SeatRequest.fromMap(it, doc.id) }
-                }?.filter {
-                    it.status == SeatRequestStatus.PENDING || it.status == SeatRequestStatus.APPROVED
-                } ?: emptyList()
-                trySend(requests)
-            }
-        awaitClose { listener.remove() }
+        val body = JSONObject().apply { put("resolvedBy", resolvedBy) }
+        api.post("/api/rooms/$roomId/seat-requests/$requestId/deny", body)
     }
 
     override suspend fun cancelApprovedRequest(
@@ -137,12 +95,6 @@ class SeatRequestRepositoryImpl(
         requestId: String,
         userId: String
     ): Resource<Unit> = firebaseCall("Failed to cancel approved request") {
-        requestsCollection(roomId).document(requestId).update(
-            mapOf(
-                "status" to SeatRequestStatus.DENIED.name,
-                "resolvedBy" to userId,
-                "resolvedAt" to Timestamp.now()
-            )
-        ).await()
+        api.post("/api/rooms/$roomId/seat-requests/$requestId/cancel")
     }
 }

@@ -1,8 +1,11 @@
 package com.shyden.shytalk.feature.daily
 
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -31,7 +34,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -319,7 +326,7 @@ private fun DayCell(
             )
             if (!isClaimed && rewardAmount > 0) {
                 Text(
-                    text = "$rewardAmount",
+                    text = "\uD83E\uDE99$rewardAmount",
                     fontSize = 6.sp,
                     color = if (isMilestone) Color(0xFFFF6B35) else textColor.copy(alpha = 0.7f),
                     fontWeight = if (isMilestone) FontWeight.Bold else FontWeight.Normal
@@ -338,4 +345,100 @@ private fun DayCell(
             )
         }
     }
+}
+
+@Composable
+fun DailyRewardCelebrationDialog(
+    viewModel: DailyRewardViewModel,
+    onDismiss: () -> Unit
+) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val reward = state.reward ?: return
+    if (!state.showCelebration) return
+
+    // Bounce-in animation
+    var animateIn by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (animateIn) 1f else 0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        label = "celebrationScale"
+    )
+    LaunchedEffect(Unit) { animateIn = true }
+
+    AlertDialog(
+        onDismissRequest = {
+            viewModel.dismissCelebration()
+            onDismiss()
+        },
+        icon = {
+            Text(
+                text = "\uD83C\uDF89",
+                fontSize = 40.sp,
+                modifier = Modifier.graphicsLayer(scaleX = scale, scaleY = scale)
+            )
+        },
+        title = {
+            Text(
+                text = "Reward Claimed!",
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (reward.isGiftReward) {
+                    Text(
+                        text = "${reward.giftQuantity}x ${reward.giftId}",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = SuperShyGold,
+                        textAlign = TextAlign.Center
+                    )
+                } else {
+                    Text(
+                        text = "+${reward.coinsAwarded}",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = SuperShyGold
+                    )
+                    Text(
+                        text = "coins",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                if (reward.isMilestone) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Milestone bonus!",
+                        color = Color(0xFFFF6B35),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "${state.currentStreak}-day streak",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = SuperShyGold,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                viewModel.dismissCelebration()
+                onDismiss()
+            }) {
+                Text("Awesome!")
+            }
+        }
+    )
 }

@@ -35,10 +35,11 @@ class LegalAcceptanceTest {
         // Initially disabled — not all checkboxes checked
         composeTestRule.onNodeWithTag("legal_acceptButton").assertIsNotEnabled()
 
-        // Check all three checkboxes
+        // Check all four checkboxes
         composeTestRule.onNodeWithTag("legal_checkbox_PrivacyPolicy").performClick()
         composeTestRule.onNodeWithTag("legal_checkbox_CommunityStandards").performClick()
         composeTestRule.onNodeWithTag("legal_checkbox_TermsAndConditions").performClick()
+        composeTestRule.onNodeWithTag("legal_checkbox_CyberBullyingPolicy").performClick()
 
         // Now the accept button should be enabled
         composeTestRule.onNodeWithTag("legal_acceptButton").assertIsDisplayed()

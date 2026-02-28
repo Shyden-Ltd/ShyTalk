@@ -6,30 +6,26 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.shyden.shytalk.MainActivity
 import com.shyden.shytalk.R
+import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.core.util.Constants
+import com.shyden.shytalk.data.repository.NotificationRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 
 class ShyTalkMessagingService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                FirebaseFirestore.getInstance()
-                    .collection("users")
-                    .document(userId)
-                    .update("fcmTokens", com.google.firebase.firestore.FieldValue.arrayUnion(token))
-                    .await()
+                val notificationRepo: NotificationRepository =
+                    org.koin.core.context.GlobalContext.get().get()
+                notificationRepo.saveFcmToken("", token)
             } catch (_: Exception) {
                 // Token save failed — will retry on next app launch
             }
@@ -48,6 +44,14 @@ class ShyTalkMessagingService : FirebaseMessagingService() {
     }
 
     private fun handlePmNotification(data: Map<String, String>) {
+        // Suppress notifications when app is in the foreground
+        try {
+            val roomManager: RoomLifecycleManager = org.koin.core.context.GlobalContext.get().get()
+            if (roomManager.isAppInForeground) return
+        } catch (_: Exception) {
+            // Koin not initialized yet — show notification
+        }
+
         val senderName = data["senderName"] ?: "Someone"
         val messageText = data["messageText"] ?: "New message"
         val senderId = data["senderId"] ?: return

@@ -2,8 +2,6 @@ package com.shyden.shytalk.core.di
 
 import android.provider.Settings
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.firestore.FirebaseFirestore
 import com.shyden.shytalk.BuildConfig
 import com.shyden.shytalk.core.room.ActiveRoomManager
 import com.shyden.shytalk.core.room.RoomLifecycleManager
@@ -13,10 +11,11 @@ import com.shyden.shytalk.data.remote.LiveKitTokenService
 import com.shyden.shytalk.data.remote.LiveKitVoiceService
 import com.shyden.shytalk.data.remote.AndroidAppConfigService
 import com.shyden.shytalk.data.remote.AppConfigService
-import com.shyden.shytalk.data.remote.FirebasePresenceService
 import com.shyden.shytalk.data.remote.PresenceService
+import com.shyden.shytalk.data.remote.WebSocketPresenceService
 import com.shyden.shytalk.data.remote.TokenService
 import com.shyden.shytalk.data.remote.VoiceService
+import com.shyden.shytalk.data.remote.WorkerApiClient
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.AuthRepositoryImpl
 import com.shyden.shytalk.data.repository.DeviceRepository
@@ -44,7 +43,6 @@ import com.shyden.shytalk.data.repository.GiftRepositoryImpl
 import com.shyden.shytalk.data.repository.EconomyRepository
 import com.shyden.shytalk.data.repository.EconomyRepositoryImpl
 import com.shyden.shytalk.data.remote.BillingService
-import com.google.firebase.functions.FirebaseFunctions
 import com.shyden.shytalk.feature.auth.AuthViewModel
 import com.shyden.shytalk.feature.daily.DailyRewardViewModel
 import com.shyden.shytalk.feature.gacha.GachaViewModel
@@ -72,26 +70,23 @@ import org.koin.dsl.bind
 import org.koin.dsl.module
 
 val appModule = module {
-    // Firebase instances
+    // Firebase Auth (free tier — kept for authentication)
     single { FirebaseAuth.getInstance() }
-    single { FirebaseFirestore.getInstance() }
-    single { FirebaseDatabase.getInstance("https://shytalk-7ba69-default-rtdb.asia-southeast1.firebasedatabase.app") }
-
     // HTTP client
     single { OkHttpClient.Builder().build() }
+
+    // Worker API client (Cloudflare)
+    single { WorkerApiClient(get(), BuildConfig.API_BASE_URL, get()) }
 
     // Device ID
     single(named("deviceId")) {
         Settings.Secure.getString(androidContext().contentResolver, Settings.Secure.ANDROID_ID)
     }
 
-    // Firebase Functions
-    single { FirebaseFunctions.getInstance("asia-southeast1") }
-
     // Services
-    single<TokenService> { LiveKitTokenService() }
+    single<TokenService> { LiveKitTokenService(get()) }
     single<VoiceService> { LiveKitVoiceService(androidContext(), get()) }
-    single<PresenceService> { FirebasePresenceService(get()) }
+    single<PresenceService> { WebSocketPresenceService(get(), BuildConfig.API_BASE_URL, get()) }
     single<AppConfigService> { AndroidAppConfigService(androidContext(), get()) }
     single { BillingService(androidContext()) }
 
@@ -105,10 +100,10 @@ val appModule = module {
     singleOf(::DeviceRepositoryImpl) bind DeviceRepository::class
     singleOf(::PrivateMessageRepositoryImpl) bind PrivateMessageRepository::class
     singleOf(::ReportRepositoryImpl) bind ReportRepository::class
-    singleOf(::TypingRepositoryImpl) bind TypingRepository::class
+    single<TypingRepository> { TypingRepositoryImpl(get(), BuildConfig.API_BASE_URL, get()) }
     singleOf(::NotificationRepositoryImpl) bind NotificationRepository::class
     singleOf(::GiftRepositoryImpl) bind GiftRepository::class
-    single<EconomyRepository> { EconomyRepositoryImpl(get(), get()) }
+    singleOf(::EconomyRepositoryImpl) bind EconomyRepository::class
     single { StickerStorage(androidContext()) }
 
     // ActiveRoomManager

@@ -89,6 +89,7 @@ fun AppSettingsScreen(
     onNavigateToPrivacyPolicy: () -> Unit,
     onNavigateToCommunityStandards: () -> Unit = {},
     onNavigateToTermsAndConditions: () -> Unit = {},
+    onNavigateToCyberBullyingPolicy: () -> Unit = {},
     onSignOut: () -> Unit,
     viewModel: AppSettingsViewModel = koinViewModel()
 ) {
@@ -180,6 +181,7 @@ fun AppSettingsScreen(
                 onNavigateToPrivacyPolicy = onNavigateToPrivacyPolicy,
                 onNavigateToCommunityStandards = onNavigateToCommunityStandards,
                 onNavigateToTermsAndConditions = onNavigateToTermsAndConditions,
+                onNavigateToCyberBullyingPolicy = onNavigateToCyberBullyingPolicy,
                 onCheckForUpdates = { viewModel.checkForUpdates() },
                 onClearCache = { viewModel.clearCache() },
                 snackbarHostState = snackbarHostState
@@ -1001,6 +1003,7 @@ private fun AboutPage(
     onNavigateToPrivacyPolicy: () -> Unit,
     onNavigateToCommunityStandards: () -> Unit,
     onNavigateToTermsAndConditions: () -> Unit,
+    onNavigateToCyberBullyingPolicy: () -> Unit,
     onCheckForUpdates: () -> Unit,
     onClearCache: () -> Unit,
     snackbarHostState: SnackbarHostState
@@ -1117,6 +1120,20 @@ private fun AboutPage(
             ) {
                 Text(
                     text = "Terms & Conditions",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+
+            // Cyber Bullying Policy
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToCyberBullyingPolicy() }
+                    .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Cyber Bullying Policy",
                     style = MaterialTheme.typography.bodyLarge
                 )
             }

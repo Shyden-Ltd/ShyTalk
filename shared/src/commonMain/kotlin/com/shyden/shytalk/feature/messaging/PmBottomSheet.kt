@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 fun PmBottomSheet(
     onDismiss: () -> Unit,
     preOpenUserId: String? = null,
+    preOpenGroupConversationId: String? = null,
     onPickImages: ((PrivateChatViewModel) -> Unit)? = null,
     onPickStickerImage: ((PrivateChatViewModel) -> Unit)? = null,
     onNavigateToRoom: ((String) -> Unit)? = null,
@@ -47,7 +48,7 @@ fun PmBottomSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedChatUserId by remember { mutableStateOf(preOpenUserId) }
-    var selectedGroupConversationId by remember { mutableStateOf<String?>(null) }
+    var selectedGroupConversationId by remember { mutableStateOf(preOpenGroupConversationId) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,

@@ -7,11 +7,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -87,7 +90,7 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun PrivateChatScreen(
     otherUserId: String = "",
@@ -132,6 +135,14 @@ fun PrivateChatScreen(
     // Always scroll to bottom when new messages arrive (sent or received)
     LaunchedEffect(uiState.messages.size, uiState.messages.lastOrNull()?.messageId) {
         if (uiState.messages.isNotEmpty() && hasScrolledToBottom) {
+            listState.animateScrollToItem(uiState.messages.size - 1)
+        }
+    }
+
+    // Scroll to bottom when the keyboard opens so the latest messages stay visible
+    val isKeyboardVisible = WindowInsets.isImeVisible
+    LaunchedEffect(isKeyboardVisible) {
+        if (isKeyboardVisible && uiState.messages.isNotEmpty() && hasScrolledToBottom) {
             listState.animateScrollToItem(uiState.messages.size - 1)
         }
     }

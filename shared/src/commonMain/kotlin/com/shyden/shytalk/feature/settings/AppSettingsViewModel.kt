@@ -263,7 +263,7 @@ class AppSettingsViewModel(
             _uiState.update { it.copy(isCheckingUpdate = true, updateCheckResult = null) }
             when (val result = appConfigService.getLatestVersionInfo()) {
                 is Resource.Success -> {
-                    val (latestVersionCode, latestVersionName) = result.data
+                    val (_, latestVersionCode, latestVersionName) = result.data
                     val checkResult = if (appConfigService.currentVersionCode >= latestVersionCode) {
                         UpdateCheckResult.UpToDate
                     } else {

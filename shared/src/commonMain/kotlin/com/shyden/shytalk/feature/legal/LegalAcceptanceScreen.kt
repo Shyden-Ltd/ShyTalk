@@ -26,20 +26,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 
-const val CURRENT_LEGAL_VERSION = 3
+const val CURRENT_LEGAL_VERSION = 4
 
 @Composable
 fun LegalAcceptanceScreen(
     onAccept: () -> Unit,
     onViewPrivacyPolicy: () -> Unit,
     onViewCommunityStandards: () -> Unit,
-    onViewTerms: () -> Unit
+    onViewTerms: () -> Unit,
+    onViewCyberBullyingPolicy: () -> Unit
 ) {
     var privacyChecked by remember { mutableStateOf(false) }
     var communityChecked by remember { mutableStateOf(false) }
     var termsChecked by remember { mutableStateOf(false) }
+    var cyberBullyingChecked by remember { mutableStateOf(false) }
 
-    val allChecked = privacyChecked && communityChecked && termsChecked
+    val allChecked = privacyChecked && communityChecked && termsChecked && cyberBullyingChecked
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -92,6 +94,16 @@ fun LegalAcceptanceScreen(
                 checked = termsChecked,
                 onCheckedChange = { termsChecked = it },
                 onViewDocument = onViewTerms
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Cyber Bullying Policy
+            LegalCheckRow(
+                title = "Cyber Bullying Policy",
+                checked = cyberBullyingChecked,
+                onCheckedChange = { cyberBullyingChecked = it },
+                onViewDocument = onViewCyberBullyingPolicy
             )
 
             Spacer(modifier = Modifier.weight(1f))

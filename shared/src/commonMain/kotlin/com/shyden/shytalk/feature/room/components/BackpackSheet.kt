@@ -469,7 +469,7 @@ private fun PagedGiftGrid(
         ) { page ->
             val pageItems = items.drop(page * pageSize).take(pageSize)
             Column(
-                modifier = Modifier.fillMaxWidth().fillMaxHeight().padding(horizontal = 2.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 for (row in 0 until 2) {
@@ -481,7 +481,7 @@ private fun PagedGiftGrid(
                             val index = row * 4 + col
                             if (index < pageItems.size) {
                                 val item = pageItems[index]
-                                Box(modifier = Modifier.weight(1f)) {
+                                Box(modifier = Modifier.weight(1f).aspectRatio(1f)) {
                                     if (isBackpackTab) {
                                         BackpackGiftCell(
                                             item = item,
@@ -507,7 +507,7 @@ private fun PagedGiftGrid(
                                     }
                                 }
                             } else {
-                                Spacer(modifier = Modifier.weight(1f))
+                                Spacer(modifier = Modifier.weight(1f).aspectRatio(1f))
                             }
                         }
                     }

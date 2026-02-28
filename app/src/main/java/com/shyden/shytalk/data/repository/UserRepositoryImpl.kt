@@ -2,49 +2,32 @@ package com.shyden.shytalk.data.repository
 
 import com.shyden.shytalk.core.model.ProfileVisitor
 import com.shyden.shytalk.core.model.User
-import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
-import com.google.firebase.Timestamp
-import com.google.firebase.firestore.FieldPath
-import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
-import com.google.firebase.firestore.SetOptions
-import java.util.Date
-import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.coroutineScope
+import com.shyden.shytalk.core.util.toMap
+import com.shyden.shytalk.data.remote.WorkerApiClient
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.merge
-import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.withTimeout
+import org.json.JSONArray
+import org.json.JSONObject
 
 class UserRepositoryImpl(
-    private val firestore: FirebaseFirestore
+    private val api: WorkerApiClient
 ) : UserRepository {
-
-    private val usersCollection = firestore.collection("users")
 
     private val _userUpdates = MutableSharedFlow<User>(replay = 1, extraBufferCapacity = 5)
     override val userUpdates: SharedFlow<User> = _userUpdates.asSharedFlow()
 
     private suspend fun emitUserUpdate(userId: String) {
         try {
-            val doc = usersCollection.document(userId).get().await()
-            if (doc.exists()) {
-                val data = doc.data
-                if (data != null) {
-                    _userUpdates.tryEmit(User.fromMap(data, doc.id))
-                }
-            }
+            val json = api.get("/api/users/$userId")
+            _userUpdates.tryEmit(User.fromMap(json.toMap(), userId))
         } catch (_: Exception) {
             // Best-effort: don't fail the parent operation if re-fetch fails
         }
@@ -56,270 +39,182 @@ class UserRepositoryImpl(
     )
 
     override suspend fun createOrUpdateUser(user: User): Resource<Unit> = firebaseCall("Failed to create/update user") {
-        try {
-            withTimeout(10_000L) {
-                usersCollection.document(user.uid).set(user.toMap()).await()
-            }
-            _userUpdates.tryEmit(user)
-        } catch (_: TimeoutCancellationException) {
-            throw Exception("Server not responding — please try again")
+        val body = JSONObject()
+        for ((k, v) in user.toMap()) {
+            body.put(k, v ?: JSONObject.NULL)
         }
+        api.post("/api/users", body)
+        _userUpdates.tryEmit(user)
     }
 
     override suspend fun getUser(userId: String): Resource<User> = firebaseCall("Failed to get user") {
-        val doc = usersCollection.document(userId).get().await()
-        if (!doc.exists()) throw Exception("User not found")
-        val data = doc.data ?: throw Exception("User data is null")
-        User.fromMap(data, doc.id)
+        val json = api.get("/api/users/$userId")
+        User.fromMap(json.toMap(), userId)
     }
 
     override suspend fun userExists(userId: String): Resource<Boolean> = firebaseCall("Failed to check user existence") {
-        val doc = usersCollection.document(userId).get().await()
-        doc.exists()
+        val json = api.get("/api/users/$userId/exists")
+        json.optBoolean("exists", false)
     }
 
     override suspend fun updateDisplayName(userId: String, displayName: String): Resource<Unit> = firebaseCall("Failed to update display name") {
-        usersCollection.document(userId).update("displayName", displayName).await()
+        api.patch("/api/users/$userId", JSONObject().put("displayName", displayName))
         emitUserUpdate(userId)
     }
 
     override suspend fun updateAvatar(userId: String, avatarUrl: String): Resource<Unit> = firebaseCall("Failed to update avatar") {
-        usersCollection.document(userId).update("avatarUrl", avatarUrl).await()
+        api.patch("/api/users/$userId", JSONObject().put("avatarUrl", avatarUrl))
         emitUserUpdate(userId)
     }
 
     override suspend fun updateLastSeen(userId: String): Resource<Unit> = firebaseCall("Failed to update last seen") {
-        usersCollection.document(userId).update("lastSeenAt", Timestamp.now()).await()
+        api.patch("/api/users/$userId", JSONObject().put("lastSeenAt", System.currentTimeMillis()))
     }
 
     override suspend fun updateProfile(userId: String, fields: Map<String, Any?>): Resource<Unit> = firebaseCall("Failed to update profile") {
-        usersCollection.document(userId).update(fields).await()
+        val body = JSONObject()
+        for ((k, v) in fields) {
+            body.put(k, v ?: JSONObject.NULL)
+        }
+        api.patch("/api/users/$userId", body)
         if (fields.keys.any { it in profileVisibleFields }) {
             emitUserUpdate(userId)
         }
     }
 
     override suspend fun generateUniqueId(userId: String): Resource<Long> = firebaseCall("Failed to generate unique ID") {
-        val counterRef = firestore.collection("counters").document("uniqueId")
-        firestore.runTransaction { transaction ->
-            val snapshot = transaction.get(counterRef)
-            val currentId = if (snapshot.exists()) {
-                snapshot.getLong("nextId") ?: 10000000L
-            } else {
-                10000000L
-            }
-            transaction.set(counterRef, mapOf("nextId" to currentId + 1))
-            transaction.update(usersCollection.document(userId), "uniqueId", currentId)
-            currentId
-        }.await()
+        val json = api.post("/api/users/$userId/unique-id")
+        json.getLong("uniqueId")
     }
 
     override suspend fun blockUser(userId: String, blockedUserId: String): Resource<Unit> = firebaseCall("Failed to block user") {
-        val batch = firestore.batch()
-        // Add to blocked list
-        batch.update(usersCollection.document(userId), "blockedUserIds", FieldValue.arrayUnion(blockedUserId))
-        // Remove follow connections in both directions
-        batch.update(usersCollection.document(userId), "followingIds", FieldValue.arrayRemove(blockedUserId))
-        batch.update(usersCollection.document(userId), "followerIds", FieldValue.arrayRemove(blockedUserId))
-        batch.update(usersCollection.document(blockedUserId), "followingIds", FieldValue.arrayRemove(userId))
-        batch.update(usersCollection.document(blockedUserId), "followerIds", FieldValue.arrayRemove(userId))
-        batch.commit().await()
+        api.post("/api/users/$userId/block", JSONObject().put("blockedUserId", blockedUserId))
     }
 
     override suspend fun unblockUser(userId: String, blockedUserId: String): Resource<Unit> = firebaseCall("Failed to unblock user") {
-        usersCollection.document(userId)
-            .update("blockedUserIds", FieldValue.arrayRemove(blockedUserId)).await()
+        api.delete("/api/users/$userId/block/$blockedUserId")
     }
 
     override suspend fun getBlockedUserIds(userId: String): Resource<Set<String>> = firebaseCall("Failed to get blocked users") {
-        val doc = usersCollection.document(userId).get().await()
-        if (!doc.exists()) return@firebaseCall emptySet()
-        val data = doc.data ?: return@firebaseCall emptySet()
-        (data["blockedUserIds"] as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet()
+        val json = api.get("/api/users/$userId/blocked")
+        val arr = json.optJSONArray("blockedUserIds") ?: JSONArray()
+        (0 until arr.length()).map { arr.getString(it) }.toSet()
     }
 
     override suspend fun followUser(currentUserId: String, targetUserId: String): Resource<Unit> =
         firebaseCall("Failed to follow user") {
-            val batch = firestore.batch()
-            batch.update(usersCollection.document(currentUserId), "followingIds", FieldValue.arrayUnion(targetUserId))
-            batch.update(usersCollection.document(targetUserId), "followerIds", FieldValue.arrayUnion(currentUserId))
-            batch.commit().await()
+            api.post("/api/users/$currentUserId/follow", JSONObject().put("targetUserId", targetUserId))
         }
 
     override suspend fun unfollowUser(currentUserId: String, targetUserId: String): Resource<Unit> =
         firebaseCall("Failed to unfollow user") {
-            val batch = firestore.batch()
-            batch.update(usersCollection.document(currentUserId), "followingIds", FieldValue.arrayRemove(targetUserId))
-            batch.update(usersCollection.document(targetUserId), "followerIds", FieldValue.arrayRemove(currentUserId))
-            batch.commit().await()
+            api.delete("/api/users/$currentUserId/follow/$targetUserId")
         }
 
     override suspend fun removeFollower(userId: String, followerId: String): Resource<Unit> =
         firebaseCall("Failed to remove follower") {
-            val batch = firestore.batch()
-            batch.update(usersCollection.document(userId), "followerIds", FieldValue.arrayRemove(followerId))
-            batch.update(usersCollection.document(followerId), "followingIds", FieldValue.arrayRemove(userId))
-            batch.commit().await()
+            api.delete("/api/users/$userId/followers/$followerId")
         }
 
     override suspend fun getUsers(userIds: List<String>): Resource<List<User>> =
         firebaseCall("Failed to get users") {
             if (userIds.isEmpty()) return@firebaseCall emptyList()
-            coroutineScope {
-                userIds.chunked(30).map { chunk ->
-                    async {
-                        val snapshot = usersCollection.whereIn(FieldPath.documentId(), chunk).get().await()
-                        snapshot.documents.mapNotNull { doc ->
-                            doc.data?.let { User.fromMap(it, doc.id) }
-                        }
-                    }
-                }.awaitAll().flatMap { it }
+            val body = JSONObject().put("uids", JSONArray(userIds))
+            val arr = api.post("/api/users/batch", body).optJSONArray("users") ?: JSONArray()
+            (0 until arr.length()).mapNotNull { i ->
+                val obj = arr.getJSONObject(i)
+                val uid = obj.optString("uid", "")
+                if (uid.isNotEmpty()) User.fromMap(obj.toMap(), uid) else null
             }
         }
 
     override suspend fun recordProfileVisit(profileUserId: String, visitorId: String): Resource<Unit> =
         firebaseCall("Failed to record visit") {
-            // Write visit to stalker subcollection — counter increments and
-            // firstVisitedAt are handled by the onStalkerWrite Cloud Function.
-            usersCollection.document(profileUserId)
-                .collection("stalkers").document(visitorId)
-                .set(
-                    mapOf(
-                        "visitorId" to visitorId,
-                        "visitCount" to FieldValue.increment(1),
-                        "lastVisitedAt" to FieldValue.serverTimestamp()
-                    ),
-                    SetOptions.merge()
-                ).await()
+            api.post("/api/users/$profileUserId/stalkers/visit", JSONObject().put("visitorId", visitorId))
         }
 
     override suspend fun getStalkers(profileUserId: String): Resource<List<ProfileVisitor>> =
         firebaseCall("Failed to load stalkers") {
-            val cutoff = Timestamp(Date(System.currentTimeMillis() - Constants.STALKER_EXPIRY_MS))
-            val snapshot = usersCollection.document(profileUserId)
-                .collection("stalkers")
-                .whereGreaterThan("lastVisitedAt", cutoff)
-                .orderBy("lastVisitedAt", Query.Direction.DESCENDING)
-                .get().await()
-            snapshot.documents.mapNotNull { doc ->
-                doc.data?.let { ProfileVisitor.fromMap(it) }
+            val arr = api.get("/api/users/$profileUserId/stalkers").optJSONArray("stalkers") ?: JSONArray()
+            (0 until arr.length()).mapNotNull { i ->
+                val obj = arr.getJSONObject(i)
+                ProfileVisitor.fromMap(obj.toMap())
             }
         }
 
     override suspend fun markStalkersViewed(userId: String): Resource<Unit> =
         firebaseCall("Failed to mark stalkers viewed") {
-            usersCollection.document(userId).update(
-                mapOf(
-                    "newStalkerCount" to 0,
-                    "stalkersLastViewedAt" to FieldValue.serverTimestamp()
-                )
-            ).await()
+            api.post("/api/users/$userId/stalkers/viewed")
         }
 
     override suspend fun submitSuspensionAppeal(userId: String, appealText: String): Resource<Unit> =
         firebaseCall("Failed to submit appeal") {
-            val userDoc = usersCollection.document(userId).get().await()
-            val userData = userDoc.data ?: throw Exception("User not found")
-            val user = User.fromMap(userData, userId)
-
-            val appealData = hashMapOf(
-                "userId" to userId,
-                "userUniqueId" to user.uniqueId,
-                "userDisplayName" to user.displayName,
-                "appealText" to appealText,
-                "submittedAt" to Timestamp.now(),
-                "status" to "pending",
-                "reviewedBy" to null,
-                "reviewedAt" to null,
-                "adminNote" to null
-            )
-
-            val batch = firestore.batch()
-            batch.set(firestore.collection("suspensionAppeals").document(), appealData)
-            batch.update(usersCollection.document(userId), mapOf(
-                "suspensionCanAppeal" to false,
-                "suspensionAppealStatus" to "pending"
-            ))
-            batch.commit().await()
+            api.post("/api/users/$userId/appeal", JSONObject().put("appealText", appealText))
         }
 
     override suspend fun liftExpiredSuspension(userId: String): Resource<Unit> =
         firebaseCall("Failed to lift expired suspension") {
-            val doc = usersCollection.document(userId).get().await()
-            val data = doc.data ?: throw Exception("User not found")
-            val updates = mutableMapOf<String, Any?>("isSuspended" to false)
-
-            @Suppress("UNCHECKED_CAST")
-            val preSuspension = data["_preSuspension"] as? Map<String, Any?>
-            if (preSuspension != null) {
-                updates["displayName"] = preSuspension["displayName"] ?: data["displayName"]
-                updates["profilePhotoUrl"] = preSuspension["profilePhotoUrl"]
-                updates["coverPhotoUrl"] = preSuspension["coverPhotoUrl"]
-                updates["_preSuspension"] = FieldValue.delete()
-            }
-
-            usersCollection.document(userId).update(updates).await()
+            api.post("/api/users/$userId/lift-suspension")
         }
 
     override suspend fun getAliases(userId: String): Resource<Map<String, String>> =
         firebaseCall("Failed to get aliases") {
-            val doc = usersCollection.document(userId).get().await()
-            if (!doc.exists()) return@firebaseCall emptyMap()
-            val data = doc.data ?: return@firebaseCall emptyMap()
-            @Suppress("UNCHECKED_CAST")
-            (data["aliases"] as? Map<String, String>) ?: emptyMap()
+            val json = api.get("/api/users/$userId/aliases")
+            val obj = json.optJSONObject("aliases") ?: JSONObject()
+            val result = mutableMapOf<String, String>()
+            obj.keys().forEach { key -> result[key] = obj.getString(key) }
+            result
         }
 
     override suspend fun setAlias(userId: String, targetUserId: String, alias: String): Resource<Unit> =
         firebaseCall("Failed to set alias") {
-            usersCollection.document(userId).update("aliases.$targetUserId", alias).await()
+            api.put("/api/users/$userId/aliases/$targetUserId", JSONObject().put("alias", alias))
         }
 
     override suspend fun removeAlias(userId: String, targetUserId: String): Resource<Unit> =
         firebaseCall("Failed to remove alias") {
-            usersCollection.document(userId).update("aliases.$targetUserId", FieldValue.delete()).await()
+            api.delete("/api/users/$userId/aliases/$targetUserId")
         }
 
-    override fun observeUserFlags(userId: String): Flow<UserFlags> = callbackFlow {
-        val listener = usersCollection.document(userId)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
-                val flags = UserFlags(
-                    isSuspended = snapshot.getBoolean("isSuspended") == true,
-                    suspensionEndDate = snapshot.getTimestamp("suspensionEndDate")?.toDate()?.time,
-                    hasActiveWarning = snapshot.getBoolean("hasActiveWarning") == true,
-                    warningReason = snapshot.getString("warningReason")
-                )
-                trySend(flags)
+    override fun observeUserFlags(userId: String): Flow<UserFlags> = flow {
+        while (true) {
+            try {
+                val json = api.get("/api/users/$userId/flags")
+                emit(UserFlags(
+                    isSuspended = json.optBoolean("isSuspended", false),
+                    suspensionEndDate = if (json.has("suspensionEndDate") && !json.isNull("suspensionEndDate")) json.getLong("suspensionEndDate") else null,
+                    hasActiveWarning = json.optBoolean("hasActiveWarning", false),
+                    warningReason = if (json.has("warningReason") && !json.isNull("warningReason")) json.getString("warningReason") else null
+                ))
+            } catch (_: Exception) {
+                // Silently skip failed polls
             }
-        awaitClose { listener.remove() }
+            delay(15_000) // Poll every 15 seconds
+        }
     }
 
     override suspend fun acknowledgeWarning(userId: String): Resource<Unit> = firebaseCall("Failed to acknowledge warning") {
-        usersCollection.document(userId)
-            .update(
-                mapOf(
-                    "hasActiveWarning" to false,
-                    "warningAcceptedAt" to FieldValue.serverTimestamp()
-                )
-            ).await()
+        api.post("/api/users/$userId/acknowledge-warning")
     }
 
     override suspend fun getWarningReason(userId: String): Resource<String?> = firebaseCall("Failed to get warning reason") {
-        val doc = usersCollection.document(userId).get().await()
-        doc.getString("warningReason")
+        val json = api.get("/api/users/$userId/warning-reason")
+        if (json.has("reason") && !json.isNull("reason")) json.getString("reason") else null
     }
 
     override fun observeUsers(userIds: Set<String>): Flow<User> {
         if (userIds.isEmpty()) return emptyFlow()
         return userIds.map { userId ->
-            callbackFlow {
-                val listener = usersCollection.document(userId)
-                    .addSnapshotListener { snapshot, error ->
-                        if (error != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
-                        snapshot.data?.let { trySend(User.fromMap(it, snapshot.id)) }
+            flow {
+                while (true) {
+                    try {
+                        val json = api.get("/api/users/$userId")
+                        emit(User.fromMap(json.toMap(), userId))
+                    } catch (_: Exception) {
+                        // Silently skip failed polls
                     }
-                awaitClose { listener.remove() }
+                    delay(30_000) // Poll every 30 seconds
+                }
             }
         }.merge()
     }

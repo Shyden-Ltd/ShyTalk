@@ -1,158 +1,82 @@
 package com.shyden.shytalk.data.repository
 
-import com.google.android.gms.tasks.Tasks
-import com.google.firebase.firestore.CollectionReference
-import com.google.firebase.firestore.DocumentReference
-import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
-import com.google.firebase.firestore.QuerySnapshot
-import com.google.firebase.functions.FirebaseFunctions
-import com.google.firebase.functions.HttpsCallableReference
 import com.shyden.shytalk.core.util.Resource
-import io.mockk.every
+import com.shyden.shytalk.data.remote.WorkerApiClient
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
 class EconomyRepositoryImplTest {
 
-    private lateinit var firestore: FirebaseFirestore
-    private lateinit var functions: FirebaseFunctions
+    private lateinit var api: WorkerApiClient
     private lateinit var repo: EconomyRepositoryImpl
-
-    private lateinit var coinPackagesCollection: CollectionReference
 
     @Before
     fun setup() {
-        firestore = mockk(relaxed = true)
-        functions = mockk(relaxed = true)
-        coinPackagesCollection = mockk(relaxed = true)
-
-        every { firestore.collection("coinPackages") } returns coinPackagesCollection
-
-        repo = EconomyRepositoryImpl(firestore, functions)
+        api = mockk(relaxed = true)
+        repo = EconomyRepositoryImpl(api)
     }
 
-    // ── Cloud Function call tests ─────────────────────────────────────
-    // HttpsCallableResult.getData() is final and can't be mocked with MockK.
-    // We test failure paths (which don't parse the result) and Firestore-only paths.
+    // region observeEconomyConfig
 
     @Test
-    fun `claimDailyReward failure returns Error`() = runTest {
-        val callable = mockk<HttpsCallableReference>()
-        every { callable.call() } returns Tasks.forException(RuntimeException("Already claimed"))
-        every { functions.getHttpsCallable("claimDailyReward") } returns callable
+    fun `observeEconomyConfig returns parsed config from API`() = runTest {
+        val json = JSONObject().apply {
+            put("value", JSONObject().apply {
+                put("beanConversionRate", 0.6)
+                put("dailyBase", 50)
+                put("broadcastSendThreshold", 5000)
+                put("pullCosts", JSONObject().apply {
+                    put("1", 10)
+                    put("10", 80)
+                })
+            })
+        }
+        coEvery { api.get("/api/config/economy") } returns json
 
-        val result = repo.claimDailyReward()
+        val config = repo.observeEconomyConfig().first()
 
-        assertTrue(result is Resource.Error)
+        assertEquals(0.6, config.beanConversionRate, 0.001)
+        assertEquals(50, config.dailyBase)
+        assertEquals(5000, config.broadcastSendThreshold)
     }
 
-    @Test
-    fun `pullGacha failure returns Error`() = runTest {
-        val callable = mockk<HttpsCallableReference>()
-        every { callable.call(any()) } returns Tasks.forException(RuntimeException("Insufficient coins"))
-        every { functions.getHttpsCallable("pullGacha") } returns callable
+    // endregion
 
-        val result = repo.pullGacha(1, 10)
-
-        assertTrue(result is Resource.Error)
-    }
+    // region getCoinPackages
 
     @Test
-    fun `sendGift failure returns Error`() = runTest {
-        val callable = mockk<HttpsCallableReference>()
-        every { callable.call(any()) } returns Tasks.forException(RuntimeException("Not in backpack"))
-        every { functions.getHttpsCallable("sendGift") } returns callable
-
-        val result = repo.sendGift("recipient-1", "gift-1")
-
-        assertTrue(result is Resource.Error)
-    }
-
-    @Test
-    fun `sendGiftDirect failure returns Error`() = runTest {
-        val callable = mockk<HttpsCallableReference>()
-        every { callable.call(any()) } returns Tasks.forException(RuntimeException("Insufficient coins"))
-        every { functions.getHttpsCallable("sendGiftDirect") } returns callable
-
-        val result = repo.sendGiftDirect("recipient-1", "gift-1")
-
-        assertTrue(result is Resource.Error)
-    }
-
-    @Test
-    fun `redeemBeans failure returns Error`() = runTest {
-        val callable = mockk<HttpsCallableReference>()
-        every { callable.call(any()) } returns Tasks.forException(RuntimeException("Insufficient beans"))
-        every { functions.getHttpsCallable("redeemBeans") } returns callable
-
-        val result = repo.redeemBeans(100)
-
-        assertTrue(result is Resource.Error)
-    }
-
-    @Test
-    fun `purchaseCoins failure returns Error`() = runTest {
-        val callable = mockk<HttpsCallableReference>()
-        every { callable.call(any()) } returns Tasks.forException(RuntimeException("Purchase failed"))
-        every { functions.getHttpsCallable("validatePurchase") } returns callable
-
-        val result = repo.purchaseCoins("coins_100", "token")
-
-        assertTrue(result is Resource.Error)
-    }
-
-    @Test
-    fun `purchaseSubscription failure returns Error`() = runTest {
-        val callable = mockk<HttpsCallableReference>()
-        every { callable.call(any()) } returns Tasks.forException(RuntimeException("Subscription failed"))
-        every { functions.getHttpsCallable("validatePurchase") } returns callable
-
-        val result = repo.purchaseSubscription("super_shy_monthly", "token")
-
-        assertTrue(result is Resource.Error)
-    }
-
-    @Test
-    fun `sendEntireBackpack failure returns Error`() = runTest {
-        val callable = mockk<HttpsCallableReference>()
-        every { callable.call(any()) } returns Tasks.forException(RuntimeException("Backpack is empty"))
-        every { functions.getHttpsCallable("sendEntireBackpack") } returns callable
-
-        val result = repo.sendEntireBackpack("recipient-1")
-
-        assertTrue(result is Resource.Error)
-    }
-
-    // ── Firestore-only tests ──────────────────────────────────────────
-
-    @Test
-    fun `getCoinPackages returns sorted active packages`() = runTest {
-        val query = mockk<Query>(relaxed = true)
-        val snapshot = mockk<QuerySnapshot>()
-
-        val doc1 = mockk<DocumentSnapshot>()
-        every { doc1.id } returns "pkg1"
-        every { doc1.data } returns mapOf(
-            "productId" to "coins_500", "coins" to 500L, "bonusCoins" to 50L,
-            "displayPrice" to "$4.99", "order" to 2L, "isActive" to true
-        )
-
-        val doc2 = mockk<DocumentSnapshot>()
-        every { doc2.id } returns "pkg2"
-        every { doc2.data } returns mapOf(
-            "productId" to "coins_100", "coins" to 100L, "bonusCoins" to 0L,
-            "displayPrice" to "$0.99", "order" to 1L, "isActive" to true
-        )
-
-        every { snapshot.documents } returns listOf(doc1, doc2)
-        every { coinPackagesCollection.whereEqualTo("isActive", true) } returns query
-        every { query.get() } returns Tasks.forResult(snapshot)
+    fun `getCoinPackages returns sorted packages from API`() = runTest {
+        val arr = JSONArray().apply {
+            put(JSONObject().apply {
+                put("id", "pkg2")
+                put("productId", "coins_500")
+                put("coins", 500)
+                put("bonusCoins", 50)
+                put("displayPrice", "$4.99")
+                put("order", 2)
+                put("isActive", true)
+            })
+            put(JSONObject().apply {
+                put("id", "pkg1")
+                put("productId", "coins_100")
+                put("coins", 100)
+                put("bonusCoins", 0)
+                put("displayPrice", "$0.99")
+                put("order", 1)
+                put("isActive", true)
+            })
+        }
+        coEvery { api.getArray("/api/coin-packages") } returns arr
 
         val result = repo.getCoinPackages()
 
@@ -164,13 +88,8 @@ class EconomyRepositoryImplTest {
     }
 
     @Test
-    fun `getCoinPackages returns empty on no active packages`() = runTest {
-        val query = mockk<Query>(relaxed = true)
-        val snapshot = mockk<QuerySnapshot>()
-
-        every { snapshot.documents } returns emptyList()
-        every { coinPackagesCollection.whereEqualTo("isActive", true) } returns query
-        every { query.get() } returns Tasks.forResult(snapshot)
+    fun `getCoinPackages returns empty on no packages`() = runTest {
+        coEvery { api.getArray("/api/coin-packages") } returns JSONArray()
 
         val result = repo.getCoinPackages()
 
@@ -180,109 +99,430 @@ class EconomyRepositoryImplTest {
 
     @Test
     fun `getCoinPackages returns Error on exception`() = runTest {
-        val query = mockk<Query>(relaxed = true)
-        every { coinPackagesCollection.whereEqualTo("isActive", true) } returns query
-        every { query.get() } returns Tasks.forException(RuntimeException("Connection failed"))
+        coEvery { api.getArray("/api/coin-packages") } throws RuntimeException("Connection failed")
 
         val result = repo.getCoinPackages()
 
         assertTrue(result is Resource.Error)
     }
 
+    // endregion
+
+    // region claimDailyReward
+
     @Test
-    fun `getCoinPackages skips docs with null data`() = runTest {
-        val query = mockk<Query>(relaxed = true)
-        val snapshot = mockk<QuerySnapshot>()
+    fun `claimDailyReward returns parsed result`() = runTest {
+        coEvery { api.post("/api/economy/daily-reward", any()) } returns JSONObject().apply {
+            put("coinsAwarded", 50)
+            put("newStreak", 5)
+            put("isMilestone", false)
+            put("newBalance", 1050)
+        }
 
-        val doc1 = mockk<DocumentSnapshot>()
-        every { doc1.id } returns "pkg1"
-        every { doc1.data } returns null
-
-        val doc2 = mockk<DocumentSnapshot>()
-        every { doc2.id } returns "pkg2"
-        every { doc2.data } returns mapOf(
-            "productId" to "coins_100", "coins" to 100L, "bonusCoins" to 0L,
-            "displayPrice" to "$0.99", "order" to 1L, "isActive" to true
-        )
-
-        every { snapshot.documents } returns listOf(doc1, doc2)
-        every { coinPackagesCollection.whereEqualTo("isActive", true) } returns query
-        every { query.get() } returns Tasks.forResult(snapshot)
-
-        val result = repo.getCoinPackages()
+        val result = repo.claimDailyReward()
 
         assertTrue(result is Resource.Success)
-        assertEquals(1, (result as Resource.Success).data.size)
+        val data = (result as Resource.Success).data
+        assertEquals(50, data.coinsAwarded)
+        assertEquals(5, data.newStreak)
+        assertFalse(data.isMilestone)
+        assertEquals(1050L, data.newBalance)
+    }
+
+    @Test
+    fun `claimDailyReward failure returns Error`() = runTest {
+        coEvery { api.post("/api/economy/daily-reward", any()) } throws RuntimeException("Already claimed")
+
+        val result = repo.claimDailyReward()
+
+        assertTrue(result is Resource.Error)
+    }
+
+    // endregion
+
+    // region pullGacha
+
+    @Test
+    fun `pullGacha returns parsed gacha result`() = runTest {
+        coEvery { api.post("/api/economy/gacha", any()) } returns JSONObject().apply {
+            put("gifts", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("giftId", "rose")
+                    put("giftName", "Rose")
+                    put("coinValue", 100)
+                    put("iconUrl", "https://img.com/rose.png")
+                })
+            })
+            put("coinsSpent", 10)
+            put("newBalance", 990)
+            put("newPityCounter", 1)
+            put("newLuckScore", 0)
+        }
+
+        val result = repo.pullGacha(1, 10)
+
+        assertTrue(result is Resource.Success)
+        val data = (result as Resource.Success).data
+        assertEquals(1, data.gifts.size)
+        assertEquals("rose", data.gifts[0].giftId)
+        assertEquals(10, data.coinsSpent)
+        assertEquals(990L, data.newBalance)
+    }
+
+    @Test
+    fun `pullGacha failure returns Error`() = runTest {
+        coEvery { api.post("/api/economy/gacha", any()) } throws RuntimeException("Insufficient coins")
+
+        val result = repo.pullGacha(1, 10)
+
+        assertTrue(result is Resource.Error)
+    }
+
+    // endregion
+
+    // region sendGift
+
+    @Test
+    fun `sendGift calls correct endpoint`() = runTest {
+        coEvery { api.post("/api/economy/gift", any()) } returns JSONObject().apply {
+            put("success", true)
+            put("beanReward", 60)
+        }
+
+        val result = repo.sendGift("recipient-1", "rose", 2)
+
+        assertTrue(result is Resource.Success)
+        coVerify { api.post("/api/economy/gift", any()) }
+    }
+
+    @Test
+    fun `sendGift failure returns Error`() = runTest {
+        coEvery { api.post("/api/economy/gift", any()) } throws RuntimeException("Not in backpack")
+
+        val result = repo.sendGift("recipient-1", "gift-1")
+
+        assertTrue(result is Resource.Error)
+    }
+
+    // endregion
+
+    // region sendGiftDirect
+
+    @Test
+    fun `sendGiftDirect calls correct endpoint`() = runTest {
+        coEvery { api.post("/api/economy/gift-direct", any()) } returns JSONObject().apply {
+            put("success", true)
+            put("beanReward", 30)
+            put("coinsSpent", 100)
+        }
+
+        val result = repo.sendGiftDirect("recipient-1", "rose", 1)
+
+        assertTrue(result is Resource.Success)
+        coVerify { api.post("/api/economy/gift-direct", any()) }
+    }
+
+    @Test
+    fun `sendGiftDirect failure returns Error`() = runTest {
+        coEvery { api.post("/api/economy/gift-direct", any()) } throws RuntimeException("Insufficient coins")
+
+        val result = repo.sendGiftDirect("recipient-1", "gift-1")
+
+        assertTrue(result is Resource.Error)
+    }
+
+    // endregion
+
+    // region sendGiftBatch
+
+    @Test
+    fun `sendGiftBatch calls correct endpoint`() = runTest {
+        coEvery { api.post("/api/economy/gift-batch", any()) } returns JSONObject().apply {
+            put("success", true)
+            put("totalSent", 6)
+            put("recipientCount", 3)
+        }
+
+        val result = repo.sendGiftBatch(listOf("r1", "r2", "r3"), "rose", 2, true)
+
+        assertTrue(result is Resource.Success)
+        coVerify { api.post("/api/economy/gift-batch", any()) }
     }
 
     @Test
     fun `sendGiftBatch failure returns Error`() = runTest {
-        val callable = mockk<HttpsCallableReference>()
-        every { callable.call(any()) } returns Tasks.forException(RuntimeException("Batch failed"))
-        every { functions.getHttpsCallable("sendGiftBatch") } returns callable
+        coEvery { api.post("/api/economy/gift-batch", any()) } throws RuntimeException("Batch failed")
 
         val result = repo.sendGiftBatch(listOf("r1", "r2"), "gift-1", 1, false)
 
         assertTrue(result is Resource.Error)
     }
 
+    // endregion
+
+    // region sendEntireBackpack
+
+    @Test
+    fun `sendEntireBackpack calls correct endpoint`() = runTest {
+        coEvery { api.post("/api/economy/backpack-send", any()) } returns JSONObject().apply {
+            put("success", true)
+            put("totalItemsSent", 15)
+            put("totalBeanReward", 300)
+        }
+
+        val result = repo.sendEntireBackpack("recipient-1")
+
+        assertTrue(result is Resource.Success)
+        coVerify { api.post("/api/economy/backpack-send", any()) }
+    }
+
+    @Test
+    fun `sendEntireBackpack failure returns Error`() = runTest {
+        coEvery { api.post("/api/economy/backpack-send", any()) } throws RuntimeException("Backpack is empty")
+
+        val result = repo.sendEntireBackpack("recipient-1")
+
+        assertTrue(result is Resource.Error)
+    }
+
+    // endregion
+
+    // region redeemBeans
+
+    @Test
+    fun `redeemBeans calls correct endpoint`() = runTest {
+        coEvery { api.post("/api/economy/redeem-beans", any()) } returns JSONObject().apply {
+            put("coinsReceived", 100)
+            put("newCoinBalance", 1100)
+            put("newBeanBalance", 0)
+        }
+
+        val result = repo.redeemBeans(100)
+
+        assertTrue(result is Resource.Success)
+        coVerify { api.post("/api/economy/redeem-beans", any()) }
+    }
+
+    @Test
+    fun `redeemBeans failure returns Error`() = runTest {
+        coEvery { api.post("/api/economy/redeem-beans", any()) } throws RuntimeException("Insufficient beans")
+
+        val result = repo.redeemBeans(100)
+
+        assertTrue(result is Resource.Error)
+    }
+
+    // endregion
+
+    // region purchaseCoins
+
+    @Test
+    fun `purchaseCoins calls correct endpoint`() = runTest {
+        coEvery { api.post("/api/economy/purchase", any()) } returns JSONObject().apply {
+            put("success", true)
+            put("coinsAdded", 100)
+            put("newBalance", 1100)
+        }
+
+        val result = repo.purchaseCoins("coins_100", "purchase-token-1")
+
+        assertTrue(result is Resource.Success)
+        coVerify { api.post("/api/economy/purchase", any()) }
+    }
+
+    @Test
+    fun `purchaseCoins failure returns Error`() = runTest {
+        coEvery { api.post("/api/economy/purchase", any()) } throws RuntimeException("Purchase failed")
+
+        val result = repo.purchaseCoins("coins_100", "token")
+
+        assertTrue(result is Resource.Error)
+    }
+
+    // endregion
+
+    // region purchaseSubscription
+
+    @Test
+    fun `purchaseSubscription calls correct endpoint`() = runTest {
+        coEvery { api.post("/api/economy/purchase", any()) } returns JSONObject().apply {
+            put("success", true)
+            put("tier", "monthly")
+        }
+
+        val result = repo.purchaseSubscription("super_shy_monthly", "sub-token-1")
+
+        assertTrue(result is Resource.Success)
+        coVerify { api.post("/api/economy/purchase", any()) }
+    }
+
+    @Test
+    fun `purchaseSubscription failure returns Error`() = runTest {
+        coEvery { api.post("/api/economy/purchase", any()) } throws RuntimeException("Subscription failed")
+
+        val result = repo.purchaseSubscription("super_shy_monthly", "token")
+
+        assertTrue(result is Resource.Error)
+    }
+
+    // endregion
+
+    // region getRecentTransactions
+
+    @Test
+    fun `getRecentTransactions returns parsed transactions`() = runTest {
+        coEvery { api.getArray("/api/economy/transactions?limit=10") } returns JSONArray().apply {
+            put(JSONObject().apply {
+                put("id", "tx-1")
+                put("type", "DAILY_REWARD")
+                put("amount", 50)
+                put("currency", "COINS")
+                put("balanceAfter", 1050)
+                put("details", "Day 5")
+                put("timestamp", 1700000000000L)
+            })
+            put(JSONObject().apply {
+                put("id", "tx-2")
+                put("type", "GACHA_PULL")
+                put("amount", -10)
+                put("currency", "COINS")
+                put("balanceAfter", 1040)
+                put("pullCount", 1)
+                put("timestamp", 1699999000000L)
+            })
+        }
+
+        val result = repo.getRecentTransactions(10)
+
+        assertTrue(result is Resource.Success)
+        val txs = (result as Resource.Success).data
+        assertEquals(2, txs.size)
+        assertEquals("tx-1", txs[0].id)
+        assertEquals(50L, txs[0].amount)
+        assertEquals("tx-2", txs[1].id)
+        assertEquals(1, txs[1].pullCount)
+    }
+
+    @Test
+    fun `getRecentTransactions failure returns Error`() = runTest {
+        coEvery { api.getArray(any()) } throws RuntimeException("Network error")
+
+        val result = repo.getRecentTransactions()
+
+        assertTrue(result is Resource.Error)
+    }
+
+    // endregion
+
+    // region getAllTransactions
+
+    @Test
+    fun `getAllTransactions without filter calls correct endpoint`() = runTest {
+        coEvery { api.getArray("/api/economy/transactions?limit=200") } returns JSONArray()
+
+        val result = repo.getAllTransactions()
+
+        assertTrue(result is Resource.Success)
+        coVerify { api.getArray("/api/economy/transactions?limit=200") }
+    }
+
+    @Test
+    fun `getAllTransactions with type filter calls correct endpoint`() = runTest {
+        coEvery { api.getArray("/api/economy/transactions?limit=200&type=GACHA_PULL") } returns JSONArray()
+
+        val result = repo.getAllTransactions("GACHA_PULL")
+
+        assertTrue(result is Resource.Success)
+        coVerify { api.getArray("/api/economy/transactions?limit=200&type=GACHA_PULL") }
+    }
+
+    @Test
+    fun `getAllTransactions failure returns Error`() = runTest {
+        coEvery { api.getArray(any()) } throws RuntimeException("Network error")
+
+        val result = repo.getAllTransactions()
+
+        assertTrue(result is Resource.Error)
+    }
+
+    // endregion
+
+    // region addTestCoins
+
+    @Test
+    fun `addTestCoins calls correct endpoint`() = runTest {
+        coEvery { api.post("/api/economy/test-coins", any()) } returns JSONObject().apply {
+            put("success", true)
+            put("coinsAdded", 1000)
+            put("newBalance", 2000)
+        }
+
+        val result = repo.addTestCoins(1000)
+
+        assertTrue(result is Resource.Success)
+        coVerify { api.post("/api/economy/test-coins", any()) }
+    }
+
     @Test
     fun `addTestCoins failure returns Error`() = runTest {
-        val callable = mockk<HttpsCallableReference>()
-        every { callable.call(any()) } returns Tasks.forException(RuntimeException("Not allowed"))
-        every { functions.getHttpsCallable("addTestCoins") } returns callable
+        coEvery { api.post("/api/economy/test-coins", any()) } throws RuntimeException("Not allowed")
 
         val result = repo.addTestCoins(100)
 
         assertTrue(result is Resource.Error)
     }
 
+    // endregion
+
+    // region claimSuperShyTrial
+
+    @Test
+    fun `claimSuperShyTrial calls correct endpoint`() = runTest {
+        coEvery { api.post("/api/economy/trial-claim", any()) } returns JSONObject().apply {
+            put("success", true)
+        }
+
+        val result = repo.claimSuperShyTrial()
+
+        assertTrue(result is Resource.Success)
+        coVerify { api.post("/api/economy/trial-claim", any()) }
+    }
+
     @Test
     fun `claimSuperShyTrial failure returns Error`() = runTest {
-        val callable = mockk<HttpsCallableReference>()
-        every { callable.call() } returns Tasks.forException(RuntimeException("Already claimed"))
-        every { functions.getHttpsCallable("claimSuperShyTrial") } returns callable
+        coEvery { api.post("/api/economy/trial-claim", any()) } throws RuntimeException("Already claimed")
 
         val result = repo.claimSuperShyTrial()
 
         assertTrue(result is Resource.Error)
     }
 
+    // endregion
+
+    // region activateSuperShyTrial
+
+    @Test
+    fun `activateSuperShyTrial calls correct endpoint`() = runTest {
+        coEvery { api.post("/api/economy/trial-activate", any()) } returns JSONObject().apply {
+            put("success", true)
+            put("newTier", "trial")
+            put("newExpiry", 1702000000000L)
+        }
+
+        val result = repo.activateSuperShyTrial()
+
+        assertTrue(result is Resource.Success)
+        coVerify { api.post("/api/economy/trial-activate", any()) }
+    }
+
     @Test
     fun `activateSuperShyTrial failure returns Error`() = runTest {
-        val callable = mockk<HttpsCallableReference>()
-        every { callable.call() } returns Tasks.forException(RuntimeException("No trial"))
-        every { functions.getHttpsCallable("activateSuperShyTrial") } returns callable
+        coEvery { api.post("/api/economy/trial-activate", any()) } throws RuntimeException("No trial")
 
         val result = repo.activateSuperShyTrial()
 
         assertTrue(result is Resource.Error)
     }
 
-    @Test
-    fun `getCoinPackages returns single package correctly`() = runTest {
-        val query = mockk<Query>(relaxed = true)
-        val snapshot = mockk<QuerySnapshot>()
-
-        val doc = mockk<DocumentSnapshot>()
-        every { doc.id } returns "pkg1"
-        every { doc.data } returns mapOf(
-            "productId" to "coins_2000", "coins" to 2000L, "bonusCoins" to 200L,
-            "displayPrice" to "$9.99", "order" to 1L, "isActive" to true
-        )
-
-        every { snapshot.documents } returns listOf(doc)
-        every { coinPackagesCollection.whereEqualTo("isActive", true) } returns query
-        every { query.get() } returns Tasks.forResult(snapshot)
-
-        val result = repo.getCoinPackages()
-
-        assertTrue(result is Resource.Success)
-        val packages = (result as Resource.Success).data
-        assertEquals(1, packages.size)
-        assertEquals("coins_2000", packages[0].productId)
-        assertEquals(2000, packages[0].coins)
-        assertEquals(200, packages[0].bonusCoins)
-        assertEquals("$9.99", packages[0].displayPrice)
-    }
+    // endregion
 }

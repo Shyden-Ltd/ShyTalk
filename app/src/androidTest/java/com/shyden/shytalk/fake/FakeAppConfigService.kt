@@ -6,8 +6,8 @@ import com.shyden.shytalk.data.remote.AppConfigService
 class FakeAppConfigService : AppConfigService {
     override val currentVersionCode: Int = 40
 
-    override suspend fun getLatestVersionInfo(): Resource<Pair<Int, String>> =
-        Resource.Success(40 to "0.40")
+    override suspend fun getLatestVersionInfo(): Resource<Triple<Int, Int, String>> =
+        Resource.Success(Triple(1, 40, "0.40"))
 
     override fun clearAppCache() { /* no-op */ }
 }

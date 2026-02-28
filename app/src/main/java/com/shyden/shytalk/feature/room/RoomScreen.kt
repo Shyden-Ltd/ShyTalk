@@ -95,6 +95,7 @@ import com.shyden.shytalk.feature.messaging.PmBottomSheet
 import com.shyden.shytalk.feature.messaging.PrivateChatViewModel
 import com.shyden.shytalk.feature.room.components.BackpackSheet
 import com.shyden.shytalk.feature.room.components.RoomActionCarousel
+import com.shyden.shytalk.feature.daily.DailyRewardCelebrationDialog
 import com.shyden.shytalk.feature.daily.DailyRewardDialog
 import com.shyden.shytalk.feature.daily.DailyRewardViewModel
 import com.shyden.shytalk.feature.settings.RoomSettingsSheet
@@ -128,6 +129,8 @@ fun RoomScreen(
     var showRoomNameDialog by remember(roomId) { mutableStateOf(false) }
     var showPmSheet by remember(roomId) { mutableStateOf(false) }
     var pmSheetPreOpenUserId by remember(roomId) { mutableStateOf<String?>(null) }
+    var pmSheetPreOpenGroupConversationId by remember(roomId) { mutableStateOf<String?>(null) }
+    val activeRoomManager: com.shyden.shytalk.core.room.ActiveRoomManager = koinInject()
     var showGachaWheel by remember(roomId) { mutableStateOf(false) }
     var showDailyReward by remember(roomId) { mutableStateOf(false) }
     var showBackpackSheet by remember(roomId) { mutableStateOf(false) }
@@ -154,6 +157,17 @@ fun RoomScreen(
                     timestamp = currentTimeMillis()
                 )
             )
+        }
+    }
+
+    // Open PmBottomSheet when a notification is tapped while in a room
+    val pendingPm by activeRoomManager.pendingPmOpen.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingPm) {
+        pendingPm?.let { pm ->
+            pmSheetPreOpenUserId = pm.userId
+            pmSheetPreOpenGroupConversationId = pm.groupConversationId
+            showPmSheet = true
+            activeRoomManager.consumePendingPmOpen()
         }
     }
 
@@ -751,6 +765,7 @@ fun RoomScreen(
                         },
                         onToggleMessages = {
                             pmSheetPreOpenUserId = null
+                            pmSheetPreOpenGroupConversationId = null
                             showPmSheet = true
                         },
                         unreadCount = convListState.totalUnreadCount.toInt(),
@@ -1056,8 +1071,10 @@ fun RoomScreen(
                 onDismiss = {
                     showPmSheet = false
                     pmSheetPreOpenUserId = null
+                    pmSheetPreOpenGroupConversationId = null
                 },
                 preOpenUserId = pmSheetPreOpenUserId,
+                preOpenGroupConversationId = pmSheetPreOpenGroupConversationId,
                 onPickImages = { vm ->
                     pmImageResultHandler = { bytesList -> vm.uploadAndSendImages(bytesList) }
                     pmImagePickerLauncher.launch(
@@ -1121,6 +1138,15 @@ fun RoomScreen(
                     onDismiss = { showDailyReward = false }
                 )
             }
+        }
+
+        // Daily Reward Celebration (shown after claiming)
+        val dailyRewardState by dailyRewardViewModel.uiState.collectAsStateWithLifecycle()
+        if (dailyRewardState.showCelebration) {
+            DailyRewardCelebrationDialog(
+                viewModel = dailyRewardViewModel,
+                onDismiss = { showDailyReward = false }
+            )
         }
 
         // Gift preview popup (long-press)

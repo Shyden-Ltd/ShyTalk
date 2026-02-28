@@ -42,10 +42,21 @@ class ConstantsLegalUrlsTest {
     }
 
     @Test
+    fun `CYBER_BULLYING_URL uses HTTPS and ends with html`() {
+        assertTrue(Constants.CYBER_BULLYING_URL.startsWith("https://"))
+        assertTrue(Constants.CYBER_BULLYING_URL.endsWith(".html"))
+        assertEquals(
+            "https://shytalk.shyden.co.uk/cyber-bullying.html",
+            Constants.CYBER_BULLYING_URL
+        )
+    }
+
+    @Test
     fun `all legal URLs use HTTPS`() {
         assertTrue(Constants.PRIVACY_POLICY_URL.startsWith("https://"))
         assertTrue(Constants.TERMS_URL.startsWith("https://"))
         assertTrue(Constants.COMMUNITY_GUIDELINES_URL.startsWith("https://"))
+        assertTrue(Constants.CYBER_BULLYING_URL.startsWith("https://"))
     }
 
     @Test
@@ -53,6 +64,7 @@ class ConstantsLegalUrlsTest {
         assertTrue(Constants.PRIVACY_POLICY_URL.endsWith(".html"))
         assertTrue(Constants.TERMS_URL.endsWith(".html"))
         assertTrue(Constants.COMMUNITY_GUIDELINES_URL.endsWith(".html"))
+        assertTrue(Constants.CYBER_BULLYING_URL.endsWith(".html"))
     }
 
     @Test
@@ -60,8 +72,9 @@ class ConstantsLegalUrlsTest {
         val urls = setOf(
             Constants.PRIVACY_POLICY_URL,
             Constants.TERMS_URL,
-            Constants.COMMUNITY_GUIDELINES_URL
+            Constants.COMMUNITY_GUIDELINES_URL,
+            Constants.CYBER_BULLYING_URL
         )
-        assertEquals(3, urls.size)
+        assertEquals(4, urls.size)
     }
 }

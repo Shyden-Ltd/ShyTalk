@@ -4,6 +4,7 @@ import com.shyden.shytalk.core.util.Resource
 
 interface AppConfigService {
     val currentVersionCode: Int
-    suspend fun getLatestVersionInfo(): Resource<Pair<Int, String>>
+    /** Returns (minVersionCode, latestVersionCode, latestVersionName). */
+    suspend fun getLatestVersionInfo(): Resource<Triple<Int, Int, String>>
     fun clearAppCache()
 }

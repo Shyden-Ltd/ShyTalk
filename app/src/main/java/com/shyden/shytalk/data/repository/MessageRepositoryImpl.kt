@@ -2,41 +2,43 @@ package com.shyden.shytalk.data.repository
 
 import com.shyden.shytalk.core.model.Message
 import com.shyden.shytalk.core.model.MessageType
-import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
-import com.shyden.shytalk.core.util.currentTimeMillis
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
-import kotlinx.coroutines.channels.awaitClose
+import com.shyden.shytalk.core.util.toMap
+import com.shyden.shytalk.data.remote.PresenceService
+import com.shyden.shytalk.data.remote.RoomEvent
+import com.shyden.shytalk.data.remote.WorkerApiClient
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.tasks.await
-import java.util.UUID
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.transform
+import org.json.JSONObject
 
 class MessageRepositoryImpl(
-    private val firestore: FirebaseFirestore
+    private val api: WorkerApiClient,
+    private val presenceService: PresenceService
 ) : MessageRepository {
 
-    private fun messagesCollection(roomId: String) =
-        firestore.collection("rooms").document(roomId).collection("messages")
-
-    override fun getMessages(roomId: String): Flow<List<Message>> = callbackFlow {
-        val listener = messagesCollection(roomId)
-            .orderBy("createdAt", Query.Direction.ASCENDING)
-            .limitToLast(Constants.MAX_ROOM_MESSAGES.toLong())
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    close(error)
-                    return@addSnapshotListener
-                }
-                val messages = snapshot?.documents?.mapNotNull { doc ->
-                    doc.data?.let { Message.fromMap(it, doc.id) }
-                } ?: emptyList()
-                trySend(messages)
+    override fun getMessages(roomId: String): Flow<List<Message>> = merge(
+        // Slow fallback poll (10s)
+        flow { while (true) { emit(Unit); delay(10_000) } },
+        // Immediate refetch on new messages
+        presenceService.roomEvents
+            .filter { it is RoomEvent.NewMessage }
+            .map { }
+    ).transform {
+        try {
+            val arr = api.getArray("/api/rooms/$roomId/messages")
+            val messages = (0 until arr.length()).mapNotNull { i ->
+                val obj = arr.getJSONObject(i)
+                Message.fromMap(obj.toMap(), obj.getString("messageId"))
             }
-        awaitClose { listener.remove() }
+            emit(messages)
+        } catch (_: Exception) { }
     }.distinctUntilChanged()
 
     private suspend fun createAndSendMessage(
@@ -46,31 +48,13 @@ class MessageRepositoryImpl(
         text: String,
         type: MessageType
     ): Resource<Unit> = firebaseCall("Failed to send message") {
-        val messageId = UUID.randomUUID().toString()
-        val message = Message(
-            messageId = messageId,
-            senderId = senderId,
-            senderName = senderName,
-            text = text,
-            createdAt = currentTimeMillis(),
-            type = type
-        )
-        messagesCollection(roomId).document(messageId).set(message.toMap()).await()
-        trimOldMessages(roomId)
-    }
-
-    private suspend fun trimOldMessages(roomId: String) {
-        val collection = messagesCollection(roomId)
-        val snapshot = collection
-            .orderBy("createdAt", Query.Direction.ASCENDING)
-            .get()
-            .await()
-        val excess = snapshot.documents.size - Constants.MAX_ROOM_MESSAGES
-        if (excess > 0) {
-            val batch = firestore.batch()
-            snapshot.documents.take(excess).forEach { batch.delete(it.reference) }
-            batch.commit().await()
+        val body = JSONObject().apply {
+            put("senderId", senderId)
+            put("senderName", senderName)
+            put("text", text)
+            put("type", type.name)
         }
+        api.post("/api/rooms/$roomId/messages", body)
     }
 
     override suspend fun sendMessage(
@@ -95,8 +79,7 @@ class MessageRepositoryImpl(
         messageId: String,
         newText: String
     ): Resource<Unit> = firebaseCall("Failed to edit message") {
-        messagesCollection(roomId).document(messageId).update(
-            mapOf("text" to newText, "isEdited" to true)
-        ).await()
+        val body = JSONObject().apply { put("text", newText) }
+        api.patch("/api/rooms/$roomId/messages/$messageId", body)
     }
 }

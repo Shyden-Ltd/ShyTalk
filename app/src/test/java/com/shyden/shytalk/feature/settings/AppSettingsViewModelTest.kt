@@ -340,7 +340,7 @@ class AppSettingsViewModelTest {
     @Test
     fun `checkForUpdates - up to date when current version equals latest`() = runTest {
         every { appConfigService.currentVersionCode } returns 10
-        coEvery { appConfigService.getLatestVersionInfo() } returns Resource.Success(Pair(10, "1.0.0"))
+        coEvery { appConfigService.getLatestVersionInfo() } returns Resource.Success(Triple(1, 10, "1.0.0"))
 
         val vm = createViewModel()
         advanceUntilIdle()
@@ -355,7 +355,7 @@ class AppSettingsViewModelTest {
     @Test
     fun `checkForUpdates - up to date when current version greater than latest`() = runTest {
         every { appConfigService.currentVersionCode } returns 15
-        coEvery { appConfigService.getLatestVersionInfo() } returns Resource.Success(Pair(10, "1.0.0"))
+        coEvery { appConfigService.getLatestVersionInfo() } returns Resource.Success(Triple(1, 10, "1.0.0"))
 
         val vm = createViewModel()
         advanceUntilIdle()
@@ -370,7 +370,7 @@ class AppSettingsViewModelTest {
     @Test
     fun `checkForUpdates - update available when current version less than latest`() = runTest {
         every { appConfigService.currentVersionCode } returns 5
-        coEvery { appConfigService.getLatestVersionInfo() } returns Resource.Success(Pair(10, "2.0.0"))
+        coEvery { appConfigService.getLatestVersionInfo() } returns Resource.Success(Triple(1, 10, "2.0.0"))
 
         val vm = createViewModel()
         advanceUntilIdle()

@@ -1,15 +1,12 @@
 package com.shyden.shytalk.data.repository
 
-import com.google.android.gms.tasks.Tasks
-import com.google.firebase.firestore.CollectionReference
-import com.google.firebase.firestore.DocumentReference
-import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.FirebaseFirestore
 import com.shyden.shytalk.core.util.Resource
-import io.mockk.every
+import com.shyden.shytalk.data.remote.ApiException
+import com.shyden.shytalk.data.remote.WorkerApiClient
+import io.mockk.coEvery
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.test.runTest
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -18,28 +15,18 @@ import org.junit.Test
 
 class DeviceRepositoryImplTest {
 
-    private lateinit var firestore: FirebaseFirestore
-    private lateinit var collection: CollectionReference
-    private lateinit var docRef: DocumentReference
+    private lateinit var api: WorkerApiClient
     private lateinit var repo: DeviceRepositoryImpl
 
     @Before
     fun setup() {
-        firestore = mockk(relaxed = true)
-        collection = mockk(relaxed = true)
-        docRef = mockk(relaxed = true)
-        every { firestore.collection("deviceBindings") } returns collection
-        every { collection.document(any<String>()) } returns docRef
-        repo = DeviceRepositoryImpl(firestore)
+        api = mockk(relaxed = true)
+        repo = DeviceRepositoryImpl(api)
     }
 
     @Test
-    fun `getDeviceBinding returns userId when document exists`() = runTest {
-        val snapshot = mockk<DocumentSnapshot> {
-            every { exists() } returns true
-            every { getString("userId") } returns "user-123"
-        }
-        every { docRef.get() } returns Tasks.forResult(snapshot)
+    fun `getDeviceBinding returns userId when binding exists`() = runTest {
+        coEvery { api.get("/api/device-bindings/device-1") } returns JSONObject().put("userId", "user-123")
 
         val result = repo.getDeviceBinding("device-1")
 
@@ -48,11 +35,8 @@ class DeviceRepositoryImplTest {
     }
 
     @Test
-    fun `getDeviceBinding returns null when document does not exist`() = runTest {
-        val snapshot = mockk<DocumentSnapshot> {
-            every { exists() } returns false
-        }
-        every { docRef.get() } returns Tasks.forResult(snapshot)
+    fun `getDeviceBinding returns null when binding does not exist`() = runTest {
+        coEvery { api.get("/api/device-bindings/device-1") } throws ApiException(404, "Not found")
 
         val result = repo.getDeviceBinding("device-1")
 
@@ -61,8 +45,8 @@ class DeviceRepositoryImplTest {
     }
 
     @Test
-    fun `getDeviceBinding returns Error on exception`() = runTest {
-        every { docRef.get() } returns Tasks.forException(RuntimeException("Firestore error"))
+    fun `getDeviceBinding returns Error on non-404 exception`() = runTest {
+        coEvery { api.get("/api/device-bindings/device-1") } throws ApiException(500, "Server error")
 
         val result = repo.getDeviceBinding("device-1")
 
@@ -71,17 +55,16 @@ class DeviceRepositoryImplTest {
 
     @Test
     fun `bindDevice returns Success`() = runTest {
-        every { docRef.set(any()) } returns Tasks.forResult(null)
+        coEvery { api.post(any(), any()) } returns JSONObject().put("success", true)
 
         val result = repo.bindDevice("device-1", "user-123")
 
         assertTrue(result is Resource.Success)
-        verify { collection.document("device-1") }
     }
 
     @Test
     fun `bindDevice returns Error on exception`() = runTest {
-        every { docRef.set(any()) } returns Tasks.forException(RuntimeException("Write failed"))
+        coEvery { api.post(any(), any()) } throws RuntimeException("Write failed")
 
         val result = repo.bindDevice("device-1", "user-123")
 

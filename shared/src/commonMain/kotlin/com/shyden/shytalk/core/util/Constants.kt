@@ -68,4 +68,5 @@ object Constants {
     const val PRIVACY_POLICY_URL = "$LEGAL_BASE_URL/privacy-policy.html"
     const val TERMS_URL = "$LEGAL_BASE_URL/terms-and-conditions.html"
     const val COMMUNITY_GUIDELINES_URL = "$LEGAL_BASE_URL/community-guidelines.html"
+    const val CYBER_BULLYING_URL = "https://shytalk.shyden.co.uk/cyber-bullying.html"
 }

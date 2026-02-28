@@ -41,6 +41,11 @@ android {
             "WORKER_URL",
             "\"${System.getenv("WORKER_URL") ?: "https://shytalk-storage.shyden1988uk.workers.dev"}\""
         )
+        buildConfigField(
+            "String",
+            "API_BASE_URL",
+            "\"${System.getenv("API_BASE_URL") ?: "https://shytalk-api.shyden1988uk.workers.dev"}\""
+        )
     }
 
     signingConfigs {
@@ -132,12 +137,9 @@ dependencies {
     implementation(libs.koin.android)
     implementation(libs.koin.compose.viewmodel)
 
-    // Firebase
+    // Firebase (Auth + FCM only — free Spark plan)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
-    implementation(libs.firebase.firestore)
-    implementation(libs.firebase.functions)
-    implementation(libs.firebase.database)
     implementation(libs.firebase.messaging)
 
     // Coroutines

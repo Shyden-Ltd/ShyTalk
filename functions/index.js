@@ -2155,12 +2155,6 @@ exports.sendEntireBackpack = onCall({ region: "asia-southeast1" }, async (reques
 
       tx.delete(bpRef);
 
-      const recipientBpRef = recipientRef.collection("backpack").doc(item.giftId);
-      tx.set(recipientBpRef, {
-        quantity: FieldValue.increment(currentQty),
-        lastAcquired: FieldValue.serverTimestamp(),
-      }, { merge: true });
-
       const wallRef = recipientRef.collection("giftWall").doc(item.giftId);
       tx.set(wallRef, {
         receivedCount: FieldValue.increment(currentQty),

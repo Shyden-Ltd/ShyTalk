@@ -69,6 +69,20 @@ class ActiveRoomManager(
     private val _isRoomScreenVisible = MutableStateFlow(false)
     val isRoomScreenVisible: StateFlow<Boolean> = _isRoomScreenVisible.asStateFlow()
 
+    /** Signals RoomScreen to open PmBottomSheet for a specific user or group. */
+    data class PendingPmOpen(val userId: String? = null, val groupConversationId: String? = null)
+
+    private val _pendingPmOpen = MutableStateFlow<PendingPmOpen?>(null)
+    val pendingPmOpen: StateFlow<PendingPmOpen?> = _pendingPmOpen.asStateFlow()
+
+    fun requestOpenPm(userId: String? = null, groupConversationId: String? = null) {
+        _pendingPmOpen.value = PendingPmOpen(userId, groupConversationId)
+    }
+
+    fun consumePendingPmOpen() {
+        _pendingPmOpen.value = null
+    }
+
     private val _disconnectedUserIds = MutableStateFlow<Set<String>>(emptySet())
     override val disconnectedUserIds: StateFlow<Set<String>> = _disconnectedUserIds.asStateFlow()
 

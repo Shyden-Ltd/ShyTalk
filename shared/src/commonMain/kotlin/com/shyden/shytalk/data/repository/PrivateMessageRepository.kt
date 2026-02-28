@@ -39,6 +39,7 @@ interface PrivateMessageRepository {
     suspend fun editMessage(conversationId: String, messageId: String, newText: String): Resource<Unit>
     suspend fun getEditHistory(conversationId: String, messageId: String): Resource<List<MessageEdit>>
     suspend fun markAsRead(conversationId: String, userId: String, messageId: String): Resource<Unit>
+    suspend fun resetUnreadCount(conversationId: String, userId: String): Resource<Unit>
     suspend fun muteConversation(conversationId: String, userId: String, muted: Boolean): Resource<Unit>
     suspend fun pinConversation(conversationId: String, userId: String, pinned: Boolean): Resource<Unit>
     suspend fun hideConversation(conversationId: String, userId: String): Resource<Unit>

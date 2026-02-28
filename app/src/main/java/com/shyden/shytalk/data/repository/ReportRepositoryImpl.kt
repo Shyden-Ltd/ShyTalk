@@ -1,18 +1,14 @@
 package com.shyden.shytalk.data.repository
 
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
-import com.shyden.shytalk.core.util.millisToTimestamp
-import com.shyden.shytalk.core.util.timestampToMillis
-import com.shyden.shytalk.core.util.currentTimeMillis
+import com.shyden.shytalk.data.remote.WorkerApiClient
 import com.shyden.shytalk.feature.messaging.Report
-import kotlinx.coroutines.tasks.await
-import java.util.UUID
+import org.json.JSONArray
+import org.json.JSONObject
 
 class ReportRepositoryImpl(
-    private val firestore: FirebaseFirestore
+    private val api: WorkerApiClient
 ) : ReportRepository {
 
     override suspend fun reportMessage(
@@ -28,25 +24,17 @@ class ReportRepositoryImpl(
         reason: String,
         description: String
     ): Resource<Unit> = firebaseCall("Failed to submit report") {
-        val reportId = UUID.randomUUID().toString()
-        firestore.collection("reports").document(reportId).set(
-            mapOf(
-                "reporterId" to reporterId,
-                "reporterName" to reporterName,
-                "reporterUniqueId" to reporterUniqueId,
-                "reportedUserId" to reportedUserId,
-                "reportedUserName" to reportedUserName,
-                "reportedUserUniqueId" to reportedUserUniqueId,
-                "conversationId" to conversationId,
-                "messageId" to messageId,
-                "messageText" to messageText,
-                "reason" to reason,
-                "description" to description,
-                "type" to "MESSAGE",
-                "timestamp" to millisToTimestamp(currentTimeMillis()),
-                "status" to "pending"
-            )
-        ).await()
+        api.post("/api/reports", JSONObject().apply {
+            put("reportedUserId", reportedUserId)
+            put("reportedUserName", reportedUserName)
+            put("reportedUserUniqueId", reportedUserUniqueId)
+            put("conversationId", conversationId)
+            put("messageId", messageId)
+            put("messageText", messageText)
+            put("reason", reason)
+            put("description", description)
+        })
+        Unit
     }
 
     override suspend fun reportUser(
@@ -61,66 +49,50 @@ class ReportRepositoryImpl(
         description: String,
         evidenceUrls: List<String>
     ): Resource<Unit> = firebaseCall("Failed to submit report") {
-        val reportId = UUID.randomUUID().toString()
-        val data = mutableMapOf<String, Any?>(
-            "reporterId" to reporterId,
-            "reporterName" to reporterName,
-            "reporterUniqueId" to reporterUniqueId,
-            "reportedUserId" to reportedUserId,
-            "reportedUserName" to reportedUserName,
-            "reportedUserUniqueId" to reportedUserUniqueId,
-            "conversationId" to conversationId,
-            "reason" to reason,
-            "description" to description,
-            "type" to "USER",
-            "timestamp" to millisToTimestamp(currentTimeMillis()),
-            "status" to "pending"
-        )
-        if (evidenceUrls.isNotEmpty()) {
-            data["evidenceUrls"] = evidenceUrls
-        }
-        firestore.collection("reports").document(reportId).set(data).await()
+        api.post("/api/reports", JSONObject().apply {
+            put("reportedUserId", reportedUserId)
+            put("reportedUserName", reportedUserName)
+            put("reportedUserUniqueId", reportedUserUniqueId)
+            put("conversationId", conversationId)
+            put("reason", reason)
+            put("description", description)
+            if (evidenceUrls.isNotEmpty()) {
+                put("evidenceUrls", JSONArray(evidenceUrls))
+            }
+        })
+        Unit
     }
 
     override suspend fun getPendingReports(): Resource<List<Report>> =
         firebaseCall("Failed to load reports") {
-            val snapshot = firestore.collection("reports")
-                .whereEqualTo("status", "pending")
-                .orderBy("timestamp", Query.Direction.DESCENDING)
-                .limit(50)
-                .get()
-                .await()
-
-            snapshot.documents.map { doc ->
-                val data = doc.data ?: emptyMap()
+            val arr = api.getArray("/api/reports")
+            (0 until arr.length()).map { i ->
+                val obj = arr.getJSONObject(i)
                 Report(
-                    reportId = doc.id,
-                    reporterId = data["reporterId"] as? String ?: "",
-                    reporterName = data["reporterName"] as? String ?: "",
-                    reporterUniqueId = (data["reporterUniqueId"] as? Long) ?: 0L,
-                    reportedUserId = data["reportedUserId"] as? String ?: "",
-                    reportedUserName = data["reportedUserName"] as? String ?: "",
-                    reportedUserUniqueId = (data["reportedUserUniqueId"] as? Long) ?: 0L,
-                    conversationId = data["conversationId"] as? String ?: "",
-                    messageId = data["messageId"] as? String ?: "",
-                    messageText = data["messageText"] as? String ?: "",
-                    reason = data["reason"] as? String ?: "",
-                    description = data["description"] as? String ?: "",
-                    type = (data["type"] as? String ?: "").lowercase(),
-                    timestamp = timestampToMillis(data["timestamp"]),
-                    status = data["status"] as? String ?: "pending"
+                    reportId = obj.optString("id"),
+                    reporterId = obj.optString("reporter_id"),
+                    reporterName = obj.optString("reporter_name"),
+                    reporterUniqueId = obj.optLong("reporter_unique_id", 0L),
+                    reportedUserId = obj.optString("reported_user_id"),
+                    reportedUserName = obj.optString("reported_user_name"),
+                    reportedUserUniqueId = obj.optLong("reported_user_unique_id", 0L),
+                    conversationId = obj.optString("conversation_id"),
+                    messageId = obj.optString("message_id"),
+                    messageText = obj.optString("message_text"),
+                    reason = obj.optString("reason"),
+                    description = obj.optString("description"),
+                    type = obj.optString("type", "").lowercase(),
+                    timestamp = obj.optLong("created_at", 0L),
+                    status = obj.optString("status", "pending")
                 )
             }
         }
 
     override suspend fun resolveReport(reportId: String, action: String): Resource<Unit> =
         firebaseCall("Failed to resolve report") {
-            firestore.collection("reports").document(reportId).update(
-                mapOf(
-                    "status" to "resolved",
-                    "resolvedAction" to action,
-                    "resolvedAt" to millisToTimestamp(currentTimeMillis())
-                )
-            ).await()
+            api.post("/api/reports/$reportId/resolve", JSONObject().apply {
+                put("action", action)
+            })
+            Unit
         }
 }

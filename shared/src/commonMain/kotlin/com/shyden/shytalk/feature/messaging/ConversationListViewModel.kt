@@ -258,6 +258,10 @@ class ConversationListViewModel(
                 totalUnreadCount = updated.sumOf { it.settings?.unreadCount ?: 0 }
             )
         }
+        // Persist to backend so re-fetches don't revert the local state
+        viewModelScope.launch {
+            pmRepository.resetUnreadCount(conversationId, currentUserId)
+        }
     }
 
     fun clearError() {

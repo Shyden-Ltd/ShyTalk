@@ -1,21 +1,14 @@
 package com.shyden.shytalk.data.repository
 
-import com.google.android.gms.tasks.Tasks
-import com.google.firebase.firestore.CollectionReference
-import com.google.firebase.firestore.DocumentReference
-import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
-import com.google.firebase.firestore.QuerySnapshot
-import com.google.firebase.firestore.Transaction
-import com.shyden.shytalk.core.model.SeatRequest
 import com.shyden.shytalk.core.model.SeatRequestStatus
 import com.shyden.shytalk.core.util.Resource
-import io.mockk.every
+import com.shyden.shytalk.data.remote.PresenceService
+import com.shyden.shytalk.data.remote.WorkerApiClient
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
-import io.mockk.slot
-import io.mockk.verify
 import kotlinx.coroutines.test.runTest
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -23,89 +16,55 @@ import org.junit.Test
 
 class SeatRequestRepositoryImplTest {
 
-    private lateinit var firestore: FirebaseFirestore
-    private lateinit var roomsCollection: CollectionReference
-    private lateinit var roomDoc: DocumentReference
-    private lateinit var requestsCollection: CollectionReference
-    private lateinit var requestDoc: DocumentReference
+    private lateinit var api: WorkerApiClient
+    private lateinit var presenceService: PresenceService
     private lateinit var repo: SeatRequestRepositoryImpl
 
     @Before
     fun setup() {
-        firestore = mockk(relaxed = true)
-        roomsCollection = mockk(relaxed = true)
-        roomDoc = mockk(relaxed = true)
-        requestsCollection = mockk(relaxed = true)
-        requestDoc = mockk(relaxed = true)
-
-        every { firestore.collection("rooms") } returns roomsCollection
-        every { roomsCollection.document(any<String>()) } returns roomDoc
-        every { roomDoc.collection("seatRequests") } returns requestsCollection
-        every { requestsCollection.document(any<String>()) } returns requestDoc
-
-        repo = SeatRequestRepositoryImpl(firestore)
+        api = mockk(relaxed = true)
+        presenceService = mockk(relaxed = true)
+        repo = SeatRequestRepositoryImpl(api, presenceService)
     }
 
+    // region createRequest
+
     @Test
-    fun `createRequest returns Success when no existing pending request`() = runTest {
-        val query = mockk<Query>(relaxed = true)
-        val querySnapshot = mockk<QuerySnapshot> { every { isEmpty } returns true }
-        every { requestsCollection.whereEqualTo("userId", "user-1") } returns query
-        every { query.whereEqualTo("status", SeatRequestStatus.PENDING.name) } returns query
-        every { query.limit(1) } returns query
-        every { query.get() } returns Tasks.forResult(querySnapshot)
-        every { requestDoc.set(any()) } returns Tasks.forResult(null)
+    fun `createRequest returns Success`() = runTest {
+        coEvery { api.post("/api/rooms/room-1/seat-requests", any()) } returns JSONObject().apply {
+            put("requestId", "req-1")
+        }
 
         val result = repo.createRequest("room-1", "user-1", "Alice", 2)
 
         assertTrue(result is Resource.Success)
+        coVerify { api.post("/api/rooms/room-1/seat-requests", any()) }
     }
 
     @Test
-    fun `createRequest refreshes existing pending request instead of creating new`() = runTest {
-        val existingDocRef = mockk<DocumentReference>(relaxed = true)
-        val existingDoc = mockk<DocumentSnapshot> {
-            every { reference } returns existingDocRef
-        }
-        val query = mockk<Query>(relaxed = true)
-        val querySnapshot = mockk<QuerySnapshot> {
-            every { isEmpty } returns false
-            every { documents } returns listOf(existingDoc)
-        }
-        every { requestsCollection.whereEqualTo("userId", "user-1") } returns query
-        every { query.whereEqualTo("status", SeatRequestStatus.PENDING.name) } returns query
-        every { query.limit(1) } returns query
-        every { query.get() } returns Tasks.forResult(querySnapshot)
-        every { existingDocRef.update(any<Map<String, Any>>()) } returns Tasks.forResult(null)
+    fun `createRequest returns Error on exception`() = runTest {
+        coEvery { api.post("/api/rooms/room-1/seat-requests", any()) } throws RuntimeException("Fail")
 
         val result = repo.createRequest("room-1", "user-1", "Alice", 2)
 
-        assertTrue(result is Resource.Success)
-        // Should NOT have created a new document
-        verify(exactly = 0) { requestDoc.set(any()) }
-        // Should have updated the existing one
-        verify(exactly = 1) { existingDocRef.update(any<Map<String, Any>>()) }
+        assertTrue(result is Resource.Error)
     }
 
-    @Test
-    fun `approveRequest updates status and returns request`() = runTest {
-        val docSnapshot = mockk<DocumentSnapshot> {
-            every { id } returns "req-1"
-            every { data } returns mapOf(
-                "requestId" to "req-1",
-                "userId" to "user-1",
-                "userName" to "Alice",
-                "seatIndex" to 2L,
-                "status" to "PENDING"
-            )
-        }
-        val transaction = mockk<Transaction>(relaxed = true)
-        every { transaction.get(requestDoc) } returns docSnapshot
+    // endregion
 
-        every { firestore.runTransaction(any<Transaction.Function<SeatRequest>>()) } answers {
-            val func = firstArg<Transaction.Function<SeatRequest>>()
-            val resultVal = func.apply(transaction)
-            Tasks.forResult(resultVal)
+    // region approveRequest
+
+    @Test
+    fun `approveRequest returns Success with parsed SeatRequest`() = runTest {
+        coEvery { api.post("/api/rooms/room-1/seat-requests/req-1/approve", any()) } returns JSONObject().apply {
+            put("requestId", "req-1")
+            put("userId", "user-1")
+            put("userName", "Alice")
+            put("seatIndex", 2)
+            put("status", "APPROVED")
+            put("resolvedBy", "owner-1")
+            put("resolvedAt", 1700000000000L)
+            put("createdAt", 1699999000000L)
         }
 
         val result = repo.approveRequest("room-1", "req-1", "owner-1")
@@ -119,34 +78,62 @@ class SeatRequestRepositoryImplTest {
     }
 
     @Test
-    fun `denyRequest updates status to DENIED`() = runTest {
-        val mapSlot = slot<Map<String, Any?>>()
-        every { requestDoc.update(capture(mapSlot)) } returns Tasks.forResult(null)
-
-        val result = repo.denyRequest("room-1", "req-1", "owner-1")
-
-        assertTrue(result is Resource.Success)
-        val updateData = mapSlot.captured
-        assertTrue(updateData["status"] == SeatRequestStatus.DENIED.name)
-        assertTrue(updateData["resolvedBy"] == "owner-1")
-    }
-
-    @Test
     fun `approveRequest returns Error on exception`() = runTest {
-        every { firestore.runTransaction(any<Transaction.Function<SeatRequest>>()) } returns
-            Tasks.forException(RuntimeException("Fail"))
+        coEvery { api.post("/api/rooms/room-1/seat-requests/req-1/approve", any()) } throws RuntimeException("Fail")
 
         val result = repo.approveRequest("room-1", "req-1", "owner-1")
 
         assertTrue(result is Resource.Error)
     }
 
+    // endregion
+
+    // region denyRequest
+
+    @Test
+    fun `denyRequest returns Success`() = runTest {
+        coEvery { api.post("/api/rooms/room-1/seat-requests/req-1/deny", any()) } returns JSONObject().apply {
+            put("success", true)
+        }
+
+        val result = repo.denyRequest("room-1", "req-1", "owner-1")
+
+        assertTrue(result is Resource.Success)
+        coVerify { api.post("/api/rooms/room-1/seat-requests/req-1/deny", any()) }
+    }
+
     @Test
     fun `denyRequest returns Error on exception`() = runTest {
-        every { requestDoc.update(any<Map<String, Any?>>()) } returns Tasks.forException(RuntimeException("Fail"))
+        coEvery { api.post("/api/rooms/room-1/seat-requests/req-1/deny", any()) } throws RuntimeException("Fail")
 
         val result = repo.denyRequest("room-1", "req-1", "owner-1")
 
         assertTrue(result is Resource.Error)
     }
+
+    // endregion
+
+    // region cancelApprovedRequest
+
+    @Test
+    fun `cancelApprovedRequest returns Success`() = runTest {
+        coEvery { api.post("/api/rooms/room-1/seat-requests/req-1/cancel", any()) } returns JSONObject().apply {
+            put("success", true)
+        }
+
+        val result = repo.cancelApprovedRequest("room-1", "req-1", "user-1")
+
+        assertTrue(result is Resource.Success)
+    }
+
+    @Test
+    fun `cancelApprovedRequest returns Error on exception`() = runTest {
+        coEvery { api.post("/api/rooms/room-1/seat-requests/req-1/cancel", any()) } throws RuntimeException("Fail")
+
+        val result = repo.cancelApprovedRequest("room-1", "req-1", "user-1")
+
+        assertTrue(result is Resource.Error)
+    }
+
+    // endregion
 }

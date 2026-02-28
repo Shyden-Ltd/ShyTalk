@@ -21,6 +21,7 @@ sealed class Screen(val route: String) {
     }
     data object CommunityStandards : Screen("community_standards")
     data object TermsAndConditions : Screen("terms_and_conditions")
+    data object CyberBullyingPolicy : Screen("cyber_bullying_policy")
     data object LegalAcceptance : Screen("legal_acceptance")
     data object ReportReview : Screen("report_review")
     data object GroupChat : Screen("group_chat/{conversationId}") {

@@ -1,0 +1,21 @@
+{
+  "name": "shytalk-api",
+  "version": "1.0.0",
+  "description": "ShyTalk Cloudflare Worker API — replaces Firebase Cloud Functions + Firestore",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "jest --verbose",
+    "migrate:local": "wrangler d1 execute shytalk-db --local --file=migrations/0001_initial_schema.sql",
+    "migrate:remote": "wrangler d1 execute shytalk-db --remote --file=migrations/0001_initial_schema.sql"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.0.0",
+    "livekit-server-sdk": "^2.15.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "wrangler": "^4.0.0"
+  }
+}

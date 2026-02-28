@@ -488,9 +488,11 @@ class ConversationListViewModelTest {
         assertEquals(5L, vm.uiState.value.conversations[0].settings?.unreadCount)
 
         vm.markConversationRead("conv-1")
+        advanceUntilIdle()
 
         val cw = vm.uiState.value.conversations.find { it.conversation.conversationId == "conv-1" }
         assertEquals(0L, cw?.settings?.unreadCount)
+        coVerify { pmRepository.resetUnreadCount("conv-1", currentUserId) }
     }
 
     @Test

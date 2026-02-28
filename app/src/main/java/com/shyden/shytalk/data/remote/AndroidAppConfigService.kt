@@ -1,27 +1,25 @@
 package com.shyden.shytalk.data.remote
 
 import android.content.Context
-import com.google.firebase.firestore.FirebaseFirestore
 import com.shyden.shytalk.BuildConfig
 import com.shyden.shytalk.core.util.Resource
-import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.withTimeout
+import com.shyden.shytalk.core.util.toMap
 
 class AndroidAppConfigService(
     private val context: Context,
-    private val firestore: FirebaseFirestore
+    private val api: WorkerApiClient
 ) : AppConfigService {
 
     override val currentVersionCode: Int = BuildConfig.VERSION_CODE
 
-    override suspend fun getLatestVersionInfo(): Resource<Pair<Int, String>> {
+    override suspend fun getLatestVersionInfo(): Resource<Triple<Int, Int, String>> {
         return try {
-            val doc = withTimeout(10_000L) {
-                firestore.collection("config").document("app").get().await()
-            }
-            val latestVersionCode = (doc.getLong("latestVersionCode") ?: 0).toInt()
-            val latestVersionName = doc.getString("latestVersionName") ?: ""
-            Resource.Success(latestVersionCode to latestVersionName)
+            val json = api.get("/api/config/app")
+            val data = json.optJSONObject("value")?.toMap() ?: emptyMap()
+            val minVersionCode = (data["minVersionCode"] as? Number)?.toInt() ?: 0
+            val latestVersionCode = (data["latestVersionCode"] as? Number)?.toInt() ?: 0
+            val latestVersionName = data["latestVersionName"] as? String ?: ""
+            Resource.Success(Triple(minVersionCode, latestVersionCode, latestVersionName))
         } catch (e: Exception) {
             Resource.Error("Failed to check for updates")
         }

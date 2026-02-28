@@ -1,32 +1,18 @@
 package com.shyden.shytalk.data.remote
 
-import com.google.firebase.functions.FirebaseFunctions
-import kotlinx.coroutines.tasks.await
+import org.json.JSONObject
 
-/**
- * Fetches LiveKit tokens from a Firebase Cloud Function.
- *
- * The Cloud Function `generateLiveKitToken` should accept:
- *   { roomName: String, identity: String }
- * and return:
- *   { token: String }
- */
 class LiveKitTokenService(
-    private val functions: FirebaseFunctions = FirebaseFunctions.getInstance()
+    private val api: WorkerApiClient
 ) : TokenService {
 
     override suspend fun fetchToken(roomName: String, identity: String): String {
-        val data = hashMapOf(
-            "roomName" to roomName,
-            "identity" to identity
-        )
-        val result = functions
-            .getHttpsCallable("generateLiveKitToken")
-            .call(data)
-            .await()
-
-        val response = result.getData() as? Map<*, *>
-        return response?.get("token") as? String
+        val response = api.post("/api/livekit/token", JSONObject().apply {
+            put("roomName", roomName)
+            put("identity", identity)
+        })
+        return response.optString("token")
+            .takeIf { it.isNotEmpty() }
             ?: throw IllegalStateException("Invalid token response from server")
     }
 }

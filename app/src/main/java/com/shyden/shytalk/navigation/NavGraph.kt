@@ -45,6 +45,7 @@ import com.shyden.shytalk.data.remote.VoiceService
 import com.shyden.shytalk.feature.auth.GoogleSignInScreen
 import com.shyden.shytalk.feature.legal.CURRENT_LEGAL_VERSION
 import com.shyden.shytalk.feature.legal.CommunityStandardsScreen
+import com.shyden.shytalk.feature.legal.CyberBullyingPolicyScreen
 import com.shyden.shytalk.feature.legal.LegalAcceptanceScreen
 import com.shyden.shytalk.feature.legal.TermsAndConditionsScreen
 import com.shyden.shytalk.feature.main.MainScreen
@@ -71,6 +72,7 @@ import com.shyden.shytalk.feature.shop.TransactionHistoryScreen
 import com.shyden.shytalk.feature.shop.TransactionHistoryViewModel
 import com.shyden.shytalk.feature.shop.WalletScreen
 import com.shyden.shytalk.feature.shop.WalletViewModel
+import com.shyden.shytalk.feature.daily.DailyRewardCelebrationDialog
 import com.shyden.shytalk.feature.daily.DailyRewardDialog
 import com.shyden.shytalk.feature.daily.DailyRewardViewModel
 import com.shyden.shytalk.data.remote.BillingService
@@ -301,6 +303,13 @@ fun NavGraph(
                 )
             }
 
+            if (dailyRewardState.showCelebration) {
+                DailyRewardCelebrationDialog(
+                    viewModel = dailyRewardViewModel,
+                    onDismiss = { showDailyRewardDialog = false }
+                )
+            }
+
             val voiceService: VoiceService = koinInject()
 
             MainScreen(
@@ -501,6 +510,9 @@ fun NavGraph(
                 onNavigateToTermsAndConditions = {
                     navController.navigate(Screen.TermsAndConditions.route)
                 },
+                onNavigateToCyberBullyingPolicy = {
+                    navController.navigate(Screen.CyberBullyingPolicy.route)
+                },
                 onSignOut = {
                     // Remove FCM token before signing out
                     val signOutUserId = authRepository.currentUserId
@@ -545,6 +557,12 @@ fun NavGraph(
             )
         }
 
+        composable(Screen.CyberBullyingPolicy.route) {
+            CyberBullyingPolicyScreen(
+                onNavigateBack = { navController.safePopBackStack() }
+            )
+        }
+
         composable(Screen.LegalAcceptance.route) {
             val legalUserRepository: UserRepository = koinInject()
             val legalScope = rememberCoroutineScope()
@@ -568,6 +586,9 @@ fun NavGraph(
                 },
                 onViewTerms = {
                     navController.navigate(Screen.TermsAndConditions.route)
+                },
+                onViewCyberBullyingPolicy = {
+                    navController.navigate(Screen.CyberBullyingPolicy.route)
                 }
             )
         }

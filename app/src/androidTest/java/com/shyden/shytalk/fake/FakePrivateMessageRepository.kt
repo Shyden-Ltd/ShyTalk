@@ -71,6 +71,7 @@ class FakePrivateMessageRepository : PrivateMessageRepository {
     override suspend fun editMessage(conversationId: String, messageId: String, newText: String): Resource<Unit> = Resource.Success(Unit)
     override suspend fun getEditHistory(conversationId: String, messageId: String): Resource<List<MessageEdit>> = Resource.Success(emptyList())
     override suspend fun markAsRead(conversationId: String, userId: String, messageId: String): Resource<Unit> = Resource.Success(Unit)
+    override suspend fun resetUnreadCount(conversationId: String, userId: String): Resource<Unit> = Resource.Success(Unit)
     override suspend fun muteConversation(conversationId: String, userId: String, muted: Boolean): Resource<Unit> = Resource.Success(Unit)
     override suspend fun pinConversation(conversationId: String, userId: String, pinned: Boolean): Resource<Unit> = Resource.Success(Unit)
     override suspend fun hideConversation(conversationId: String, userId: String): Resource<Unit> = Resource.Success(Unit)

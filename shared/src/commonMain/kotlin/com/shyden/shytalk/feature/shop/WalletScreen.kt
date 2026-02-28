@@ -3,17 +3,12 @@ package com.shyden.shytalk.feature.shop
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -158,7 +153,7 @@ private fun CoinsTab(
 ) {
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
@@ -192,24 +187,29 @@ private fun CoinsTab(
         Text("Buy Shy Coins", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
 
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            contentPadding = PaddingValues(0.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.heightIn(max = 240.dp)
-        ) {
-            items(coinPackages) { pkg ->
-                val totalCoins = pkg.coins + pkg.bonusCoins
-                CoinPackageCard(
-                    pkg = pkg,
-                    enabled = !isPurchasing,
-                    onClick = { onTestPurchase(totalCoins) }
-                )
+        // Grid rendered inline to avoid nested scrollable issues
+        val rows = coinPackages.chunked(2)
+        rows.forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                row.forEach { pkg ->
+                    val totalCoins = pkg.coins + pkg.bonusCoins
+                    Box(modifier = Modifier.weight(1f)) {
+                        CoinPackageCard(
+                            pkg = pkg,
+                            enabled = !isPurchasing,
+                            onClick = { onTestPurchase(totalCoins) }
+                        )
+                    }
+                }
+                if (row.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
             }
+            Spacer(modifier = Modifier.height(8.dp))
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
@@ -357,7 +357,7 @@ internal fun CoinPackageCard(pkg: CoinPackage, enabled: Boolean = true, onClick:
         onClick = onClick,
         enabled = enabled,
         shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.heightIn(min = 72.dp)
+        modifier = Modifier.fillMaxWidth().height(80.dp)
     ) {
         Column(
             modifier = Modifier.fillMaxSize().padding(8.dp),
@@ -404,26 +404,30 @@ fun CoinPurchaseSheetContent(
         Text("Buy Shy Coins", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
 
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            contentPadding = PaddingValues(0.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.heightIn(max = 240.dp)
-        ) {
-            items(coinPackages) { pkg ->
-                val totalCoins = pkg.coins + pkg.bonusCoins
-                CoinPackageCard(
-                    pkg = pkg,
-                    enabled = !isPurchasing,
-                    onClick = {
-                        onTestPurchase(totalCoins)
-                        onDismiss()
+        val sheetRows = coinPackages.chunked(2)
+        sheetRows.forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                row.forEach { pkg ->
+                    val totalCoins = pkg.coins + pkg.bonusCoins
+                    Box(modifier = Modifier.weight(1f)) {
+                        CoinPackageCard(
+                            pkg = pkg,
+                            enabled = !isPurchasing,
+                            onClick = {
+                                onTestPurchase(totalCoins)
+                                onDismiss()
+                            }
+                        )
                     }
-                )
+                }
+                if (row.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
             }
+            Spacer(modifier = Modifier.height(8.dp))
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
     }
 }
