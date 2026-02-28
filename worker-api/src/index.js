@@ -142,7 +142,7 @@ export default {
     const cron = event.cron;
 
     switch (cron) {
-      case '0 3 * * 0': // Archive old reports (Sunday 03:00)
+      case '0 3 * * SUN': // Archive old reports (Sunday 03:00)
         await archiveOldReports(env);
         break;
 

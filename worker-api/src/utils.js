@@ -54,11 +54,35 @@ function yesterdayStr() {
 }
 
 /**
- * Parse the request body as JSON. Returns null on failure.
+ * Convert a camelCase string to snake_case.
+ */
+function camelToSnake(str) {
+  return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+}
+
+/**
+ * Recursively convert all keys in an object from camelCase to snake_case.
+ */
+function normalizeKeys(obj) {
+  if (Array.isArray(obj)) return obj.map(normalizeKeys);
+  if (obj !== null && typeof obj === 'object') {
+    const result = {};
+    for (const [key, value] of Object.entries(obj)) {
+      result[camelToSnake(key)] = normalizeKeys(value);
+    }
+    return result;
+  }
+  return obj;
+}
+
+/**
+ * Parse the request body as JSON and normalize keys to snake_case.
+ * Returns null on failure.
  */
 async function parseBody(request) {
   try {
-    return await request.json();
+    const body = await request.json();
+    return normalizeKeys(body);
   } catch {
     return null;
   }

@@ -3,11 +3,15 @@ package com.shyden.shytalk.feature.profile
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import com.shyden.shytalk.core.util.isAtLeast13
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -15,7 +19,10 @@ fun DOBDatePickerDialog(
     onDismiss: () -> Unit,
     onDateSelected: (millis: Long, error: String?) -> Unit
 ) {
-    val datePickerState = rememberDatePickerState()
+    val currentYear = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).year
+    val datePickerState = rememberDatePickerState(
+        yearRange = 1940..(currentYear - 13),
+    )
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {

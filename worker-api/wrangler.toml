@@ -1,13 +1,13 @@
 name = "shytalk-api"
 main = "src/index.js"
 compatibility_date = "2025-01-01"
-node_compat = true
+compatibility_flags = ["nodejs_compat"]
 
 # ── D1 Database ──────────────────────────────────────────────────
 [[d1_databases]]
 binding = "DB"
 database_name = "shytalk-db"
-database_id = ""                         # TODO: fill after `wrangler d1 create shytalk-db`
+database_id = "b6dafad0-0fd9-4170-b714-7c7089552fb6"
 migrations_dir = "migrations"
 
 # ── R2 Bucket (already exists from worker/) ──────────────────────
@@ -18,7 +18,7 @@ bucket_name = "shytalk-media"
 # ── KV Namespace (config cache, rate limiting) ───────────────────
 [[kv_namespaces]]
 binding = "KV"
-id = ""                                  # TODO: fill after `wrangler kv namespace create SHYTALK_KV`
+id = "dc68f6d3e52645f19413afc3ba635860"
 
 # ── Durable Objects ──────────────────────────────────────────────
 [durable_objects]
@@ -29,7 +29,7 @@ bindings = [
 
 [[migrations]]
 tag = "v1"
-new_classes = ["RoomDurableObject", "ConversationDurableObject"]
+new_sqlite_classes = ["RoomDurableObject", "ConversationDurableObject"]
 
 # ── Secrets (set via `wrangler secret put`) ──────────────────────
 # FIREBASE_API_KEY         — for Firebase ID token verification
@@ -43,11 +43,10 @@ new_classes = ["RoomDurableObject", "ConversationDurableObject"]
 # ── Cron Triggers (Phase 8) ──────────────────────────────────────
 [triggers]
 crons = [
-  "0 3 * * 0",    # archiveOldReports — Sunday 03:00 UTC
+  "0 3 * * SUN",  # archiveOldReports — Sunday 03:00 UTC
   "0 4 * * *",    # cleanupOrphanedStorage — daily 04:00 UTC
-  "0 0 * * *",    # checkSubscriptionStatus — daily 00:00 UTC
+  "0 0 * * *",    # checkSubscriptionStatus + cleanExpiredBackpackItems — daily 00:00 UTC
   "0 * * * *",    # updateGiftRankings — hourly
-  "0 0 * * *",    # cleanExpiredBackpackItems — daily 00:00 UTC (distinct handler)
 ]
 
 # ── Environment ──────────────────────────────────────────────────

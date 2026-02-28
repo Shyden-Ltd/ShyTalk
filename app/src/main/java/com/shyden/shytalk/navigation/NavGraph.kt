@@ -541,6 +541,7 @@ fun NavGraph(
             PrivacyPolicyScreen(
                 onAccept = { navController.safePopBackStack() },
                 onDecline = { navController.safePopBackStack() },
+                onNavigateBack = { navController.safePopBackStack() },
                 showActions = false
             )
         }
