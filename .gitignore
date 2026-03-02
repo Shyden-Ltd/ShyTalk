@@ -20,6 +20,8 @@ shytalk-7ba69-firebase-adminsdk-*.json
 functions/node_modules/
 worker/node_modules/
 worker/.wrangler/
+worker-api/node_modules/
+worker-api/.wrangler/
 .env
 /node_modules/
 /package.json
