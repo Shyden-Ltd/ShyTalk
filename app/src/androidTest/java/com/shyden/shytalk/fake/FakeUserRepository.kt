@@ -65,6 +65,13 @@ class FakeUserRepository : UserRepository {
     override suspend fun getBlockedUserIds(userId: String): Resource<Set<String>> =
         Resource.Success(emptySet())
 
+    override suspend fun checkBlockedBy(userIds: List<String>, targetUserId: String): Resource<Set<String>> {
+        val blockers = userIds.filter { uid ->
+            users[uid]?.blockedUserIds?.contains(targetUserId) == true
+        }.toSet()
+        return Resource.Success(blockers)
+    }
+
     override suspend fun followUser(currentUserId: String, targetUserId: String): Resource<Unit> {
         val current = users[currentUserId] ?: return Resource.Error("User not found")
         val target = users[targetUserId] ?: return Resource.Error("Target not found")

@@ -20,6 +20,10 @@ const { registerRoomRoutes } = require('./routes/rooms');
 const { registerConversationRoutes } = require('./routes/conversations');
 const { registerBannerRoutes } = require('./routes/banners');
 const { registerFunFactRoutes } = require('./routes/fun-facts');
+const { registerAdminUserRoutes } = require('./routes/admin-users');
+const { registerAdminEconomyRoutes } = require('./routes/admin-economy');
+const { registerAdminGiftRoutes } = require('./routes/admin-gifts');
+const { registerAdminCleanupRoutes } = require('./routes/admin-cleanup');
 
 // Re-export Durable Object classes
 export { RoomDurableObject, ConversationDurableObject };
@@ -37,6 +41,10 @@ registerRoomRoutes(router);
 registerConversationRoutes(router);
 registerBannerRoutes(router);
 registerFunFactRoutes(router);
+registerAdminUserRoutes(router);
+registerAdminEconomyRoutes(router);
+registerAdminGiftRoutes(router);
+registerAdminCleanupRoutes(router);
 
 // ── Health check (no auth) ──
 router.get('/api/health', async () => {
@@ -318,10 +326,10 @@ async function cleanupOrphanedStorage(env) {
 
   // Users → profile_photo_url, cover_photo_url, pre_suspension_*
   const { results: users } = await env.DB.prepare(
-    'SELECT profile_photo_url, cover_photo_url, pre_suspension_photo_url, pre_suspension_cover_url FROM users'
+    'SELECT profile_photo_url, cover_photo_url, pre_suspension_profile_photo_url, pre_suspension_cover_photo_url FROM users'
   ).all();
   for (const u of users) {
-    for (const url of [u.profile_photo_url, u.cover_photo_url, u.pre_suspension_photo_url, u.pre_suspension_cover_url]) {
+    for (const url of [u.profile_photo_url, u.cover_photo_url, u.pre_suspension_profile_photo_url, u.pre_suspension_cover_photo_url]) {
       const k = extractKey(url);
       if (k) referencedKeys.add(k);
     }

@@ -12,7 +12,6 @@ import com.shyden.shytalk.data.repository.BannerRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.UserRepository
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -224,18 +223,17 @@ class HomeViewModel(
     }
 
     companion object {
-        const val REFRESH_INTERVAL_MS = 30_000L
+        const val REFRESH_INTERVAL_MS = 120_000L
     }
 
     fun createRoom(name: String) {
         val userId = authRepository.currentUserId ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null, lastRoomName = name) }
-            // Run independent pre-checks in parallel
-            val saveNameJob = async { userRepository.updateProfile(userId, mapOf("lastRoomName" to name)) }
-            val closeJob = async { roomRepository.closeAllRoomsByOwner(userId) }
-            saveNameJob.await()
-            closeJob.await()
+            // Fire-and-forget: neither blocks room creation
+            launch { userRepository.updateProfile(userId, mapOf("lastRoomName" to name)) }
+            launch { roomRepository.closeAllRoomsByOwner(userId) }
+            // Create immediately without waiting
             when (val result = roomRepository.createRoom(name, userId)) {
                 is Resource.Success -> {
                     _uiState.update { it.copy(isLoading = false, createdRoomId = result.data) }

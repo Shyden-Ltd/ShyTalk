@@ -234,7 +234,8 @@ object TestData {
         createdBy: String? = null,
         isClosed: Boolean = false,
         permissions: GroupPermissions = GroupPermissions(),
-        modNotifyMode: String = "ALL_ADMINS"
+        modNotifyMode: String = "ALL_ADMINS",
+        settings: ConversationSettings? = null
     ) = Conversation(
         conversationId = conversationId,
         participantIds = participantIds,
@@ -250,7 +251,8 @@ object TestData {
         createdBy = createdBy,
         isClosed = isClosed,
         permissions = permissions,
-        modNotifyMode = modNotifyMode
+        modNotifyMode = modNotifyMode,
+        settings = settings
     )
 
     fun createTestConversationPreview(

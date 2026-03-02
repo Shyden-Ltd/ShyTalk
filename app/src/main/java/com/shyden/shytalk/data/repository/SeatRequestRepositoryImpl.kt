@@ -23,8 +23,8 @@ class SeatRequestRepositoryImpl(
 ) : SeatRequestRepository {
 
     override fun getPendingRequests(roomId: String): Flow<List<SeatRequest>> = merge(
-        // Slow fallback poll (10s)
-        flow { while (true) { emit(Unit); delay(10_000) } },
+        // Slow fallback poll — WebSocket handles real-time updates
+        flow { while (true) { emit(Unit); delay(120_000) } },
         // Immediate refetch on seat request events
         presenceService.roomEvents
             .filter { it is RoomEvent.SeatRequestUpdated }
@@ -41,8 +41,8 @@ class SeatRequestRepositoryImpl(
     }.distinctUntilChanged()
 
     override fun getRequestsByUser(roomId: String, userId: String): Flow<List<SeatRequest>> = merge(
-        // Slow fallback poll (10s)
-        flow { while (true) { emit(Unit); delay(10_000) } },
+        // Slow fallback poll — WebSocket handles real-time updates
+        flow { while (true) { emit(Unit); delay(120_000) } },
         // Immediate refetch on seat request events
         presenceService.roomEvents
             .filter { it is RoomEvent.SeatRequestUpdated }

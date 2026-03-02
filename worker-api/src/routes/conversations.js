@@ -183,7 +183,34 @@ function registerConversationRoutes(router) {
       userConvs.map(r => assembleConversation(env, r.conversation_id))
     );
 
-    return json(conversations.filter(Boolean));
+    // Inline settings for the authenticated user to avoid N+1 API calls
+    const filtered = conversations.filter(Boolean);
+    const convIds = filtered.map(c => c.conversationId);
+    if (convIds.length > 0) {
+      const placeholders = convIds.map(() => '?').join(',');
+      const { results: allSettings } = await env.DB.prepare(
+        `SELECT * FROM conversation_settings WHERE user_id = ? AND conversation_id IN (${placeholders})`
+      ).bind(uid, ...convIds).all();
+      const settingsMap = Object.fromEntries(allSettings.map(s => [s.conversation_id, s]));
+      for (const conv of filtered) {
+        const s = settingsMap[conv.conversationId];
+        conv.settings = s ? {
+          userId: s.user_id,
+          isMuted: !!s.is_muted,
+          isHidden: !!s.is_hidden,
+          hiddenAt: s.hidden_at,
+          isPinned: !!s.is_pinned,
+          lastReadMessageId: s.last_read_message_id || '',
+          lastReadAt: s.last_read_at || 0,
+          unreadCount: s.unread_count || 0,
+        } : {
+          userId: uid, isMuted: false, isHidden: false, hiddenAt: null,
+          isPinned: false, lastReadMessageId: '', lastReadAt: 0, unreadCount: 0,
+        };
+      }
+    }
+
+    return json(filtered);
   });
 
   // ── Get or create 1-on-1 conversation ──

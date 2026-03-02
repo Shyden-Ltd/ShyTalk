@@ -80,7 +80,7 @@ class HomeUiStateTest {
     }
 
     @Test
-    fun `REFRESH_INTERVAL_MS is 30 seconds`() {
-        assertEquals(30_000L, HomeViewModel.REFRESH_INTERVAL_MS)
+    fun `REFRESH_INTERVAL_MS is 120 seconds`() {
+        assertEquals(120_000L, HomeViewModel.REFRESH_INTERVAL_MS)
     }
 }

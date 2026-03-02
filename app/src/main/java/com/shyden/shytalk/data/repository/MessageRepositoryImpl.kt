@@ -24,8 +24,8 @@ class MessageRepositoryImpl(
 ) : MessageRepository {
 
     override fun getMessages(roomId: String): Flow<List<Message>> = merge(
-        // Slow fallback poll (10s)
-        flow { while (true) { emit(Unit); delay(10_000) } },
+        // Slow fallback poll — WebSocket handles real-time updates
+        flow { while (true) { emit(Unit); delay(120_000) } },
         // Immediate refetch on new messages
         presenceService.roomEvents
             .filter { it is RoomEvent.NewMessage }

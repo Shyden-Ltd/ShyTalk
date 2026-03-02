@@ -56,9 +56,8 @@ class GiftRepositoryImpl(
     override fun observeBroadcasts(): Flow<List<Broadcast>> = flow {
         // Initial fetch
         emit(fetchBroadcasts())
-        // Poll every 30 seconds for new broadcasts
         while (true) {
-            delay(30_000)
+            delay(120_000)
             try {
                 emit(fetchBroadcasts())
             } catch (_: Exception) {

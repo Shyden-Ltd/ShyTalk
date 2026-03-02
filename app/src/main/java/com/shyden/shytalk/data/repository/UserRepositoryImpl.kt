@@ -153,6 +153,17 @@ class UserRepositoryImpl(
         }
     }
 
+    override suspend fun checkBlockedBy(userIds: List<String>, targetUserId: String): Resource<Set<String>> {
+        if (userIds.isEmpty()) return Resource.Success(emptySet())
+        return firebaseCall("Failed to check blocks") {
+            val body = JSONObject()
+                .put("userIds", JSONArray(userIds))
+                .put("targetUserId", targetUserId)
+            val arr = api.post("/api/users/check-blocks", body).optJSONArray("blockerIds") ?: JSONArray()
+            (0 until arr.length()).map { arr.getString(it) }.toSet()
+        }
+    }
+
     override suspend fun followUser(currentUserId: String, targetUserId: String): Resource<Unit> =
         firebaseCall("Failed to follow user") {
             api.post("/api/users/$currentUserId/follow", JSONObject().put("targetUserId", targetUserId))
@@ -243,7 +254,7 @@ class UserRepositoryImpl(
             } catch (_: Exception) {
                 // Silently skip failed polls
             }
-            delay(15_000) // Poll every 15 seconds
+            delay(120_000)
         }
     }
 
@@ -269,7 +280,7 @@ class UserRepositoryImpl(
                     } catch (_: Exception) {
                         // Silently skip failed polls
                     }
-                    delay(30_000) // Poll every 30 seconds
+                    delay(120_000)
                 }
             }
         }.merge()

@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "test": "jest --verbose",
+    "test": "jest --verbose --forceExit",
+    "test:unit": "jest --verbose src/__tests__/utils.test.js",
+    "test:smoke": "jest --verbose --forceExit --testTimeout=60000 src/__tests__/worker-smoke.test.js",
     "migrate:local": "wrangler d1 execute shytalk-db --local --file=migrations/0001_initial_schema.sql",
     "migrate:remote": "wrangler d1 execute shytalk-db --remote --file=migrations/0001_initial_schema.sql"
   },

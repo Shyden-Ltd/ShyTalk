@@ -32,9 +32,6 @@ import com.shyden.shytalk.data.repository.SeatRequestRepository
 import com.shyden.shytalk.data.repository.UserRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -661,26 +658,11 @@ class RoomViewModel(
                 return@launch
             }
 
-            // Check if any other participant (non-owner) has blocked me
+            // Check if any other participant (non-owner) has blocked me — single batch call
             val otherParticipantIds = room.participantIds.filter { it != userId && it != room.ownerId }
-            val uncachedIds = otherParticipantIds.filter { it !in userCache }
-            if (uncachedIds.isNotEmpty()) {
-                coroutineScope {
-                    uncachedIds.map { pid ->
-                        async {
-                            when (val result = userRepository.getUser(pid)) {
-                                is Resource.Success -> pid to result.data
-                                else -> null
-                            }
-                        }
-                    }.awaitAll().filterNotNull().forEach { (id, user) ->
-                        userCache[id] = user
-                    }
-                }
-            }
-            for (participantId in otherParticipantIds) {
-                val participantUser = userCache[participantId] ?: continue
-                if (userId in participantUser.blockedUserIds) {
+            if (otherParticipantIds.isNotEmpty()) {
+                val result = userRepository.checkBlockedBy(otherParticipantIds, userId)
+                if (result is Resource.Success && result.data.isNotEmpty()) {
                     _uiState.update { it.copy(blockWarning = BlockWarning.BlockedByUserInRoom) }
                     return@launch
                 }
@@ -725,11 +707,15 @@ class RoomViewModel(
         }
     }
 
+    private val knownSenderIds = mutableSetOf<String>()
+
     private fun loadMessageSenderUsers(messages: List<Message>) {
         val senderIds = messages.mapTo(mutableSetOf()) { it.senderId }
         senderIds.remove("system")
-        if (senderIds.isEmpty()) return
-        loadUsersForIds(senderIds) { /* accumulateKnownUsers handles the UI update */ }
+        val newIds = senderIds - knownSenderIds
+        if (newIds.isEmpty()) return
+        knownSenderIds.addAll(newIds)
+        loadUsersForIds(newIds) { /* accumulateKnownUsers handles the UI update */ }
     }
 
     private fun observeVoiceState() {

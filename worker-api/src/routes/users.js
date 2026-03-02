@@ -234,6 +234,25 @@ function registerUserRoutes(router) {
     return json(results.map(r => r.blocked_user_id));
   });
 
+  // ── Batch block check ──
+  router.post('/api/users/check-blocks', async (request, env) => {
+    const body = await parseBody(request);
+    const userIds = body?.userIds;
+    const targetUserId = body?.targetUserId;
+    if (!userIds || !Array.isArray(userIds) || !targetUserId) {
+      return jsonError('userIds array and targetUserId required', 400);
+    }
+    const capped = userIds.slice(0, 100);
+    if (capped.length === 0) return json({ blockerIds: [] });
+
+    const placeholders = capped.map(() => '?').join(',');
+    const { results } = await env.DB.prepare(
+      `SELECT user_id FROM user_blocks WHERE user_id IN (${placeholders}) AND blocked_user_id = ?`
+    ).bind(...capped, targetUserId).all();
+
+    return json({ blockerIds: results.map(r => r.user_id) });
+  });
+
   // ── Batch get users ──
   router.post('/api/users/batch', async (request, env) => {
     const body = await parseBody(request);

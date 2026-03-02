@@ -26,6 +26,7 @@ interface UserRepository {
     suspend fun blockUser(userId: String, blockedUserId: String): Resource<Unit>
     suspend fun unblockUser(userId: String, blockedUserId: String): Resource<Unit>
     suspend fun getBlockedUserIds(userId: String): Resource<Set<String>>
+    suspend fun checkBlockedBy(userIds: List<String>, targetUserId: String): Resource<Set<String>>
     suspend fun followUser(currentUserId: String, targetUserId: String): Resource<Unit>
     suspend fun unfollowUser(currentUserId: String, targetUserId: String): Resource<Unit>
     suspend fun getUsers(userIds: List<String>): Resource<List<User>>

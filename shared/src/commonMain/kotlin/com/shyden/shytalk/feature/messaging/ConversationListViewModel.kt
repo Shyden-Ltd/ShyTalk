@@ -112,12 +112,14 @@ class ConversationListViewModel(
             }
         }
 
-        // Show conversations immediately with cached settings (no blocking network calls)
+        // Populate settings cache from inline settings (returned by the list endpoint)
+        for (conversation in conversations) {
+            conversation.settings?.let { settingsCache[conversation.conversationId] = it }
+        }
+
+        // Show conversations with inline settings — no background refresh needed
         val conversationsWithDetails = buildConversationList(conversations, blockedByMe)
         emitSortedConversations(conversationsWithDetails)
-
-        // Then refresh settings in background for accurate unread counts
-        refreshSettingsInBackground(conversations)
     }
 
     private fun buildConversationList(
@@ -184,34 +186,6 @@ class ConversationListViewModel(
                 isLoading = false,
                 totalUnreadCount = totalUnread
             )
-        }
-    }
-
-    private fun refreshSettingsInBackground(conversations: List<Conversation>) {
-        viewModelScope.launch {
-            var anyChanged = false
-            for (conversation in conversations) {
-                val result = pmRepository.getConversationSettings(
-                    conversation.conversationId, currentUserId
-                )
-                if (result is Resource.Success) {
-                    val old = settingsCache[conversation.conversationId]
-                    if (old != result.data) {
-                        settingsCache[conversation.conversationId] = result.data
-                        anyChanged = true
-                    }
-                }
-            }
-            // Re-render once if any settings changed (e.g. unread counts)
-            if (anyChanged) {
-                val currentUser = when (val result = userRepository.getUser(currentUserId)) {
-                    is Resource.Success -> result.data
-                    else -> null
-                }
-                val blockedByMe = currentUser?.blockedUserIds ?: emptySet()
-                val refreshed = buildConversationList(conversations, blockedByMe)
-                emitSortedConversations(refreshed)
-            }
         }
     }
 

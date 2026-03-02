@@ -323,7 +323,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `init - getUser error defaults hasDOB to false`() = runTest {
+    fun `init - getUser error sets isBackendUnreachable`() = runTest {
         every { authRepository.isAuthenticated } returns true
         every { authRepository.currentUserId } returns userId
         coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(userId)
@@ -333,8 +333,8 @@ class AuthViewModelTest {
         val vm = createViewModel()
         advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.hasProfile)
-        assertFalse(vm.uiState.value.hasDOB)
+        assertTrue(vm.uiState.value.isBackendUnreachable)
+        assertFalse(vm.uiState.value.isLoading)
     }
 
     // ===== Suspension =====
@@ -577,7 +577,7 @@ class AuthViewModelTest {
     // ===== userExists error =====
 
     @Test
-    fun `signInWithGoogle - userExists error defaults to hasProfile false`() = runTest {
+    fun `signInWithGoogle - userExists error sets isBackendUnreachable`() = runTest {
         every { authRepository.isAuthenticated } returns false
         every { authRepository.currentUserId } returns null
         coEvery { authRepository.signInWithGoogleIdToken("token") } returns Resource.Success(userId)
@@ -590,8 +590,7 @@ class AuthViewModelTest {
         advanceUntilIdle()
 
         val state = vm.uiState.value
-        assertTrue(state.isAuthenticated)
-        assertFalse(state.hasProfile)
+        assertTrue(state.isBackendUnreachable)
         assertFalse(state.isLoading)
     }
 

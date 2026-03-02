@@ -52,7 +52,7 @@ class PrivateMessageRepositoryImpl(
                 conversationCache = conversations
                 emit(conversations)
             } catch (_: Exception) { }
-            delay(5_000)
+            delay(60_000)
         }
     }.distinctUntilChanged()
 
@@ -83,7 +83,7 @@ class PrivateMessageRepositoryImpl(
                 val json = api.get("/api/conversations/$conversationId/settings")
                 emit(ConversationSettings.fromMap(json.toMap(), userId))
             } catch (_: Exception) { }
-            delay(10_000)
+            delay(120_000)
         }
     }.distinctUntilChanged()
 
@@ -101,8 +101,8 @@ class PrivateMessageRepositoryImpl(
                 emit(messages)
             } catch (_: Exception) { }
             // WebSocket handles the fast path (instant new_message events);
-            // this is now just a safety-net poll
-            delay(30_000)
+            // this is just a safety-net poll
+            delay(60_000)
         }
     }.distinctUntilChanged()
 

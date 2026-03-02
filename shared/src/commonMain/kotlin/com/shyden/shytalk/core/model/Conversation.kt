@@ -47,7 +47,8 @@ data class Conversation(
     val isClosed: Boolean = false,
     val permissions: GroupPermissions = GroupPermissions(),
     val systemMessageConfig: SystemMessageConfig = SystemMessageConfig(),
-    val modNotifyMode: String = "ALL_ADMINS"
+    val modNotifyMode: String = "ALL_ADMINS",
+    val settings: ConversationSettings? = null
 ) {
     val isOneOnOne: Boolean get() = !isGroup
 
@@ -121,7 +122,10 @@ data class Conversation(
             systemMessageConfig = (map["systemMessageConfig"] as? Map<String, Any?>)?.let {
                 SystemMessageConfig.fromMap(it)
             } ?: SystemMessageConfig(),
-            modNotifyMode = map["modNotifyMode"] as? String ?: "ALL_ADMINS"
+            modNotifyMode = map["modNotifyMode"] as? String ?: "ALL_ADMINS",
+            settings = (map["settings"] as? Map<String, Any?>)?.let { s ->
+                ConversationSettings.fromMap(s, s["userId"] as? String ?: "")
+            }
         )
     }
 }

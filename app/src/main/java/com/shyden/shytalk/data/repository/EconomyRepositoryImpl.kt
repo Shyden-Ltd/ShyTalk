@@ -26,7 +26,7 @@ class EconomyRepositoryImpl(
                 val json = api.get("/api/economy/balance")
                 emit(json.optLong("coins", 0))
             } catch (_: Exception) { }
-            delay(5_000)
+            delay(60_000)
         }
     }
 

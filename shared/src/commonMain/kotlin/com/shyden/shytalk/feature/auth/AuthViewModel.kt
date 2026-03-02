@@ -21,6 +21,7 @@ data class AuthUiState(
     val hasDOB: Boolean = false,
     val needsLegalAcceptance: Boolean = false,
     val isDeviceLocked: Boolean = false,
+    val isBackendUnreachable: Boolean = false,
     val isSuspended: Boolean = false,
     val suspensionReason: String? = null,
     val suspensionEndDate: Long? = null,
@@ -162,12 +163,7 @@ class AuthViewModel(
                         }
                         else -> {
                             _uiState.update {
-                                it.copy(
-                                    isLoading = false,
-                                    isAuthenticated = true,
-                                    hasProfile = true,
-                                    hasDOB = false
-                                )
+                                it.copy(isLoading = false, isBackendUnreachable = true)
                             }
                         }
                     }
@@ -184,10 +180,18 @@ class AuthViewModel(
             }
             is Resource.Error -> {
                 _uiState.update {
-                    it.copy(isLoading = false, isAuthenticated = true, hasProfile = false)
+                    it.copy(isLoading = false, isBackendUnreachable = true)
                 }
             }
             is Resource.Loading -> {}
+        }
+    }
+
+    fun retryConnection() {
+        val userId = authRepository.currentUserId ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, isBackendUnreachable = false) }
+            resolveProfileState(userId)
         }
     }
 

@@ -102,14 +102,14 @@ class ConversationListViewModelTest {
         coEvery { userRepository.getUsers(listOf("other-user")) } returns Resource.Success(listOf(otherUser))
 
         val settings = TestData.createTestConversationSettings(userId = currentUserId, unreadCount = 3)
-        coEvery { pmRepository.getConversationSettings(any(), currentUserId) } returns Resource.Success(settings)
 
         val vm = createViewModel()
         advanceUntilIdle()
 
         val conv = TestData.createTestConversation(
             conversationId = "conv-1",
-            participantIds = listOf(currentUserId, "other-user")
+            participantIds = listOf(currentUserId, "other-user"),
+            settings = settings
         )
         conversationsFlow.emit(listOf(conv))
         advanceUntilIdle()
@@ -172,7 +172,6 @@ class ConversationListViewModelTest {
             isHidden = true,
             hiddenAt = 2_000_000_000L
         )
-        coEvery { pmRepository.getConversationSettings(any(), currentUserId) } returns Resource.Success(settings)
 
         val vm = createViewModel()
         advanceUntilIdle()
@@ -180,7 +179,8 @@ class ConversationListViewModelTest {
         val conv = TestData.createTestConversation(
             conversationId = "conv-hidden",
             participantIds = listOf(currentUserId, "other-user"),
-            lastMessageAt = 1_000_000_000L // before hiddenAt
+            lastMessageAt = 1_000_000_000L, // before hiddenAt
+            settings = settings
         )
         conversationsFlow.emit(listOf(conv))
         advanceUntilIdle()
@@ -198,7 +198,6 @@ class ConversationListViewModelTest {
             isHidden = true,
             hiddenAt = 1_000_000_000L
         )
-        coEvery { pmRepository.getConversationSettings(any(), currentUserId) } returns Resource.Success(settings)
 
         val vm = createViewModel()
         advanceUntilIdle()
@@ -206,7 +205,8 @@ class ConversationListViewModelTest {
         val conv = TestData.createTestConversation(
             conversationId = "conv-unhidden",
             participantIds = listOf(currentUserId, "other-user"),
-            lastMessageAt = 2_000_000_000L // after hiddenAt
+            lastMessageAt = 2_000_000_000L, // after hiddenAt
+            settings = settings
         )
         conversationsFlow.emit(listOf(conv))
         advanceUntilIdle()
@@ -225,21 +225,20 @@ class ConversationListViewModelTest {
         val pinnedSettings = TestData.createTestConversationSettings(userId = currentUserId, isPinned = true)
         val normalSettings = TestData.createTestConversationSettings(userId = currentUserId, isPinned = false)
 
-        coEvery { pmRepository.getConversationSettings("conv-normal", currentUserId) } returns Resource.Success(normalSettings)
-        coEvery { pmRepository.getConversationSettings("conv-pinned", currentUserId) } returns Resource.Success(pinnedSettings)
-
         val vm = createViewModel()
         advanceUntilIdle()
 
         val convNormal = TestData.createTestConversation(
             conversationId = "conv-normal",
             participantIds = listOf(currentUserId, "user-a"),
-            lastMessageAt = 2_000_000_000L
+            lastMessageAt = 2_000_000_000L,
+            settings = normalSettings
         )
         val convPinned = TestData.createTestConversation(
             conversationId = "conv-pinned",
             participantIds = listOf(currentUserId, "user-b"),
-            lastMessageAt = 1_000_000_000L
+            lastMessageAt = 1_000_000_000L,
+            settings = pinnedSettings
         )
         conversationsFlow.emit(listOf(convNormal, convPinned))
         advanceUntilIdle()
@@ -339,15 +338,17 @@ class ConversationListViewModelTest {
     fun `pinConversation toggles pin state`() = runTest {
         val user = TestData.createTestUser(uid = "other")
         coEvery { userRepository.getUsers(any()) } returns Resource.Success(listOf(user))
-        coEvery { pmRepository.getConversationSettings(any(), currentUserId) } returns
-                Resource.Success(TestData.createTestConversationSettings(userId = currentUserId, isPinned = false))
         coEvery { pmRepository.pinConversation(any(), any(), any()) } returns Resource.Success(Unit)
 
         val vm = createViewModel()
         advanceUntilIdle()
 
         conversationsFlow.emit(listOf(
-            TestData.createTestConversation(conversationId = "conv-1", participantIds = listOf(currentUserId, "other"))
+            TestData.createTestConversation(
+                conversationId = "conv-1",
+                participantIds = listOf(currentUserId, "other"),
+                settings = TestData.createTestConversationSettings(userId = currentUserId, isPinned = false)
+            )
         ))
         advanceUntilIdle()
 
@@ -369,19 +370,18 @@ class ConversationListViewModelTest {
         val mutedSettings = TestData.createTestConversationSettings(userId = currentUserId, isMuted = true, unreadCount = 5)
         val normalSettings = TestData.createTestConversationSettings(userId = currentUserId, isMuted = false, unreadCount = 3)
 
-        coEvery { pmRepository.getConversationSettings("conv-muted", currentUserId) } returns Resource.Success(mutedSettings)
-        coEvery { pmRepository.getConversationSettings("conv-normal", currentUserId) } returns Resource.Success(normalSettings)
-
         val vm = createViewModel()
         advanceUntilIdle()
 
         val convMuted = TestData.createTestConversation(
             conversationId = "conv-muted",
-            participantIds = listOf(currentUserId, "user-a")
+            participantIds = listOf(currentUserId, "user-a"),
+            settings = mutedSettings
         )
         val convNormal = TestData.createTestConversation(
             conversationId = "conv-normal",
-            participantIds = listOf(currentUserId, "user-b")
+            participantIds = listOf(currentUserId, "user-b"),
+            settings = normalSettings
         )
         conversationsFlow.emit(listOf(convMuted, convNormal))
         advanceUntilIdle()
@@ -473,14 +473,14 @@ class ConversationListViewModelTest {
         coEvery { userRepository.getUsers(listOf("other-user")) } returns Resource.Success(listOf(otherUser))
 
         val settings = TestData.createTestConversationSettings(userId = currentUserId, unreadCount = 5)
-        coEvery { pmRepository.getConversationSettings("conv-1", currentUserId) } returns Resource.Success(settings)
 
         val vm = createViewModel()
         advanceUntilIdle()
 
         val conv = TestData.createTestConversation(
             conversationId = "conv-1",
-            participantIds = listOf(currentUserId, "other-user")
+            participantIds = listOf(currentUserId, "other-user"),
+            settings = settings
         )
         conversationsFlow.emit(listOf(conv))
         advanceUntilIdle()
@@ -504,19 +504,18 @@ class ConversationListViewModelTest {
         val settings1 = TestData.createTestConversationSettings(userId = currentUserId, unreadCount = 5)
         val settings2 = TestData.createTestConversationSettings(userId = currentUserId, unreadCount = 3)
 
-        coEvery { pmRepository.getConversationSettings("conv-1", currentUserId) } returns Resource.Success(settings1)
-        coEvery { pmRepository.getConversationSettings("conv-2", currentUserId) } returns Resource.Success(settings2)
-
         val vm = createViewModel()
         advanceUntilIdle()
 
         val conv1 = TestData.createTestConversation(
             conversationId = "conv-1",
-            participantIds = listOf(currentUserId, "user-a")
+            participantIds = listOf(currentUserId, "user-a"),
+            settings = settings1
         )
         val conv2 = TestData.createTestConversation(
             conversationId = "conv-2",
-            participantIds = listOf(currentUserId, "user-b")
+            participantIds = listOf(currentUserId, "user-b"),
+            settings = settings2
         )
         conversationsFlow.emit(listOf(conv1, conv2))
         advanceUntilIdle()
@@ -539,19 +538,18 @@ class ConversationListViewModelTest {
         val mutedSettings = TestData.createTestConversationSettings(userId = currentUserId, isMuted = true)
         val normalSettings = TestData.createTestConversationSettings(userId = currentUserId, isMuted = false)
 
-        coEvery { pmRepository.getConversationSettings("conv-muted", currentUserId) } returns Resource.Success(mutedSettings)
-        coEvery { pmRepository.getConversationSettings("conv-normal", currentUserId) } returns Resource.Success(normalSettings)
-
         val vm = createViewModel()
         advanceUntilIdle()
 
         val convMuted = TestData.createTestConversation(
             conversationId = "conv-muted",
-            participantIds = listOf(currentUserId, "user-a")
+            participantIds = listOf(currentUserId, "user-a"),
+            settings = mutedSettings
         )
         val convNormal = TestData.createTestConversation(
             conversationId = "conv-normal",
-            participantIds = listOf(currentUserId, "user-b")
+            participantIds = listOf(currentUserId, "user-b"),
+            settings = normalSettings
         )
         conversationsFlow.emit(listOf(convMuted, convNormal))
         advanceUntilIdle()
@@ -591,27 +589,26 @@ class ConversationListViewModelTest {
         val pinnedSettings = TestData.createTestConversationSettings(userId = currentUserId, isPinned = true)
         val normalSettings = TestData.createTestConversationSettings(userId = currentUserId, isPinned = false)
 
-        coEvery { pmRepository.getConversationSettings("conv-pinned-1", currentUserId) } returns Resource.Success(pinnedSettings)
-        coEvery { pmRepository.getConversationSettings("conv-pinned-2", currentUserId) } returns Resource.Success(pinnedSettings)
-        coEvery { pmRepository.getConversationSettings("conv-normal", currentUserId) } returns Resource.Success(normalSettings)
-
         val vm = createViewModel()
         advanceUntilIdle()
 
         val convNormal = TestData.createTestConversation(
             conversationId = "conv-normal",
             participantIds = listOf(currentUserId, "user-a"),
-            lastMessageAt = 3_000_000_000L // most recent but not pinned
+            lastMessageAt = 3_000_000_000L, // most recent but not pinned
+            settings = normalSettings
         )
         val convPinned1 = TestData.createTestConversation(
             conversationId = "conv-pinned-1",
             participantIds = listOf(currentUserId, "user-b"),
-            lastMessageAt = 1_000_000_000L
+            lastMessageAt = 1_000_000_000L,
+            settings = pinnedSettings
         )
         val convPinned2 = TestData.createTestConversation(
             conversationId = "conv-pinned-2",
             participantIds = listOf(currentUserId, "user-c"),
-            lastMessageAt = 2_000_000_000L
+            lastMessageAt = 2_000_000_000L,
+            settings = pinnedSettings
         )
         conversationsFlow.emit(listOf(convNormal, convPinned1, convPinned2))
         advanceUntilIdle()

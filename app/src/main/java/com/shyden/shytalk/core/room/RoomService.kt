@@ -75,18 +75,15 @@ class RoomService : Service() {
                 startActivity(intent)
             },
             onBubbleDismissed = {
-                if (activeRoomManager.isAppInForeground) {
-                    // App is open — ask for confirmation via MainActivity dialog
-                    val confirmIntent = Intent(this, MainActivity::class.java).apply {
-                        action = "CONFIRM_LEAVE_ROOM"
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                                Intent.FLAG_ACTIVITY_SINGLE_TOP
-                    }
-                    startActivity(confirmIntent)
-                } else {
-                    // App in background — leave/close immediately
-                    performDismiss()
+                // Always ask for confirmation — chathead overlay is still visible,
+                // so SYSTEM_ALERT_WINDOW exemption allows starting the Activity
+                // even when the app is in the background.
+                val confirmIntent = Intent(this, MainActivity::class.java).apply {
+                    action = "CONFIRM_LEAVE_ROOM"
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                            Intent.FLAG_ACTIVITY_SINGLE_TOP
                 }
+                startActivity(confirmIntent)
             }
         )
     }
@@ -149,16 +146,8 @@ class RoomService : Service() {
                 Log.e(TAG, "performDismiss: error during close/leave", e)
             }
 
-            // Hide chathead after API call completes
+            // Hide chathead and stop service
             chatHeadManager?.hide()
-            if (!activeRoomManager.isAppInForeground) {
-                val finishIntent = Intent(this@RoomService, MainActivity::class.java).apply {
-                    action = "FINISH_APP"
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                            Intent.FLAG_ACTIVITY_CLEAR_TOP
-                }
-                startActivity(finishIntent)
-            }
             stopSelf()
         }
     }

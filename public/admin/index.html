@@ -3221,8 +3221,7 @@
       projectId: "shytalk-7ba69"
     };
 
-    // UPDATE THIS after first deploy with the actual Cloud Function URL
-    const API_BASE = "https://adminapi-4luvb5abra-as.a.run.app";
+    const API_BASE = "https://shytalk-api.shyden1988uk.workers.dev";
 
     const app = initializeApp(FIREBASE_CONFIG);
     const auth = getAuth(app);
@@ -3391,9 +3390,14 @@
       const token = await currentUser.getIdToken();
       const opts = {
         method,
-        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: { "Authorization": `Bearer ${token}` },
       };
-      if (body) opts.body = JSON.stringify(body);
+      if (body && !(body instanceof FormData)) {
+        opts.headers["Content-Type"] = "application/json";
+        opts.body = JSON.stringify(body);
+      } else if (body instanceof FormData) {
+        opts.body = body;
+      }
       const res = await fetch(`${API_BASE}${path}`, opts);
       const contentType = res.headers.get("content-type") || "";
       if (!contentType.includes("application/json")) {
@@ -7072,35 +7076,12 @@
     // BANNERS MANAGEMENT
     // ══════════════════════════════════════════════════════════════
 
-    const WORKER_API_BASE = "https://shytalk-api.shyden1988uk.workers.dev";
     let bannersData = [];
     let editingBannerId = null;
 
-    async function workerApiCall(method, path, body) {
-      const token = await currentUser.getIdToken();
-      const opts = {
-        method,
-        headers: { "Authorization": `Bearer ${token}` },
-      };
-      if (body && !(body instanceof FormData)) {
-        opts.headers["Content-Type"] = "application/json";
-        opts.body = JSON.stringify(body);
-      } else if (body instanceof FormData) {
-        opts.body = body;
-      }
-      const res = await fetch(`${WORKER_API_BASE}${path}`, opts);
-      const contentType = res.headers.get("content-type") || "";
-      if (!contentType.includes("application/json")) {
-        throw new Error(`HTTP ${res.status}: server returned non-JSON response`);
-      }
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      return data;
-    }
-
     async function loadBanners() {
       try {
-        bannersData = await workerApiCall("GET", "/api/admin/banners");
+        bannersData = await apiCall("GET", "/api/admin/banners");
         renderBannersList();
       } catch (err) {
         showToast("Failed to load banners: " + err.message, "error");
@@ -7202,7 +7183,7 @@
         deleteBtn.addEventListener("click", async () => {
           if (!confirm("Delete this banner? This cannot be undone.")) return;
           try {
-            await workerApiCall("DELETE", `/api/admin/banners/${b.id}`);
+            await apiCall("DELETE", `/api/admin/banners/${b.id}`);
             showToast("Banner deleted");
             await loadBanners();
           } catch (err) {
@@ -7254,7 +7235,7 @@
           renderBannersList();
 
           try {
-            await workerApiCall("PUT", "/api/admin/banners/reorder", reorderPayload);
+            await apiCall("PUT", "/api/admin/banners/reorder", reorderPayload);
             showToast("Banner order updated");
           } catch (err) {
             showToast("Reorder failed: " + err.message, "error");
@@ -7361,7 +7342,7 @@
         if (bannerFileInput.files.length > 0) {
           const formData = new FormData();
           formData.append("file", bannerFileInput.files[0]);
-          const uploadResult = await workerApiCall("POST", "/api/admin/banners/upload", formData);
+          const uploadResult = await apiCall("POST", "/api/admin/banners/upload", formData);
           imageUrl = uploadResult.image_url;
         }
 
@@ -7386,10 +7367,10 @@
         };
 
         if (editingBannerId) {
-          await workerApiCall("PUT", `/api/admin/banners/${editingBannerId}`, payload);
+          await apiCall("PUT", `/api/admin/banners/${editingBannerId}`, payload);
           showToast("Banner updated");
         } else {
-          await workerApiCall("POST", "/api/admin/banners", payload);
+          await apiCall("POST", "/api/admin/banners", payload);
           showToast("Banner created");
         }
 
@@ -7412,7 +7393,7 @@
 
     async function loadFunFacts() {
       try {
-        funFactsData = await workerApiCall("GET", "/api/admin/fun-facts");
+        funFactsData = await apiCall("GET", "/api/admin/fun-facts");
         renderFunFactsList();
       } catch (err) {
         showToast("Failed to load fun facts: " + err.message, "error");
@@ -7494,7 +7475,7 @@
         deleteBtn.addEventListener("click", async () => {
           if (!confirm("Delete this fun fact? This cannot be undone.")) return;
           try {
-            await workerApiCall("DELETE", `/api/admin/fun-facts/${f.id}`);
+            await apiCall("DELETE", `/api/admin/fun-facts/${f.id}`);
             showToast("Fun fact deleted");
             await loadFunFacts();
           } catch (err) {
@@ -7557,10 +7538,10 @@
         };
 
         if (editingFunFactId) {
-          await workerApiCall("PUT", `/api/admin/fun-facts/${editingFunFactId}`, payload);
+          await apiCall("PUT", `/api/admin/fun-facts/${editingFunFactId}`, payload);
           showToast("Fun fact updated");
         } else {
-          await workerApiCall("POST", "/api/admin/fun-facts", payload);
+          await apiCall("POST", "/api/admin/fun-facts", payload);
           showToast("Fun fact created");
         }
 

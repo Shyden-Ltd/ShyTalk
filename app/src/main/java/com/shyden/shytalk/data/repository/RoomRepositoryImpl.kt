@@ -49,13 +49,13 @@ class RoomRepositoryImpl(
                 }
                 emit(rooms)
             } catch (_: Exception) { }
-            delay(5_000)
+            delay(60_000)
         }
     }.distinctUntilChanged()
 
     override fun getRoomFlow(roomId: String): Flow<ChatRoom?> = merge(
-        // Slow fallback poll (10s)
-        flow { while (true) { emit(Unit); delay(10_000) } },
+        // Slow fallback poll — WebSocket handles real-time updates
+        flow { while (true) { emit(Unit); delay(120_000) } },
         // Immediate refetch on room events
         presenceService.roomEvents
             .filter { it is RoomEvent.RoomUpdated || it is RoomEvent.RoomClosed }
