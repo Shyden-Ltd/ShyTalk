@@ -7,6 +7,6 @@ interface PresenceService {
     fun removePresence()
     fun observeRoomPresence(roomId: String): Flow<Set<String>>
 
-    /** Events pushed from the RoomDurableObject via WebSocket. */
+    /** Room events observed via Firebase RTDB listeners. */
     val roomEvents: Flow<RoomEvent>
 }

@@ -3,8 +3,8 @@ package com.shyden.shytalk.data.remote
 import kotlinx.coroutines.flow.Flow
 
 /**
- * WebSocket service for real-time conversation events.
- * Connects to the ConversationDurableObject to receive
+ * Service for real-time conversation events.
+ * Implemented via Firebase RTDB listeners for
  * instant message notifications and typing indicators.
  */
 interface ConversationWebSocketService {

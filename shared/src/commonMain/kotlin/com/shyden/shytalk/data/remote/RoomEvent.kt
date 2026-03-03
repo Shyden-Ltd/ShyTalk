@@ -1,6 +1,6 @@
 package com.shyden.shytalk.data.remote
 
-/** Events pushed from the RoomDurableObject via WebSocket. */
+/** Room events observed via Firebase RTDB listeners. */
 sealed class RoomEvent {
     data object RoomUpdated : RoomEvent()
     data object NewMessage : RoomEvent()

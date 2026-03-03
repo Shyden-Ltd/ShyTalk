@@ -17,7 +17,6 @@ local.properties
 /keystore.jks
 /play-service-account.json
 shytalk-7ba69-firebase-adminsdk-*.json
-functions-archive/node_modules/
 worker/node_modules/
 worker/.wrangler/
 worker-api/node_modules/

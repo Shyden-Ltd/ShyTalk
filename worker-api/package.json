@@ -13,7 +13,6 @@
     "migrate:remote": "wrangler d1 execute shytalk-db --remote --file=migrations/0001_initial_schema.sql"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.0.0",
     "livekit-server-sdk": "^2.15.0"
   },
   "devDependencies": {
