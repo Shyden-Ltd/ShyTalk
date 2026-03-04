@@ -1,0 +1,25 @@
+name: iOS Framework Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-ios-framework:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Compile shared framework for iOS
+        run: ./gradlew :shared:compileKotlinIosArm64 :shared:compileKotlinIosSimulatorArm64
