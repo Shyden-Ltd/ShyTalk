@@ -25,6 +25,8 @@ data class ConversationSettings(
     )
 
     companion object {
+        fun default(userId: String) = ConversationSettings(userId = userId)
+
         fun fromMap(map: Map<String, Any?>, userId: String): ConversationSettings = ConversationSettings(
             userId = userId,
             isMuted = map["isMuted"].asBool(),

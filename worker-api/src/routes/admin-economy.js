@@ -15,6 +15,16 @@
 
 const { json, jsonError, generateId, now, parseBody } = require('../utils');
 const { requireAdmin } = require('../middleware/auth');
+const {
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  queryCollection,
+  fieldFilter,
+  andFilter,
+  orderBy,
+} = require('../utils/firestore');
 
 function registerAdminEconomyRoutes(router) {
 
@@ -23,15 +33,21 @@ function registerAdminEconomyRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    const user = await env.DB.prepare(`
-      SELECT shy_coins, shy_beans, luck_score, pity_counter,
-             is_super_shy, super_shy_expiry, super_shy_tier,
-             login_streak, last_login_date, guaranteed_next_pull_gift_id
-      FROM users WHERE uid = ?
-    `).bind(params.uid).first();
-
+    const user = await getDoc(env, `users/${params.uid}`);
     if (!user) return jsonError('User not found', 404);
-    return json(user);
+
+    return json({
+      shyCoins:                user.shyCoins                ?? user.shy_coins                ?? 0,
+      shyBeans:                user.shyBeans                ?? user.shy_beans                ?? 0,
+      luckScore:               user.luckScore               ?? user.luck_score               ?? 0,
+      pityCounter:             user.pityCounter             ?? user.pity_counter             ?? 0,
+      isSuperShy:              user.isSuperShy              ?? user.is_super_shy             ?? false,
+      superShyExpiry:          user.superShyExpiry          ?? user.super_shy_expiry         ?? null,
+      superShyTier:            user.superShyTier            ?? user.super_shy_tier           ?? null,
+      loginStreak:             user.loginStreak             ?? user.login_streak             ?? 0,
+      lastLoginDate:           user.lastLoginDate           ?? user.last_login_date          ?? null,
+      guaranteedNextPullGiftId: user.guaranteedNextPullGiftId ?? user.guaranteed_next_pull_gift_id ?? null,
+    });
   });
 
   // ── Adjust balance (coins or beans) ──
@@ -50,31 +66,37 @@ function registerAdminEconomyRoutes(router) {
       return jsonError('currency must be "coins" or "beans"', 400);
     }
 
-    const column = currency === 'coins' ? 'shy_coins' : 'shy_beans';
-    const user = await env.DB.prepare(
-      `SELECT ${column} FROM users WHERE uid = ?`
-    ).bind(params.uid).first();
+    const field = currency === 'coins' ? 'shyCoins' : 'shyBeans';
+    const user = await getDoc(env, `users/${params.uid}`);
     if (!user) return jsonError('User not found', 404);
 
-    const currentBalance = user[column] || 0;
+    const currentBalance = user[field] ?? (currency === 'coins' ? (user.shy_coins ?? 0) : (user.shy_beans ?? 0));
     const newBalance = Math.max(0, currentBalance + amount);
-
     const timestamp = now();
-    await env.DB.batch([
-      env.DB.prepare(`UPDATE users SET ${column} = ? WHERE uid = ?`)
-        .bind(newBalance, params.uid),
+    const txId = generateId();
+    const logId = generateId();
 
-      env.DB.prepare(`
-        INSERT INTO transactions (id, user_id, type, amount, currency, balance_after, details, timestamp)
-        VALUES (?, ?, 'ADMIN_ADJUSTMENT', ?, ?, ?, ?, ?)
-      `).bind(generateId(), params.uid, amount, currency.toUpperCase(), newBalance,
-        reason || `Admin adjustment: ${amount > 0 ? '+' : ''}${amount} ${currency}`, timestamp),
+    await Promise.all([
+      updateDoc(env, `users/${params.uid}`, { [field]: newBalance }),
 
-      env.DB.prepare(`
-        INSERT INTO admin_audit_log (id, admin_id, action, target_user_id, details, created_at)
-        VALUES (?, ?, 'ADJUST_BALANCE', ?, ?, ?)
-      `).bind(generateId(), request.auth.uid, params.uid,
-        `${amount > 0 ? '+' : ''}${amount} ${currency} (${reason || 'no reason'})`, timestamp),
+      setDoc(env, `users/${params.uid}/transactions/${txId}`, {
+        id:           txId,
+        userId:       params.uid,
+        type:         'ADMIN_ADJUSTMENT',
+        amount:       amount,
+        currency:     currency.toUpperCase(),
+        balanceAfter: newBalance,
+        details:      reason || `Admin adjustment: ${amount > 0 ? '+' : ''}${amount} ${currency}`,
+        timestamp:    timestamp,
+      }),
+
+      setDoc(env, `adminAuditLog/${logId}`, {
+        adminId:      request.auth.uid,
+        action:       'ADJUST_BALANCE',
+        targetUserId: params.uid,
+        details:      `${amount > 0 ? '+' : ''}${amount} ${currency} (${reason || 'no reason'})`,
+        createdAt:    timestamp,
+      }),
     ]);
 
     return json({ success: true, newBalance, currency });
@@ -92,27 +114,26 @@ function registerAdminEconomyRoutes(router) {
     }
 
     const timestamp = now();
-    const stmts = [];
+    const backpackPath = `users/${params.uid}/backpack/${body.giftId}`;
 
     if (body.quantity === 0) {
-      stmts.push(env.DB.prepare(
-        'DELETE FROM backpack_items WHERE user_id = ? AND gift_id = ?'
-      ).bind(params.uid, body.giftId));
+      await deleteDoc(env, backpackPath);
     } else {
-      stmts.push(env.DB.prepare(`
-        INSERT INTO backpack_items (user_id, gift_id, quantity, last_acquired)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(user_id, gift_id) DO UPDATE SET quantity = ?, last_acquired = ?
-      `).bind(params.uid, body.giftId, body.quantity, timestamp, body.quantity, timestamp));
+      await setDoc(env, backpackPath, {
+        giftId:       body.giftId,
+        quantity:     body.quantity,
+        lastAcquired: timestamp,
+      });
     }
 
-    stmts.push(env.DB.prepare(`
-      INSERT INTO admin_audit_log (id, admin_id, action, target_user_id, details, created_at)
-      VALUES (?, ?, 'SET_BACKPACK', ?, ?, ?)
-    `).bind(generateId(), request.auth.uid, params.uid,
-      `Set ${body.giftId} quantity to ${body.quantity}`, timestamp));
+    await setDoc(env, `adminAuditLog/${generateId()}`, {
+      adminId:      request.auth.uid,
+      action:       'SET_BACKPACK',
+      targetUserId: params.uid,
+      details:      `Set ${body.giftId} quantity to ${body.quantity}`,
+      createdAt:    timestamp,
+    });
 
-    await env.DB.batch(stmts);
     return json({ success: true });
   });
 
@@ -121,12 +142,13 @@ function registerAdminEconomyRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    const user = await env.DB.prepare(
-      'SELECT luck_score, pity_counter FROM users WHERE uid = ?'
-    ).bind(params.uid).first();
+    const user = await getDoc(env, `users/${params.uid}`);
     if (!user) return jsonError('User not found', 404);
 
-    return json({ luckScore: user.luck_score || 0, pityCounter: user.pity_counter || 0 });
+    return json({
+      luckScore:   user.luckScore   ?? user.luck_score   ?? 0,
+      pityCounter: user.pityCounter ?? user.pity_counter ?? 0,
+    });
   });
 
   // ── Update luck/pity ──
@@ -137,32 +159,27 @@ function registerAdminEconomyRoutes(router) {
     const body = await parseBody(request);
     if (!body) return jsonError('Invalid JSON body', 400);
 
-    const updates = [];
-    const binds = [];
-
+    const updates = {};
     if (body.luckScore != null) {
-      const luck = Math.max(0, Math.min(100, parseInt(body.luckScore)));
-      updates.push('luck_score = ?');
-      binds.push(luck);
+      updates.luckScore = Math.max(0, Math.min(100, parseInt(body.luckScore)));
     }
     if (body.pityCounter != null) {
-      const pity = Math.max(0, parseInt(body.pityCounter));
-      updates.push('pity_counter = ?');
-      binds.push(pity);
+      updates.pityCounter = Math.max(0, parseInt(body.pityCounter));
     }
 
-    if (updates.length === 0) return jsonError('No fields to update', 400);
+    if (Object.keys(updates).length === 0) return jsonError('No fields to update', 400);
 
-    binds.push(params.uid);
-    await env.DB.prepare(
-      `UPDATE users SET ${updates.join(', ')} WHERE uid = ?`
-    ).bind(...binds).run();
+    await Promise.all([
+      updateDoc(env, `users/${params.uid}`, updates),
 
-    await env.DB.prepare(`
-      INSERT INTO admin_audit_log (id, admin_id, action, target_user_id, details, created_at)
-      VALUES (?, ?, 'SET_LUCK', ?, ?, ?)
-    `).bind(generateId(), request.auth.uid, params.uid,
-      JSON.stringify(body), now()).run();
+      setDoc(env, `adminAuditLog/${generateId()}`, {
+        adminId:      request.auth.uid,
+        action:       'SET_LUCK',
+        targetUserId: params.uid,
+        details:      JSON.stringify(body),
+        createdAt:    now(),
+      }),
+    ]);
 
     return json({ success: true });
   });
@@ -176,18 +193,21 @@ function registerAdminEconomyRoutes(router) {
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 200);
     const filterType = url.searchParams.get('type');
 
-    let query = 'SELECT * FROM transactions WHERE user_id = ?';
-    const binds = [params.uid];
+    const structuredQuery = {
+      orderBy: [orderBy('timestamp', 'DESCENDING')],
+      limit,
+    };
 
     if (filterType) {
-      query += ' AND type = ?';
-      binds.push(filterType);
+      structuredQuery.where = fieldFilter('type', 'EQUAL', filterType);
     }
 
-    query += ' ORDER BY timestamp DESC LIMIT ?';
-    binds.push(limit);
+    const results = await queryCollection(
+      env,
+      `users/${params.uid}/transactions`,
+      structuredQuery
+    );
 
-    const { results } = await env.DB.prepare(query).bind(...binds).all();
     return json(results);
   });
 
@@ -196,22 +216,27 @@ function registerAdminEconomyRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    const user = await env.DB.prepare(
-      'SELECT guaranteed_next_pull_gift_id FROM users WHERE uid = ?'
-    ).bind(params.uid).first();
+    const user = await getDoc(env, `users/${params.uid}`);
     if (!user) return jsonError('User not found', 404);
 
+    const guaranteedGiftId = user.guaranteedNextPullGiftId
+      ?? user.guaranteed_next_pull_gift_id
+      ?? null;
+
     let gift = null;
-    if (user.guaranteed_next_pull_gift_id) {
-      gift = await env.DB.prepare(
-        'SELECT id, name, coin_value, icon_url FROM gifts WHERE id = ?'
-      ).bind(user.guaranteed_next_pull_gift_id).first();
+    if (guaranteedGiftId) {
+      const giftDoc = await getDoc(env, `gifts/${guaranteedGiftId}`);
+      if (giftDoc) {
+        gift = {
+          id:        giftDoc.id,
+          name:      giftDoc.name,
+          coinValue: giftDoc.coinValue ?? giftDoc.coin_value,
+          iconUrl:   giftDoc.iconUrl   ?? giftDoc.icon_url,
+        };
+      }
     }
 
-    return json({
-      guaranteedGiftId: user.guaranteed_next_pull_gift_id,
-      gift,
-    });
+    return json({ guaranteedGiftId, gift });
   });
 
   // ── Gacha guarantee: set ──
@@ -223,18 +248,19 @@ function registerAdminEconomyRoutes(router) {
     if (!body?.giftId) return jsonError('giftId required', 400);
 
     // Verify gift exists
-    const gift = await env.DB.prepare('SELECT id FROM gifts WHERE id = ?')
-      .bind(body.giftId).first();
+    const gift = await getDoc(env, `gifts/${body.giftId}`);
     if (!gift) return jsonError('Gift not found', 404);
 
-    await env.DB.batch([
-      env.DB.prepare('UPDATE users SET guaranteed_next_pull_gift_id = ? WHERE uid = ?')
-        .bind(body.giftId, params.uid),
-      env.DB.prepare(`
-        INSERT INTO admin_audit_log (id, admin_id, action, target_user_id, details, created_at)
-        VALUES (?, ?, 'SET_GUARANTEE', ?, ?, ?)
-      `).bind(generateId(), request.auth.uid, params.uid,
-        `Guaranteed: ${body.giftId}`, now()),
+    await Promise.all([
+      updateDoc(env, `users/${params.uid}`, { guaranteedNextPullGiftId: body.giftId }),
+
+      setDoc(env, `adminAuditLog/${generateId()}`, {
+        adminId:      request.auth.uid,
+        action:       'SET_GUARANTEE',
+        targetUserId: params.uid,
+        details:      `Guaranteed: ${body.giftId}`,
+        createdAt:    now(),
+      }),
     ]);
 
     return json({ success: true });
@@ -245,13 +271,16 @@ function registerAdminEconomyRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    await env.DB.batch([
-      env.DB.prepare('UPDATE users SET guaranteed_next_pull_gift_id = NULL WHERE uid = ?')
-        .bind(params.uid),
-      env.DB.prepare(`
-        INSERT INTO admin_audit_log (id, admin_id, action, target_user_id, details, created_at)
-        VALUES (?, ?, 'REVOKE_GUARANTEE', ?, NULL, ?)
-      `).bind(generateId(), request.auth.uid, params.uid, now()),
+    await Promise.all([
+      updateDoc(env, `users/${params.uid}`, { guaranteedNextPullGiftId: null }),
+
+      setDoc(env, `adminAuditLog/${generateId()}`, {
+        adminId:      request.auth.uid,
+        action:       'REVOKE_GUARANTEE',
+        targetUserId: params.uid,
+        details:      null,
+        createdAt:    now(),
+      }),
     ]);
 
     return json({ success: true });

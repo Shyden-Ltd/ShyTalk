@@ -1,100 +1,122 @@
 package com.shyden.shytalk.data.repository
 
+import com.google.firebase.firestore.FirebaseFirestore
 import com.shyden.shytalk.core.model.BackpackItem
 import com.shyden.shytalk.core.model.Broadcast
 import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.model.GiftRankEntry
 import com.shyden.shytalk.core.model.GiftSender
 import com.shyden.shytalk.core.model.GiftWallEntry
-import com.shyden.shytalk.core.util.toMap
 import com.shyden.shytalk.data.remote.WorkerApiClient
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
-import org.json.JSONObject
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.tasks.await
 
 class GiftRepositoryImpl(
-    private val api: WorkerApiClient
+    private val api: WorkerApiClient,
+    private val firestore: FirebaseFirestore
 ) : GiftRepository {
 
-    override fun observeGiftCatalog(): Flow<List<Gift>> = flow {
-        val arr = api.getArray("/api/gifts")
-        val gifts = (0 until arr.length()).mapNotNull { i ->
-            val obj = arr.getJSONObject(i)
-            Gift.fromMap(obj.toMap(), obj.getString("id"))
-        }
-        emit(gifts)
-    }
-
-    override fun observeAllGifts(): Flow<List<Gift>> = flow {
-        val arr = api.getArray("/api/gifts/all")
-        val gifts = (0 until arr.length()).mapNotNull { i ->
-            val obj = arr.getJSONObject(i)
-            Gift.fromMap(obj.toMap(), obj.getString("id"))
-        }
-        emit(gifts)
-    }
-
-    override fun observeBackpack(userId: String): Flow<List<BackpackItem>> = flow {
-        val arr = api.getArray("/api/users/$userId/backpack")
-        val items = (0 until arr.length()).mapNotNull { i ->
-            val obj = arr.getJSONObject(i)
-            BackpackItem.fromMap(obj.toMap(), obj.optString("gift_id", ""))
-        }
-        emit(items)
-    }
-
-    override fun observeGiftWall(userId: String): Flow<List<GiftWallEntry>> = flow {
-        val arr = api.getArray("/api/users/$userId/gift-wall")
-        val entries = (0 until arr.length()).mapNotNull { i ->
-            val obj = arr.getJSONObject(i)
-            GiftWallEntry.fromMap(obj.toMap(), obj.optString("gift_id", ""))
-        }
-        emit(entries)
-    }
-
-    override fun observeBroadcasts(): Flow<List<Broadcast>> = flow {
-        // Initial fetch
-        emit(fetchBroadcasts())
-        while (true) {
-            delay(120_000)
-            try {
-                emit(fetchBroadcasts())
-            } catch (_: Exception) {
-                // Silently skip failed polls — UI retains last known state
+    // Gift catalog — real-time from Firestore
+    override fun observeGiftCatalog(): Flow<List<Gift>> = callbackFlow {
+        val listener = firestore.collection("gifts")
+            .whereEqualTo("showInStore", true)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                val gifts = snapshot.documents.mapNotNull { doc ->
+                    val data = doc.data ?: return@mapNotNull null
+                    Gift.fromMap(data, doc.id)
+                }.sortedBy { it.order }
+                trySend(gifts)
             }
-        }
+        awaitClose { listener.remove() }
     }
 
-    private suspend fun fetchBroadcasts(): List<Broadcast> {
-        val arr = api.getArray("/api/broadcasts")
-        return (0 until arr.length()).mapNotNull { i ->
-            val obj = arr.getJSONObject(i)
-            Broadcast.fromMap(obj.toMap(), obj.getString("id"))
-        }
+    // All gifts (admin/gacha) — real-time from Firestore
+    override fun observeAllGifts(): Flow<List<Gift>> = callbackFlow {
+        val listener = firestore.collection("gifts")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                val gifts = snapshot.documents.mapNotNull { doc ->
+                    val data = doc.data ?: return@mapNotNull null
+                    Gift.fromMap(data, doc.id)
+                }.sortedBy { it.order }
+                trySend(gifts)
+            }
+        awaitClose { listener.remove() }
     }
 
+    // Backpack — real-time from Firestore subcollection
+    override fun observeBackpack(userId: String): Flow<List<BackpackItem>> = callbackFlow {
+        val listener = firestore.collection("users/$userId/backpack")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                val items = snapshot.documents.mapNotNull { doc ->
+                    val data = doc.data ?: return@mapNotNull null
+                    BackpackItem.fromMap(data, doc.id)
+                }
+                trySend(items)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    // Gift wall — real-time from Firestore subcollection
+    override fun observeGiftWall(userId: String): Flow<List<GiftWallEntry>> = callbackFlow {
+        val listener = firestore.collection("users/$userId/giftWall")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                val entries = snapshot.documents.mapNotNull { doc ->
+                    val data = doc.data ?: return@mapNotNull null
+                    GiftWallEntry.fromMap(data, doc.id)
+                }
+                trySend(entries)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    // Broadcasts — real-time from Firestore (replaces 120s polling)
+    override fun observeBroadcasts(): Flow<List<Broadcast>> = callbackFlow {
+        val listener = firestore.collection("broadcasts")
+            .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .limit(50)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                val broadcasts = snapshot.documents.mapNotNull { doc ->
+                    val data = doc.data ?: return@mapNotNull null
+                    Broadcast.fromMap(data, doc.id)
+                }
+                trySend(broadcasts)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    // Gift wall senders — from Firestore (embedded in gift wall doc)
     override suspend fun getGiftWallSenders(userId: String, giftId: String): List<GiftSender> {
-        val arr = api.getArray("/api/users/$userId/gift-wall/$giftId/senders")
-        return (0 until arr.length()).map { i ->
-            val obj = arr.getJSONObject(i)
+        val doc = firestore.document("users/$userId/giftWall/$giftId").get().await()
+        val data = doc.data ?: return emptyList()
+        val senders = data["senders"] as? List<*> ?: return emptyList()
+        return senders.mapNotNull { sender ->
+            val map = sender as? Map<*, *> ?: return@mapNotNull null
             GiftSender(
-                userId = obj.optString("sender_id", ""),
-                count = obj.optInt("send_count", 0)
+                userId = map["senderId"] as? String ?: "",
+                count = (map["sendCount"] as? Number)?.toInt() ?: 0
             )
         }
     }
 
+    // Gift ranking — from Firestore
     override suspend fun getGiftRanking(giftId: String): List<GiftRankEntry> {
-        val json = api.get("/api/gift-rankings/$giftId")
-        val rankings = json.optJSONArray("rankings") ?: return emptyList()
-        return (0 until rankings.length()).mapNotNull { i ->
-            val obj = rankings.getJSONObject(i)
+        val doc = firestore.document("giftRankings/$giftId").get().await()
+        val data = doc.data ?: return emptyList()
+        val rankings = data["rankings"] as? List<*> ?: return emptyList()
+        return rankings.mapNotNull { entry ->
+            val map = entry as? Map<*, *> ?: return@mapNotNull null
             GiftRankEntry(
-                userId = obj.optString("userId", ""),
-                count = obj.optInt("count", 0),
-                displayName = obj.optString("displayName", ""),
-                profilePhotoUrl = if (obj.has("profilePhotoUrl") && !obj.isNull("profilePhotoUrl")) obj.getString("profilePhotoUrl") else null
+                userId = map["userId"] as? String ?: "",
+                count = (map["count"] as? Number)?.toInt() ?: 0,
+                displayName = map["displayName"] as? String ?: "",
+                profilePhotoUrl = map["profilePhotoUrl"] as? String
             )
         }
     }

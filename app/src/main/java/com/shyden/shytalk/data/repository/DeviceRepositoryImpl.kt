@@ -1,29 +1,26 @@
 package com.shyden.shytalk.data.repository
 
+import com.google.firebase.firestore.FirebaseFirestore
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
-import com.shyden.shytalk.data.remote.ApiException
-import com.shyden.shytalk.data.remote.WorkerApiClient
-import org.json.JSONObject
+import kotlinx.coroutines.tasks.await
 
 class DeviceRepositoryImpl(
-    private val api: WorkerApiClient
+    private val firestore: FirebaseFirestore
 ) : DeviceRepository {
 
     override suspend fun getDeviceBinding(deviceId: String): Resource<String?> = firebaseCall("Failed to check device binding") {
-        try {
-            val json = api.get("/api/device-bindings/$deviceId")
-            json.optString("userId", null)
-        } catch (e: ApiException) {
-            if (e.statusCode == 404) null else throw e
-        }
+        val doc = firestore.document("deviceBindings/$deviceId").get().await()
+        val data = doc.data ?: return@firebaseCall null
+        data["userId"] as? String
     }
 
     override suspend fun bindDevice(deviceId: String, userId: String): Resource<Unit> = firebaseCall("Failed to bind device") {
-        api.post("/api/device-bindings", JSONObject().apply {
-            put("deviceId", deviceId)
-            put("userId", userId)
-        })
-        Unit
+        firestore.document("deviceBindings/$deviceId").set(
+            mapOf(
+                "userId" to userId,
+                "boundAt" to System.currentTimeMillis()
+            )
+        ).await()
     }
 }

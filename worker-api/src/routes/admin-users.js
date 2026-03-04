@@ -19,6 +19,17 @@ const { json, jsonError, generateId, now, parseBody } = require('../utils');
 const { requireAdmin } = require('../middleware/auth');
 const { sendSystemPm } = require('../utils/system-pm');
 const { computeDisplayScore } = require('../utils/gcs');
+const {
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  queryCollection,
+  batchWrite,
+  batchUpdateOp,
+  fieldFilter,
+  orderBy,
+} = require('../utils/firestore');
 
 function registerAdminUserRoutes(router) {
 
@@ -31,12 +42,13 @@ function registerAdminUserRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    const user = await env.DB.prepare('SELECT * FROM users WHERE uid = ?')
-      .bind(params.uid).first();
+    const user = await getDoc(env, `users/${params.uid}`);
     if (!user) return jsonError('User not found', 404);
 
     // Enrich with GCS display score
-    user.gcs_display_score = computeDisplayScore(user.gcs_score, user.gcs_last_deduction_at);
+    const gcsScore = user.gcsScore ?? user.gcs_score ?? 100;
+    const gcsLastDeductionAt = user.gcsLastDeductionAt ?? user.gcs_last_deduction_at ?? null;
+    user.gcsDisplayScore = computeDisplayScore(gcsScore, gcsLastDeductionAt);
 
     return json(user);
   });
@@ -49,42 +61,42 @@ function registerAdminUserRoutes(router) {
     const body = await parseBody(request);
     if (!body) return jsonError('Invalid JSON body', 400);
 
-    // Admin can update more fields than regular users
+    // Admin can update more fields than regular users — all in camelCase
     const allowedFields = [
-      'display_name', 'description', 'nationality', 'date_of_birth', 'gender',
-      'profile_photo_url', 'avatar_url', 'cover_photo_url', 'user_type',
-      'shy_coins', 'shy_beans', 'luck_score', 'pity_counter',
-      'is_super_shy', 'super_shy_expiry', 'super_shy_tier',
-      'login_streak', 'gcs_score', 'warning_count', 'warning_reason',
-      'has_active_warning', 'pm_privacy', 'accepted_legal_version',
-      'current_room_id',
+      'displayName', 'description', 'nationality', 'dateOfBirth', 'gender',
+      'profilePhotoUrl', 'avatarUrl', 'coverPhotoUrl', 'userType',
+      'shyCoins', 'shyBeans', 'luckScore', 'pityCounter',
+      'isSuperShy', 'superShyExpiry', 'superShyTier',
+      'loginStreak', 'gcsScore', 'warningCount', 'warningReason',
+      'hasActiveWarning', 'pmPrivacy', 'acceptedLegalVersion',
+      'currentRoomId',
     ];
 
     const updates = {};
     for (const key of allowedFields) {
-      // Support both camelCase and snake_case input
-      const snakeKey = key;
-      const camelKey = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-      if (snakeKey in body) updates[snakeKey] = body[snakeKey];
-      else if (camelKey in body) updates[snakeKey] = body[camelKey];
+      if (key in body) {
+        updates[key] = body[key];
+      } else {
+        // Also accept snake_case input and convert to camelCase
+        const snakeKey = key.replace(/[A-Z]/g, c => `_${c.toLowerCase()}`);
+        if (snakeKey in body) updates[key] = body[snakeKey];
+      }
     }
 
     if (Object.keys(updates).length === 0) {
       return jsonError('No valid fields to update', 400);
     }
 
-    const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
-    const values = Object.values(updates);
-
-    await env.DB.prepare(`UPDATE users SET ${setClauses} WHERE uid = ?`)
-      .bind(...values, params.uid).run();
+    await updateDoc(env, `users/${params.uid}`, updates);
 
     // Audit log
-    await env.DB.prepare(`
-      INSERT INTO admin_audit_log (id, admin_id, action, target_user_id, details, created_at)
-      VALUES (?, ?, 'EDIT_USER', ?, ?, ?)
-    `).bind(generateId(), request.auth.uid, params.uid,
-      `Updated fields: ${Object.keys(updates).join(', ')}`, now()).run();
+    await setDoc(env, `adminAuditLog/${generateId()}`, {
+      adminId:      request.auth.uid,
+      action:       'EDIT_USER',
+      targetUserId: params.uid,
+      details:      `Updated fields: ${Object.keys(updates).join(', ')}`,
+      createdAt:    now(),
+    });
 
     return json({ success: true });
   });
@@ -105,37 +117,32 @@ function registerAdminUserRoutes(router) {
     const deduction = severity === 'severe' ? 20 : 10;
     const timestamp = now();
 
-    const user = await env.DB.prepare(
-      'SELECT gcs_score, warning_count, display_name FROM users WHERE uid = ?'
-    ).bind(params.uid).first();
+    const user = await getDoc(env, `users/${params.uid}`);
     if (!user) return jsonError('User not found', 404);
 
-    const newGcs = Math.max(0, (user.gcs_score || 100) - deduction);
-    const newWarningCount = (user.warning_count || 0) + 1;
+    const gcsScore = user.gcsScore ?? user.gcs_score ?? 100;
+    const warningCount = user.warningCount ?? user.warning_count ?? 0;
+    const newGcs = Math.max(0, gcsScore - deduction);
+    const newWarningCount = warningCount + 1;
 
-    const stmts = [
-      // Update user warning fields
-      env.DB.prepare(`
-        UPDATE users SET
-          gcs_score = ?,
-          gcs_last_deduction_at = ?,
-          warning_count = ?,
-          warning_reason = ?,
-          has_active_warning = 1,
-          warning_issued_at = ?
-        WHERE uid = ?
-      `).bind(newGcs, timestamp, newWarningCount, body.reason, timestamp, params.uid),
-
-      // Audit log
-      env.DB.prepare(`
-        INSERT INTO admin_audit_log (id, admin_id, action, target_user_id, details, created_at)
-        VALUES (?, ?, 'WARN', ?, ?, ?)
-      `).bind(generateId(), request.auth.uid, params.uid,
-        `Severity: ${severity}, GCS: ${user.gcs_score || 100} → ${newGcs}, Reason: ${body.reason}`,
-        timestamp),
-    ];
-
-    await env.DB.batch(stmts);
+    await Promise.all([
+      updateDoc(env, `users/${params.uid}`, {
+        gcsScore:           newGcs,
+        gcsLastDeductionAt: timestamp,
+        warningCount:       newWarningCount,
+        warningReason:      body.reason,
+        hasActiveWarning:   true,
+        hasNewWarning:      true,
+        warningIssuedAt:    timestamp,
+      }),
+      setDoc(env, `adminAuditLog/${generateId()}`, {
+        adminId:      request.auth.uid,
+        action:       'WARN',
+        targetUserId: params.uid,
+        details:      `Severity: ${severity}, GCS: ${gcsScore} → ${newGcs}, Reason: ${body.reason}`,
+        createdAt:    timestamp,
+      }),
+    ]);
 
     // Send system PM to warned user (fire-and-forget)
     const ctx = request.ctx;
@@ -162,22 +169,23 @@ function registerAdminUserRoutes(router) {
 
     const timestamp = now();
 
-    await env.DB.batch([
-      env.DB.prepare(`
-        UPDATE users SET
-          gcs_score = 100,
-          gcs_last_deduction_at = NULL,
-          warning_count = 0,
-          has_active_warning = 0,
-          warning_reason = NULL,
-          warning_issued_at = NULL
-        WHERE uid = ?
-      `).bind(params.uid),
-
-      env.DB.prepare(`
-        INSERT INTO admin_audit_log (id, admin_id, action, target_user_id, details, created_at)
-        VALUES (?, ?, 'RESET_GCS', ?, 'GCS reset to 100', ?)
-      `).bind(generateId(), request.auth.uid, params.uid, timestamp),
+    await Promise.all([
+      updateDoc(env, `users/${params.uid}`, {
+        gcsScore:           100,
+        gcsLastDeductionAt: null,
+        warningCount:       0,
+        hasActiveWarning:   false,
+        hasNewWarning:      false,
+        warningReason:      null,
+        warningIssuedAt:    null,
+      }),
+      setDoc(env, `adminAuditLog/${generateId()}`, {
+        adminId:      request.auth.uid,
+        action:       'RESET_GCS',
+        targetUserId: params.uid,
+        details:      'GCS reset to 100',
+        createdAt:    timestamp,
+      }),
     ]);
 
     return json({ success: true });
@@ -194,15 +202,13 @@ function registerAdminUserRoutes(router) {
     const url = new URL(request.url);
     const messageLimit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 200);
 
-    const { results } = await env.DB.prepare(`
-      SELECT * FROM private_messages
-      WHERE conversation_id = ?
-      ORDER BY created_at DESC
-      LIMIT ?
-    `).bind(params.id, messageLimit).all();
+    const messages = await queryCollection(env, `conversations/${params.id}/messages`, {
+      orderBy: [orderBy('createdAt', 'DESCENDING')],
+      limit:   messageLimit,
+    });
 
     // Return chronological order
-    return json(results.reverse());
+    return json(messages.reverse());
   });
 
   // ══════════════════════════════════════════════════════════════
@@ -214,16 +220,22 @@ function registerAdminUserRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    const user = await env.DB.prepare(
-      'SELECT * FROM users WHERE unique_id = ?'
-    ).bind(parseInt(params.id)).first();
+    const uniqueId = parseInt(params.id);
+    const results = await queryCollection(env, 'users', {
+      where: fieldFilter('uniqueId', 'EQUAL', uniqueId),
+      limit: 1,
+    });
+
+    const user = results[0] || null;
     if (!user) return jsonError('User not found', 404);
 
-    user.gcs_display_score = computeDisplayScore(user.gcs_score, user.gcs_last_deduction_at);
+    const gcsScore = user.gcsScore ?? user.gcs_score ?? 100;
+    const gcsLastDeductionAt = user.gcsLastDeductionAt ?? user.gcs_last_deduction_at ?? null;
+    user.gcsDisplayScore = computeDisplayScore(gcsScore, gcsLastDeductionAt);
     return json(user);
   });
 
-  // ── UID ↔ Unique ID resolvers ──
+  // ── UID → Unique ID resolver ──
   router.post('/api/resolve/uids-to-uniqueIds', async (request, env) => {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
@@ -232,16 +244,17 @@ function registerAdminUserRoutes(router) {
     const uids = body?.uids || [];
     if (uids.length === 0) return json({});
 
-    const placeholders = uids.map(() => '?').join(',');
-    const { results } = await env.DB.prepare(
-      `SELECT uid, unique_id FROM users WHERE uid IN (${placeholders})`
-    ).bind(...uids).all();
+    const docs = await Promise.all(uids.map(uid => getDoc(env, `users/${uid}`)));
 
     const map = {};
-    for (const r of results) map[r.uid] = r.unique_id;
+    for (let i = 0; i < uids.length; i++) {
+      const doc = docs[i];
+      if (doc) map[uids[i]] = doc.uniqueId ?? doc.unique_id ?? null;
+    }
     return json(map);
   });
 
+  // ── Unique ID → UID resolver ──
   router.post('/api/resolve/uniqueIds-to-uids', async (request, env) => {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
@@ -250,17 +263,25 @@ function registerAdminUserRoutes(router) {
     const uniqueIds = body?.uniqueIds || [];
     if (uniqueIds.length === 0) return json({});
 
-    const placeholders = uniqueIds.map(() => '?').join(',');
-    const { results } = await env.DB.prepare(
-      `SELECT uid, unique_id FROM users WHERE unique_id IN (${placeholders})`
-    ).bind(...uniqueIds).all();
+    // Query each uniqueId in parallel (Firestore doesn't support IN on non-array fields cleanly)
+    const results = await Promise.all(
+      uniqueIds.map(id =>
+        queryCollection(env, 'users', {
+          where: fieldFilter('uniqueId', 'EQUAL', id),
+          limit: 1,
+        })
+      )
+    );
 
     const map = {};
-    for (const r of results) map[r.unique_id] = r.uid;
+    for (let i = 0; i < uniqueIds.length; i++) {
+      const doc = results[i]?.[0] || null;
+      if (doc) map[uniqueIds[i]] = doc.uid ?? doc.id;
+    }
     return json(map);
   });
 
-  // ── Suspend/unsuspend aliases (singular /api/user/:uid path) ──
+  // ── Suspend user ──
   router.post('/api/user/:uid/suspend', async (request, env, params) => {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
@@ -277,118 +298,163 @@ function registerAdminUserRoutes(router) {
       endTimestamp = d.getTime();
     }
 
-    const user = await env.DB.prepare(
-      'SELECT display_name, profile_photo_url, cover_photo_url FROM users WHERE uid = ?'
-    ).bind(params.uid).first();
+    const user = await getDoc(env, `users/${params.uid}`);
     if (!user) return jsonError('User not found', 404);
 
     const timestamp = now();
-    await env.DB.batch([
-      env.DB.prepare(`
-        UPDATE users SET
-          is_suspended = 1, suspension_reason = ?, suspension_start_date = ?,
-          suspension_end_date = ?, suspension_can_appeal = ?, suspended_by = ?,
-          pre_suspension_display_name = ?,
-          pre_suspension_profile_photo_url = ?,
-          pre_suspension_cover_photo_url = ?,
-          display_name = 'Suspended Account',
-          profile_photo_url = NULL, cover_photo_url = NULL,
-          avatar_url = NULL, bio = NULL, current_room_id = NULL
-        WHERE uid = ?
-      `).bind(
-        body.reason.trim(), timestamp, endTimestamp,
-        body.canAppeal ? 1 : 0, request.auth.uid,
-        user.display_name, user.profile_photo_url, user.cover_photo_url,
-        params.uid
-      ),
-      env.DB.prepare(`
-        INSERT INTO admin_audit_log (id, admin_id, action, target_user_id, details, created_at)
-        VALUES (?, ?, 'SUSPEND', ?, ?, ?)
-      `).bind(generateId(), request.auth.uid, params.uid, body.reason, timestamp),
+
+    await Promise.all([
+      updateDoc(env, `users/${params.uid}`, {
+        isSuspended:                    true,
+        suspensionReason:               body.reason.trim(),
+        suspensionStartDate:            timestamp,
+        suspensionExpiry:               endTimestamp,
+        suspensionCanAppeal:            body.canAppeal,
+        suspendedBy:                    request.auth.uid,
+        preSuspensionDisplayName:       user.displayName ?? user.display_name ?? null,
+        preSuspensionProfilePhotoUrl:   user.profilePhotoUrl ?? user.profile_photo_url ?? null,
+        preSuspensionCoverPhotoUrl:     user.coverPhotoUrl ?? user.cover_photo_url ?? null,
+        displayName:                    'Suspended Account',
+        profilePhotoUrl:                null,
+        coverPhotoUrl:                  null,
+        avatarUrl:                      null,
+        bio:                            null,
+        currentRoomId:                  null,
+      }),
+      setDoc(env, `adminAuditLog/${generateId()}`, {
+        adminId:      request.auth.uid,
+        action:       'SUSPEND',
+        targetUserId: params.uid,
+        details:      body.reason,
+        createdAt:    timestamp,
+      }),
+    ]);
+
+    // Evict from any active rooms (fire-and-forget)
+    const ctx = request.ctx;
+    if (ctx) {
+      ctx.waitUntil(
+        evictSuspendedUser(env, params.uid)
+          .catch(err => console.error('Failed to evict suspended user:', err))
+      );
+    }
+
+    return json({ success: true });
+  });
+
+  // ── Unsuspend user ──
+  router.post('/api/user/:uid/unsuspend', async (request, env, params) => {
+    const adminCheck = requireAdmin(request);
+    if (adminCheck) return adminCheck;
+
+    const user = await getDoc(env, `users/${params.uid}`);
+    if (!user) return jsonError('User not found', 404);
+
+    const restore = {};
+    const preName  = user.preSuspensionDisplayName  ?? user.pre_suspension_display_name  ?? null;
+    const prePhoto = user.preSuspensionProfilePhotoUrl ?? user.pre_suspension_profile_photo_url ?? null;
+    const preCover = user.preSuspensionCoverPhotoUrl   ?? user.pre_suspension_cover_photo_url   ?? null;
+    if (preName)  restore.displayName      = preName;
+    if (prePhoto) restore.profilePhotoUrl  = prePhoto;
+    if (preCover) restore.coverPhotoUrl    = preCover;
+
+    await Promise.all([
+      updateDoc(env, `users/${params.uid}`, {
+        isSuspended:                    false,
+        suspensionReason:               null,
+        suspensionStartDate:            null,
+        suspensionExpiry:               null,
+        suspensionCanAppeal:            null,
+        suspendedBy:                    null,
+        preSuspensionDisplayName:       null,
+        preSuspensionProfilePhotoUrl:   null,
+        preSuspensionCoverPhotoUrl:     null,
+        ...restore,
+      }),
+      setDoc(env, `adminAuditLog/${generateId()}`, {
+        adminId:      request.auth.uid,
+        action:       'UNSUSPEND',
+        targetUserId: params.uid,
+        details:      null,
+        createdAt:    now(),
+      }),
     ]);
 
     return json({ success: true });
   });
 
-  router.post('/api/user/:uid/unsuspend', async (request, env, params) => {
-    const adminCheck = requireAdmin(request);
-    if (adminCheck) return adminCheck;
-
-    const user = await env.DB.prepare(
-      'SELECT pre_suspension_display_name, pre_suspension_profile_photo_url, pre_suspension_cover_photo_url FROM users WHERE uid = ?'
-    ).bind(params.uid).first();
-    if (!user) return jsonError('User not found', 404);
-
-    const updates = [
-      'is_suspended = 0', 'suspension_reason = NULL',
-      'suspension_start_date = NULL', 'suspension_end_date = NULL',
-      'suspension_can_appeal = NULL', 'suspended_by = NULL',
-    ];
-    const binds = [];
-
-    if (user.pre_suspension_display_name) {
-      updates.push('display_name = ?');
-      binds.push(user.pre_suspension_display_name);
-    }
-    if (user.pre_suspension_profile_photo_url) {
-      updates.push('profile_photo_url = ?');
-      binds.push(user.pre_suspension_profile_photo_url);
-    }
-    if (user.pre_suspension_cover_photo_url) {
-      updates.push('cover_photo_url = ?');
-      binds.push(user.pre_suspension_cover_photo_url);
-    }
-    updates.push(
-      'pre_suspension_display_name = NULL',
-      'pre_suspension_profile_photo_url = NULL',
-      'pre_suspension_cover_photo_url = NULL'
-    );
-
-    binds.push(params.uid);
-    await env.DB.prepare(
-      `UPDATE users SET ${updates.join(', ')} WHERE uid = ?`
-    ).bind(...binds).run();
-
-    await env.DB.prepare(`
-      INSERT INTO admin_audit_log (id, admin_id, action, target_user_id, details, created_at)
-      VALUES (?, ?, 'UNSUSPEND', ?, NULL, ?)
-    `).bind(generateId(), request.auth.uid, params.uid, now()).run();
-
-    return json({ success: true });
-  });
-
-  // ── Report locks by UID (admin page uses reported user's UID as key) ──
+  // ── Report locks by UID ──
   router.post('/api/report-locks/:uid/lock', async (request, env, params) => {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
     // Look up admin display name for the lock
-    const admin = await env.DB.prepare(
-      'SELECT display_name FROM users WHERE uid = ?'
-    ).bind(request.auth.uid).first();
+    const admin = await getDoc(env, `users/${request.auth.uid}`);
+    const displayName = admin?.displayName ?? admin?.display_name ?? null;
 
-    await env.DB.prepare(`
-      INSERT INTO report_locks (report_id, locked_by, locked_at, display_name)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(report_id) DO UPDATE SET locked_by = ?, locked_at = ?, display_name = ?
-    `).bind(
-      params.uid, request.auth.uid, now(), admin?.display_name || null,
-      request.auth.uid, now(), admin?.display_name || null
-    ).run();
+    await setDoc(env, `reportLocks/${params.uid}`, {
+      reportId:    params.uid,
+      lockedBy:    request.auth.uid,
+      lockedAt:    now(),
+      displayName: displayName,
+    });
 
-    return json({ success: true, displayName: admin?.display_name || null });
+    return json({ success: true, displayName });
   });
 
   router.delete('/api/report-locks/:uid', async (request, env, params) => {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    await env.DB.prepare(
-      'DELETE FROM report_locks WHERE report_id = ?'
-    ).bind(params.uid).run();
+    await deleteDoc(env, `reportLocks/${params.uid}`);
 
     return json({ success: true });
   });
+}
+
+/**
+ * Evict a suspended user from any active rooms they are participating in.
+ * Queries rooms where the user is a participant, removes them from
+ * participantIds, clears their seat, and clears their currentRoomId.
+ */
+async function evictSuspendedUser(env, uid) {
+  const rooms = await queryCollection(env, 'rooms', {
+    where: fieldFilter('participantIds', 'ARRAY_CONTAINS', uid),
+  });
+
+  if (rooms.length === 0) return;
+
+  const writes = [];
+
+  for (const room of rooms) {
+    const participantIds = (room.participantIds || []).filter(id => id !== uid);
+
+    // Clear any seat occupied by this user
+    const seats = room.seats ? { ...room.seats } : {};
+    for (const [index, seat] of Object.entries(seats)) {
+      if (seat && (seat.userId === uid || seat.user_id === uid)) {
+        seats[index] = {
+          index:    parseInt(index),
+          status:   'EMPTY',
+          userId:   null,
+          isMuted:  false,
+        };
+      }
+    }
+
+    writes.push(batchUpdateOp(env, `rooms/${room.id}`, {
+      participantIds,
+      seats,
+    }));
+  }
+
+  // Also clear the user's currentRoomId
+  writes.push(batchUpdateOp(env, `users/${uid}`, { currentRoomId: null }));
+
+  // batchWrite handles up to 500 ops; chunk if needed
+  for (let i = 0; i < writes.length; i += 500) {
+    await batchWrite(env, writes.slice(i, i + 500));
+  }
 }
 
 module.exports = { registerAdminUserRoutes };

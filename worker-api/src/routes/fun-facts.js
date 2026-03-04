@@ -10,13 +10,20 @@
 
 const { json, jsonError, generateId, now } = require('../utils');
 const { requireAdmin } = require('../middleware/auth');
+const { getDoc, setDoc, updateDoc, deleteDoc, queryCollection, fieldFilter, orderBy } = require('../utils/firestore');
 
 function registerFunFactRoutes(router) {
   // ── All active facts (any authenticated user) ──
   router.get('/api/fun-facts', async (request, env) => {
-    const { results } = await env.DB.prepare(
-      'SELECT * FROM fun_facts WHERE is_active = 1 ORDER BY RANDOM()'
-    ).all();
+    const results = await queryCollection(env, 'funFacts', {
+      where: fieldFilter('isActive', 'EQUAL', true),
+    });
+
+    // Shuffle (Firestore has no RANDOM() order)
+    for (let i = results.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [results[i], results[j]] = [results[j], results[i]];
+    }
 
     return json(results);
   });
@@ -26,9 +33,9 @@ function registerFunFactRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    const { results } = await env.DB.prepare(
-      'SELECT * FROM fun_facts ORDER BY created_at DESC'
-    ).all();
+    const results = await queryCollection(env, 'funFacts', {
+      orderBy: [orderBy('createdAt', 'DESCENDING')],
+    });
 
     return json(results);
   });
@@ -45,19 +52,16 @@ function registerFunFactRoutes(router) {
     const id = generateId();
     const timestamp = now();
 
-    await env.DB.prepare(`
-      INSERT INTO fun_facts (id, text, category, emoji, source_language, is_active, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
+    await setDoc(env, `funFacts/${id}`, {
       id,
-      body.text,
-      body.category || 'trivia',
-      body.emoji || '',
-      body.source_language || '',
-      body.is_active !== undefined ? (body.is_active ? 1 : 0) : 1,
-      timestamp,
-      timestamp
-    ).run();
+      text: body.text,
+      category: body.category || 'trivia',
+      emoji: body.emoji || '',
+      sourceLanguage: body.sourceLanguage || body.source_language || '',
+      isActive: body.isActive !== undefined ? !!body.isActive : (body.is_active !== false),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
 
     return json({ success: true, id });
   });
@@ -70,29 +74,24 @@ function registerFunFactRoutes(router) {
     const body = await request.json().catch(() => null);
     if (!body) return jsonError('Invalid JSON body', 400);
 
-    const existing = await env.DB.prepare(
-      'SELECT id FROM fun_facts WHERE id = ?'
-    ).bind(params.id).first();
+    const existing = await getDoc(env, `funFacts/${params.id}`);
     if (!existing) return jsonError('Fun fact not found', 404);
 
-    const fields = [];
-    const binds = [];
+    const fields = {};
+    if (body.text !== undefined) fields.text = body.text;
+    if (body.category !== undefined) fields.category = body.category;
+    if (body.emoji !== undefined) fields.emoji = body.emoji;
+    if (body.sourceLanguage !== undefined || body.source_language !== undefined) {
+      fields.sourceLanguage = body.sourceLanguage ?? body.source_language;
+    }
+    if (body.isActive !== undefined || body.is_active !== undefined) {
+      fields.isActive = !!(body.isActive ?? body.is_active);
+    }
 
-    if (body.text !== undefined) { fields.push('text = ?'); binds.push(body.text); }
-    if (body.category !== undefined) { fields.push('category = ?'); binds.push(body.category); }
-    if (body.emoji !== undefined) { fields.push('emoji = ?'); binds.push(body.emoji); }
-    if (body.source_language !== undefined) { fields.push('source_language = ?'); binds.push(body.source_language); }
-    if (body.is_active !== undefined) { fields.push('is_active = ?'); binds.push(body.is_active ? 1 : 0); }
+    if (Object.keys(fields).length === 0) return jsonError('No fields to update', 400);
 
-    if (fields.length === 0) return jsonError('No fields to update', 400);
-
-    fields.push('updated_at = ?');
-    binds.push(now());
-    binds.push(params.id);
-
-    await env.DB.prepare(
-      `UPDATE fun_facts SET ${fields.join(', ')} WHERE id = ?`
-    ).bind(...binds).run();
+    fields.updatedAt = now();
+    await updateDoc(env, `funFacts/${params.id}`, fields);
 
     return json({ success: true });
   });
@@ -102,12 +101,10 @@ function registerFunFactRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    const existing = await env.DB.prepare(
-      'SELECT id FROM fun_facts WHERE id = ?'
-    ).bind(params.id).first();
+    const existing = await getDoc(env, `funFacts/${params.id}`);
     if (!existing) return jsonError('Fun fact not found', 404);
 
-    await env.DB.prepare('DELETE FROM fun_facts WHERE id = ?').bind(params.id).run();
+    await deleteDoc(env, `funFacts/${params.id}`);
 
     return json({ success: true });
   });

@@ -1,18 +1,28 @@
 package com.shyden.shytalk.data.repository
 
+import com.google.firebase.firestore.FirebaseFirestore
 import com.shyden.shytalk.core.model.Banner
-import com.shyden.shytalk.core.util.toMap
-import com.shyden.shytalk.data.remote.WorkerApiClient
+import kotlinx.coroutines.tasks.await
 
 class BannerRepositoryImpl(
-    private val api: WorkerApiClient
+    private val firestore: FirebaseFirestore
 ) : BannerRepository {
 
     override suspend fun getActiveBanners(): List<Banner> {
-        val arr = api.getArray("/api/banners/active")
-        return (0 until arr.length()).mapNotNull { i ->
-            val obj = arr.getJSONObject(i)
-            Banner.fromMap(obj.toMap(), obj.getString("id"))
-        }
+        val now = System.currentTimeMillis()
+        val snapshot = firestore.collection("banners")
+            .whereEqualTo("isActive", true)
+            .whereLessThanOrEqualTo("startDate", now)
+            .get()
+            .await()
+        return snapshot.documents
+            .mapNotNull { doc ->
+                val data = doc.data ?: return@mapNotNull null
+                // Filter out expired banners client-side (Firestore can't do AND on two range fields)
+                val endDate = (data["endDate"] as? Long) ?: Long.MAX_VALUE
+                if (endDate < now) return@mapNotNull null
+                Banner.fromMap(data, doc.id)
+            }
+            .sortedBy { it.sortOrder }
     }
 }

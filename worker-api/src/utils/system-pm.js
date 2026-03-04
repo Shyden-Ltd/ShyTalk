@@ -1,29 +1,31 @@
 /**
  * System PM helper — sends private messages from SHYTALK_SYSTEM.
  *
- * D1-only implementation (no Firestore). Creates the conversation if needed,
+ * Firestore implementation. Creates the conversation if needed,
  * inserts the message, and updates last-message denorm + unread counts.
  */
 
 const { generateId, now } = require('../utils');
+const { getDoc, setDoc, updateDoc, incrementField } = require('./firestore');
 const { writeRtdb } = require('./rtdb');
 
 const SYSTEM_UID = 'SHYTALK_SYSTEM';
 const SYSTEM_DISPLAY_NAME = 'ShyTalk System';
 
 /**
- * Ensure the SHYTALK_SYSTEM user row exists.
+ * Ensure the SHYTALK_SYSTEM user doc exists.
  */
 async function ensureSystemUser(env) {
-  const existing = await env.DB.prepare(
-    'SELECT uid FROM users WHERE uid = ?'
-  ).bind(SYSTEM_UID).first();
-
+  const existing = await getDoc(env, `users/${SYSTEM_UID}`);
   if (!existing) {
-    await env.DB.prepare(`
-      INSERT INTO users (uid, display_name, user_type, created_at, last_seen_at)
-      VALUES (?, ?, 'SYSTEM', ?, ?)
-    `).bind(SYSTEM_UID, SYSTEM_DISPLAY_NAME, now(), now()).run();
+    const timestamp = now();
+    await setDoc(env, `users/${SYSTEM_UID}`, {
+      id: SYSTEM_UID,
+      displayName: SYSTEM_DISPLAY_NAME,
+      userType: 'SYSTEM',
+      createdAt: timestamp,
+      lastSeenAt: timestamp,
+    });
   }
 }
 
@@ -37,7 +39,7 @@ function systemConversationId(recipientUid) {
 /**
  * Send a system PM to a user.
  *
- * @param {object} env - Worker env bindings (DB, etc.)
+ * @param {object} env - Worker env bindings
  * @param {string} recipientUid - Target user UID
  * @param {string} text - Message text
  */
@@ -48,49 +50,50 @@ async function sendSystemPm(env, recipientUid, text) {
   const timestamp = now();
   const msgId = generateId();
 
-  const stmts = [];
+  // Upsert conversation doc (setDoc overwrites / creates)
+  const convDoc = await getDoc(env, `conversations/${convId}`);
+  const convData = {
+    id: convId,
+    isGroup: false,
+    participantIds: convDoc?.participantIds || [recipientUid, SYSTEM_UID],
+    lastMessageText: text,
+    lastMessageSenderId: SYSTEM_UID,
+    lastMessageSenderName: SYSTEM_DISPLAY_NAME,
+    lastMessageType: 'TEXT',
+    lastMessageAt: timestamp,
+  };
+  if (!convDoc) {
+    convData.createdAt = timestamp;
+  }
+  await setDoc(env, `conversations/${convId}`, convData);
 
-  // Upsert conversation
-  stmts.push(env.DB.prepare(`
-    INSERT INTO conversations (id, is_group, last_message_text, last_message_sender_id,
-      last_message_sender_name, last_message_type, last_message_at, created_at)
-    VALUES (?, 0, ?, ?, ?, 'TEXT', ?, ?)
-    ON CONFLICT(id) DO UPDATE SET
-      last_message_text = ?, last_message_sender_id = ?,
-      last_message_sender_name = ?, last_message_type = 'TEXT', last_message_at = ?
-  `).bind(
-    convId, text, SYSTEM_UID, SYSTEM_DISPLAY_NAME, timestamp, timestamp,
-    text, SYSTEM_UID, SYSTEM_DISPLAY_NAME, timestamp
-  ));
+  // Insert message in subcollection
+  await setDoc(env, `conversations/${convId}/messages/${msgId}`, {
+    id: msgId,
+    conversationId: convId,
+    senderId: SYSTEM_UID,
+    senderName: SYSTEM_DISPLAY_NAME,
+    text,
+    type: 'SYSTEM',
+    createdAt: timestamp,
+  });
 
-  // Ensure both participants exist
-  stmts.push(env.DB.prepare(`
-    INSERT INTO conversation_participants (conversation_id, user_id, role, joined_at)
-    VALUES (?, ?, 'MEMBER', ?)
-    ON CONFLICT(conversation_id, user_id) DO NOTHING
-  `).bind(convId, recipientUid, timestamp));
-
-  stmts.push(env.DB.prepare(`
-    INSERT INTO conversation_participants (conversation_id, user_id, role, joined_at)
-    VALUES (?, ?, 'MEMBER', ?)
-    ON CONFLICT(conversation_id, user_id) DO NOTHING
-  `).bind(convId, SYSTEM_UID, timestamp));
-
-  // Insert message
-  stmts.push(env.DB.prepare(`
-    INSERT INTO private_messages (id, conversation_id, sender_id, sender_name, text, type, created_at)
-    VALUES (?, ?, ?, ?, ?, 'SYSTEM', ?)
-  `).bind(msgId, convId, SYSTEM_UID, SYSTEM_DISPLAY_NAME, text, timestamp));
-
-  // Upsert conversation_settings for recipient — increment unread
-  stmts.push(env.DB.prepare(`
-    INSERT INTO conversation_settings (conversation_id, user_id, unread_count)
-    VALUES (?, ?, 1)
-    ON CONFLICT(conversation_id, user_id) DO UPDATE SET
-      unread_count = unread_count + 1, is_hidden = 0
-  `).bind(convId, recipientUid));
-
-  await env.DB.batch(stmts);
+  // Increment unread count for recipient + unhide
+  const settingsPath = `conversations/${convId}/userSettings/${recipientUid}`;
+  const settings = await getDoc(env, settingsPath);
+  if (settings) {
+    await updateDoc(env, settingsPath, {
+      unreadCount: (settings.unreadCount || 0) + 1,
+      isHidden: false,
+    });
+  } else {
+    await setDoc(env, settingsPath, {
+      userId: recipientUid,
+      conversationId: convId,
+      unreadCount: 1,
+      isHidden: false,
+    });
+  }
 
   // Broadcast via RTDB
   try {

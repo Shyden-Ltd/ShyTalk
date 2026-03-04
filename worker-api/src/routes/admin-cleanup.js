@@ -1,7 +1,7 @@
 /**
  * Admin cleanup routes — data reset, storage audit, orphan cleanup.
  *
- * All endpoints require admin. They operate on D1 tables and R2 directly.
+ * All endpoints require admin. They operate on Firestore collections and R2 directly.
  *
  * POST /api/cleanup/system-conversations       → Delete duplicate system conversations
  * POST /api/cleanup/all-system-conversations    → Delete ALL system conversations
@@ -13,13 +13,26 @@
  * POST /api/cleanup/all-beans                  → Reset all bean balances
  * POST /api/cleanup/all-spin-history           → Delete gacha transactions + reset pity
  * POST /api/cleanup/all-supershy               → Clear Super Shy status
- * POST /api/cleanup/all-appeals                → Delete all appeals
+ * POST /api/cleanup/all-appeals                → Delete all suspension appeals
  * GET  /api/storage/audit                      → R2 folder audit
  * POST /api/cleanup/orphaned-storage           → Smart R2 cleanup
  */
 
 const { json, jsonError, now } = require('../utils');
 const { requireAdmin } = require('../middleware/auth');
+const {
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  queryCollection,
+  batchWrite,
+  batchUpdateOp,
+  batchDeleteOp,
+  fieldFilter,
+  andFilter,
+  orderBy,
+} = require('../utils/firestore');
 
 function registerAdminCleanupRoutes(router) {
 
@@ -28,38 +41,34 @@ function registerAdminCleanupRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    // Find system conversations with non-deterministic IDs
-    // Deterministic format: [uid, SHYTALK_SYSTEM].sort().join('_')
-    const { results: systemConvs } = await env.DB.prepare(`
-      SELECT c.id FROM conversations c
-      JOIN conversation_participants cp ON cp.conversation_id = c.id
-      WHERE cp.user_id = 'SHYTALK_SYSTEM' AND c.is_group = 0
-    `).all();
+    // Find all conversations where SHYTALK_SYSTEM is a participant
+    // participantIds array contains 'SHYTALK_SYSTEM'
+    const systemConvs = await queryCollection(env, 'conversations', {
+      where: fieldFilter('participantIds', 'ARRAY_CONTAINS', 'SHYTALK_SYSTEM'),
+    });
 
     let deleted = 0;
     const seen = new Map(); // recipientUid → first conversation id
 
     for (const conv of systemConvs) {
-      // Get the other participant
-      const other = await env.DB.prepare(`
-        SELECT user_id FROM conversation_participants
-        WHERE conversation_id = ? AND user_id != 'SHYTALK_SYSTEM'
-      `).bind(conv.id).first();
+      // Get the other participant (non-SHYTALK_SYSTEM uid)
+      const participantIds = conv.participantIds || [];
+      const otherUid = participantIds.find(id => id !== 'SHYTALK_SYSTEM');
+      if (!otherUid) continue;
 
-      if (!other) continue;
-      const expectedId = [other.user_id, 'SHYTALK_SYSTEM'].sort().join('_');
+      const expectedId = [otherUid, 'SHYTALK_SYSTEM'].sort().join('_');
 
       if (conv.id === expectedId) {
-        seen.set(other.user_id, conv.id);
+        seen.set(otherUid, conv.id);
         continue;
       }
 
       // This is a duplicate — delete it
-      if (seen.has(other.user_id)) {
+      if (seen.has(otherUid)) {
         await deleteConversation(env, conv.id);
         deleted++;
       } else {
-        seen.set(other.user_id, conv.id);
+        seen.set(otherUid, conv.id);
       }
     }
 
@@ -71,11 +80,9 @@ function registerAdminCleanupRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    const { results: systemConvs } = await env.DB.prepare(`
-      SELECT c.id FROM conversations c
-      JOIN conversation_participants cp ON cp.conversation_id = c.id
-      WHERE cp.user_id = 'SHYTALK_SYSTEM' AND c.is_group = 0
-    `).all();
+    const systemConvs = await queryCollection(env, 'conversations', {
+      where: fieldFilter('participantIds', 'ARRAY_CONTAINS', 'SHYTALK_SYSTEM'),
+    });
 
     for (const conv of systemConvs) {
       await deleteConversation(env, conv.id);
@@ -89,14 +96,25 @@ function registerAdminCleanupRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    // Delete R2 evidence files
+    // Delete R2 evidence files first
     await deleteR2Prefix(env, 'report_evidence/');
 
-    await env.DB.batch([
-      env.DB.prepare('DELETE FROM reports'),
-      env.DB.prepare('DELETE FROM reports_archive'),
-      env.DB.prepare('DELETE FROM report_locks'),
+    // Delete all docs from reports, reportsArchive, reportLocks collections
+    const [reports, reportsArchive, reportLocks] = await Promise.all([
+      queryCollection(env, 'reports', {}),
+      queryCollection(env, 'reportsArchive', {}),
+      queryCollection(env, 'reportLocks', {}),
     ]);
+
+    const writes = [
+      ...reports.map(d => batchDeleteOp(env, `reports/${d.id}`)),
+      ...reportsArchive.map(d => batchDeleteOp(env, `reportsArchive/${d.id}`)),
+      ...reportLocks.map(d => batchDeleteOp(env, `reportLocks/${d.id}`)),
+    ];
+
+    for (let i = 0; i < writes.length; i += 500) {
+      await batchWrite(env, writes.slice(i, i + 500));
+    }
 
     return json({ success: true });
   });
@@ -106,18 +124,39 @@ function registerAdminCleanupRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    const result = await env.DB.prepare(`
-      UPDATE users SET
-        gcs_score = 100,
-        gcs_last_deduction_at = NULL,
-        warning_count = 0,
-        has_active_warning = 0,
-        warning_reason = NULL,
-        warning_issued_at = NULL
-      WHERE warning_count > 0 OR has_active_warning = 1 OR gcs_score < 100
-    `).run();
+    // Query users who have any warning state set
+    const users = await queryCollection(env, 'users', {
+      where: fieldFilter('warningCount', 'GREATER_THAN', 0),
+    });
 
-    return json({ success: true, affected: result.changes || 0 });
+    // Also catch users with hasActiveWarning=true but warningCount=0
+    const usersWithActiveWarning = await queryCollection(env, 'users', {
+      where: fieldFilter('hasActiveWarning', 'EQUAL', true),
+    });
+
+    // Deduplicate by id
+    const allIds = new Set([
+      ...users.map(u => u.id),
+      ...usersWithActiveWarning.map(u => u.id),
+    ]);
+
+    const writes = Array.from(allIds).map(uid =>
+      batchUpdateOp(env, `users/${uid}`, {
+        gcsScore:           100,
+        gcsLastDeductionAt: null,
+        warningCount:       0,
+        hasActiveWarning:   false,
+        hasNewWarning:      false,
+        warningReason:      null,
+        warningIssuedAt:    null,
+      })
+    );
+
+    for (let i = 0; i < writes.length; i += 500) {
+      await batchWrite(env, writes.slice(i, i + 500));
+    }
+
+    return json({ success: true, affected: allIds.size });
   });
 
   // ── Clear all backpacks ──
@@ -125,8 +164,27 @@ function registerAdminCleanupRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    const result = await env.DB.prepare('DELETE FROM backpack_items').run();
-    return json({ success: true, deleted: result.changes || 0 });
+    // We cannot query subcollections in a collection group easily via REST,
+    // so query all users and delete their backpack subcollection items.
+    // For large datasets this is done by listing users and purging each backpack.
+    const users = await queryCollection(env, 'users', {
+      orderBy: [orderBy('uid', 'ASCENDING')],
+    });
+
+    let deleted = 0;
+    for (const user of users) {
+      const uid = user.uid ?? user.id;
+      const items = await queryCollection(env, `users/${uid}/backpack`, {});
+      if (items.length === 0) continue;
+
+      const writes = items.map(item => batchDeleteOp(env, `users/${uid}/backpack/${item.id}`));
+      for (let i = 0; i < writes.length; i += 500) {
+        await batchWrite(env, writes.slice(i, i + 500));
+      }
+      deleted += items.length;
+    }
+
+    return json({ success: true, deleted });
   });
 
   // ── Clear all gift walls ──
@@ -134,10 +192,19 @@ function registerAdminCleanupRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    await env.DB.batch([
-      env.DB.prepare('DELETE FROM gift_wall'),
-      env.DB.prepare('DELETE FROM gift_wall_senders'),
+    const [giftWall, giftWallSenders] = await Promise.all([
+      queryCollection(env, 'giftWall', {}),
+      queryCollection(env, 'giftWallSenders', {}),
     ]);
+
+    const writes = [
+      ...giftWall.map(d => batchDeleteOp(env, `giftWall/${d.id}`)),
+      ...giftWallSenders.map(d => batchDeleteOp(env, `giftWallSenders/${d.id}`)),
+    ];
+
+    for (let i = 0; i < writes.length; i += 500) {
+      await batchWrite(env, writes.slice(i, i + 500));
+    }
 
     return json({ success: true });
   });
@@ -147,7 +214,18 @@ function registerAdminCleanupRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    await env.DB.prepare('UPDATE users SET shy_coins = 0').run();
+    const users = await queryCollection(env, 'users', {
+      where: fieldFilter('shyCoins', 'GREATER_THAN', 0),
+    });
+
+    const writes = users.map(u =>
+      batchUpdateOp(env, `users/${u.id}`, { shyCoins: 0 })
+    );
+
+    for (let i = 0; i < writes.length; i += 500) {
+      await batchWrite(env, writes.slice(i, i + 500));
+    }
+
     return json({ success: true });
   });
 
@@ -156,7 +234,18 @@ function registerAdminCleanupRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    await env.DB.prepare('UPDATE users SET shy_beans = 0').run();
+    const users = await queryCollection(env, 'users', {
+      where: fieldFilter('shyBeans', 'GREATER_THAN', 0),
+    });
+
+    const writes = users.map(u =>
+      batchUpdateOp(env, `users/${u.id}`, { shyBeans: 0 })
+    );
+
+    for (let i = 0; i < writes.length; i += 500) {
+      await batchWrite(env, writes.slice(i, i + 500));
+    }
+
     return json({ success: true });
   });
 
@@ -165,10 +254,38 @@ function registerAdminCleanupRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    await env.DB.batch([
-      env.DB.prepare("DELETE FROM transactions WHERE type = 'GACHA_PULL'"),
-      env.DB.prepare('UPDATE users SET pity_counter = 0'),
-    ]);
+    // Clear pity counters on all users who have one
+    const usersWithPity = await queryCollection(env, 'users', {
+      where: fieldFilter('pityCounter', 'GREATER_THAN', 0),
+    });
+
+    const userWrites = usersWithPity.map(u =>
+      batchUpdateOp(env, `users/${u.id}`, { pityCounter: 0 })
+    );
+    for (let i = 0; i < userWrites.length; i += 500) {
+      await batchWrite(env, userWrites.slice(i, i + 500));
+    }
+
+    // Delete GACHA_PULL transactions from every user's transactions subcollection
+    // This requires iterating users (Firestore REST has no collection group delete)
+    const users = await queryCollection(env, 'users', {
+      orderBy: [orderBy('uid', 'ASCENDING')],
+    });
+
+    for (const user of users) {
+      const uid = user.uid ?? user.id;
+      const gachaTxs = await queryCollection(env, `users/${uid}/transactions`, {
+        where: fieldFilter('type', 'EQUAL', 'GACHA_PULL'),
+      });
+      if (gachaTxs.length === 0) continue;
+
+      const writes = gachaTxs.map(tx =>
+        batchDeleteOp(env, `users/${uid}/transactions/${tx.id}`)
+      );
+      for (let i = 0; i < writes.length; i += 500) {
+        await batchWrite(env, writes.slice(i, i + 500));
+      }
+    }
 
     return json({ success: true });
   });
@@ -178,26 +295,39 @@ function registerAdminCleanupRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    await env.DB.batch([
-      env.DB.prepare(`
-        UPDATE users SET
-          is_super_shy = 0,
-          super_shy_expiry = NULL,
-          super_shy_tier = NULL,
-          has_claimed_super_shy_trial = 0
-      `),
-    ]);
+    const users = await queryCollection(env, 'users', {
+      where: fieldFilter('isSuperShy', 'EQUAL', true),
+    });
+
+    const writes = users.map(u =>
+      batchUpdateOp(env, `users/${u.id}`, {
+        isSuperShy:               false,
+        superShyExpiry:           null,
+        superShyTier:             null,
+        hasClaimedSuperShyTrial:  false,
+      })
+    );
+
+    for (let i = 0; i < writes.length; i += 500) {
+      await batchWrite(env, writes.slice(i, i + 500));
+    }
 
     return json({ success: true });
   });
 
-  // ── Delete all appeals ──
+  // ── Delete all suspension appeals ──
   router.post('/api/cleanup/all-appeals', async (request, env) => {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    const result = await env.DB.prepare('DELETE FROM suspension_appeals').run();
-    return json({ success: true, deleted: result.changes || 0 });
+    const appeals = await queryCollection(env, 'suspensionAppeals', {});
+
+    const writes = appeals.map(a => batchDeleteOp(env, `suspensionAppeals/${a.id}`));
+    for (let i = 0; i < writes.length; i += 500) {
+      await batchWrite(env, writes.slice(i, i + 500));
+    }
+
+    return json({ success: true, deleted: appeals.length });
   });
 
   // ══════════════════════════════════════════════════════════════
@@ -253,81 +383,93 @@ function registerAdminCleanupRoutes(router) {
     const referencedKeys = new Set();
     referencedKeys.add('system/shytalk_icon.webp');
 
-    // Users
-    const { results: users } = await env.DB.prepare(
-      'SELECT profile_photo_url, cover_photo_url, pre_suspension_profile_photo_url, pre_suspension_cover_photo_url FROM users'
-    ).all();
+    // ── Users ──
+    const users = await queryCollection(env, 'users', {
+      orderBy: [orderBy('uid', 'ASCENDING')],
+    });
     for (const u of users) {
-      for (const url of [u.profile_photo_url, u.cover_photo_url, u.pre_suspension_profile_photo_url, u.pre_suspension_cover_photo_url]) {
-        const k = extractKey(url);
+      for (const field of [
+        'profilePhotoUrl', 'coverPhotoUrl',
+        'preSuspensionProfilePhotoUrl', 'preSuspensionCoverPhotoUrl',
+        // Legacy snake_case fallbacks
+        'profile_photo_url', 'cover_photo_url',
+        'pre_suspension_profile_photo_url', 'pre_suspension_cover_photo_url',
+      ]) {
+        const k = extractKey(u[field]);
         if (k) referencedKeys.add(k);
       }
     }
 
-    // Conversations
-    const { results: convs } = await env.DB.prepare(
-      'SELECT group_photo_url FROM conversations WHERE group_photo_url IS NOT NULL'
-    ).all();
+    // ── Conversations (group photo) ──
+    const convs = await queryCollection(env, 'conversations', {
+      where: fieldFilter('isGroup', 'EQUAL', true),
+    });
     for (const c of convs) {
-      const k = extractKey(c.group_photo_url);
+      const k = extractKey(c.groupPhotoUrl ?? c.group_photo_url);
       if (k) referencedKeys.add(k);
     }
 
-    // Messages
-    const { results: imageMessages } = await env.DB.prepare(
-      "SELECT image_urls FROM private_messages WHERE type = 'IMAGE' AND image_urls IS NOT NULL"
-    ).all();
-    for (const msg of imageMessages) {
-      try {
-        const urls = JSON.parse(msg.image_urls);
-        for (const url of urls) {
-          const k = extractKey(url);
-          if (k) referencedKeys.add(k);
-        }
-      } catch (_) {}
-    }
-
-    // Room messages
-    const { results: roomImageMsgs } = await env.DB.prepare(
-      "SELECT image_urls FROM messages WHERE type = 'IMAGE' AND image_urls IS NOT NULL"
-    ).all().catch(() => ({ results: [] }));
-    for (const msg of roomImageMsgs) {
-      try {
-        const urls = JSON.parse(msg.image_urls);
-        for (const url of urls) {
-          const k = extractKey(url);
-          if (k) referencedKeys.add(k);
-        }
-      } catch (_) {}
-    }
-
-    // Reports + archive
-    for (const table of ['reports', 'reports_archive']) {
-      const { results: rows } = await env.DB.prepare(
-        `SELECT evidence_urls FROM ${table} WHERE evidence_urls IS NOT NULL`
-      ).all();
-      for (const row of rows) {
-        try {
-          const urls = JSON.parse(row.evidence_urls);
+    // ── Private messages (IMAGE type) ──
+    // Subcollection — iterate conversations and query messages
+    for (const conv of convs) {
+      const messages = await queryCollection(env, `conversations/${conv.id}/messages`, {
+        where: fieldFilter('type', 'EQUAL', 'IMAGE'),
+      });
+      for (const msg of messages) {
+        const urls = msg.imageUrls ?? msg.image_urls;
+        if (Array.isArray(urls)) {
           for (const url of urls) {
             const k = extractKey(url);
             if (k) referencedKeys.add(k);
           }
-        } catch (_) {}
+        }
       }
     }
 
-    // Banners
-    const { results: bannerRows } = await env.DB.prepare(
-      'SELECT image_url FROM banners WHERE image_url IS NOT NULL'
-    ).all();
-    for (const b of bannerRows) {
-      const k = extractKey(b.image_url);
+    // ── Room messages (IMAGE type) ──
+    const rooms = await queryCollection(env, 'rooms', {});
+    for (const room of rooms) {
+      const messages = await queryCollection(env, `rooms/${room.id}/messages`, {
+        where: fieldFilter('type', 'EQUAL', 'IMAGE'),
+      });
+      for (const msg of messages) {
+        const urls = msg.imageUrls ?? msg.image_urls;
+        if (Array.isArray(urls)) {
+          for (const url of urls) {
+            const k = extractKey(url);
+            if (k) referencedKeys.add(k);
+          }
+        }
+      }
+    }
+
+    // ── Reports + archive ──
+    const [reports, reportsArchive] = await Promise.all([
+      queryCollection(env, 'reports', {}),
+      queryCollection(env, 'reportsArchive', {}),
+    ]);
+    for (const row of [...reports, ...reportsArchive]) {
+      const urls = row.evidenceUrls ?? row.evidence_urls;
+      if (Array.isArray(urls)) {
+        for (const url of urls) {
+          const k = extractKey(url);
+          if (k) referencedKeys.add(k);
+        }
+      }
+    }
+
+    // ── Banners ──
+    const banners = await queryCollection(env, 'banners', {});
+    for (const b of banners) {
+      const k = extractKey(b.imageUrl ?? b.image_url);
       if (k) referencedKeys.add(k);
     }
 
-    // List and delete orphans
-    const folders = ['pm_images/', 'stickers/', 'report_evidence/', 'profile_photos/', 'cover_photos/', 'group_photos/', 'banners/'];
+    // ── List and delete orphans ──
+    const folders = [
+      'pm_images/', 'stickers/', 'report_evidence/',
+      'profile_photos/', 'cover_photos/', 'group_photos/', 'banners/',
+    ];
     const summary = {};
     let totalDeleted = 0;
 
@@ -354,21 +496,31 @@ function registerAdminCleanupRoutes(router) {
 }
 
 /**
- * Delete a conversation and all its associated data.
+ * Delete a conversation and all its associated subcollection data from Firestore.
+ *
+ * Deletes:
+ *  - conversations/{convId}/messages/* (all messages)
+ *  - conversations/{convId}/userSettings/* (per-user settings)
+ *  - conversations/{convId}/mutes/* (mute records)
+ *  - conversations/{convId} (the conversation doc itself)
  */
 async function deleteConversation(env, convId) {
-  await env.DB.batch([
-    env.DB.prepare('DELETE FROM private_messages WHERE conversation_id = ?').bind(convId),
-    env.DB.prepare('DELETE FROM conversation_participants WHERE conversation_id = ?').bind(convId),
-    env.DB.prepare('DELETE FROM conversation_settings WHERE conversation_id = ?').bind(convId),
-    env.DB.prepare('DELETE FROM conversation_permissions WHERE conversation_id = ?').bind(convId),
-    env.DB.prepare('DELETE FROM conversation_system_message_config WHERE conversation_id = ?').bind(convId),
-    env.DB.prepare('DELETE FROM conversation_mutes WHERE conversation_id = ?').bind(convId),
-    env.DB.prepare('DELETE FROM conversation_mod_log WHERE conversation_id = ?').bind(convId),
-    env.DB.prepare('DELETE FROM message_reactions WHERE message_id IN (SELECT id FROM private_messages WHERE conversation_id = ?)').bind(convId),
-    env.DB.prepare('DELETE FROM message_read_by WHERE message_id IN (SELECT id FROM private_messages WHERE conversation_id = ?)').bind(convId),
-    env.DB.prepare('DELETE FROM conversations WHERE id = ?').bind(convId),
+  const [messages, userSettings, mutes] = await Promise.all([
+    queryCollection(env, `conversations/${convId}/messages`, {}),
+    queryCollection(env, `conversations/${convId}/userSettings`, {}),
+    queryCollection(env, `conversations/${convId}/mutes`, {}),
   ]);
+
+  const writes = [
+    ...messages.map(m => batchDeleteOp(env, `conversations/${convId}/messages/${m.id}`)),
+    ...userSettings.map(s => batchDeleteOp(env, `conversations/${convId}/userSettings/${s.id}`)),
+    ...mutes.map(m => batchDeleteOp(env, `conversations/${convId}/mutes/${m.id}`)),
+    batchDeleteOp(env, `conversations/${convId}`),
+  ];
+
+  for (let i = 0; i < writes.length; i += 500) {
+    await batchWrite(env, writes.slice(i, i + 500));
+  }
 }
 
 /**

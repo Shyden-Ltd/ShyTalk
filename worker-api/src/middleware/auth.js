@@ -290,10 +290,9 @@ async function authMiddleware(request, env) {
     let isSuspended = cached?.isSuspended;
 
     if (isSuspended === undefined) {
-      const user = await env.DB.prepare(
-        'SELECT is_suspended FROM users WHERE uid = ?'
-      ).bind(uid).first();
-      isSuspended = !!user?.is_suspended;
+      const { getDoc } = require('../utils/firestore');
+      const user = await getDoc(env, `users/${uid}`);
+      isSuspended = !!(user?.isSuspended || user?.is_suspended);
       // Update cache with suspension status
       if (cached) {
         cached.isSuspended = isSuspended;

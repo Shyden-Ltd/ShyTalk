@@ -1,46 +1,38 @@
 package com.shyden.shytalk.data.repository
 
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import com.shyden.shytalk.core.model.Message
 import com.shyden.shytalk.core.model.MessageType
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
-import com.shyden.shytalk.core.util.toMap
-import com.shyden.shytalk.data.remote.PresenceService
-import com.shyden.shytalk.data.remote.RoomEvent
-import com.shyden.shytalk.data.remote.WorkerApiClient
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.merge
-import kotlinx.coroutines.flow.transform
-import org.json.JSONObject
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.tasks.await
 
 class MessageRepositoryImpl(
-    private val api: WorkerApiClient,
-    private val presenceService: PresenceService
+    private val firestore: FirebaseFirestore
 ) : MessageRepository {
 
-    override fun getMessages(roomId: String): Flow<List<Message>> = merge(
-        // Slow fallback poll — WebSocket handles real-time updates
-        flow { while (true) { emit(Unit); delay(120_000) } },
-        // Immediate refetch on new messages
-        presenceService.roomEvents
-            .filter { it is RoomEvent.NewMessage }
-            .map { }
-    ).transform {
-        try {
-            val arr = api.getArray("/api/rooms/$roomId/messages")
-            val messages = (0 until arr.length()).mapNotNull { i ->
-                val obj = arr.getJSONObject(i)
-                Message.fromMap(obj.toMap(), obj.getString("messageId"))
+    // Real-time room messages from Firestore subcollection
+    override fun getMessages(roomId: String): Flow<List<Message>> = callbackFlow {
+        val listener = firestore.collection("rooms/$roomId/messages")
+            .orderBy("createdAt", Query.Direction.ASCENDING)
+            .limitToLast(200)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                val messages = snapshot.documents.mapNotNull { doc ->
+                    val data = doc.data ?: return@mapNotNull null
+                    Message.fromMap(data, doc.id)
+                }
+                trySend(messages)
             }
-            emit(messages)
-        } catch (_: Exception) { }
-    }.distinctUntilChanged()
+        awaitClose { listener.remove() }
+    }
 
+    // Direct Firestore write — room messages don't need FCM push
+    // (participants have real-time listeners)
     private suspend fun createAndSendMessage(
         roomId: String,
         senderId: String,
@@ -48,13 +40,19 @@ class MessageRepositoryImpl(
         text: String,
         type: MessageType
     ): Resource<Unit> = firebaseCall("Failed to send message") {
-        val body = JSONObject().apply {
-            put("senderId", senderId)
-            put("senderName", senderName)
-            put("text", text)
-            put("type", type.name)
-        }
-        api.post("/api/rooms/$roomId/messages", body)
+        val msgId = firestore.collection("rooms/$roomId/messages").document().id
+        val timestamp = System.currentTimeMillis()
+        firestore.document("rooms/$roomId/messages/$msgId").set(
+            mapOf(
+                "id" to msgId,
+                "roomId" to roomId,
+                "senderId" to senderId,
+                "senderName" to senderName,
+                "text" to text,
+                "type" to type.name,
+                "createdAt" to timestamp
+            )
+        ).await()
     }
 
     override suspend fun sendMessage(
@@ -79,7 +77,12 @@ class MessageRepositoryImpl(
         messageId: String,
         newText: String
     ): Resource<Unit> = firebaseCall("Failed to edit message") {
-        val body = JSONObject().apply { put("text", newText) }
-        api.patch("/api/rooms/$roomId/messages/$messageId", body)
+        firestore.document("rooms/$roomId/messages/$messageId").update(
+            mapOf(
+                "text" to newText,
+                "isEdited" to true,
+                "editedAt" to System.currentTimeMillis()
+            )
+        ).await()
     }
 }

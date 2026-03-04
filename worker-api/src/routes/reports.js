@@ -19,12 +19,52 @@
 
 const { json, jsonError, generateId, now, parseBody } = require('../utils');
 const { requireAdmin } = require('../middleware/auth');
-const { sendFcmToTokens, cleanupInvalidTokens } = require('../utils/fcm');
+const { sendFcmToTokens } = require('../utils/fcm');
 const { sendSystemPm } = require('../utils/system-pm');
 const { computeDisplayScore } = require('../utils/gcs');
 const { writeRtdb, deleteRtdb } = require('../utils/rtdb');
+const {
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  queryCollection,
+  batchWrite,
+  batchUpdateOp,
+  fieldFilter,
+  andFilter,
+  orderBy,
+} = require('../utils/firestore');
+
+// ─── Helpers ─────────────────────────────────────────────────────
+
+/**
+ * Remove invalid FCM tokens from admin user docs in Firestore.
+ * For each invalid token, finds which admin user doc contains it and removes it.
+ */
+async function cleanupInvalidAdminTokens(env, invalidTokens, adminUsers) {
+  if (!invalidTokens || invalidTokens.length === 0) return;
+
+  const invalidSet = new Set(invalidTokens);
+  const writes = [];
+
+  for (const u of adminUsers) {
+    if (!Array.isArray(u.fcmTokens)) continue;
+    const filtered = u.fcmTokens.filter(t => !invalidSet.has(t));
+    if (filtered.length !== u.fcmTokens.length) {
+      writes.push(batchUpdateOp(env, `users/${u.id}`, { fcmTokens: filtered }));
+    }
+  }
+
+  if (writes.length > 0) {
+    await batchWrite(env, writes);
+  }
+}
+
+// ─── Route registration ──────────────────────────────────────────
 
 function registerReportRoutes(router) {
+
   // ── Submit report ──
   router.post('/api/reports', async (request, env) => {
     const body = await parseBody(request);
@@ -40,46 +80,53 @@ function registerReportRoutes(router) {
       return jsonError('reportedUserId and reason required', 400);
     }
 
-    const reporter = await env.DB.prepare(
-      'SELECT display_name, unique_id FROM users WHERE uid = ?'
-    ).bind(request.auth.uid).first();
+    // Fetch reporter info
+    const reporter = await getDoc(env, `users/${request.auth.uid}`);
 
     const reportId = generateId();
+    const timestamp = now();
 
-    await env.DB.prepare(`
-      INSERT INTO reports (
-        id, reporter_id, reporter_name, reporter_unique_id,
-        reported_user_id, reported_user_name, reported_user_unique_id,
-        conversation_id, message_id, message_text,
-        reason, description, evidence_urls, status, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-    `).bind(
-      reportId, request.auth.uid,
-      reporter?.display_name || null, reporter?.unique_id || null,
-      reportedUserId, reportedUserName || null, reportedUserUniqueId || null,
-      conversationId || null, messageId || null, messageText || null,
-      reason, description || null,
-      evidenceUrls ? JSON.stringify(evidenceUrls) : null,
-      now()
-    ).run();
+    await setDoc(env, `reports/${reportId}`, {
+      reporterId:              request.auth.uid,
+      reporterName:            reporter?.displayName ?? reporter?.display_name ?? null,
+      reporterUniqueId:        reporter?.uniqueId ?? reporter?.unique_id ?? null,
+      reportedUserId:          reportedUserId,
+      reportedUserName:        reportedUserName || null,
+      reportedUserUniqueId:    reportedUserUniqueId || null,
+      conversationId:          conversationId || null,
+      messageId:               messageId || null,
+      messageText:             messageText || null,
+      reason:                  reason,
+      description:             description || null,
+      evidenceUrls:            evidenceUrls || [],
+      status:                  'pending',
+      actionTaken:             null,
+      resolvedAt:              null,
+      resolvedBy:              null,
+      createdAt:               timestamp,
+    });
 
     // Fire-and-forget: FCM push notification to admin tokens
     const ctx = request.ctx;
     if (ctx) {
       ctx.waitUntil((async () => {
         try {
-          const { results: adminTokens } = await env.DB.prepare(
-            'SELECT token FROM admin_tokens'
-          ).all();
-          if (adminTokens.length > 0) {
+          const adminUsers = await queryCollection(env, 'users', {
+            where: fieldFilter('userType', 'EQUAL', 'admin'),
+          });
+          const tokens = [];
+          for (const u of adminUsers) {
+            if (Array.isArray(u.fcmTokens)) tokens.push(...u.fcmTokens);
+          }
+          if (tokens.length > 0) {
             const data = {
-              type: 'ADMIN_NEW_REPORT',
+              type:             'ADMIN_NEW_REPORT',
               reportId,
               reason,
               reportedUserName: reportedUserName || 'Unknown',
             };
-            const invalid = await sendFcmToTokens(env, adminTokens.map(t => t.token), data);
-            await cleanupInvalidTokens(env, invalid, 'admin_tokens');
+            const invalid = await sendFcmToTokens(env, tokens, data);
+            await cleanupInvalidAdminTokens(env, invalid, adminUsers);
           }
         } catch (err) {
           console.error('Failed to send report notification:', err);
@@ -96,90 +143,89 @@ function registerReportRoutes(router) {
     if (adminCheck) return adminCheck;
 
     const url = new URL(request.url);
-    const status = url.searchParams.get('status') || 'pending';
-    const userId = url.searchParams.get('userId');
-    const search = url.searchParams.get('search');
+    const statusFilter = url.searchParams.get('status') || 'pending';
+    const userIdFilter = url.searchParams.get('userId');
+    const search = url.searchParams.get('search')?.toLowerCase();
 
-    let query = 'SELECT * FROM reports WHERE 1=1';
-    const binds = [];
-
-    if (status) {
-      query += ' AND status = ?';
-      binds.push(status);
-    }
-    if (userId) {
-      query += ' AND reported_user_id = ?';
-      binds.push(userId);
-    }
-    if (search) {
-      query += ' AND (reported_user_name LIKE ? OR reporter_name LIKE ? OR reason LIKE ? OR description LIKE ?)';
-      const searchTerm = `%${search}%`;
-      binds.push(searchTerm, searchTerm, searchTerm, searchTerm);
+    // Build Firestore filters
+    const filters = [fieldFilter('status', 'EQUAL', statusFilter)];
+    if (userIdFilter) {
+      filters.push(fieldFilter('reportedUserId', 'EQUAL', userIdFilter));
     }
 
-    query += ' ORDER BY created_at ' + (status === 'pending' ? 'ASC' : 'DESC');
-    query += ' LIMIT 500';
+    const direction = statusFilter === 'pending' ? 'ASCENDING' : 'DESCENDING';
 
-    const { results: reports } = await env.DB.prepare(query).bind(...binds).all();
+    const reports = await queryCollection(env, 'reports', {
+      where:   filters.length === 1 ? filters[0] : andFilter(...filters),
+      orderBy: [orderBy('createdAt', direction)],
+      limit:   500,
+    });
 
-    // Collect all unique reported user IDs for enrichment
-    const reportedUserIds = [...new Set(reports.map(r => r.reported_user_id))];
-    const reporterIds = [...new Set(reports.map(r => r.reporter_id))];
+    // Client-side search filter (Firestore doesn't support full-text search)
+    const filtered = search
+      ? reports.filter(r =>
+          (r.reportedUserName  || '').toLowerCase().includes(search) ||
+          (r.reporterName      || '').toLowerCase().includes(search) ||
+          (r.reason            || '').toLowerCase().includes(search) ||
+          (r.description       || '').toLowerCase().includes(search)
+        )
+      : reports;
 
-    // Batch-fetch user enrichment data
+    // Collect all unique user IDs for enrichment
+    const reportedUserIds = [...new Set(filtered.map(r => r.reportedUserId).filter(Boolean))];
+    const reporterIds     = [...new Set(filtered.map(r => r.reporterId).filter(Boolean))];
+
+    // Parallel-fetch user enrichment data and report locks
+    const [reportedUserDocs, reporterDocs, locks] = await Promise.all([
+      Promise.all(reportedUserIds.map(uid => getDoc(env, `users/${uid}`))),
+      Promise.all(reporterIds.map(uid => getDoc(env, `users/${uid}`))),
+      queryCollection(env, 'reportLocks', {}),
+    ]);
+
+    // Build lookup maps
     const userMap = {};
-    if (reportedUserIds.length > 0) {
-      const placeholders = reportedUserIds.map(() => '?').join(',');
-      const { results: users } = await env.DB.prepare(
-        `SELECT uid, display_name, unique_id, gcs_score, gcs_last_deduction_at,
-                warning_count, is_suspended, suspension_reason,
-                pre_suspension_display_name, pre_suspension_profile_photo_url
-         FROM users WHERE uid IN (${placeholders})`
-      ).bind(...reportedUserIds).all();
-      for (const u of users) {
-        u.gcs_display_score = computeDisplayScore(u.gcs_score, u.gcs_last_deduction_at);
-        userMap[u.uid] = u;
+    for (let i = 0; i < reportedUserIds.length; i++) {
+      const u = reportedUserDocs[i];
+      if (u) {
+        const gcsScore         = u.gcsScore         ?? u.gcs_score          ?? 100;
+        const gcsLastDeduction = u.gcsLastDeductionAt ?? u.gcs_last_deduction_at ?? null;
+        u.gcsDisplayScore = computeDisplayScore(gcsScore, gcsLastDeduction);
+        userMap[reportedUserIds[i]] = u;
       }
     }
 
     const reporterMap = {};
-    if (reporterIds.length > 0) {
-      const placeholders = reporterIds.map(() => '?').join(',');
-      const { results: reporters } = await env.DB.prepare(
-        `SELECT uid, display_name, unique_id FROM users WHERE uid IN (${placeholders})`
-      ).bind(...reporterIds).all();
-      for (const r of reporters) reporterMap[r.uid] = r;
+    for (let i = 0; i < reporterIds.length; i++) {
+      const u = reporterDocs[i];
+      if (u) reporterMap[reporterIds[i]] = u;
     }
 
-    // Fetch locks
     const lockMap = {};
-    const { results: locks } = await env.DB.prepare(
-      'SELECT * FROM report_locks'
-    ).all();
     for (const lock of locks) {
-      lockMap[lock.report_id] = lock;
+      // reportLocks documents are keyed by userId (the reported user)
+      lockMap[lock.id] = lock;
     }
 
     // Enrich reports
-    const enriched = reports.map(r => ({
+    const enriched = filtered.map(r => ({
       ...r,
-      evidence_urls: r.evidence_urls ? JSON.parse(r.evidence_urls) : [],
-      reported_user: userMap[r.reported_user_id] || null,
-      reporter: reporterMap[r.reporter_id] || null,
-      lock: lockMap[r.reported_user_id] || null,
+      evidenceUrls:  r.evidenceUrls || [],
+      reportedUser:  userMap[r.reportedUserId] || null,
+      reporter:      reporterMap[r.reporterId] || null,
+      lock:          lockMap[r.reportedUserId] || null,
     }));
 
     // Group by reported user for pending reports
-    if (status === 'pending') {
+    if (statusFilter === 'pending') {
       const grouped = {};
       for (const r of enriched) {
-        const key = r.reported_user_id;
+        const key = r.reportedUserId;
         if (!grouped[key]) {
           grouped[key] = {
             reportedUserId: key,
-            reportedUser: r.reported_user,
-            lock: r.lock,
-            reports: [],
+            reportedUser:   r.reportedUser,
+            lock:           r.lock,
+            reports:        [],
           };
         }
         grouped[key].reports.push(r);
@@ -199,81 +245,82 @@ function registerReportRoutes(router) {
     const action = body?.action || 'dismissed';
     const timestamp = now();
 
-    // Get the report
-    const report = await env.DB.prepare(
-      'SELECT * FROM reports WHERE id = ?'
-    ).bind(params.id).first();
+    // Fetch the report
+    const report = await getDoc(env, `reports/${params.id}`);
     if (!report) return jsonError('Report not found', 404);
 
-    const stmts = [
-      env.DB.prepare(`
-        UPDATE reports SET status = 'resolved', action_taken = ?, resolved_at = ?, resolved_by = ?
-        WHERE id = ?
-      `).bind(action, timestamp, request.auth.uid, params.id),
+    // Resolve the report
+    await updateDoc(env, `reports/${params.id}`, {
+      status:     'resolved',
+      actionTaken: action,
+      resolvedAt:  timestamp,
+      resolvedBy:  request.auth.uid,
+    });
 
-      // Audit log
-      env.DB.prepare(`
-        INSERT INTO admin_audit_log (id, admin_id, action, target_user_id, details, created_at)
-        VALUES (?, ?, 'RESOLVE_REPORT', ?, ?, ?)
-      `).bind(generateId(), request.auth.uid, report.reported_user_id,
-        `Report ${params.id}: ${action}`, timestamp),
-    ];
+    // Audit log (fire-and-forget)
+    const auditWrite = setDoc(env, `adminAuditLog/${generateId()}`, {
+      adminId:      request.auth.uid,
+      action:       'RESOLVE_REPORT',
+      targetUserId: report.reportedUserId,
+      details:      `Report ${params.id}: ${action}`,
+      createdAt:    timestamp,
+    });
 
-    // If action involves warning, deduct GCS and set warning fields
+    // Warning actions: deduct GCS and update user
     if (action === 'warned' || action === 'warned_severe') {
-      const severity = action === 'warned_severe' ? 'severe' : 'standard';
+      const severity  = action === 'warned_severe' ? 'severe' : 'standard';
       const deduction = severity === 'severe' ? 20 : 10;
 
-      const user = await env.DB.prepare(
-        'SELECT gcs_score, warning_count FROM users WHERE uid = ?'
-      ).bind(report.reported_user_id).first();
-
+      const user = await getDoc(env, `users/${report.reportedUserId}`);
       if (user) {
-        const newGcs = Math.max(0, (user.gcs_score || 100) - deduction);
-        const newWarningCount = (user.warning_count || 0) + 1;
+        const gcsScore     = user.gcsScore     ?? user.gcs_score     ?? 100;
+        const warningCount = user.warningCount  ?? user.warning_count ?? 0;
+        const newGcs           = Math.max(0, gcsScore - deduction);
+        const newWarningCount  = warningCount + 1;
+        const warningReason    = body?.reason || report.reason;
 
-        stmts.push(env.DB.prepare(`
-          UPDATE users SET
-            gcs_score = ?, gcs_last_deduction_at = ?,
-            warning_count = ?, warning_reason = ?,
-            has_active_warning = 1, warning_issued_at = ?
-          WHERE uid = ?
-        `).bind(newGcs, timestamp, newWarningCount, body.reason || report.reason,
-          timestamp, report.reported_user_id));
+        await updateDoc(env, `users/${report.reportedUserId}`, {
+          gcsScore:           newGcs,
+          gcsLastDeductionAt: timestamp,
+          warningCount:       newWarningCount,
+          warningReason:      warningReason,
+          hasActiveWarning:   true,
+          hasNewWarning:      true,
+          warningIssuedAt:    timestamp,
+        });
 
         // Send warning PM (fire-and-forget)
         const ctx = request.ctx;
         if (ctx) {
           ctx.waitUntil(
-            sendSystemPm(env, report.reported_user_id,
-              `⚠️ You have received a warning.\n\nReason: ${body.reason || report.reason}\n\nYour Good Character Score has been reduced by ${deduction} points (now ${newGcs}/100).`
+            sendSystemPm(env, report.reportedUserId,
+              `\u26a0\ufe0f You have received a warning.\n\nReason: ${warningReason}\n\nYour Good Character Score has been reduced by ${deduction} points (now ${newGcs}/100).`
             ).catch(err => console.error('Failed to send warning PM:', err))
           );
         }
       }
     }
 
-    // Send resolution PM to reporter (fire-and-forget)
+    // Resolution PM to reporter (fire-and-forget)
     const ctx = request.ctx;
-    if (ctx && report.reporter_id) {
-      const actionText = action === 'dismissed' ? 'reviewed and dismissed'
-        : action === 'warned' ? 'reviewed and a warning was issued'
-        : action === 'warned_severe' ? 'reviewed and a severe warning was issued'
-        : action === 'suspended' ? 'reviewed and the user has been suspended'
+    if (ctx && report.reporterId) {
+      const actionText = action === 'dismissed'      ? 'reviewed and dismissed'
+        : action === 'warned'                        ? 'reviewed and a warning was issued'
+        : action === 'warned_severe'                 ? 'reviewed and a severe warning was issued'
+        : action === 'suspended'                     ? 'reviewed and the user has been suspended'
         : 'reviewed';
       ctx.waitUntil(
-        sendSystemPm(env, report.reporter_id,
+        sendSystemPm(env, report.reporterId,
           `Your report has been ${actionText}. Thank you for helping keep ShyTalk safe.`
         ).catch(err => console.error('Failed to send reporter PM:', err))
       );
     }
 
-    await env.DB.batch(stmts);
-
-    // Release lock
-    await env.DB.prepare(
-      'DELETE FROM report_locks WHERE report_id = ?'
-    ).bind(report.reported_user_id).run();
+    // Release lock and write audit log in parallel
+    await Promise.all([
+      auditWrite,
+      deleteDoc(env, `reportLocks/${report.reportedUserId}`),
+    ]);
 
     return json({ success: true });
   });
@@ -287,66 +334,79 @@ function registerReportRoutes(router) {
     const action = body?.action || 'dismissed';
     const timestamp = now();
 
-    const { results: reports } = await env.DB.prepare(
-      "SELECT id, reporter_id FROM reports WHERE reported_user_id = ? AND status = 'pending'"
-    ).bind(params.userId).all();
+    // Fetch all pending reports for this user
+    const reports = await queryCollection(env, 'reports', {
+      where: andFilter(
+        fieldFilter('reportedUserId', 'EQUAL', params.userId),
+        fieldFilter('status', 'EQUAL', 'pending')
+      ),
+    });
 
     if (reports.length === 0) return json({ success: true, resolved: 0 });
 
-    const stmts = [];
-    for (const report of reports) {
-      stmts.push(env.DB.prepare(`
-        UPDATE reports SET status = 'resolved', action_taken = ?, resolved_at = ?, resolved_by = ?
-        WHERE id = ?
-      `).bind(action, timestamp, request.auth.uid, report.id));
-    }
+    // Resolve all reports via batch
+    const writes = reports.map(r => batchUpdateOp(env, `reports/${r.id}`, {
+      status:     'resolved',
+      actionTaken: action,
+      resolvedAt:  timestamp,
+      resolvedBy:  request.auth.uid,
+    }));
 
     // Apply warning if applicable
     if (action === 'warned' || action === 'warned_severe') {
-      const severity = action === 'warned_severe' ? 'severe' : 'standard';
+      const severity  = action === 'warned_severe' ? 'severe' : 'standard';
       const deduction = severity === 'severe' ? 20 : 10;
 
-      const user = await env.DB.prepare(
-        'SELECT gcs_score, warning_count FROM users WHERE uid = ?'
-      ).bind(params.userId).first();
-
+      const user = await getDoc(env, `users/${params.userId}`);
       if (user) {
-        const newGcs = Math.max(0, (user.gcs_score || 100) - deduction);
-        const newWarningCount = (user.warning_count || 0) + 1;
+        const gcsScore     = user.gcsScore     ?? user.gcs_score     ?? 100;
+        const warningCount = user.warningCount  ?? user.warning_count ?? 0;
+        const newGcs          = Math.max(0, gcsScore - deduction);
+        const newWarningCount = warningCount + 1;
+        const warningReason   = body?.reason || 'Multiple reports';
 
-        stmts.push(env.DB.prepare(`
-          UPDATE users SET
-            gcs_score = ?, gcs_last_deduction_at = ?,
-            warning_count = ?, warning_reason = ?,
-            has_active_warning = 1, warning_issued_at = ?
-          WHERE uid = ?
-        `).bind(newGcs, timestamp, newWarningCount, body.reason || 'Multiple reports',
-          timestamp, params.userId));
+        writes.push(batchUpdateOp(env, `users/${params.userId}`, {
+          gcsScore:           newGcs,
+          gcsLastDeductionAt: timestamp,
+          warningCount:       newWarningCount,
+          warningReason:      warningReason,
+          hasActiveWarning:   true,
+          hasNewWarning:      true,
+          warningIssuedAt:    timestamp,
+        }));
 
         const ctx = request.ctx;
         if (ctx) {
           ctx.waitUntil(
             sendSystemPm(env, params.userId,
-              `⚠️ You have received a warning based on multiple reports.\n\nReason: ${body.reason || 'Multiple reports'}\n\nYour Good Character Score has been reduced by ${deduction} points (now ${newGcs}/100).`
+              `\u26a0\ufe0f You have received a warning based on multiple reports.\n\nReason: ${warningReason}\n\nYour Good Character Score has been reduced by ${deduction} points (now ${newGcs}/100).`
             ).catch(err => console.error('Failed to send warning PM:', err))
           );
         }
       }
     }
 
-    // Audit log
-    stmts.push(env.DB.prepare(`
-      INSERT INTO admin_audit_log (id, admin_id, action, target_user_id, details, created_at)
-      VALUES (?, ?, 'RESOLVE_ALL_REPORTS', ?, ?, ?)
-    `).bind(generateId(), request.auth.uid, params.userId,
-      `Resolved ${reports.length} reports: ${action}`, timestamp));
+    // Execute batch writes
+    for (let i = 0; i < writes.length; i += 500) {
+      await batchWrite(env, writes.slice(i, i + 500));
+    }
 
-    await env.DB.batch(stmts);
+    // Audit log and lock release in parallel
+    await Promise.all([
+      setDoc(env, `adminAuditLog/${generateId()}`, {
+        adminId:      request.auth.uid,
+        action:       'RESOLVE_ALL_REPORTS',
+        targetUserId: params.userId,
+        details:      `Resolved ${reports.length} reports: ${action}`,
+        createdAt:    timestamp,
+      }),
+      deleteDoc(env, `reportLocks/${params.userId}`),
+    ]);
 
-    // Send resolution PMs to all reporters (fire-and-forget)
+    // Resolution PMs to all unique reporters (fire-and-forget)
     const ctx = request.ctx;
     if (ctx) {
-      const uniqueReporters = [...new Set(reports.map(r => r.reporter_id).filter(Boolean))];
+      const uniqueReporters = [...new Set(reports.map(r => r.reporterId).filter(Boolean))];
       for (const reporterId of uniqueReporters) {
         ctx.waitUntil(
           sendSystemPm(env, reporterId,
@@ -356,11 +416,6 @@ function registerReportRoutes(router) {
       }
     }
 
-    // Release lock
-    await env.DB.prepare(
-      'DELETE FROM report_locks WHERE report_id = ?'
-    ).bind(params.userId).run();
-
     return json({ success: true, resolved: reports.length });
   });
 
@@ -369,37 +424,62 @@ function registerReportRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    const pending = await env.DB.prepare(
-      "SELECT COUNT(*) as count FROM reports WHERE status = 'pending'"
-    ).first();
-
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayMs = todayStart.getTime();
 
-    const resolvedToday = await env.DB.prepare(
-      "SELECT COUNT(*) as count FROM reports WHERE status = 'resolved' AND resolved_at >= ?"
-    ).bind(todayMs).first();
+    // Fetch pending and resolved-today in parallel
+    const [pendingReports, resolvedTodayReports, allResolved] = await Promise.all([
+      queryCollection(env, 'reports', {
+        where: fieldFilter('status', 'EQUAL', 'pending'),
+        limit: 1000,
+      }),
+      queryCollection(env, 'reports', {
+        where: andFilter(
+          fieldFilter('status', 'EQUAL', 'resolved'),
+          fieldFilter('resolvedAt', 'GREATER_THAN_OR_EQUAL', todayMs)
+        ),
+        limit: 1000,
+      }),
+      queryCollection(env, 'reports', {
+        where: andFilter(
+          fieldFilter('status', 'EQUAL', 'resolved'),
+          fieldFilter('resolvedAt', 'GREATER_THAN', 0)
+        ),
+        limit: 5000,
+      }),
+    ]);
 
-    const avgResponse = await env.DB.prepare(
-      "SELECT AVG(resolved_at - created_at) as avg_ms FROM reports WHERE status = 'resolved' AND resolved_at IS NOT NULL"
-    ).first();
-
-    const avgResponseHours = avgResponse?.avg_ms
-      ? Math.round(avgResponse.avg_ms / (60 * 60 * 1000) * 10) / 10
+    // Compute average response time from all resolved reports
+    let totalMs = 0;
+    let countWithTimes = 0;
+    for (const r of allResolved) {
+      if (r.resolvedAt && r.createdAt) {
+        totalMs += (r.resolvedAt - r.createdAt);
+        countWithTimes++;
+      }
+    }
+    const avgResponseHours = countWithTimes > 0
+      ? Math.round((totalMs / countWithTimes) / (60 * 60 * 1000) * 10) / 10
       : 0;
 
-    const { results: reviewers } = await env.DB.prepare(`
-      SELECT resolved_by, COUNT(*) as count
-      FROM reports WHERE status = 'resolved' AND resolved_at >= ?
-      GROUP BY resolved_by
-    `).bind(todayMs).all();
+    // Active reviewers today
+    const reviewerCounts = {};
+    for (const r of resolvedTodayReports) {
+      if (r.resolvedBy) {
+        reviewerCounts[r.resolvedBy] = (reviewerCounts[r.resolvedBy] || 0) + 1;
+      }
+    }
+    const activeReviewers = Object.entries(reviewerCounts).map(([resolvedBy, count]) => ({
+      resolvedBy,
+      count,
+    }));
 
     return json({
-      pendingCount: pending?.count || 0,
-      resolvedToday: resolvedToday?.count || 0,
+      pendingCount:     pendingReports.length,
+      resolvedToday:    resolvedTodayReports.length,
       avgResponseHours,
-      activeReviewers: reviewers,
+      activeReviewers,
     });
   });
 
@@ -410,37 +490,40 @@ function registerReportRoutes(router) {
 
     const url = new URL(request.url);
     const from = url.searchParams.get('from');
-    const to = url.searchParams.get('to');
+    const to   = url.searchParams.get('to');
 
-    let query = "SELECT * FROM reports WHERE status = 'resolved'";
-    const binds = [];
+    const fromMs = from ? new Date(from).getTime() : null;
+    const toMs   = to   ? new Date(to + 'T23:59:59.999Z').getTime() : null;
 
-    if (from) {
-      query += ' AND resolved_at >= ?';
-      binds.push(new Date(from).getTime());
-    }
-    if (to) {
-      query += ' AND resolved_at <= ?';
-      binds.push(new Date(to + 'T23:59:59.999Z').getTime());
+    // Build query filters
+    const filters = [fieldFilter('status', 'EQUAL', 'resolved')];
+    if (fromMs && !isNaN(fromMs)) {
+      filters.push(fieldFilter('resolvedAt', 'GREATER_THAN_OR_EQUAL', fromMs));
     }
 
-    query += ' ORDER BY resolved_at DESC LIMIT 5000';
+    const results = await queryCollection(env, 'reports', {
+      where:   filters.length === 1 ? filters[0] : andFilter(...filters),
+      orderBy: [orderBy('resolvedAt', 'DESCENDING')],
+      limit:   5000,
+    });
 
-    const { results } = await env.DB.prepare(query).bind(...binds).all();
+    // Client-side upper bound filter (Firestore requires composite index for two range filters)
+    const rows = toMs && !isNaN(toMs)
+      ? results.filter(r => r.resolvedAt && r.resolvedAt <= toMs)
+      : results;
 
     // Build CSV
     const headers = [
-      'id', 'reporter_name', 'reported_user_name', 'reason', 'description',
-      'action_taken', 'resolved_at', 'resolved_by', 'created_at'
+      'id', 'reporterName', 'reportedUserName', 'reason', 'description',
+      'actionTaken', 'resolvedAt', 'resolvedBy', 'createdAt',
     ];
     const csvRows = [headers.join(',')];
-    for (const r of results) {
+    for (const r of rows) {
       csvRows.push(headers.map(h => {
         let val = r[h] ?? '';
-        if (h === 'resolved_at' || h === 'created_at') {
+        if (h === 'resolvedAt' || h === 'createdAt') {
           val = val ? new Date(val).toISOString() : '';
         }
-        // Escape CSV value
         val = String(val).replace(/"/g, '""');
         return `"${val}"`;
       }).join(','));
@@ -449,7 +532,7 @@ function registerReportRoutes(router) {
     return new Response(csvRows.join('\n'), {
       status: 200,
       headers: {
-        'Content-Type': 'text/csv',
+        'Content-Type':        'text/csv',
         'Content-Disposition': `attachment; filename="reports-export.csv"`,
         'Access-Control-Allow-Origin': '*',
       },
@@ -461,18 +544,15 @@ function registerReportRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    const admin = await env.DB.prepare(
-      'SELECT display_name FROM users WHERE uid = ?'
-    ).bind(request.auth.uid).first();
+    const admin = await getDoc(env, `users/${request.auth.uid}`);
+    const displayName = admin?.displayName ?? admin?.display_name ?? null;
 
-    await env.DB.prepare(`
-      INSERT INTO report_locks (report_id, locked_by, locked_at, display_name)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(report_id) DO UPDATE SET locked_by = ?, locked_at = ?, display_name = ?
-    `).bind(
-      params.id, request.auth.uid, now(), admin?.display_name || null,
-      request.auth.uid, now(), admin?.display_name || null
-    ).run();
+    // reportLocks is keyed by the reported userId (same as report ID here)
+    await setDoc(env, `reportLocks/${params.id}`, {
+      lockedBy:    request.auth.uid,
+      lockedAt:    now(),
+      displayName: displayName,
+    });
 
     return json({ success: true });
   });
@@ -482,15 +562,13 @@ function registerReportRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    await env.DB.prepare(
-      'DELETE FROM report_locks WHERE report_id = ?'
-    ).bind(params.id).run();
+    await deleteDoc(env, `reportLocks/${params.id}`);
 
     return json({ success: true });
   });
 
   // ══════════════════════════════════════════════════════════════
-  // SUSPENSIONS (admin)
+  // SUSPENSIONS (admin — canonical routes)
   // ══════════════════════════════════════════════════════════════
 
   // ── Suspend user ──
@@ -510,48 +588,45 @@ function registerReportRoutes(router) {
       endTimestamp = d.getTime();
     }
 
-    const user = await env.DB.prepare(
-      'SELECT display_name, profile_photo_url, cover_photo_url FROM users WHERE uid = ?'
-    ).bind(params.uid).first();
-
+    const user = await getDoc(env, `users/${params.uid}`);
     if (!user) return jsonError('User not found', 404);
 
     const timestamp = now();
-    const stmts = [
-      env.DB.prepare(`
-        UPDATE users SET
-          is_suspended = 1,
-          suspension_reason = ?,
-          suspension_start_date = ?,
-          suspension_end_date = ?,
-          suspension_can_appeal = ?,
-          suspended_by = ?,
-          pre_suspension_display_name = ?,
-          pre_suspension_profile_photo_url = ?,
-          pre_suspension_cover_photo_url = ?,
-          display_name = 'Suspended Account',
-          profile_photo_url = NULL,
-          cover_photo_url = NULL,
-          avatar_url = NULL,
-          current_room_id = NULL
-        WHERE uid = ?
-      `).bind(
-        body.reason.trim(), timestamp, endTimestamp,
-        body.canAppeal ? 1 : 0, request.auth.uid,
-        user.display_name, user.profile_photo_url, user.cover_photo_url,
-        params.uid
-      ),
-      env.DB.prepare(`
-        INSERT INTO admin_audit_log (id, admin_id, action, target_user_id, details, created_at)
-        VALUES (?, ?, 'SUSPEND', ?, ?, ?)
-      `).bind(generateId(), request.auth.uid, params.uid, body.reason, timestamp),
-    ];
-    await env.DB.batch(stmts);
+
+    await Promise.all([
+      updateDoc(env, `users/${params.uid}`, {
+        isSuspended:                  true,
+        suspensionReason:             body.reason.trim(),
+        suspensionStartDate:          timestamp,
+        suspensionExpiry:             endTimestamp,
+        suspensionCanAppeal:          body.canAppeal,
+        suspendedBy:                  request.auth.uid,
+        preSuspensionDisplayName:     user.displayName     ?? user.display_name     ?? null,
+        preSuspensionProfilePhotoUrl: user.profilePhotoUrl ?? user.profile_photo_url ?? null,
+        preSuspensionCoverPhotoUrl:   user.coverPhotoUrl   ?? user.cover_photo_url   ?? null,
+        displayName:                  'Suspended Account',
+        profilePhotoUrl:              null,
+        coverPhotoUrl:                null,
+        avatarUrl:                    null,
+        bio:                          null,
+        currentRoomId:                null,
+      }),
+      setDoc(env, `adminAuditLog/${generateId()}`, {
+        adminId:      request.auth.uid,
+        action:       'SUSPEND',
+        targetUserId: params.uid,
+        details:      body.reason.trim(),
+        createdAt:    timestamp,
+      }),
+    ]);
 
     // Evict from rooms (fire-and-forget)
     const ctx = request.ctx;
     if (ctx) {
-      ctx.waitUntil(evictSuspendedUser(env, params.uid));
+      ctx.waitUntil(
+        evictSuspendedUser(env, params.uid)
+          .catch(err => console.error('Failed to evict suspended user:', err))
+      );
     }
 
     return json({ success: true });
@@ -562,50 +637,39 @@ function registerReportRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    const user = await env.DB.prepare(
-      'SELECT pre_suspension_display_name, pre_suspension_profile_photo_url, pre_suspension_cover_photo_url FROM users WHERE uid = ?'
-    ).bind(params.uid).first();
-
+    const user = await getDoc(env, `users/${params.uid}`);
     if (!user) return jsonError('User not found', 404);
 
-    const updates = [
-      'is_suspended = 0',
-      'suspension_reason = NULL',
-      'suspension_start_date = NULL',
-      'suspension_end_date = NULL',
-      'suspension_can_appeal = NULL',
-      'suspended_by = NULL',
-    ];
-    const binds = [];
+    const preName  = user.preSuspensionDisplayName     ?? user.pre_suspension_display_name     ?? null;
+    const prePhoto = user.preSuspensionProfilePhotoUrl  ?? user.pre_suspension_profile_photo_url ?? null;
+    const preCover = user.preSuspensionCoverPhotoUrl    ?? user.pre_suspension_cover_photo_url   ?? null;
 
-    if (user.pre_suspension_display_name) {
-      updates.push('display_name = ?');
-      binds.push(user.pre_suspension_display_name);
-    }
-    if (user.pre_suspension_profile_photo_url) {
-      updates.push('profile_photo_url = ?');
-      binds.push(user.pre_suspension_profile_photo_url);
-    }
-    if (user.pre_suspension_cover_photo_url) {
-      updates.push('cover_photo_url = ?');
-      binds.push(user.pre_suspension_cover_photo_url);
-    }
-    updates.push(
-      'pre_suspension_display_name = NULL',
-      'pre_suspension_profile_photo_url = NULL',
-      'pre_suspension_cover_photo_url = NULL'
-    );
+    const restore = {};
+    if (preName)  restore.displayName     = preName;
+    if (prePhoto) restore.profilePhotoUrl = prePhoto;
+    if (preCover) restore.coverPhotoUrl   = preCover;
 
-    binds.push(params.uid);
-    await env.DB.prepare(
-      `UPDATE users SET ${updates.join(', ')} WHERE uid = ?`
-    ).bind(...binds).run();
-
-    // Audit log
-    await env.DB.prepare(`
-      INSERT INTO admin_audit_log (id, admin_id, action, target_user_id, details, created_at)
-      VALUES (?, ?, 'UNSUSPEND', ?, NULL, ?)
-    `).bind(generateId(), request.auth.uid, params.uid, now()).run();
+    await Promise.all([
+      updateDoc(env, `users/${params.uid}`, {
+        isSuspended:                  false,
+        suspensionReason:             null,
+        suspensionStartDate:          null,
+        suspensionExpiry:             null,
+        suspensionCanAppeal:          null,
+        suspendedBy:                  null,
+        preSuspensionDisplayName:     null,
+        preSuspensionProfilePhotoUrl: null,
+        preSuspensionCoverPhotoUrl:   null,
+        ...restore,
+      }),
+      setDoc(env, `adminAuditLog/${generateId()}`, {
+        adminId:      request.auth.uid,
+        action:       'UNSUSPEND',
+        targetUserId: params.uid,
+        details:      null,
+        createdAt:    now(),
+      }),
+    ]);
 
     return json({ success: true });
   });
@@ -621,53 +685,68 @@ function registerReportRoutes(router) {
 
     const uid = request.auth.uid;
 
-    const user = await env.DB.prepare(
-      'SELECT is_suspended, suspension_can_appeal FROM users WHERE uid = ?'
-    ).bind(uid).first();
+    const user = await getDoc(env, `users/${uid}`);
+    const isSuspended      = user?.isSuspended      ?? user?.is_suspended      ?? false;
+    const canAppeal        = user?.suspensionCanAppeal ?? user?.suspension_can_appeal ?? false;
 
-    if (!user?.is_suspended) return jsonError('User is not suspended', 400);
-    if (!user.suspension_can_appeal) return jsonError('Appeals are not allowed for this suspension', 403);
+    if (!isSuspended) return jsonError('User is not suspended', 400);
+    if (!canAppeal)   return jsonError('Appeals are not allowed for this suspension', 403);
 
-    const existing = await env.DB.prepare(
-      "SELECT id FROM suspension_appeals WHERE user_id = ? AND status = 'pending'"
-    ).bind(uid).first();
+    // Check for existing pending appeal
+    const existing = await queryCollection(env, 'suspensionAppeals', {
+      where: andFilter(
+        fieldFilter('userId', 'EQUAL', uid),
+        fieldFilter('status', 'EQUAL', 'pending')
+      ),
+      limit: 1,
+    });
 
-    if (existing) return jsonError('An appeal is already pending', 409);
+    if (existing.length > 0) return jsonError('An appeal is already pending', 409);
 
     const appealId = generateId();
-    await env.DB.prepare(`
-      INSERT INTO suspension_appeals (id, user_id, appeal_text, status, created_at)
-      VALUES (?, ?, ?, 'pending', ?)
-    `).bind(appealId, uid, body.appealText, now()).run();
+    await setDoc(env, `suspensionAppeals/${appealId}`, {
+      userId:     uid,
+      appealText: body.appealText,
+      status:     'pending',
+      reviewedBy: null,
+      reviewedAt: null,
+      createdAt:  now(),
+    });
 
     return json({ success: true, appealId });
   });
 
-  // ── List appeals (admin) — supports status filter ──
+  // ── List appeals (admin) ──
   router.get('/api/appeals', async (request, env) => {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
     const url = new URL(request.url);
-    const status = url.searchParams.get('status');
+    const statusFilter = url.searchParams.get('status');
 
-    let query = `
-      SELECT sa.*, u.display_name, u.unique_id, u.suspension_reason, u.suspension_end_date
-      FROM suspension_appeals sa
-      JOIN users u ON u.uid = sa.user_id
-    `;
-    const binds = [];
-
-    if (status) {
-      query += ' WHERE sa.status = ?';
-      binds.push(status);
+    const query = {};
+    if (statusFilter) {
+      query.where = fieldFilter('status', 'EQUAL', statusFilter);
     }
+    query.orderBy = [orderBy('createdAt', 'DESCENDING')];
+    query.limit   = 100;
 
-    query += ' ORDER BY sa.created_at DESC LIMIT 100';
+    const appeals = await queryCollection(env, 'suspensionAppeals', query);
 
-    const { results: appeals } = await env.DB.prepare(query).bind(...binds).all();
+    // Enrich with user data (display name, uniqueId, suspension info)
+    const enriched = await Promise.all(appeals.map(async a => {
+      const uid = a.userId ?? a.user_id;
+      const userData = uid ? await getDoc(env, `users/${uid}`) : null;
+      return {
+        ...a,
+        displayName:      userData?.displayName     ?? userData?.display_name     ?? null,
+        uniqueId:         userData?.uniqueId        ?? userData?.unique_id        ?? null,
+        suspensionReason: userData?.suspensionReason ?? userData?.suspension_reason ?? null,
+        suspensionExpiry: userData?.suspensionExpiry ?? userData?.suspension_end_date ?? null,
+      };
+    }));
 
-    return json(appeals);
+    return json(enriched);
   });
 
   // ── Review appeal (admin) ──
@@ -681,63 +760,55 @@ function registerReportRoutes(router) {
       return jsonError('status must be "approved" or "denied"', 400);
     }
 
-    const appeal = await env.DB.prepare(
-      'SELECT user_id FROM suspension_appeals WHERE id = ?'
-    ).bind(params.id).first();
-
+    const appeal = await getDoc(env, `suspensionAppeals/${params.id}`);
     if (!appeal) return jsonError('Appeal not found', 404);
 
-    const stmts = [
-      env.DB.prepare(`
-        UPDATE suspension_appeals SET status = ?, reviewed_by = ?, reviewed_at = ?
-        WHERE id = ?
-      `).bind(status, request.auth.uid, now(), params.id),
-    ];
+    const timestamp = now();
+    const userId    = appeal.userId ?? appeal.user_id;
 
+    // Update the appeal document
+    await updateDoc(env, `suspensionAppeals/${params.id}`, {
+      status:     status,
+      reviewedBy: request.auth.uid,
+      reviewedAt: timestamp,
+    });
+
+    // If approved, unsuspend the user
     if (status === 'approved') {
-      const user = await env.DB.prepare(
-        'SELECT pre_suspension_display_name, pre_suspension_profile_photo_url, pre_suspension_cover_photo_url FROM users WHERE uid = ?'
-      ).bind(appeal.user_id).first();
+      const user = await getDoc(env, `users/${userId}`);
+      if (user) {
+        const preName  = user.preSuspensionDisplayName     ?? user.pre_suspension_display_name     ?? null;
+        const prePhoto = user.preSuspensionProfilePhotoUrl  ?? user.pre_suspension_profile_photo_url ?? null;
+        const preCover = user.preSuspensionCoverPhotoUrl    ?? user.pre_suspension_cover_photo_url   ?? null;
 
-      let unsuspendSql = `UPDATE users SET
-        is_suspended = 0, suspension_reason = NULL,
-        suspension_start_date = NULL, suspension_end_date = NULL,
-        suspension_can_appeal = NULL, suspended_by = NULL,
-        pre_suspension_display_name = NULL,
-        pre_suspension_profile_photo_url = NULL,
-        pre_suspension_cover_photo_url = NULL`;
-      const unsuspendBinds = [];
+        const restore = {};
+        if (preName)  restore.displayName     = preName;
+        if (prePhoto) restore.profilePhotoUrl = prePhoto;
+        if (preCover) restore.coverPhotoUrl   = preCover;
 
-      if (user?.pre_suspension_display_name) {
-        unsuspendSql += ', display_name = ?';
-        unsuspendBinds.push(user.pre_suspension_display_name);
+        await updateDoc(env, `users/${userId}`, {
+          isSuspended:                  false,
+          suspensionReason:             null,
+          suspensionStartDate:          null,
+          suspensionExpiry:             null,
+          suspensionCanAppeal:          null,
+          suspendedBy:                  null,
+          preSuspensionDisplayName:     null,
+          preSuspensionProfilePhotoUrl: null,
+          preSuspensionCoverPhotoUrl:   null,
+          ...restore,
+        });
       }
-      if (user?.pre_suspension_profile_photo_url) {
-        unsuspendSql += ', profile_photo_url = ?';
-        unsuspendBinds.push(user.pre_suspension_profile_photo_url);
-      }
-      if (user?.pre_suspension_cover_photo_url) {
-        unsuspendSql += ', cover_photo_url = ?';
-        unsuspendBinds.push(user.pre_suspension_cover_photo_url);
-      }
-
-      unsuspendSql += ' WHERE uid = ?';
-      unsuspendBinds.push(appeal.user_id);
-
-      stmts.push(env.DB.prepare(unsuspendSql).bind(...unsuspendBinds));
     }
 
     // Audit log
-    stmts.push(env.DB.prepare(`
-      INSERT INTO admin_audit_log (id, admin_id, action, target_user_id, details, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(
-      generateId(), request.auth.uid,
-      status === 'approved' ? 'APPEAL_APPROVED' : 'APPEAL_DENIED',
-      appeal.user_id, null, now()
-    ));
-
-    await env.DB.batch(stmts);
+    await setDoc(env, `adminAuditLog/${generateId()}`, {
+      adminId:      request.auth.uid,
+      action:       status === 'approved' ? 'APPEAL_APPROVED' : 'APPEAL_DENIED',
+      targetUserId: userId,
+      details:      null,
+      createdAt:    timestamp,
+    });
 
     return json({ success: true });
   });
@@ -750,55 +821,100 @@ function registerReportRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    const url = new URL(request.url);
-    const limit = parseInt(url.searchParams.get('limit') || '50');
+    const url   = new URL(request.url);
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 200);
 
-    const { results } = await env.DB.prepare(`
-      SELECT al.*, u.display_name as admin_name
-      FROM admin_audit_log al
-      LEFT JOIN users u ON u.uid = al.admin_id
-      ORDER BY al.created_at DESC
-      LIMIT ?
-    `).bind(limit).all();
+    const entries = await queryCollection(env, 'adminAuditLog', {
+      orderBy: [orderBy('createdAt', 'DESCENDING')],
+      limit,
+    });
 
-    return json(results);
+    // Enrich with admin display name
+    const adminIds = [...new Set(entries.map(e => e.adminId).filter(Boolean))];
+    const adminDocs = await Promise.all(adminIds.map(id => getDoc(env, `users/${id}`)));
+
+    const adminNameMap = {};
+    for (let i = 0; i < adminIds.length; i++) {
+      const doc = adminDocs[i];
+      if (doc) {
+        adminNameMap[adminIds[i]] = doc.displayName ?? doc.display_name ?? null;
+      }
+    }
+
+    const enriched = entries.map(e => ({
+      ...e,
+      adminName: adminNameMap[e.adminId] || null,
+    }));
+
+    return json(enriched);
   });
 }
 
+// ══════════════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════════════
+
 /**
  * Evict a suspended user from all rooms they're in.
+ *
+ * Queries rooms where the user appears in participantIds, removes them from
+ * the participant list, clears their seat, and clears their currentRoomId.
+ * If the user is the owner, the room is closed and an RTDB close event is fired.
  */
 async function evictSuspendedUser(env, userId) {
-  try {
-    const { results: participations } = await env.DB.prepare(
-      'SELECT room_id FROM room_participants WHERE user_id = ?'
-    ).bind(userId).all();
+  const rooms = await queryCollection(env, 'rooms', {
+    where: fieldFilter('participantIds', 'ARRAY_CONTAINS', userId),
+  });
 
-    for (const { room_id: roomId } of participations) {
-      const room = await env.DB.prepare(
-        'SELECT owner_id FROM rooms WHERE id = ?'
-      ).bind(roomId).first();
+  if (rooms.length === 0) return;
 
-      if (!room) continue;
+  const writes = [];
 
-      if (room.owner_id === userId) {
-        try {
-          await writeRtdb(env, `rooms/${roomId}/events/lastEvent`, { type: 'room_closed', ts: Date.now() });
-        } catch {}
-        try { await deleteRtdb(env, `rooms/${roomId}`); } catch {}
-        await env.DB.prepare("UPDATE rooms SET status = 'CLOSED' WHERE id = ?").bind(roomId).run();
-      } else {
-        await env.DB.batch([
-          env.DB.prepare('DELETE FROM room_participants WHERE room_id = ? AND user_id = ?').bind(roomId, userId),
-          env.DB.prepare('DELETE FROM room_seats WHERE room_id = ? AND user_id = ?').bind(roomId, userId),
-        ]);
-        try {
-          await writeRtdb(env, `rooms/${roomId}/events/lastEvent`, { type: 'room_updated', ts: Date.now() });
-        } catch {}
+  for (const room of rooms) {
+    if (room.ownerId === userId) {
+      // Owner suspended — close the room
+      try {
+        await writeRtdb(env, `rooms/${room.id}/events/lastEvent`, {
+          type: 'room_closed',
+          ts:   Date.now(),
+        });
+      } catch (_) { /* best-effort */ }
+      try {
+        await deleteRtdb(env, `rooms/${room.id}`);
+      } catch (_) { /* best-effort */ }
+      writes.push(batchUpdateOp(env, `rooms/${room.id}`, {
+        state:    'CLOSED',
+        closedAt: now(),
+      }));
+    } else {
+      // Regular participant — remove from participants and clear their seat
+      const participantIds = (room.participantIds || []).filter(id => id !== userId);
+
+      const seats = room.seats ? { ...room.seats } : {};
+      for (const [index, seat] of Object.entries(seats)) {
+        if (seat && (seat.userId === userId || seat.user_id === userId)) {
+          seats[index] = { userId: null, state: 'EMPTY', isMuted: false };
+        }
       }
+
+      writes.push(batchUpdateOp(env, `rooms/${room.id}`, { participantIds, seats }));
+
+      // Notify room of the update
+      try {
+        await writeRtdb(env, `rooms/${room.id}/events/lastEvent`, {
+          type: 'room_updated',
+          ts:   Date.now(),
+        });
+      } catch (_) { /* best-effort */ }
     }
-  } catch (err) {
-    console.error(`Failed to evict suspended user ${userId} from rooms:`, err);
+  }
+
+  // Clear user's currentRoomId
+  writes.push(batchUpdateOp(env, `users/${userId}`, { currentRoomId: null }));
+
+  // Batch write in chunks of 500
+  for (let i = 0; i < writes.length; i += 500) {
+    await batchWrite(env, writes.slice(i, i + 500));
   }
 }
 

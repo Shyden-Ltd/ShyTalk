@@ -69,7 +69,7 @@ async function getAccessToken(env) {
   const header = { alg: 'RS256', typ: 'JWT' };
   const payload = {
     iss: email,
-    scope: 'https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/firebase.database',
+    scope: 'https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/datastore',
     aud: 'https://oauth2.googleapis.com/token',
     iat: now,
     exp: now + 3600,
@@ -176,17 +176,27 @@ async function sendFcmToTokens(env, tokens, data) {
 }
 
 /**
- * Delete invalid FCM tokens from a D1 table.
+ * Remove invalid FCM tokens from user docs in Firestore.
+ * Tokens are stored as an array field `fcmTokens` on each user doc.
+ *
+ * @param {object} env - Worker env bindings
+ * @param {string[]} invalidTokens - Tokens that FCM rejected
+ * @param {string} userId - The user ID whose doc contains these tokens
  */
-async function cleanupInvalidTokens(env, invalidTokens, table) {
-  if (!invalidTokens || invalidTokens.length === 0) return;
+async function cleanupInvalidTokens(env, invalidTokens, userId) {
+  if (!invalidTokens || invalidTokens.length === 0 || !userId) return;
 
-  const stmts = invalidTokens.map(token =>
-    env.DB.prepare(`DELETE FROM ${table} WHERE token = ?`).bind(token)
-  );
+  const { getDoc, updateDoc } = require('./firestore');
+  const user = await getDoc(env, `users/${userId}`);
+  if (!user) return;
 
-  await env.DB.batch(stmts);
-  console.log(`Cleaned ${invalidTokens.length} invalid tokens from ${table}`);
+  const currentTokens = user.fcmTokens || [];
+  const cleaned = currentTokens.filter(t => !invalidTokens.includes(t));
+
+  if (cleaned.length !== currentTokens.length) {
+    await updateDoc(env, `users/${userId}`, { fcmTokens: cleaned });
+    console.log(`Cleaned ${currentTokens.length - cleaned.length} invalid tokens for user ${userId}`);
+  }
 }
 
 module.exports = {

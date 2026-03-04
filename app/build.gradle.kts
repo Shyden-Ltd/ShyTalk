@@ -137,9 +137,10 @@ dependencies {
     implementation(libs.koin.android)
     implementation(libs.koin.compose.viewmodel)
 
-    // Firebase (Auth + FCM + RTDB — free Spark plan)
+    // Firebase (Auth + Firestore + FCM + RTDB — free Spark plan)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
     implementation(libs.firebase.database)
     implementation(libs.firebase.messaging)
 

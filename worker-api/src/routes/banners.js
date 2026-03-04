@@ -12,20 +12,27 @@
 
 const { json, jsonError, generateId, now } = require('../utils');
 const { requireAdmin } = require('../middleware/auth');
+const { getDoc, setDoc, updateDoc, deleteDoc, queryCollection, batchWrite, batchUpdateOp, fieldFilter, andFilter, orderBy } = require('../utils/firestore');
 
 function registerBannerRoutes(router) {
   // ── Active banners (any authenticated user) ──
   router.get('/api/banners/active', async (request, env) => {
     const timestamp = now();
-    const { results } = await env.DB.prepare(`
-      SELECT * FROM banners
-      WHERE is_active = 1
-        AND (start_date IS NULL OR start_date <= ?)
-        AND (end_date IS NULL OR end_date > ?)
-      ORDER BY sort_order ASC
-    `).bind(timestamp, timestamp).all();
 
-    return json(results);
+    // Query active banners, then client-filter by date range
+    const results = await queryCollection(env, 'banners', {
+      where: fieldFilter('isActive', 'EQUAL', true),
+      orderBy: [orderBy('sortOrder')],
+    });
+
+    // Filter by start/end date
+    const active = results.filter(b => {
+      if (b.startDate && b.startDate > timestamp) return false;
+      if (b.endDate && b.endDate <= timestamp) return false;
+      return true;
+    });
+
+    return json(active);
   });
 
   // ── All banners (admin) ──
@@ -33,9 +40,9 @@ function registerBannerRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    const { results } = await env.DB.prepare(
-      'SELECT * FROM banners ORDER BY sort_order ASC'
-    ).all();
+    const results = await queryCollection(env, 'banners', {
+      orderBy: [orderBy('sortOrder')],
+    });
 
     return json(results);
   });
@@ -47,34 +54,31 @@ function registerBannerRoutes(router) {
 
     const body = await request.json().catch(() => null);
     if (!body) return jsonError('Invalid JSON body', 400);
-    if (!body.image_url) return jsonError('image_url is required', 400);
+    if (!body.image_url && !body.imageUrl) return jsonError('imageUrl is required', 400);
 
     const id = generateId();
     const timestamp = now();
 
-    // Get next sort_order
-    const maxRow = await env.DB.prepare(
-      'SELECT COALESCE(MAX(sort_order), -1) as max_order FROM banners'
-    ).first();
-    const sortOrder = (maxRow?.max_order ?? -1) + 1;
+    // Get next sort_order by querying existing banners
+    const allBanners = await queryCollection(env, 'banners', {
+      orderBy: [orderBy('sortOrder', 'DESCENDING')],
+      limit: 1,
+    });
+    const sortOrder = allBanners.length > 0 ? (allBanners[0].sortOrder || 0) + 1 : 0;
 
-    await env.DB.prepare(`
-      INSERT INTO banners (id, title, image_url, action_type, action_value,
-        start_date, end_date, sort_order, is_active, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
+    await setDoc(env, `banners/${id}`, {
       id,
-      body.title || null,
-      body.image_url,
-      body.action_type || 'NONE',
-      body.action_value || null,
-      body.start_date ?? null,
-      body.end_date ?? null,
+      title: body.title || null,
+      imageUrl: body.imageUrl || body.image_url,
+      actionType: body.actionType || body.action_type || 'NONE',
+      actionValue: body.actionValue || body.action_value || null,
+      startDate: body.startDate ?? body.start_date ?? null,
+      endDate: body.endDate ?? body.end_date ?? null,
       sortOrder,
-      body.is_active !== undefined ? (body.is_active ? 1 : 0) : 1,
-      timestamp,
-      timestamp
-    ).run();
+      isActive: body.isActive !== undefined ? !!body.isActive : (body.is_active !== false),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
 
     return json({ success: true, id });
   });
@@ -88,13 +92,15 @@ function registerBannerRoutes(router) {
     if (!Array.isArray(body)) return jsonError('Expected array of {id, sort_order}', 400);
 
     const timestamp = now();
-    const stmts = body.map(item =>
-      env.DB.prepare(
-        'UPDATE banners SET sort_order = ?, updated_at = ? WHERE id = ?'
-      ).bind(item.sort_order, timestamp, item.id)
+    const writes = body.map(item =>
+      batchUpdateOp(env, `banners/${item.id}`, {
+        sortOrder: item.sort_order ?? item.sortOrder,
+        updatedAt: timestamp,
+      })
     );
 
-    await env.DB.batch(stmts);
+    if (writes.length > 0) await batchWrite(env, writes);
+
     return json({ success: true });
   });
 
@@ -106,31 +112,34 @@ function registerBannerRoutes(router) {
     const body = await request.json().catch(() => null);
     if (!body) return jsonError('Invalid JSON body', 400);
 
-    const existing = await env.DB.prepare(
-      'SELECT id FROM banners WHERE id = ?'
-    ).bind(params.id).first();
+    const existing = await getDoc(env, `banners/${params.id}`);
     if (!existing) return jsonError('Banner not found', 404);
 
-    const fields = [];
-    const binds = [];
+    const fields = {};
+    if (body.title !== undefined) fields.title = body.title || null;
+    if (body.imageUrl !== undefined || body.image_url !== undefined) {
+      fields.imageUrl = body.imageUrl ?? body.image_url;
+    }
+    if (body.actionType !== undefined || body.action_type !== undefined) {
+      fields.actionType = body.actionType ?? body.action_type;
+    }
+    if (body.actionValue !== undefined || body.action_value !== undefined) {
+      fields.actionValue = (body.actionValue ?? body.action_value) || null;
+    }
+    if (body.startDate !== undefined || body.start_date !== undefined) {
+      fields.startDate = body.startDate ?? body.start_date;
+    }
+    if (body.endDate !== undefined || body.end_date !== undefined) {
+      fields.endDate = body.endDate ?? body.end_date;
+    }
+    if (body.isActive !== undefined || body.is_active !== undefined) {
+      fields.isActive = !!(body.isActive ?? body.is_active);
+    }
 
-    if (body.title !== undefined) { fields.push('title = ?'); binds.push(body.title || null); }
-    if (body.image_url !== undefined) { fields.push('image_url = ?'); binds.push(body.image_url); }
-    if (body.action_type !== undefined) { fields.push('action_type = ?'); binds.push(body.action_type); }
-    if (body.action_value !== undefined) { fields.push('action_value = ?'); binds.push(body.action_value || null); }
-    if (body.start_date !== undefined) { fields.push('start_date = ?'); binds.push(body.start_date); }
-    if (body.end_date !== undefined) { fields.push('end_date = ?'); binds.push(body.end_date); }
-    if (body.is_active !== undefined) { fields.push('is_active = ?'); binds.push(body.is_active ? 1 : 0); }
+    if (Object.keys(fields).length === 0) return jsonError('No fields to update', 400);
 
-    if (fields.length === 0) return jsonError('No fields to update', 400);
-
-    fields.push('updated_at = ?');
-    binds.push(now());
-    binds.push(params.id);
-
-    await env.DB.prepare(
-      `UPDATE banners SET ${fields.join(', ')} WHERE id = ?`
-    ).bind(...binds).run();
+    fields.updatedAt = now();
+    await updateDoc(env, `banners/${params.id}`, fields);
 
     return json({ success: true });
   });
@@ -140,21 +149,17 @@ function registerBannerRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    // Get image_url to delete from R2
-    const banner = await env.DB.prepare(
-      'SELECT image_url FROM banners WHERE id = ?'
-    ).bind(params.id).first();
-
+    const banner = await getDoc(env, `banners/${params.id}`);
     if (!banner) return jsonError('Banner not found', 404);
 
     // Delete R2 object if it's our CDN URL
     const CDN_PREFIX = 'https://images.shytalk.shyden.co.uk/';
-    if (banner.image_url && banner.image_url.startsWith(CDN_PREFIX)) {
-      const key = banner.image_url.slice(CDN_PREFIX.length);
+    if (banner.imageUrl && banner.imageUrl.startsWith(CDN_PREFIX)) {
+      const key = banner.imageUrl.slice(CDN_PREFIX.length);
       await env.R2_BUCKET.delete(key);
     }
 
-    await env.DB.prepare('DELETE FROM banners WHERE id = ?').bind(params.id).run();
+    await deleteDoc(env, `banners/${params.id}`);
 
     return json({ success: true });
   });
@@ -175,7 +180,6 @@ function registerBannerRoutes(router) {
       return jsonError('No file uploaded', 400);
     }
 
-    // Determine extension from MIME type
     const mimeToExt = {
       'image/jpeg': 'jpg',
       'image/png': 'png',
@@ -190,7 +194,7 @@ function registerBannerRoutes(router) {
     });
 
     const imageUrl = `https://images.shytalk.shyden.co.uk/${key}`;
-    return json({ success: true, image_url: imageUrl, key });
+    return json({ success: true, image_url: imageUrl, imageUrl, key });
   });
 }
 

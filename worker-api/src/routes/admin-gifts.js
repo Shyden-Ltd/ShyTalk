@@ -10,6 +10,14 @@
 
 const { json, jsonError, generateId, now, parseBody } = require('../utils');
 const { requireAdmin } = require('../middleware/auth');
+const {
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  batchWrite,
+  batchUpdateOp,
+} = require('../utils/firestore');
 
 function registerAdminGiftRoutes(router) {
 
@@ -24,23 +32,31 @@ function registerAdminGiftRoutes(router) {
     }
 
     const id = body.id || generateId();
-    await env.DB.prepare(`
-      INSERT INTO gifts (id, name, coin_value, animation_url, sound_url, icon_url,
-        "order", expires_after_days, show_in_store, show_on_wheel, weight)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      id, body.name, body.coinValue,
-      body.animationUrl || '', body.soundUrl || '', body.iconUrl || '',
-      body.order || 0, body.expiresAfterDays || null,
-      body.showInStore != null ? (body.showInStore ? 1 : 0) : 1,
-      body.showOnWheel != null ? (body.showOnWheel ? 1 : 0) : 1,
-      body.weight || 1.0
-    ).run();
+    const giftData = {
+      id,
+      name:             body.name,
+      coinValue:        body.coinValue,
+      animationUrl:     body.animationUrl ?? body.animation_url ?? '',
+      soundUrl:         body.soundUrl     ?? body.sound_url     ?? '',
+      iconUrl:          body.iconUrl      ?? body.icon_url      ?? '',
+      order:            body.order        ?? 0,
+      expiresAfterDays: body.expiresAfterDays ?? body.expires_after_days ?? null,
+      showInStore:      body.showInStore  !== false && body.show_in_store  !== false,
+      showOnWheel:      body.showOnWheel  !== false && body.show_on_wheel  !== false,
+      weight:           body.weight       ?? 1.0,
+    };
 
-    await env.DB.prepare(`
-      INSERT INTO admin_audit_log (id, admin_id, action, target_user_id, details, created_at)
-      VALUES (?, ?, 'CREATE_GIFT', NULL, ?, ?)
-    `).bind(generateId(), request.auth.uid, `Created gift: ${body.name} (${id})`, now()).run();
+    await Promise.all([
+      setDoc(env, `gifts/${id}`, giftData),
+
+      setDoc(env, `adminAuditLog/${generateId()}`, {
+        adminId:      request.auth.uid,
+        action:       'CREATE_GIFT',
+        targetUserId: null,
+        details:      `Created gift: ${body.name} (${id})`,
+        createdAt:    now(),
+      }),
+    ]);
 
     return json({ success: true, id });
   });
@@ -53,37 +69,22 @@ function registerAdminGiftRoutes(router) {
     const body = await parseBody(request);
     if (!body) return jsonError('Invalid JSON body', 400);
 
-    const fieldMap = {
-      name: 'name', coinValue: 'coin_value', coin_value: 'coin_value',
-      animationUrl: 'animation_url', animation_url: 'animation_url',
-      soundUrl: 'sound_url', sound_url: 'sound_url',
-      iconUrl: 'icon_url', icon_url: 'icon_url',
-      order: '"order"',
-      expiresAfterDays: 'expires_after_days', expires_after_days: 'expires_after_days',
-      showInStore: 'show_in_store', show_in_store: 'show_in_store',
-      showOnWheel: 'show_on_wheel', show_on_wheel: 'show_on_wheel',
-      weight: 'weight',
-    };
+    // Build camelCase update object from either camelCase or snake_case input
+    const updates = {};
+    if ('name' in body)                                           updates.name             = body.name;
+    if ('coinValue' in body || 'coin_value' in body)             updates.coinValue         = body.coinValue        ?? body.coin_value;
+    if ('animationUrl' in body || 'animation_url' in body)       updates.animationUrl      = body.animationUrl     ?? body.animation_url;
+    if ('soundUrl' in body || 'sound_url' in body)               updates.soundUrl          = body.soundUrl         ?? body.sound_url;
+    if ('iconUrl' in body || 'icon_url' in body)                 updates.iconUrl           = body.iconUrl          ?? body.icon_url;
+    if ('order' in body)                                          updates.order             = body.order;
+    if ('expiresAfterDays' in body || 'expires_after_days' in body) updates.expiresAfterDays = body.expiresAfterDays ?? body.expires_after_days;
+    if ('showInStore' in body || 'show_in_store' in body)        updates.showInStore       = !!(body.showInStore   ?? body.show_in_store);
+    if ('showOnWheel' in body || 'show_on_wheel' in body)        updates.showOnWheel       = !!(body.showOnWheel   ?? body.show_on_wheel);
+    if ('weight' in body)                                         updates.weight            = body.weight;
 
-    const updates = [];
-    const binds = [];
+    if (Object.keys(updates).length === 0) return jsonError('No valid fields to update', 400);
 
-    for (const [inputKey, dbCol] of Object.entries(fieldMap)) {
-      if (inputKey in body) {
-        let value = body[inputKey];
-        // Convert booleans to integers
-        if (typeof value === 'boolean') value = value ? 1 : 0;
-        updates.push(`${dbCol} = ?`);
-        binds.push(value);
-      }
-    }
-
-    if (updates.length === 0) return jsonError('No valid fields to update', 400);
-
-    binds.push(params.id);
-    await env.DB.prepare(
-      `UPDATE gifts SET ${updates.join(', ')} WHERE id = ?`
-    ).bind(...binds).run();
+    await updateDoc(env, `gifts/${params.id}`, updates);
 
     return json({ success: true });
   });
@@ -93,12 +94,17 @@ function registerAdminGiftRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    await env.DB.prepare('DELETE FROM gifts WHERE id = ?').bind(params.id).run();
+    await Promise.all([
+      deleteDoc(env, `gifts/${params.id}`),
 
-    await env.DB.prepare(`
-      INSERT INTO admin_audit_log (id, admin_id, action, target_user_id, details, created_at)
-      VALUES (?, ?, 'DELETE_GIFT', NULL, ?, ?)
-    `).bind(generateId(), request.auth.uid, `Deleted gift: ${params.id}`, now()).run();
+      setDoc(env, `adminAuditLog/${generateId()}`, {
+        adminId:      request.auth.uid,
+        action:       'DELETE_GIFT',
+        targetUserId: null,
+        details:      `Deleted gift: ${params.id}`,
+        createdAt:    now(),
+      }),
+    ]);
 
     return json({ success: true });
   });
@@ -109,49 +115,61 @@ function registerAdminGiftRoutes(router) {
     if (adminCheck) return adminCheck;
 
     const SEED_GIFTS = [
-      { id: 'rose', name: 'Rose', coinValue: 1, order: 1 },
-      { id: 'lollipop', name: 'Lollipop', coinValue: 5, order: 2 },
-      { id: 'ice_cream', name: 'Ice Cream', coinValue: 10, order: 3 },
-      { id: 'coffee', name: 'Coffee', coinValue: 25, order: 4 },
-      { id: 'teddy_bear', name: 'Teddy Bear', coinValue: 50, order: 5 },
-      { id: 'chocolate_box', name: 'Chocolate Box', coinValue: 100, order: 6 },
-      { id: 'bouquet', name: 'Bouquet', coinValue: 200, order: 7 },
-      { id: 'perfume', name: 'Perfume', coinValue: 500, order: 8 },
-      { id: 'fireworks', name: 'Fireworks', coinValue: 1000, order: 9 },
-      { id: 'diamond_ring', name: 'Diamond Ring', coinValue: 2000, order: 10 },
-      { id: 'crown', name: 'Crown', coinValue: 5000, order: 11 },
-      { id: 'castle', name: 'Castle', coinValue: 10000, order: 12 },
-      { id: 'yacht', name: 'Yacht', coinValue: 20000, order: 13 },
-      { id: 'rocket', name: 'Rocket', coinValue: 50000, order: 14 },
-      { id: 'planet', name: 'Planet', coinValue: 100000, order: 15 },
-      { id: 'universe', name: 'Universe', coinValue: 200000, order: 16 },
-      { id: 'star', name: 'Star', coinValue: 10, order: 17 },
-      { id: 'heart', name: 'Heart', coinValue: 25, order: 18 },
-      { id: 'balloon', name: 'Balloon', coinValue: 5, order: 19 },
-      { id: 'cake', name: 'Cake', coinValue: 50, order: 20 },
-      { id: 'pizza', name: 'Pizza', coinValue: 15, order: 21 },
-      { id: 'sushi', name: 'Sushi', coinValue: 30, order: 22 },
-      { id: 'rainbow', name: 'Rainbow', coinValue: 500, order: 23 },
-      { id: 'sunflower', name: 'Sunflower', coinValue: 100, order: 24 },
-      { id: 'music_box', name: 'Music Box', coinValue: 250, order: 25 },
-      { id: 'magic_lamp', name: 'Magic Lamp', coinValue: 1500, order: 26 },
-      { id: 'treasure_chest', name: 'Treasure Chest', coinValue: 3000, order: 27 },
+      { id: 'rose',           name: 'Rose',           coinValue: 1,      order: 1  },
+      { id: 'lollipop',       name: 'Lollipop',       coinValue: 5,      order: 2  },
+      { id: 'ice_cream',      name: 'Ice Cream',      coinValue: 10,     order: 3  },
+      { id: 'coffee',         name: 'Coffee',         coinValue: 25,     order: 4  },
+      { id: 'teddy_bear',     name: 'Teddy Bear',     coinValue: 50,     order: 5  },
+      { id: 'chocolate_box',  name: 'Chocolate Box',  coinValue: 100,    order: 6  },
+      { id: 'bouquet',        name: 'Bouquet',        coinValue: 200,    order: 7  },
+      { id: 'perfume',        name: 'Perfume',        coinValue: 500,    order: 8  },
+      { id: 'fireworks',      name: 'Fireworks',      coinValue: 1000,   order: 9  },
+      { id: 'diamond_ring',   name: 'Diamond Ring',   coinValue: 2000,   order: 10 },
+      { id: 'crown',          name: 'Crown',          coinValue: 5000,   order: 11 },
+      { id: 'castle',         name: 'Castle',         coinValue: 10000,  order: 12 },
+      { id: 'yacht',          name: 'Yacht',          coinValue: 20000,  order: 13 },
+      { id: 'rocket',         name: 'Rocket',         coinValue: 50000,  order: 14 },
+      { id: 'planet',         name: 'Planet',         coinValue: 100000, order: 15 },
+      { id: 'universe',       name: 'Universe',       coinValue: 200000, order: 16 },
+      { id: 'star',           name: 'Star',           coinValue: 10,     order: 17 },
+      { id: 'heart',          name: 'Heart',          coinValue: 25,     order: 18 },
+      { id: 'balloon',        name: 'Balloon',        coinValue: 5,      order: 19 },
+      { id: 'cake',           name: 'Cake',           coinValue: 50,     order: 20 },
+      { id: 'pizza',          name: 'Pizza',          coinValue: 15,     order: 21 },
+      { id: 'sushi',          name: 'Sushi',          coinValue: 30,     order: 22 },
+      { id: 'rainbow',        name: 'Rainbow',        coinValue: 500,    order: 23 },
+      { id: 'sunflower',      name: 'Sunflower',      coinValue: 100,    order: 24 },
+      { id: 'music_box',      name: 'Music Box',      coinValue: 250,    order: 25 },
+      { id: 'magic_lamp',     name: 'Magic Lamp',     coinValue: 1500,   order: 26 },
+      { id: 'treasure_chest', name: 'Treasure Chest', coinValue: 3000,   order: 27 },
     ];
 
-    const stmts = SEED_GIFTS.map(g =>
-      env.DB.prepare(`
-        INSERT INTO gifts (id, name, coin_value, "order", animation_url, sound_url, icon_url, show_in_store, show_on_wheel)
-        VALUES (?, ?, ?, ?, '', '', '', 1, 1)
-        ON CONFLICT(id) DO UPDATE SET name = ?, coin_value = ?, "order" = ?
-      `).bind(g.id, g.name, g.coinValue, g.order, g.name, g.coinValue, g.order)
+    // Batch upsert all gifts (batchWrite uses PATCH semantics — full overwrite here)
+    const writes = SEED_GIFTS.map(g =>
+      batchUpdateOp(env, `gifts/${g.id}`, {
+        id:           g.id,
+        name:         g.name,
+        coinValue:    g.coinValue,
+        order:        g.order,
+        animationUrl: '',
+        soundUrl:     '',
+        iconUrl:      '',
+        showInStore:  true,
+        showOnWheel:  true,
+        weight:       1.0,
+      })
     );
 
-    await env.DB.batch(stmts);
+    // Batch in chunks of 500 (well within limit for 27 gifts)
+    await batchWrite(env, writes);
 
-    await env.DB.prepare(`
-      INSERT INTO admin_audit_log (id, admin_id, action, target_user_id, details, created_at)
-      VALUES (?, ?, 'SEED_GIFTS', NULL, 'Seeded 27 gifts', ?)
-    `).bind(generateId(), request.auth.uid, now()).run();
+    await setDoc(env, `adminAuditLog/${generateId()}`, {
+      adminId:      request.auth.uid,
+      action:       'SEED_GIFTS',
+      targetUserId: null,
+      details:      'Seeded 27 gifts',
+      createdAt:    now(),
+    });
 
     return json({ success: true, count: SEED_GIFTS.length });
   });

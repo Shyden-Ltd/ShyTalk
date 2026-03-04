@@ -1,11 +1,12 @@
 package com.shyden.shytalk.data.repository
 
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.remote.WorkerApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.json.JSONArray
 import org.json.JSONObject
@@ -18,93 +19,23 @@ import org.junit.Test
 class EconomyRepositoryImplTest {
 
     private lateinit var api: WorkerApiClient
+    private lateinit var firestore: FirebaseFirestore
+    private lateinit var auth: FirebaseAuth
     private lateinit var repo: EconomyRepositoryImpl
 
     @Before
     fun setup() {
         api = mockk(relaxed = true)
-        repo = EconomyRepositoryImpl(api)
+        firestore = mockk(relaxed = true)
+        auth = mockk(relaxed = true)
+        repo = EconomyRepositoryImpl(api, firestore, auth)
     }
 
-    // region observeEconomyConfig
-
-    @Test
-    fun `observeEconomyConfig returns parsed config from API`() = runTest {
-        val json = JSONObject().apply {
-            put("value", JSONObject().apply {
-                put("beanConversionRate", 0.6)
-                put("dailyBase", 50)
-                put("broadcastSendThreshold", 5000)
-                put("pullCosts", JSONObject().apply {
-                    put("1", 10)
-                    put("10", 80)
-                })
-            })
-        }
-        coEvery { api.get("/api/config/economy") } returns json
-
-        val config = repo.observeEconomyConfig().first()
-
-        assertEquals(0.6, config.beanConversionRate, 0.001)
-        assertEquals(50, config.dailyBase)
-        assertEquals(5000, config.broadcastSendThreshold)
-    }
+    // region observeEconomyConfig — reads from Firestore (tested via integration tests)
 
     // endregion
 
-    // region getCoinPackages
-
-    @Test
-    fun `getCoinPackages returns sorted packages from API`() = runTest {
-        val arr = JSONArray().apply {
-            put(JSONObject().apply {
-                put("id", "pkg2")
-                put("productId", "coins_500")
-                put("coins", 500)
-                put("bonusCoins", 50)
-                put("displayPrice", "$4.99")
-                put("order", 2)
-                put("isActive", true)
-            })
-            put(JSONObject().apply {
-                put("id", "pkg1")
-                put("productId", "coins_100")
-                put("coins", 100)
-                put("bonusCoins", 0)
-                put("displayPrice", "$0.99")
-                put("order", 1)
-                put("isActive", true)
-            })
-        }
-        coEvery { api.getArray("/api/coin-packages") } returns arr
-
-        val result = repo.getCoinPackages()
-
-        assertTrue(result is Resource.Success)
-        val packages = (result as Resource.Success).data
-        assertEquals(2, packages.size)
-        assertEquals("coins_100", packages[0].productId)
-        assertEquals("coins_500", packages[1].productId)
-    }
-
-    @Test
-    fun `getCoinPackages returns empty on no packages`() = runTest {
-        coEvery { api.getArray("/api/coin-packages") } returns JSONArray()
-
-        val result = repo.getCoinPackages()
-
-        assertTrue(result is Resource.Success)
-        assertTrue((result as Resource.Success).data.isEmpty())
-    }
-
-    @Test
-    fun `getCoinPackages returns Error on exception`() = runTest {
-        coEvery { api.getArray("/api/coin-packages") } throws RuntimeException("Connection failed")
-
-        val result = repo.getCoinPackages()
-
-        assertTrue(result is Resource.Error)
-    }
+    // region getCoinPackages — reads from Firestore (tested via integration tests)
 
     // endregion
 
@@ -367,83 +298,11 @@ class EconomyRepositoryImplTest {
 
     // endregion
 
-    // region getRecentTransactions
-
-    @Test
-    fun `getRecentTransactions returns parsed transactions`() = runTest {
-        coEvery { api.getArray("/api/economy/transactions?limit=10") } returns JSONArray().apply {
-            put(JSONObject().apply {
-                put("id", "tx-1")
-                put("type", "DAILY_REWARD")
-                put("amount", 50)
-                put("currency", "COINS")
-                put("balanceAfter", 1050)
-                put("details", "Day 5")
-                put("timestamp", 1700000000000L)
-            })
-            put(JSONObject().apply {
-                put("id", "tx-2")
-                put("type", "GACHA_PULL")
-                put("amount", -10)
-                put("currency", "COINS")
-                put("balanceAfter", 1040)
-                put("pullCount", 1)
-                put("timestamp", 1699999000000L)
-            })
-        }
-
-        val result = repo.getRecentTransactions(10)
-
-        assertTrue(result is Resource.Success)
-        val txs = (result as Resource.Success).data
-        assertEquals(2, txs.size)
-        assertEquals("tx-1", txs[0].id)
-        assertEquals(50L, txs[0].amount)
-        assertEquals("tx-2", txs[1].id)
-        assertEquals(1, txs[1].pullCount)
-    }
-
-    @Test
-    fun `getRecentTransactions failure returns Error`() = runTest {
-        coEvery { api.getArray(any()) } throws RuntimeException("Network error")
-
-        val result = repo.getRecentTransactions()
-
-        assertTrue(result is Resource.Error)
-    }
+    // region getRecentTransactions — reads from Firestore (tested via integration tests)
 
     // endregion
 
-    // region getAllTransactions
-
-    @Test
-    fun `getAllTransactions without filter calls correct endpoint`() = runTest {
-        coEvery { api.getArray("/api/economy/transactions?limit=200") } returns JSONArray()
-
-        val result = repo.getAllTransactions()
-
-        assertTrue(result is Resource.Success)
-        coVerify { api.getArray("/api/economy/transactions?limit=200") }
-    }
-
-    @Test
-    fun `getAllTransactions with type filter calls correct endpoint`() = runTest {
-        coEvery { api.getArray("/api/economy/transactions?limit=200&type=GACHA_PULL") } returns JSONArray()
-
-        val result = repo.getAllTransactions("GACHA_PULL")
-
-        assertTrue(result is Resource.Success)
-        coVerify { api.getArray("/api/economy/transactions?limit=200&type=GACHA_PULL") }
-    }
-
-    @Test
-    fun `getAllTransactions failure returns Error`() = runTest {
-        coEvery { api.getArray(any()) } throws RuntimeException("Network error")
-
-        val result = repo.getAllTransactions()
-
-        assertTrue(result is Resource.Error)
-    }
+    // region getAllTransactions — reads from Firestore (tested via integration tests)
 
     // endregion
 

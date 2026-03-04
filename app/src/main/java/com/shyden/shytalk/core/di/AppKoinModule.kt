@@ -2,6 +2,7 @@ package com.shyden.shytalk.core.di
 
 import android.provider.Settings
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import com.shyden.shytalk.BuildConfig
 import com.shyden.shytalk.core.room.ActiveRoomManager
 import com.shyden.shytalk.core.room.RoomLifecycleManager
@@ -81,8 +82,9 @@ import org.koin.dsl.bind
 import org.koin.dsl.module
 
 val appModule = module {
-    // Firebase Auth (free tier — kept for authentication)
+    // Firebase Auth + Firestore (free Spark plan)
     single { FirebaseAuth.getInstance() }
+    single { FirebaseFirestore.getInstance() }
     // HTTP client
     single {
         OkHttpClient.Builder()

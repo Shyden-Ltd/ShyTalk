@@ -2,97 +2,69 @@
  * Config routes — read-only app/economy/moderation configuration.
  *
  * GET /api/config/:key     → Get a config value (app, economy, moderation)
- * GET /api/gifts            → Get gift catalog
+ * GET /api/gifts            → Get gift catalog (store-visible)
  * GET /api/gifts/all        → Get all gifts (including hidden)
  * GET /api/coin-packages    → Get active coin packages
  * GET /api/broadcasts       → Get recent broadcasts
  * GET /api/gift-rankings/:giftId → Get gift rankings
+ * PUT /api/config/economy   → Admin update economy config (merge)
  */
 
 const { json, jsonError, parseBody } = require('../utils');
 const { requireAdmin } = require('../middleware/auth');
-
-async function getConfig(params, env) {
-  const { key } = params;
-  const row = await env.DB.prepare('SELECT value FROM config WHERE key = ?').bind(key).first();
-  if (!row) return jsonError('Config not found', 404);
-  return json(JSON.parse(row.value));
-}
-
-async function getGiftCatalog(env) {
-  const { results } = await env.DB.prepare(
-    'SELECT * FROM gifts WHERE show_in_store = 1 ORDER BY "order" ASC'
-  ).all();
-  return json(results);
-}
-
-async function getAllGifts(env) {
-  const { results } = await env.DB.prepare(
-    'SELECT * FROM gifts ORDER BY "order" ASC'
-  ).all();
-  return json(results);
-}
-
-async function getCoinPackages(env) {
-  const { results } = await env.DB.prepare(
-    'SELECT * FROM coin_packages WHERE is_active = 1 ORDER BY "order" ASC'
-  ).all();
-  return json(results);
-}
-
-async function getBroadcasts(env) {
-  const { results } = await env.DB.prepare(
-    'SELECT * FROM broadcasts ORDER BY timestamp DESC LIMIT 50'
-  ).all();
-  return json(results);
-}
-
-async function getGiftRankings(params, env) {
-  const { giftId } = params;
-
-  const meta = await env.DB.prepare(
-    'SELECT * FROM gift_rankings_meta WHERE gift_id = ?'
-  ).bind(giftId).first();
-
-  const { results: rankings } = await env.DB.prepare(
-    'SELECT * FROM gift_rankings WHERE gift_id = ? ORDER BY rank ASC LIMIT 100'
-  ).bind(giftId).all();
-
-  return json({
-    rankings,
-    totalSent: meta?.total_sent || 0,
-    lastUpdated: meta?.last_updated || null,
-  });
-}
+const { getDoc, setDoc, queryCollection, fieldFilter, orderBy } = require('../utils/firestore');
 
 function registerConfigRoutes(router) {
   router.get('/api/config/:key', async (request, env, params) => {
-    return getConfig(params, env);
+    const doc = await getDoc(env, `config/${params.key}`);
+    if (!doc) return jsonError('Config not found', 404);
+    // Remove the Firestore doc id field, return plain config object
+    const { id, ...config } = doc;
+    return json(config);
   });
 
   router.get('/api/gifts', async (request, env) => {
-    return getGiftCatalog(env);
+    const results = await queryCollection(env, 'gifts', {
+      where: fieldFilter('showInStore', 'EQUAL', true),
+      orderBy: [orderBy('order')],
+    });
+    return json(results);
   });
 
   router.get('/api/gifts/all', async (request, env) => {
-    return getAllGifts(env);
+    const results = await queryCollection(env, 'gifts', {
+      orderBy: [orderBy('order')],
+    });
+    return json(results);
   });
 
   router.get('/api/coin-packages', async (request, env) => {
-    return getCoinPackages(env);
+    const results = await queryCollection(env, 'coinPackages', {
+      where: fieldFilter('isActive', 'EQUAL', true),
+      orderBy: [orderBy('order')],
+    });
+    return json(results);
   });
 
   router.get('/api/broadcasts', async (request, env) => {
-    return getBroadcasts(env);
+    const results = await queryCollection(env, 'broadcasts', {
+      orderBy: [orderBy('timestamp', 'DESCENDING')],
+      limit: 50,
+    });
+    return json(results);
   });
 
   router.get('/api/gift-rankings/:giftId', async (request, env, params) => {
-    return getGiftRankings(params, env);
+    const doc = await getDoc(env, `giftRankings/${params.giftId}`);
+
+    return json({
+      rankings: doc?.rankings || [],
+      totalSent: doc?.totalSent || 0,
+      lastUpdated: doc?.lastUpdated || null,
+    });
   });
 
-  // ── Economy config (admin — GET already handled by /api/config/:key) ──
-
-  // PUT /api/config/economy — admin update economy config (merge-update)
+  // ── Economy config (admin) ──
   router.put('/api/config/economy', async (request, env) => {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
@@ -100,7 +72,6 @@ function registerConfigRoutes(router) {
     const body = await parseBody(request);
     if (!body) return jsonError('Invalid JSON body', 400);
 
-    // Validate known economy config fields
     const ECONOMY_CONFIG_FIELDS = [
       'beanConversionRate', 'beanRedeemBonusThreshold', 'beanRedeemBonusMultiplier',
       'pullCosts', 'broadcastSendThreshold', 'broadcastWinThreshold',
@@ -108,7 +79,6 @@ function registerConfigRoutes(router) {
       'pityHighValueThreshold', 'dailyBase', 'milestoneRewards',
     ];
 
-    // Only allow known fields
     const filtered = {};
     for (const key of ECONOMY_CONFIG_FIELDS) {
       if (key in body) filtered[key] = body[key];
@@ -119,14 +89,11 @@ function registerConfigRoutes(router) {
     }
 
     // Merge with existing config
-    const existing = await env.DB.prepare("SELECT value FROM config WHERE key = 'economy'").first();
-    const current = existing ? JSON.parse(existing.value) : {};
-    const merged = { ...current, ...filtered };
+    const existing = await getDoc(env, 'config/economy') || {};
+    const { id: _id, ...currentConfig } = existing;
+    const merged = { ...currentConfig, ...filtered };
 
-    await env.DB.prepare(`
-      INSERT INTO config (key, value) VALUES ('economy', ?)
-      ON CONFLICT(key) DO UPDATE SET value = ?
-    `).bind(JSON.stringify(merged), JSON.stringify(merged)).run();
+    await setDoc(env, 'config/economy', merged);
 
     return json(merged);
   });

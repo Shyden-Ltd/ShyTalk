@@ -1,15 +1,15 @@
 package com.shyden.shytalk.data.repository
 
 import android.content.Context
+import com.google.firebase.firestore.FirebaseFirestore
 import com.shyden.shytalk.core.model.FunFact
-import com.shyden.shytalk.core.util.toMap
-import com.shyden.shytalk.data.remote.WorkerApiClient
+import kotlinx.coroutines.tasks.await
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
 class FunFactRepositoryImpl(
-    private val api: WorkerApiClient,
+    private val firestore: FirebaseFirestore,
     private val context: Context
 ) : FunFactRepository {
 
@@ -19,10 +19,10 @@ class FunFactRepositoryImpl(
     private var memoryCache: List<FunFact>? = null
 
     override suspend fun syncFacts(): List<FunFact> {
-        val arr = api.getArray("/api/fun-facts")
-        val facts = (0 until arr.length()).mapNotNull { i ->
-            val obj = arr.getJSONObject(i)
-            FunFact.fromMap(obj.toMap(), obj.getString("id"))
+        val snapshot = firestore.collection("funFacts").get().await()
+        val facts = snapshot.documents.mapNotNull { doc ->
+            val data = doc.data ?: return@mapNotNull null
+            FunFact.fromMap(data, doc.id)
         }
 
         // Persist to local cache

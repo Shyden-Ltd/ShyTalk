@@ -4,12 +4,7 @@ main = "src/index.js"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
-# ── D1 Database ──────────────────────────────────────────────────
-[[d1_databases]]
-binding = "DB"
-database_name = "shytalk-db"
-database_id = "b6dafad0-0fd9-4170-b714-7c7089552fb6"
-migrations_dir = "migrations"
+# ── D1 Database (REMOVED — Firestore is sole database) ──────────
 
 # ── R2 Bucket (already exists from worker/) ──────────────────────
 [[r2_buckets]]
@@ -41,7 +36,7 @@ crons = [
   "0 3 * * SUN",  # archiveOldReports — Sunday 03:00 UTC
   "0 4 * * *",    # cleanupOrphanedStorage — daily 04:00 UTC
   "0 0 * * *",    # checkSubscriptionStatus + cleanExpiredBackpackItems — daily 00:00 UTC
-  "0 * * * *",    # updateGiftRankings — hourly
+  # updateGiftRankings cron REMOVED — rankings now updated incrementally in economy.js
   "*/5 * * * *",  # closeStaleOwnerAwayRooms — every 5 minutes
 ]
 

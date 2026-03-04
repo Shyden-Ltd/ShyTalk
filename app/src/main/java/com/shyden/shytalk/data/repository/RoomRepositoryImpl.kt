@@ -1,97 +1,157 @@
 package com.shyden.shytalk.data.repository
 
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
 import com.shyden.shytalk.core.model.ChatRoom
+import com.shyden.shytalk.core.model.Seat
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
-import com.shyden.shytalk.core.util.toMap
-import com.shyden.shytalk.data.remote.PresenceService
-import com.shyden.shytalk.data.remote.RoomEvent
 import com.shyden.shytalk.data.remote.WorkerApiClient
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.merge
-import kotlinx.coroutines.flow.transform
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.tasks.await
 import org.json.JSONObject
 
 class RoomRepositoryImpl(
     private val api: WorkerApiClient,
-    private val presenceService: PresenceService
+    private val firestore: FirebaseFirestore
 ) : RoomRepository {
 
     @Volatile private var prefetchedRooms: List<ChatRoom>? = null
 
     override suspend fun prefetchActiveRooms() {
         try {
-            val arr = api.getArray("/api/rooms/active")
-            prefetchedRooms = (0 until arr.length()).mapNotNull { i ->
-                val obj = arr.getJSONObject(i)
-                ChatRoom.fromMap(obj.toMap(), obj.getString("roomId"))
+            val snapshot = firestore.collection("rooms")
+                .whereIn("state", listOf("ACTIVE", "OWNER_AWAY"))
+                .get()
+                .await()
+            prefetchedRooms = snapshot.documents.mapNotNull { doc ->
+                val data = doc.data ?: return@mapNotNull null
+                ChatRoom.fromMap(data, doc.id)
             }
         } catch (_: Exception) { }
     }
 
-    // Active rooms list is not tied to a specific room's DO — keep polling
-    override fun getActiveRooms(): Flow<List<ChatRoom>> = flow {
+    // Real-time active rooms list from Firestore
+    override fun getActiveRooms(): Flow<List<ChatRoom>> = callbackFlow {
         prefetchedRooms?.let {
-            emit(it)
+            trySend(it)
             prefetchedRooms = null
         }
-        while (true) {
-            try {
-                val arr = api.getArray("/api/rooms/active")
-                val rooms = (0 until arr.length()).mapNotNull { i ->
-                    val obj = arr.getJSONObject(i)
-                    ChatRoom.fromMap(obj.toMap(), obj.getString("roomId"))
+        val listener = firestore.collection("rooms")
+            .whereIn("state", listOf("ACTIVE", "OWNER_AWAY"))
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                val rooms = snapshot.documents.mapNotNull { doc ->
+                    val data = doc.data ?: return@mapNotNull null
+                    ChatRoom.fromMap(data, doc.id)
                 }
-                emit(rooms)
-            } catch (_: Exception) { }
-            delay(60_000)
-        }
-    }.distinctUntilChanged()
+                trySend(rooms)
+            }
+        awaitClose { listener.remove() }
+    }
 
-    override fun getRoomFlow(roomId: String): Flow<ChatRoom?> = merge(
-        // Slow fallback poll — WebSocket handles real-time updates
-        flow { while (true) { emit(Unit); delay(120_000) } },
-        // Immediate refetch on room events
-        presenceService.roomEvents
-            .filter { it is RoomEvent.RoomUpdated || it is RoomEvent.RoomClosed }
-            .map { }
-    ).transform {
-        try {
-            val json = api.get("/api/rooms/$roomId")
-            emit(ChatRoom.fromMap(json.toMap(), json.getString("roomId")))
-        } catch (_: Exception) { }
-    }.distinctUntilChanged()
+    // Real-time single room from Firestore
+    override fun getRoomFlow(roomId: String): Flow<ChatRoom?> = callbackFlow {
+        val listener = firestore.document("rooms/$roomId")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                if (!snapshot.exists()) {
+                    trySend(null)
+                    return@addSnapshotListener
+                }
+                val data = snapshot.data ?: return@addSnapshotListener
+                trySend(ChatRoom.fromMap(data, roomId))
+            }
+        awaitClose { listener.remove() }
+    }
 
     override suspend fun getRoom(roomId: String): Resource<ChatRoom> = firebaseCall("Failed to get room") {
-        val json = api.get("/api/rooms/$roomId")
-        ChatRoom.fromMap(json.toMap(), json.getString("roomId"))
+        val doc = firestore.document("rooms/$roomId").get().await()
+        val data = doc.data ?: throw Exception("Room not found")
+        ChatRoom.fromMap(data, roomId)
     }
 
     override suspend fun createRoom(name: String, ownerId: String): Resource<String> = firebaseCall("Failed to create room") {
-        val body = JSONObject().apply { put("name", name) }
-        val json = api.post("/api/rooms", body)
-        json.getString("roomId")
+        val roomId = firestore.collection("rooms").document().id
+        val timestamp = System.currentTimeMillis()
+        val emptySeat = mapOf("userId" to null, "state" to "EMPTY", "isMuted" to false)
+        val seats = (0..7).associate { it.toString() to emptySeat }
+        val roomData = mapOf(
+            "id" to roomId,
+            "name" to name,
+            "ownerId" to ownerId,
+            "state" to "ACTIVE",
+            "createdAt" to timestamp,
+            "participantIds" to listOf(ownerId),
+            "hostIds" to emptyList<String>(),
+            "bannedUserIds" to emptyList<String>(),
+            "kickInfo" to emptyMap<String, Any>(),
+            "pendingInvites" to emptyMap<String, Any>(),
+            "seats" to seats,
+            "voiceRoomName" to roomId,
+            "requireApproval" to false,
+            "firstJoinTimestamps" to emptyMap<String, Any>(),
+            "allTimeHostIds" to emptyList<String>(),
+            "allTimeSeatUserIds" to emptyList<String>(),
+        )
+        firestore.document("rooms/$roomId").set(roomData).await()
+        firestore.document("users/$ownerId").update("currentRoomId", roomId).await()
+        roomId
     }
 
     override suspend fun joinRoom(roomId: String, userId: String): Resource<Unit> = firebaseCall("Failed to join room") {
-        api.post("/api/rooms/$roomId/join")
+        firestore.document("rooms/$roomId").update(
+            mapOf(
+                "participantIds" to FieldValue.arrayUnion(userId)
+            )
+        ).await()
+        firestore.document("users/$userId").update("currentRoomId", roomId).await()
     }
 
     override suspend fun leaveRoom(roomId: String, userId: String): Resource<Unit> = firebaseCall("Failed to leave room") {
-        api.post("/api/rooms/$roomId/leave")
+        // Get current room to find user's seat
+        val doc = firestore.document("rooms/$roomId").get().await()
+        val data = doc.data
+        val updates = mutableMapOf<String, Any?>(
+            "participantIds" to FieldValue.arrayRemove(userId)
+        )
+        // Clear any seat occupied by this user
+        if (data != null) {
+            val seatsRaw = data["seats"] as? Map<*, *>
+            seatsRaw?.forEach { (index, seatData) ->
+                val seat = seatData as? Map<*, *>
+                if (seat?.get("userId") == userId) {
+                    updates["seats.$index.userId"] = null
+                    updates["seats.$index.state"] = "EMPTY"
+                    updates["seats.$index.isMuted"] = false
+                }
+            }
+        }
+        firestore.document("rooms/$roomId").update(updates).await()
+        firestore.document("users/$userId").update("currentRoomId", null).await()
     }
 
     override suspend fun takeSeat(roomId: String, seatIndex: Int, userId: String): Resource<Unit> = firebaseCall("Failed to take seat") {
-        api.post("/api/rooms/$roomId/seats/$seatIndex/take")
+        firestore.document("rooms/$roomId").update(
+            mapOf(
+                "seats.$seatIndex.userId" to userId,
+                "seats.$seatIndex.state" to "OCCUPIED",
+                "seats.$seatIndex.isMuted" to false,
+                "allTimeSeatUserIds" to FieldValue.arrayUnion(userId)
+            )
+        ).await()
     }
 
     override suspend fun leaveSeat(roomId: String, seatIndex: Int): Resource<Unit> = firebaseCall("Failed to leave seat") {
-        api.post("/api/rooms/$roomId/seats/$seatIndex/leave")
+        firestore.document("rooms/$roomId").update(
+            mapOf(
+                "seats.$seatIndex.userId" to null,
+                "seats.$seatIndex.state" to "EMPTY",
+                "seats.$seatIndex.isMuted" to false
+            )
+        ).await()
     }
 
     override suspend fun removeFromSeat(roomId: String, seatIndex: Int): Resource<Unit> {
@@ -99,56 +159,110 @@ class RoomRepositoryImpl(
     }
 
     override suspend fun moveSeat(roomId: String, fromIndex: Int, toIndex: Int, userId: String): Resource<Unit> = firebaseCall("Failed to move seat") {
-        val body = JSONObject().apply {
-            put("fromIndex", fromIndex)
-            put("toIndex", toIndex)
-            put("userId", userId)
-        }
-        api.post("/api/rooms/$roomId/seats/move", body)
+        // Read current seat data to swap
+        val doc = firestore.document("rooms/$roomId").get().await()
+        val data = doc.data ?: throw Exception("Room not found")
+        val seatsRaw = data["seats"] as? Map<*, *> ?: throw Exception("No seats data")
+        val fromSeat = (seatsRaw[fromIndex.toString()] as? Map<*, *>)?.let { raw ->
+            raw.entries.associate { (k, v) -> k.toString() to v }
+        } ?: Seat.EMPTY_MAP
+        val toSeat = (seatsRaw[toIndex.toString()] as? Map<*, *>)?.let { raw ->
+            raw.entries.associate { (k, v) -> k.toString() to v }
+        } ?: Seat.EMPTY_MAP
+
+        firestore.document("rooms/$roomId").update(
+            mapOf(
+                "seats.$fromIndex.userId" to toSeat["userId"],
+                "seats.$fromIndex.state" to (toSeat["state"] ?: "EMPTY"),
+                "seats.$fromIndex.isMuted" to (toSeat["isMuted"] ?: false),
+                "seats.$toIndex.userId" to fromSeat["userId"],
+                "seats.$toIndex.state" to (fromSeat["state"] ?: "EMPTY"),
+                "seats.$toIndex.isMuted" to (fromSeat["isMuted"] ?: false)
+            )
+        ).await()
     }
 
     override suspend fun kickUser(roomId: String, userId: String, seatIndex: Int?, kickerName: String, reason: String): Resource<Unit> = firebaseCall("Failed to kick user") {
-        val body = JSONObject().apply {
-            put("userId", userId)
-            put("kickerName", kickerName)
-            put("reason", reason.ifBlank { "No reason given" })
+        val effectiveReason = reason.ifBlank { "No reason given" }
+        val updates = mutableMapOf<String, Any?>(
+            "participantIds" to FieldValue.arrayRemove(userId),
+            "bannedUserIds" to FieldValue.arrayUnion(userId),
+            "kickInfo.$userId" to mapOf(
+                "kickerName" to kickerName,
+                "reason" to effectiveReason
+            )
+        )
+        // Clear any seat occupied by this user
+        if (seatIndex != null) {
+            updates["seats.$seatIndex.userId"] = null
+            updates["seats.$seatIndex.state"] = "EMPTY"
+            updates["seats.$seatIndex.isMuted"] = false
+        } else {
+            // Find and clear seat by reading room data
+            val doc = firestore.document("rooms/$roomId").get().await()
+            val data = doc.data
+            val seatsRaw = data?.get("seats") as? Map<*, *>
+            seatsRaw?.forEach { (index, seatData) ->
+                val seat = seatData as? Map<*, *>
+                if (seat?.get("userId") == userId) {
+                    updates["seats.$index.userId"] = null
+                    updates["seats.$index.state"] = "EMPTY"
+                    updates["seats.$index.isMuted"] = false
+                }
+            }
         }
-        api.post("/api/rooms/$roomId/kick", body)
+        firestore.document("rooms/$roomId").update(updates).await()
+        firestore.document("users/$userId").update("currentRoomId", null).await()
     }
 
     override suspend fun toggleMute(roomId: String, seatIndex: Int, isMuted: Boolean): Resource<Unit> = firebaseCall("Failed to toggle mute") {
-        val body = JSONObject().apply { put("isMuted", isMuted) }
-        api.patch("/api/rooms/$roomId/seats/$seatIndex/mute", body)
+        firestore.document("rooms/$roomId").update(
+            "seats.$seatIndex.isMuted", isMuted
+        ).await()
     }
 
     override suspend fun addHost(roomId: String, userId: String): Resource<Unit> = firebaseCall("Failed to add host") {
-        val body = JSONObject().apply { put("userId", userId) }
-        api.post("/api/rooms/$roomId/hosts/add", body)
+        firestore.document("rooms/$roomId").update(
+            mapOf(
+                "hostIds" to FieldValue.arrayUnion(userId),
+                "allTimeHostIds" to FieldValue.arrayUnion(userId)
+            )
+        ).await()
     }
 
     override suspend fun removeHost(roomId: String, userId: String): Resource<Unit> = firebaseCall("Failed to remove host") {
-        val body = JSONObject().apply { put("userId", userId) }
-        api.post("/api/rooms/$roomId/hosts/remove", body)
+        firestore.document("rooms/$roomId").update(
+            "hostIds", FieldValue.arrayRemove(userId)
+        ).await()
     }
 
     override suspend fun updateRoomName(roomId: String, newName: String): Resource<Unit> = firebaseCall("Failed to update room name") {
-        val body = JSONObject().apply { put("name", newName) }
-        api.patch("/api/rooms/$roomId", body)
+        firestore.document("rooms/$roomId").update("name", newName).await()
     }
 
     override suspend fun setRequireApproval(roomId: String, requireApproval: Boolean): Resource<Unit> = firebaseCall("Failed to update approval setting") {
-        val body = JSONObject().apply { put("requireApproval", requireApproval) }
-        api.patch("/api/rooms/$roomId", body)
+        firestore.document("rooms/$roomId").update("requireApproval", requireApproval).await()
     }
 
     override suspend fun setOwnerAway(roomId: String): Resource<Unit> = firebaseCall("Failed to set owner away") {
-        api.post("/api/rooms/$roomId/owner-away")
+        firestore.document("rooms/$roomId").update(
+            mapOf(
+                "state" to "OWNER_AWAY",
+                "ownerLeftAt" to System.currentTimeMillis()
+            )
+        ).await()
     }
 
     override suspend fun setOwnerReturned(roomId: String, ownerId: String): Resource<Unit> = firebaseCall("Failed to set owner returned") {
-        api.post("/api/rooms/$roomId/owner-return")
+        firestore.document("rooms/$roomId").update(
+            mapOf(
+                "state" to "ACTIVE",
+                "ownerLeftAt" to null
+            )
+        ).await()
     }
 
+    // Keep as Worker API — needs FCM push notification
     override suspend fun sendInvite(roomId: String, userId: String, invitedBy: String): Resource<Unit> = firebaseCall("Failed to send invite") {
         val body = JSONObject().apply {
             put("userId", userId)
@@ -158,45 +272,149 @@ class RoomRepositoryImpl(
     }
 
     override suspend fun cancelInvite(roomId: String, userId: String): Resource<Unit> = firebaseCall("Failed to cancel invite") {
-        val body = JSONObject().apply { put("userId", userId) }
-        api.post("/api/rooms/$roomId/invites/cancel", body)
+        firestore.document("rooms/$roomId").update(
+            "pendingInvites.$userId", FieldValue.delete()
+        ).await()
     }
 
     override suspend fun acceptInvite(roomId: String, userId: String, seatIndex: Int): Resource<Unit> = firebaseCall("Failed to accept invite") {
-        val body = JSONObject().apply { put("seatIndex", seatIndex) }
-        api.post("/api/rooms/$roomId/invites/accept", body)
+        firestore.document("rooms/$roomId").update(
+            mapOf(
+                "pendingInvites.$userId" to FieldValue.delete(),
+                "participantIds" to FieldValue.arrayUnion(userId),
+                "seats.$seatIndex.userId" to userId,
+                "seats.$seatIndex.state" to "OCCUPIED",
+                "seats.$seatIndex.isMuted" to false,
+                "allTimeSeatUserIds" to FieldValue.arrayUnion(userId)
+            )
+        ).await()
+        firestore.document("users/$userId").update("currentRoomId", roomId).await()
     }
 
     override suspend fun closeRoom(roomId: String): Resource<Unit> = firebaseCall("Failed to close room") {
-        api.post("/api/rooms/$roomId/close")
+        // Read current room to get participant list
+        val doc = firestore.document("rooms/$roomId").get().await()
+        val data = doc.data ?: throw Exception("Room not found")
+        val participantIds = (data["participantIds"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+
+        val emptySeat = mapOf("userId" to null, "state" to "EMPTY", "isMuted" to false)
+        val emptySeats = (0..7).associate { it.toString() to emptySeat }
+
+        firestore.document("rooms/$roomId").update(
+            mapOf(
+                "state" to "CLOSED",
+                "closedAt" to System.currentTimeMillis(),
+                "participantIds" to emptyList<String>(),
+                "seats" to emptySeats
+            )
+        ).await()
+
+        // Clear currentRoomId for all participants
+        for (uid in participantIds) {
+            try {
+                firestore.document("users/$uid").update("currentRoomId", null).await()
+            } catch (_: Exception) { }
+        }
     }
 
     override suspend fun findActiveRoomByOwner(ownerId: String): String? {
         return try {
-            val json = api.get("/api/rooms/by-owner/$ownerId")
-            if (json.isNull("roomId")) null else json.getString("roomId")
+            val snapshot = firestore.collection("rooms")
+                .whereEqualTo("owner_id", ownerId)
+                .whereIn("state", listOf("ACTIVE", "OWNER_AWAY"))
+                .get()
+                .await()
+            snapshot.documents.firstOrNull()?.id
         } catch (_: Exception) {
             null
         }
     }
 
     override suspend fun recordFirstJoinTimestamp(roomId: String, userId: String): Resource<Unit> = firebaseCall("Failed to record first join timestamp") {
-        api.post("/api/rooms/$roomId/first-join")
+        firestore.document("rooms/$roomId").update(
+            "firstJoinTimestamps.$userId", System.currentTimeMillis()
+        ).await()
     }
 
     override suspend fun leaveAllRooms(userId: String, exceptRoomId: String?): Resource<Unit> = firebaseCall("Failed to leave all rooms") {
-        val body = JSONObject().apply {
-            if (exceptRoomId != null) put("exceptRoomId", exceptRoomId)
+        val snapshot = firestore.collection("rooms")
+            .whereArrayContains("participantIds", userId)
+            .whereIn("state", listOf("ACTIVE", "OWNER_AWAY"))
+            .get()
+            .await()
+        for (doc in snapshot.documents) {
+            if (doc.id == exceptRoomId) continue
+            val data = doc.data ?: continue
+            val updates = mutableMapOf<String, Any?>(
+                "participantIds" to FieldValue.arrayRemove(userId)
+            )
+            // Clear any seat occupied by this user
+            val seatsRaw = data["seats"] as? Map<*, *>
+            seatsRaw?.forEach { (index, seatData) ->
+                val seat = seatData as? Map<*, *>
+                if (seat?.get("userId") == userId) {
+                    updates["seats.$index.userId"] = null
+                    updates["seats.$index.state"] = "EMPTY"
+                    updates["seats.$index.isMuted"] = false
+                }
+            }
+            try {
+                firestore.document("rooms/${doc.id}").update(updates).await()
+            } catch (_: Exception) { }
         }
-        api.post("/api/rooms/leave-all", body)
+        firestore.document("users/$userId").update("currentRoomId", null).await()
     }
 
     override suspend fun closeAllRoomsByOwner(ownerId: String): Resource<Unit> = firebaseCall("Failed to close rooms") {
-        api.post("/api/rooms/close-all")
+        val snapshot = firestore.collection("rooms")
+            .whereEqualTo("ownerId", ownerId)
+            .whereIn("state", listOf("ACTIVE", "OWNER_AWAY"))
+            .get()
+            .await()
+        for (doc in snapshot.documents) {
+            val data = doc.data ?: continue
+            val participantIds = (data["participantIds"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+
+            val emptySeat = mapOf("userId" to null, "state" to "EMPTY", "isMuted" to false)
+            val emptySeats = (0..7).associate { it.toString() to emptySeat }
+
+            try {
+                firestore.document("rooms/${doc.id}").update(
+                    mapOf(
+                        "state" to "CLOSED",
+                        "closedAt" to System.currentTimeMillis(),
+                        "participantIds" to emptyList<String>(),
+                        "seats" to emptySeats
+                    )
+                ).await()
+                for (uid in participantIds) {
+                    try {
+                        firestore.document("users/$uid").update("currentRoomId", null).await()
+                    } catch (_: Exception) { }
+                }
+            } catch (_: Exception) { }
+        }
     }
 
     override suspend fun removeDisconnectedUser(roomId: String, userId: String): Resource<Unit> = firebaseCall("Failed to remove disconnected user") {
-        val body = JSONObject().apply { put("userId", userId) }
-        api.post("/api/rooms/$roomId/remove-disconnected", body)
+        // Same logic as leaveRoom
+        val doc = firestore.document("rooms/$roomId").get().await()
+        val data = doc.data
+        val updates = mutableMapOf<String, Any?>(
+            "participantIds" to FieldValue.arrayRemove(userId)
+        )
+        if (data != null) {
+            val seatsRaw = data["seats"] as? Map<*, *>
+            seatsRaw?.forEach { (index, seatData) ->
+                val seat = seatData as? Map<*, *>
+                if (seat?.get("userId") == userId) {
+                    updates["seats.$index.userId"] = null
+                    updates["seats.$index.state"] = "EMPTY"
+                    updates["seats.$index.isMuted"] = false
+                }
+            }
+        }
+        firestore.document("rooms/$roomId").update(updates).await()
+        firestore.document("users/$userId").update("currentRoomId", null).await()
     }
 }

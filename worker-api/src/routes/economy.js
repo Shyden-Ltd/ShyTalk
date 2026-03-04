@@ -1,6 +1,8 @@
 /**
  * Economy routes — daily rewards, gacha, gift sending, bean redemption, purchases.
  *
+ * All operations use Firestore as the sole database.
+ *
  * POST /api/economy/daily-reward     → Claim daily login reward
  * POST /api/economy/gacha            → Pull gacha (1, 10, or 100)
  * POST /api/economy/gift             → Send gift from backpack
@@ -20,6 +22,11 @@
  */
 
 const { json, jsonError, generateId, now, todayStr, yesterdayStr, parseBody } = require('../utils');
+const {
+  getDoc, setDoc, updateDoc, deleteDoc,
+  queryCollection, batchWrite, batchUpdateOp, batchDeleteOp, batchIncrementOp,
+  fieldFilter, orderBy,
+} = require('../utils/firestore');
 
 const DEFAULT_ECONOMY_CONFIG = {
   beanConversionRate: 0.6,
@@ -38,33 +45,107 @@ const DEFAULT_ECONOMY_CONFIG = {
 };
 
 async function loadEconomyConfig(env) {
-  const row = await env.DB.prepare("SELECT value FROM config WHERE key = 'economy'").first();
-  if (row) {
-    return { ...DEFAULT_ECONOMY_CONFIG, ...JSON.parse(row.value) };
+  const doc = await getDoc(env, 'config/economy');
+  if (doc) {
+    const { id: _id, ...config } = doc;
+    return { ...DEFAULT_ECONOMY_CONFIG, ...config };
   }
   return { ...DEFAULT_ECONOMY_CONFIG };
+}
+
+/**
+ * Helper to read a user field with camelCase (new) or snake_case (legacy) fallback.
+ */
+function userField(user, camel, snake) {
+  return user[camel] ?? user[snake] ?? null;
 }
 
 /**
  * Add a broadcast entry and trim to last 50.
  */
 async function addBroadcast(env, data) {
-  await env.DB.prepare(`
-    INSERT INTO broadcasts (id, type, sender_name, sender_photo_url, recipient_name,
-      gift_name, gift_icon_url, gift_coin_value, quantity, timestamp)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    generateId(), data.type, data.senderName, data.senderPhotoUrl || null,
-    data.recipientName || '', data.giftName, data.giftIconUrl || '',
-    data.giftCoinValue, data.quantity || 1, now()
-  ).run();
+  const broadcastId = generateId();
+  await setDoc(env, `broadcasts/${broadcastId}`, {
+    id: broadcastId,
+    type: data.type,
+    senderName: data.senderName,
+    senderPhotoUrl: data.senderPhotoUrl || null,
+    recipientName: data.recipientName || '',
+    giftName: data.giftName,
+    giftIconUrl: data.giftIconUrl || '',
+    giftCoinValue: data.giftCoinValue,
+    quantity: data.quantity || 1,
+    timestamp: now(),
+  });
 
-  // Keep only last 50
-  await env.DB.prepare(`
-    DELETE FROM broadcasts WHERE id NOT IN (
-      SELECT id FROM broadcasts ORDER BY timestamp DESC LIMIT 50
-    )
-  `).run();
+  // Trim old broadcasts (keep last 50) — query oldest beyond 50
+  const old = await queryCollection(env, 'broadcasts', {
+    orderBy: [orderBy('timestamp', 'DESCENDING')],
+    offset: 50,
+    limit: 100,
+  });
+  if (old.length > 0) {
+    const deletes = old.map(b => batchDeleteOp(env, `broadcasts/${b.id}`));
+    await batchWrite(env, deletes);
+  }
+}
+
+/**
+ * Write a gift to a user's gift wall (upsert receivedCount, update senders).
+ */
+async function updateGiftWall(env, recipientId, giftId, senderId, quantity) {
+  const wallDoc = await getDoc(env, `users/${recipientId}/giftWall/${giftId}`);
+
+  const currentCount = wallDoc?.receivedCount || 0;
+  const senders = wallDoc?.senders || [];
+
+  // Update or add sender
+  const existingSender = senders.find(s => s.senderId === senderId);
+  if (existingSender) {
+    existingSender.sendCount = (existingSender.sendCount || 0) + quantity;
+    existingSender.lastSentAt = now();
+  } else {
+    senders.push({ senderId, sendCount: quantity, lastSentAt: now() });
+  }
+
+  // Sort senders by count descending, keep top 50
+  senders.sort((a, b) => (b.sendCount || 0) - (a.sendCount || 0));
+  const trimmedSenders = senders.slice(0, 50);
+
+  await setDoc(env, `users/${recipientId}/giftWall/${giftId}`, {
+    giftId,
+    receivedCount: currentCount + quantity,
+    senders: trimmedSenders,
+  });
+}
+
+/**
+ * Write a transaction record.
+ */
+async function writeTransaction(env, userId, txId, data) {
+  await setDoc(env, `users/${userId}/transactions/${txId}`, {
+    id: txId,
+    ...data,
+    timestamp: data.timestamp || now(),
+  });
+}
+
+/**
+ * Write a room gift message to Firestore.
+ */
+async function writeRoomGiftMessage(env, roomId, senderId, senderName, text, giftId, giftIconUrl) {
+  const msgId = generateId();
+  await setDoc(env, `rooms/${roomId}/messages/${msgId}`, {
+    id: msgId,
+    roomId,
+    senderId,
+    senderName,
+    text,
+    type: 'GIFT',
+    giftId: giftId || null,
+    giftIconUrl: giftIconUrl || '',
+    createdAt: now(),
+  });
 }
 
 function registerEconomyRoutes(router) {
@@ -76,16 +157,20 @@ function registerEconomyRoutes(router) {
     const today = todayStr();
     const yesterday = yesterdayStr();
 
-    const user = await env.DB.prepare(
-      'SELECT shy_coins, is_super_shy, login_streak, last_login_date, last_login_reward_date FROM users WHERE uid = ?'
-    ).bind(uid).first();
-
+    const user = await getDoc(env, `users/${uid}`);
     if (!user) return jsonError('User not found', 404);
-    if (user.last_login_reward_date === today) {
+
+    const shyCoins = userField(user, 'shyCoins', 'shy_coins') || 0;
+    const isSuperShy = userField(user, 'isSuperShy', 'is_super_shy') || false;
+    const loginStreak = userField(user, 'loginStreak', 'login_streak') || 0;
+    const lastLoginDate = userField(user, 'lastLoginDate', 'last_login_date');
+    const lastLoginRewardDate = userField(user, 'lastLoginRewardDate', 'last_login_reward_date');
+
+    if (lastLoginRewardDate === today) {
       return jsonError('Already claimed today', 409);
     }
 
-    const newStreak = (user.last_login_date === yesterday) ? (user.login_streak || 0) + 1 : 1;
+    const newStreak = (lastLoginDate === yesterday) ? loginStreak + 1 : 1;
     const milestoneRewards = config.milestoneRewards || {};
     const rawReward = milestoneRewards[String(newStreak)];
     const isMilestone = String(newStreak) in milestoneRewards;
@@ -99,29 +184,29 @@ function registerEconomyRoutes(router) {
       coinReward = (typeof rawReward === 'number') ? rawReward
         : (rawReward?.amount) ? rawReward.amount
         : config.dailyBase;
-      if (user.is_super_shy) coinReward = Math.ceil(coinReward * 1.1);
+      if (isSuperShy) coinReward = Math.ceil(coinReward * 1.1);
     }
 
-    const newBalance = (user.shy_coins || 0) + coinReward;
+    const newBalance = shyCoins + coinReward;
 
-    // Update user
-    const stmts = [];
-    stmts.push(env.DB.prepare(`
-      UPDATE users SET login_streak = ?, last_login_date = ?, last_login_reward_date = ?${coinReward > 0 ? ', shy_coins = ?' : ''}
-      WHERE uid = ?
-    `).bind(...(coinReward > 0
-      ? [newStreak, today, today, newBalance, uid]
-      : [newStreak, today, today, uid])));
+    // Update user doc
+    const userUpdates = {
+      loginStreak: newStreak,
+      lastLoginDate: today,
+      lastLoginRewardDate: today,
+    };
+    if (coinReward > 0) userUpdates.shyCoins = newBalance;
+    await updateDoc(env, `users/${uid}`, userUpdates);
 
     // Add gift to backpack if gift reward
     if (giftReward) {
-      stmts.push(env.DB.prepare(`
-        INSERT INTO backpack_items (user_id, gift_id, quantity, last_acquired)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(user_id, gift_id) DO UPDATE SET
-          quantity = quantity + ?, last_acquired = ?
-      `).bind(uid, giftReward.giftId, giftReward.quantity, now(),
-              giftReward.quantity, now()));
+      const bpDoc = await getDoc(env, `users/${uid}/backpack/${giftReward.giftId}`);
+      const currentQty = bpDoc?.quantity || 0;
+      await setDoc(env, `users/${uid}/backpack/${giftReward.giftId}`, {
+        giftId: giftReward.giftId,
+        quantity: currentQty + giftReward.quantity,
+        lastAcquired: now(),
+      });
     }
 
     // Transaction record
@@ -130,15 +215,13 @@ function registerEconomyRoutes(router) {
       ? `Day ${newStreak} (milestone) — ${giftReward.quantity}x ${giftReward.giftId}`
       : `Day ${newStreak}${isMilestone ? ' (milestone)' : ''}`;
 
-    stmts.push(env.DB.prepare(`
-      INSERT INTO transactions (id, user_id, type, amount, currency, balance_after, details, timestamp)
-      VALUES (?, ?, 'DAILY_REWARD', ?, ?, ?, ?, ?)
-    `).bind(txId, uid,
-      giftReward ? giftReward.quantity : coinReward,
-      giftReward ? 'GIFT' : 'COINS',
-      newBalance, details, now()));
-
-    await env.DB.batch(stmts);
+    await writeTransaction(env, uid, txId, {
+      type: 'DAILY_REWARD',
+      amount: giftReward ? giftReward.quantity : coinReward,
+      currency: giftReward ? 'GIFT' : 'COINS',
+      balanceAfter: newBalance,
+      details,
+    });
 
     const result = { coinsAwarded: coinReward, newStreak, isMilestone, newBalance };
     if (giftReward) {
@@ -173,37 +256,43 @@ function registerEconomyRoutes(router) {
       });
     }
 
-    const user = await env.DB.prepare(
-      'SELECT shy_coins, pity_counter, luck_score, guaranteed_next_pull_gift_id FROM users WHERE uid = ?'
-    ).bind(uid).first();
-
+    const user = await getDoc(env, `users/${uid}`);
     if (!user) return jsonError('User not found', 404);
-    if ((user.shy_coins || 0) < cost) return jsonError('Insufficient coins', 402);
+
+    const shyCoins = userField(user, 'shyCoins', 'shy_coins') || 0;
+    if (shyCoins < cost) return jsonError('Insufficient coins', 402);
 
     // Load winnable gifts
-    const { results: allGifts } = await env.DB.prepare(
-      'SELECT * FROM gifts WHERE coin_value > 0 AND show_on_wheel = 1 ORDER BY "order" ASC LIMIT 16'
-    ).all();
+    const allGifts = await queryCollection(env, 'gifts', {
+      where: fieldFilter('showOnWheel', 'EQUAL', true),
+      orderBy: [orderBy('order')],
+      limit: 16,
+    });
 
     if (allGifts.length === 0) return jsonError('No winnable gifts', 500);
 
+    // Filter to gifts with coinValue > 0
+    const winnableGifts = allGifts.filter(g => (g.coinValue || 0) > 0);
+    if (winnableGifts.length === 0) return jsonError('No winnable gifts', 500);
+
     // Compute base weights
     const exponent = config.dropRateExponent;
-    const baseWeights = allGifts.map(g => 1 / Math.pow(g.coin_value, exponent));
+    const baseWeights = winnableGifts.map(g => 1 / Math.pow(g.coinValue, exponent));
 
-    let pity = user.pity_counter || 0;
-    let luck = user.luck_score || 0;
+    let pity = userField(user, 'pityCounter', 'pity_counter') || 0;
+    let luck = userField(user, 'luckScore', 'luck_score') || 0;
     const highValueThreshold = config.pityHighValueThreshold;
     const results = [];
 
     // Admin-guaranteed first pull
     let guaranteedFirstPull = false;
-    if (user.guaranteed_next_pull_gift_id) {
-      const guaranteedGift = allGifts.find(g => g.id === user.guaranteed_next_pull_gift_id);
+    const guaranteedGiftId = userField(user, 'guaranteedNextPullGiftId', 'guaranteed_next_pull_gift_id');
+    if (guaranteedGiftId) {
+      const guaranteedGift = winnableGifts.find(g => g.id === guaranteedGiftId);
       if (guaranteedGift) {
         results.push(guaranteedGift);
         guaranteedFirstPull = true;
-        pity = guaranteedGift.coin_value >= highValueThreshold ? 0 : pity + 1;
+        pity = guaranteedGift.coinValue >= highValueThreshold ? 0 : pity + 1;
       }
     }
 
@@ -212,8 +301,8 @@ function registerEconomyRoutes(router) {
 
       // Pity system
       if (pity >= config.pityHardLimit) {
-        for (let j = 0; j < allGifts.length; j++) {
-          if (allGifts[j].coin_value < highValueThreshold) weights[j] = 0;
+        for (let j = 0; j < winnableGifts.length; j++) {
+          if (winnableGifts[j].coinValue < highValueThreshold) weights[j] = 0;
         }
         if (weights.every(w => w === 0)) {
           for (let j = 0; j < weights.length; j++) weights[j] = baseWeights[j];
@@ -222,15 +311,15 @@ function registerEconomyRoutes(router) {
         const progress = (pity - config.pitySoftStart) / (config.pityHardLimit - config.pitySoftStart);
         const shift = config.pitySoftMaxShift * progress;
         let lowTotal = 0, highTotal = 0;
-        for (let j = 0; j < allGifts.length; j++) {
-          if (allGifts[j].coin_value >= highValueThreshold) highTotal += weights[j];
+        for (let j = 0; j < winnableGifts.length; j++) {
+          if (winnableGifts[j].coinValue >= highValueThreshold) highTotal += weights[j];
           else lowTotal += weights[j];
         }
         if (lowTotal > 0 && highTotal > 0) {
           const totalWeight = lowTotal + highTotal;
           const shiftAmount = shift * totalWeight;
-          for (let j = 0; j < allGifts.length; j++) {
-            if (allGifts[j].coin_value >= highValueThreshold) {
+          for (let j = 0; j < winnableGifts.length; j++) {
+            if (winnableGifts[j].coinValue >= highValueThreshold) {
               weights[j] += shiftAmount * (weights[j] / highTotal);
             } else {
               weights[j] -= shiftAmount * (weights[j] / lowTotal);
@@ -245,15 +334,15 @@ function registerEconomyRoutes(router) {
       if (luckBoost > 0) {
         const totalWeight = weights.reduce((s, w) => s + w, 0);
         const shiftAmount = luckBoost * totalWeight;
-        const minValue = Math.min(...allGifts.map(g => g.coin_value));
+        const minValue = Math.min(...winnableGifts.map(g => g.coinValue));
         let cheapTotal = 0, expensiveTotal = 0;
-        for (let j = 0; j < allGifts.length; j++) {
-          if (allGifts[j].coin_value === minValue) cheapTotal += weights[j];
+        for (let j = 0; j < winnableGifts.length; j++) {
+          if (winnableGifts[j].coinValue === minValue) cheapTotal += weights[j];
           else expensiveTotal += weights[j];
         }
         if (cheapTotal > shiftAmount && expensiveTotal > 0) {
-          for (let j = 0; j < allGifts.length; j++) {
-            if (allGifts[j].coin_value === minValue) {
+          for (let j = 0; j < winnableGifts.length; j++) {
+            if (winnableGifts[j].coinValue === minValue) {
               weights[j] -= shiftAmount * (weights[j] / cheapTotal);
             } else {
               weights[j] += shiftAmount * (weights[j] / expensiveTotal);
@@ -264,7 +353,7 @@ function registerEconomyRoutes(router) {
 
       // Roll
       const total = weights.reduce((s, w) => s + w, 0);
-      if (total <= 0) { results.push(allGifts[0]); pity++; continue; }
+      if (total <= 0) { results.push(winnableGifts[0]); pity++; continue; }
 
       const roll = Math.random() * total;
       let cumulative = 0, selectedIndex = 0;
@@ -273,64 +362,67 @@ function registerEconomyRoutes(router) {
         if (roll <= cumulative) { selectedIndex = j; break; }
       }
 
-      const gift = allGifts[selectedIndex];
+      const gift = winnableGifts[selectedIndex];
       results.push(gift);
-      pity = gift.coin_value >= highValueThreshold ? 0 : pity + 1;
+      pity = gift.coinValue >= highValueThreshold ? 0 : pity + 1;
     }
 
     if (pullCount === 100) luck = Math.min(100, luck + 2);
 
-    const newBalance = (user.shy_coins || 0) - cost;
+    const newBalance = shyCoins - cost;
     const timestamp = now();
 
-    // Build batch statements
-    const stmts = [];
-
     // Update user
-    stmts.push(env.DB.prepare(`
-      UPDATE users SET shy_coins = ?, pity_counter = ?, luck_score = ?, guaranteed_next_pull_gift_id = NULL
-      WHERE uid = ?
-    `).bind(newBalance, pity, luck, uid));
+    await updateDoc(env, `users/${uid}`, {
+      shyCoins: newBalance,
+      pityCounter: pity,
+      luckScore: luck,
+      guaranteedNextPullGiftId: null,
+    });
 
     // Add gifts to backpack
     for (const gift of results) {
-      const expiresAt = gift.expires_after_days
-        ? timestamp + gift.expires_after_days * 86400000
-        : null;
-      stmts.push(env.DB.prepare(`
-        INSERT INTO backpack_items (user_id, gift_id, quantity, last_acquired, expires_at)
-        VALUES (?, ?, 1, ?, ?)
-        ON CONFLICT(user_id, gift_id) DO UPDATE SET
-          quantity = quantity + 1, last_acquired = ?${expiresAt ? ', expires_at = ?' : ''}
-      `).bind(uid, gift.id, timestamp, expiresAt, timestamp,
-        ...(expiresAt ? [expiresAt] : [])));
+      const bpDoc = await getDoc(env, `users/${uid}/backpack/${gift.id}`);
+      const currentQty = bpDoc?.quantity || 0;
+      const expiresAt = gift.expiresAfterDays
+        ? timestamp + gift.expiresAfterDays * 86400000
+        : bpDoc?.expiresAt || null;
+      await setDoc(env, `users/${uid}/backpack/${gift.id}`, {
+        giftId: gift.id,
+        quantity: currentQty + 1,
+        lastAcquired: timestamp,
+        expiresAt,
+        // Denormalized gift metadata for display
+        giftName: gift.name,
+        coinValue: gift.coinValue,
+        iconUrl: gift.iconUrl || '',
+      });
     }
 
     // Transaction record
-    stmts.push(env.DB.prepare(`
-      INSERT INTO transactions (id, user_id, type, amount, currency, balance_after, pull_count, details, guaranteed, timestamp)
-      VALUES (?, ?, 'GACHA_PULL', ?, 'COINS', ?, ?, ?, ?, ?)
-    `).bind(generateId(), uid, -cost, newBalance, pullCount,
-      results.map(g => g.name).join(', '),
-      guaranteedFirstPull ? 1 : 0, timestamp));
+    const gachaTxId = generateId();
+    await writeTransaction(env, uid, gachaTxId, {
+      type: 'GACHA_PULL',
+      amount: -cost,
+      currency: 'COINS',
+      balanceAfter: newBalance,
+      pullCount,
+      details: results.map(g => g.name).join(', '),
+      guaranteed: !!guaranteedFirstPull,
+    });
 
-    await env.DB.batch(stmts);
-
-    // Broadcast qualifying wins (outside batch)
+    // Broadcast qualifying wins
     const winThreshold = config.broadcastWinThreshold;
     for (const gift of results) {
-      if (gift.coin_value >= winThreshold) {
-        const sender = await env.DB.prepare(
-          'SELECT display_name, profile_photo_url FROM users WHERE uid = ?'
-        ).bind(uid).first();
+      if (gift.coinValue >= winThreshold) {
         await addBroadcast(env, {
           type: 'GACHA_WIN',
-          senderName: sender?.display_name || '',
-          senderPhotoUrl: sender?.profile_photo_url,
+          senderName: userField(user, 'displayName', 'display_name') || '',
+          senderPhotoUrl: userField(user, 'profilePhotoUrl', 'profile_photo_url'),
           recipientName: '',
           giftName: gift.name,
-          giftIconUrl: gift.icon_url || '',
-          giftCoinValue: gift.coin_value,
+          giftIconUrl: gift.iconUrl || '',
+          giftCoinValue: gift.coinValue,
         });
         break; // one broadcast per pull session
       }
@@ -339,7 +431,7 @@ function registerEconomyRoutes(router) {
     return json({
       gifts: results.map(g => ({
         giftId: g.id, giftName: g.name,
-        coinValue: g.coin_value, iconUrl: g.icon_url || '',
+        coinValue: g.coinValue, iconUrl: g.iconUrl || '',
       })),
       coinsSpent: cost, newBalance,
       newPityCounter: pity, newLuckScore: luck,
@@ -359,95 +451,88 @@ function registerEconomyRoutes(router) {
     if (uid === recipientId) return jsonError('Cannot send gift to yourself', 400);
 
     const [gift, bpItem, sender, recipient] = await Promise.all([
-      env.DB.prepare('SELECT * FROM gifts WHERE id = ?').bind(giftId).first(),
-      env.DB.prepare('SELECT quantity FROM backpack_items WHERE user_id = ? AND gift_id = ?').bind(uid, giftId).first(),
-      env.DB.prepare('SELECT shy_coins, display_name, current_room_id FROM users WHERE uid = ?').bind(uid).first(),
-      env.DB.prepare('SELECT shy_beans, display_name FROM users WHERE uid = ?').bind(recipientId).first(),
+      getDoc(env, `gifts/${giftId}`),
+      getDoc(env, `users/${uid}/backpack/${giftId}`),
+      getDoc(env, `users/${uid}`),
+      getDoc(env, `users/${recipientId}`),
     ]);
 
     if (!gift) return jsonError('Gift not found', 404);
-    if (!bpItem || bpItem.quantity < quantity) return jsonError('Insufficient items in backpack', 402);
+    if (!bpItem || (bpItem.quantity || 0) < quantity) return jsonError('Insufficient items in backpack', 402);
     if (!recipient) return jsonError('Recipient not found', 404);
 
     const config = await loadEconomyConfig(env);
-    const beanReward = Math.floor(gift.coin_value * config.beanConversionRate * quantity);
+    const coinValue = gift.coinValue || gift.coin_value || 0;
+    const beanReward = Math.floor(coinValue * config.beanConversionRate * quantity);
+    const senderCoins = userField(sender, 'shyCoins', 'shy_coins') || 0;
+    const recipientBeans = userField(recipient, 'shyBeans', 'shy_beans') || 0;
     const timestamp = now();
 
-    const stmts = [];
-
     // Decrement backpack
-    const newQty = bpItem.quantity - quantity;
+    const newQty = (bpItem.quantity || 0) - quantity;
     if (newQty <= 0) {
-      stmts.push(env.DB.prepare('DELETE FROM backpack_items WHERE user_id = ? AND gift_id = ?').bind(uid, giftId));
+      await deleteDoc(env, `users/${uid}/backpack/${giftId}`);
     } else {
-      stmts.push(env.DB.prepare('UPDATE backpack_items SET quantity = ? WHERE user_id = ? AND gift_id = ?').bind(newQty, uid, giftId));
+      await updateDoc(env, `users/${uid}/backpack/${giftId}`, { quantity: newQty });
     }
 
     // Update recipient gift wall
-    stmts.push(env.DB.prepare(`
-      INSERT INTO gift_wall (user_id, gift_id, received_count) VALUES (?, ?, ?)
-      ON CONFLICT(user_id, gift_id) DO UPDATE SET received_count = received_count + ?
-    `).bind(recipientId, giftId, quantity, quantity));
-
-    stmts.push(env.DB.prepare(`
-      INSERT INTO gift_wall_senders (user_id, gift_id, sender_id, send_count) VALUES (?, ?, ?, ?)
-      ON CONFLICT(user_id, gift_id, sender_id) DO UPDATE SET send_count = send_count + ?
-    `).bind(recipientId, giftId, uid, quantity, quantity));
+    await updateGiftWall(env, recipientId, giftId, uid, quantity);
 
     // Credit beans
-    stmts.push(env.DB.prepare('UPDATE users SET shy_beans = shy_beans + ? WHERE uid = ?').bind(beanReward, recipientId));
+    await updateDoc(env, `users/${recipientId}`, { shyBeans: recipientBeans + beanReward });
 
-    // Room message if in room
-    if (sender?.current_room_id) {
-      const sName = sender.display_name || 'Someone';
-      const rName = recipient.display_name || 'Someone';
+    // Room message if sender is in a room
+    const currentRoomId = userField(sender, 'currentRoomId', 'current_room_id');
+    if (currentRoomId) {
+      const sName = userField(sender, 'displayName', 'display_name') || 'Someone';
+      const rName = userField(recipient, 'displayName', 'display_name') || 'Someone';
       const qtyLabel = quantity > 1 ? `${quantity}x ` : '';
-      const msgId = generateId();
-      stmts.push(env.DB.prepare(`
-        INSERT INTO room_messages (id, room_id, sender_id, sender_name, text, type, gift_id, gift_icon_url, created_at)
-        VALUES (?, ?, ?, ?, ?, 'GIFT', ?, ?, ?)
-      `).bind(msgId, sender.current_room_id, uid, sName,
-        `${sName} sent ${qtyLabel}${gift.name} to ${rName}`, giftId, gift.icon_url || '', timestamp));
+      await writeRoomGiftMessage(env, currentRoomId, uid, sName,
+        `${sName} sent ${qtyLabel}${gift.name} to ${rName}`, giftId, gift.iconUrl || gift.icon_url || '');
 
-      // Update last gift event
-      stmts.push(env.DB.prepare(`
-        INSERT INTO room_last_gift_event (room_id, sender_id, sender_name, recipient_id, recipient_name,
-          gift_id, gift_name, coin_value, quantity, timestamp)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(room_id) DO UPDATE SET
-          sender_id = ?, sender_name = ?, recipient_id = ?, recipient_name = ?,
-          gift_id = ?, gift_name = ?, coin_value = ?, quantity = ?, timestamp = ?
-      `).bind(
-        sender.current_room_id, uid, sender.display_name || 'Someone', recipientId, recipient.display_name || 'Someone',
-        giftId, gift.name, gift.coin_value, quantity, timestamp,
-        uid, sender.display_name || 'Someone', recipientId, recipient.display_name || 'Someone',
-        giftId, gift.name, gift.coin_value, quantity, timestamp
-      ));
+      // Update last gift event on room doc
+      await updateDoc(env, `rooms/${currentRoomId}`, {
+        lastGiftEvent: {
+          senderId: uid, senderName: sName,
+          recipientId, recipientName: rName,
+          giftId, giftName: gift.name,
+          coinValue, quantity, timestamp,
+        },
+      });
     }
 
     // Transaction records
-    stmts.push(env.DB.prepare(`
-      INSERT INTO transactions (id, user_id, type, amount, currency, balance_after, gift_id, gift_name, recipient_id, quantity, timestamp)
-      VALUES (?, ?, 'GIFT_SENT', ?, 'COINS', ?, ?, ?, ?, ?, ?)
-    `).bind(generateId(), uid, -quantity, sender?.shy_coins || 0, giftId, gift.name, recipientId, quantity, timestamp));
+    const giftSentTxId = generateId();
+    const giftReceivedTxId = generateId();
 
-    stmts.push(env.DB.prepare(`
-      INSERT INTO transactions (id, user_id, type, amount, currency, balance_after, gift_id, gift_name, sender_id, quantity, timestamp)
-      VALUES (?, ?, 'GIFT_RECEIVED', ?, 'BEANS', ?, ?, ?, ?, ?, ?)
-    `).bind(generateId(), recipientId, beanReward, (recipient.shy_beans || 0) + beanReward,
-      giftId, gift.name, uid, quantity, timestamp));
-
-    await env.DB.batch(stmts);
+    await Promise.all([
+      writeTransaction(env, uid, giftSentTxId, {
+        type: 'GIFT_SENT', amount: -quantity, currency: 'COINS',
+        balanceAfter: senderCoins, giftId, giftName: gift.name,
+        recipientId, quantity, timestamp,
+      }),
+      writeTransaction(env, recipientId, giftReceivedTxId, {
+        type: 'GIFT_RECEIVED', amount: beanReward, currency: 'BEANS',
+        balanceAfter: recipientBeans + beanReward, giftId, giftName: gift.name,
+        senderId: uid, quantity, timestamp,
+      }),
+    ]);
 
     // Broadcast
-    if (gift.coin_value >= config.broadcastSendThreshold) {
+    if (coinValue >= config.broadcastSendThreshold) {
       await addBroadcast(env, {
-        type: 'GIFT_SEND', senderName: sender?.display_name || '',
-        senderPhotoUrl: null, recipientName: recipient.display_name || '',
-        giftName: gift.name, giftIconUrl: gift.icon_url || '',
-        giftCoinValue: gift.coin_value, quantity,
+        type: 'GIFT_SEND',
+        senderName: userField(sender, 'displayName', 'display_name') || '',
+        senderPhotoUrl: null,
+        recipientName: userField(recipient, 'displayName', 'display_name') || '',
+        giftName: gift.name, giftIconUrl: gift.iconUrl || gift.icon_url || '',
+        giftCoinValue: coinValue, quantity,
       });
     }
+
+    // Update gift rankings incrementally
+    await updateGiftRankings(env, recipientId, giftId, quantity);
 
     return json({ success: true, beanReward, giftName: gift.name, quantity });
   });
@@ -463,76 +548,75 @@ function registerEconomyRoutes(router) {
     if (uid === recipientId) return jsonError('Cannot send gift to yourself', 400);
 
     const [gift, sender, recipient] = await Promise.all([
-      env.DB.prepare('SELECT * FROM gifts WHERE id = ?').bind(giftId).first(),
-      env.DB.prepare('SELECT shy_coins, display_name, current_room_id FROM users WHERE uid = ?').bind(uid).first(),
-      env.DB.prepare('SELECT shy_beans, display_name FROM users WHERE uid = ?').bind(recipientId).first(),
+      getDoc(env, `gifts/${giftId}`),
+      getDoc(env, `users/${uid}`),
+      getDoc(env, `users/${recipientId}`),
     ]);
 
     if (!gift) return jsonError('Gift not found', 404);
     if (!recipient) return jsonError('Recipient not found', 404);
 
-    const totalCost = gift.coin_value * quantity;
-    if ((sender?.shy_coins || 0) < totalCost) return jsonError('Insufficient coins', 402);
+    const coinValue = gift.coinValue || gift.coin_value || 0;
+    const totalCost = coinValue * quantity;
+    const senderCoins = userField(sender, 'shyCoins', 'shy_coins') || 0;
+    if (senderCoins < totalCost) return jsonError('Insufficient coins', 402);
 
     const config = await loadEconomyConfig(env);
-    const beanReward = Math.floor(gift.coin_value * config.beanConversionRate * quantity);
-    const newSenderCoins = (sender.shy_coins || 0) - totalCost;
+    const beanReward = Math.floor(coinValue * config.beanConversionRate * quantity);
+    const newSenderCoins = senderCoins - totalCost;
+    const recipientBeans = userField(recipient, 'shyBeans', 'shy_beans') || 0;
     const timestamp = now();
 
-    const stmts = [];
-
     // Deduct coins
-    stmts.push(env.DB.prepare('UPDATE users SET shy_coins = ? WHERE uid = ?').bind(newSenderCoins, uid));
+    await updateDoc(env, `users/${uid}`, { shyCoins: newSenderCoins });
 
     // Gift wall
-    stmts.push(env.DB.prepare(`
-      INSERT INTO gift_wall (user_id, gift_id, received_count) VALUES (?, ?, ?)
-      ON CONFLICT(user_id, gift_id) DO UPDATE SET received_count = received_count + ?
-    `).bind(recipientId, giftId, quantity, quantity));
-
-    stmts.push(env.DB.prepare(`
-      INSERT INTO gift_wall_senders (user_id, gift_id, sender_id, send_count) VALUES (?, ?, ?, ?)
-      ON CONFLICT(user_id, gift_id, sender_id) DO UPDATE SET send_count = send_count + ?
-    `).bind(recipientId, giftId, uid, quantity, quantity));
+    await updateGiftWall(env, recipientId, giftId, uid, quantity);
 
     // Beans
-    stmts.push(env.DB.prepare('UPDATE users SET shy_beans = shy_beans + ? WHERE uid = ?').bind(beanReward, recipientId));
+    await updateDoc(env, `users/${recipientId}`, { shyBeans: recipientBeans + beanReward });
 
     // Room message
-    if (sender?.current_room_id) {
-      const sName = sender.display_name || 'Someone';
-      const rName = recipient.display_name || 'Someone';
+    const currentRoomId = userField(sender, 'currentRoomId', 'current_room_id');
+    if (currentRoomId) {
+      const sName = userField(sender, 'displayName', 'display_name') || 'Someone';
+      const rName = userField(recipient, 'displayName', 'display_name') || 'Someone';
       const qtyLabel = quantity > 1 ? `${quantity}x ` : '';
-      stmts.push(env.DB.prepare(`
-        INSERT INTO room_messages (id, room_id, sender_id, sender_name, text, type, gift_id, gift_icon_url, created_at)
-        VALUES (?, ?, ?, ?, ?, 'GIFT', ?, ?, ?)
-      `).bind(generateId(), sender.current_room_id, uid, sName,
-        `${sName} sent ${qtyLabel}${gift.name} to ${rName}`, giftId, gift.icon_url || '', timestamp));
+      await writeRoomGiftMessage(env, currentRoomId, uid, sName,
+        `${sName} sent ${qtyLabel}${gift.name} to ${rName}`, giftId, gift.iconUrl || '');
     }
 
     // Transactions
-    stmts.push(env.DB.prepare(`
-      INSERT INTO transactions (id, user_id, type, amount, currency, balance_after, gift_id, gift_name, recipient_id, quantity, details, timestamp)
-      VALUES (?, ?, 'GIFT_SENT', ?, 'COINS', ?, ?, ?, ?, ?, ?, ?)
-    `).bind(generateId(), uid, -totalCost, newSenderCoins, giftId, gift.name, recipientId, quantity,
-      `Sent ${quantity > 1 ? quantity + 'x ' : ''}${gift.name} directly (${totalCost} coins)`, timestamp));
+    const directSentTxId = generateId();
+    const directReceivedTxId = generateId();
 
-    stmts.push(env.DB.prepare(`
-      INSERT INTO transactions (id, user_id, type, amount, currency, balance_after, gift_id, gift_name, sender_id, quantity, timestamp)
-      VALUES (?, ?, 'GIFT_RECEIVED', ?, 'BEANS', ?, ?, ?, ?, ?, ?)
-    `).bind(generateId(), recipientId, beanReward, (recipient.shy_beans || 0) + beanReward,
-      giftId, gift.name, uid, quantity, timestamp));
+    await Promise.all([
+      writeTransaction(env, uid, directSentTxId, {
+        type: 'GIFT_SENT', amount: -totalCost, currency: 'COINS',
+        balanceAfter: newSenderCoins, giftId, giftName: gift.name,
+        recipientId, quantity,
+        details: `Sent ${quantity > 1 ? quantity + 'x ' : ''}${gift.name} directly (${totalCost} coins)`,
+        timestamp,
+      }),
+      writeTransaction(env, recipientId, directReceivedTxId, {
+        type: 'GIFT_RECEIVED', amount: beanReward, currency: 'BEANS',
+        balanceAfter: recipientBeans + beanReward, giftId, giftName: gift.name,
+        senderId: uid, quantity, timestamp,
+      }),
+    ]);
 
-    await env.DB.batch(stmts);
-
-    if (gift.coin_value >= config.broadcastSendThreshold) {
+    if (coinValue >= config.broadcastSendThreshold) {
       await addBroadcast(env, {
-        type: 'GIFT_SEND', senderName: sender?.display_name || '',
-        recipientName: recipient.display_name || '',
-        giftName: gift.name, giftIconUrl: gift.icon_url || '',
-        giftCoinValue: gift.coin_value, quantity,
+        type: 'GIFT_SEND',
+        senderName: userField(sender, 'displayName', 'display_name') || '',
+        recipientName: userField(recipient, 'displayName', 'display_name') || '',
+        giftName: gift.name, giftIconUrl: gift.iconUrl || '',
+        giftCoinValue: coinValue, quantity,
       });
     }
+
+    // Update gift rankings incrementally
+    await updateGiftRankings(env, recipientId, giftId, quantity);
 
     return json({ success: true, beanReward, giftName: gift.name, coinsSpent: totalCost, quantity });
   });
@@ -547,27 +631,28 @@ function registerEconomyRoutes(router) {
       return jsonError('amount must be a positive number', 400);
     }
 
-    const user = await env.DB.prepare('SELECT shy_beans, shy_coins FROM users WHERE uid = ?').bind(uid).first();
+    const user = await getDoc(env, `users/${uid}`);
     if (!user) return jsonError('User not found', 404);
-    if ((user.shy_beans || 0) < amount) return jsonError('Insufficient beans', 402);
+
+    const shyBeans = userField(user, 'shyBeans', 'shy_beans') || 0;
+    const shyCoins = userField(user, 'shyCoins', 'shy_coins') || 0;
+    if (shyBeans < amount) return jsonError('Insufficient beans', 402);
 
     const config = await loadEconomyConfig(env);
     const hasBonus = amount >= config.beanRedeemBonusThreshold;
     const coins = hasBonus ? Math.floor(amount * config.beanRedeemBonusMultiplier) : amount;
-    const newBeans = (user.shy_beans || 0) - amount;
-    const newCoins = (user.shy_coins || 0) + coins;
+    const newBeans = shyBeans - amount;
+    const newCoins = shyCoins + coins;
+
+    await updateDoc(env, `users/${uid}`, { shyBeans: newBeans, shyCoins: newCoins });
 
     const bonusPct = Math.round((config.beanRedeemBonusMultiplier - 1) * 100);
-
-    await env.DB.batch([
-      env.DB.prepare('UPDATE users SET shy_beans = ?, shy_coins = ? WHERE uid = ?')
-        .bind(newBeans, newCoins, uid),
-      env.DB.prepare(`
-        INSERT INTO transactions (id, user_id, type, amount, currency, balance_after, details, timestamp)
-        VALUES (?, ?, 'BEAN_REDEEM', ?, 'COINS', ?, ?, ?)
-      `).bind(generateId(), uid, coins, newCoins,
-        `Redeemed ${amount} beans${hasBonus ? ` (${bonusPct}% bonus)` : ''}`, now()),
-    ]);
+    const redeemTxId = generateId();
+    await writeTransaction(env, uid, redeemTxId, {
+      type: 'BEAN_REDEEM', amount: coins, currency: 'COINS',
+      balanceAfter: newCoins,
+      details: `Redeemed ${amount} beans${hasBonus ? ` (${bonusPct}% bonus)` : ''}`,
+    });
 
     return json({ coinsReceived: coins, newCoinBalance: newCoins, newBeanBalance: newBeans });
   });
@@ -594,41 +679,45 @@ function registerEconomyRoutes(router) {
 
       const expiry = sub.days ? timestamp + sub.days * 86400000 : null;
 
-      await env.DB.batch([
-        env.DB.prepare(`
-          UPDATE users SET is_super_shy = 1, super_shy_expiry = ?, super_shy_tier = ? WHERE uid = ?
-        `).bind(expiry, sub.tier, uid),
-        env.DB.prepare(`
-          INSERT INTO transactions (id, user_id, type, amount, currency, balance_after, details, timestamp)
-          VALUES (?, ?, 'SUBSCRIPTION', 0, 'COINS', 0, ?, ?)
-        `).bind(generateId(), uid, `Super Shy ${sub.tier}`, timestamp),
-      ]);
+      await updateDoc(env, `users/${uid}`, {
+        isSuperShy: true,
+        superShyExpiry: expiry,
+        superShyTier: sub.tier,
+      });
+
+      const subTxId = generateId();
+      await writeTransaction(env, uid, subTxId, {
+        type: 'SUBSCRIPTION', amount: 0, currency: 'COINS',
+        balanceAfter: 0, details: `Super Shy ${sub.tier}`, timestamp,
+      });
 
       return json({ success: true, tier: sub.tier });
     }
 
     // Coin package
-    const pkg = await env.DB.prepare(
-      'SELECT * FROM coin_packages WHERE product_id = ? LIMIT 1'
-    ).bind(productId).first();
-
+    const packages = await queryCollection(env, 'coinPackages', {
+      where: fieldFilter('productId', 'EQUAL', productId),
+      limit: 1,
+    });
+    const pkg = packages[0];
     if (!pkg) return jsonError('Unknown coin package', 404);
 
-    const totalCoins = (pkg.coins || 0) + (pkg.bonus_coins || 0);
+    const totalCoins = (pkg.coins || 0) + (pkg.bonusCoins || 0);
 
-    const user = await env.DB.prepare('SELECT shy_coins FROM users WHERE uid = ?').bind(uid).first();
+    const user = await getDoc(env, `users/${uid}`);
     if (!user) return jsonError('User not found', 404);
 
-    const newBalance = (user.shy_coins || 0) + totalCoins;
+    const shyCoins = userField(user, 'shyCoins', 'shy_coins') || 0;
+    const newBalance = shyCoins + totalCoins;
 
-    await env.DB.batch([
-      env.DB.prepare('UPDATE users SET shy_coins = ? WHERE uid = ?').bind(newBalance, uid),
-      env.DB.prepare(`
-        INSERT INTO transactions (id, user_id, type, amount, currency, balance_after, details, timestamp)
-        VALUES (?, ?, 'PURCHASE', ?, 'COINS', ?, ?, ?)
-      `).bind(generateId(), uid, totalCoins, newBalance,
-        `${pkg.coins} + ${pkg.bonus_coins} bonus coins`, timestamp),
-    ]);
+    await updateDoc(env, `users/${uid}`, { shyCoins: newBalance });
+
+    const purchaseTxId = generateId();
+    await writeTransaction(env, uid, purchaseTxId, {
+      type: 'PURCHASE', amount: totalCoins, currency: 'COINS',
+      balanceAfter: newBalance,
+      details: `${pkg.coins} + ${pkg.bonusCoins || 0} bonus coins`, timestamp,
+    });
 
     return json({ success: true, coinsAdded: totalCoins, newBalance });
   });
@@ -637,24 +726,28 @@ function registerEconomyRoutes(router) {
   router.post('/api/economy/trial-claim', async (request, env) => {
     const uid = request.auth.uid;
 
-    const user = await env.DB.prepare(
-      'SELECT has_claimed_super_shy_trial, shy_coins FROM users WHERE uid = ?'
-    ).bind(uid).first();
-
+    const user = await getDoc(env, `users/${uid}`);
     if (!user) return jsonError('User not found', 404);
-    if (user.has_claimed_super_shy_trial) return jsonError('Trial already claimed', 409);
 
-    await env.DB.batch([
-      env.DB.prepare('UPDATE users SET has_claimed_super_shy_trial = 1 WHERE uid = ?').bind(uid),
-      env.DB.prepare(`
-        INSERT INTO backpack_items (user_id, gift_id, quantity) VALUES (?, 'super_shy_trial', 1)
-        ON CONFLICT(user_id, gift_id) DO UPDATE SET quantity = 1
-      `).bind(uid),
-      env.DB.prepare(`
-        INSERT INTO transactions (id, user_id, type, amount, currency, balance_after, details, timestamp)
-        VALUES (?, ?, 'TRIAL_CLAIM', 0, 'COINS', ?, 'Claimed 30 days of Super Shy', ?)
-      `).bind(generateId(), uid, user.shy_coins || 0, now()),
-    ]);
+    const hasClaimed = userField(user, 'hasClaimedSuperShyTrial', 'has_claimed_super_shy_trial');
+    if (hasClaimed) return jsonError('Trial already claimed', 409);
+
+    const shyCoins = userField(user, 'shyCoins', 'shy_coins') || 0;
+
+    await updateDoc(env, `users/${uid}`, { hasClaimedSuperShyTrial: true });
+
+    // Add trial item to backpack
+    await setDoc(env, `users/${uid}/backpack/super_shy_trial`, {
+      giftId: 'super_shy_trial',
+      quantity: 1,
+      giftName: 'Super Shy Trial',
+    });
+
+    const trialClaimTxId = generateId();
+    await writeTransaction(env, uid, trialClaimTxId, {
+      type: 'TRIAL_CLAIM', amount: 0, currency: 'COINS',
+      balanceAfter: shyCoins, details: 'Claimed 30 days of Super Shy',
+    });
 
     return json({ success: true });
   });
@@ -663,31 +756,35 @@ function registerEconomyRoutes(router) {
     const uid = request.auth.uid;
 
     const [user, bpItem] = await Promise.all([
-      env.DB.prepare('SELECT shy_coins, is_super_shy, super_shy_expiry, super_shy_tier FROM users WHERE uid = ?').bind(uid).first(),
-      env.DB.prepare("SELECT quantity FROM backpack_items WHERE user_id = ? AND gift_id = 'super_shy_trial'").bind(uid).first(),
+      getDoc(env, `users/${uid}`),
+      getDoc(env, `users/${uid}/backpack/super_shy_trial`),
     ]);
 
     if (!user) return jsonError('User not found', 404);
-    if (!bpItem || bpItem.quantity < 1) return jsonError('No trial item in backpack', 402);
+    if (!bpItem || (bpItem.quantity || 0) < 1) return jsonError('No trial item in backpack', 402);
 
     const timestamp = now();
     const thirtyDays = 30 * 24 * 60 * 60 * 1000;
-    const currentExpiry = user.super_shy_expiry || 0;
+    const currentExpiry = userField(user, 'superShyExpiry', 'super_shy_expiry') || 0;
     const baseTime = Math.max(currentExpiry, timestamp);
     const newExpiry = baseTime + thirtyDays;
-    const currentTier = user.super_shy_tier;
+    const currentTier = userField(user, 'superShyTier', 'super_shy_tier');
     const newTier = (currentTier && currentTier !== 'trial') ? currentTier : 'trial';
 
-    await env.DB.batch([
-      env.DB.prepare("DELETE FROM backpack_items WHERE user_id = ? AND gift_id = 'super_shy_trial'").bind(uid),
-      env.DB.prepare(`
-        UPDATE users SET is_super_shy = 1, super_shy_expiry = ?, super_shy_tier = ? WHERE uid = ?
-      `).bind(newExpiry, newTier, uid),
-      env.DB.prepare(`
-        INSERT INTO transactions (id, user_id, type, amount, currency, balance_after, details, timestamp)
-        VALUES (?, ?, 'TRIAL_ACTIVATE', 0, 'COINS', ?, 'Activated 30 days of Super Shy', ?)
-      `).bind(generateId(), uid, user.shy_coins || 0, timestamp),
-    ]);
+    // Remove trial from backpack and activate
+    await deleteDoc(env, `users/${uid}/backpack/super_shy_trial`);
+    await updateDoc(env, `users/${uid}`, {
+      isSuperShy: true,
+      superShyExpiry: newExpiry,
+      superShyTier: newTier,
+    });
+
+    const shyCoins = userField(user, 'shyCoins', 'shy_coins') || 0;
+    const trialActivateTxId = generateId();
+    await writeTransaction(env, uid, trialActivateTxId, {
+      type: 'TRIAL_ACTIVATE', amount: 0, currency: 'COINS',
+      balanceAfter: shyCoins, details: 'Activated 30 days of Super Shy', timestamp,
+    });
 
     return json({ success: true, newTier, newExpiry });
   });
@@ -702,18 +799,19 @@ function registerEconomyRoutes(router) {
       return jsonError('amount must be 1-100000', 400);
     }
 
-    const user = await env.DB.prepare('SELECT shy_coins FROM users WHERE uid = ?').bind(uid).first();
+    const user = await getDoc(env, `users/${uid}`);
     if (!user) return jsonError('User not found', 404);
 
-    const newBalance = (user.shy_coins || 0) + amount;
+    const shyCoins = userField(user, 'shyCoins', 'shy_coins') || 0;
+    const newBalance = shyCoins + amount;
 
-    await env.DB.batch([
-      env.DB.prepare('UPDATE users SET shy_coins = ? WHERE uid = ?').bind(newBalance, uid),
-      env.DB.prepare(`
-        INSERT INTO transactions (id, user_id, type, amount, currency, balance_after, details, timestamp)
-        VALUES (?, ?, 'PURCHASE', ?, 'COINS', ?, ?, ?)
-      `).bind(generateId(), uid, amount, newBalance, `Test purchase (+${amount} coins)`, now()),
-    ]);
+    await updateDoc(env, `users/${uid}`, { shyCoins: newBalance });
+
+    const testTxId = generateId();
+    await writeTransaction(env, uid, testTxId, {
+      type: 'PURCHASE', amount, currency: 'COINS',
+      balanceAfter: newBalance, details: `Test purchase (+${amount} coins)`,
+    });
 
     return json({ success: true, coinsAdded: amount, newBalance });
   });
@@ -732,113 +830,89 @@ function registerEconomyRoutes(router) {
     if (recipientIds.includes(uid)) return jsonError('Cannot send gift to yourself', 400);
     if (recipientIds.length > 50) return jsonError('Max 50 recipients', 400);
 
-    const gift = await env.DB.prepare('SELECT * FROM gifts WHERE id = ?').bind(giftId).first();
+    const gift = await getDoc(env, `gifts/${giftId}`);
     if (!gift) return jsonError('Gift not found', 404);
 
-    const sender = await env.DB.prepare(
-      'SELECT shy_coins, display_name, current_room_id FROM users WHERE uid = ?'
-    ).bind(uid).first();
+    const sender = await getDoc(env, `users/${uid}`);
     if (!sender) return jsonError('Sender not found', 404);
 
+    const coinValue = gift.coinValue || gift.coin_value || 0;
     const totalQty = quantity * recipientIds.length;
+    const senderCoins = userField(sender, 'shyCoins', 'shy_coins') || 0;
 
     if (fromBackpack) {
-      const bpItem = await env.DB.prepare(
-        'SELECT quantity FROM backpack_items WHERE user_id = ? AND gift_id = ?'
-      ).bind(uid, giftId).first();
-      if (!bpItem || bpItem.quantity < totalQty) return jsonError('Insufficient items in backpack', 402);
+      const bpItem = await getDoc(env, `users/${uid}/backpack/${giftId}`);
+      if (!bpItem || (bpItem.quantity || 0) < totalQty) return jsonError('Insufficient items in backpack', 402);
     } else {
-      const totalCost = gift.coin_value * totalQty;
-      if ((sender.shy_coins || 0) < totalCost) return jsonError('Insufficient coins', 402);
+      const totalCost = coinValue * totalQty;
+      if (senderCoins < totalCost) return jsonError('Insufficient coins', 402);
     }
 
     const config = await loadEconomyConfig(env);
     const timestamp = now();
-    const stmts = [];
 
     if (fromBackpack) {
-      // Decrement backpack
-      const bpItem = await env.DB.prepare(
-        'SELECT quantity FROM backpack_items WHERE user_id = ? AND gift_id = ?'
-      ).bind(uid, giftId).first();
+      const bpItem = await getDoc(env, `users/${uid}/backpack/${giftId}`);
       const newQty = (bpItem?.quantity || 0) - totalQty;
       if (newQty <= 0) {
-        stmts.push(env.DB.prepare('DELETE FROM backpack_items WHERE user_id = ? AND gift_id = ?').bind(uid, giftId));
+        await deleteDoc(env, `users/${uid}/backpack/${giftId}`);
       } else {
-        stmts.push(env.DB.prepare('UPDATE backpack_items SET quantity = ? WHERE user_id = ? AND gift_id = ?').bind(newQty, uid, giftId));
+        await updateDoc(env, `users/${uid}/backpack/${giftId}`, { quantity: newQty });
       }
     } else {
-      const totalCost = gift.coin_value * totalQty;
-      const newBalance = (sender.shy_coins || 0) - totalCost;
-      stmts.push(env.DB.prepare('UPDATE users SET shy_coins = ? WHERE uid = ?').bind(newBalance, uid));
+      const totalCost = coinValue * totalQty;
+      await updateDoc(env, `users/${uid}`, { shyCoins: senderCoins - totalCost });
     }
 
-    // For each recipient: gift wall + beans
-    const placeholders = recipientIds.map(() => '?').join(',');
-    const { results: recipients } = await env.DB.prepare(
-      `SELECT uid, shy_beans, display_name FROM users WHERE uid IN (${placeholders})`
-    ).bind(...recipientIds).all();
-
-    const recipientMap = {};
-    for (const r of recipients) recipientMap[r.uid] = r;
-
+    // Process each recipient
     for (const recipientId of recipientIds) {
-      const recipient = recipientMap[recipientId];
+      const recipient = await getDoc(env, `users/${recipientId}`);
       if (!recipient) continue;
 
-      const beanReward = Math.floor(gift.coin_value * config.beanConversionRate * quantity);
+      const beanReward = Math.floor(coinValue * config.beanConversionRate * quantity);
+      const recipientBeans = userField(recipient, 'shyBeans', 'shy_beans') || 0;
 
-      stmts.push(env.DB.prepare(`
-        INSERT INTO gift_wall (user_id, gift_id, received_count) VALUES (?, ?, ?)
-        ON CONFLICT(user_id, gift_id) DO UPDATE SET received_count = received_count + ?
-      `).bind(recipientId, giftId, quantity, quantity));
+      // Gift wall + beans + transaction
+      await updateGiftWall(env, recipientId, giftId, uid, quantity);
+      await updateDoc(env, `users/${recipientId}`, { shyBeans: recipientBeans + beanReward });
 
-      stmts.push(env.DB.prepare(`
-        INSERT INTO gift_wall_senders (user_id, gift_id, sender_id, send_count) VALUES (?, ?, ?, ?)
-        ON CONFLICT(user_id, gift_id, sender_id) DO UPDATE SET send_count = send_count + ?
-      `).bind(recipientId, giftId, uid, quantity, quantity));
-
-      stmts.push(env.DB.prepare('UPDATE users SET shy_beans = shy_beans + ? WHERE uid = ?').bind(beanReward, recipientId));
-
-      stmts.push(env.DB.prepare(`
-        INSERT INTO transactions (id, user_id, type, amount, currency, balance_after, gift_id, gift_name, sender_id, quantity, timestamp)
-        VALUES (?, ?, 'GIFT_RECEIVED', ?, 'BEANS', ?, ?, ?, ?, ?, ?)
-      `).bind(generateId(), recipientId, beanReward, (recipient.shy_beans || 0) + beanReward,
-        giftId, gift.name, uid, quantity, timestamp));
+      const recipientTxId = generateId();
+      await writeTransaction(env, recipientId, recipientTxId, {
+        type: 'GIFT_RECEIVED', amount: beanReward, currency: 'BEANS',
+        balanceAfter: recipientBeans + beanReward, giftId, giftName: gift.name,
+        senderId: uid, quantity, timestamp,
+      });
     }
 
     // Sender transaction
     const source = fromBackpack ? 'backpack' : 'direct';
-    stmts.push(env.DB.prepare(`
-      INSERT INTO transactions (id, user_id, type, amount, currency, balance_after, gift_id, gift_name, quantity,
-        total_recipients, details, timestamp)
-      VALUES (?, ?, 'GIFT_SENT', ?, 'COINS', ?, ?, ?, ?, ?, ?, ?)
-    `).bind(generateId(), uid,
-      fromBackpack ? 0 : -(gift.coin_value * totalQty),
-      sender.shy_coins || 0, giftId, gift.name, quantity,
-      recipientIds.length,
-      `Batch ${source}: ${totalQty}x ${gift.name} to ${recipientIds.length} users`,
-      timestamp));
+    const batchSenderTxId = generateId();
+    await writeTransaction(env, uid, batchSenderTxId, {
+      type: 'GIFT_SENT',
+      amount: fromBackpack ? 0 : -(coinValue * totalQty),
+      currency: 'COINS',
+      balanceAfter: senderCoins, giftId, giftName: gift.name, quantity,
+      details: `Batch ${source}: ${totalQty}x ${gift.name} to ${recipientIds.length} users`,
+      timestamp,
+    });
 
     // Room message
-    if (sender.current_room_id) {
-      stmts.push(env.DB.prepare(`
-        INSERT INTO room_messages (id, room_id, sender_id, sender_name, text, type, gift_id, gift_icon_url, created_at)
-        VALUES (?, ?, ?, ?, ?, 'GIFT', ?, ?, ?)
-      `).bind(generateId(), sender.current_room_id, uid, sender.display_name || 'Someone',
-        `${sender.display_name || 'Someone'} sent ${totalQty}x ${gift.name} to ${recipientIds.length} people`,
-        giftId, gift.icon_url || '', timestamp));
+    const currentRoomId = userField(sender, 'currentRoomId', 'current_room_id');
+    if (currentRoomId) {
+      const sName = userField(sender, 'displayName', 'display_name') || 'Someone';
+      await writeRoomGiftMessage(env, currentRoomId, uid, sName,
+        `${sName} sent ${totalQty}x ${gift.name} to ${recipientIds.length} people`,
+        giftId, gift.iconUrl || '');
     }
 
-    await env.DB.batch(stmts);
-
     // Broadcast
-    if (gift.coin_value >= config.broadcastSendThreshold) {
+    if (coinValue >= config.broadcastSendThreshold) {
       await addBroadcast(env, {
-        type: 'GIFT_SEND', senderName: sender.display_name || '',
+        type: 'GIFT_SEND',
+        senderName: userField(sender, 'displayName', 'display_name') || '',
         recipientName: `${recipientIds.length} people`,
-        giftName: gift.name, giftIconUrl: gift.icon_url || '',
-        giftCoinValue: gift.coin_value, quantity: totalQty,
+        giftName: gift.name, giftIconUrl: gift.iconUrl || '',
+        giftCoinValue: coinValue, quantity: totalQty,
       });
     }
 
@@ -855,73 +929,80 @@ function registerEconomyRoutes(router) {
     if (uid === recipientId) return jsonError('Cannot send to yourself', 400);
 
     const [sender, recipient] = await Promise.all([
-      env.DB.prepare('SELECT shy_coins, display_name, current_room_id FROM users WHERE uid = ?').bind(uid).first(),
-      env.DB.prepare('SELECT shy_beans, display_name FROM users WHERE uid = ?').bind(recipientId).first(),
+      getDoc(env, `users/${uid}`),
+      getDoc(env, `users/${recipientId}`),
     ]);
     if (!sender) return jsonError('Sender not found', 404);
     if (!recipient) return jsonError('Recipient not found', 404);
 
-    const { results: backpackItems } = await env.DB.prepare(
-      "SELECT bi.*, g.name, g.coin_value, g.icon_url FROM backpack_items bi JOIN gifts g ON g.id = bi.gift_id WHERE bi.user_id = ? AND bi.gift_id != 'super_shy_trial' AND bi.quantity > 0"
-    ).bind(uid).all();
+    // Get backpack items (excluding trial items)
+    const backpackItems = await queryCollection(env, `users/${uid}/backpack`, {});
+    const sendableItems = backpackItems.filter(
+      item => item.giftId !== 'super_shy_trial' && (item.quantity || 0) > 0
+    );
 
-    if (backpackItems.length === 0) return jsonError('Backpack is empty', 400);
+    if (sendableItems.length === 0) return jsonError('Backpack is empty', 400);
 
+    // For each backpack item, we need gift metadata. If denormalized on the bp doc, use it.
+    // Otherwise, look up the gift.
     const config = await loadEconomyConfig(env);
     const timestamp = now();
-    const stmts = [];
     let totalItemsSent = 0;
     let totalBeanReward = 0;
 
-    for (const item of backpackItems) {
-      totalItemsSent += item.quantity;
-      const beanReward = Math.floor(item.coin_value * config.beanConversionRate * item.quantity);
+    for (const item of sendableItems) {
+      const qty = item.quantity || 0;
+      totalItemsSent += qty;
+
+      // Get coin value from backpack doc or gift catalog
+      let coinVal = item.coinValue;
+      if (coinVal == null) {
+        const giftDoc = await getDoc(env, `gifts/${item.giftId}`);
+        coinVal = giftDoc?.coinValue || 0;
+      }
+
+      const beanReward = Math.floor(coinVal * config.beanConversionRate * qty);
       totalBeanReward += beanReward;
 
       // Gift wall
-      stmts.push(env.DB.prepare(`
-        INSERT INTO gift_wall (user_id, gift_id, received_count) VALUES (?, ?, ?)
-        ON CONFLICT(user_id, gift_id) DO UPDATE SET received_count = received_count + ?
-      `).bind(recipientId, item.gift_id, item.quantity, item.quantity));
-
-      stmts.push(env.DB.prepare(`
-        INSERT INTO gift_wall_senders (user_id, gift_id, sender_id, send_count) VALUES (?, ?, ?, ?)
-        ON CONFLICT(user_id, gift_id, sender_id) DO UPDATE SET send_count = send_count + ?
-      `).bind(recipientId, item.gift_id, uid, item.quantity, item.quantity));
+      await updateGiftWall(env, recipientId, item.giftId, uid, qty);
     }
 
     // Credit beans
-    stmts.push(env.DB.prepare('UPDATE users SET shy_beans = shy_beans + ? WHERE uid = ?').bind(totalBeanReward, recipientId));
+    const recipientBeans = userField(recipient, 'shyBeans', 'shy_beans') || 0;
+    await updateDoc(env, `users/${recipientId}`, { shyBeans: recipientBeans + totalBeanReward });
 
     // Clear sender's backpack (except trial items)
-    stmts.push(env.DB.prepare(
-      "DELETE FROM backpack_items WHERE user_id = ? AND gift_id != 'super_shy_trial'"
-    ).bind(uid));
+    const deleteWrites = sendableItems.map(item => batchDeleteOp(env, `users/${uid}/backpack/${item.giftId}`));
+    if (deleteWrites.length > 0) await batchWrite(env, deleteWrites);
 
     // Transactions
-    stmts.push(env.DB.prepare(`
-      INSERT INTO transactions (id, user_id, type, amount, currency, balance_after, total_items_sent, details, timestamp)
-      VALUES (?, ?, 'BACKPACK_SENT', 0, 'ITEMS', ?, ?, ?, ?)
-    `).bind(generateId(), uid, sender.shy_coins || 0, totalItemsSent,
-      `Sent entire backpack (${totalItemsSent} items) to ${recipient.display_name || 'user'}`, timestamp));
+    const senderCoins = userField(sender, 'shyCoins', 'shy_coins') || 0;
+    const bpSentTxId = generateId();
+    const bpReceivedTxId = generateId();
+    const senderName = userField(sender, 'displayName', 'display_name') || 'user';
+    const recipientName = userField(recipient, 'displayName', 'display_name') || 'user';
 
-    stmts.push(env.DB.prepare(`
-      INSERT INTO transactions (id, user_id, type, amount, currency, balance_after, total_items_received, details, timestamp)
-      VALUES (?, ?, 'BACKPACK_RECEIVED', ?, 'BEANS', ?, ?, ?, ?)
-    `).bind(generateId(), recipientId, totalBeanReward, (recipient.shy_beans || 0) + totalBeanReward,
-      totalItemsSent, `Received entire backpack (${totalItemsSent} items) from ${sender.display_name || 'user'}`, timestamp));
+    await Promise.all([
+      writeTransaction(env, uid, bpSentTxId, {
+        type: 'BACKPACK_SENT', amount: 0, currency: 'ITEMS',
+        balanceAfter: senderCoins, totalItemsSent,
+        details: `Sent entire backpack (${totalItemsSent} items) to ${recipientName}`, timestamp,
+      }),
+      writeTransaction(env, recipientId, bpReceivedTxId, {
+        type: 'BACKPACK_RECEIVED', amount: totalBeanReward, currency: 'BEANS',
+        balanceAfter: recipientBeans + totalBeanReward, totalItemsReceived: totalItemsSent,
+        details: `Received entire backpack (${totalItemsSent} items) from ${senderName}`, timestamp,
+      }),
+    ]);
 
     // Room message
-    if (sender.current_room_id) {
-      stmts.push(env.DB.prepare(`
-        INSERT INTO room_messages (id, room_id, sender_id, sender_name, text, type, created_at)
-        VALUES (?, ?, ?, ?, ?, 'GIFT', ?)
-      `).bind(generateId(), sender.current_room_id, uid, sender.display_name || 'Someone',
-        `${sender.display_name || 'Someone'} sent their entire backpack (${totalItemsSent} items) to ${recipient.display_name || 'Someone'}`,
-        timestamp));
+    const currentRoomId = userField(sender, 'currentRoomId', 'current_room_id');
+    if (currentRoomId) {
+      await writeRoomGiftMessage(env, currentRoomId, uid, senderName,
+        `${senderName} sent their entire backpack (${totalItemsSent} items) to ${recipientName}`,
+        null, '');
     }
-
-    await env.DB.batch(stmts);
 
     return json({ success: true, totalItemsSent, totalBeanReward });
   });
@@ -929,9 +1010,12 @@ function registerEconomyRoutes(router) {
   // ── Balance ──
   router.get('/api/economy/balance', async (request, env) => {
     const uid = request.auth.uid;
-    const user = await env.DB.prepare('SELECT shy_coins, shy_beans FROM users WHERE uid = ?').bind(uid).first();
+    const user = await getDoc(env, `users/${uid}`);
     if (!user) return jsonError('User not found', 404);
-    return json({ coins: user.shy_coins || 0, beans: user.shy_beans || 0 });
+    return json({
+      coins: userField(user, 'shyCoins', 'shy_coins') || 0,
+      beans: userField(user, 'shyBeans', 'shy_beans') || 0,
+    });
   });
 
   // ── Transactions ──
@@ -941,48 +1025,81 @@ function registerEconomyRoutes(router) {
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 200);
     const filterType = url.searchParams.get('type');
 
-    const cols = `id, type, amount, currency, balance_after AS balanceAfter,
-      gift_id AS giftId, gift_name AS giftName, recipient_id AS recipientId,
-      sender_id AS senderId, pull_count AS pullCount, quantity, details, timestamp`;
-
-    let query = `SELECT ${cols} FROM transactions WHERE user_id = ?`;
-    const binds = [uid];
+    const query = {
+      orderBy: [orderBy('timestamp', 'DESCENDING')],
+      limit,
+    };
 
     if (filterType) {
-      query += ' AND type = ?';
-      binds.push(filterType);
+      query.where = fieldFilter('type', 'EQUAL', filterType);
     }
 
-    query += ' ORDER BY timestamp DESC LIMIT ?';
-    binds.push(limit);
-
-    const { results } = await env.DB.prepare(query).bind(...binds).all();
+    const results = await queryCollection(env, `users/${uid}/transactions`, query);
     return json(results);
   });
 
   // ── Backpack ──
   router.get('/api/users/:uid/backpack', async (request, env, params) => {
-    const { results } = await env.DB.prepare(
-      'SELECT * FROM backpack_items WHERE user_id = ?'
-    ).bind(params.uid).all();
+    const results = await queryCollection(env, `users/${params.uid}/backpack`, {});
     return json(results);
   });
 
   // ── Gift wall ──
   router.get('/api/users/:uid/gift-wall', async (request, env, params) => {
-    const { results } = await env.DB.prepare(
-      'SELECT * FROM gift_wall WHERE user_id = ?'
-    ).bind(params.uid).all();
+    const results = await queryCollection(env, `users/${params.uid}/giftWall`, {});
     return json(results);
   });
 
   // ── Gift wall senders ──
   router.get('/api/users/:uid/gift-wall/:giftId/senders', async (request, env, params) => {
-    const { results } = await env.DB.prepare(
-      'SELECT sender_id, send_count FROM gift_wall_senders WHERE user_id = ? AND gift_id = ? ORDER BY send_count DESC'
-    ).bind(params.uid, params.giftId).all();
-    return json(results);
+    const doc = await getDoc(env, `users/${params.uid}/giftWall/${params.giftId}`);
+    const senders = doc?.senders || [];
+    // Sort by sendCount descending
+    senders.sort((a, b) => (b.sendCount || 0) - (a.sendCount || 0));
+    return json(senders);
   });
+}
+
+/**
+ * Incrementally update gift rankings when a gift is sent.
+ * Replaces the old hourly cron job with real-time updates.
+ */
+async function updateGiftRankings(env, recipientId, giftId, quantity) {
+  try {
+    const rankDoc = await getDoc(env, `giftRankings/${giftId}`) || {};
+    const rankings = rankDoc.rankings || [];
+    const totalSent = (rankDoc.totalSent || 0) + quantity;
+
+    // Find or add recipient in rankings
+    const existing = rankings.find(r => r.userId === recipientId);
+    if (existing) {
+      existing.count = (existing.count || 0) + quantity;
+    } else {
+      // Get recipient display info
+      const user = await getDoc(env, `users/${recipientId}`);
+      rankings.push({
+        userId: recipientId,
+        count: quantity,
+        displayName: userField(user, 'displayName', 'display_name') || '',
+        profilePhotoUrl: userField(user, 'profilePhotoUrl', 'profile_photo_url') || '',
+      });
+    }
+
+    // Sort by count descending, keep top 100
+    rankings.sort((a, b) => (b.count || 0) - (a.count || 0));
+    const trimmed = rankings.slice(0, 100);
+
+    // Re-assign ranks
+    trimmed.forEach((r, i) => { r.rank = i + 1; });
+
+    await setDoc(env, `giftRankings/${giftId}`, {
+      rankings: trimmed,
+      totalSent,
+      lastUpdated: now(),
+    });
+  } catch (err) {
+    console.error('updateGiftRankings error:', err.message);
+  }
 }
 
 module.exports = { registerEconomyRoutes };

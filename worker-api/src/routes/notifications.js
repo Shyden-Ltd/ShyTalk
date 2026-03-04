@@ -1,5 +1,5 @@
 /**
- * Notification routes — FCM token management and notification sending.
+ * Notification routes — FCM token management and notification settings.
  *
  * POST   /api/notifications/token    → Save FCM token
  * DELETE /api/notifications/token    → Remove FCM token
@@ -7,6 +7,7 @@
  */
 
 const { json, jsonError, now, parseBody } = require('../utils');
+const { getDoc, updateDoc } = require('../utils/firestore');
 
 function registerNotificationRoutes(router) {
   // ── Save FCM token ──
@@ -14,10 +15,14 @@ function registerNotificationRoutes(router) {
     const body = await parseBody(request);
     if (!body?.token) return jsonError('token required', 400);
 
-    await env.DB.prepare(`
-      INSERT INTO fcm_tokens (user_id, token, created_at) VALUES (?, ?, ?)
-      ON CONFLICT(user_id, token) DO UPDATE SET created_at = ?
-    `).bind(request.auth.uid, body.token, now(), now()).run();
+    const uid = request.auth.uid;
+    const userDoc = await getDoc(env, `users/${uid}`);
+    const tokens = userDoc?.fcmTokens || [];
+
+    if (!tokens.includes(body.token)) {
+      tokens.push(body.token);
+      await updateDoc(env, `users/${uid}`, { fcmTokens: tokens });
+    }
 
     return json({ success: true });
   });
@@ -27,9 +32,11 @@ function registerNotificationRoutes(router) {
     const body = await parseBody(request);
     if (!body?.token) return jsonError('token required', 400);
 
-    await env.DB.prepare(
-      'DELETE FROM fcm_tokens WHERE user_id = ? AND token = ?'
-    ).bind(request.auth.uid, body.token).run();
+    const uid = request.auth.uid;
+    const userDoc = await getDoc(env, `users/${uid}`);
+    const tokens = (userDoc?.fcmTokens || []).filter(t => t !== body.token);
+
+    await updateDoc(env, `users/${uid}`, { fcmTokens: tokens });
 
     return json({ success: true });
   });
@@ -40,24 +47,20 @@ function registerNotificationRoutes(router) {
     if (!body) return jsonError('Invalid body', 400);
 
     const allowedFields = [
-      'pm_notifications_enabled', 'pm_sound_enabled',
-      'pm_show_timestamps', 'pm_show_date_separators', 'pm_notification_preview',
+      'pmNotificationsEnabled', 'pmSoundEnabled',
+      'pmShowTimestamps', 'pmShowDateSeparators', 'pmNotificationPreview',
     ];
 
     const updates = {};
     for (const key of allowedFields) {
-      if (key in body) updates[key] = body[key] ? 1 : 0;
+      if (key in body) updates[key] = !!body[key];
     }
 
     if (Object.keys(updates).length === 0) {
       return jsonError('No valid fields', 400);
     }
 
-    const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
-    const values = Object.values(updates);
-
-    await env.DB.prepare(`UPDATE users SET ${setClauses} WHERE uid = ?`)
-      .bind(...values, request.auth.uid).run();
+    await updateDoc(env, `users/${request.auth.uid}`, updates);
 
     return json({ success: true });
   });

@@ -1,5 +1,9 @@
 package com.shyden.shytalk.data.repository
 
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
 import com.shyden.shytalk.core.model.Conversation
 import com.shyden.shytalk.core.model.ConversationSettings
 import com.shyden.shytalk.core.model.GroupPermissions
@@ -10,115 +14,139 @@ import com.shyden.shytalk.core.model.SystemMessageConfig
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
-import com.shyden.shytalk.core.util.toMap
 import com.shyden.shytalk.data.remote.WorkerApiClient
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.tasks.await
 import org.json.JSONArray
 import org.json.JSONObject
 
 class PrivateMessageRepositoryImpl(
-    private val api: WorkerApiClient
+    private val api: WorkerApiClient,
+    private val firestore: FirebaseFirestore
 ) : PrivateMessageRepository {
 
     @Volatile private var prefetchedConversations: List<Conversation>? = null
-    private var conversationCache: List<Conversation>? = null
-    private val messageCache = mutableMapOf<String, List<PrivateMessage>>()
 
     override suspend fun prefetchConversations() {
+        // Firestore offline cache handles this, but we still support the prefetch API
+        // for splash screen — just do a Firestore read to warm the cache
         try {
-            val arr = api.getArray("/api/conversations")
-            prefetchedConversations = (0 until arr.length()).map { i ->
-                val obj = arr.getJSONObject(i)
-                Conversation.fromMap(obj.toMap(), obj.getString("id"))
+            val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+            val snapshot = firestore.collection("conversations")
+                .whereArrayContains("participantIds", uid)
+                .orderBy("lastMessageAt", Query.Direction.DESCENDING)
+                .get()
+                .await()
+            prefetchedConversations = snapshot.documents.mapNotNull { doc ->
+                val data = doc.data ?: return@mapNotNull null
+                Conversation.fromMap(data, doc.id)
             }
         } catch (_: Exception) { }
     }
 
-    override fun getConversations(userId: String): Flow<List<Conversation>> = flow {
-        // Emit prefetched data (from splash) or cached data from previous collection
-        val instant = prefetchedConversations ?: conversationCache
-        instant?.let { emit(it) }
-        prefetchedConversations = null
-        while (true) {
-            try {
-                val arr = api.getArray("/api/conversations")
-                val conversations = (0 until arr.length()).map { i ->
-                    val obj = arr.getJSONObject(i)
-                    Conversation.fromMap(obj.toMap(), obj.getString("id"))
-                }
-                conversationCache = conversations
-                emit(conversations)
-            } catch (_: Exception) { }
-            delay(60_000)
+    // Real-time conversation list from Firestore
+    override fun getConversations(userId: String): Flow<List<Conversation>> = callbackFlow {
+        prefetchedConversations?.let {
+            trySend(it)
+            prefetchedConversations = null
         }
-    }.distinctUntilChanged()
+        val listener = firestore.collection("conversations")
+            .whereArrayContains("participantIds", userId)
+            .orderBy("lastMessageAt", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                val conversations = snapshot.documents.mapNotNull { doc ->
+                    val data = doc.data ?: return@mapNotNull null
+                    Conversation.fromMap(data, doc.id)
+                }
+                trySend(conversations)
+            }
+        awaitClose { listener.remove() }
+    }
 
     override suspend fun getOrCreateConversation(uid1: String, uid2: String): Resource<Conversation> =
         firebaseCall("Failed to get or create conversation") {
-            // Server uses request.auth.uid as one participant; pass the other as otherUserId
-            val body = JSONObject().apply {
-                put("otherUserId", uid2)
+            val conversationId = Conversation.generateId(uid1, uid2)
+            val docRef = firestore.document("conversations/$conversationId")
+            val doc = docRef.get().await()
+            if (doc.exists()) {
+                val data = doc.data ?: throw Exception("Conversation data is null")
+                Conversation.fromMap(data, conversationId)
+            } else {
+                val now = System.currentTimeMillis()
+                val data = mapOf(
+                    "participantIds" to listOf(uid1, uid2).sorted(),
+                    "isGroup" to false,
+                    "createdAt" to now,
+                    "lastMessageAt" to now,
+                    "isClosed" to false
+                )
+                docRef.set(data).await()
+                Conversation.fromMap(data, conversationId)
             }
-            val json = api.post("/api/conversations", body)
-            Conversation.fromMap(json.toMap(), json.getString("id"))
         }
 
     override suspend fun getConversationSettings(
         conversationId: String,
         userId: String
     ): Resource<ConversationSettings> = firebaseCall("Failed to get conversation settings") {
-        val json = api.get("/api/conversations/$conversationId/settings")
-        ConversationSettings.fromMap(json.toMap(), userId)
+        val doc = firestore.document("conversations/$conversationId/userSettings/$userId").get().await()
+        val data = doc.data ?: return@firebaseCall ConversationSettings.default(userId)
+        ConversationSettings.fromMap(data, userId)
     }
 
+    // Real-time conversation settings from Firestore (replaces 120s polling)
     override fun observeConversationSettings(
         conversationId: String,
         userId: String
-    ): Flow<ConversationSettings> = flow {
-        while (true) {
-            try {
-                val json = api.get("/api/conversations/$conversationId/settings")
-                emit(ConversationSettings.fromMap(json.toMap(), userId))
-            } catch (_: Exception) { }
-            delay(120_000)
-        }
-    }.distinctUntilChanged()
+    ): Flow<ConversationSettings> = callbackFlow {
+        val listener = firestore.document("conversations/$conversationId/userSettings/$userId")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                val data = snapshot.data
+                val settings = if (data != null) ConversationSettings.fromMap(data, userId)
+                               else ConversationSettings.default(userId)
+                trySend(settings)
+            }
+        awaitClose { listener.remove() }
+    }
 
-    override fun getMessages(conversationId: String, limit: Int): Flow<List<PrivateMessage>> = flow {
-        // Emit cached messages instantly so the UI isn't blank on re-open
-        messageCache[conversationId]?.let { emit(it) }
-        while (true) {
-            try {
-                val arr = api.getArray("/api/conversations/$conversationId/messages?limit=$limit")
-                val messages = (0 until arr.length()).map { i ->
-                    val obj = arr.getJSONObject(i)
-                    PrivateMessage.fromMap(obj.toMap(), obj.getString("id"))
+    // Real-time messages from Firestore subcollection
+    override fun getMessages(conversationId: String, limit: Int): Flow<List<PrivateMessage>> = callbackFlow {
+        val listener = firestore.collection("conversations/$conversationId/messages")
+            .orderBy("createdAt", Query.Direction.ASCENDING)
+            .limitToLast(limit.toLong())
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                val messages = snapshot.documents.mapNotNull { doc ->
+                    val data = doc.data ?: return@mapNotNull null
+                    PrivateMessage.fromMap(data, doc.id)
                 }
-                messageCache[conversationId] = messages
-                emit(messages)
-            } catch (_: Exception) { }
-            // WebSocket handles the fast path (instant new_message events);
-            // this is just a safety-net poll
-            delay(60_000)
-        }
-    }.distinctUntilChanged()
+                trySend(messages)
+            }
+        awaitClose { listener.remove() }
+    }
 
     override suspend fun loadOlderMessages(
         conversationId: String,
         beforeTimestamp: Long,
         limit: Int
     ): Resource<List<PrivateMessage>> = firebaseCall("Failed to load older messages") {
-        val arr = api.getArray(
-            "/api/conversations/$conversationId/messages/older?before=$beforeTimestamp&limit=$limit"
-        )
-        (0 until arr.length()).map { i ->
-            val obj = arr.getJSONObject(i)
-            PrivateMessage.fromMap(obj.toMap(), obj.getString("id"))
-        }
+        val snapshot = firestore.collection("conversations/$conversationId/messages")
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .whereLessThan("createdAt", beforeTimestamp)
+            .limit(limit.toLong())
+            .get()
+            .await()
+        snapshot.documents.mapNotNull { doc ->
+            val data = doc.data ?: return@mapNotNull null
+            PrivateMessage.fromMap(data, doc.id)
+        }.reversed() // Return in chronological order
     }
+
+    // === Send methods — kept as Worker API (needs FCM push to recipient) ===
 
     override suspend fun sendTextMessage(
         conversationId: String,
@@ -163,142 +191,6 @@ class PrivateMessageRepositoryImpl(
         api.post("/api/conversations/$conversationId/messages", body)
     }
 
-    override suspend fun editMessage(
-        conversationId: String,
-        messageId: String,
-        newText: String
-    ): Resource<Unit> = firebaseCall("Failed to edit message") {
-        val body = JSONObject().apply { put("text", newText) }
-        api.patch("/api/conversations/$conversationId/messages/$messageId", body)
-    }
-
-    override suspend fun getEditHistory(
-        conversationId: String,
-        messageId: String
-    ): Resource<List<MessageEdit>> = firebaseCall("Failed to get edit history") {
-        val arr = api.getArray("/api/conversations/$conversationId/messages/$messageId/edits")
-        (0 until arr.length()).map { i ->
-            val obj = arr.getJSONObject(i)
-            MessageEdit.fromMap(obj.toMap(), obj.getString("id"))
-        }
-    }
-
-    override suspend fun markAsRead(
-        conversationId: String,
-        userId: String,
-        messageId: String
-    ): Resource<Unit> = firebaseCall("Failed to mark as read") {
-        val body = JSONObject().apply { put("messageId", messageId) }
-        api.post("/api/conversations/$conversationId/read", body)
-    }
-
-    override suspend fun resetUnreadCount(
-        conversationId: String,
-        userId: String
-    ): Resource<Unit> = firebaseCall("Failed to reset unread count") {
-        api.post("/api/conversations/$conversationId/reset-unread")
-    }
-
-    override suspend fun muteConversation(
-        conversationId: String,
-        userId: String,
-        muted: Boolean
-    ): Resource<Unit> = firebaseCall("Failed to mute conversation") {
-        val body = JSONObject().apply { put("isMuted", muted) }
-        api.patch("/api/conversations/$conversationId/settings", body)
-    }
-
-    override suspend fun pinConversation(
-        conversationId: String,
-        userId: String,
-        pinned: Boolean
-    ): Resource<Unit> = firebaseCall("Failed to pin conversation") {
-        val body = JSONObject().apply { put("isPinned", pinned) }
-        api.patch("/api/conversations/$conversationId/settings", body)
-    }
-
-    override suspend fun hideConversation(
-        conversationId: String,
-        userId: String
-    ): Resource<Unit> = firebaseCall("Failed to hide conversation") {
-        val body = JSONObject().apply { put("isHidden", true) }
-        api.patch("/api/conversations/$conversationId/settings", body)
-    }
-
-    override suspend fun toggleReaction(
-        conversationId: String,
-        messageId: String,
-        emoji: String,
-        userId: String
-    ): Resource<Unit> = firebaseCall("Failed to toggle reaction") {
-        val body = JSONObject().apply {
-            put("emoji", emoji)
-            put("userId", userId)
-        }
-        api.post("/api/conversations/$conversationId/messages/$messageId/react", body)
-    }
-
-    override suspend fun searchMessages(
-        conversationId: String,
-        query: String
-    ): Resource<List<PrivateMessage>> = firebaseCall("Failed to search messages") {
-        val arr = api.getArray("/api/conversations/search-messages?conversationId=$conversationId&q=$query")
-        (0 until arr.length()).map { i ->
-            val obj = arr.getJSONObject(i)
-            PrivateMessage.fromMap(obj.toMap(), obj.getString("id"))
-        }
-    }
-
-    override suspend fun createGroupConversation(
-        creatorId: String,
-        participantIds: List<String>,
-        groupName: String,
-        groupDescription: String?,
-        groupPhotoUrl: String?,
-        adminIds: List<String>,
-        modIds: List<String>,
-        permissions: GroupPermissions,
-        systemMessageConfig: SystemMessageConfig
-    ): Resource<Conversation> = firebaseCall("Failed to create group conversation") {
-        val body = JSONObject().apply {
-            put("creatorId", creatorId)
-            put("participantIds", JSONArray(participantIds))
-            put("groupName", groupName)
-            groupDescription?.let { put("groupDescription", it) }
-            groupPhotoUrl?.let { put("groupPhotoUrl", it) }
-            put("adminIds", JSONArray(adminIds))
-            put("modIds", JSONArray(modIds))
-            put("permissions", JSONObject(permissions.toMap()))
-            put("systemMessageConfig", JSONObject(systemMessageConfig.toMap()))
-        }
-        val json = api.post("/api/conversations/group", body)
-        Conversation.fromMap(json.toMap(), json.getString("id"))
-    }
-
-    override suspend fun addGroupParticipant(
-        conversationId: String,
-        userId: String
-    ): Resource<Unit> = firebaseCall("Failed to add participant") {
-        val body = JSONObject().apply { put("userId", userId) }
-        api.post("/api/conversations/$conversationId/participants/add", body)
-    }
-
-    override suspend fun removeGroupParticipant(
-        conversationId: String,
-        userId: String
-    ): Resource<Unit> = firebaseCall("Failed to remove participant") {
-        val body = JSONObject().apply { put("userId", userId) }
-        api.post("/api/conversations/$conversationId/participants/remove", body)
-    }
-
-    override suspend fun updateGroupName(
-        conversationId: String,
-        newName: String
-    ): Resource<Unit> = firebaseCall("Failed to update group name") {
-        val body = JSONObject().apply { put("groupName", newName) }
-        api.patch("/api/conversations/$conversationId/group", body)
-    }
-
     override suspend fun sendStickerMessage(
         conversationId: String,
         senderId: String,
@@ -333,29 +225,240 @@ class PrivateMessageRepositoryImpl(
         api.post("/api/conversations/$conversationId/messages", body)
     }
 
+    // === Direct Firestore writes (no FCM push needed) ===
+
+    override suspend fun editMessage(
+        conversationId: String,
+        messageId: String,
+        newText: String
+    ): Resource<Unit> = firebaseCall("Failed to edit message") {
+        val messageRef = firestore.document("conversations/$conversationId/messages/$messageId")
+        // Read current message to save edit history
+        val currentDoc = messageRef.get().await()
+        val currentText = currentDoc.getString("text") ?: ""
+        val now = System.currentTimeMillis()
+        // Save previous text to edits subcollection
+        messageRef.collection("edits").add(
+            mapOf(
+                "previousText" to currentText,
+                "editedAt" to now
+            )
+        ).await()
+        // Update the message
+        messageRef.update(
+            mapOf(
+                "text" to newText,
+                "isEdited" to true,
+                "editedAt" to now,
+                "editCount" to FieldValue.increment(1)
+            )
+        ).await()
+    }
+
+    override suspend fun getEditHistory(
+        conversationId: String,
+        messageId: String
+    ): Resource<List<MessageEdit>> = firebaseCall("Failed to get edit history") {
+        val snapshot = firestore.collection("conversations/$conversationId/messages/$messageId/edits")
+            .orderBy("editedAt", Query.Direction.ASCENDING)
+            .get()
+            .await()
+        snapshot.documents.mapNotNull { doc ->
+            val data = doc.data ?: return@mapNotNull null
+            MessageEdit.fromMap(data, doc.id)
+        }
+    }
+
+    override suspend fun markAsRead(
+        conversationId: String,
+        userId: String,
+        messageId: String
+    ): Resource<Unit> = firebaseCall("Failed to mark as read") {
+        firestore.document("conversations/$conversationId/userSettings/$userId")
+            .set(
+                mapOf(
+                    "lastReadMessageId" to messageId,
+                    "unreadCount" to 0,
+                    "lastReadAt" to System.currentTimeMillis()
+                ),
+                SetOptions.merge()
+            ).await()
+    }
+
+    override suspend fun resetUnreadCount(
+        conversationId: String,
+        userId: String
+    ): Resource<Unit> = firebaseCall("Failed to reset unread count") {
+        firestore.document("conversations/$conversationId/userSettings/$userId")
+            .set(mapOf("unreadCount" to 0), SetOptions.merge()).await()
+    }
+
+    override suspend fun muteConversation(
+        conversationId: String,
+        userId: String,
+        muted: Boolean
+    ): Resource<Unit> = firebaseCall("Failed to mute conversation") {
+        firestore.document("conversations/$conversationId/userSettings/$userId")
+            .set(mapOf("isMuted" to muted), SetOptions.merge()).await()
+    }
+
+    override suspend fun pinConversation(
+        conversationId: String,
+        userId: String,
+        pinned: Boolean
+    ): Resource<Unit> = firebaseCall("Failed to pin conversation") {
+        firestore.document("conversations/$conversationId/userSettings/$userId")
+            .set(mapOf("isPinned" to pinned), SetOptions.merge()).await()
+    }
+
+    override suspend fun hideConversation(
+        conversationId: String,
+        userId: String
+    ): Resource<Unit> = firebaseCall("Failed to hide conversation") {
+        firestore.document("conversations/$conversationId/userSettings/$userId")
+            .set(
+                mapOf(
+                    "isHidden" to true,
+                    "hiddenAt" to System.currentTimeMillis()
+                ),
+                SetOptions.merge()
+            ).await()
+    }
+
+    override suspend fun toggleReaction(
+        conversationId: String,
+        messageId: String,
+        emoji: String,
+        userId: String
+    ): Resource<Unit> = firebaseCall("Failed to toggle reaction") {
+        val messageRef = firestore.document("conversations/$conversationId/messages/$messageId")
+        val doc = messageRef.get().await()
+        val data = doc.data ?: throw Exception("Message not found")
+        @Suppress("UNCHECKED_CAST")
+        val reactions = (data["reactions"] as? Map<String, List<String>>)?.toMutableMap()
+            ?: mutableMapOf()
+        val usersForEmoji = reactions[emoji]?.toMutableList() ?: mutableListOf()
+        if (userId in usersForEmoji) {
+            usersForEmoji.remove(userId)
+            if (usersForEmoji.isEmpty()) {
+                reactions.remove(emoji)
+            } else {
+                reactions[emoji] = usersForEmoji
+            }
+        } else {
+            usersForEmoji.add(userId)
+            reactions[emoji] = usersForEmoji
+        }
+        messageRef.update("reactions", reactions).await()
+    }
+
+    override suspend fun searchMessages(
+        conversationId: String,
+        query: String
+    ): Resource<List<PrivateMessage>> = firebaseCall("Failed to search messages") {
+        val snapshot = firestore.collection("conversations/$conversationId/messages")
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .get()
+            .await()
+        val lowerQuery = query.lowercase()
+        snapshot.documents.mapNotNull { doc ->
+            val data = doc.data ?: return@mapNotNull null
+            val message = PrivateMessage.fromMap(data, doc.id)
+            if (message.text.lowercase().contains(lowerQuery)) message else null
+        }
+    }
+
+    override suspend fun createGroupConversation(
+        creatorId: String,
+        participantIds: List<String>,
+        groupName: String,
+        groupDescription: String?,
+        groupPhotoUrl: String?,
+        adminIds: List<String>,
+        modIds: List<String>,
+        permissions: GroupPermissions,
+        systemMessageConfig: SystemMessageConfig
+    ): Resource<Conversation> = firebaseCall("Failed to create group conversation") {
+        val docRef = firestore.collection("conversations").document()
+        val now = System.currentTimeMillis()
+        val data = mutableMapOf<String, Any?>(
+            "participantIds" to participantIds,
+            "isGroup" to true,
+            "groupName" to groupName,
+            "createdBy" to creatorId,
+            "createdAt" to now,
+            "lastMessageAt" to now,
+            "isClosed" to false,
+            "groupAdminIds" to adminIds,
+            "groupModIds" to modIds,
+            "permissions" to permissions.toMap(),
+            "systemMessageConfig" to systemMessageConfig.toMap(),
+            "modNotifyMode" to "ALL_ADMINS"
+        )
+        groupDescription?.let { data["groupDescription"] = it }
+        groupPhotoUrl?.let { data["groupPhotoUrl"] = it }
+        docRef.set(data).await()
+        // Create userSettings docs for all participants with unreadCount: 0
+        val batch = firestore.batch()
+        for (pid in participantIds) {
+            val settingsRef = docRef.collection("userSettings").document(pid)
+            batch.set(settingsRef, mapOf("unreadCount" to 0, "userId" to pid))
+        }
+        batch.commit().await()
+        Conversation.fromMap(data, docRef.id)
+    }
+
+    override suspend fun addGroupParticipant(
+        conversationId: String,
+        userId: String
+    ): Resource<Unit> = firebaseCall("Failed to add participant") {
+        firestore.document("conversations/$conversationId")
+            .update("participantIds", FieldValue.arrayUnion(userId)).await()
+    }
+
+    override suspend fun removeGroupParticipant(
+        conversationId: String,
+        userId: String
+    ): Resource<Unit> = firebaseCall("Failed to remove participant") {
+        firestore.document("conversations/$conversationId")
+            .update("participantIds", FieldValue.arrayRemove(userId)).await()
+    }
+
+    override suspend fun updateGroupName(
+        conversationId: String,
+        newName: String
+    ): Resource<Unit> = firebaseCall("Failed to update group name") {
+        firestore.document("conversations/$conversationId")
+            .update("groupName", newName).await()
+    }
+
     override suspend fun getModerationConfig(): Resource<List<String>> =
         firebaseCall("Failed to load moderation config") {
-            val json = api.get("/api/config/moderation")
-            val arr = json.optJSONArray("prohibitedWords") ?: JSONArray()
-            (0 until arr.length()).map { arr.getString(it) }
+            val doc = firestore.document("config/moderation").get().await()
+            val data = doc.data ?: return@firebaseCall emptyList()
+            (data["prohibitedWords"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
         }
 
+    // Single conversation read from Firestore
     override suspend fun getConversation(conversationId: String): Resource<Conversation> =
         firebaseCall("Failed to get conversation") {
-            val json = api.get("/api/conversations/$conversationId")
-            Conversation.fromMap(json.toMap(), json.getString("id"))
+            val doc = firestore.document("conversations/$conversationId").get().await()
+            val data = doc.data ?: throw Exception("Conversation not found")
+            Conversation.fromMap(data, conversationId)
         }
 
     override suspend fun closeGroupConversation(conversationId: String): Resource<Unit> =
         firebaseCall("Failed to close group conversation") {
-            api.patch("/api/conversations/$conversationId/close", JSONObject())
+            firestore.document("conversations/$conversationId")
+                .update("isClosed", true).await()
         }
 
     override suspend fun recallMessage(
         conversationId: String,
         messageId: String
     ): Resource<Unit> = firebaseCall("Failed to recall message") {
-        api.post("/api/conversations/$conversationId/messages/$messageId/recall", JSONObject())
+        firestore.document("conversations/$conversationId/messages/$messageId")
+            .update(mapOf("isRecalled" to true, "text" to "")).await()
     }
 
     // ===== Mod Actions =====
@@ -366,28 +469,34 @@ class PrivateMessageRepositoryImpl(
         duration: Long?,
         reason: String?
     ): Resource<Unit> = firebaseCall("Failed to mute member") {
-        val body = JSONObject().apply {
-            duration?.let { put("duration", it) }
-            reason?.let { put("reason", it) }
-        }
-        api.post("/api/conversations/$conversationId/mutes/$userId", body)
+        val now = System.currentTimeMillis()
+        val data = mutableMapOf<String, Any?>(
+            "userId" to userId,
+            "mutedAt" to now
+        )
+        duration?.let { data["duration"] = it }
+        reason?.let { data["reason"] = it }
+        firestore.document("conversations/$conversationId/mutes/$userId")
+            .set(data).await()
     }
 
     override suspend fun unmuteGroupMember(
         conversationId: String,
         userId: String
     ): Resource<Unit> = firebaseCall("Failed to unmute member") {
-        api.delete("/api/conversations/$conversationId/mutes/$userId")
+        firestore.document("conversations/$conversationId/mutes/$userId")
+            .delete().await()
     }
 
     override suspend fun getGroupMutes(
         conversationId: String
     ): Resource<List<MuteInfo>> = firebaseCall("Failed to get mutes") {
-        val arr = api.getArray("/api/conversations/$conversationId/mutes")
-        (0 until arr.length()).map { i ->
-            val obj = arr.getJSONObject(i)
-            @Suppress("UNCHECKED_CAST")
-            MuteInfo.fromMap(obj.toMap() as Map<String, Any?>, obj.getString("userId"))
+        val snapshot = firestore.collection("conversations/$conversationId/mutes")
+            .get()
+            .await()
+        snapshot.documents.mapNotNull { doc ->
+            val data = doc.data ?: return@mapNotNull null
+            MuteInfo.fromMap(data, doc.id)
         }
     }
 
@@ -396,8 +505,8 @@ class PrivateMessageRepositoryImpl(
         messageId: String,
         hiddenBy: String
     ): Resource<Unit> = firebaseCall("Failed to hide message") {
-        val body = JSONObject().apply { put("hiddenBy", hiddenBy) }
-        api.post("/api/conversations/$conversationId/messages/$messageId/hide", body)
+        firestore.document("conversations/$conversationId/messages/$messageId")
+            .update(mapOf("isHidden" to true, "hiddenBy" to hiddenBy)).await()
     }
 
     // ===== Role Management =====
@@ -407,19 +516,16 @@ class PrivateMessageRepositoryImpl(
         adminIds: List<String>,
         modIds: List<String>
     ): Resource<Unit> = firebaseCall("Failed to update roles") {
-        val body = JSONObject().apply {
-            put("adminIds", JSONArray(adminIds))
-            put("modIds", JSONArray(modIds))
-        }
-        api.patch("/api/conversations/$conversationId/roles", body)
+        firestore.document("conversations/$conversationId")
+            .update(mapOf("groupAdminIds" to adminIds, "groupModIds" to modIds)).await()
     }
 
     override suspend fun transferOwnership(
         conversationId: String,
         newOwnerId: String
     ): Resource<Unit> = firebaseCall("Failed to transfer ownership") {
-        val body = JSONObject().apply { put("newOwnerId", newOwnerId) }
-        api.post("/api/conversations/$conversationId/transfer-ownership", body)
+        firestore.document("conversations/$conversationId")
+            .update("createdBy", newOwnerId).await()
     }
 
     // ===== Permissions =====
@@ -428,22 +534,24 @@ class PrivateMessageRepositoryImpl(
         conversationId: String,
         permissions: GroupPermissions
     ): Resource<Unit> = firebaseCall("Failed to update permissions") {
-        api.patch("/api/conversations/$conversationId/permissions", JSONObject(permissions.toMap()))
+        firestore.document("conversations/$conversationId")
+            .update("permissions", permissions.toMap()).await()
     }
 
     override suspend fun updateSystemMessageConfig(
         conversationId: String,
         config: SystemMessageConfig
     ): Resource<Unit> = firebaseCall("Failed to update system message config") {
-        api.patch("/api/conversations/$conversationId/system-messages", JSONObject(config.toMap()))
+        firestore.document("conversations/$conversationId")
+            .update("systemMessageConfig", config.toMap()).await()
     }
 
     override suspend fun updateModNotifyMode(
         conversationId: String,
         mode: String
     ): Resource<Unit> = firebaseCall("Failed to update mod notify mode") {
-        val body = JSONObject().apply { put("modNotifyMode", mode) }
-        api.patch("/api/conversations/$conversationId/mod-notify", body)
+        firestore.document("conversations/$conversationId")
+            .update("modNotifyMode", mode).await()
     }
 
     // ===== Group Info =====
@@ -452,16 +560,16 @@ class PrivateMessageRepositoryImpl(
         conversationId: String,
         description: String
     ): Resource<Unit> = firebaseCall("Failed to update description") {
-        val body = JSONObject().apply { put("groupDescription", description) }
-        api.patch("/api/conversations/$conversationId/group", body)
+        firestore.document("conversations/$conversationId")
+            .update("groupDescription", description).await()
     }
 
     override suspend fun updateGroupPhoto(
         conversationId: String,
         photoUrl: String?
     ): Resource<Unit> = firebaseCall("Failed to update group photo") {
-        val body = JSONObject().apply { put("groupPhotoUrl", photoUrl ?: JSONObject.NULL) }
-        api.patch("/api/conversations/$conversationId/group", body)
+        firestore.document("conversations/$conversationId")
+            .update("groupPhotoUrl", photoUrl).await()
     }
 
     // ===== Search =====
@@ -470,11 +578,15 @@ class PrivateMessageRepositoryImpl(
         query: String,
         currentUserId: String
     ): Resource<List<User>> = firebaseCall("Failed to search users") {
-        val arr = api.getArray("/api/conversations/search-users?q=$query")
-        (0 until arr.length()).map { i ->
-            val obj = arr.getJSONObject(i)
-            @Suppress("UNCHECKED_CAST")
-            User.fromMap(obj.toMap() as Map<String, Any?>, obj.getString("uid"))
+        val snapshot = firestore.collection("users")
+            .whereGreaterThanOrEqualTo("displayName", query)
+            .whereLessThan("displayName", query + "\uf8ff")
+            .get()
+            .await()
+        snapshot.documents.mapNotNull { doc ->
+            val data = doc.data ?: return@mapNotNull null
+            if (doc.id == currentUserId) return@mapNotNull null
+            User.fromMap(data, doc.id)
         }
     }
 
@@ -483,7 +595,14 @@ class PrivateMessageRepositoryImpl(
     override suspend fun getOwnedGroupCount(
         userId: String
     ): Resource<Int> = firebaseCall("Failed to get owned group count") {
-        val json = api.get("/api/conversations/owned-group-count")
-        json.getInt("count")
+        val snapshot = firestore.collection("conversations")
+            .whereEqualTo("createdBy", userId)
+            .whereEqualTo("isGroup", true)
+            .get()
+            .await()
+        snapshot.documents.count { doc ->
+            val data = doc.data ?: return@count false
+            (data["isClosed"] as? Boolean) != true
+        }
     }
 }

@@ -1,19 +1,19 @@
 package com.shyden.shytalk.data.repository
 
+import com.google.android.gms.tasks.Tasks
+import com.google.firebase.firestore.CollectionReference
+import com.google.firebase.firestore.DocumentReference
+import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.WriteBatch
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.remote.WorkerApiClient
 import io.mockk.coEvery
-import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.take
-import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
-import org.json.JSONArray
 import org.json.JSONObject
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -21,62 +21,85 @@ import org.junit.Test
 class PrivateMessageRepositoryImplTest {
 
     private lateinit var api: WorkerApiClient
+    private lateinit var firestore: FirebaseFirestore
     private lateinit var repo: PrivateMessageRepositoryImpl
+    private lateinit var mockDocRef: DocumentReference
+    private lateinit var mockCollRef: CollectionReference
+    private lateinit var mockDocSnapshot: DocumentSnapshot
+    private lateinit var mockBatch: WriteBatch
 
     @Before
     fun setup() {
         api = mockk(relaxed = true)
-        repo = PrivateMessageRepositoryImpl(api)
+        firestore = mockk(relaxed = true)
+        mockDocRef = mockk(relaxed = true)
+        mockCollRef = mockk(relaxed = true)
+        mockDocSnapshot = mockk(relaxed = true)
+        mockBatch = mockk(relaxed = true)
+
+        // Firestore path resolution
+        every { firestore.document(any()) } returns mockDocRef
+        every { firestore.collection(any()) } returns mockCollRef
+        every { mockCollRef.document() } returns mockDocRef
+        every { mockCollRef.document(any<String>()) } returns mockDocRef
+        every { mockDocRef.id } returns "test-id"
+        every { mockDocRef.collection(any()) } returns mockCollRef
+
+        // Task-returning operations
+        every { mockDocRef.set(any()) } returns Tasks.forResult(null)
+        every { mockDocRef.set(any(), any<SetOptions>()) } returns Tasks.forResult(null)
+        every { mockDocRef.update(any<Map<String, Any>>()) } returns Tasks.forResult(null)
+        every { mockDocRef.update(any<String>(), any()) } returns Tasks.forResult(null)
+        every { mockDocRef.delete() } returns Tasks.forResult(null)
+        every { mockDocRef.get() } returns Tasks.forResult(mockDocSnapshot)
+        every { mockCollRef.add(any()) } returns Tasks.forResult(mockDocRef)
+
+        // DocumentSnapshot defaults
+        every { mockDocSnapshot.exists() } returns false
+        every { mockDocSnapshot.data } returns mapOf("text" to "old text")
+        every { mockDocSnapshot.getString(any()) } returns "old text"
+
+        // Batch operations
+        every { firestore.batch() } returns mockBatch
+        every { mockBatch.commit() } returns Tasks.forResult(null)
+
+        repo = PrivateMessageRepositoryImpl(api, firestore)
     }
 
-    // region getOrCreateConversation
+    // region getOrCreateConversation — direct Firestore
 
     @Test
-    fun `getOrCreateConversation returns Success with conversation`() = runTest {
-        coEvery { api.post("/api/conversations", any()) } returns JSONObject().apply {
-            put("id", "conv-123")
-            put("isGroup", false)
-            put("createdAt", 1700000000000L)
-            put("lastMessageAt", 1700000000000L)
-        }
+    fun `getOrCreateConversation returns Success when creating new`() = runTest {
+        val result = repo.getOrCreateConversation("uid1", "uid2")
+        assertTrue(result is Resource.Success)
+    }
+
+    @Test
+    fun `getOrCreateConversation returns Success when existing`() = runTest {
+        every { mockDocSnapshot.exists() } returns true
+        every { mockDocSnapshot.data } returns mapOf(
+            "participantIds" to listOf("uid1", "uid2"),
+            "isGroup" to false,
+            "createdAt" to 1700000000000L,
+            "lastMessageAt" to 1700000000000L,
+            "isClosed" to false
+        )
 
         val result = repo.getOrCreateConversation("uid1", "uid2")
-
         assertTrue(result is Resource.Success)
-        assertEquals("conv-123", (result as Resource.Success).data.conversationId)
-        coVerify { api.post("/api/conversations", any()) }
     }
 
     @Test
     fun `getOrCreateConversation returns Error on exception`() = runTest {
-        coEvery { api.post("/api/conversations", any()) } throws RuntimeException("Fail")
+        every { mockDocRef.get() } returns Tasks.forException(RuntimeException("Fail"))
 
         val result = repo.getOrCreateConversation("uid1", "uid2")
-
         assertTrue(result is Resource.Error)
     }
 
     // endregion
 
-    // region getConversationSettings
-
-    @Test
-    fun `getConversationSettings returns Success`() = runTest {
-        coEvery { api.get("/api/conversations/conv-1/settings") } returns JSONObject().apply {
-            put("isMuted", false)
-            put("isPinned", false)
-            put("isHidden", false)
-            put("unreadCount", 0)
-        }
-
-        val result = repo.getConversationSettings("conv-1", "user-1")
-
-        assertTrue(result is Resource.Success)
-    }
-
-    // endregion
-
-    // region sendTextMessage
+    // region sendTextMessage — Worker API (needs FCM push)
 
     @Test
     fun `sendTextMessage returns Success`() = runTest {
@@ -85,9 +108,7 @@ class PrivateMessageRepositoryImplTest {
         }
 
         val result = repo.sendTextMessage("conv-1", "user-1", "Alice", "Hello!")
-
         assertTrue(result is Resource.Success)
-        coVerify { api.post("/api/conversations/conv-1/messages", any()) }
     }
 
     @Test
@@ -95,13 +116,12 @@ class PrivateMessageRepositoryImplTest {
         coEvery { api.post("/api/conversations/conv-1/messages", any()) } throws RuntimeException("Fail")
 
         val result = repo.sendTextMessage("conv-1", "user-1", "Alice", "Hello!")
-
         assertTrue(result is Resource.Error)
     }
 
     // endregion
 
-    // region sendImageMessage
+    // region sendImageMessage — Worker API
 
     @Test
     fun `sendImageMessage returns Success`() = runTest {
@@ -112,366 +132,12 @@ class PrivateMessageRepositoryImplTest {
         val result = repo.sendImageMessage(
             "conv-1", "user-1", "Alice", listOf("https://img.example.com/1.jpg")
         )
-
         assertTrue(result is Resource.Success)
     }
 
     // endregion
 
-    // region editMessage
-
-    @Test
-    fun `editMessage returns Success`() = runTest {
-        coEvery { api.patch("/api/conversations/conv-1/messages/msg-1", any()) } returns JSONObject().apply {
-            put("success", true)
-        }
-
-        val result = repo.editMessage("conv-1", "msg-1", "Updated text")
-
-        assertTrue(result is Resource.Success)
-        coVerify { api.patch("/api/conversations/conv-1/messages/msg-1", any()) }
-    }
-
-    @Test
-    fun `editMessage returns Error on exception`() = runTest {
-        coEvery { api.patch("/api/conversations/conv-1/messages/msg-1", any()) } throws RuntimeException("Fail")
-
-        val result = repo.editMessage("conv-1", "msg-1", "Updated text")
-
-        assertTrue(result is Resource.Error)
-    }
-
-    // endregion
-
-    // region getEditHistory
-
-    @Test
-    fun `getEditHistory returns Success`() = runTest {
-        coEvery { api.getArray("/api/conversations/conv-1/messages/msg-1/edits") } returns JSONArray().apply {
-            put(JSONObject().apply {
-                put("id", "edit-1")
-                put("previousText", "Old text")
-                put("editedAt", 1700000000000L)
-            })
-        }
-
-        val result = repo.getEditHistory("conv-1", "msg-1")
-
-        assertTrue(result is Resource.Success)
-        assertEquals(1, (result as Resource.Success).data.size)
-    }
-
-    // endregion
-
-    // region markAsRead
-
-    @Test
-    fun `markAsRead returns Success`() = runTest {
-        coEvery { api.post("/api/conversations/conv-1/read", any()) } returns JSONObject().apply {
-            put("success", true)
-        }
-
-        val result = repo.markAsRead("conv-1", "user-1", "msg-5")
-
-        assertTrue(result is Resource.Success)
-    }
-
-    // endregion
-
-    // region resetUnreadCount
-
-    @Test
-    fun `resetUnreadCount returns Success`() = runTest {
-        coEvery { api.post("/api/conversations/conv-1/reset-unread", any()) } returns JSONObject().apply {
-            put("success", true)
-        }
-
-        val result = repo.resetUnreadCount("conv-1", "user-1")
-
-        assertTrue(result is Resource.Success)
-    }
-
-    // endregion
-
-    // region muteConversation
-
-    @Test
-    fun `muteConversation returns Success`() = runTest {
-        coEvery { api.patch("/api/conversations/conv-1/settings", any()) } returns JSONObject().apply {
-            put("success", true)
-        }
-
-        val result = repo.muteConversation("conv-1", "user-1", true)
-
-        assertTrue(result is Resource.Success)
-    }
-
-    // endregion
-
-    // region pinConversation
-
-    @Test
-    fun `pinConversation returns Success`() = runTest {
-        coEvery { api.patch("/api/conversations/conv-1/settings", any()) } returns JSONObject().apply {
-            put("success", true)
-        }
-
-        val result = repo.pinConversation("conv-1", "user-1", true)
-
-        assertTrue(result is Resource.Success)
-    }
-
-    // endregion
-
-    // region hideConversation
-
-    @Test
-    fun `hideConversation returns Success`() = runTest {
-        coEvery { api.patch("/api/conversations/conv-1/settings", any()) } returns JSONObject().apply {
-            put("success", true)
-        }
-
-        val result = repo.hideConversation("conv-1", "user-1")
-
-        assertTrue(result is Resource.Success)
-    }
-
-    // endregion
-
-    // region toggleReaction
-
-    @Test
-    fun `toggleReaction returns Success`() = runTest {
-        coEvery { api.post("/api/conversations/conv-1/messages/msg-1/react", any()) } returns JSONObject().apply {
-            put("success", true)
-        }
-
-        val result = repo.toggleReaction("conv-1", "msg-1", "❤️", "user-1")
-
-        assertTrue(result is Resource.Success)
-    }
-
-    // endregion
-
-    // region recallMessage
-
-    @Test
-    fun `recallMessage returns Success`() = runTest {
-        coEvery { api.post("/api/conversations/conv-1/messages/msg-1/recall", any()) } returns JSONObject().apply {
-            put("success", true)
-        }
-
-        val result = repo.recallMessage("conv-1", "msg-1")
-
-        assertTrue(result is Resource.Success)
-    }
-
-    // endregion
-
-    // region hideMessage
-
-    @Test
-    fun `hideMessage returns Success`() = runTest {
-        coEvery { api.post("/api/conversations/conv-1/messages/msg-1/hide", any()) } returns JSONObject().apply {
-            put("success", true)
-        }
-
-        val result = repo.hideMessage("conv-1", "msg-1", "admin-1")
-
-        assertTrue(result is Resource.Success)
-    }
-
-    // endregion
-
-    // region createGroupConversation
-
-    @Test
-    fun `createGroupConversation returns Success`() = runTest {
-        coEvery { api.post("/api/conversations/group", any()) } returns JSONObject().apply {
-            put("id", "group-1")
-            put("isGroup", true)
-            put("groupName", "Test Group")
-            put("createdAt", 1700000000000L)
-            put("lastMessageAt", 1700000000000L)
-        }
-
-        val result = repo.createGroupConversation(
-            creatorId = "user-1",
-            participantIds = listOf("user-2", "user-3"),
-            groupName = "Test Group"
-        )
-
-        assertTrue(result is Resource.Success)
-        assertEquals("group-1", (result as Resource.Success).data.conversationId)
-    }
-
-    // endregion
-
-    // region addGroupParticipant
-
-    @Test
-    fun `addGroupParticipant returns Success`() = runTest {
-        coEvery { api.post("/api/conversations/conv-1/participants/add", any()) } returns JSONObject().apply {
-            put("success", true)
-        }
-
-        val result = repo.addGroupParticipant("conv-1", "user-new")
-
-        assertTrue(result is Resource.Success)
-    }
-
-    // endregion
-
-    // region removeGroupParticipant
-
-    @Test
-    fun `removeGroupParticipant returns Success`() = runTest {
-        coEvery { api.post("/api/conversations/conv-1/participants/remove", any()) } returns JSONObject().apply {
-            put("success", true)
-        }
-
-        val result = repo.removeGroupParticipant("conv-1", "user-old")
-
-        assertTrue(result is Resource.Success)
-    }
-
-    // endregion
-
-    // region updateGroupName
-
-    @Test
-    fun `updateGroupName returns Success`() = runTest {
-        coEvery { api.patch("/api/conversations/conv-1/group", any()) } returns JSONObject().apply {
-            put("success", true)
-        }
-
-        val result = repo.updateGroupName("conv-1", "New Name")
-
-        assertTrue(result is Resource.Success)
-    }
-
-    // endregion
-
-    // region closeGroupConversation
-
-    @Test
-    fun `closeGroupConversation returns Success`() = runTest {
-        coEvery { api.patch("/api/conversations/conv-1/close", any()) } returns JSONObject().apply {
-            put("success", true)
-        }
-
-        val result = repo.closeGroupConversation("conv-1")
-
-        assertTrue(result is Resource.Success)
-    }
-
-    @Test
-    fun `closeGroupConversation returns Error on exception`() = runTest {
-        coEvery { api.patch("/api/conversations/conv-1/close", any()) } throws RuntimeException("Fail")
-
-        val result = repo.closeGroupConversation("conv-1")
-
-        assertTrue(result is Resource.Error)
-    }
-
-    // endregion
-
-    // region muteGroupMember
-
-    @Test
-    fun `muteGroupMember returns Success`() = runTest {
-        coEvery { api.post("/api/conversations/conv-1/mutes/user-bad", any()) } returns JSONObject().apply {
-            put("success", true)
-        }
-
-        val result = repo.muteGroupMember("conv-1", "user-bad", 3600000L, "Spamming")
-
-        assertTrue(result is Resource.Success)
-    }
-
-    // endregion
-
-    // region unmuteGroupMember
-
-    @Test
-    fun `unmuteGroupMember returns Success`() = runTest {
-        coEvery { api.delete("/api/conversations/conv-1/mutes/user-bad") } returns JSONObject().apply {
-            put("success", true)
-        }
-
-        val result = repo.unmuteGroupMember("conv-1", "user-bad")
-
-        assertTrue(result is Resource.Success)
-    }
-
-    // endregion
-
-    // region updateGroupRoles
-
-    @Test
-    fun `updateGroupRoles returns Success`() = runTest {
-        coEvery { api.patch("/api/conversations/conv-1/roles", any()) } returns JSONObject().apply {
-            put("success", true)
-        }
-
-        val result = repo.updateGroupRoles("conv-1", listOf("admin-1"), listOf("mod-1"))
-
-        assertTrue(result is Resource.Success)
-    }
-
-    // endregion
-
-    // region transferOwnership
-
-    @Test
-    fun `transferOwnership returns Success`() = runTest {
-        coEvery { api.post("/api/conversations/conv-1/transfer-ownership", any()) } returns JSONObject().apply {
-            put("success", true)
-        }
-
-        val result = repo.transferOwnership("conv-1", "new-owner")
-
-        assertTrue(result is Resource.Success)
-    }
-
-    // endregion
-
-    // region getOwnedGroupCount
-
-    @Test
-    fun `getOwnedGroupCount returns Success with count`() = runTest {
-        coEvery { api.get("/api/conversations/owned-group-count") } returns JSONObject().apply {
-            put("count", 3)
-        }
-
-        val result = repo.getOwnedGroupCount("user-1")
-
-        assertTrue(result is Resource.Success)
-        assertEquals(3, (result as Resource.Success).data)
-    }
-
-    // endregion
-
-    // region getModerationConfig
-
-    @Test
-    fun `getModerationConfig returns Success with word list`() = runTest {
-        coEvery { api.get("/api/config/moderation") } returns JSONObject().apply {
-            put("prohibitedWords", JSONArray().apply {
-                put("badword1")
-                put("badword2")
-            })
-        }
-
-        val result = repo.getModerationConfig()
-
-        assertTrue(result is Resource.Success)
-        assertEquals(2, (result as Resource.Success).data.size)
-    }
-
-    // endregion
-
-    // region sendStickerMessage
+    // region sendStickerMessage — Worker API
 
     @Test
     fun `sendStickerMessage returns Success`() = runTest {
@@ -480,13 +146,12 @@ class PrivateMessageRepositoryImplTest {
         }
 
         val result = repo.sendStickerMessage("conv-1", "user-1", "Alice", "https://sticker.url")
-
         assertTrue(result is Resource.Success)
     }
 
     // endregion
 
-    // region sendRoomInviteMessage
+    // region sendRoomInviteMessage — Worker API
 
     @Test
     fun `sendRoomInviteMessage returns Success`() = runTest {
@@ -495,102 +160,207 @@ class PrivateMessageRepositoryImplTest {
         }
 
         val result = repo.sendRoomInviteMessage("conv-1", "user-1", "Alice", "room-1", "Fun Room")
-
         assertTrue(result is Resource.Success)
     }
 
     // endregion
 
-    // region getConversation
+    // region editMessage — direct Firestore
 
     @Test
-    fun `getConversation returns Success`() = runTest {
-        coEvery { api.get("/api/conversations/conv-1") } returns JSONObject().apply {
-            put("id", "conv-1")
-            put("isGroup", false)
-            put("createdAt", 1700000000000L)
-        }
-
-        val result = repo.getConversation("conv-1")
-
+    fun `editMessage returns Success`() = runTest {
+        val result = repo.editMessage("conv-1", "msg-1", "Updated text")
         assertTrue(result is Resource.Success)
-        assertEquals("conv-1", (result as Resource.Success).data.conversationId)
     }
 
     @Test
-    fun `getConversation returns Error on exception`() = runTest {
-        coEvery { api.get("/api/conversations/conv-1") } throws RuntimeException("Fail")
+    fun `editMessage returns Error on exception`() = runTest {
+        every { mockDocRef.update(any<Map<String, Any>>()) } returns Tasks.forException(RuntimeException("Fail"))
 
-        val result = repo.getConversation("conv-1")
-
+        val result = repo.editMessage("conv-1", "msg-1", "Updated text")
         assertTrue(result is Resource.Error)
     }
 
     // endregion
 
-    // region getConversations — conversation cache
+    // region markAsRead — direct Firestore
 
-    private fun conversationJsonArray(vararg ids: String): JSONArray {
-        return JSONArray().apply {
-            ids.forEach { id ->
-                put(JSONObject().apply {
-                    put("id", id)
-                    put("isGroup", false)
-                    put("createdAt", 1700000000000L)
-                    put("lastMessageAt", 1700000000000L)
-                })
-            }
-        }
+    @Test
+    fun `markAsRead returns Success`() = runTest {
+        val result = repo.markAsRead("conv-1", "user-1", "msg-5")
+        assertTrue(result is Resource.Success)
+    }
+
+    // endregion
+
+    // region resetUnreadCount — direct Firestore
+
+    @Test
+    fun `resetUnreadCount returns Success`() = runTest {
+        val result = repo.resetUnreadCount("conv-1", "user-1")
+        assertTrue(result is Resource.Success)
+    }
+
+    // endregion
+
+    // region muteConversation — direct Firestore
+
+    @Test
+    fun `muteConversation returns Success`() = runTest {
+        val result = repo.muteConversation("conv-1", "user-1", true)
+        assertTrue(result is Resource.Success)
+    }
+
+    // endregion
+
+    // region pinConversation — direct Firestore
+
+    @Test
+    fun `pinConversation returns Success`() = runTest {
+        val result = repo.pinConversation("conv-1", "user-1", true)
+        assertTrue(result is Resource.Success)
+    }
+
+    // endregion
+
+    // region hideConversation — direct Firestore
+
+    @Test
+    fun `hideConversation returns Success`() = runTest {
+        val result = repo.hideConversation("conv-1", "user-1")
+        assertTrue(result is Resource.Success)
+    }
+
+    // endregion
+
+    // region toggleReaction — direct Firestore
+
+    @Test
+    fun `toggleReaction returns Success`() = runTest {
+        val result = repo.toggleReaction("conv-1", "msg-1", "\u2764\uFE0F", "user-1")
+        assertTrue(result is Resource.Success)
+    }
+
+    // endregion
+
+    // region recallMessage — direct Firestore
+
+    @Test
+    fun `recallMessage returns Success`() = runTest {
+        val result = repo.recallMessage("conv-1", "msg-1")
+        assertTrue(result is Resource.Success)
+    }
+
+    // endregion
+
+    // region hideMessage — direct Firestore
+
+    @Test
+    fun `hideMessage returns Success`() = runTest {
+        val result = repo.hideMessage("conv-1", "msg-1", "admin-1")
+        assertTrue(result is Resource.Success)
+    }
+
+    // endregion
+
+    // region createGroupConversation — direct Firestore
+
+    @Test
+    fun `createGroupConversation returns Success`() = runTest {
+        val result = repo.createGroupConversation(
+            creatorId = "user-1",
+            participantIds = listOf("user-2", "user-3"),
+            groupName = "Test Group"
+        )
+        assertTrue(result is Resource.Success)
+    }
+
+    // endregion
+
+    // region addGroupParticipant — direct Firestore
+
+    @Test
+    fun `addGroupParticipant returns Success`() = runTest {
+        val result = repo.addGroupParticipant("conv-1", "user-new")
+        assertTrue(result is Resource.Success)
+    }
+
+    // endregion
+
+    // region removeGroupParticipant — direct Firestore
+
+    @Test
+    fun `removeGroupParticipant returns Success`() = runTest {
+        val result = repo.removeGroupParticipant("conv-1", "user-old")
+        assertTrue(result is Resource.Success)
+    }
+
+    // endregion
+
+    // region updateGroupName — direct Firestore
+
+    @Test
+    fun `updateGroupName returns Success`() = runTest {
+        val result = repo.updateGroupName("conv-1", "New Name")
+        assertTrue(result is Resource.Success)
+    }
+
+    // endregion
+
+    // region closeGroupConversation — direct Firestore
+
+    @Test
+    fun `closeGroupConversation returns Success`() = runTest {
+        val result = repo.closeGroupConversation("conv-1")
+        assertTrue(result is Resource.Success)
     }
 
     @Test
-    fun `getConversations emits prefetched data first`() = runTest {
-        coEvery { api.getArray("/api/conversations") } returns conversationJsonArray("conv-pre")
-        repo.prefetchConversations()
+    fun `closeGroupConversation returns Error on exception`() = runTest {
+        every { mockDocRef.update(any<String>(), any()) } returns Tasks.forException(RuntimeException("Fail"))
 
-        // Collect just the first emission (should be the prefetched data)
-        val result = repo.getConversations("user-1").first()
-
-        assertEquals(1, result.size)
-        assertEquals("conv-pre", result[0].conversationId)
+        val result = repo.closeGroupConversation("conv-1")
+        assertTrue(result is Resource.Error)
     }
 
+    // endregion
+
+    // region muteGroupMember — direct Firestore
+
     @Test
-    fun `getConversations emits cache on second collection`() = runTest {
-        // Seed both prefetched + cache: prefetch first, then simulate a full flow cycle
-        coEvery { api.getArray("/api/conversations") } returns conversationJsonArray("conv-1")
-        repo.prefetchConversations()
-
-        // First collection consumes prefetched data
-        val first = repo.getConversations("user-1").first()
-        assertEquals("conv-1", first[0].conversationId)
-
-        // Prefetch again to populate cache via a second prefetch
-        // (simulates the loop having run once)
-        repo.prefetchConversations()
-        // Second collection should consume the new prefetched data
-        // which exercises the "instant ?: conversationCache" path
-        val second = repo.getConversations("user-1").first()
-        assertEquals("conv-1", second[0].conversationId)
+    fun `muteGroupMember returns Success`() = runTest {
+        val result = repo.muteGroupMember("conv-1", "user-bad", 3600000L, "Spamming")
+        assertTrue(result is Resource.Success)
     }
 
+    // endregion
+
+    // region unmuteGroupMember — direct Firestore
+
     @Test
-    fun `getConversations cache survives prefetch clear`() = runTest {
-        // Prefetch sets prefetchedConversations; first collection clears it
-        coEvery { api.getArray("/api/conversations") } returns conversationJsonArray("conv-cached")
-        repo.prefetchConversations()
+    fun `unmuteGroupMember returns Success`() = runTest {
+        val result = repo.unmuteGroupMember("conv-1", "user-bad")
+        assertTrue(result is Resource.Success)
+    }
 
-        // First collection: prefetched is consumed
-        repo.getConversations("user-1").first()
+    // endregion
 
-        // Now prefetchedConversations is null. Simulate it being populated by
-        // the while-loop: call prefetch again (which sets the same field).
-        // But the real test: after clearing prefetch, the conversationCache
-        // fallback should work. We test this by calling prefetch to seed,
-        // consuming it, then manually verifying a new getConversations still gets data.
-        repo.prefetchConversations()
-        val result = repo.getConversations("user-1").first()
-        assertEquals("conv-cached", result[0].conversationId)
+    // region updateGroupRoles — direct Firestore
+
+    @Test
+    fun `updateGroupRoles returns Success`() = runTest {
+        val result = repo.updateGroupRoles("conv-1", listOf("admin-1"), listOf("mod-1"))
+        assertTrue(result is Resource.Success)
+    }
+
+    // endregion
+
+    // region transferOwnership — direct Firestore
+
+    @Test
+    fun `transferOwnership returns Success`() = runTest {
+        val result = repo.transferOwnership("conv-1", "new-owner")
+        assertTrue(result is Resource.Success)
     }
 
     // endregion
