@@ -1,6 +1,7 @@
 package com.shyden.shytalk.feature.main
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -34,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import com.shyden.shytalk.core.model.BannerActionType
 import com.shyden.shytalk.core.model.ChatRoom
+import com.shyden.shytalk.core.ui.DegradedModeBanner
 import com.shyden.shytalk.feature.home.RoomListContent
 
 enum class BottomNavTab(val label: String) {
@@ -45,6 +47,7 @@ enum class BottomNavTab(val label: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
+    isBackendDegraded: Boolean = false,
     onNavigateToRoom: (String) -> Unit,
     onPrewarmRoom: (ChatRoom) -> Unit = {},
     onNavigateToUserProfile: (String) -> Unit,
@@ -147,45 +150,42 @@ fun MainScreen(
             }
         }
     ) { padding ->
-        when (selectedTab) {
-            BottomNavTab.Rooms -> {
-                RoomListContent(
-                    onNavigateToRoom = onNavigateToRoom,
-                    onPrewarmRoom = onPrewarmRoom,
-                    onBannerAction = { banner ->
-                        val value = banner.actionValue ?: return@RoomListContent
-                        when (banner.actionType) {
-                            BannerActionType.URL -> onNavigateToUrl(value)
-                            BannerActionType.ROOM -> onNavigateToRoom(value)
-                            BannerActionType.SCREEN -> when (value) {
-                                "wallet" -> onNavigateToWallet()
-                                "settings" -> onNavigateToSettings()
-                                else -> {}
-                            }
-                            BannerActionType.NONE -> {}
-                        }
-                    },
-                    snackbarHostState = snackbarHostState,
-                    showCreateDialog = showCreateDialog,
-                    onDismissCreateDialog = { showCreateDialog = false },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                )
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            if (isBackendDegraded) {
+                DegradedModeBanner()
             }
-            BottomNavTab.Messages -> {
-                messagesContent(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                )
-            }
-            BottomNavTab.Profile -> {
-                profileContent(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                )
+            Box(modifier = Modifier.weight(1f)) {
+                when (selectedTab) {
+                    BottomNavTab.Rooms -> {
+                        RoomListContent(
+                            onNavigateToRoom = onNavigateToRoom,
+                            onPrewarmRoom = onPrewarmRoom,
+                            onBannerAction = { banner ->
+                                val value = banner.actionValue ?: return@RoomListContent
+                                when (banner.actionType) {
+                                    BannerActionType.URL -> onNavigateToUrl(value)
+                                    BannerActionType.ROOM -> onNavigateToRoom(value)
+                                    BannerActionType.SCREEN -> when (value) {
+                                        "wallet" -> onNavigateToWallet()
+                                        "settings" -> onNavigateToSettings()
+                                        else -> {}
+                                    }
+                                    BannerActionType.NONE -> {}
+                                }
+                            },
+                            snackbarHostState = snackbarHostState,
+                            showCreateDialog = showCreateDialog,
+                            onDismissCreateDialog = { showCreateDialog = false },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    BottomNavTab.Messages -> {
+                        messagesContent(Modifier.fillMaxSize())
+                    }
+                    BottomNavTab.Profile -> {
+                        profileContent(Modifier.fillMaxSize())
+                    }
+                }
             }
         }
     }

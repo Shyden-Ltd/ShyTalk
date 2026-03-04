@@ -43,6 +43,7 @@ import com.shyden.shytalk.core.util.DeviceSecurityChecker
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.remote.AppConfigService
 import com.shyden.shytalk.feature.security.UnsafeDeviceScreen
+import com.shyden.shytalk.feature.update.DegradedModeScreen
 import com.shyden.shytalk.feature.update.ForceUpdateScreen
 import com.shyden.shytalk.navigation.NavGraph
 import com.shyden.shytalk.navigation.Screen
@@ -72,6 +73,8 @@ class MainActivity : ComponentActivity() {
                 var checkComplete by remember { mutableStateOf(false) }
                 var softUpdateAvailable by remember { mutableStateOf<String?>(null) }
                 var isUnsafe by remember { mutableStateOf(false) }
+                var backendDegraded by remember { mutableStateOf(false) }
+                var degradedAcknowledged by remember { mutableStateOf(false) }
 
                 LaunchedEffect(Unit) {
                     isUnsafe = DeviceSecurityChecker.isUnsafe()
@@ -88,7 +91,31 @@ class MainActivity : ComponentActivity() {
                         }
                         is Resource.Loading -> { /* wait */ }
                     }
+                    when (val healthResult = appConfigService.checkBackendHealth()) {
+                        is Resource.Success -> {
+                            backendDegraded = healthResult.data.status == "degraded"
+                        }
+                        is Resource.Error -> { /* network error — don't block */ }
+                        is Resource.Loading -> {}
+                    }
                     checkComplete = true
+                }
+
+                // Poll health every 5 minutes while degraded; clear when recovered
+                LaunchedEffect(backendDegraded) {
+                    if (!backendDegraded) return@LaunchedEffect
+                    while (true) {
+                        delay(300_000L) // 5 minutes
+                        when (val result = appConfigService.checkBackendHealth()) {
+                            is Resource.Success -> {
+                                if (result.data.status == "ok") {
+                                    backendDegraded = false
+                                    return@LaunchedEffect
+                                }
+                            }
+                            else -> {} // still degraded
+                        }
+                    }
                 }
 
                 when {
@@ -118,6 +145,9 @@ class MainActivity : ComponentActivity() {
                     }
                     isUnsafe -> { UnsafeDeviceScreen() }
                     updateRequired -> { ForceUpdateScreen() }
+                    backendDegraded && !degradedAcknowledged -> {
+                        DegradedModeScreen(onAcknowledge = { degradedAcknowledged = true })
+                    }
                     else -> {
                             val navController = rememberNavController()
                             val navigateToRoomId by _navigateToRoom
@@ -153,6 +183,7 @@ class MainActivity : ComponentActivity() {
                             NavGraph(
                                 navController = navController,
                                 startDestination = Screen.SignIn.route,
+                                isBackendDegraded = backendDegraded,
                                 onSignOut = {
                                     workerApiClient.clearTokenCache()
                                     authRepository.signOut()

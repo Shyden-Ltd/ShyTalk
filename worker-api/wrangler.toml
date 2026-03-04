@@ -4,8 +4,6 @@ main = "src/index.js"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
-# ── D1 Database (REMOVED — Firestore is sole database) ──────────
-
 # ── R2 Bucket (already exists from worker/) ──────────────────────
 [[r2_buckets]]
 binding = "R2_BUCKET"
