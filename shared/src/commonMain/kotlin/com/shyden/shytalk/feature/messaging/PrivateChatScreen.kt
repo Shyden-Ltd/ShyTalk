@@ -7,14 +7,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -80,6 +77,7 @@ import com.shyden.shytalk.core.model.PrivateMessage
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.formatRelativeTime
+import com.shyden.shytalk.core.util.isKeyboardVisible
 import com.shyden.shytalk.ui.theme.SpeakingGreen
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.delay
@@ -91,7 +89,7 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrivateChatScreen(
     otherUserId: String = "",
@@ -148,7 +146,7 @@ fun PrivateChatScreen(
     }
 
     // Scroll to bottom when the keyboard opens so the latest messages stay visible
-    val isKeyboardVisible = WindowInsets.isImeVisible
+    val isKeyboardVisible = isKeyboardVisible()
     LaunchedEffect(isKeyboardVisible) {
         if (isKeyboardVisible && uiState.messages.isNotEmpty() && hasScrolledToBottom) {
             delay(400) // Wait for IME animation to complete before scrolling

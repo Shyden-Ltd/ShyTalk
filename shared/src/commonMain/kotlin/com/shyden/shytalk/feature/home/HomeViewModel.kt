@@ -41,8 +41,14 @@ class HomeViewModel(
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
-    private val userCache: LinkedHashMap<String, User> = object : LinkedHashMap<String, User>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, User>?) = size > 500
+    private val userCache = linkedMapOf<String, User>()
+
+    private fun cacheUser(key: String, user: User) {
+        userCache[key] = user
+        if (userCache.size > 500) {
+            val it = userCache.keys.iterator()
+            if (it.hasNext()) { it.next(); it.remove() }
+        }
     }
     private var myBlockedUserIds: Set<String> = emptySet()
     private var allRooms: List<ChatRoom> = emptyList()
@@ -113,7 +119,7 @@ class HomeViewModel(
         viewModelScope.launch {
             userRepository.userUpdates.collect { updatedUser ->
                 if (updatedUser.uid in userCache) {
-                    userCache[updatedUser.uid] = updatedUser
+                    cacheUser(updatedUser.uid, updatedUser)
                     _uiState.update { state ->
                         state.copy(
                             seatUsers = state.seatUsers.let { map ->
@@ -188,7 +194,7 @@ class HomeViewModel(
         if (newUserIds.isNotEmpty()) {
             when (val result = userRepository.getUsers(newUserIds.toList())) {
                 is Resource.Success -> {
-                    result.data.forEach { user -> userCache[user.uid] = user }
+                    result.data.forEach { user -> cacheUser(user.uid, user) }
                 }
                 else -> {}
             }

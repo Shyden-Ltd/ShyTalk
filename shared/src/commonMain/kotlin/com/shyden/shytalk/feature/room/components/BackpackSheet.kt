@@ -1025,11 +1025,18 @@ private fun SendAllConfirmDialog(
 }
 
 /** Format large numbers in abbreviated form (e.g. 1.2K, 3.5M). */
-private fun formatLargeNumber(value: Long): String = when {
-    value >= 1_000_000_000 -> "${"%.1f".format(value / 1_000_000_000.0)}B"
-    value >= 1_000_000 -> "${"%.1f".format(value / 1_000_000.0)}M"
-    value >= 10_000 -> "${"%.1f".format(value / 1_000.0)}K"
-    else -> "$value"
+private fun formatLargeNumber(value: Long): String {
+    fun oneDecimal(v: Double): String {
+        val rounded = (v * 10).toLong() / 10.0
+        return if (rounded == rounded.toLong().toDouble()) "${rounded.toLong()}.0"
+        else rounded.toString().let { s -> s.substring(0, s.indexOf('.') + 2) }
+    }
+    return when {
+        value >= 1_000_000_000 -> "${oneDecimal(value / 1_000_000_000.0)}B"
+        value >= 1_000_000 -> "${oneDecimal(value / 1_000_000.0)}M"
+        value >= 10_000 -> "${oneDecimal(value / 1_000.0)}K"
+        else -> "$value"
+    }
 }
 
 /** Neutral accent color for all gifts (rarity tiers removed). */

@@ -27,7 +27,7 @@ fun VoiceWaveOverlay(modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "voiceWave")
     val progress by transition.animateFloat(
         initialValue = 0f,
-        targetValue = (2 * Math.PI).toFloat(),
+        targetValue = (2 * kotlin.math.PI).toFloat(),
         animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = 2000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart

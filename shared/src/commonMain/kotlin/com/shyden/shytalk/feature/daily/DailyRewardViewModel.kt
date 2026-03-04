@@ -6,6 +6,7 @@ import com.shyden.shytalk.core.model.DailyRewardResult
 import com.shyden.shytalk.core.model.MilestoneReward
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Resource
+import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.EconomyRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,8 +14,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.datetime.Clock
 import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
@@ -59,7 +60,7 @@ class DailyRewardViewModel(
     }
 
     fun checkAndShowDialog(user: User) {
-        val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+        val now = Instant.fromEpochMilliseconds(currentTimeMillis()).toLocalDateTime(TimeZone.currentSystemDefault())
         val today = now.date.toString()
         val alreadyClaimed = user.lastLoginRewardDate == today
 
@@ -101,7 +102,7 @@ class DailyRewardViewModel(
             _uiState.update { it.copy(isClaiming = true, error = null) }
             when (val result = economyRepository.claimDailyReward()) {
                 is Resource.Success -> {
-                    val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+                    val now = Instant.fromEpochMilliseconds(currentTimeMillis()).toLocalDateTime(TimeZone.currentSystemDefault())
                     val todayDay = now.dayOfMonth
                     _uiState.update {
                         it.copy(

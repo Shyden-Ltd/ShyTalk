@@ -136,7 +136,7 @@ class RoomViewModel(
     private var isSeated = false
     private val userCache: MutableMap<String, User> = mutableMapOf()
     private var blockCheckDone = false
-    @Volatile private var firstJoinTimestamp: Long? = null
+    @kotlin.concurrent.Volatile private var firstJoinTimestamp: Long? = null
     private var allMessages: List<Message> = emptyList()
     private var lastKnownRoom: ChatRoom? = null
     private var ownerReturnTriggered = false

@@ -21,7 +21,7 @@ fun OwnerAwayBanner(
         modifier = Modifier.fillMaxWidth()
     ) {
         Text(
-            text = "Owner away - Room closes in ${minutes}:${"%02d".format(seconds)}",
+            text = "Owner away - Room closes in ${minutes}:${seconds.toString().padStart(2, '0')}",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onErrorContainer,
             modifier = Modifier

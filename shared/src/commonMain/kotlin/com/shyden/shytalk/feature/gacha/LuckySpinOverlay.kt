@@ -68,6 +68,7 @@ import com.shyden.shytalk.core.model.GachaGift
 import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.model.Transaction
 import com.shyden.shytalk.core.ui.SuperShyGold
+import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.feature.shop.CoinPackageCard
 import com.shyden.shytalk.feature.shop.formatNumber
 import com.shyden.shytalk.feature.shop.formatTimestamp
@@ -204,11 +205,11 @@ fun LuckySpinOverlay(
         val totalDuration = 2800L
         val minInterval = 30L
         val maxInterval = 280L
-        val startTime = System.currentTimeMillis()
+        val startTime = currentTimeMillis()
         var step = 0
 
         while (true) {
-            val elapsed = System.currentTimeMillis() - startTime
+            val elapsed = currentTimeMillis() - startTime
             val progress = (elapsed.toFloat() / totalDuration).coerceIn(0f, 1f)
             val interval = minInterval + ((maxInterval - minInterval) * progress.pow(3)).toLong()
 
@@ -335,10 +336,10 @@ fun LuckySpinOverlay(
 
                 // Quick chase (260ms per result)
                 val chaseDuration = 260L
-                val startTime2 = System.currentTimeMillis()
+                val startTime2 = currentTimeMillis()
                 var chaseStep = 0
                 while (true) {
-                    val p = ((System.currentTimeMillis() - startTime2).toFloat() / chaseDuration).coerceIn(0f, 1f)
+                    val p = ((currentTimeMillis() - startTime2).toFloat() / chaseDuration).coerceIn(0f, 1f)
                     if (p < 0.75f) {
                         outerLitIndex = if (outerGifts.isNotEmpty()) chaseStep % outerGifts.size else -1
                         innerLitIndex = if (innerGifts.isNotEmpty()) (innerGifts.size - (chaseStep % innerGifts.size)) % innerGifts.size else -1

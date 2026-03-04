@@ -891,7 +891,7 @@ class PrivateChatViewModel(
 
     fun addStickerFromImage(imageData: ByteArray) {
         if (stickerStorage == null) return
-        val id = kotlinx.datetime.Clock.System.now().toEpochMilliseconds().toString()
+        val id = currentTimeMillis().toString()
         stickerStorage.addSticker(id, imageData)
         _uiState.update {
             it.copy(stickers = stickerStorage.getStickers())
@@ -938,7 +938,7 @@ class PrivateChatViewModel(
                     _uiState.update { it.copy(error = "You already have this sticker") }
                     return@launch
                 }
-                val id = kotlinx.datetime.Clock.System.now().toEpochMilliseconds().toString()
+                val id = currentTimeMillis().toString()
                 stickerStorage.addSticker(id, bytes)
                 stickerStorage.updateStickerUrl(id, url)
                 _uiState.update {

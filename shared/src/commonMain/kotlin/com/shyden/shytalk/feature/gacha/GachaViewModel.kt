@@ -9,6 +9,7 @@ import com.shyden.shytalk.core.model.GachaResult
 import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.model.Transaction
 import com.shyden.shytalk.core.util.Resource
+import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.data.repository.EconomyRepository
 import com.shyden.shytalk.data.repository.GiftRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -110,7 +111,7 @@ class GachaViewModel(
                 .catch { /* ignore */ }
                 .collect { coins ->
                     // Ignore stale Firestore snapshots for 3s after a pull set the balance
-                    val elapsed = System.currentTimeMillis() - pullBalanceSetAt
+                    val elapsed = currentTimeMillis() - pullBalanceSetAt
                     if (elapsed < 3000 && coins < _uiState.value.coinBalance) return@collect
                     _uiState.update { it.copy(coinBalance = coins) }
                 }
@@ -176,7 +177,7 @@ class GachaViewModel(
                     // Update pull costs from server response if available
                     val latestCosts = result.data.currentPullCosts
 
-                    pullBalanceSetAt = System.currentTimeMillis()
+                    pullBalanceSetAt = currentTimeMillis()
                     if (count == 1) {
                         _uiState.update {
                             it.copy(

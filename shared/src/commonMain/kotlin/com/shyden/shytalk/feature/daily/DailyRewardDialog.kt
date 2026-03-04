@@ -51,8 +51,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shyden.shytalk.core.ui.SuperShyGold
-import kotlinx.datetime.Clock
+import com.shyden.shytalk.core.util.currentTimeMillis
 import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -66,7 +67,7 @@ fun DailyRewardDialog(
 
     if (!state.showDialog) return
 
-    val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+    val now = Instant.fromEpochMilliseconds(currentTimeMillis()).toLocalDateTime(TimeZone.currentSystemDefault())
     val currentYear = now.year
     val currentMonth = now.monthNumber
     val todayDay = now.dayOfMonth

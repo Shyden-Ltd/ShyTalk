@@ -92,7 +92,17 @@ internal fun transactionLabel(transaction: Transaction): String {
     }
 }
 
-internal fun formatNumber(value: Long): String = "%,d".format(value)
+internal fun formatNumber(value: Long): String {
+    val s = value.toString()
+    val result = StringBuilder()
+    val startIndex = if (s.startsWith('-')) 1 else 0
+    val digits = s.substring(startIndex)
+    for (i in digits.indices) {
+        if (i > 0 && (digits.length - i) % 3 == 0) result.append(',')
+        result.append(digits[i])
+    }
+    return if (startIndex == 1) "-$result" else result.toString()
+}
 
 internal fun formatTimestamp(millis: Long): String {
     if (millis == 0L) return ""
