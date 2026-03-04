@@ -80,6 +80,7 @@ import com.shyden.shytalk.core.model.BroadcastType
 import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.model.GiftEvent
 import com.shyden.shytalk.core.ui.BroadcastBanner
+import com.shyden.shytalk.core.ui.DegradedModeBanner
 import com.shyden.shytalk.core.ui.GiftEffectOverlay
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.data.repository.GiftRepository
@@ -107,6 +108,7 @@ import org.koin.compose.koinInject
 @Composable
 fun RoomScreen(
     roomId: String,
+    isBackendDegraded: Boolean = false,
     onNavigateBack: () -> Unit,
     onNavigateToUserProfile: (String) -> Unit = {},
     onNavigateToChat: (String) -> Unit = {},
@@ -122,6 +124,15 @@ fun RoomScreen(
     val gachaState by gachaViewModel.uiState.collectAsStateWithLifecycle()
     val giftingState by giftingViewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    var wasEverDegraded by remember { mutableStateOf(isBackendDegraded) }
+    LaunchedEffect(isBackendDegraded) {
+        if (wasEverDegraded && !isBackendDegraded) {
+            snackbarHostState.showSnackbar(
+                "Service restored — close this room and open a new one for full functionality"
+            )
+        }
+        if (isBackendDegraded) wasEverDegraded = true
+    }
     var showSettings by remember(roomId) { mutableStateOf(false) }
     var showUserCardForId by remember(roomId) { mutableStateOf<String?>(null) }
     var showParticipantPanel by remember(roomId) { mutableStateOf(false) }
@@ -663,6 +674,11 @@ fun RoomScreen(
                 }
             } else if (uiState.hasJoined) {
                 Column(modifier = Modifier.fillMaxSize().imePadding()) {
+                    // Degraded Mode Banner
+                    if (isBackendDegraded) {
+                        DegradedModeBanner()
+                    }
+
                     // Owner Away Banner
                     if (uiState.room?.state == RoomState.OWNER_AWAY) {
                         OwnerAwayBanner(

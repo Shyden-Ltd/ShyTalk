@@ -28,3 +28,16 @@ worker-api/.wrangler/
 e2e_results/
 test_output.txt
 nul
+
+# JVM crash/replay logs
+hs_err_pid*.log
+replay_pid*.log
+
+# Playwright MCP temp files
+.playwright-mcp/
+
+# Migration scripts (one-time use)
+scripts/migrate-*.mjs
+
+# Archived Cloud Functions (deleted from project)
+functions-archive/

@@ -230,10 +230,10 @@ class HomeViewModel(
         val userId = authRepository.currentUserId ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null, lastRoomName = name) }
-            // Fire-and-forget: neither blocks room creation
             launch { userRepository.updateProfile(userId, mapOf("lastRoomName" to name)) }
-            launch { roomRepository.closeAllRoomsByOwner(userId) }
-            // Create immediately without waiting
+            // Close old rooms BEFORE creating new one to avoid race where the
+            // closeAll query picks up the newly-created room and closes it.
+            roomRepository.closeAllRoomsByOwner(userId)
             when (val result = roomRepository.createRoom(name, userId)) {
                 is Resource.Success -> {
                     _uiState.update { it.copy(isLoading = false, createdRoomId = result.data) }

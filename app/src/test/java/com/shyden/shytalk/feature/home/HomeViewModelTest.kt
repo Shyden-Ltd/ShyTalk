@@ -11,6 +11,7 @@ import com.shyden.shytalk.testutil.MainDispatcherRule
 import com.shyden.shytalk.testutil.TestData
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -500,5 +501,22 @@ class HomeViewModelTest {
 
         assertNull(vm.uiState.value.error)
         assertEquals("room-2", vm.uiState.value.createdRoomId)
+    }
+
+    @Test
+    fun `createRoom closes old rooms before creating new one to avoid race`() = runTest {
+        val vm = createViewModel()
+        advanceUntilIdle()
+        coEvery { roomRepository.createRoom(any(), any()) } returns Resource.Success("new-id")
+
+        vm.createRoom("New Room")
+        advanceUntilIdle()
+
+        // closeAllRoomsByOwner must complete BEFORE createRoom starts,
+        // otherwise the close query can pick up the newly-created room.
+        coVerifyOrder {
+            roomRepository.closeAllRoomsByOwner(currentUserId)
+            roomRepository.createRoom("New Room", currentUserId)
+        }
     }
 }

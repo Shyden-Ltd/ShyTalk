@@ -35,7 +35,13 @@ class AndroidAppConfigService(
                 timestamp = (data["timestamp"] as? Number)?.toLong() ?: System.currentTimeMillis()
             ))
         } catch (e: Exception) {
-            Resource.Error("Failed to check backend health")
+            // If we can't reach the health endpoint at all (429, network error, etc.),
+            // the backend is effectively degraded
+            Resource.Success(BackendHealthStatus(
+                status = "degraded",
+                firestoreAvailable = false,
+                timestamp = System.currentTimeMillis()
+            ))
         }
     }
 

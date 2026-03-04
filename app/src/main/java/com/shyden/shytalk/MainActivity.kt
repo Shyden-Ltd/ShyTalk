@@ -95,8 +95,7 @@ class MainActivity : ComponentActivity() {
                         is Resource.Success -> {
                             backendDegraded = healthResult.data.status == "degraded"
                         }
-                        is Resource.Error -> { /* network error — don't block */ }
-                        is Resource.Loading -> {}
+                        else -> {}
                     }
                     checkComplete = true
                 }

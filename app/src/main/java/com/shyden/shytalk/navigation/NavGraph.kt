@@ -410,6 +410,7 @@ fun NavGraph(
             val roomId = backStackEntry.arguments?.getString("roomId") ?: return@composable
             RoomScreen(
                 roomId = roomId,
+                isBackendDegraded = isBackendDegraded,
                 onNavigateBack = { navController.safePopBackStack() },
                 onNavigateToUserProfile = { userId ->
                     navController.navigate(Screen.UserProfile.createRoute(userId))

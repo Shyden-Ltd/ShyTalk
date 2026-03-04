@@ -1,7 +1,6 @@
-v0.48 — Performance & UX Polish
+v0.49 — Better Stability
 
-- Clean splash screen with just logo and app name
-- Conversation list now loads instantly (settings refresh in background)
-- Closed rooms show speaker photos and visitor count instead of empty cards
-- Room invite previews auto-scroll into view when they load
-- Smoother room closing with loading indicator
+- You'll now see a notice inside rooms when our servers are having trouble
+- Get notified when things are back to normal while you're in a room
+- Fixed a bug where rooms could close right after being created
+- Banner carousel now loads more reliably
