@@ -92,6 +92,48 @@ function fromFirestoreDoc(doc) {
   return { id, ...data };
 }
 
+// ─── Circuit breaker for Cloudflare daily quota ─────────────────
+// When Cloudflare returns 429 (daily request limit reached), stop all
+// Firestore calls until midnight UTC to preserve remaining quota.
+// Uses KV to persist the tripped state across Worker invocations.
+
+const CIRCUIT_BREAKER_KEY = 'firestore_circuit_open';
+let circuitOpenCached = false; // In-memory cache to avoid KV reads on every call
+
+async function isCircuitOpen(env) {
+  if (circuitOpenCached) return true;
+  if (!env.KV) return false;
+  const val = await env.KV.get(CIRCUIT_BREAKER_KEY);
+  if (val) { circuitOpenCached = true; return true; }
+  return false;
+}
+
+async function tripCircuitBreaker(env) {
+  circuitOpenCached = true;
+  if (!env.KV) return;
+  // Calculate seconds until midnight UTC
+  const now = new Date();
+  const midnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+  const ttl = Math.max(Math.ceil((midnight - now) / 1000), 60);
+  await env.KV.put(CIRCUIT_BREAKER_KEY, '1', { expirationTtl: ttl });
+  console.log(`Circuit breaker tripped — Firestore calls disabled for ${ttl}s (until midnight UTC)`);
+}
+
+/**
+ * Fetch wrapper that respects the circuit breaker.
+ * On 429: trips the breaker and returns the 429 response (no retry).
+ */
+async function firestoreFetch(url, options, env) {
+  if (env && await isCircuitOpen(env)) {
+    return { ok: false, status: 429, text: async () => 'Circuit breaker open — Cloudflare daily limit reached' };
+  }
+  const response = await fetch(url, options);
+  if (response.status === 429 && env) {
+    await tripCircuitBreaker(env);
+  }
+  return response;
+}
+
 // ─── REST API helpers ────────────────────────────────────────────
 
 function baseUrl(env) {
@@ -114,9 +156,9 @@ async function getDoc(env, path) {
   const accessToken = await getAccessToken(env);
   const url = `${baseUrl(env)}/${path}`;
 
-  const response = await fetch(url, {
+  const response = await firestoreFetch(url, {
     headers: { 'Authorization': `Bearer ${accessToken}` },
-  });
+  }, env);
 
   if (response.status === 404) return null;
   if (!response.ok) {
@@ -143,14 +185,14 @@ async function setDoc(env, path, data) {
   const accessToken = await getAccessToken(env);
   const url = `${baseUrl(env)}/${path}`;
 
-  const response = await fetch(url, {
+  const response = await firestoreFetch(url, {
     method: 'PATCH',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ fields: toFirestoreFields(data) }),
-  });
+  }, env);
 
   if (!response.ok) {
     const text = await response.text();
@@ -175,14 +217,14 @@ async function updateDoc(env, path, fields) {
   const mask = fieldPaths.map(f => `updateMask.fieldPaths=${encodeURIComponent(f)}`).join('&');
   const url = `${baseUrl(env)}/${path}?${mask}`;
 
-  const response = await fetch(url, {
+  const response = await firestoreFetch(url, {
     method: 'PATCH',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ fields: toFirestoreFields(fields) }),
-  });
+  }, env);
 
   if (!response.ok) {
     const text = await response.text();
@@ -204,10 +246,10 @@ async function deleteDoc(env, path) {
   const accessToken = await getAccessToken(env);
   const url = `${baseUrl(env)}/${path}`;
 
-  const response = await fetch(url, {
+  const response = await firestoreFetch(url, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${accessToken}` },
-  });
+  }, env);
 
   if (!response.ok) {
     const text = await response.text();
@@ -244,14 +286,14 @@ async function queryCollection(env, collectionPath, structuredQuery) {
     },
   };
 
-  const response = await fetch(url, {
+  const response = await firestoreFetch(url, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(query),
-  });
+  }, env);
 
   if (!response.ok) {
     const text = await response.text();
@@ -287,14 +329,14 @@ async function batchWrite(env, writes) {
   const projectId = env.FIREBASE_PROJECT_ID;
   const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:batchWrite`;
 
-  const response = await fetch(url, {
+  const response = await firestoreFetch(url, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ writes }),
-  });
+  }, env);
 
   if (!response.ok) {
     const text = await response.text();
@@ -392,7 +434,7 @@ async function incrementField(env, path, field, amount = 1) {
   const projectId = env.FIREBASE_PROJECT_ID;
   const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:commit`;
 
-  const response = await fetch(url, {
+  const response = await firestoreFetch(url, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
@@ -411,7 +453,7 @@ async function incrementField(env, path, field, amount = 1) {
         },
       }],
     }),
-  });
+  }, env);
 
   if (!response.ok) {
     const text = await response.text();
@@ -517,6 +559,7 @@ function batchIncrementOp(env, path, increments) {
 }
 
 module.exports = {
+  isCircuitOpen,
   getDoc,
   setDoc,
   updateDoc,

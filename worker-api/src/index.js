@@ -24,6 +24,7 @@ const { registerAdminEconomyRoutes } = require('./routes/admin-economy');
 const { registerAdminGiftRoutes } = require('./routes/admin-gifts');
 const { registerAdminCleanupRoutes } = require('./routes/admin-cleanup');
 const {
+  isCircuitOpen,
   getDoc, setDoc, updateDoc, deleteDoc,
   queryCollection, batchWrite, batchUpdateOp, batchDeleteOp,
   fieldFilter, andFilter, orderBy,
@@ -48,8 +49,13 @@ registerAdminGiftRoutes(router);
 registerAdminCleanupRoutes(router);
 
 // ── Health check (no auth) ──
-router.get('/api/health', async () => {
-  return json({ status: 'ok', timestamp: Date.now() });
+router.get('/api/health', async (request, env) => {
+  const circuitOpen = await isCircuitOpen(env);
+  return json({
+    status: circuitOpen ? 'degraded' : 'ok',
+    firestoreAvailable: !circuitOpen,
+    timestamp: Date.now(),
+  });
 });
 
 // ── Admin search endpoints ──

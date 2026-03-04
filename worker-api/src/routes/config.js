@@ -17,10 +17,25 @@ const { getDoc, setDoc, queryCollection, fieldFilter, orderBy } = require('../ut
 function registerConfigRoutes(router) {
   router.get('/api/config/:key', async (request, env, params) => {
     const doc = await getDoc(env, `config/${params.key}`);
-    if (!doc) return jsonError('Config not found', 404);
+    if (!doc) {
+      // Return defaults for known config keys
+      if (params.key === 'app') {
+        return json({ minVersionCode: 1, latestVersionCode: 1, latestVersionName: '' });
+      }
+      return jsonError('Config not found', 404);
+    }
     // Remove the Firestore doc id field, return plain config object
     const { id, ...config } = doc;
     return json(config);
+  });
+
+  router.put('/api/config/:key', async (request, env, params) => {
+    const adminCheck = requireAdmin(request);
+    if (adminCheck) return adminCheck;
+    const body = await parseBody(request);
+    if (!body) return jsonError('Invalid JSON body', 400);
+    await setDoc(env, `config/${params.key}`, body);
+    return json({ success: true });
   });
 
   router.get('/api/gifts', async (request, env) => {
