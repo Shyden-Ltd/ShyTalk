@@ -41,7 +41,9 @@ data class AppSettingsUiState(
     val dndEndMinute: Int = 0,
     val minGiftAnimationValue: Int = 0,
     val selfDestructAlertEnabled: Boolean = false,
+    val cacheSizeBytes: Long = 0L,
     val cacheCleared: Boolean = false,
+    val showClearCacheDialog: Boolean = false,
     val updateCheckResult: UpdateCheckResult? = null,
     val isCheckingUpdate: Boolean = false
 )
@@ -59,6 +61,11 @@ class AppSettingsViewModel(
 
     init {
         loadSettings()
+        loadCacheSize()
+    }
+
+    private fun loadCacheSize() {
+        _uiState.update { it.copy(cacheSizeBytes = appConfigService.getCacheSizeBytes()) }
     }
 
     private fun loadSettings() {
@@ -249,9 +256,18 @@ class AppSettingsViewModel(
         }
     }
 
+    fun requestClearCache() {
+        _uiState.update { it.copy(showClearCacheDialog = true) }
+    }
+
+    fun dismissClearCacheDialog() {
+        _uiState.update { it.copy(showClearCacheDialog = false) }
+    }
+
     fun clearCache() {
         appConfigService.clearAppCache()
-        _uiState.update { it.copy(cacheCleared = true) }
+        _uiState.update { it.copy(cacheCleared = true, showClearCacheDialog = false) }
+        loadCacheSize()
     }
 
     fun resetCacheCleared() {

@@ -106,13 +106,6 @@ fun AppSettingsScreen(
         }
     }
 
-    LaunchedEffect(uiState.cacheCleared) {
-        if (uiState.cacheCleared) {
-            snackbarHostState.showSnackbar("Cache cleared")
-            viewModel.resetCacheCleared()
-        }
-    }
-
     BackHandler(enabled = currentPage != SettingsPage.Main) {
         currentPageName = SettingsPage.Main.name
     }
@@ -183,7 +176,7 @@ fun AppSettingsScreen(
                 onNavigateToTermsAndConditions = onNavigateToTermsAndConditions,
                 onNavigateToCyberBullyingPolicy = onNavigateToCyberBullyingPolicy,
                 onCheckForUpdates = { viewModel.checkForUpdates() },
-                onClearCache = { viewModel.clearCache() },
+                onClearCache = { viewModel.requestClearCache() },
                 snackbarHostState = snackbarHostState
             )
         }
@@ -206,6 +199,39 @@ fun AppSettingsScreen(
             dismissButton = {
                 TextButton(onClick = { showSignOutDialog = false }) {
                     Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Clear cache confirmation dialog
+    if (uiState.showClearCacheDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissClearCacheDialog() },
+            title = { Text("Clear Cache") },
+            text = { Text("Clear ${formatCacheSize(uiState.cacheSizeBytes)} of cached data?") },
+            confirmButton = {
+                TextButton(onClick = { viewModel.clearCache() }) {
+                    Text("Clear")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissClearCacheDialog() }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Cache cleared success dialog
+    if (uiState.cacheCleared) {
+        AlertDialog(
+            onDismissRequest = { viewModel.resetCacheCleared() },
+            title = { Text("Cache Cleared") },
+            text = { Text("App cache has been cleared.") },
+            confirmButton = {
+                TextButton(onClick = { viewModel.resetCacheCleared() }) {
+                    Text("OK")
                 }
             }
         )
@@ -1161,7 +1187,7 @@ private fun AboutPage(
                 onClick = onClearCache,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Clear Cache")
+                Text("Clear Cache (${formatCacheSize(uiState.cacheSizeBytes)})")
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -1282,5 +1308,13 @@ private fun BlockedUserRow(
         TextButton(onClick = onUnblock) {
             Text("Unblock")
         }
+    }
+}
+
+private fun formatCacheSize(bytes: Long): String {
+    return when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+        else -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
     }
 }

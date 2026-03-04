@@ -320,7 +320,7 @@ class RoomRepositoryImpl(
     override suspend fun findActiveRoomByOwner(ownerId: String): String? {
         return try {
             val snapshot = firestore.collection("rooms")
-                .whereEqualTo("owner_id", ownerId)
+                .whereEqualTo("ownerId", ownerId)
                 .whereIn("state", listOf("ACTIVE", "OWNER_AWAY"))
                 .get()
                 .await()

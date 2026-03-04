@@ -30,7 +30,7 @@ class EconomyRepositoryImpl(
         val listener = firestore.document("users/$uid")
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null) return@addSnapshotListener
-                val coins = (snapshot.getLong("shy_coins") ?: snapshot.getLong("shyCoins")) ?: 0L
+                val coins = snapshot.getLong("shyCoins") ?: 0L
                 trySend(coins)
             }
         awaitClose { listener.remove() }

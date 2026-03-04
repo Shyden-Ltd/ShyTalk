@@ -9,7 +9,7 @@ service cloud.firestore {
       allow create: if request.auth != null && request.auth.uid == uid;
       allow update: if request.auth != null && request.auth.uid == uid
         && !request.resource.data.diff(resource.data).affectedKeys()
-            .hasAny(['shyCoins', 'beans', 'isSuperShy', 'superShyExpiry', 'superShyTier',
+            .hasAny(['shyCoins', 'shyBeans', 'isSuperShy', 'superShyExpiry', 'superShyTier',
                      'gcsLastDeductionAt', 'isSuspended', 'suspensionReason', 'suspensionExpiry',
                      'suspensionEndDate', 'userType']);
 
@@ -183,6 +183,12 @@ service cloud.firestore {
 
     // ── Fun facts — auth read, server write ────────────────────────
     match /funFacts/{factId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // ── Banners — auth read, server write only ─────────────────────
+    match /banners/{bannerId} {
       allow read: if request.auth != null;
       allow write: if false;
     }

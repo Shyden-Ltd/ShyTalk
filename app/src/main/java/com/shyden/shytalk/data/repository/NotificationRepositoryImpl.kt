@@ -39,8 +39,6 @@ class NotificationRepositoryImpl(
         firebaseCall("Failed to get notification setting") {
             val doc = firestore.document("users/$userId").get().await()
             val data = doc.data ?: return@firebaseCall true
-            (data["pmNotificationsEnabled"] as? Boolean)
-                ?: (data["pm_notifications_enabled"] as? Boolean)
-                ?: true
+            (data["pmNotificationsEnabled"] as? Boolean) ?: true
         }
 }

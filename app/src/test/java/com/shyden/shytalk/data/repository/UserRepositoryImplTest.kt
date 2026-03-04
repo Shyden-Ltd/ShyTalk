@@ -170,6 +170,15 @@ class UserRepositoryImplTest {
 
     @Test
     fun `recordProfileVisit returns Error on failure`() = runTest {
+        val notFoundSnapshot = mockk<DocumentSnapshot>(relaxed = true) {
+            every { exists() } returns false
+        }
+        val getTask = mockk<Task<DocumentSnapshot>>(relaxed = true) {
+            every { isComplete } returns true
+            every { isCanceled } returns false
+            every { exception } returns null
+            every { result } returns notFoundSnapshot
+        }
         val failTask = mockk<Task<Void>>(relaxed = true) {
             every { isComplete } returns true
             every { isCanceled } returns false
@@ -177,6 +186,7 @@ class UserRepositoryImplTest {
             every { result } throws RuntimeException("Firestore error")
         }
         val failDocRef = mockk<DocumentReference>(relaxed = true) {
+            every { get() } returns getTask
             every { set(any()) } returns failTask
         }
         every { firestore.document("users/user-1/stalkers/visitor-1") } returns failDocRef

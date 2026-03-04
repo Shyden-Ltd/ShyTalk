@@ -139,10 +139,10 @@ class UserRepositoryImpl(
                 if (error != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
                 val data = snapshot.data ?: return@addSnapshotListener
                 trySend(UserFlags(
-                    isSuspended = (data["isSuspended"] as? Boolean) ?: ((data["is_suspended"] as? Long) == 1L),
-                    suspensionEndDate = (data["suspensionEndDate"] ?: data["suspension_end_date"]) as? Long,
-                    hasActiveWarning = (data["hasActiveWarning"] as? Boolean) ?: ((data["has_active_warning"] as? Long) == 1L),
-                    warningReason = (data["warningReason"] ?: data["warning_reason"]) as? String
+                    isSuspended = data["isSuspended"] as? Boolean ?: false,
+                    suspensionEndDate = data["suspensionEndDate"] as? Long,
+                    hasActiveWarning = data["hasActiveWarning"] as? Boolean ?: false,
+                    warningReason = data["warningReason"] as? String
                 ))
             }
         awaitClose { listener.remove() }
@@ -151,7 +151,7 @@ class UserRepositoryImpl(
     override suspend fun getWarningReason(userId: String): Resource<String?> = firebaseCall("Failed to get warning reason") {
         val doc = firestore.document("users/$userId").get().await()
         val data = doc.data ?: return@firebaseCall null
-        (data["warningReason"] ?: data["warning_reason"]) as? String
+        data["warningReason"] as? String
     }
 
     // Real-time user observation from Firestore (replaces 120s polling)
@@ -254,8 +254,26 @@ class UserRepositoryImpl(
 
     override suspend fun recordProfileVisit(profileUserId: String, visitorId: String): Resource<Unit> =
         firebaseCall("Failed to record visit") {
-            firestore.document("users/$profileUserId/stalkers/$visitorId")
-                .set(mapOf("visitorId" to visitorId, "visitedAt" to System.currentTimeMillis())).await()
+            val now = System.currentTimeMillis()
+            val docRef = firestore.document("users/$profileUserId/stalkers/$visitorId")
+            val existing = docRef.get().await()
+            if (existing.exists()) {
+                docRef.update(
+                    mapOf(
+                        "lastVisitedAt" to now,
+                        "visitCount" to FieldValue.increment(1)
+                    )
+                ).await()
+            } else {
+                docRef.set(
+                    mapOf(
+                        "visitorId" to visitorId,
+                        "lastVisitedAt" to now,
+                        "firstVisitedAt" to now,
+                        "visitCount" to 1L
+                    )
+                ).await()
+            }
         }
 
     override suspend fun markStalkersViewed(userId: String): Resource<Unit> =
