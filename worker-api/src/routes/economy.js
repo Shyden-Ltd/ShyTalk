@@ -300,12 +300,21 @@ function registerEconomyRoutes(router) {
       const weights = [...baseWeights];
 
       // Pity system
+      let hardPityTriggered = false;
       if (pity >= config.pityHardLimit) {
+        hardPityTriggered = true;
+        // Zero out low-value gifts so only high-value remain
         for (let j = 0; j < winnableGifts.length; j++) {
           if (winnableGifts[j].coinValue < highValueThreshold) weights[j] = 0;
         }
         if (weights.every(w => w === 0)) {
-          for (let j = 0; j < weights.length; j++) weights[j] = baseWeights[j];
+          // No gifts meet the threshold — guarantee the most expensive gift
+          let bestIdx = 0;
+          for (let j = 1; j < winnableGifts.length; j++) {
+            if (winnableGifts[j].coinValue > winnableGifts[bestIdx].coinValue) bestIdx = j;
+          }
+          // Set only the most expensive gift's weight
+          for (let j = 0; j < weights.length; j++) weights[j] = j === bestIdx ? 1 : 0;
         }
       } else if (pity >= config.pitySoftStart) {
         const progress = (pity - config.pitySoftStart) / (config.pityHardLimit - config.pitySoftStart);
@@ -353,7 +362,7 @@ function registerEconomyRoutes(router) {
 
       // Roll
       const total = weights.reduce((s, w) => s + w, 0);
-      if (total <= 0) { results.push(winnableGifts[0]); pity++; continue; }
+      if (total <= 0) { results.push(winnableGifts[0]); pity = hardPityTriggered ? 0 : pity + 1; continue; }
 
       const roll = Math.random() * total;
       let cumulative = 0, selectedIndex = 0;
@@ -364,7 +373,8 @@ function registerEconomyRoutes(router) {
 
       const gift = winnableGifts[selectedIndex];
       results.push(gift);
-      pity = gift.coinValue >= highValueThreshold ? 0 : pity + 1;
+      // Reset pity on hard pity trigger OR when a high-value gift is won naturally
+      pity = (hardPityTriggered || gift.coinValue >= highValueThreshold) ? 0 : pity + 1;
     }
 
     if (pullCount === 100) luck = Math.min(100, luck + 2);

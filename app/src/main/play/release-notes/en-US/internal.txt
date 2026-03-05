@@ -1,8 +1,10 @@
-v0.50 — Social & Safety
+v0.51 — Economy & Admin Fixes
 
-- Follow/unfollow now works reliably from profile pages
-- Profile visitors (stalkers) are now tracked properly
-- Daily user backups to protect against data loss
-- Admin panel shows accurate counts for all maintenance actions
-- Unique IDs always start at 8 digits (10000000+)
-- Storage audit and cleanup display fixed
+- Fixed gacha pity system not guaranteeing high-value gifts at max pity
+- Gacha spin results load instantly (removed unnecessary delay)
+- Fixed coin/bean balance adjustments from admin panel
+- Fixed guaranteed gift prize setting showing undefined
+- Admin panel: email, user type, and all attributes display correctly
+- New maintenance tools: clear PMs, group chats, rooms, broadcasts, audit logs
+- RESET ALL now requires successful backup before proceeding
+- Economy tab save errors resolved

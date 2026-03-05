@@ -611,7 +611,9 @@ async function arrayUnionField(env, path, field, elements) {
 
   if (!response.ok) {
     const text = await response.text();
-    console.error(`Firestore ARRAY_UNION ${path}.${field}: ${response.status} ${text}`);
+    const msg = `Firestore ARRAY_UNION ${path}.${field}: ${response.status} ${text}`;
+    console.error(msg);
+    throw new Error(msg);
   }
 }
 
@@ -650,7 +652,9 @@ async function arrayRemoveField(env, path, field, elements) {
 
   if (!response.ok) {
     const text = await response.text();
-    console.error(`Firestore ARRAY_REMOVE ${path}.${field}: ${response.status} ${text}`);
+    const msg = `Firestore ARRAY_REMOVE ${path}.${field}: ${response.status} ${text}`;
+    console.error(msg);
+    throw new Error(msg);
   }
 }
 

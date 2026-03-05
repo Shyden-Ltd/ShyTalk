@@ -14,6 +14,12 @@
  * POST /api/cleanup/all-spin-history           → Delete gacha transactions + reset pity
  * POST /api/cleanup/all-supershy               → Clear Super Shy status
  * POST /api/cleanup/all-appeals                → Delete all suspension appeals
+ * POST /api/cleanup/backfill-user-type          → Set userType=MEMBER for users missing it
+ * POST /api/cleanup/all-private-messages       → Delete all 1-on-1 PMs + R2 media
+ * POST /api/cleanup/all-group-chats            → Delete all group chats + R2 media
+ * POST /api/cleanup/all-rooms                  → Delete all closed rooms + subcollections
+ * POST /api/cleanup/all-broadcasts             → Delete all broadcast records
+ * POST /api/cleanup/all-audit-logs             → Delete all admin audit logs
  * GET  /api/storage/audit                      → R2 folder audit
  * POST /api/cleanup/orphaned-storage           → Smart R2 cleanup
  */
@@ -192,21 +198,25 @@ function registerAdminCleanupRoutes(router) {
     const adminCheck = requireAdmin(request);
     if (adminCheck) return adminCheck;
 
-    const [giftWall, giftWallSenders] = await Promise.all([
-      queryCollection(env, 'giftWall', {}),
-      queryCollection(env, 'giftWallSenders', {}),
-    ]);
+    // Gift wall data is stored as subcollections: users/{uid}/giftWall/{giftId}
+    const users = await queryCollection(env, 'users', {
+      orderBy: [orderBy('uid', 'ASCENDING')],
+    });
 
-    const writes = [
-      ...giftWall.map(d => batchDeleteOp(env, `giftWall/${d.id}`)),
-      ...giftWallSenders.map(d => batchDeleteOp(env, `giftWallSenders/${d.id}`)),
-    ];
+    let deleted = 0;
+    for (const user of users) {
+      const uid = user.uid ?? user.id;
+      const gifts = await queryCollection(env, `users/${uid}/giftWall`, {});
+      if (gifts.length === 0) continue;
 
-    for (let i = 0; i < writes.length; i += 500) {
-      await batchWrite(env, writes.slice(i, i + 500));
+      const writes = gifts.map(gift => batchDeleteOp(env, `users/${uid}/giftWall/${gift.id}`));
+      for (let i = 0; i < writes.length; i += 500) {
+        await batchWrite(env, writes.slice(i, i + 500));
+      }
+      deleted += gifts.length;
     }
 
-    return json({ success: true, deleted: giftWall.length + giftWallSenders.length });
+    return json({ success: true, deleted });
   });
 
   // ── Reset all coins ──
@@ -572,6 +582,159 @@ function registerAdminCleanupRoutes(router) {
 
     return json({ success: true, deleted: bindings.length });
   });
+
+  // ── Backfill userType for users missing it ──
+  router.post('/api/cleanup/backfill-user-type', async (request, env) => {
+    const adminCheck = requireAdmin(request);
+    if (adminCheck) return adminCheck;
+
+    const users = await queryCollection(env, 'users', { limit: 5000 });
+    const missing = users.filter(u => !u.userType && !u.user_type);
+
+    if (missing.length === 0) {
+      return json({ success: true, updated: 0, message: 'All users already have a userType' });
+    }
+
+    const writes = missing.map(u =>
+      batchUpdateOp(env, `users/${u.uid ?? u.id}`, { userType: 'MEMBER' })
+    );
+    for (let i = 0; i < writes.length; i += 500) {
+      await batchWrite(env, writes.slice(i, i + 500));
+    }
+
+    return json({ success: true, updated: missing.length });
+  });
+
+  // ── Delete all private messages (1-on-1 conversations) + R2 media ──
+  router.post('/api/cleanup/all-private-messages', async (request, env) => {
+    const adminCheck = requireAdmin(request);
+    if (adminCheck) return adminCheck;
+
+    // Get all non-group conversations
+    const allConvs = await queryCollection(env, 'conversations', { limit: 5000 });
+    const pms = allConvs.filter(c => !c.isGroup);
+
+    if (pms.length === 0) {
+      return json({ success: true, deleted: 0, mediaDeleted: 0, message: 'No private messages found' });
+    }
+
+    // Collect image URLs from messages before deleting
+    let mediaDeleted = 0;
+    const CDN_PREFIX = 'https://images.shytalk.shyden.co.uk/';
+
+    for (const conv of pms) {
+      const messages = await queryCollection(env, `conversations/${conv.id}/messages`, {});
+      for (const msg of messages) {
+        const urls = msg.imageUrls || [];
+        for (const url of urls) {
+          if (url && url.startsWith(CDN_PREFIX)) {
+            try { await env.R2_BUCKET.delete(url.slice(CDN_PREFIX.length)); mediaDeleted++; } catch (_) {}
+          }
+        }
+      }
+      await deleteConversation(env, conv.id);
+    }
+
+    return json({ success: true, deleted: pms.length, mediaDeleted });
+  });
+
+  // ── Delete all group chats + R2 media ──
+  router.post('/api/cleanup/all-group-chats', async (request, env) => {
+    const adminCheck = requireAdmin(request);
+    if (adminCheck) return adminCheck;
+
+    const allConvs = await queryCollection(env, 'conversations', {
+      where: fieldFilter('isGroup', 'EQUAL', true),
+      limit: 5000,
+    });
+
+    if (allConvs.length === 0) {
+      return json({ success: true, deleted: 0, mediaDeleted: 0, message: 'No group chats found' });
+    }
+
+    const CDN_PREFIX = 'https://images.shytalk.shyden.co.uk/';
+    let mediaDeleted = 0;
+
+    for (const conv of allConvs) {
+      // Delete group photo from R2
+      const photoUrl = conv.groupPhotoUrl || conv.group_photo_url;
+      if (photoUrl && photoUrl.startsWith(CDN_PREFIX)) {
+        try { await env.R2_BUCKET.delete(photoUrl.slice(CDN_PREFIX.length)); mediaDeleted++; } catch (_) {}
+      }
+      // Delete message images
+      const messages = await queryCollection(env, `conversations/${conv.id}/messages`, {});
+      for (const msg of messages) {
+        const urls = msg.imageUrls || [];
+        for (const url of urls) {
+          if (url && url.startsWith(CDN_PREFIX)) {
+            try { await env.R2_BUCKET.delete(url.slice(CDN_PREFIX.length)); mediaDeleted++; } catch (_) {}
+          }
+        }
+      }
+      await deleteConversation(env, conv.id);
+    }
+
+    return json({ success: true, deleted: allConvs.length, mediaDeleted });
+  });
+
+  // ── Delete all closed rooms + subcollections ──
+  router.post('/api/cleanup/all-rooms', async (request, env) => {
+    const adminCheck = requireAdmin(request);
+    if (adminCheck) return adminCheck;
+
+    const closedRooms = await queryCollection(env, 'rooms', {
+      where: fieldFilter('state', 'EQUAL', 'CLOSED'),
+      limit: 5000,
+    });
+
+    if (closedRooms.length === 0) {
+      return json({ success: true, deleted: 0, message: 'No closed rooms found' });
+    }
+
+    for (const room of closedRooms) {
+      await deleteRoom(env, room.id);
+    }
+
+    return json({ success: true, deleted: closedRooms.length });
+  });
+
+  // ── Delete all broadcasts ──
+  router.post('/api/cleanup/all-broadcasts', async (request, env) => {
+    const adminCheck = requireAdmin(request);
+    if (adminCheck) return adminCheck;
+
+    const broadcasts = await queryCollection(env, 'broadcasts', { limit: 5000 });
+
+    if (broadcasts.length === 0) {
+      return json({ success: true, deleted: 0, message: 'No broadcasts found' });
+    }
+
+    const writes = broadcasts.map(b => batchDeleteOp(env, `broadcasts/${b.id}`));
+    for (let i = 0; i < writes.length; i += 500) {
+      await batchWrite(env, writes.slice(i, i + 500));
+    }
+
+    return json({ success: true, deleted: broadcasts.length });
+  });
+
+  // ── Delete all admin audit logs ──
+  router.post('/api/cleanup/all-audit-logs', async (request, env) => {
+    const adminCheck = requireAdmin(request);
+    if (adminCheck) return adminCheck;
+
+    const logs = await queryCollection(env, 'adminAuditLog', { limit: 5000 });
+
+    if (logs.length === 0) {
+      return json({ success: true, deleted: 0, message: 'No audit logs found' });
+    }
+
+    const writes = logs.map(l => batchDeleteOp(env, `adminAuditLog/${l.id}`));
+    for (let i = 0; i < writes.length; i += 500) {
+      await batchWrite(env, writes.slice(i, i + 500));
+    }
+
+    return json({ success: true, deleted: logs.length });
+  });
 }
 
 /**
@@ -595,6 +758,26 @@ async function deleteConversation(env, convId) {
     ...userSettings.map(s => batchDeleteOp(env, `conversations/${convId}/userSettings/${s.id}`)),
     ...mutes.map(m => batchDeleteOp(env, `conversations/${convId}/mutes/${m.id}`)),
     batchDeleteOp(env, `conversations/${convId}`),
+  ];
+
+  for (let i = 0; i < writes.length; i += 500) {
+    await batchWrite(env, writes.slice(i, i + 500));
+  }
+}
+
+/**
+ * Delete a room and all its associated subcollection data from Firestore.
+ */
+async function deleteRoom(env, roomId) {
+  const [messages, seatRequests] = await Promise.all([
+    queryCollection(env, `rooms/${roomId}/messages`, {}),
+    queryCollection(env, `rooms/${roomId}/seatRequests`, {}),
+  ]);
+
+  const writes = [
+    ...messages.map(m => batchDeleteOp(env, `rooms/${roomId}/messages/${m.id}`)),
+    ...seatRequests.map(s => batchDeleteOp(env, `rooms/${roomId}/seatRequests/${s.id}`)),
+    batchDeleteOp(env, `rooms/${roomId}`),
   ];
 
   for (let i = 0; i < writes.length; i += 500) {

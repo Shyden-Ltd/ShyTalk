@@ -19,6 +19,7 @@ const { json, jsonError, generateId, now, parseBody } = require('../utils');
 const { requireAdmin } = require('../middleware/auth');
 const { sendSystemPm } = require('../utils/system-pm');
 const { computeDisplayScore } = require('../utils/gcs');
+const { getAccessToken } = require('../utils/fcm');
 const {
   getDoc,
   setDoc,
@@ -30,6 +31,40 @@ const {
   fieldFilter,
   orderBy,
 } = require('../utils/firestore');
+
+/**
+ * Look up a Firebase Auth user's email by UID.
+ * Uses the Identity Toolkit REST API with service account credentials.
+ */
+async function getFirebaseAuthEmail(env, uid) {
+  try {
+    const accessToken = await getAccessToken(env);
+    const projectId = env.FIREBASE_PROJECT_ID;
+    const resp = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/projects/${projectId}/accounts:lookup`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ localId: [uid] }),
+      }
+    );
+    if (!resp.ok) {
+      const text = await resp.text();
+      console.error(`Firebase Auth lookup failed (${resp.status}): ${text}`);
+      return null;
+    }
+    const data = await resp.json();
+    const authUser = data.users?.[0];
+    // Return email or phone number as fallback
+    return authUser?.email ?? null;
+  } catch (err) {
+    console.error('Firebase Auth email lookup error:', err.message);
+    return null;
+  }
+}
 
 function registerAdminUserRoutes(router) {
 
@@ -45,10 +80,38 @@ function registerAdminUserRoutes(router) {
     const user = await getDoc(env, `users/${params.uid}`);
     if (!user) return jsonError('User not found', 404);
 
+    // Normalize snake_case → camelCase for admin panel compatibility
+    user.displayName      = user.displayName      ?? user.display_name      ?? null;
+    user.profilePhotoUrl  = user.profilePhotoUrl  ?? user.profile_photo_url ?? null;
+    user.coverPhotoUrl    = user.coverPhotoUrl    ?? user.cover_photo_url   ?? null;
+    user.dateOfBirth      = user.dateOfBirth      ?? user.date_of_birth     ?? null;
+    user.uniqueId         = user.uniqueId         ?? user.unique_id         ?? null;
+    user.isSuperShy       = user.isSuperShy       ?? user.is_super_shy      ?? false;
+    user.superShyExpiry   = user.superShyExpiry   ?? user.super_shy_expiry  ?? null;
+    user.superShyTier     = user.superShyTier     ?? user.super_shy_tier    ?? null;
+    user.loginStreak      = user.loginStreak      ?? user.login_streak      ?? 0;
+    user.shyCoins         = user.shyCoins         ?? user.shy_coins         ?? 0;
+    user.shyBeans         = user.shyBeans         ?? user.shy_beans         ?? 0;
+    user.warningCount     = user.warningCount     ?? user.warning_count     ?? 0;
+    user.luckScore        = user.luckScore        ?? user.luck_score        ?? 0;
+    user.pityCounter      = user.pityCounter      ?? user.pity_counter      ?? 0;
+    user.gcsScore         = user.gcsScore         ?? user.gcs_score         ?? 100;
+    user.gcsLastDeductionAt = user.gcsLastDeductionAt ?? user.gcs_last_deduction_at ?? null;
+    user.hasActiveWarning = user.hasActiveWarning ?? user.has_active_warning ?? false;
+    user.warningReason    = user.warningReason    ?? user.warning_reason    ?? null;
+    user.userType         = user.userType         ?? user.user_type         ?? 'MEMBER';
+
+    // Fetch email from Firebase Auth if not in Firestore doc
+    if (!user.email) {
+      user.email = await getFirebaseAuthEmail(env, params.uid);
+      // Backfill to Firestore for future lookups
+      if (user.email) {
+        updateDoc(env, `users/${params.uid}`, { email: user.email }).catch(() => {});
+      }
+    }
+
     // Enrich with GCS display score
-    const gcsScore = user.gcsScore ?? user.gcs_score ?? 100;
-    const gcsLastDeductionAt = user.gcsLastDeductionAt ?? user.gcs_last_deduction_at ?? null;
-    user.gcsDisplayScore = computeDisplayScore(gcsScore, gcsLastDeductionAt);
+    user.gcsDisplayScore = computeDisplayScore(user.gcsScore, user.gcsLastDeductionAt);
 
     return json(user);
   });
@@ -98,7 +161,7 @@ function registerAdminUserRoutes(router) {
       createdAt:    now(),
     });
 
-    return json({ success: true });
+    return json({ success: true, updatedFields: Object.keys(updates) });
   });
 
   // ══════════════════════════════════════════════════════════════

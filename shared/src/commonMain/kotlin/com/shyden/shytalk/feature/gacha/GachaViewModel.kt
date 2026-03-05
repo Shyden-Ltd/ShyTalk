@@ -212,8 +212,7 @@ class GachaViewModel(
                 }
                 is Resource.Loading -> {}
             }
-            // Delay to allow cloud function to write transaction doc
-            loadSpinHistory(delayMs = 2000)
+            loadSpinHistory()
         }
     }
 

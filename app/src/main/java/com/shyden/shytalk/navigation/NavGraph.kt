@@ -754,16 +754,36 @@ fun NavGraph(
         composable(Screen.Wallet.route) {
             val walletViewModel: WalletViewModel = org.koin.compose.viewmodel.koinViewModel()
             val billingService: BillingService = koinInject()
+            val walletContext = LocalContext.current
+            val walletScope = rememberCoroutineScope()
 
             WalletScreen(
                 viewModel = walletViewModel,
                 onNavigateBack = { navController.safePopBackStack() },
                 onNavigateToTransactions = { navController.navigate(Screen.Transactions.route) },
                 onPurchasePackage = { pkg ->
-                    // TODO: Launch billing flow for coin package
+                    walletScope.launch {
+                        val products = billingService.queryProducts(listOf(pkg.productId))
+                        val details = products.firstOrNull()
+                        if (details != null) {
+                            val activity = walletContext as android.app.Activity
+                            billingService.launchPurchaseFlow(activity, details)
+                        }
+                    }
                 },
                 onPurchaseSubscription = { productId ->
-                    // TODO: Launch billing flow for subscription
+                    walletScope.launch {
+                        val products = billingService.queryProducts(
+                            listOf(productId),
+                            com.android.billingclient.api.BillingClient.ProductType.SUBS
+                        )
+                        val details = products.firstOrNull()
+                        if (details != null) {
+                            val activity = walletContext as android.app.Activity
+                            val offerToken = details.subscriptionOfferDetails?.firstOrNull()?.offerToken
+                            billingService.launchPurchaseFlow(activity, details, offerToken)
+                        }
+                    }
                 }
             )
         }

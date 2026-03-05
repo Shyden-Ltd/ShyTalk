@@ -192,8 +192,9 @@ export default {
         await closeStaleOwnerAwayRooms(env);
         break;
 
-      case '0 2 * * *': // Backup user profiles to R2 (daily 02:00)
+      case '0 2 * * *': // Backup user profiles to R2 + cleanup old rooms (daily 02:00)
         await backupUserProfiles(env);
+        await cleanupClosedRooms(env);
         break;
 
       default:
@@ -366,6 +367,38 @@ async function backupUserProfiles(env) {
       console.log(`Backup: pruned old backup ${obj.key}`);
     }
   }
+}
+
+async function cleanupClosedRooms(env) {
+  const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+
+  const closedRooms = await queryCollection(env, 'rooms', {
+    where: fieldFilter('state', 'EQUAL', 'CLOSED'),
+    limit: 500,
+  });
+
+  // Only delete rooms closed more than 7 days ago
+  const old = closedRooms.filter(r => r.closedAt && r.closedAt < sevenDaysAgo);
+  if (old.length === 0) return;
+
+  for (const room of old) {
+    const [messages, seatRequests] = await Promise.all([
+      queryCollection(env, `rooms/${room.id}/messages`, {}),
+      queryCollection(env, `rooms/${room.id}/seatRequests`, {}),
+    ]);
+
+    const writes = [
+      ...messages.map(m => batchDeleteOp(env, `rooms/${room.id}/messages/${m.id}`)),
+      ...seatRequests.map(s => batchDeleteOp(env, `rooms/${room.id}/seatRequests/${s.id}`)),
+      batchDeleteOp(env, `rooms/${room.id}`),
+    ];
+
+    for (let i = 0; i < writes.length; i += 500) {
+      await batchWrite(env, writes.slice(i, i + 500));
+    }
+  }
+
+  console.log(`Cleaned up ${old.length} closed rooms (older than 7 days)`);
 }
 
 async function cleanupOrphanedStorage(env) {

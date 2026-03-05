@@ -58,10 +58,14 @@ function registerAdminEconomyRoutes(router) {
     const body = await parseBody(request);
     if (!body) return jsonError('Invalid JSON body', 400);
 
-    const { amount, currency, reason } = body;
+    const { reason } = body;
+    const currency = (body.currency || '').toLowerCase();
+    // Support both signed amount and operation+amount
+    let amount = body.amount;
     if (typeof amount !== 'number' || amount === 0) {
       return jsonError('amount must be a non-zero number', 400);
     }
+    if (body.operation === 'deduct' && amount > 0) amount = -amount;
     if (!['coins', 'beans'].includes(currency)) {
       return jsonError('currency must be "coins" or "beans"', 400);
     }
@@ -263,7 +267,11 @@ function registerAdminEconomyRoutes(router) {
       }),
     ]);
 
-    return json({ success: true });
+    return json({
+      success: true,
+      giftName: gift.name ?? gift.giftName ?? body.giftId,
+      coinValue: gift.coinValue ?? gift.coin_value ?? 0,
+    });
   });
 
   // ── Gacha guarantee: revoke ──

@@ -36,7 +36,7 @@ crons = [
   "0 0 * * *",    # checkSubscriptionStatus + cleanExpiredBackpackItems — daily 00:00 UTC
   # updateGiftRankings cron REMOVED — rankings now updated incrementally in economy.js
   "*/5 * * * *",  # closeStaleOwnerAwayRooms — every 5 minutes
-  "0 2 * * *",    # backupUserProfiles — daily 02:00 UTC to R2
+  "0 2 * * *",    # backupUserProfiles + cleanupClosedRooms — daily 02:00 UTC
 ]
 
 # ── Environment ──────────────────────────────────────────────────

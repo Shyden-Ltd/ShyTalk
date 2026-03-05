@@ -94,17 +94,25 @@ function registerUserRoutes(router) {
     const existing = await getDoc(env, `users/${uid}`);
 
     if (existing) {
-      // Update lastSeen only
-      await updateDoc(env, `users/${uid}`, { lastSeen: now() });
+      // Update lastSeen + backfill missing fields
+      const updates = { lastSeen: now() };
+      const incomingEmail = body.email || null;
+      if (incomingEmail && !existing.email) updates.email = incomingEmail;
+      if (!existing.userType) updates.userType = 'MEMBER';
+      await updateDoc(env, `users/${uid}`, updates);
       return json({ success: true, created: false });
     }
 
     // Create new user doc with camelCase fields
     const photoUrl = body.profilePhotoUrl || body.profile_photo_url || null;
+    const dob = body.dateOfBirth || body.date_of_birth || null;
     await setDoc(env, `users/${uid}`, {
       uid,
       displayName:     body.displayName || body.display_name || null,
+      email:           body.email || null,
       profilePhotoUrl: photoUrl,
+      dateOfBirth:     dob,
+      userType:        'MEMBER',
       blockedUserIds:  [],
       followingIds:    [],
       followerIds:     [],
@@ -207,10 +215,15 @@ function registerUserRoutes(router) {
     if (request.auth.uid !== params.uid) return jsonError('Forbidden', 403);
     if (params.uid === targetUid) return jsonError('Cannot follow yourself', 400);
 
-    await Promise.all([
-      arrayUnionField(env, `users/${params.uid}`, 'followingIds', [targetUid]),
-      arrayUnionField(env, `users/${targetUid}`, 'followerIds', [params.uid]),
-    ]);
+    try {
+      await Promise.all([
+        arrayUnionField(env, `users/${params.uid}`, 'followingIds', [targetUid]),
+        arrayUnionField(env, `users/${targetUid}`, 'followerIds', [params.uid]),
+      ]);
+    } catch (err) {
+      console.error('Follow failed:', err);
+      return jsonError('Failed to follow user', 500);
+    }
 
     return json({ success: true });
   });
@@ -222,10 +235,15 @@ function registerUserRoutes(router) {
     if (!targetUid) return jsonError('targetUserId required', 400);
     if (request.auth.uid !== params.uid) return jsonError('Forbidden', 403);
 
-    await Promise.all([
-      arrayRemoveField(env, `users/${params.uid}`, 'followingIds', [targetUid]),
-      arrayRemoveField(env, `users/${targetUid}`, 'followerIds', [params.uid]),
-    ]);
+    try {
+      await Promise.all([
+        arrayRemoveField(env, `users/${params.uid}`, 'followingIds', [targetUid]),
+        arrayRemoveField(env, `users/${targetUid}`, 'followerIds', [params.uid]),
+      ]);
+    } catch (err) {
+      console.error('Unfollow failed:', err);
+      return jsonError('Failed to unfollow user', 500);
+    }
 
     return json({ success: true });
   });
@@ -237,10 +255,15 @@ function registerUserRoutes(router) {
     if (!followerUid) return jsonError('followerUserId required', 400);
     if (request.auth.uid !== params.uid) return jsonError('Forbidden', 403);
 
-    await Promise.all([
-      arrayRemoveField(env, `users/${params.uid}`, 'followerIds', [followerUid]),
-      arrayRemoveField(env, `users/${followerUid}`, 'followingIds', [params.uid]),
-    ]);
+    try {
+      await Promise.all([
+        arrayRemoveField(env, `users/${params.uid}`, 'followerIds', [followerUid]),
+        arrayRemoveField(env, `users/${followerUid}`, 'followingIds', [params.uid]),
+      ]);
+    } catch (err) {
+      console.error('Remove follower failed:', err);
+      return jsonError('Failed to remove follower', 500);
+    }
 
     return json({ success: true });
   });

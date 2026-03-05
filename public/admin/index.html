@@ -137,8 +137,8 @@
           margin: 0 auto;
         }
 
-        /* Narrow panels (form-heavy) get a comfortable reading width */
-        #user-form, .search-bar { max-width: 800px; }
+        /* Search bar gets a comfortable reading width */
+        .search-bar { max-width: 800px; }
 
         /* --- Search --- */
         .search-bar {
@@ -2963,10 +2963,46 @@
                     <button id="clear-device-bindings-btn">Clear All Device Bindings</button>
                     <div class="maintenance-result" id="clear-device-bindings-result"></div>
                 </div>
+                <div class="maintenance-card">
+                    <h3>Backfill User Types</h3>
+                    <p>Set userType to "MEMBER" for all users that are missing it. Safe to run multiple times.</p>
+                    <button id="backfill-user-type-btn">Backfill User Types</button>
+                    <div class="maintenance-result" id="backfill-user-type-result"></div>
+                </div>
+                <div class="maintenance-card">
+                    <h3>Private Messages</h3>
+                    <p>Delete all 1-on-1 private message conversations and their associated images from storage.</p>
+                    <button id="clear-pms-btn">Delete All Private Messages</button>
+                    <div class="maintenance-result" id="clear-pms-result"></div>
+                </div>
+                <div class="maintenance-card">
+                    <h3>Group Chats</h3>
+                    <p>Delete all group chat conversations, their messages, and associated media (group photos, images).</p>
+                    <button id="clear-groups-btn">Delete All Group Chats</button>
+                    <div class="maintenance-result" id="clear-groups-result"></div>
+                </div>
+                <div class="maintenance-card">
+                    <h3>Closed Rooms</h3>
+                    <p>Delete all closed rooms and their messages/seat requests. Active and owner-away rooms are preserved. Also runs automatically daily (rooms closed &gt; 7 days).</p>
+                    <button id="clear-rooms-btn">Delete All Closed Rooms</button>
+                    <div class="maintenance-result" id="clear-rooms-result"></div>
+                </div>
+                <div class="maintenance-card">
+                    <h3>Broadcasts</h3>
+                    <p>Delete all gift send and gacha win broadcast records.</p>
+                    <button id="clear-broadcasts-btn">Delete All Broadcasts</button>
+                    <div class="maintenance-result" id="clear-broadcasts-result"></div>
+                </div>
+                <div class="maintenance-card">
+                    <h3>Audit Logs</h3>
+                    <p>Delete all admin audit log entries.</p>
+                    <button id="clear-audit-logs-btn">Delete All Audit Logs</button>
+                    <div class="maintenance-result" id="clear-audit-logs-result"></div>
+                </div>
                 <div class="maintenance-card nuclear">
                     <h3>&#9762; RESET ALL</h3>
                     <p>Runs every maintenance action above in sequence. This will wipe system messages,
-                        reports, warnings, orphaned storage, backpacks, gift walls, coins, beans, spin history, Super Shy, and appeals.</p>
+                        reports, warnings, orphaned storage, backpacks, gift walls, coins, beans, spin history, Super Shy, appeals, private messages, group chats, closed rooms, broadcasts, and audit logs.</p>
                     <div class="nuclear-actions">
                         <span>System Messages</span>
                         <span>Reports</span>
@@ -2979,6 +3015,11 @@
                         <span>Beans</span>
                         <span>Spin History</span>
                         <span>Super Shy</span>
+                        <span>Private Messages</span>
+                        <span>Group Chats</span>
+                        <span>Closed Rooms</span>
+                        <span>Broadcasts</span>
+                        <span>Audit Logs</span>
                     </div>
                     <button id="reset-all-btn">RESET EVERYTHING</button>
                     <div class="maintenance-result" id="reset-all-result"></div>
@@ -2991,9 +3032,9 @@
             <div class="nuclear-dialog">
                 <div class="step-indicator" id="nuclear-step-label">Step 1 of 3</div>
                 <h2 id="nuclear-title">Are you sure?</h2>
-                <p id="nuclear-desc">This will run ALL 11 maintenance actions and permanently delete
+                <p id="nuclear-desc">This will run ALL 16 maintenance actions and permanently delete
                     system messages, reports, warnings, orphaned files, backpacks, gift walls, coins,
-                    beans, spin history, Super Shy, and appeals for every user. This cannot be undone.</p>
+                    beans, spin history, Super Shy, appeals, private messages, group chats, closed rooms, broadcasts, and audit logs. This cannot be undone.</p>
                 <div id="nuclear-input-wrap" style="display:none;">
                     <input type="text" id="nuclear-confirm-input" placeholder="Type here..." autocomplete="off">
                 </div>
@@ -3024,6 +3065,11 @@
                     <div class="step" id="np-beans">&#9679; Empty beans</div>
                     <div class="step" id="np-spin-history">&#9679; Clear spin history</div>
                     <div class="step" id="np-supershy">&#9679; Remove Super Shy</div>
+                    <div class="step" id="np-pms">&#9679; Delete private messages</div>
+                    <div class="step" id="np-groups">&#9679; Delete group chats</div>
+                    <div class="step" id="np-rooms">&#9679; Delete closed rooms</div>
+                    <div class="step" id="np-broadcasts">&#9679; Delete broadcasts</div>
+                    <div class="step" id="np-audit-logs">&#9679; Delete audit logs</div>
                 </div>
             </div>
         </div>
@@ -4315,9 +4361,9 @@
 
     function populateGcsSection(data) {
       gcsSection.style.display = "block";
-      const floor = data.goodCharacterScore ?? 100;
-      const lastDeduction = data.goodCharacterLastDeductionAt || null;
-      const display = computeDisplayScore(floor, lastDeduction);
+      const floor = data.gcsScore ?? data.goodCharacterScore ?? 100;
+      const lastDeduction = data.gcsLastDeductionAt ?? data.goodCharacterLastDeductionAt ?? null;
+      const display = data.gcsDisplayScore ?? computeDisplayScore(floor, lastDeduction);
       gcsBadgeUser.className = `gcs-badge ${gcsClass(display)}`;
       gcsBadgeUser.textContent = `${gcsEmoji(display)} ${display}`;
       gcsFloor.textContent = floor;
@@ -4496,7 +4542,7 @@
         $("#stat-pending").textContent = stats.pendingCount;
         $("#stat-resolved-today").textContent = stats.resolvedToday;
         $("#stat-avg-response").textContent = stats.avgResponseHours != null ? `${stats.avgResponseHours}h` : "-";
-        $("#stat-reviewers").textContent = stats.activeReviewers;
+        $("#stat-reviewers").textContent = Array.isArray(stats.activeReviewers) ? stats.activeReviewers.length : (stats.activeReviewers || 0);
 
         // Update tab badge
         updateReportBadge(stats.pendingCount);
@@ -4613,7 +4659,7 @@
         card.dataset.uid = user.uid;
         reportCards.push(card);
 
-        const gcsScore = user.gcs?.displayScore ?? 100;
+        const gcsScore = user.gcsDisplayScore ?? 100;
 
         // Header
         let headerHtml = `<div class="report-card-header">`;
@@ -6353,6 +6399,176 @@
       btn.textContent = "Clear All Device Bindings";
     });
 
+    $("#backfill-user-type-btn").addEventListener("click", async () => {
+      const btn = $("#backfill-user-type-btn");
+      const result = $("#backfill-user-type-result");
+
+      btn.disabled = true;
+      btn.textContent = "Backfilling...";
+      result.style.display = "none";
+
+      try {
+        const token = await auth.currentUser.getIdToken();
+        const resp = await fetch(`${API_BASE}/api/cleanup/backfill-user-type`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || "Request failed");
+        result.className = "maintenance-result success";
+        result.textContent = data.updated > 0
+          ? `Set userType to MEMBER for ${data.updated} user(s)`
+          : data.message;
+        result.style.display = "block";
+      } catch (err) {
+        result.className = "maintenance-result error";
+        result.textContent = err.message;
+        result.style.display = "block";
+      }
+      btn.disabled = false;
+      btn.textContent = "Backfill User Types";
+    });
+
+    // ── Delete all private messages ──
+    $("#clear-pms-btn").addEventListener("click", async () => {
+      const btn = $("#clear-pms-btn");
+      const result = $("#clear-pms-result");
+      if (!confirm("Delete ALL private message conversations and their images? This cannot be undone.")) return;
+      btn.disabled = true;
+      btn.textContent = "Deleting...";
+      result.style.display = "none";
+      try {
+        const token = await auth.currentUser.getIdToken();
+        const resp = await fetch(`${API_BASE}/api/cleanup/all-private-messages`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || "Request failed");
+        result.className = "maintenance-result success";
+        result.textContent = `Deleted ${data.deleted} conversation(s), ${data.mediaDeleted} media file(s)`;
+        result.style.display = "block";
+      } catch (err) {
+        result.className = "maintenance-result error";
+        result.textContent = err.message;
+        result.style.display = "block";
+      }
+      btn.disabled = false;
+      btn.textContent = "Delete All Private Messages";
+    });
+
+    // ── Delete all group chats ──
+    $("#clear-groups-btn").addEventListener("click", async () => {
+      const btn = $("#clear-groups-btn");
+      const result = $("#clear-groups-result");
+      if (!confirm("Delete ALL group chats, their messages, and associated media? This cannot be undone.")) return;
+      btn.disabled = true;
+      btn.textContent = "Deleting...";
+      result.style.display = "none";
+      try {
+        const token = await auth.currentUser.getIdToken();
+        const resp = await fetch(`${API_BASE}/api/cleanup/all-group-chats`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || "Request failed");
+        result.className = "maintenance-result success";
+        result.textContent = `Deleted ${data.deleted} group chat(s), ${data.mediaDeleted} media file(s)`;
+        result.style.display = "block";
+      } catch (err) {
+        result.className = "maintenance-result error";
+        result.textContent = err.message;
+        result.style.display = "block";
+      }
+      btn.disabled = false;
+      btn.textContent = "Delete All Group Chats";
+    });
+
+    // ── Delete all closed rooms ──
+    $("#clear-rooms-btn").addEventListener("click", async () => {
+      const btn = $("#clear-rooms-btn");
+      const result = $("#clear-rooms-result");
+      if (!confirm("Delete ALL closed rooms and their messages? Active rooms will not be affected.")) return;
+      btn.disabled = true;
+      btn.textContent = "Deleting...";
+      result.style.display = "none";
+      try {
+        const token = await auth.currentUser.getIdToken();
+        const resp = await fetch(`${API_BASE}/api/cleanup/all-rooms`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || "Request failed");
+        result.className = "maintenance-result success";
+        result.textContent = `Deleted ${data.deleted} closed room(s)`;
+        result.style.display = "block";
+      } catch (err) {
+        result.className = "maintenance-result error";
+        result.textContent = err.message;
+        result.style.display = "block";
+      }
+      btn.disabled = false;
+      btn.textContent = "Delete All Closed Rooms";
+    });
+
+    // ── Delete all broadcasts ──
+    $("#clear-broadcasts-btn").addEventListener("click", async () => {
+      const btn = $("#clear-broadcasts-btn");
+      const result = $("#clear-broadcasts-result");
+      if (!confirm("Delete ALL broadcast records?")) return;
+      btn.disabled = true;
+      btn.textContent = "Deleting...";
+      result.style.display = "none";
+      try {
+        const token = await auth.currentUser.getIdToken();
+        const resp = await fetch(`${API_BASE}/api/cleanup/all-broadcasts`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || "Request failed");
+        result.className = "maintenance-result success";
+        result.textContent = `Deleted ${data.deleted} broadcast(s)`;
+        result.style.display = "block";
+      } catch (err) {
+        result.className = "maintenance-result error";
+        result.textContent = err.message;
+        result.style.display = "block";
+      }
+      btn.disabled = false;
+      btn.textContent = "Delete All Broadcasts";
+    });
+
+    // ── Delete all audit logs ──
+    $("#clear-audit-logs-btn").addEventListener("click", async () => {
+      const btn = $("#clear-audit-logs-btn");
+      const result = $("#clear-audit-logs-result");
+      if (!confirm("Delete ALL admin audit log entries?")) return;
+      btn.disabled = true;
+      btn.textContent = "Deleting...";
+      result.style.display = "none";
+      try {
+        const token = await auth.currentUser.getIdToken();
+        const resp = await fetch(`${API_BASE}/api/cleanup/all-audit-logs`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || "Request failed");
+        result.className = "maintenance-result success";
+        result.textContent = `Deleted ${data.deleted} audit log(s)`;
+        result.style.display = "block";
+      } catch (err) {
+        result.className = "maintenance-result error";
+        result.textContent = err.message;
+        result.style.display = "block";
+      }
+      btn.disabled = false;
+      btn.textContent = "Delete All Audit Logs";
+    });
+
     // =====================================================
     // --- Reset All (nuclear) ---
     // =====================================================
@@ -6520,7 +6736,7 @@
         step = 1;
         stepLabel.textContent = "Step 1 of 3";
         title.textContent = "Are you absolutely sure?";
-        desc.textContent = "This will run ALL 9 maintenance actions and permanently delete system messages, reports, warnings, orphaned files, backpacks, gift walls, coins, beans, and spin history for every user. This cannot be undone.";
+        desc.textContent = "This will run ALL 16 maintenance actions and permanently delete system messages, reports, warnings, orphaned files, backpacks, gift walls, coins, beans, spin history, Super Shy, appeals, private messages, group chats, closed rooms, broadcasts, and audit logs for every user. This cannot be undone.";
         inputWrap.style.display = "none";
         confirmInput.value = "";
         btnRow.style.display = "flex";
@@ -6573,7 +6789,7 @@
           step = 2;
           stepLabel.textContent = "Step 2 of 3";
           title.textContent = "This is your last warning";
-          desc.textContent = "Every user will lose their coins, beans, backpack items, gift wall, spin history, and warnings. All reports, system messages, and appeals will be deleted. Orphaned files will be purged.";
+          desc.textContent = "Every user will lose their coins, beans, backpack items, gift wall, spin history, and warnings. All reports, system messages, appeals, private messages, group chats, closed rooms, broadcasts, and audit logs will be deleted. Orphaned files will be purged.";
           proceedBtn.textContent = "Continue to final step";
           return;
         }
@@ -6615,16 +6831,25 @@
 
           const token = await auth.currentUser.getIdToken();
 
-          // Auto-backup before wipe — safety net
+          // Auto-backup before wipe — required safety net
           stepLabel.textContent = "Creating safety backup...";
           try {
-            await fetch(`${API_BASE}/api/admin/backups/trigger`, {
+            const backupResp = await fetch(`${API_BASE}/api/admin/backups/trigger`, {
               method: "POST",
               headers: { "Authorization": `Bearer ${token}` },
             });
+            if (!backupResp.ok) throw new Error("Backup request failed");
             console.log("Pre-wipe backup created");
           } catch (backupErr) {
             console.error("Pre-wipe backup failed:", backupErr);
+            result.className = "maintenance-result error";
+            result.textContent = "Backup failed — reset aborted for safety. Fix backup first.";
+            result.style.display = "block";
+            mainBtn.disabled = false;
+            mainBtn.textContent = "RESET EVERYTHING";
+            setMaintenanceButtonsDisabled(false);
+            overlay.style.display = "none";
+            return;
           }
 
           const actions = [
@@ -6639,6 +6864,11 @@
             { id: "np-beans", endpoint: "all-beans", label: "Beans" },
             { id: "np-spin-history", endpoint: "all-spin-history", label: "Spin history" },
             { id: "np-supershy", endpoint: "all-supershy", label: "Super Shy" },
+            { id: "np-pms", endpoint: "all-private-messages", label: "Private messages" },
+            { id: "np-groups", endpoint: "all-group-chats", label: "Group chats" },
+            { id: "np-rooms", endpoint: "all-rooms", label: "Closed rooms" },
+            { id: "np-broadcasts", endpoint: "all-broadcasts", label: "Broadcasts" },
+            { id: "np-audit-logs", endpoint: "all-audit-logs", label: "Audit logs" },
           ];
 
           let failed = 0;
@@ -6683,7 +6913,7 @@
           title.textContent = failed ? "Some actions failed" : "All done";
           desc.textContent = failed
             ? `${actions.length - failed} of ${actions.length} actions succeeded. Check the results below.`
-            : "All 11 maintenance actions completed successfully.";
+            : "All 16 maintenance actions completed successfully.";
           btnRow.style.display = "flex";
           proceedBtn.style.display = "none";
           cancelBtn.textContent = "Close";

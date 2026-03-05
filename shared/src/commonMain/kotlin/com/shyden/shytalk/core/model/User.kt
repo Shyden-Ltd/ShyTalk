@@ -154,7 +154,7 @@ data class User(
                 ?.filterIsInstance<String>()?.toSet() ?: emptySet(),
             followerIds = (map["followerIds"] as? List<*>)
                 ?.filterIsInstance<String>()?.toSet() ?: emptySet(),
-            dateOfBirth = map["dateOfBirth"]?.let { timestampToMillis(it) },
+            dateOfBirth = (map["dateOfBirth"] ?: map["date_of_birth"])?.let { timestampToMillis(it) },
             hideFollowing = map["hideFollowing"].asBool(),
             hideOnlineStatus = map["hideOnlineStatus"].asBool(),
             hideAge = map["hideAge"].asBool(),

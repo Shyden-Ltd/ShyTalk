@@ -222,18 +222,26 @@ function registerReportRoutes(router) {
         const key = r.reportedUserId;
         if (!grouped[key]) {
           grouped[key] = {
+            uid:            key,
             reportedUserId: key,
-            reportedUser:   r.reportedUser,
+            displayName:    r.reportedUser?.displayName ?? r.reportedUser?.display_name ?? null,
+            profilePhotoUrl: r.reportedUser?.profilePhotoUrl ?? r.reportedUser?.profile_photo_url ?? null,
+            uniqueId:       r.reportedUser?.uniqueId ?? r.reportedUser?.unique_id ?? null,
+            warningCount:   r.reportedUser?.warningCount ?? r.reportedUser?.warning_count ?? 0,
+            isSuspended:    r.reportedUser?.isSuspended ?? r.reportedUser?.is_suspended ?? false,
+            gcsDisplayScore: r.reportedUser?.gcsDisplayScore ?? 100,
             lock:           r.lock,
             reports:        [],
+            reportCount:    0,
           };
         }
         grouped[key].reports.push(r);
+        grouped[key].reportCount = grouped[key].reports.length;
       }
-      return json(Object.values(grouped));
+      return json({ users: Object.values(grouped) });
     }
 
-    return json(enriched);
+    return json({ users: enriched });
   });
 
   // ── Resolve report (admin — full logic) ──

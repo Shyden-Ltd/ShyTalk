@@ -645,7 +645,7 @@ fun LuckySpinOverlay(
 
                         Button(
                             onClick = {
-                                if (spinning) return@Button
+                                if (spinning || showSummary) return@Button
                                 if (!canAfford) {
                                     showCoinShop = true
                                 } else if (!gachaState.isPulling) {

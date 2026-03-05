@@ -278,6 +278,12 @@ class RoomViewModel(
                                 currentUserName = if (uid == state.currentUserId) updatedUser.displayName else state.currentUserName
                             )
                         }
+                        // Re-resolve room limits if the owner's SuperShy status changed
+                        val room = _uiState.value.room
+                        if (room != null && uid == room.ownerId && cached.isSuperShy != updatedUser.isSuperShy) {
+                            resolveRoomDuration()
+                            resolveSeatLimit()
+                        }
                     }
                 }
         }
