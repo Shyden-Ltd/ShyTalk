@@ -98,25 +98,34 @@ function fromFirestoreDoc(doc) {
 // Uses KV to persist the tripped state across Worker invocations.
 
 const CIRCUIT_BREAKER_KEY = 'firestore_circuit_open';
-let circuitOpenCached = false; // In-memory cache to avoid KV reads on every call
+let circuitTrippedLocally = false;
 
 async function isCircuitOpen(env) {
-  if (circuitOpenCached) return true;
   if (!env.KV) return false;
   const val = await env.KV.get(CIRCUIT_BREAKER_KEY);
-  if (val) { circuitOpenCached = true; return true; }
-  return false;
+  if (!val) { circuitTrippedLocally = false; return false; }
+  // Value is the expiry timestamp — check if it's still in the future
+  const expiresAt = parseInt(val, 10);
+  if (isNaN(expiresAt) || Date.now() >= expiresAt) {
+    // Expired — clean up and close the circuit
+    circuitTrippedLocally = false;
+    await env.KV.delete(CIRCUIT_BREAKER_KEY);
+    return false;
+  }
+  return true;
 }
 
 async function tripCircuitBreaker(env) {
-  circuitOpenCached = true;
+  circuitTrippedLocally = true;
   if (!env.KV) return;
-  // Calculate seconds until midnight UTC
+  // Calculate midnight UTC as the expiry time
   const now = new Date();
   const midnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+  const expiresAt = midnight.getTime();
   const ttl = Math.max(Math.ceil((midnight - now) / 1000), 60);
-  await env.KV.put(CIRCUIT_BREAKER_KEY, '1', { expirationTtl: ttl });
-  console.log(`Circuit breaker tripped — Firestore calls disabled for ${ttl}s (until midnight UTC)`);
+  // Store expiry timestamp as value (checked in code), TTL as backup
+  await env.KV.put(CIRCUIT_BREAKER_KEY, String(expiresAt), { expirationTtl: ttl });
+  console.log(`Circuit breaker tripped — Firestore calls disabled until ${midnight.toISOString()}`);
 }
 
 /**
@@ -124,6 +133,10 @@ async function tripCircuitBreaker(env) {
  * On 429: trips the breaker and returns the 429 response (no retry).
  */
 async function firestoreFetch(url, options, env) {
+  // Fast path: if this isolate tripped the breaker, skip the KV check
+  if (circuitTrippedLocally) {
+    return { ok: false, status: 429, text: async () => 'Circuit breaker open — Cloudflare daily limit reached' };
+  }
   if (env && await isCircuitOpen(env)) {
     return { ok: false, status: 429, text: async () => 'Circuit breaker open — Cloudflare daily limit reached' };
   }
