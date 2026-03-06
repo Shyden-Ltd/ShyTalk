@@ -66,6 +66,7 @@ function registerUserRoutes(router) {
       'selfDestructAlertEnabled', 'minGiftAnimationValue',
       'dndEnabled', 'dndStartHour', 'dndStartMinute', 'dndEndHour', 'dndEndMinute',
       'acceptedLegalVersion', 'currentRoomId', 'lastRoomName',
+      'language',
     ];
 
     const updates = {};
@@ -119,6 +120,7 @@ function registerUserRoutes(router) {
       followerIds:     [],
       fcmTokens:       [],
       aliases:         {},
+      language:        body.language || 'en',
       stalkerCount:    0,
       newStalkerCount: 0,
       createdAt:       now(),

@@ -70,6 +70,7 @@ router.patch('/users/:uid', async (req, res) => {
       'selfDestructAlertEnabled', 'minGiftAnimationValue',
       'dndEnabled', 'dndStartHour', 'dndStartMinute', 'dndEndHour', 'dndEndMinute',
       'acceptedLegalVersion', 'currentRoomId', 'lastRoomName',
+      'language',
     ];
 
     const updates = {};
@@ -128,6 +129,7 @@ router.post('/users', async (req, res) => {
       followerIds:     [],
       fcmTokens:       [],
       aliases:         {},
+      language:        body.language || 'en',
       stalkerCount:    0,
       newStalkerCount: 0,
       createdAt:       now(),
