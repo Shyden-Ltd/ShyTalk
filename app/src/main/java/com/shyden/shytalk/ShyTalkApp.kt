@@ -12,6 +12,7 @@ import coil3.memory.MemoryCache
 import coil3.request.crossfade
 import com.shyden.shytalk.core.di.appModule
 import com.shyden.shytalk.core.util.Constants
+import com.shyden.shytalk.core.util.LanguagePreference
 import okio.Path.Companion.toOkioPath
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
@@ -42,6 +43,8 @@ class ShyTalkApp : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
+
+        LanguagePreference.init(this)
 
         startKoin {
             androidContext(this@ShyTalkApp)
