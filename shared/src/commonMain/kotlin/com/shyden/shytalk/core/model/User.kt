@@ -65,7 +65,8 @@ data class User(
     val aliases: Map<String, String> = emptyMap(),
     val minGiftAnimationValue: Int = 0,
     val selfDestructAlertEnabled: Boolean = false,
-    val hasClaimedSuperShyTrial: Boolean = false
+    val hasClaimedSuperShyTrial: Boolean = false,
+    val language: String = "en"
 ) {
     val isActivelySuspended: Boolean
         get() {
@@ -135,7 +136,8 @@ data class User(
         "aliases" to aliases,
         "minGiftAnimationValue" to minGiftAnimationValue,
         "selfDestructAlertEnabled" to selfDestructAlertEnabled,
-        "hasClaimedSuperShyTrial" to hasClaimedSuperShyTrial
+        "hasClaimedSuperShyTrial" to hasClaimedSuperShyTrial,
+        "language" to language
     )
 
     companion object {
@@ -208,7 +210,8 @@ data class User(
                 ?.toMap() ?: emptyMap(),
             minGiftAnimationValue = (map["minGiftAnimationValue"] as? Long)?.toInt() ?: 0,
             selfDestructAlertEnabled = map["selfDestructAlertEnabled"].asBool(),
-            hasClaimedSuperShyTrial = map["hasClaimedSuperShyTrial"].asBool()
+            hasClaimedSuperShyTrial = map["hasClaimedSuperShyTrial"].asBool(),
+            language = map["language"] as? String ?: "en"
         )
     }
 }

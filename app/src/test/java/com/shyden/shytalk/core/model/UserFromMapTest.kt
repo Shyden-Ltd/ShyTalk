@@ -396,6 +396,28 @@ class UserFromMapTest {
         assertEquals(false, map["selfDestructAlertEnabled"])
     }
 
+    // ===== Language preference =====
+
+    @Test
+    fun `fromMap parses language`() {
+        val map = mapOf<String, Any?>("language" to "es")
+        val user = User.fromMap(map, "uid")
+        assertEquals("es", user.language)
+    }
+
+    @Test
+    fun `fromMap defaults language to en when missing`() {
+        val user = User.fromMap(emptyMap(), "uid")
+        assertEquals("en", user.language)
+    }
+
+    @Test
+    fun `toMap includes language`() {
+        val user = User(language = "ja")
+        val map = user.toMap()
+        assertEquals("ja", map["language"])
+    }
+
     @Test
     fun `fromMap of toMap roundtrip preserves suspension fields`() {
         val original = User(
