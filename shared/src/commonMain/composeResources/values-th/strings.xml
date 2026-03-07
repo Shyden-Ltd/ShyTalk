@@ -1,0 +1,471 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common actions -->
+    <string name="all_caps">ทั้งหมด</string>
+    <string name="back">กลับ</string>
+    <string name="cancel">ยกเลิก</string>
+    <string name="change">เปลี่ยน</string>
+    <string name="close">ปิด</string>
+    <string name="confirm">ยืนยัน</string>
+    <string name="continue_button">ดำเนินการต่อ</string>
+    <string name="create">สร้าง</string>
+    <string name="delete">ลบ</string>
+    <string name="done">เสร็จสิ้น</string>
+    <string name="edit">แก้ไข</string>
+    <string name="error_generic">เกิดข้อผิดพลาด</string>
+    <string name="got_it">เข้าใจแล้ว</string>
+    <string name="learn_more">เรียนรู้เพิ่มเติม</string>
+    <string name="loading">กำลังโหลด…</string>
+    <string name="maybe_later">ไว้ทีหลัง</string>
+    <string name="message_action">ส่งข้อความ</string>
+    <string name="next">ถัดไป</string>
+    <string name="ok">ตกลง</string>
+    <string name="retry">ลองใหม่</string>
+    <string name="save">บันทึก</string>
+    <string name="send">ส่ง</string>
+    <string name="sending">กำลังส่ง...</string>
+    <string name="transfer">โอน</string>
+    <string name="unknown">ไม่ทราบ</string>
+    <string name="using">กำลังใช้...</string>
+    <string name="you">คุณ</string>
+
+    <!-- Message bubbles -->
+    <string name="edited">แก้ไขแล้ว</string>
+    <string name="tap_to_join">แตะเพื่อเข้าร่วม</string>
+    <string name="message_recalled_by_you">คุณเรียกคืนข้อความนี้แล้ว</string>
+    <string name="message_recalled">ข้อความนี้ถูกเรียกคืนแล้ว</string>
+    <string name="message_hidden_by_mod">ข้อความนี้ถูกซ่อนโดยผู้ดูแล</string>
+    <string name="invite_to_mic">เชิญพูดไมค์</string>
+    <string name="closed">ปิดแล้ว</string>
+    <string name="edited_count">แก้ไขแล้ว (%1$d)</string>
+    <string name="read">อ่านแล้ว</string>
+    <string name="sent">ส่งแล้ว</string>
+    <string name="sticker">สติกเกอร์</string>
+    <string name="image">รูปภาพ</string>
+
+    <!-- Context menu -->
+    <string name="react">รีแอค</string>
+    <string name="reply">ตอบกลับ</string>
+    <string name="copy">คัดลอก</string>
+    <string name="recall">เรียกคืน</string>
+    <string name="add_to_stickers">เพิ่มในสติกเกอร์</string>
+    <string name="hide_message">ซ่อนข้อความ</string>
+    <string name="report_message">รายงานข้อความ</string>
+
+    <!-- Translation -->
+    <string name="translate">แปล</string>
+    <string name="translated_from">แปลจาก %1$s</string>
+    <string name="show_original">แสดงต้นฉบับ</string>
+    <string name="translation_limit_reached">ถึงขีดจำกัดรายวันแล้ว อัปเกรดเป็น Super Shy เพื่อแปลไม่จำกัด</string>
+    <string name="auto_translate">แปลอัตโนมัติ</string>
+    <string name="auto_translate_description">แปลข้อความขาเข้าเป็นภาษาของคุณโดยอัตโนมัติ</string>
+    <string name="translations_remaining">เหลือการแปลวันนี้ %1$d ครั้ง</string>
+
+    <!-- Settings -->
+    <string name="settings">การตั้งค่า</string>
+    <string name="language">ภาษา</string>
+    <string name="blocked_users">ผู้ใช้ที่ถูกบล็อก</string>
+    <string name="account">บัญชี</string>
+    <string name="privacy">ความเป็นส่วนตัว</string>
+    <string name="notifications">การแจ้งเตือน</string>
+    <string name="permissions">สิทธิ์</string>
+    <string name="about">เกี่ยวกับ</string>
+    <string name="sign_out">ออกจากระบบ</string>
+    <string name="sign_out_confirm">คุณแน่ใจหรือไม่ว่าต้องการออกจากระบบ?</string>
+
+    <!-- Home -->
+    <string name="create_room">สร้างห้อง</string>
+    <string name="create_room_prompt">ตั้งชื่อห้องของคุณ</string>
+    <string name="home">หน้าหลัก</string>
+    <string name="in_room_count">%1$d คนในห้อง</string>
+    <string name="join">เข้าร่วม</string>
+    <string name="no_active_rooms">ไม่มีห้องที่ใช้งานอยู่</string>
+    <string name="no_rooms">ไม่มีห้องว่าง</string>
+    <string name="room_name">ชื่อห้อง</string>
+    <string name="room_name_label">ชื่อห้อง</string>
+    <string name="seats_count">%1$d/%2$d ที่นั่ง</string>
+    <string name="speakers_count">%1$d/%2$d ผู้พูด</string>
+    <string name="tap_plus_to_create">แตะ + เพื่อสร้าง</string>
+    <string name="visitors_count">%1$d ผู้เข้าชม</string>
+
+    <!-- Profile -->
+    <string name="connections">การเชื่อมต่อ</string>
+    <string name="display_name">ชื่อที่แสดง</string>
+    <string name="dob_privacy_note">ต้องระบุวันเกิด แต่คุณสามารถซ่อนอายุในการตั้งค่าความเป็นส่วนตัวได้</string>
+    <string name="dob_required_subtitle">เราต้องการวันเกิดของคุณเพื่อดำเนินการต่อ</string>
+    <string name="follow">ติดตาม</string>
+    <string name="follow_back">ติดตามกลับ</string>
+    <string name="followers">ผู้ติดตาม</string>
+    <string name="followers_count">ผู้ติดตาม (%1$d)</string>
+    <string name="following">กำลังติดตาม</string>
+    <string name="following_count">กำลังติดตาม (%1$d)</string>
+    <string name="following_list_private">รายการติดตามของผู้ใช้นี้เป็นส่วนตัว</string>
+    <string name="get_super_shy">รับ Super Shy</string>
+    <string name="gift_wall">กำแพงของขวัญ</string>
+    <string name="gift_value_coins">มูลค่า: %1$d เหรียญ</string>
+    <string name="no_followers_yet">ยังไม่มีผู้ติดตาม</string>
+    <string name="no_profile_visitors">ยังไม่มีผู้เข้าชมโปรไฟล์</string>
+    <string name="not_following_anyone">ยังไม่ได้ติดตามใคร</string>
+    <string name="one_more_step">อีกหนึ่งขั้นตอน</string>
+    <string name="profile">โปรไฟล์</string>
+    <string name="profile_setup_subtitle">เลือกชื่อที่แสดงและกรอกวันเกิดของคุณ</string>
+    <string name="received_times">ได้รับ %1$d ครั้ง</string>
+    <string name="remove_follower">ลบผู้ติดตาม</string>
+    <string name="report">รายงาน</string>
+    <string name="select_date_of_birth">เลือกวันเกิด</string>
+    <string name="select_nationality">เลือกสัญชาติ</string>
+    <string name="search_countries">ค้นหาประเทศ</string>
+    <string name="selected">เลือกแล้ว</string>
+    <string name="set_up_your_profile">ตั้งค่าโปรไฟล์ของคุณ</string>
+    <string name="stalker_visit_info">มาเยี่ยมชมคุณ %1$s, %2$d ครั้งใน 3 เดือนที่ผ่านมา</string>
+    <string name="stalkers_count">ผู้แอบดู (%1$d)</string>
+    <string name="stalkers_super_shy_description">ดูว่าใครเข้ามาดูโปรไฟล์ของคุณ! ผู้แอบดูโปรไฟล์เป็นฟีเจอร์พิเศษของ Super Shy</string>
+    <string name="super_shy_benefit">สิทธิประโยชน์ Super Shy</string>
+    <string name="top_senders">ผู้ส่งยอดนิยม</string>
+    <string name="block">บล็อก</string>
+    <string name="unblock">ปลดบล็อก</string>
+    <string name="undo_remove">เลิกลบ</string>
+    <string name="unfollow">เลิกติดตาม</string>
+
+    <!-- Room -->
+    <string name="alias">ชื่อเล่น</string>
+    <string name="approve">อนุมัติ</string>
+    <string name="audience">ผู้ชม</string>
+    <string name="back_to_home">กลับหน้าหลัก</string>
+    <string name="backpack">กระเป๋าเป้</string>
+    <string name="backpack_empty">กระเป๋าเป้ของคุณว่างเปล่า\nหมุนวงล้อเพื่อรับของขวัญ!</string>
+    <string name="ban">แบน</string>
+    <string name="block_user">บล็อกผู้ใช้</string>
+    <string name="block_user_confirm">คุณแน่ใจหรือไม่ว่าต้องการบล็อก %1$s?</string>
+    <string name="close_room">ปิดห้อง</string>
+    <string name="daily">รายวัน</string>
+    <string name="deny">ปฏิเสธ</string>
+    <string name="empty_seat">ที่นั่งว่าง</string>
+    <string name="filter_gift_animations_description">กรองภาพเคลื่อนไหวของขวัญราคาถูกออก</string>
+    <string name="gift">ของขวัญ</string>
+    <string name="gift_animations">ภาพเคลื่อนไหวของขวัญ</string>
+    <string name="host">โฮสต์</string>
+    <string name="hosts">โฮสต์</string>
+    <string name="invite_to_seat">เชิญนั่ง</string>
+    <string name="kick">เตะออก</string>
+    <string name="kick_user">เตะผู้ใช้ออก</string>
+    <string name="kick_user_confirm">คุณแน่ใจหรือไม่ว่าต้องการเตะ %1$s ออกจากห้อง? พวกเขาจะไม่สามารถกลับเข้ามาได้</string>
+    <string name="leave_room">ออกจากห้อง</string>
+    <string name="leave_seat">ออกจากที่นั่ง</string>
+    <string name="lock_seating">ล็อกที่นั่ง</string>
+    <string name="lock_seating_description">เจ้าของเท่านั้นที่สามารถเชิญผู้ใช้นั่งได้</string>
+    <string name="buy_coins">ซื้อเหรียญ</string>
+    <string name="collect_all">เก็บทั้งหมด (%1$d)</string>
+    <string name="increased_drop_rate">อัตราดรอปเพิ่มขึ้น</string>
+    <string name="loading_prices">กำลังโหลดราคา…</string>
+    <string name="lucky_spin">Lucky Spin</string>
+    <string name="lucky_spin_title">LUCKY SPIN</string>
+    <string name="need_more_coins">ต้องการเหรียญเพิ่ม!</string>
+    <string name="no_packages_available">ไม่มีแพ็คเกจ</string>
+    <string name="no_spins_yet">ยังไม่มีการหมุน</string>
+    <string name="prizes">รางวัล</string>
+    <string name="skip_animation">ข้ามภาพเคลื่อนไหว</string>
+    <string name="spin">หมุน</string>
+    <string name="spin_count">%1$d การหมุน</string>
+    <string name="spin_history">ประวัติการหมุน</string>
+    <string name="spin_results">ผลการหมุน</string>
+    <string name="message">ข้อความ</string>
+    <string name="move_to_audience">ย้ายไปผู้ชม</string>
+    <string name="move_to_seat">ย้ายไปที่นั่ง</string>
+    <string name="move_to_which_seat">ย้ายไปที่นั่งไหน?</string>
+    <string name="mute">ปิดเสียง</string>
+    <string name="no_audience_members">ไม่มีผู้ชม</string>
+    <string name="no_pending_requests">ไม่มีคำขอที่รอดำเนินการ</string>
+    <string name="no_reason_given">ไม่ได้ระบุเหตุผล</string>
+    <string name="no_one_on_mic">ไม่มีใครอยู่บนไมค์</string>
+    <string name="occupied">มีคนนั่ง</string>
+    <string name="open_for_duration">เปิดมา %1$s</string>
+    <string name="owner">เจ้าของ</string>
+    <string name="reason_optional">เหตุผล (ไม่บังคับ)</string>
+    <string name="reject">ปฏิเสธ</string>
+    <string name="remove">ลบ</string>
+    <string name="remove_as_host">ถอดจากโฮสต์</string>
+    <string name="remove_from_room">ลบออกจากห้อง</string>
+    <string name="request">คำขอ</string>
+    <string name="request_a_seat">ขอที่นั่ง</string>
+    <string name="request_seat">ขอที่นั่ง</string>
+    <string name="requesting">กำลังขอ</string>
+    <string name="room">ห้อง</string>
+    <string name="room_closed">ห้องถูกปิดแล้ว</string>
+    <string name="room_closing_no_super_shy">เจ้าของห้องไม่มี Super Shy ดังนั้นห้องนี้จะปิดในเร็วๆ นี้</string>
+    <string name="room_closing_in">ห้องจะปิดใน %1$d:%2$s</string>
+    <string name="room_closing_soon">ห้องจะปิดเร็วๆ นี้</string>
+    <string name="room_settings">การตั้งค่าห้อง</string>
+    <string name="rooms">ห้อง</string>
+    <string name="seat_requests">คำขอที่นั่ง</string>
+    <string name="seat_swap_with">ที่นั่ง %1$d (สลับกับ %2$s)</string>
+    <string name="set_alias">ตั้งชื่อเล่น</string>
+    <string name="set_alias_description">ตั้งชื่อเล่นส่วนตัวสำหรับ %1$s คุณเท่านั้นที่จะเห็น</string>
+    <string name="set_as_host">ตั้งเป็นโฮสต์</string>
+    <string name="showing_all_gift_animations">แสดงภาพเคลื่อนไหวของขวัญทั้งหมด</string>
+    <string name="showing_animations_worth">แสดงเฉพาะภาพเคลื่อนไหวมูลค่า %1$d+ เหรียญ</string>
+    <string name="speakers">ผู้พูด</string>
+    <string name="take_a_seat">นั่งลง</string>
+    <string name="unmute">เปิดเสียง</string>
+    <string name="unmuted">เปิดเสียงแล้ว</string>
+    <string name="user">ผู้ใช้</string>
+    <string name="user_id">ID: %1$d</string>
+    <string name="visitor_count">%1$d ผู้เข้าชม</string>
+    <string name="voice">เสียง</string>
+    <string name="voice_unavailable">เสียงไม่พร้อมใช้งาน</string>
+    <string name="you_have_super_shy_room">คุณมี Super Shy! เปิดห้องของคุณได้นานถึง %1$d ชั่วโมง</string>
+    <string name="get_super_shy_rooms">รับ Super Shy เพื่อใช้ห้องได้นานถึง %1$d ชั่วโมง!</string>
+
+    <!-- Room - Notifications -->
+    <string name="accept">ยอมรับ</string>
+    <string name="decline">ปฏิเสธ</string>
+    <string name="go_back">กลับ</string>
+    <string name="go_to_seat">ไปที่ที่นั่ง</string>
+    <string name="invited_to_sit">คุณได้รับเชิญให้นั่ง!</string>
+    <string name="request_accepted">คำขอของคุณได้รับการยอมรับแล้ว!</string>
+    <string name="seat_number">ที่นั่ง %1$d</string>
+    <string name="user_wants_to_sit">%1$s ต้องการนั่ง</string>
+
+    <!-- Room - Chat -->
+    <string name="cancel_edit">ยกเลิกการแก้ไข</string>
+    <string name="edit_message_placeholder">แก้ไขข้อความ...</string>
+    <string name="message_placeholder">ข้อความ...</string>
+    <string name="new_messages">ข้อความใหม่</string>
+
+    <!-- Room - Backpack -->
+    <string name="action_cannot_be_undone">การกระทำนี้ไม่สามารถยกเลิกได้</string>
+    <string name="confirm_send">ยืนยันการส่ง</string>
+    <string name="from_backpack_items">จากกระเป๋าเป้: %1$d ชิ้น</string>
+    <string name="gifts">ของขวัญ</string>
+    <string name="send_all">ส่งทั้งหมด</string>
+    <string name="send_all_includes">รวมทั้งหมด %1$d ชิ้นใน %2$d ของขวัญต่างๆ</string>
+    <string name="send_all_warning">คุณกำลังจะส่งกระเป๋าเป้ทั้งหมดให้ %1$s</string>
+    <string name="send_everything_confirm">ฉันเข้าใจแล้ว ส่งทั้งหมด</string>
+    <string name="to_label">ถึง</string>
+    <string name="total_cost_coins">ค่าใช้จ่ายทั้งหมด: %1$d เหรียญ</string>
+    <string name="use_button">ใช้</string>
+    <string name="you_have_count">คุณมี: %1$d</string>
+    <string name="your_balance_coins">ยอดคงเหลือ: %1$d เหรียญ</string>
+
+    <!-- Messaging -->
+    <string name="additional_details_optional">รายละเอียดเพิ่มเติม (ไม่บังคับ)</string>
+    <string name="all_admins_and_mods">แอดมิน &amp; ผู้ดูแลทั้งหมด</string>
+    <string name="attach_evidence">แนบหลักฐาน</string>
+    <string name="cant_message_user">คุณไม่สามารถส่งข้อความถึงผู้ใช้นี้ได้</string>
+    <string name="chat">แชท</string>
+    <string name="close_group">ปิดกลุ่ม</string>
+    <string name="close_group_warning">การกระทำนี้จะปิดกลุ่มสำหรับทุกคน ข้อความจะถูกเก็บไว้สำหรับการตรวจสอบ</string>
+    <string name="compressing">กำลังบีบอัด...</string>
+    <string name="conversation_start_hint">เริ่มการสนทนาจากโปรไฟล์\nหรือการ์ดผู้ใช้ในห้อง</string>
+    <string name="create_group">สร้างกลุ่ม</string>
+    <string name="current_version">ปัจจุบัน</string>
+    <string name="delete_conversation">ลบการสนทนา</string>
+    <string name="delete_conversation_warning">การกระทำนี้จะลบการสนทนาออกจากรายการของคุณ ข้อความจะถูกเก็บไว้และจะปรากฏอีกครั้งหากอีกฝ่ายส่งข้อความถึงคุณ</string>
+    <string name="description_label">คำอธิบาย</string>
+    <string name="description_optional">คำอธิบาย (ไม่บังคับ)</string>
+    <string name="edit_history">ประวัติการแก้ไข</string>
+    <string name="editing_message">กำลังแก้ไขข้อความ</string>
+    <string name="evidence">หลักฐาน</string>
+    <string name="evidence_required">ต้องมีภาพหน้าจอหรือการบันทึกอย่างน้อยหนึ่งรายการ</string>
+    <string name="general">ทั่วไป</string>
+    <string name="group">กลุ่ม</string>
+    <string name="group_chat">แชทกลุ่ม</string>
+    <string name="group_name_label">ชื่อกลุ่ม</string>
+    <string name="group_name_required">ชื่อกลุ่ม *</string>
+    <string name="group_settings">การตั้งค่ากลุ่ม</string>
+    <string name="invite_to_room">เชิญเข้าห้อง</string>
+    <string name="last_seen">เห็นล่าสุด %1$s</string>
+    <string name="leave_group">ออกจากกลุ่ม</string>
+    <string name="members">สมาชิก</string>
+    <string name="members_count">%1$d สมาชิก</string>
+    <string name="message_ellipsis">ข้อความ...</string>
+    <string name="message_permissions">สิทธิ์ข้อความ</string>
+    <string name="message_preview_image">[รูปภาพ]</string>
+    <string name="message_preview_recalled">[ข้อความถูกเรียกคืน]</string>
+    <string name="message_preview_room_invite">[คำเชิญเข้าห้อง]</string>
+    <string name="message_preview_sticker">[สติกเกอร์]</string>
+    <string name="messages">ข้อความ</string>
+    <string name="mod_notifications">การแจ้งเตือนผู้ดูแล</string>
+    <string name="move_to_front">ย้ายไปด้านหน้า</string>
+    <string name="mute_notifications">ปิดการแจ้งเตือน</string>
+    <string name="mute_reason">. เหตุผล: %1$s</string>
+    <string name="muted">ปิดเสียงแล้ว</string>
+    <string name="muted_for_hours_minutes">คุณถูกปิดเสียง %1$d ชม. %2$d นาที</string>
+    <string name="muted_for_minutes">คุณถูกปิดเสียง %1$d นาที</string>
+    <string name="muted_indefinitely">คุณถูกปิดเสียง</string>
+    <string name="new_group">กลุ่มใหม่</string>
+    <string name="new_group_selected">กลุ่มใหม่ (%1$d ที่เลือก)</string>
+    <string name="new_message">ข้อความใหม่</string>
+    <string name="no_action_needed">ไม่ต้องดำเนินการ</string>
+    <string name="no_followers_following_found">ไม่พบผู้ติดตามหรือการติดตาม</string>
+    <string name="no_matches_found">ไม่พบรายการที่ตรงกัน</string>
+    <string name="no_messages">ยังไม่มีข้อความ</string>
+    <string name="no_pending_reports">ไม่มีรายงานที่รอดำเนินการ</string>
+    <string name="no_stickers_yet">ยังไม่มีสติกเกอร์</string>
+    <string name="no_users_found">ไม่พบผู้ใช้</string>
+    <string name="notify_owner_only">แจ้งเจ้าของเท่านั้น</string>
+    <string name="online">ออนไลน์</string>
+    <string name="only_admins_can_send">เฉพาะแอดมินและผู้ดูแลเท่านั้นที่สามารถส่งข้อความในกลุ่มนี้ได้</string>
+    <string name="only_owner_can_change_permissions">เฉพาะเจ้าของกลุ่มเท่านั้นที่สามารถเปลี่ยนสิทธิ์ได้</string>
+    <string name="owner_only">เจ้าของเท่านั้น</string>
+    <string name="participants">ผู้เข้าร่วม</string>
+    <string name="participants_count">ผู้เข้าร่วม (%1$d)</string>
+    <string name="pin">ปักหมุด</string>
+    <string name="recent">ล่าสุด</string>
+    <string name="replying_to">ตอบกลับ %1$s</string>
+    <string name="report_message_prompt">ทำไมคุณจึงรายงานข้อความนี้?</string>
+    <string name="report_review">ตรวจสอบรายงาน</string>
+    <string name="report_user">รายงาน %1$s</string>
+    <string name="report_user_prompt">ทำไมคุณจึงรายงานผู้ใช้นี้?</string>
+    <string name="reset_to_default">รีเซ็ตเป็นค่าเริ่มต้น</string>
+    <string name="result_count">%1$d ผลลัพธ์</string>
+    <string name="review_report">ตรวจสอบรายงาน</string>
+    <string name="role_admin">แอดมิน</string>
+    <string name="role_member">สมาชิก</string>
+    <string name="role_mod">ผู้ดูแล</string>
+    <string name="role_owner">เจ้าของ</string>
+    <string name="save_description">บันทึกคำอธิบาย</string>
+    <string name="search_all_users">ค้นหาผู้ใช้ทั้งหมด</string>
+    <string name="search_conversations">ค้นหาการสนทนา...</string>
+    <string name="search_messages">ค้นหาข้อความ...</string>
+    <string name="search_people">ค้นหาผู้คน...</string>
+    <string name="select_action">เลือกการดำเนินการ:</string>
+    <string name="selected_count">%1$d ที่เลือก</string>
+    <string name="start_conversation">เริ่มการสนทนา</string>
+    <string name="submit_report">ส่งรายงาน</string>
+    <string name="submitting">กำลังส่ง...</string>
+    <string name="system_messages">ข้อความระบบ</string>
+    <string name="transfer_ownership">โอนความเป็นเจ้าของ</string>
+    <string name="transfer_ownership_warning">เลือกสมาชิกเพื่อโอนความเป็นเจ้าของ คุณจะสูญเสียสิทธิ์เจ้าของ การกระทำนี้ไม่สามารถยกเลิกได้</string>
+    <string name="type_message">พิมพ์ข้อความ…</string>
+    <string name="typing">กำลังพิมพ์...</string>
+    <string name="unmute_action">เปิดเสียง</string>
+    <string name="unmute_notifications">เปิดการแจ้งเตือน</string>
+    <string name="unpin">เลิกปักหมุด</string>
+    <string name="view_profile">ดูโปรไฟล์</string>
+
+    <!-- Messaging - report reasons -->
+    <string name="report_reason_spam">สแปม</string>
+    <string name="report_reason_harassment">การคุกคาม</string>
+    <string name="report_reason_inappropriate">เนื้อหาไม่เหมาะสม</string>
+    <string name="report_reason_other">อื่นๆ</string>
+
+    <!-- Messaging - report actions -->
+    <string name="report_action_warning">ออกคำเตือน</string>
+    <string name="report_action_temp_suspension">ระงับชั่วคราว</string>
+    <string name="report_action_perm_suspension">ระงับถาวร</string>
+    <string name="report_action_pm_ban">แบนจาก PM</string>
+
+    <!-- Messaging - report details -->
+    <string name="report_reason_prefix">เหตุผล: %1$s</string>
+    <string name="report_type_prefix">ประเภท: %1$s</string>
+    <string name="report_details_prefix">รายละเอียด: %1$s</string>
+    <string name="report_message_prefix">ข้อความ: \"%1$s\"</string>
+    <string name="report_reporter_reported">ผู้รายงาน: %1$s | ผู้ถูกรายงาน: %2$s</string>
+
+    <!-- Messaging - system message labels -->
+    <string name="sys_member_joins">สมาชิกเข้าร่วม</string>
+    <string name="sys_member_leaves">สมาชิกออก</string>
+    <string name="sys_role_changes">เปลี่ยนบทบาท</string>
+    <string name="sys_permission_changes">เปลี่ยนสิทธิ์</string>
+
+    <!-- Messaging - permission labels -->
+    <string name="perm_who_can_send">ใครสามารถส่งข้อความได้</string>
+    <string name="perm_who_can_add_members">ใครสามารถเพิ่มสมาชิกได้</string>
+    <string name="perm_who_can_edit_info">ใครสามารถแก้ไขข้อมูลกลุ่มได้</string>
+    <string name="perm_who_can_delete_messages">ใครสามารถลบข้อความได้</string>
+    <string name="perm_who_can_mute_members">ใครสามารถปิดเสียงสมาชิกได้</string>
+    <string name="perm_who_can_remove_members">ใครสามารถลบสมาชิกได้</string>
+
+    <!-- Messaging - date separators -->
+    <string name="today">วันนี้</string>
+    <string name="yesterday">เมื่อวาน</string>
+
+    <!-- Daily Reward -->
+    <string name="awesome">เยี่ยม!</string>
+    <string name="claim_todays_reward">รับรางวัลวันนี้</string>
+    <string name="coins">เหรียญ</string>
+    <string name="day_fri">ศ.</string>
+    <string name="day_mon">จ.</string>
+    <string name="day_sat">ส.</string>
+    <string name="day_streak">ต่อเนื่อง %1$d วัน</string>
+    <string name="day_sun">อา.</string>
+    <string name="day_thu">พฤ.</string>
+    <string name="day_tue">อ.</string>
+    <string name="day_wed">พ.</string>
+    <string name="later">ทีหลัง</string>
+    <string name="milestone">เป้าหมาย</string>
+    <string name="milestone_bonus">โบนัสเป้าหมาย!</string>
+    <string name="plus_coins">+%1$d เหรียญ!</string>
+    <string name="reward_claimed">รับรางวัลแล้ว!</string>
+
+    <!-- Economy -->
+    <string name="bean_redeem_description">1 ถั่ว = 1 เหรียญ แลก 2,000+ รับโบนัส 10%!</string>
+    <string name="bonus_coins">+%1$d โบนัส</string>
+    <string name="buy_shy_coins">ซื้อ ShyCoins</string>
+    <string name="confirm_redemption">ยืนยันการแลก</string>
+    <string name="daily_reward">รางวัลประจำวัน</string>
+    <string name="redeem">แลก</string>
+    <string name="redeem_all">แลกทั้งหมด</string>
+    <string name="redeem_beans_for_coins">แลก %1$s ถั่วเป็น %2$s เหรียญ?</string>
+    <string name="redeem_shy_beans">แลก ShyBeans</string>
+    <string name="send_gift">ส่งของขวัญ</string>
+    <string name="shy_beans">ShyBeans</string>
+    <string name="shy_coins">ShyCoins</string>
+    <string name="testing_mode_coins">โหมดทดสอบ — ไม่มีการเรียกเก็บเงินจริง แตะแพ็คเกจเพื่อรับเหรียญทันที</string>
+    <string name="filter_all">ทั้งหมด</string>
+    <string name="filter_gacha">กาชา</string>
+    <string name="filter_gifts">ของขวัญ</string>
+    <string name="filter_purchases">การซื้อ</string>
+    <string name="filter_redemptions">การแลก</string>
+    <string name="filter_rewards">รางวัล</string>
+    <string name="no_filtered_transactions">ไม่มีธุรกรรม %1$s</string>
+    <string name="no_transactions_yet">ยังไม่มีธุรกรรม</string>
+    <string name="transaction_history">ประวัติธุรกรรม</string>
+    <string name="transactions">ธุรกรรม</string>
+    <string name="wallet">กระเป๋าเงิน</string>
+
+    <!-- Super Shy -->
+    <string name="benefit_daily_bonus">+10% เหรียญเข้าสู่ระบบรายวัน (ปัดขึ้น)</string>
+    <string name="benefit_extended_room">ขยายเวลาห้อง (12 ชั่วโมง)</string>
+    <string name="benefit_full_room">ห้องเต็มรูปแบบ 8 ที่นั่ง</string>
+    <string name="benefit_gold_name">ชื่อสีทองทุกที่</string>
+    <string name="benefit_profile_frame">กรอบโปรไฟล์พิเศษ</string>
+    <string name="benefit_star_badge">เครื่องหมายดาวข้างชื่อ</string>
+    <string name="benefits">สิทธิประโยชน์</string>
+    <string name="choose_a_plan">เลือกแผน</string>
+    <string name="claim_30_days_free">รับฟรี 30 วัน</string>
+    <string name="claimed">รับแล้ว!</string>
+    <string name="claimed_activate_backpack">เพื่อเปิดใช้งาน ให้ค้นหาในกระเป๋าเป้ขณะอยู่ในห้องแชท</string>
+    <string name="claiming">กำลังรับ…</string>
+    <string name="currently_active">ใช้งานอยู่</string>
+    <string name="days_remaining">เหลือ %1$d วัน</string>
+    <string name="one_time_payment">ชำระครั้งเดียว</string>
+    <string name="per_month">ต่อเดือน</string>
+    <string name="per_year">ต่อปี</string>
+    <string name="super_shy">Super Shy</string>
+    <string name="super_shy_for_life">คุณเป็น Super Shy ตลอดกาล!</string>
+    <string name="tap_to_claim_backpack">แตะเพื่อรับ — เพิ่มในกระเป๋าเป้ของคุณ</string>
+    <string name="testing_mode_super_shy">โหมดทดสอบ — ไม่มีการเรียกเก็บเงินจริง แตะแผนเพื่อเปิดใช้งาน Super Shy ทันที</string>
+    <string name="tier_label">ระดับ: %1$s</string>
+    <string name="tier_lifetime">ตลอดชีพ</string>
+    <string name="tier_monthly">รายเดือน</string>
+    <string name="tier_yearly">รายปี</string>
+    <string name="upgrade_to_lifetime">อัปเกรดเป็นตลอดชีพ</string>
+
+    <!-- Legal -->
+    <string name="accept_all_and_continue">ยอมรับทั้งหมด &amp; ดำเนินการต่อ</string>
+    <string name="community_standards">มาตรฐานชุมชน</string>
+    <string name="cyber_bullying_policy">นโยบายต่อต้านการกลั่นแกล้งทางไซเบอร์</string>
+    <string name="i_have_read_and_agree">ฉันได้อ่านและยอมรับ </string>
+    <string name="privacy_policy">นโยบายความเป็นส่วนตัว</string>
+    <string name="review_and_accept_policies">กรุณาอ่านและยอมรับนโยบายของเราเพื่อดำเนินการต่อ</string>
+    <string name="terms_and_conditions">ข้อกำหนด &amp; เงื่อนไข</string>
+    <string name="welcome_to_shytalk">ยินดีต้อนรับสู่ ShyTalk</string>
+
+    <!-- Auth -->
+    <string name="sign_in">เข้าสู่ระบบ</string>
+    <string name="phone_number">หมายเลขโทรศัพท์</string>
+    <string name="verification_code">รหัสยืนยัน</string>
+    <string name="continue_with_google">ดำเนินการต่อด้วย Google</string>
+</resources>

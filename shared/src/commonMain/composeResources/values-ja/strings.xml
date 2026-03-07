@@ -1,0 +1,471 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common actions -->
+    <string name="all_caps">すべて</string>
+    <string name="back">戻る</string>
+    <string name="cancel">キャンセル</string>
+    <string name="change">変更</string>
+    <string name="close">閉じる</string>
+    <string name="confirm">確認</string>
+    <string name="continue_button">続行</string>
+    <string name="create">作成</string>
+    <string name="delete">削除</string>
+    <string name="done">完了</string>
+    <string name="edit">編集</string>
+    <string name="error_generic">エラーが発生しました</string>
+    <string name="got_it">了解</string>
+    <string name="learn_more">詳しく見る</string>
+    <string name="loading">読み込み中…</string>
+    <string name="maybe_later">また今度</string>
+    <string name="message_action">メッセージ</string>
+    <string name="next">次へ</string>
+    <string name="ok">OK</string>
+    <string name="retry">再試行</string>
+    <string name="save">保存</string>
+    <string name="send">送信</string>
+    <string name="sending">送信中...</string>
+    <string name="transfer">譲渡</string>
+    <string name="unknown">不明</string>
+    <string name="using">使用中...</string>
+    <string name="you">あなた</string>
+
+    <!-- Message bubbles -->
+    <string name="edited">編集済み</string>
+    <string name="tap_to_join">タップして参加</string>
+    <string name="message_recalled_by_you">このメッセージを取り消しました</string>
+    <string name="message_recalled">このメッセージは取り消されました</string>
+    <string name="message_hidden_by_mod">このメッセージはモデレーターによって非表示にされました</string>
+    <string name="invite_to_mic">マイクに招待</string>
+    <string name="closed">クローズ</string>
+    <string name="edited_count">編集済み (%1$d)</string>
+    <string name="read">既読</string>
+    <string name="sent">送信済み</string>
+    <string name="sticker">スタンプ</string>
+    <string name="image">画像</string>
+
+    <!-- Context menu -->
+    <string name="react">リアクション</string>
+    <string name="reply">返信</string>
+    <string name="copy">コピー</string>
+    <string name="recall">取り消し</string>
+    <string name="add_to_stickers">スタンプに追加</string>
+    <string name="hide_message">メッセージを非表示</string>
+    <string name="report_message">メッセージを報告</string>
+
+    <!-- Translation -->
+    <string name="translate">翻訳</string>
+    <string name="translated_from">%1$sから翻訳</string>
+    <string name="show_original">原文を表示</string>
+    <string name="translation_limit_reached">1日の上限に達しました。Super Shyにアップグレードすると無制限に翻訳できます。</string>
+    <string name="auto_translate">自動翻訳</string>
+    <string name="auto_translate_description">受信メッセージを自動的にあなたの言語に翻訳します</string>
+    <string name="translations_remaining">本日の残り翻訳回数: %1$d回</string>
+
+    <!-- Settings -->
+    <string name="settings">設定</string>
+    <string name="language">言語</string>
+    <string name="blocked_users">ブロック中のユーザー</string>
+    <string name="account">アカウント</string>
+    <string name="privacy">プライバシー</string>
+    <string name="notifications">通知</string>
+    <string name="permissions">権限</string>
+    <string name="about">アプリについて</string>
+    <string name="sign_out">ログアウト</string>
+    <string name="sign_out_confirm">本当にログアウトしますか？</string>
+
+    <!-- Home -->
+    <string name="create_room">ルームを作成</string>
+    <string name="create_room_prompt">ルームに名前を付けてください</string>
+    <string name="home">ホーム</string>
+    <string name="in_room_count">%1$d人がルームに参加中</string>
+    <string name="join">参加</string>
+    <string name="no_active_rooms">アクティブなルームはありません</string>
+    <string name="no_rooms">利用可能なルームはありません</string>
+    <string name="room_name">ルーム名</string>
+    <string name="room_name_label">ルーム名</string>
+    <string name="seats_count">%1$d/%2$d席</string>
+    <string name="speakers_count">%1$d/%2$dスピーカー</string>
+    <string name="tap_plus_to_create">+をタップして作成</string>
+    <string name="visitors_count">%1$d人の訪問者</string>
+
+    <!-- Profile -->
+    <string name="connections">つながり</string>
+    <string name="display_name">表示名</string>
+    <string name="dob_privacy_note">生年月日の入力は必須ですが、プライバシー設定で年齢を非表示にできます。</string>
+    <string name="dob_required_subtitle">続行するには生年月日が必要です。</string>
+    <string name="follow">フォロー</string>
+    <string name="follow_back">フォローバック</string>
+    <string name="followers">フォロワー</string>
+    <string name="followers_count">フォロワー (%1$d)</string>
+    <string name="following">フォロー中</string>
+    <string name="following_count">フォロー中 (%1$d)</string>
+    <string name="following_list_private">このユーザーのフォローリストは非公開です</string>
+    <string name="get_super_shy">Super Shyを取得</string>
+    <string name="gift_wall">ギフトウォール</string>
+    <string name="gift_value_coins">価値: %1$dコイン</string>
+    <string name="no_followers_yet">まだフォロワーはいません</string>
+    <string name="no_profile_visitors">まだプロフィール訪問者はいません</string>
+    <string name="not_following_anyone">まだ誰もフォローしていません</string>
+    <string name="one_more_step">あと一歩</string>
+    <string name="profile">プロフィール</string>
+    <string name="profile_setup_subtitle">表示名を選んで生年月日を入力してください</string>
+    <string name="received_times">%1$d回受け取りました</string>
+    <string name="remove_follower">フォロワーを解除</string>
+    <string name="report">報告</string>
+    <string name="select_date_of_birth">生年月日を選択</string>
+    <string name="select_nationality">国籍を選択</string>
+    <string name="search_countries">国を検索</string>
+    <string name="selected">選択済み</string>
+    <string name="set_up_your_profile">プロフィールを設定</string>
+    <string name="stalker_visit_info">%1$sにあなたをストーキング、過去3ヶ月で%2$d回</string>
+    <string name="stalkers_count">ストーカー (%1$d)</string>
+    <string name="stalkers_super_shy_description">誰があなたのプロフィールを見ているか確認しよう！プロフィールストーカーはSuper Shy限定機能です。</string>
+    <string name="super_shy_benefit">Super Shy特典</string>
+    <string name="top_senders">トップ送信者</string>
+    <string name="block">ブロック</string>
+    <string name="unblock">ブロック解除</string>
+    <string name="undo_remove">解除を元に戻す</string>
+    <string name="unfollow">フォロー解除</string>
+
+    <!-- Room -->
+    <string name="alias">ニックネーム</string>
+    <string name="approve">承認</string>
+    <string name="audience">オーディエンス</string>
+    <string name="back_to_home">ホームに戻る</string>
+    <string name="backpack">バックパック</string>
+    <string name="backpack_empty">バックパックは空です。\nホイールを回してギフトをゲット！</string>
+    <string name="ban">BAN</string>
+    <string name="block_user">ユーザーをブロック</string>
+    <string name="block_user_confirm">%1$sをブロックしてもよろしいですか？</string>
+    <string name="close_room">ルームを閉じる</string>
+    <string name="daily">デイリー</string>
+    <string name="deny">拒否</string>
+    <string name="empty_seat">空席</string>
+    <string name="filter_gift_animations_description">安価なギフトのアニメーションをフィルタリングします。</string>
+    <string name="gift">ギフト</string>
+    <string name="gift_animations">ギフトアニメーション</string>
+    <string name="host">ホスト</string>
+    <string name="hosts">ホスト</string>
+    <string name="invite_to_seat">席に招待</string>
+    <string name="kick">キック</string>
+    <string name="kick_user">ユーザーをキック</string>
+    <string name="kick_user_confirm">%1$sをルームからキックしてもよろしいですか？再入室できなくなります。</string>
+    <string name="leave_room">ルームを退出</string>
+    <string name="leave_seat">席を離れる</string>
+    <string name="lock_seating">座席をロック</string>
+    <string name="lock_seating_description">オーナーのみがユーザーを座席に招待できます</string>
+    <string name="buy_coins">コインを購入</string>
+    <string name="collect_all">すべて回収 (%1$d)</string>
+    <string name="increased_drop_rate">ドロップ率アップ</string>
+    <string name="loading_prices">価格を読み込み中…</string>
+    <string name="lucky_spin">Lucky Spin</string>
+    <string name="lucky_spin_title">Lucky Spin</string>
+    <string name="need_more_coins">コインが足りません！</string>
+    <string name="no_packages_available">利用可能なパッケージはありません</string>
+    <string name="no_spins_yet">まだスピンしていません</string>
+    <string name="prizes">景品</string>
+    <string name="skip_animation">アニメーションをスキップ</string>
+    <string name="spin">スピン</string>
+    <string name="spin_count">%1$d回スピン</string>
+    <string name="spin_history">スピン履歴</string>
+    <string name="spin_results">スピン結果</string>
+    <string name="message">メッセージ</string>
+    <string name="move_to_audience">オーディエンスに移動</string>
+    <string name="move_to_seat">席に移動</string>
+    <string name="move_to_which_seat">どの席に移動しますか？</string>
+    <string name="mute">ミュート</string>
+    <string name="no_audience_members">オーディエンスはいません</string>
+    <string name="no_pending_requests">保留中のリクエストはありません</string>
+    <string name="no_reason_given">理由なし</string>
+    <string name="no_one_on_mic">マイクを使用中のユーザーはいません</string>
+    <string name="occupied">使用中</string>
+    <string name="open_for_duration">開設から %1$s</string>
+    <string name="owner">オーナー</string>
+    <string name="reason_optional">理由（任意）</string>
+    <string name="reject">拒否</string>
+    <string name="remove">削除</string>
+    <string name="remove_as_host">ホストを解除</string>
+    <string name="remove_from_room">ルームから退室させる</string>
+    <string name="request">リクエスト</string>
+    <string name="request_a_seat">席をリクエスト</string>
+    <string name="request_seat">席をリクエスト</string>
+    <string name="requesting">リクエスト中</string>
+    <string name="room">ルーム</string>
+    <string name="room_closed">ルームが閉鎖されました</string>
+    <string name="room_closing_no_super_shy">ルームオーナーがSuper Shyを持っていないため、このルームはまもなく閉鎖されます。</string>
+    <string name="room_closing_in">ルーム閉鎖まで %1$d:%2$s</string>
+    <string name="room_closing_soon">まもなくルームが閉鎖されます</string>
+    <string name="room_settings">ルーム設定</string>
+    <string name="rooms">ルーム</string>
+    <string name="seat_requests">着席リクエスト</string>
+    <string name="seat_swap_with">席 %1$d（%2$sと交換）</string>
+    <string name="set_alias">ニックネームを設定</string>
+    <string name="set_alias_description">%1$sのニックネームを設定します。あなただけに表示されます。</string>
+    <string name="set_as_host">ホストに設定</string>
+    <string name="showing_all_gift_animations">すべてのギフトアニメーションを表示中</string>
+    <string name="showing_animations_worth">%1$d+コイン以上のアニメーションのみ表示</string>
+    <string name="speakers">スピーカー</string>
+    <string name="take_a_seat">着席する</string>
+    <string name="unmute">ミュート解除</string>
+    <string name="unmuted">ミュート解除済み</string>
+    <string name="user">ユーザー</string>
+    <string name="user_id">ID: %1$d</string>
+    <string name="visitor_count">%1$d人の訪問者</string>
+    <string name="voice">音声</string>
+    <string name="voice_unavailable">音声が利用できません</string>
+    <string name="you_have_super_shy_room">Super Shyをお持ちです！自分のルームを開いて最大%1$d時間の延長が可能です。</string>
+    <string name="get_super_shy_rooms">Super Shyを取得して最大%1$d時間のルームを楽しもう！</string>
+
+    <!-- Room - Notifications -->
+    <string name="accept">承諾</string>
+    <string name="decline">辞退</string>
+    <string name="go_back">戻る</string>
+    <string name="go_to_seat">席に移動</string>
+    <string name="invited_to_sit">着席に招待されました！</string>
+    <string name="request_accepted">リクエストが承認されました！</string>
+    <string name="seat_number">席 %1$d</string>
+    <string name="user_wants_to_sit">%1$sが着席を希望しています</string>
+
+    <!-- Room - Chat -->
+    <string name="cancel_edit">編集をキャンセル</string>
+    <string name="edit_message_placeholder">メッセージを編集...</string>
+    <string name="message_placeholder">メッセージ...</string>
+    <string name="new_messages">新しいメッセージ</string>
+
+    <!-- Room - Backpack -->
+    <string name="action_cannot_be_undone">この操作は元に戻せません。</string>
+    <string name="confirm_send">送信を確認</string>
+    <string name="from_backpack_items">バックパックから: %1$d個</string>
+    <string name="gifts">ギフト</string>
+    <string name="send_all">すべて送信</string>
+    <string name="send_all_includes">%2$d種類のギフト、合計%1$d個すべてが含まれます。</string>
+    <string name="send_all_warning">バックパックのすべてを%1$sに送信しようとしています。</string>
+    <string name="send_everything_confirm">理解しました、すべて送信します</string>
+    <string name="to_label">宛先</string>
+    <string name="total_cost_coins">合計コスト: %1$dコイン</string>
+    <string name="use_button">使う</string>
+    <string name="you_have_count">所持数: %1$d</string>
+    <string name="your_balance_coins">残高: %1$dコイン</string>
+
+    <!-- Messaging -->
+    <string name="additional_details_optional">追加の詳細（任意）</string>
+    <string name="all_admins_and_mods">すべての管理者 &amp; モデレーター</string>
+    <string name="attach_evidence">証拠を添付</string>
+    <string name="cant_message_user">このユーザーにメッセージを送れません</string>
+    <string name="chat">チャット</string>
+    <string name="close_group">グループを閉じる</string>
+    <string name="close_group_warning">グループが全員に対して閉じられます。メッセージはモデレーションのために保持されます。</string>
+    <string name="compressing">圧縮中...</string>
+    <string name="conversation_start_hint">プロフィールやルーム内の\nユーザーカードから会話を始めましょう</string>
+    <string name="create_group">グループを作成</string>
+    <string name="current_version">現在</string>
+    <string name="delete_conversation">会話を削除</string>
+    <string name="delete_conversation_warning">会話がリストから削除されます。メッセージは保持され、相手からメッセージが届くと再表示されます。</string>
+    <string name="description_label">説明</string>
+    <string name="description_optional">説明（任意）</string>
+    <string name="edit_history">編集履歴</string>
+    <string name="editing_message">メッセージを編集中</string>
+    <string name="evidence">証拠</string>
+    <string name="evidence_required">スクリーンショットまたは録画が少なくとも1つ必要です。</string>
+    <string name="general">一般</string>
+    <string name="group">グループ</string>
+    <string name="group_chat">グループチャット</string>
+    <string name="group_name_label">グループ名</string>
+    <string name="group_name_required">グループ名 *</string>
+    <string name="group_settings">グループ設定</string>
+    <string name="invite_to_room">ルームに招待</string>
+    <string name="last_seen">最終ログイン %1$s</string>
+    <string name="leave_group">グループを退出</string>
+    <string name="members">メンバー</string>
+    <string name="members_count">%1$d人のメンバー</string>
+    <string name="message_ellipsis">メッセージ...</string>
+    <string name="message_permissions">メッセージ権限</string>
+    <string name="message_preview_image">[画像]</string>
+    <string name="message_preview_recalled">[メッセージが取り消されました]</string>
+    <string name="message_preview_room_invite">[ルーム招待]</string>
+    <string name="message_preview_sticker">[スタンプ]</string>
+    <string name="messages">メッセージ</string>
+    <string name="mod_notifications">モデレーター通知</string>
+    <string name="move_to_front">先頭に移動</string>
+    <string name="mute_notifications">通知をミュート</string>
+    <string name="mute_reason">。理由: %1$s</string>
+    <string name="muted">ミュート中</string>
+    <string name="muted_for_hours_minutes">%1$d時間%2$d分間ミュート中です</string>
+    <string name="muted_for_minutes">%1$d分間ミュート中です</string>
+    <string name="muted_indefinitely">ミュートされています</string>
+    <string name="new_group">新しいグループ</string>
+    <string name="new_group_selected">新しいグループ (%1$d人選択)</string>
+    <string name="new_message">新しいメッセージ</string>
+    <string name="no_action_needed">対応不要</string>
+    <string name="no_followers_following_found">フォロワーまたはフォロー中のユーザーが見つかりません</string>
+    <string name="no_matches_found">一致するものが見つかりません</string>
+    <string name="no_messages">メッセージはまだありません</string>
+    <string name="no_pending_reports">保留中の報告はありません</string>
+    <string name="no_stickers_yet">スタンプはまだありません</string>
+    <string name="no_users_found">ユーザーが見つかりません</string>
+    <string name="notify_owner_only">オーナーのみに通知</string>
+    <string name="online">オンライン</string>
+    <string name="only_admins_can_send">このグループでは管理者とモデレーターのみがメッセージを送信できます</string>
+    <string name="only_owner_can_change_permissions">グループオーナーのみが権限を変更できます。</string>
+    <string name="owner_only">オーナーのみ</string>
+    <string name="participants">参加者</string>
+    <string name="participants_count">参加者 (%1$d)</string>
+    <string name="pin">ピン留め</string>
+    <string name="recent">最近</string>
+    <string name="replying_to">%1$sに返信中</string>
+    <string name="report_message_prompt">このメッセージを報告する理由は何ですか？</string>
+    <string name="report_review">報告レビュー</string>
+    <string name="report_user">%1$sを報告</string>
+    <string name="report_user_prompt">このユーザーを報告する理由は何ですか？</string>
+    <string name="reset_to_default">デフォルトにリセット</string>
+    <string name="result_count">%1$d件の結果</string>
+    <string name="review_report">報告をレビュー</string>
+    <string name="role_admin">管理者</string>
+    <string name="role_member">メンバー</string>
+    <string name="role_mod">モデレーター</string>
+    <string name="role_owner">オーナー</string>
+    <string name="save_description">説明を保存</string>
+    <string name="search_all_users">すべてのユーザーを検索</string>
+    <string name="search_conversations">会話を検索...</string>
+    <string name="search_messages">メッセージを検索...</string>
+    <string name="search_people">ユーザーを検索...</string>
+    <string name="select_action">アクションを選択:</string>
+    <string name="selected_count">%1$d件選択</string>
+    <string name="start_conversation">会話を始める</string>
+    <string name="submit_report">報告を送信</string>
+    <string name="submitting">送信中...</string>
+    <string name="system_messages">システムメッセージ</string>
+    <string name="transfer_ownership">オーナー権限を譲渡</string>
+    <string name="transfer_ownership_warning">オーナー権限を譲渡するメンバーを選択してください。オーナー権限を失います。この操作は元に戻せません。</string>
+    <string name="type_message">メッセージを入力…</string>
+    <string name="typing">入力中...</string>
+    <string name="unmute_action">ミュート解除</string>
+    <string name="unmute_notifications">通知のミュートを解除</string>
+    <string name="unpin">ピン留めを解除</string>
+    <string name="view_profile">プロフィールを表示</string>
+
+    <!-- Messaging - report reasons -->
+    <string name="report_reason_spam">スパム</string>
+    <string name="report_reason_harassment">嫌がらせ</string>
+    <string name="report_reason_inappropriate">不適切なコンテンツ</string>
+    <string name="report_reason_other">その他</string>
+
+    <!-- Messaging - report actions -->
+    <string name="report_action_warning">警告を発行</string>
+    <string name="report_action_temp_suspension">一時停止</string>
+    <string name="report_action_perm_suspension">永久停止</string>
+    <string name="report_action_pm_ban">PM禁止</string>
+
+    <!-- Messaging - report details -->
+    <string name="report_reason_prefix">理由: %1$s</string>
+    <string name="report_type_prefix">種類: %1$s</string>
+    <string name="report_details_prefix">詳細: %1$s</string>
+    <string name="report_message_prefix">メッセージ: \"%1$s\"</string>
+    <string name="report_reporter_reported">報告者: %1$s | 被報告者: %2$s</string>
+
+    <!-- Messaging - system message labels -->
+    <string name="sys_member_joins">メンバー参加</string>
+    <string name="sys_member_leaves">メンバー退出</string>
+    <string name="sys_role_changes">役割の変更</string>
+    <string name="sys_permission_changes">権限の変更</string>
+
+    <!-- Messaging - permission labels -->
+    <string name="perm_who_can_send">メッセージを送信できる人</string>
+    <string name="perm_who_can_add_members">メンバーを追加できる人</string>
+    <string name="perm_who_can_edit_info">グループ情報を編集できる人</string>
+    <string name="perm_who_can_delete_messages">メッセージを削除できる人</string>
+    <string name="perm_who_can_mute_members">メンバーをミュートできる人</string>
+    <string name="perm_who_can_remove_members">メンバーを削除できる人</string>
+
+    <!-- Messaging - date separators -->
+    <string name="today">今日</string>
+    <string name="yesterday">昨日</string>
+
+    <!-- Daily Reward -->
+    <string name="awesome">すごい！</string>
+    <string name="claim_todays_reward">今日の報酬を受け取る</string>
+    <string name="coins">コイン</string>
+    <string name="day_fri">金</string>
+    <string name="day_mon">月</string>
+    <string name="day_sat">土</string>
+    <string name="day_streak">%1$d日連続</string>
+    <string name="day_sun">日</string>
+    <string name="day_thu">木</string>
+    <string name="day_tue">火</string>
+    <string name="day_wed">水</string>
+    <string name="later">あとで</string>
+    <string name="milestone">マイルストーン</string>
+    <string name="milestone_bonus">マイルストーンボーナス！</string>
+    <string name="plus_coins">+%1$dコイン！</string>
+    <string name="reward_claimed">報酬を獲得！</string>
+
+    <!-- Economy -->
+    <string name="bean_redeem_description">1ビーン = 1コイン。2,000以上の交換で10%ボーナス！</string>
+    <string name="bonus_coins">+%1$dボーナス</string>
+    <string name="buy_shy_coins">ShyCoinsを購入</string>
+    <string name="confirm_redemption">交換を確認</string>
+    <string name="daily_reward">デイリー報酬</string>
+    <string name="redeem">交換</string>
+    <string name="redeem_all">すべて交換</string>
+    <string name="redeem_beans_for_coins">%1$sビーンを%2$sコインに交換しますか？</string>
+    <string name="redeem_shy_beans">ShyBeansを交換</string>
+    <string name="send_gift">ギフトを送る</string>
+    <string name="shy_beans">ShyBeans</string>
+    <string name="shy_coins">ShyCoins</string>
+    <string name="testing_mode_coins">テストモード — 実際の課金は発生しません。パッケージをタップすると即座にコインを受け取れます。</string>
+    <string name="filter_all">すべて</string>
+    <string name="filter_gacha">ガチャ</string>
+    <string name="filter_gifts">ギフト</string>
+    <string name="filter_purchases">購入</string>
+    <string name="filter_redemptions">交換</string>
+    <string name="filter_rewards">報酬</string>
+    <string name="no_filtered_transactions">%1$sの取引はありません</string>
+    <string name="no_transactions_yet">まだ取引はありません</string>
+    <string name="transaction_history">取引履歴</string>
+    <string name="transactions">取引</string>
+    <string name="wallet">ウォレット</string>
+
+    <!-- Super Shy -->
+    <string name="benefit_daily_bonus">+10%デイリーログインコイン（切り上げ）</string>
+    <string name="benefit_extended_room">ルーム延長（12時間）</string>
+    <string name="benefit_full_room">8席のフルルーム</string>
+    <string name="benefit_gold_name">どこでもゴールド表示名</string>
+    <string name="benefit_profile_frame">限定プロフィールフレーム</string>
+    <string name="benefit_star_badge">名前の横にスターバッジ</string>
+    <string name="benefits">特典</string>
+    <string name="choose_a_plan">プランを選択</string>
+    <string name="claim_30_days_free">30日間無料で取得</string>
+    <string name="claimed">取得済み！</string>
+    <string name="claimed_activate_backpack">有効にするには、チャットルーム内でバックパックから見つけてください。</string>
+    <string name="claiming">取得中…</string>
+    <string name="currently_active">現在有効</string>
+    <string name="days_remaining">残り%1$d日</string>
+    <string name="one_time_payment">一回払い</string>
+    <string name="per_month">月額</string>
+    <string name="per_year">年額</string>
+    <string name="super_shy">Super Shy</string>
+    <string name="super_shy_for_life">永久Super Shyです！</string>
+    <string name="tap_to_claim_backpack">タップして取得 — バックパックに追加されます</string>
+    <string name="testing_mode_super_shy">テストモード — 実際の課金は発生しません。プランをタップすると即座にSuper Shyが有効になります。</string>
+    <string name="tier_label">ティア: %1$s</string>
+    <string name="tier_lifetime">永久</string>
+    <string name="tier_monthly">月額</string>
+    <string name="tier_yearly">年額</string>
+    <string name="upgrade_to_lifetime">永久プランにアップグレード</string>
+
+    <!-- Legal -->
+    <string name="accept_all_and_continue">すべて同意して続行</string>
+    <string name="community_standards">コミュニティ基準</string>
+    <string name="cyber_bullying_policy">ネットいじめ防止ポリシー</string>
+    <string name="i_have_read_and_agree">以下を読み、同意しました </string>
+    <string name="privacy_policy">プライバシーポリシー</string>
+    <string name="review_and_accept_policies">続行するにはポリシーを確認し同意してください。</string>
+    <string name="terms_and_conditions">利用規約</string>
+    <string name="welcome_to_shytalk">ShyTalkへようこそ</string>
+
+    <!-- Auth -->
+    <string name="sign_in">ログイン</string>
+    <string name="phone_number">電話番号</string>
+    <string name="verification_code">認証コード</string>
+    <string name="continue_with_google">Googleで続行</string>
+</resources>

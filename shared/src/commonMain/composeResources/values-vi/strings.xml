@@ -1,0 +1,471 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common actions -->
+    <string name="all_caps">TẤT CẢ</string>
+    <string name="back">Quay lại</string>
+    <string name="cancel">Hủy</string>
+    <string name="change">Thay đổi</string>
+    <string name="close">Đóng</string>
+    <string name="confirm">Xác nhận</string>
+    <string name="continue_button">Tiếp tục</string>
+    <string name="create">Tạo</string>
+    <string name="delete">Xóa</string>
+    <string name="done">Xong</string>
+    <string name="edit">Chỉnh sửa</string>
+    <string name="error_generic">Đã xảy ra lỗi</string>
+    <string name="got_it">Đã hiểu</string>
+    <string name="learn_more">Tìm Hiểu Thêm</string>
+    <string name="loading">Đang tải…</string>
+    <string name="maybe_later">Để Sau</string>
+    <string name="message_action">Nhắn tin</string>
+    <string name="next">Tiếp</string>
+    <string name="ok">OK</string>
+    <string name="retry">Thử lại</string>
+    <string name="save">Lưu</string>
+    <string name="send">Gửi</string>
+    <string name="sending">Đang gửi...</string>
+    <string name="transfer">Chuyển</string>
+    <string name="unknown">Không rõ</string>
+    <string name="using">Đang sử dụng...</string>
+    <string name="you">Bạn</string>
+
+    <!-- Message bubbles -->
+    <string name="edited">đã chỉnh sửa</string>
+    <string name="tap_to_join">Nhấn để tham gia</string>
+    <string name="message_recalled_by_you">Bạn đã thu hồi tin nhắn này</string>
+    <string name="message_recalled">Tin nhắn này đã bị thu hồi</string>
+    <string name="message_hidden_by_mod">Tin nhắn này đã bị quản trị viên ẩn</string>
+    <string name="invite_to_mic">Mời lên mic</string>
+    <string name="closed">Đã đóng</string>
+    <string name="edited_count">Đã chỉnh sửa (%1$d)</string>
+    <string name="read">Đã đọc</string>
+    <string name="sent">Đã gửi</string>
+    <string name="sticker">Nhãn dán</string>
+    <string name="image">Hình ảnh</string>
+
+    <!-- Context menu -->
+    <string name="react">Bày tỏ</string>
+    <string name="reply">Trả lời</string>
+    <string name="copy">Sao chép</string>
+    <string name="recall">Thu hồi</string>
+    <string name="add_to_stickers">Thêm vào Nhãn dán</string>
+    <string name="hide_message">Ẩn Tin nhắn</string>
+    <string name="report_message">Báo cáo Tin nhắn</string>
+
+    <!-- Translation -->
+    <string name="translate">Dịch</string>
+    <string name="translated_from">Đã dịch từ %1$s</string>
+    <string name="show_original">Hiện bản gốc</string>
+    <string name="translation_limit_reached">Đã hết giới hạn trong ngày. Nâng cấp Super Shy để dịch không giới hạn.</string>
+    <string name="auto_translate">Tự động dịch</string>
+    <string name="auto_translate_description">Tự động dịch tin nhắn đến sang ngôn ngữ của bạn</string>
+    <string name="translations_remaining">Còn %1$d lượt dịch hôm nay</string>
+
+    <!-- Settings -->
+    <string name="settings">Cài đặt</string>
+    <string name="language">Ngôn ngữ</string>
+    <string name="blocked_users">Người dùng bị chặn</string>
+    <string name="account">Tài khoản</string>
+    <string name="privacy">Quyền riêng tư</string>
+    <string name="notifications">Thông báo</string>
+    <string name="permissions">Quyền hạn</string>
+    <string name="about">Giới thiệu</string>
+    <string name="sign_out">Đăng xuất</string>
+    <string name="sign_out_confirm">Bạn có chắc chắn muốn đăng xuất không?</string>
+
+    <!-- Home -->
+    <string name="create_room">Tạo Phòng</string>
+    <string name="create_room_prompt">Đặt tên cho phòng của bạn</string>
+    <string name="home">Trang chủ</string>
+    <string name="in_room_count">%1$d người trong phòng</string>
+    <string name="join">Tham gia</string>
+    <string name="no_active_rooms">Không có phòng nào đang hoạt động</string>
+    <string name="no_rooms">Không có phòng nào</string>
+    <string name="room_name">Tên phòng</string>
+    <string name="room_name_label">Tên Phòng</string>
+    <string name="seats_count">%1$d/%2$d ghế</string>
+    <string name="speakers_count">%1$d/%2$d người nói</string>
+    <string name="tap_plus_to_create">Nhấn + để tạo phòng</string>
+    <string name="visitors_count">%1$d khách</string>
+
+    <!-- Profile -->
+    <string name="connections">Kết nối</string>
+    <string name="display_name">Tên hiển thị</string>
+    <string name="dob_privacy_note">Ngày sinh là bắt buộc nhưng bạn có thể ẩn tuổi trong cài đặt quyền riêng tư.</string>
+    <string name="dob_required_subtitle">Chúng tôi cần ngày sinh của bạn để tiếp tục.</string>
+    <string name="follow">Theo dõi</string>
+    <string name="follow_back">Theo dõi lại</string>
+    <string name="followers">Người theo dõi</string>
+    <string name="followers_count">Người theo dõi (%1$d)</string>
+    <string name="following">Đang theo dõi</string>
+    <string name="following_count">Đang theo dõi (%1$d)</string>
+    <string name="following_list_private">Danh sách theo dõi của người dùng này ở chế độ riêng tư</string>
+    <string name="get_super_shy">Nhận Super Shy</string>
+    <string name="gift_wall">Tường Quà tặng</string>
+    <string name="gift_value_coins">Giá trị: %1$d xu</string>
+    <string name="no_followers_yet">Chưa có người theo dõi</string>
+    <string name="no_profile_visitors">Chưa có ai ghé thăm hồ sơ</string>
+    <string name="not_following_anyone">Chưa theo dõi ai</string>
+    <string name="one_more_step">Thêm Một Bước Nữa</string>
+    <string name="profile">Hồ sơ</string>
+    <string name="profile_setup_subtitle">Chọn tên hiển thị và nhập ngày sinh của bạn</string>
+    <string name="received_times">Đã nhận %1$d lần</string>
+    <string name="remove_follower">Xóa người theo dõi</string>
+    <string name="report">Báo cáo</string>
+    <string name="select_date_of_birth">Chọn Ngày sinh</string>
+    <string name="select_nationality">Chọn Quốc tịch</string>
+    <string name="search_countries">Tìm quốc gia</string>
+    <string name="selected">Đã chọn</string>
+    <string name="set_up_your_profile">Thiết Lập Hồ Sơ</string>
+    <string name="stalker_visit_info">Đã ghé thăm hồ sơ bạn %1$s, %2$d lần trong 3 tháng qua</string>
+    <string name="stalkers_count">Người theo dõi ẩn (%1$d)</string>
+    <string name="stalkers_super_shy_description">Xem ai đã ghé thăm hồ sơ của bạn! Tính năng theo dõi hồ sơ là đặc quyền của Super Shy.</string>
+    <string name="super_shy_benefit">Đặc Quyền Super Shy</string>
+    <string name="top_senders">Người Gửi Hàng Đầu</string>
+    <string name="block">Chặn</string>
+    <string name="unblock">Bỏ chặn</string>
+    <string name="undo_remove">Hoàn tác xóa</string>
+    <string name="unfollow">Bỏ theo dõi</string>
+
+    <!-- Room -->
+    <string name="alias">Biệt danh</string>
+    <string name="approve">Chấp nhận</string>
+    <string name="audience">Khán giả</string>
+    <string name="back_to_home">Về Trang chủ</string>
+    <string name="backpack">Ba lô</string>
+    <string name="backpack_empty">Ba lô của bạn trống.\nQuay vòng quay để nhận quà!</string>
+    <string name="ban">Cấm</string>
+    <string name="block_user">Chặn Người dùng</string>
+    <string name="block_user_confirm">Bạn có chắc chắn muốn chặn %1$s không?</string>
+    <string name="close_room">Đóng Phòng</string>
+    <string name="daily">Hàng ngày</string>
+    <string name="deny">Từ chối</string>
+    <string name="empty_seat">Ghế trống</string>
+    <string name="filter_gift_animations_description">Lọc bỏ hiệu ứng của các quà giá rẻ.</string>
+    <string name="gift">Quà tặng</string>
+    <string name="gift_animations">Hiệu Ứng Quà Tặng</string>
+    <string name="host">Chủ phòng phụ</string>
+    <string name="hosts">Chủ phòng phụ</string>
+    <string name="invite_to_seat">Mời ngồi</string>
+    <string name="kick">Đuổi</string>
+    <string name="kick_user">Đuổi Người dùng</string>
+    <string name="kick_user_confirm">Bạn có chắc chắn muốn đuổi %1$s khỏi phòng không? Họ sẽ không thể tham gia lại.</string>
+    <string name="leave_room">Rời Phòng</string>
+    <string name="leave_seat">Rời ghế</string>
+    <string name="lock_seating">Khóa Chỗ Ngồi</string>
+    <string name="lock_seating_description">Chỉ chủ phòng mới có thể mời người dùng ngồi</string>
+    <string name="buy_coins">Mua xu</string>
+    <string name="collect_all">NHẬN TẤT CẢ (%1$d)</string>
+    <string name="increased_drop_rate">TỶ LỆ TRÚNG TĂNG</string>
+    <string name="loading_prices">Đang tải giá…</string>
+    <string name="lucky_spin">Lucky Spin</string>
+    <string name="lucky_spin_title">LUCKY SPIN</string>
+    <string name="need_more_coins">Cần thêm xu!</string>
+    <string name="no_packages_available">Không có gói nào</string>
+    <string name="no_spins_yet">Chưa có lượt quay</string>
+    <string name="prizes">Giải thưởng</string>
+    <string name="skip_animation">BỎ QUA HIỆU ỨNG</string>
+    <string name="spin">QUAY</string>
+    <string name="spin_count">%1$d LƯỢT QUAY</string>
+    <string name="spin_history">Lịch Sử Quay</string>
+    <string name="spin_results">Kết Quả Quay</string>
+    <string name="message">Tin nhắn</string>
+    <string name="move_to_audience">Chuyển về Khán giả</string>
+    <string name="move_to_seat">Chuyển lên Ghế</string>
+    <string name="move_to_which_seat">Chuyển đến ghế nào?</string>
+    <string name="mute">Tắt tiếng</string>
+    <string name="no_audience_members">Không có khán giả</string>
+    <string name="no_pending_requests">Không có yêu cầu đang chờ</string>
+    <string name="no_reason_given">Không có lý do</string>
+    <string name="no_one_on_mic">Không ai trên mic</string>
+    <string name="occupied">Đã có người</string>
+    <string name="open_for_duration">Đã mở %1$s</string>
+    <string name="owner">Chủ phòng</string>
+    <string name="reason_optional">Lý do (tùy chọn)</string>
+    <string name="reject">Từ chối</string>
+    <string name="remove">Xóa</string>
+    <string name="remove_as_host">Xóa quyền Chủ phòng phụ</string>
+    <string name="remove_from_room">Xóa khỏi Phòng</string>
+    <string name="request">Yêu cầu</string>
+    <string name="request_a_seat">Yêu Cầu Ghế</string>
+    <string name="request_seat">Yêu Cầu Ghế</string>
+    <string name="requesting">Đang yêu cầu</string>
+    <string name="room">Phòng</string>
+    <string name="room_closed">Phòng Đã Đóng</string>
+    <string name="room_closing_no_super_shy">Chủ phòng không có Super Shy, phòng này sẽ sớm đóng.</string>
+    <string name="room_closing_in">Phòng đóng sau %1$d:%2$s</string>
+    <string name="room_closing_soon">Phòng Sắp Đóng</string>
+    <string name="room_settings">Cài đặt phòng</string>
+    <string name="rooms">Phòng</string>
+    <string name="seat_requests">Yêu Cầu Ghế</string>
+    <string name="seat_swap_with">Ghế %1$d (đổi với %2$s)</string>
+    <string name="set_alias">Đặt Biệt danh</string>
+    <string name="set_alias_description">Đặt biệt danh cá nhân cho %1$s. Chỉ bạn mới thấy biệt danh này.</string>
+    <string name="set_as_host">Đặt làm Chủ phòng phụ</string>
+    <string name="showing_all_gift_animations">Hiển thị tất cả hiệu ứng quà tặng</string>
+    <string name="showing_animations_worth">Chỉ hiển thị hiệu ứng từ %1$d+ xu</string>
+    <string name="speakers">Người nói</string>
+    <string name="take_a_seat">Ngồi vào Ghế</string>
+    <string name="unmute">Bật tiếng</string>
+    <string name="unmuted">Đã bật tiếng</string>
+    <string name="user">Người dùng</string>
+    <string name="user_id">ID: %1$d</string>
+    <string name="visitor_count">%1$d khách</string>
+    <string name="voice">Giọng nói</string>
+    <string name="voice_unavailable">Giọng nói không khả dụng</string>
+    <string name="you_have_super_shy_room">Bạn có Super Shy! Mở phòng riêng với thời gian kéo dài lên đến %1$d giờ.</string>
+    <string name="get_super_shy_rooms">Nhận Super Shy để tận hưởng phòng kéo dài đến %1$d giờ!</string>
+
+    <!-- Room - Notifications -->
+    <string name="accept">Chấp nhận</string>
+    <string name="decline">Từ chối</string>
+    <string name="go_back">Quay lại</string>
+    <string name="go_to_seat">Đến Ghế</string>
+    <string name="invited_to_sit">Bạn đã được mời ngồi!</string>
+    <string name="request_accepted">Yêu cầu của bạn đã được chấp nhận!</string>
+    <string name="seat_number">Ghế %1$d</string>
+    <string name="user_wants_to_sit">%1$s muốn ngồi</string>
+
+    <!-- Room - Chat -->
+    <string name="cancel_edit">Hủy chỉnh sửa</string>
+    <string name="edit_message_placeholder">Chỉnh sửa tin nhắn...</string>
+    <string name="message_placeholder">Tin nhắn...</string>
+    <string name="new_messages">Tin nhắn mới</string>
+
+    <!-- Room - Backpack -->
+    <string name="action_cannot_be_undone">HÀNH ĐỘNG NÀY KHÔNG THỂ HOÀN TÁC.</string>
+    <string name="confirm_send">Xác Nhận Gửi</string>
+    <string name="from_backpack_items">Từ ba lô: %1$d vật phẩm</string>
+    <string name="gifts">Quà tặng</string>
+    <string name="send_all">Gửi Tất Cả</string>
+    <string name="send_all_includes">Bao gồm TẤT CẢ %1$d vật phẩm trong %2$d loại quà khác nhau.</string>
+    <string name="send_all_warning">Bạn sắp gửi TOÀN BỘ ba lô cho %1$s.</string>
+    <string name="send_everything_confirm">Tôi hiểu, gửi tất cả</string>
+    <string name="to_label">Đến</string>
+    <string name="total_cost_coins">Tổng chi phí: %1$d xu</string>
+    <string name="use_button">Dùng</string>
+    <string name="you_have_count">Bạn có: %1$d</string>
+    <string name="your_balance_coins">Số dư: %1$d xu</string>
+
+    <!-- Messaging -->
+    <string name="additional_details_optional">Chi tiết bổ sung (tùy chọn)</string>
+    <string name="all_admins_and_mods">Tất cả quản trị viên &amp; điều hành viên</string>
+    <string name="attach_evidence">Đính kèm Bằng chứng</string>
+    <string name="cant_message_user">Bạn không thể nhắn tin cho người dùng này</string>
+    <string name="chat">Trò chuyện</string>
+    <string name="close_group">Đóng Nhóm</string>
+    <string name="close_group_warning">Điều này sẽ đóng nhóm cho tất cả mọi người. Tin nhắn được giữ lại để kiểm duyệt.</string>
+    <string name="compressing">Đang nén...</string>
+    <string name="conversation_start_hint">Bắt đầu trò chuyện từ hồ sơ hoặc\nthẻ người dùng trong phòng</string>
+    <string name="create_group">Tạo Nhóm</string>
+    <string name="current_version">Hiện tại</string>
+    <string name="delete_conversation">Xóa Cuộc trò chuyện</string>
+    <string name="delete_conversation_warning">Điều này sẽ xóa cuộc trò chuyện khỏi danh sách của bạn. Tin nhắn được giữ lại và sẽ xuất hiện lại nếu người kia nhắn cho bạn.</string>
+    <string name="description_label">Mô tả</string>
+    <string name="description_optional">Mô tả (tùy chọn)</string>
+    <string name="edit_history">Lịch Sử Chỉnh Sửa</string>
+    <string name="editing_message">Đang chỉnh sửa tin nhắn</string>
+    <string name="evidence">Bằng chứng</string>
+    <string name="evidence_required">Cần ít nhất một ảnh chụp màn hình hoặc bản ghi.</string>
+    <string name="general">Chung</string>
+    <string name="group">Nhóm</string>
+    <string name="group_chat">Nhóm Chat</string>
+    <string name="group_name_label">Tên Nhóm</string>
+    <string name="group_name_required">Tên Nhóm *</string>
+    <string name="group_settings">Cài Đặt Nhóm</string>
+    <string name="invite_to_room">Mời vào Phòng</string>
+    <string name="last_seen">Lần cuối trực tuyến %1$s</string>
+    <string name="leave_group">Rời Nhóm</string>
+    <string name="members">Thành viên</string>
+    <string name="members_count">%1$d thành viên</string>
+    <string name="message_ellipsis">Tin nhắn...</string>
+    <string name="message_permissions">Quyền Tin nhắn</string>
+    <string name="message_preview_image">[Hình ảnh]</string>
+    <string name="message_preview_recalled">[Tin nhắn đã thu hồi]</string>
+    <string name="message_preview_room_invite">[Lời mời Phòng]</string>
+    <string name="message_preview_sticker">[Nhãn dán]</string>
+    <string name="messages">Tin nhắn</string>
+    <string name="mod_notifications">Thông Báo Điều Hành</string>
+    <string name="move_to_front">Đưa lên đầu</string>
+    <string name="mute_notifications">Tắt Thông báo</string>
+    <string name="mute_reason">. Lý do: %1$s</string>
+    <string name="muted">Đã tắt tiếng</string>
+    <string name="muted_for_hours_minutes">Bạn bị tắt tiếng trong %1$d giờ %2$d phút</string>
+    <string name="muted_for_minutes">Bạn bị tắt tiếng trong %1$d phút</string>
+    <string name="muted_indefinitely">Bạn đã bị tắt tiếng</string>
+    <string name="new_group">Nhóm Mới</string>
+    <string name="new_group_selected">Nhóm Mới (%1$d đã chọn)</string>
+    <string name="new_message">Tin Nhắn Mới</string>
+    <string name="no_action_needed">Không Cần Hành Động</string>
+    <string name="no_followers_following_found">Không tìm thấy người theo dõi</string>
+    <string name="no_matches_found">Không tìm thấy kết quả</string>
+    <string name="no_messages">Chưa có tin nhắn</string>
+    <string name="no_pending_reports">Không có báo cáo đang chờ</string>
+    <string name="no_stickers_yet">Chưa có nhãn dán</string>
+    <string name="no_users_found">Không tìm thấy người dùng</string>
+    <string name="notify_owner_only">Chỉ thông báo cho chủ phòng</string>
+    <string name="online">Trực tuyến</string>
+    <string name="only_admins_can_send">Chỉ quản trị viên và điều hành viên mới có thể gửi tin nhắn trong nhóm này</string>
+    <string name="only_owner_can_change_permissions">Chỉ chủ nhóm mới có thể thay đổi quyền hạn.</string>
+    <string name="owner_only">Chỉ chủ nhóm</string>
+    <string name="participants">Người tham gia</string>
+    <string name="participants_count">Người tham gia (%1$d)</string>
+    <string name="pin">Ghim</string>
+    <string name="recent">Gần đây</string>
+    <string name="replying_to">Đang trả lời %1$s</string>
+    <string name="report_message_prompt">Tại sao bạn báo cáo tin nhắn này?</string>
+    <string name="report_review">Xem Xét Báo Cáo</string>
+    <string name="report_user">Báo cáo %1$s</string>
+    <string name="report_user_prompt">Tại sao bạn báo cáo người dùng này?</string>
+    <string name="reset_to_default">Đặt lại Mặc định</string>
+    <string name="result_count">%1$d kết quả</string>
+    <string name="review_report">Xem Xét Báo Cáo</string>
+    <string name="role_admin">Quản trị viên</string>
+    <string name="role_member">Thành viên</string>
+    <string name="role_mod">Điều hành viên</string>
+    <string name="role_owner">Chủ nhóm</string>
+    <string name="save_description">Lưu Mô tả</string>
+    <string name="search_all_users">Tìm tất cả người dùng</string>
+    <string name="search_conversations">Tìm cuộc trò chuyện...</string>
+    <string name="search_messages">Tìm tin nhắn...</string>
+    <string name="search_people">Tìm người...</string>
+    <string name="select_action">Chọn hành động:</string>
+    <string name="selected_count">Đã chọn %1$d</string>
+    <string name="start_conversation">Bắt đầu cuộc trò chuyện</string>
+    <string name="submit_report">Gửi Báo Cáo</string>
+    <string name="submitting">Đang gửi...</string>
+    <string name="system_messages">Tin Nhắn Hệ Thống</string>
+    <string name="transfer_ownership">Chuyển Quyền Sở Hữu</string>
+    <string name="transfer_ownership_warning">Chọn thành viên để chuyển quyền sở hữu. Bạn sẽ mất quyền chủ nhóm. Hành động này không thể hoàn tác.</string>
+    <string name="type_message">Nhập tin nhắn…</string>
+    <string name="typing">đang nhập...</string>
+    <string name="unmute_action">Bật tiếng</string>
+    <string name="unmute_notifications">Bật Thông báo</string>
+    <string name="unpin">Bỏ ghim</string>
+    <string name="view_profile">Xem Hồ sơ</string>
+
+    <!-- Messaging - report reasons -->
+    <string name="report_reason_spam">Spam</string>
+    <string name="report_reason_harassment">Quấy rối</string>
+    <string name="report_reason_inappropriate">Nội dung Không phù hợp</string>
+    <string name="report_reason_other">Khác</string>
+
+    <!-- Messaging - report actions -->
+    <string name="report_action_warning">Cảnh cáo</string>
+    <string name="report_action_temp_suspension">Tạm ngưng</string>
+    <string name="report_action_perm_suspension">Cấm vĩnh viễn</string>
+    <string name="report_action_pm_ban">Cấm nhắn tin riêng</string>
+
+    <!-- Messaging - report details -->
+    <string name="report_reason_prefix">Lý do: %1$s</string>
+    <string name="report_type_prefix">Loại: %1$s</string>
+    <string name="report_details_prefix">Chi tiết: %1$s</string>
+    <string name="report_message_prefix">Tin nhắn: \"%1$s\"</string>
+    <string name="report_reporter_reported">Người báo cáo: %1$s | Bị báo cáo: %2$s</string>
+
+    <!-- Messaging - system message labels -->
+    <string name="sys_member_joins">Thành viên tham gia</string>
+    <string name="sys_member_leaves">Thành viên rời đi</string>
+    <string name="sys_role_changes">Thay đổi vai trò</string>
+    <string name="sys_permission_changes">Thay đổi quyền hạn</string>
+
+    <!-- Messaging - permission labels -->
+    <string name="perm_who_can_send">Ai có thể gửi tin nhắn</string>
+    <string name="perm_who_can_add_members">Ai có thể thêm thành viên</string>
+    <string name="perm_who_can_edit_info">Ai có thể sửa thông tin nhóm</string>
+    <string name="perm_who_can_delete_messages">Ai có thể xóa tin nhắn</string>
+    <string name="perm_who_can_mute_members">Ai có thể tắt tiếng thành viên</string>
+    <string name="perm_who_can_remove_members">Ai có thể xóa thành viên</string>
+
+    <!-- Messaging - date separators -->
+    <string name="today">Hôm nay</string>
+    <string name="yesterday">Hôm qua</string>
+
+    <!-- Daily Reward -->
+    <string name="awesome">Tuyệt vời!</string>
+    <string name="claim_todays_reward">Nhận Thưởng Hôm Nay</string>
+    <string name="coins">xu</string>
+    <string name="day_fri">T6</string>
+    <string name="day_mon">T2</string>
+    <string name="day_sat">T7</string>
+    <string name="day_streak">Chuỗi %1$d ngày</string>
+    <string name="day_sun">CN</string>
+    <string name="day_thu">T5</string>
+    <string name="day_tue">T3</string>
+    <string name="day_wed">T4</string>
+    <string name="later">Để sau</string>
+    <string name="milestone">Cột mốc</string>
+    <string name="milestone_bonus">Thưởng cột mốc!</string>
+    <string name="plus_coins">+%1$d xu!</string>
+    <string name="reward_claimed">Đã Nhận Thưởng!</string>
+
+    <!-- Economy -->
+    <string name="bean_redeem_description">1 hạt đậu = 1 xu. Đổi từ 2.000+ để nhận thêm 10% bonus!</string>
+    <string name="bonus_coins">+%1$d bonus</string>
+    <string name="buy_shy_coins">Mua ShyCoins</string>
+    <string name="confirm_redemption">Xác Nhận Đổi</string>
+    <string name="daily_reward">Thưởng Hàng Ngày</string>
+    <string name="redeem">Đổi</string>
+    <string name="redeem_all">Đổi Tất Cả</string>
+    <string name="redeem_beans_for_coins">Đổi %1$s hạt đậu lấy %2$s xu?</string>
+    <string name="redeem_shy_beans">Đổi ShyBeans</string>
+    <string name="send_gift">Gửi Quà</string>
+    <string name="shy_beans">ShyBeans</string>
+    <string name="shy_coins">ShyCoins</string>
+    <string name="testing_mode_coins">Chế độ thử nghiệm — không tính phí thật. Nhấn vào gói để nhận xu ngay.</string>
+    <string name="filter_all">Tất cả</string>
+    <string name="filter_gacha">Gacha</string>
+    <string name="filter_gifts">Quà tặng</string>
+    <string name="filter_purchases">Mua hàng</string>
+    <string name="filter_redemptions">Đổi thưởng</string>
+    <string name="filter_rewards">Phần thưởng</string>
+    <string name="no_filtered_transactions">Không có giao dịch %1$s</string>
+    <string name="no_transactions_yet">Chưa có giao dịch</string>
+    <string name="transaction_history">Lịch Sử Giao Dịch</string>
+    <string name="transactions">Giao dịch</string>
+    <string name="wallet">Ví</string>
+
+    <!-- Super Shy -->
+    <string name="benefit_daily_bonus">+10% xu đăng nhập hàng ngày (làm tròn lên)</string>
+    <string name="benefit_extended_room">Thời gian phòng kéo dài (12 giờ)</string>
+    <string name="benefit_full_room">Phòng đầy đủ 8 ghế</string>
+    <string name="benefit_gold_name">Tên hiển thị vàng ở mọi nơi</string>
+    <string name="benefit_profile_frame">Khung hồ sơ độc quyền</string>
+    <string name="benefit_star_badge">Huy hiệu ngôi sao bên cạnh tên</string>
+    <string name="benefits">Đặc quyền</string>
+    <string name="choose_a_plan">Chọn gói</string>
+    <string name="claim_30_days_free">Nhận 30 Ngày Miễn Phí</string>
+    <string name="claimed">Đã nhận!</string>
+    <string name="claimed_activate_backpack">Để kích hoạt, hãy tìm trong ba lô khi bạn đang ở phòng chat.</string>
+    <string name="claiming">Đang nhận…</string>
+    <string name="currently_active">Đang Hoạt Động</string>
+    <string name="days_remaining">Còn %1$d ngày</string>
+    <string name="one_time_payment">Thanh toán một lần</string>
+    <string name="per_month">mỗi tháng</string>
+    <string name="per_year">mỗi năm</string>
+    <string name="super_shy">Super Shy</string>
+    <string name="super_shy_for_life">Bạn là Super Shy vĩnh viễn!</string>
+    <string name="tap_to_claim_backpack">Nhấn để nhận — thêm vào ba lô của bạn</string>
+    <string name="testing_mode_super_shy">Chế độ thử nghiệm — không tính phí thật. Nhấn vào gói để kích hoạt Super Shy ngay.</string>
+    <string name="tier_label">Gói: %1$s</string>
+    <string name="tier_lifetime">Trọn đời</string>
+    <string name="tier_monthly">Hàng tháng</string>
+    <string name="tier_yearly">Hàng năm</string>
+    <string name="upgrade_to_lifetime">Nâng cấp lên Trọn Đời</string>
+
+    <!-- Legal -->
+    <string name="accept_all_and_continue">Chấp Nhận Tất Cả &amp; Tiếp Tục</string>
+    <string name="community_standards">Tiêu Chuẩn Cộng Đồng</string>
+    <string name="cyber_bullying_policy">Chính Sách Chống Bắt Nạt Mạng</string>
+    <string name="i_have_read_and_agree">Tôi đã đọc và đồng ý với </string>
+    <string name="privacy_policy">Chính Sách Bảo Mật</string>
+    <string name="review_and_accept_policies">Vui lòng xem xét và chấp nhận các chính sách để tiếp tục.</string>
+    <string name="terms_and_conditions">Điều Khoản &amp; Điều Kiện</string>
+    <string name="welcome_to_shytalk">Chào Mừng Đến ShyTalk</string>
+
+    <!-- Auth -->
+    <string name="sign_in">Đăng nhập</string>
+    <string name="phone_number">Số Điện Thoại</string>
+    <string name="verification_code">Mã Xác Nhận</string>
+    <string name="continue_with_google">Tiếp tục với Google</string>
+</resources>

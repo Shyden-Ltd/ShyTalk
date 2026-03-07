@@ -1,0 +1,471 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common actions -->
+    <string name="all_caps">TÜMÜ</string>
+    <string name="back">Geri</string>
+    <string name="cancel">İptal</string>
+    <string name="change">Değiştir</string>
+    <string name="close">Kapat</string>
+    <string name="confirm">Onayla</string>
+    <string name="continue_button">Devam</string>
+    <string name="create">Oluştur</string>
+    <string name="delete">Sil</string>
+    <string name="done">Tamam</string>
+    <string name="edit">Düzenle</string>
+    <string name="error_generic">Bir şeyler ters gitti</string>
+    <string name="got_it">Anladım</string>
+    <string name="learn_more">Daha Fazla Bilgi</string>
+    <string name="loading">Yükleniyor…</string>
+    <string name="maybe_later">Belki Sonra</string>
+    <string name="message_action">Mesaj</string>
+    <string name="next">İleri</string>
+    <string name="ok">OK</string>
+    <string name="retry">Tekrar Dene</string>
+    <string name="save">Kaydet</string>
+    <string name="send">Gönder</string>
+    <string name="sending">Gönderiliyor...</string>
+    <string name="transfer">Aktar</string>
+    <string name="unknown">Bilinmiyor</string>
+    <string name="using">Kullanılıyor...</string>
+    <string name="you">Sen</string>
+
+    <!-- Message bubbles -->
+    <string name="edited">düzenlendi</string>
+    <string name="tap_to_join">Katılmak için dokun</string>
+    <string name="message_recalled_by_you">Bu mesajı geri çektiniz</string>
+    <string name="message_recalled">Bu mesaj geri çekildi</string>
+    <string name="message_hidden_by_mod">Bu mesaj bir moderatör tarafından gizlendi</string>
+    <string name="invite_to_mic">Mikrofona davet et</string>
+    <string name="closed">Kapalı</string>
+    <string name="edited_count">Düzenlendi (%1$d)</string>
+    <string name="read">Okundu</string>
+    <string name="sent">Gönderildi</string>
+    <string name="sticker">Çıkartma</string>
+    <string name="image">Resim</string>
+
+    <!-- Context menu -->
+    <string name="react">Tepki Ver</string>
+    <string name="reply">Yanıtla</string>
+    <string name="copy">Kopyala</string>
+    <string name="recall">Geri Çek</string>
+    <string name="add_to_stickers">Çıkartmalara Ekle</string>
+    <string name="hide_message">Mesajı Gizle</string>
+    <string name="report_message">Mesajı Bildir</string>
+
+    <!-- Translation -->
+    <string name="translate">Çevir</string>
+    <string name="translated_from">%1$s dilinden çevrildi</string>
+    <string name="show_original">Orijinali göster</string>
+    <string name="translation_limit_reached">Günlük sınıra ulaşıldı. Sınırsız çeviri için Super Shy\'a yükseltin.</string>
+    <string name="auto_translate">Otomatik çeviri</string>
+    <string name="auto_translate_description">Gelen mesajları otomatik olarak dilinize çevirin</string>
+    <string name="translations_remaining">Bugün %1$d çeviri hakkınız kaldı</string>
+
+    <!-- Settings -->
+    <string name="settings">Ayarlar</string>
+    <string name="language">Dil</string>
+    <string name="blocked_users">Engellenen Kullanıcılar</string>
+    <string name="account">Hesap</string>
+    <string name="privacy">Gizlilik</string>
+    <string name="notifications">Bildirimler</string>
+    <string name="permissions">İzinler</string>
+    <string name="about">Hakkında</string>
+    <string name="sign_out">Çıkış Yap</string>
+    <string name="sign_out_confirm">Çıkış yapmak istediğinize emin misiniz?</string>
+
+    <!-- Home -->
+    <string name="create_room">Oda Oluştur</string>
+    <string name="create_room_prompt">Odanıza bir isim verin</string>
+    <string name="home">Ana Sayfa</string>
+    <string name="in_room_count">Odada %1$d kişi</string>
+    <string name="join">Katıl</string>
+    <string name="no_active_rooms">Aktif oda yok</string>
+    <string name="no_rooms">Oda bulunamadı</string>
+    <string name="room_name">Oda adı</string>
+    <string name="room_name_label">Oda Adı</string>
+    <string name="seats_count">%1$d/%2$d koltuk</string>
+    <string name="speakers_count">%1$d/%2$d konuşmacı</string>
+    <string name="tap_plus_to_create">Oluşturmak için + düğmesine dokunun</string>
+    <string name="visitors_count">%1$d ziyaretçi</string>
+
+    <!-- Profile -->
+    <string name="connections">Bağlantılar</string>
+    <string name="display_name">Görünen Ad</string>
+    <string name="dob_privacy_note">Doğum tarihiniz gereklidir ancak yaşınızı gizlilik ayarlarından gizleyebilirsiniz.</string>
+    <string name="dob_required_subtitle">Devam etmek için doğum tarihinize ihtiyacımız var.</string>
+    <string name="follow">Takip Et</string>
+    <string name="follow_back">Geri Takip Et</string>
+    <string name="followers">Takipçiler</string>
+    <string name="followers_count">Takipçiler (%1$d)</string>
+    <string name="following">Takip Edilenler</string>
+    <string name="following_count">Takip Edilenler (%1$d)</string>
+    <string name="following_list_private">Bu kullanıcının takip listesi gizlidir</string>
+    <string name="get_super_shy">Super Shy Edinin</string>
+    <string name="gift_wall">Hediye Duvarı</string>
+    <string name="gift_value_coins">Değer: %1$d jeton</string>
+    <string name="no_followers_yet">Henüz takipçi yok</string>
+    <string name="no_profile_visitors">Henüz profil ziyaretçisi yok</string>
+    <string name="not_following_anyone">Henüz kimseyi takip etmiyor</string>
+    <string name="one_more_step">Bir Adım Daha</string>
+    <string name="profile">Profil</string>
+    <string name="profile_setup_subtitle">Bir görünen ad seçin ve doğum tarihinizi girin</string>
+    <string name="received_times">%1$d kez alındı</string>
+    <string name="remove_follower">Takipçiyi kaldır</string>
+    <string name="report">Bildir</string>
+    <string name="select_date_of_birth">Doğum Tarihi Seçin</string>
+    <string name="select_nationality">Uyruk Seçin</string>
+    <string name="search_countries">Ülke ara</string>
+    <string name="selected">Seçildi</string>
+    <string name="set_up_your_profile">Profilinizi Oluşturun</string>
+    <string name="stalker_visit_info">Profilinizi %1$s tarihinde stalkladı, son 3 ayda %2$d kez</string>
+    <string name="stalkers_count">Stalker\'lar (%1$d)</string>
+    <string name="stalkers_super_shy_description">Profilinizi kimlerin ziyaret ettiğini görün! Profil stalker\'ları yalnızca Super Shy üyelere özel bir özelliktir.</string>
+    <string name="super_shy_benefit">Super Shy Avantajı</string>
+    <string name="top_senders">En Çok Gönderenler</string>
+    <string name="block">Engelle</string>
+    <string name="unblock">Engeli Kaldır</string>
+    <string name="undo_remove">Kaldırmayı geri al</string>
+    <string name="unfollow">Takibi Bırak</string>
+
+    <!-- Room -->
+    <string name="alias">Takma Ad</string>
+    <string name="approve">Onayla</string>
+    <string name="audience">Dinleyiciler</string>
+    <string name="back_to_home">Ana Sayfaya Dön</string>
+    <string name="backpack">Sırt Çantası</string>
+    <string name="backpack_empty">Sırt çantanız boş.\nHediye kazanmak için çarkı çevirin!</string>
+    <string name="ban">Yasakla</string>
+    <string name="block_user">Kullanıcıyı Engelle</string>
+    <string name="block_user_confirm">%1$s adlı kullanıcıyı engellemek istediğinize emin misiniz?</string>
+    <string name="close_room">Odayı Kapat</string>
+    <string name="daily">Günlük</string>
+    <string name="deny">Reddet</string>
+    <string name="empty_seat">Boş koltuk</string>
+    <string name="filter_gift_animations_description">Ucuz hediyelerin animasyonlarını filtreleyin.</string>
+    <string name="gift">Hediye</string>
+    <string name="gift_animations">Hediye Animasyonları</string>
+    <string name="host">Ev Sahibi</string>
+    <string name="hosts">Ev Sahipleri</string>
+    <string name="invite_to_seat">Koltuğa davet et</string>
+    <string name="kick">At</string>
+    <string name="kick_user">Kullanıcıyı At</string>
+    <string name="kick_user_confirm">%1$s adlı kullanıcıyı odadan atmak istediğinize emin misiniz? Tekrar katılamayacak.</string>
+    <string name="leave_room">Odadan Ayrıl</string>
+    <string name="leave_seat">Koltuktan ayrıl</string>
+    <string name="lock_seating">Oturmayı Kilitle</string>
+    <string name="lock_seating_description">Yalnızca oda sahibi kullanıcıları oturmaya davet edebilir</string>
+    <string name="buy_coins">Jeton satın al</string>
+    <string name="collect_all">TÜMÜNÜ TOPLA (%1$d)</string>
+    <string name="increased_drop_rate">ARTIRILMIŞ DÜŞME ORANI</string>
+    <string name="loading_prices">Fiyatlar yükleniyor…</string>
+    <string name="lucky_spin">Lucky Spin</string>
+    <string name="lucky_spin_title">LUCKY SPIN</string>
+    <string name="need_more_coins">Daha fazla jeton gerekiyor!</string>
+    <string name="no_packages_available">Paket bulunamadı</string>
+    <string name="no_spins_yet">Henüz çevirme yok</string>
+    <string name="prizes">Ödüller</string>
+    <string name="skip_animation">ANİMASYONU ATLA</string>
+    <string name="spin">ÇEVİR</string>
+    <string name="spin_count">%1$d ÇEVİRME</string>
+    <string name="spin_history">Çevirme Geçmişi</string>
+    <string name="spin_results">Çevirme Sonuçları</string>
+    <string name="message">Mesaj</string>
+    <string name="move_to_audience">Dinleyicilere Taşı</string>
+    <string name="move_to_seat">Koltuğa Taşı</string>
+    <string name="move_to_which_seat">Hangi koltuğa taşınsın?</string>
+    <string name="mute">Sessize Al</string>
+    <string name="no_audience_members">Dinleyici yok</string>
+    <string name="no_pending_requests">Bekleyen istek yok</string>
+    <string name="no_reason_given">Sebep belirtilmedi</string>
+    <string name="no_one_on_mic">Mikrofonda kimse yok</string>
+    <string name="occupied">Dolu</string>
+    <string name="open_for_duration">%1$s süredir açık</string>
+    <string name="owner">Sahip</string>
+    <string name="reason_optional">Sebep (isteğe bağlı)</string>
+    <string name="reject">Reddet</string>
+    <string name="remove">Kaldır</string>
+    <string name="remove_as_host">Ev Sahipliğini Kaldır</string>
+    <string name="remove_from_room">Odadan Çıkar</string>
+    <string name="request">İstek</string>
+    <string name="request_a_seat">Koltuk İste</string>
+    <string name="request_seat">Koltuk İste</string>
+    <string name="requesting">İsteniyor</string>
+    <string name="room">Oda</string>
+    <string name="room_closed">Oda Kapatıldı</string>
+    <string name="room_closing_no_super_shy">Oda sahibinin Super Shy\'ı yok, bu yüzden oda yakında kapanacak.</string>
+    <string name="room_closing_in">Oda %1$d:%2$s içinde kapanıyor</string>
+    <string name="room_closing_soon">Oda Yakında Kapanıyor</string>
+    <string name="room_settings">Oda ayarları</string>
+    <string name="rooms">Odalar</string>
+    <string name="seat_requests">Koltuk İstekleri</string>
+    <string name="seat_swap_with">Koltuk %1$d (%2$s ile değiştir)</string>
+    <string name="set_alias">Takma Ad Belirle</string>
+    <string name="set_alias_description">%1$s için kişisel bir takma ad belirleyin. Bunu yalnızca siz göreceksiniz.</string>
+    <string name="set_as_host">Ev Sahibi Yap</string>
+    <string name="showing_all_gift_animations">Tüm hediye animasyonları gösteriliyor</string>
+    <string name="showing_animations_worth">Yalnızca %1$d+ jeton değerinde animasyonlar gösteriliyor</string>
+    <string name="speakers">Konuşmacılar</string>
+    <string name="take_a_seat">Bir Koltuğa Oturun</string>
+    <string name="unmute">Sesi Aç</string>
+    <string name="unmuted">Ses Açıldı</string>
+    <string name="user">Kullanıcı</string>
+    <string name="user_id">ID: %1$d</string>
+    <string name="visitor_count">%1$d ziyaretçi</string>
+    <string name="voice">Ses</string>
+    <string name="voice_unavailable">Ses kullanılamıyor</string>
+    <string name="you_have_super_shy_room">Super Shy\'ınız var! %1$d saate kadar uzatılmış süreyle kendi odanızı açın.</string>
+    <string name="get_super_shy_rooms">%1$d saate kadar süren odaların keyfini çıkarmak için Super Shy edinin!</string>
+
+    <!-- Room - Notifications -->
+    <string name="accept">Kabul Et</string>
+    <string name="decline">Reddet</string>
+    <string name="go_back">Geri dön</string>
+    <string name="go_to_seat">Koltuğa Git</string>
+    <string name="invited_to_sit">Oturmaya davet edildiniz!</string>
+    <string name="request_accepted">İsteğiniz kabul edildi!</string>
+    <string name="seat_number">Koltuk %1$d</string>
+    <string name="user_wants_to_sit">%1$s oturmak istiyor</string>
+
+    <!-- Room - Chat -->
+    <string name="cancel_edit">Düzenlemeyi iptal et</string>
+    <string name="edit_message_placeholder">Mesajı düzenle...</string>
+    <string name="message_placeholder">Mesaj...</string>
+    <string name="new_messages">Yeni mesajlar</string>
+
+    <!-- Room - Backpack -->
+    <string name="action_cannot_be_undone">BU İŞLEM GERİ ALINAMAZ.</string>
+    <string name="confirm_send">Gönderimi Onayla</string>
+    <string name="from_backpack_items">Sırt çantasından: %1$d öğe</string>
+    <string name="gifts">Hediyeler</string>
+    <string name="send_all">Tümünü Gönder</string>
+    <string name="send_all_includes">Bu, %2$d farklı hediyeden TOPLAM %1$d öğeyi içerir.</string>
+    <string name="send_all_warning">%1$s adlı kullanıcıya TÜM sırt çantanızı göndermek üzeresiniz.</string>
+    <string name="send_everything_confirm">Anlıyorum, her şeyi gönder</string>
+    <string name="to_label">Kime</string>
+    <string name="total_cost_coins">Toplam maliyet: %1$d jeton</string>
+    <string name="use_button">Kullan</string>
+    <string name="you_have_count">Sahip olduğunuz: %1$d</string>
+    <string name="your_balance_coins">Bakiyeniz: %1$d jeton</string>
+
+    <!-- Messaging -->
+    <string name="additional_details_optional">Ek ayrıntılar (isteğe bağlı)</string>
+    <string name="all_admins_and_mods">Tüm yöneticiler &amp; moderatörler</string>
+    <string name="attach_evidence">Kanıt Ekle</string>
+    <string name="cant_message_user">Bu kullanıcıya mesaj gönderemezsiniz</string>
+    <string name="chat">Sohbet</string>
+    <string name="close_group">Grubu Kapat</string>
+    <string name="close_group_warning">Bu, grubu herkes için kapatacaktır. Mesajlar moderasyon için korunur.</string>
+    <string name="compressing">Sıkıştırılıyor...</string>
+    <string name="conversation_start_hint">Bir odadaki profil veya kullanıcı\nkartından sohbet başlatın</string>
+    <string name="create_group">Grup Oluştur</string>
+    <string name="current_version">Mevcut</string>
+    <string name="delete_conversation">Sohbeti Sil</string>
+    <string name="delete_conversation_warning">Bu, sohbeti listenizden kaldıracaktır. Mesajlar korunur ve karşı taraf size tekrar mesaj gönderdiğinde yeniden görünür.</string>
+    <string name="description_label">Açıklama</string>
+    <string name="description_optional">Açıklama (isteğe bağlı)</string>
+    <string name="edit_history">Düzenleme Geçmişi</string>
+    <string name="editing_message">Mesaj düzenleniyor</string>
+    <string name="evidence">Kanıt</string>
+    <string name="evidence_required">En az bir ekran görüntüsü veya kayıt gereklidir.</string>
+    <string name="general">Genel</string>
+    <string name="group">Grup</string>
+    <string name="group_chat">Grup Sohbeti</string>
+    <string name="group_name_label">Grup Adı</string>
+    <string name="group_name_required">Grup Adı *</string>
+    <string name="group_settings">Grup Ayarları</string>
+    <string name="invite_to_room">Odaya Davet Et</string>
+    <string name="last_seen">Son görülme %1$s</string>
+    <string name="leave_group">Gruptan Ayrıl</string>
+    <string name="members">Üyeler</string>
+    <string name="members_count">%1$d üye</string>
+    <string name="message_ellipsis">Mesaj...</string>
+    <string name="message_permissions">Mesaj İzinleri</string>
+    <string name="message_preview_image">[Resim]</string>
+    <string name="message_preview_recalled">[Mesaj geri çekildi]</string>
+    <string name="message_preview_room_invite">[Oda Daveti]</string>
+    <string name="message_preview_sticker">[Çıkartma]</string>
+    <string name="messages">Mesajlar</string>
+    <string name="mod_notifications">Moderatör Bildirimleri</string>
+    <string name="move_to_front">Öne taşı</string>
+    <string name="mute_notifications">Bildirimleri Sessize Al</string>
+    <string name="mute_reason">. Sebep: %1$s</string>
+    <string name="muted">Sessiz</string>
+    <string name="muted_for_hours_minutes">%1$d saat %2$d dakika susturuldunuz</string>
+    <string name="muted_for_minutes">%1$d dakika susturuldunuz</string>
+    <string name="muted_indefinitely">Susturuldunuz</string>
+    <string name="new_group">Yeni Grup</string>
+    <string name="new_group_selected">Yeni Grup (%1$d seçili)</string>
+    <string name="new_message">Yeni Mesaj</string>
+    <string name="no_action_needed">İşlem Gerekmez</string>
+    <string name="no_followers_following_found">Takipçi veya takip edilen bulunamadı</string>
+    <string name="no_matches_found">Eşleşme bulunamadı</string>
+    <string name="no_messages">Henüz mesaj yok</string>
+    <string name="no_pending_reports">Bekleyen rapor yok</string>
+    <string name="no_stickers_yet">Henüz çıkartma yok</string>
+    <string name="no_users_found">Kullanıcı bulunamadı</string>
+    <string name="notify_owner_only">Yalnızca sahibi bilgilendir</string>
+    <string name="online">Çevrimiçi</string>
+    <string name="only_admins_can_send">Bu grupta yalnızca yöneticiler ve moderatörler mesaj gönderebilir</string>
+    <string name="only_owner_can_change_permissions">Yalnızca grup sahibi izinleri değiştirebilir.</string>
+    <string name="owner_only">Yalnızca sahip</string>
+    <string name="participants">Katılımcılar</string>
+    <string name="participants_count">Katılımcılar (%1$d)</string>
+    <string name="pin">Sabitle</string>
+    <string name="recent">Son</string>
+    <string name="replying_to">%1$s adlı kişiye yanıt veriliyor</string>
+    <string name="report_message_prompt">Bu mesajı neden bildiriyorsunuz?</string>
+    <string name="report_review">Rapor İnceleme</string>
+    <string name="report_user">%1$s Bildir</string>
+    <string name="report_user_prompt">Bu kullanıcıyı neden bildiriyorsunuz?</string>
+    <string name="reset_to_default">Varsayılana Sıfırla</string>
+    <string name="result_count">%1$d sonuç</string>
+    <string name="review_report">Raporu İncele</string>
+    <string name="role_admin">Yönetici</string>
+    <string name="role_member">Üye</string>
+    <string name="role_mod">Moderatör</string>
+    <string name="role_owner">Sahip</string>
+    <string name="save_description">Açıklamayı Kaydet</string>
+    <string name="search_all_users">Tüm kullanıcıları ara</string>
+    <string name="search_conversations">Sohbetlerde ara...</string>
+    <string name="search_messages">Mesajlarda ara...</string>
+    <string name="search_people">Kişi ara...</string>
+    <string name="select_action">İşlem seçin:</string>
+    <string name="selected_count">%1$d seçili</string>
+    <string name="start_conversation">Bir sohbet başlatın</string>
+    <string name="submit_report">Raporu Gönder</string>
+    <string name="submitting">Gönderiliyor...</string>
+    <string name="system_messages">Sistem Mesajları</string>
+    <string name="transfer_ownership">Sahipliği Aktar</string>
+    <string name="transfer_ownership_warning">Sahipliğin aktarılacağı bir üye seçin. Sahip ayrıcalıklarınızı kaybedeceksiniz. Bu geri alınamaz.</string>
+    <string name="type_message">Bir mesaj yazın…</string>
+    <string name="typing">yazıyor...</string>
+    <string name="unmute_action">Sesi Aç</string>
+    <string name="unmute_notifications">Bildirimleri Aç</string>
+    <string name="unpin">Sabitlemeyi Kaldır</string>
+    <string name="view_profile">Profili Görüntüle</string>
+
+    <!-- Messaging - report reasons -->
+    <string name="report_reason_spam">Spam</string>
+    <string name="report_reason_harassment">Taciz</string>
+    <string name="report_reason_inappropriate">Uygunsuz İçerik</string>
+    <string name="report_reason_other">Diğer</string>
+
+    <!-- Messaging - report actions -->
+    <string name="report_action_warning">Uyarı Ver</string>
+    <string name="report_action_temp_suspension">Geçici Askıya Alma</string>
+    <string name="report_action_perm_suspension">Kalıcı Askıya Alma</string>
+    <string name="report_action_pm_ban">Özel Mesaj Yasağı</string>
+
+    <!-- Messaging - report details -->
+    <string name="report_reason_prefix">Sebep: %1$s</string>
+    <string name="report_type_prefix">Tür: %1$s</string>
+    <string name="report_details_prefix">Ayrıntılar: %1$s</string>
+    <string name="report_message_prefix">Mesaj: \"%1$s\"</string>
+    <string name="report_reporter_reported">Bildiren: %1$s | Bildirilen: %2$s</string>
+
+    <!-- Messaging - system message labels -->
+    <string name="sys_member_joins">Üye katılır</string>
+    <string name="sys_member_leaves">Üye ayrılır</string>
+    <string name="sys_role_changes">Rol değişiklikleri</string>
+    <string name="sys_permission_changes">İzin değişiklikleri</string>
+
+    <!-- Messaging - permission labels -->
+    <string name="perm_who_can_send">Kimler mesaj gönderebilir</string>
+    <string name="perm_who_can_add_members">Kimler üye ekleyebilir</string>
+    <string name="perm_who_can_edit_info">Kimler grup bilgilerini düzenleyebilir</string>
+    <string name="perm_who_can_delete_messages">Kimler mesaj silebilir</string>
+    <string name="perm_who_can_mute_members">Kimler üyeleri susturabilir</string>
+    <string name="perm_who_can_remove_members">Kimler üyeleri çıkarabilir</string>
+
+    <!-- Messaging - date separators -->
+    <string name="today">Bugün</string>
+    <string name="yesterday">Dün</string>
+
+    <!-- Daily Reward -->
+    <string name="awesome">Harika!</string>
+    <string name="claim_todays_reward">Bugünün Ödülünü Al</string>
+    <string name="coins">jeton</string>
+    <string name="day_fri">Cum</string>
+    <string name="day_mon">Pzt</string>
+    <string name="day_sat">Cmt</string>
+    <string name="day_streak">%1$d günlük seri</string>
+    <string name="day_sun">Paz</string>
+    <string name="day_thu">Per</string>
+    <string name="day_tue">Sal</string>
+    <string name="day_wed">Çar</string>
+    <string name="later">Sonra</string>
+    <string name="milestone">Kilometre Taşı</string>
+    <string name="milestone_bonus">Kilometre taşı bonusu!</string>
+    <string name="plus_coins">+%1$d jeton!</string>
+    <string name="reward_claimed">Ödül Alındı!</string>
+
+    <!-- Economy -->
+    <string name="bean_redeem_description">1 fasulye = 1 jeton. 2.000+ kullanım için %10 bonus!</string>
+    <string name="bonus_coins">+%1$d bonus</string>
+    <string name="buy_shy_coins">ShyCoins Satın Al</string>
+    <string name="confirm_redemption">Kullanımı Onayla</string>
+    <string name="daily_reward">Günlük Ödül</string>
+    <string name="redeem">Kullan</string>
+    <string name="redeem_all">Tümünü Kullan</string>
+    <string name="redeem_beans_for_coins">%1$s fasulye %2$s jetona çevrilsin mi?</string>
+    <string name="redeem_shy_beans">ShyBeans Kullan</string>
+    <string name="send_gift">Hediye Gönder</string>
+    <string name="shy_beans">ShyBeans</string>
+    <string name="shy_coins">ShyCoins</string>
+    <string name="testing_mode_coins">Test modu — gerçek ücret alınmaz. Anında jeton almak için bir pakete dokunun.</string>
+    <string name="filter_all">Tümü</string>
+    <string name="filter_gacha">Gacha</string>
+    <string name="filter_gifts">Hediyeler</string>
+    <string name="filter_purchases">Satın Almalar</string>
+    <string name="filter_redemptions">Kullanımlar</string>
+    <string name="filter_rewards">Ödüller</string>
+    <string name="no_filtered_transactions">%1$s işlemi yok</string>
+    <string name="no_transactions_yet">Henüz işlem yok</string>
+    <string name="transaction_history">İşlem Geçmişi</string>
+    <string name="transactions">İşlemler</string>
+    <string name="wallet">Cüzdan</string>
+
+    <!-- Super Shy -->
+    <string name="benefit_daily_bonus">+%10 günlük giriş jetonu (yukarı yuvarlanır)</string>
+    <string name="benefit_extended_room">Uzatılmış oda süresi (12 saat)</string>
+    <string name="benefit_full_room">8 koltuklu tam oda</string>
+    <string name="benefit_gold_name">Her yerde altın görünen ad</string>
+    <string name="benefit_profile_frame">Özel profil çerçevesi</string>
+    <string name="benefit_star_badge">İsmin yanında yıldız rozeti</string>
+    <string name="benefits">Avantajlar</string>
+    <string name="choose_a_plan">Bir plan seçin</string>
+    <string name="claim_30_days_free">30 Gün Ücretsiz Al</string>
+    <string name="claimed">Alındı!</string>
+    <string name="claimed_activate_backpack">Etkinleştirmek için bir sohbet odasındayken sırt çantanızda bulun.</string>
+    <string name="claiming">Alınıyor…</string>
+    <string name="currently_active">Şu An Aktif</string>
+    <string name="days_remaining">%1$d gün kaldı</string>
+    <string name="one_time_payment">Tek seferlik ödeme</string>
+    <string name="per_month">aylık</string>
+    <string name="per_year">yıllık</string>
+    <string name="super_shy">Super Shy</string>
+    <string name="super_shy_for_life">Ömür boyu Super Shy\'sınız!</string>
+    <string name="tap_to_claim_backpack">Almak için dokunun — sırt çantanıza eklenir</string>
+    <string name="testing_mode_super_shy">Test modu — gerçek ücret alınmaz. Super Shy\'ı anında etkinleştirmek için bir plana dokunun.</string>
+    <string name="tier_label">Kademe: %1$s</string>
+    <string name="tier_lifetime">Ömür Boyu</string>
+    <string name="tier_monthly">Aylık</string>
+    <string name="tier_yearly">Yıllık</string>
+    <string name="upgrade_to_lifetime">Ömür Boyu\'na Yükselt</string>
+
+    <!-- Legal -->
+    <string name="accept_all_and_continue">Tümünü Kabul Et &amp; Devam</string>
+    <string name="community_standards">Topluluk Standartları</string>
+    <string name="cyber_bullying_policy">Siber Zorbalık Politikası</string>
+    <string name="i_have_read_and_agree">Okudum ve kabul ediyorum </string>
+    <string name="privacy_policy">Gizlilik Politikası</string>
+    <string name="review_and_accept_policies">Devam etmek için lütfen politikalarımızı inceleyin ve kabul edin.</string>
+    <string name="terms_and_conditions">Şartlar &amp; Koşullar</string>
+    <string name="welcome_to_shytalk">ShyTalk\'a Hoş Geldiniz</string>
+
+    <!-- Auth -->
+    <string name="sign_in">Giriş Yap</string>
+    <string name="phone_number">Telefon Numarası</string>
+    <string name="verification_code">Doğrulama Kodu</string>
+    <string name="continue_with_google">Google ile Devam Et</string>
+</resources>

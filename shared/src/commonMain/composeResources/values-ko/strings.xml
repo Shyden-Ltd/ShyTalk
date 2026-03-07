@@ -1,0 +1,471 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common actions -->
+    <string name="all_caps">전체</string>
+    <string name="back">뒤로</string>
+    <string name="cancel">취소</string>
+    <string name="change">변경</string>
+    <string name="close">닫기</string>
+    <string name="confirm">확인</string>
+    <string name="continue_button">계속</string>
+    <string name="create">만들기</string>
+    <string name="delete">삭제</string>
+    <string name="done">완료</string>
+    <string name="edit">편집</string>
+    <string name="error_generic">문제가 발생했습니다</string>
+    <string name="got_it">확인</string>
+    <string name="learn_more">더 알아보기</string>
+    <string name="loading">로딩 중…</string>
+    <string name="maybe_later">나중에</string>
+    <string name="message_action">메시지</string>
+    <string name="next">다음</string>
+    <string name="ok">OK</string>
+    <string name="retry">재시도</string>
+    <string name="save">저장</string>
+    <string name="send">보내기</string>
+    <string name="sending">보내는 중...</string>
+    <string name="transfer">이전</string>
+    <string name="unknown">알 수 없음</string>
+    <string name="using">사용 중...</string>
+    <string name="you">나</string>
+
+    <!-- Message bubbles -->
+    <string name="edited">수정됨</string>
+    <string name="tap_to_join">탭하여 참여</string>
+    <string name="message_recalled_by_you">이 메시지를 회수했습니다</string>
+    <string name="message_recalled">이 메시지는 회수되었습니다</string>
+    <string name="message_hidden_by_mod">이 메시지는 관리자에 의해 숨겨졌습니다</string>
+    <string name="invite_to_mic">마이크 초대</string>
+    <string name="closed">종료됨</string>
+    <string name="edited_count">수정됨 (%1$d)</string>
+    <string name="read">읽음</string>
+    <string name="sent">전송됨</string>
+    <string name="sticker">스티커</string>
+    <string name="image">이미지</string>
+
+    <!-- Context menu -->
+    <string name="react">반응</string>
+    <string name="reply">답장</string>
+    <string name="copy">복사</string>
+    <string name="recall">회수</string>
+    <string name="add_to_stickers">스티커에 추가</string>
+    <string name="hide_message">메시지 숨기기</string>
+    <string name="report_message">메시지 신고</string>
+
+    <!-- Translation -->
+    <string name="translate">번역</string>
+    <string name="translated_from">%1$s에서 번역됨</string>
+    <string name="show_original">원문 보기</string>
+    <string name="translation_limit_reached">일일 한도에 도달했습니다. Super Shy로 업그레이드하면 무제한 번역을 이용할 수 있습니다.</string>
+    <string name="auto_translate">자동 번역</string>
+    <string name="auto_translate_description">수신 메시지를 자동으로 내 언어로 번역합니다</string>
+    <string name="translations_remaining">오늘 %1$d회 번역 가능</string>
+
+    <!-- Settings -->
+    <string name="settings">설정</string>
+    <string name="language">언어</string>
+    <string name="blocked_users">차단된 사용자</string>
+    <string name="account">계정</string>
+    <string name="privacy">개인정보</string>
+    <string name="notifications">알림</string>
+    <string name="permissions">권한</string>
+    <string name="about">정보</string>
+    <string name="sign_out">로그아웃</string>
+    <string name="sign_out_confirm">로그아웃하시겠습니까?</string>
+
+    <!-- Home -->
+    <string name="create_room">방 만들기</string>
+    <string name="create_room_prompt">방 이름을 입력하세요</string>
+    <string name="home">홈</string>
+    <string name="in_room_count">%1$d명 참여 중</string>
+    <string name="join">참여</string>
+    <string name="no_active_rooms">활성 방이 없습니다</string>
+    <string name="no_rooms">이용 가능한 방이 없습니다</string>
+    <string name="room_name">방 이름</string>
+    <string name="room_name_label">방 이름</string>
+    <string name="seats_count">%1$d/%2$d석</string>
+    <string name="speakers_count">%1$d/%2$d 스피커</string>
+    <string name="tap_plus_to_create">+를 눌러 만들어보세요</string>
+    <string name="visitors_count">방문자 %1$d명</string>
+
+    <!-- Profile -->
+    <string name="connections">인맥</string>
+    <string name="display_name">표시 이름</string>
+    <string name="dob_privacy_note">생년월일은 필수이지만 개인정보 설정에서 나이를 숨길 수 있습니다.</string>
+    <string name="dob_required_subtitle">계속하려면 생년월일이 필요합니다.</string>
+    <string name="follow">팔로우</string>
+    <string name="follow_back">맞팔로우</string>
+    <string name="followers">팔로워</string>
+    <string name="followers_count">팔로워 (%1$d)</string>
+    <string name="following">팔로잉</string>
+    <string name="following_count">팔로잉 (%1$d)</string>
+    <string name="following_list_private">이 사용자의 팔로잉 목록은 비공개입니다</string>
+    <string name="get_super_shy">Super Shy 이용하기</string>
+    <string name="gift_wall">선물 벽</string>
+    <string name="gift_value_coins">가치: %1$d 코인</string>
+    <string name="no_followers_yet">아직 팔로워가 없습니다</string>
+    <string name="no_profile_visitors">아직 프로필 방문자가 없습니다</string>
+    <string name="not_following_anyone">아직 팔로우하는 사람이 없습니다</string>
+    <string name="one_more_step">한 단계 더</string>
+    <string name="profile">프로필</string>
+    <string name="profile_setup_subtitle">표시 이름을 선택하고 생년월일을 입력하세요</string>
+    <string name="received_times">%1$d회 받음</string>
+    <string name="remove_follower">팔로워 삭제</string>
+    <string name="report">신고</string>
+    <string name="select_date_of_birth">생년월일 선택</string>
+    <string name="select_nationality">국적 선택</string>
+    <string name="search_countries">국가 검색</string>
+    <string name="selected">선택됨</string>
+    <string name="set_up_your_profile">프로필 설정</string>
+    <string name="stalker_visit_info">%1$s에 방문, 최근 3개월간 %2$d회</string>
+    <string name="stalkers_count">스토커 (%1$d)</string>
+    <string name="stalkers_super_shy_description">누가 내 프로필을 방문했는지 확인하세요! 프로필 스토커는 Super Shy 전용 기능입니다.</string>
+    <string name="super_shy_benefit">Super Shy 혜택</string>
+    <string name="top_senders">최다 선물자</string>
+    <string name="block">차단</string>
+    <string name="unblock">차단 해제</string>
+    <string name="undo_remove">삭제 취소</string>
+    <string name="unfollow">팔로우 취소</string>
+
+    <!-- Room -->
+    <string name="alias">별명</string>
+    <string name="approve">승인</string>
+    <string name="audience">청중</string>
+    <string name="back_to_home">홈으로 돌아가기</string>
+    <string name="backpack">배낭</string>
+    <string name="backpack_empty">배낭이 비어 있습니다.\n휠을 돌려 선물을 받으세요!</string>
+    <string name="ban">밴</string>
+    <string name="block_user">사용자 차단</string>
+    <string name="block_user_confirm">%1$s님을 차단하시겠습니까?</string>
+    <string name="close_room">방 닫기</string>
+    <string name="daily">매일</string>
+    <string name="deny">거절</string>
+    <string name="empty_seat">빈 좌석</string>
+    <string name="filter_gift_animations_description">저가 선물의 애니메이션을 필터링합니다.</string>
+    <string name="gift">선물</string>
+    <string name="gift_animations">선물 애니메이션</string>
+    <string name="host">호스트</string>
+    <string name="hosts">호스트</string>
+    <string name="invite_to_seat">좌석 초대</string>
+    <string name="kick">추방</string>
+    <string name="kick_user">사용자 추방</string>
+    <string name="kick_user_confirm">%1$s님을 방에서 추방하시겠습니까? 다시 참여할 수 없게 됩니다.</string>
+    <string name="leave_room">방 나가기</string>
+    <string name="leave_seat">좌석 비우기</string>
+    <string name="lock_seating">좌석 잠금</string>
+    <string name="lock_seating_description">방장만 사용자를 좌석에 초대할 수 있습니다</string>
+    <string name="buy_coins">코인 구매</string>
+    <string name="collect_all">모두 수집 (%1$d)</string>
+    <string name="increased_drop_rate">드롭률 증가</string>
+    <string name="loading_prices">가격 로딩 중…</string>
+    <string name="lucky_spin">Lucky Spin</string>
+    <string name="lucky_spin_title">LUCKY SPIN</string>
+    <string name="need_more_coins">코인이 더 필요합니다!</string>
+    <string name="no_packages_available">이용 가능한 패키지가 없습니다</string>
+    <string name="no_spins_yet">아직 스핀 기록이 없습니다</string>
+    <string name="prizes">상품</string>
+    <string name="skip_animation">애니메이션 건너뛰기</string>
+    <string name="spin">돌리기</string>
+    <string name="spin_count">%1$d회 돌리기</string>
+    <string name="spin_history">스핀 기록</string>
+    <string name="spin_results">스핀 결과</string>
+    <string name="message">메시지</string>
+    <string name="move_to_audience">청중으로 이동</string>
+    <string name="move_to_seat">좌석으로 이동</string>
+    <string name="move_to_which_seat">어느 좌석으로 이동하시겠습니까?</string>
+    <string name="mute">음소거</string>
+    <string name="no_audience_members">청중이 없습니다</string>
+    <string name="no_pending_requests">대기 중인 요청이 없습니다</string>
+    <string name="no_reason_given">사유 없음</string>
+    <string name="no_one_on_mic">마이크를 사용하는 사람이 없습니다</string>
+    <string name="occupied">사용 중</string>
+    <string name="open_for_duration">%1$s 동안 열림</string>
+    <string name="owner">방장</string>
+    <string name="reason_optional">사유 (선택사항)</string>
+    <string name="reject">거절</string>
+    <string name="remove">삭제</string>
+    <string name="remove_as_host">호스트 해제</string>
+    <string name="remove_from_room">방에서 내보내기</string>
+    <string name="request">요청</string>
+    <string name="request_a_seat">좌석 요청</string>
+    <string name="request_seat">좌석 요청</string>
+    <string name="requesting">요청 중</string>
+    <string name="room">방</string>
+    <string name="room_closed">방이 닫혔습니다</string>
+    <string name="room_closing_no_super_shy">방장이 Super Shy를 이용하지 않아 이 방이 곧 닫힙니다.</string>
+    <string name="room_closing_in">%1$d:%2$s 후 방이 닫힙니다</string>
+    <string name="room_closing_soon">방이 곧 닫힙니다</string>
+    <string name="room_settings">방 설정</string>
+    <string name="rooms">방 목록</string>
+    <string name="seat_requests">좌석 요청</string>
+    <string name="seat_swap_with">좌석 %1$d (%2$s님과 교체)</string>
+    <string name="set_alias">별명 설정</string>
+    <string name="set_alias_description">%1$s님의 별명을 설정합니다. 나에게만 보입니다.</string>
+    <string name="set_as_host">호스트로 지정</string>
+    <string name="showing_all_gift_animations">모든 선물 애니메이션 표시 중</string>
+    <string name="showing_animations_worth">%1$d코인 이상의 애니메이션만 표시</string>
+    <string name="speakers">스피커</string>
+    <string name="take_a_seat">좌석 앉기</string>
+    <string name="unmute">음소거 해제</string>
+    <string name="unmuted">음소거 해제됨</string>
+    <string name="user">사용자</string>
+    <string name="user_id">ID: %1$d</string>
+    <string name="visitor_count">방문자 %1$d명</string>
+    <string name="voice">음성</string>
+    <string name="voice_unavailable">음성 사용 불가</string>
+    <string name="you_have_super_shy_room">Super Shy를 이용 중입니다! 최대 %1$d시간까지 방을 열 수 있습니다.</string>
+    <string name="get_super_shy_rooms">Super Shy로 최대 %1$d시간 지속되는 방을 즐겨보세요!</string>
+
+    <!-- Room - Notifications -->
+    <string name="accept">수락</string>
+    <string name="decline">거절</string>
+    <string name="go_back">돌아가기</string>
+    <string name="go_to_seat">좌석으로 이동</string>
+    <string name="invited_to_sit">좌석 초대를 받았습니다!</string>
+    <string name="request_accepted">요청이 수락되었습니다!</string>
+    <string name="seat_number">좌석 %1$d</string>
+    <string name="user_wants_to_sit">%1$s님이 착석을 원합니다</string>
+
+    <!-- Room - Chat -->
+    <string name="cancel_edit">편집 취소</string>
+    <string name="edit_message_placeholder">메시지 편집...</string>
+    <string name="message_placeholder">메시지...</string>
+    <string name="new_messages">새 메시지</string>
+
+    <!-- Room - Backpack -->
+    <string name="action_cannot_be_undone">이 작업은 취소할 수 없습니다.</string>
+    <string name="confirm_send">보내기 확인</string>
+    <string name="from_backpack_items">배낭에서: %1$d개</string>
+    <string name="gifts">선물</string>
+    <string name="send_all">모두 보내기</string>
+    <string name="send_all_includes">%2$d종의 선물 총 %1$d개가 포함됩니다.</string>
+    <string name="send_all_warning">배낭의 모든 아이템을 %1$s님에게 보내려고 합니다.</string>
+    <string name="send_everything_confirm">이해했습니다, 모두 보내기</string>
+    <string name="to_label">받는 사람</string>
+    <string name="total_cost_coins">총 비용: %1$d 코인</string>
+    <string name="use_button">사용</string>
+    <string name="you_have_count">보유: %1$d개</string>
+    <string name="your_balance_coins">내 잔액: %1$d 코인</string>
+
+    <!-- Messaging -->
+    <string name="additional_details_optional">추가 세부사항 (선택사항)</string>
+    <string name="all_admins_and_mods">모든 관리자 &amp; 운영자</string>
+    <string name="attach_evidence">증거 첨부</string>
+    <string name="cant_message_user">이 사용자에게 메시지를 보낼 수 없습니다</string>
+    <string name="chat">채팅</string>
+    <string name="close_group">그룹 닫기</string>
+    <string name="close_group_warning">모든 사람의 그룹이 닫힙니다. 메시지는 관리 목적으로 보존됩니다.</string>
+    <string name="compressing">압축 중...</string>
+    <string name="conversation_start_hint">방의 프로필이나 사용자 카드에서\n대화를 시작하세요</string>
+    <string name="create_group">그룹 만들기</string>
+    <string name="current_version">현재</string>
+    <string name="delete_conversation">대화 삭제</string>
+    <string name="delete_conversation_warning">대화가 목록에서 삭제됩니다. 메시지는 보존되며 상대방이 다시 메시지를 보내면 다시 나타납니다.</string>
+    <string name="description_label">설명</string>
+    <string name="description_optional">설명 (선택사항)</string>
+    <string name="edit_history">수정 기록</string>
+    <string name="editing_message">메시지 편집 중</string>
+    <string name="evidence">증거</string>
+    <string name="evidence_required">스크린샷이나 녹화가 하나 이상 필요합니다.</string>
+    <string name="general">일반</string>
+    <string name="group">그룹</string>
+    <string name="group_chat">그룹 채팅</string>
+    <string name="group_name_label">그룹 이름</string>
+    <string name="group_name_required">그룹 이름 *</string>
+    <string name="group_settings">그룹 설정</string>
+    <string name="invite_to_room">방에 초대</string>
+    <string name="last_seen">마지막 접속: %1$s</string>
+    <string name="leave_group">그룹 나가기</string>
+    <string name="members">멤버</string>
+    <string name="members_count">%1$d명</string>
+    <string name="message_ellipsis">메시지...</string>
+    <string name="message_permissions">메시지 권한</string>
+    <string name="message_preview_image">[이미지]</string>
+    <string name="message_preview_recalled">[메시지 회수됨]</string>
+    <string name="message_preview_room_invite">[방 초대]</string>
+    <string name="message_preview_sticker">[스티커]</string>
+    <string name="messages">메시지</string>
+    <string name="mod_notifications">운영자 알림</string>
+    <string name="move_to_front">맨 앞으로 이동</string>
+    <string name="mute_notifications">알림 끄기</string>
+    <string name="mute_reason">. 사유: %1$s</string>
+    <string name="muted">음소거됨</string>
+    <string name="muted_for_hours_minutes">%1$d시간 %2$d분간 음소거 상태입니다</string>
+    <string name="muted_for_minutes">%1$d분간 음소거 상태입니다</string>
+    <string name="muted_indefinitely">음소거 상태입니다</string>
+    <string name="new_group">새 그룹</string>
+    <string name="new_group_selected">새 그룹 (%1$d명 선택됨)</string>
+    <string name="new_message">새 메시지</string>
+    <string name="no_action_needed">조치 불필요</string>
+    <string name="no_followers_following_found">팔로워나 팔로잉을 찾을 수 없습니다</string>
+    <string name="no_matches_found">일치하는 결과가 없습니다</string>
+    <string name="no_messages">아직 메시지가 없습니다</string>
+    <string name="no_pending_reports">대기 중인 신고가 없습니다</string>
+    <string name="no_stickers_yet">아직 스티커가 없습니다</string>
+    <string name="no_users_found">사용자를 찾을 수 없습니다</string>
+    <string name="notify_owner_only">방장에게만 알림</string>
+    <string name="online">온라인</string>
+    <string name="only_admins_can_send">관리자와 운영자만 이 그룹에서 메시지를 보낼 수 있습니다</string>
+    <string name="only_owner_can_change_permissions">그룹 소유자만 권한을 변경할 수 있습니다.</string>
+    <string name="owner_only">소유자만</string>
+    <string name="participants">참가자</string>
+    <string name="participants_count">참가자 (%1$d)</string>
+    <string name="pin">고정</string>
+    <string name="recent">최근</string>
+    <string name="replying_to">%1$s님에게 답장</string>
+    <string name="report_message_prompt">이 메시지를 신고하는 이유는 무엇인가요?</string>
+    <string name="report_review">신고 검토</string>
+    <string name="report_user">%1$s 신고</string>
+    <string name="report_user_prompt">이 사용자를 신고하는 이유는 무엇인가요?</string>
+    <string name="reset_to_default">기본값으로 재설정</string>
+    <string name="result_count">%1$d개 결과</string>
+    <string name="review_report">신고 검토</string>
+    <string name="role_admin">관리자</string>
+    <string name="role_member">멤버</string>
+    <string name="role_mod">운영자</string>
+    <string name="role_owner">소유자</string>
+    <string name="save_description">설명 저장</string>
+    <string name="search_all_users">모든 사용자 검색</string>
+    <string name="search_conversations">대화 검색...</string>
+    <string name="search_messages">메시지 검색...</string>
+    <string name="search_people">사람 검색...</string>
+    <string name="select_action">작업 선택:</string>
+    <string name="selected_count">%1$d개 선택됨</string>
+    <string name="start_conversation">대화 시작</string>
+    <string name="submit_report">신고 제출</string>
+    <string name="submitting">제출 중...</string>
+    <string name="system_messages">시스템 메시지</string>
+    <string name="transfer_ownership">소유권 이전</string>
+    <string name="transfer_ownership_warning">소유권을 이전할 멤버를 선택하세요. 소유자 권한을 잃게 됩니다. 이 작업은 취소할 수 없습니다.</string>
+    <string name="type_message">메시지를 입력하세요…</string>
+    <string name="typing">입력 중...</string>
+    <string name="unmute_action">음소거 해제</string>
+    <string name="unmute_notifications">알림 켜기</string>
+    <string name="unpin">고정 해제</string>
+    <string name="view_profile">프로필 보기</string>
+
+    <!-- Messaging - report reasons -->
+    <string name="report_reason_spam">스팸</string>
+    <string name="report_reason_harassment">괴롭힘</string>
+    <string name="report_reason_inappropriate">부적절한 콘텐츠</string>
+    <string name="report_reason_other">기타</string>
+
+    <!-- Messaging - report actions -->
+    <string name="report_action_warning">경고 발행</string>
+    <string name="report_action_temp_suspension">임시 정지</string>
+    <string name="report_action_perm_suspension">영구 정지</string>
+    <string name="report_action_pm_ban">개인 메시지 금지</string>
+
+    <!-- Messaging - report details -->
+    <string name="report_reason_prefix">사유: %1$s</string>
+    <string name="report_type_prefix">유형: %1$s</string>
+    <string name="report_details_prefix">세부사항: %1$s</string>
+    <string name="report_message_prefix">메시지: \"%1$s\"</string>
+    <string name="report_reporter_reported">신고자: %1$s | 피신고자: %2$s</string>
+
+    <!-- Messaging - system message labels -->
+    <string name="sys_member_joins">멤버 참여</string>
+    <string name="sys_member_leaves">멤버 퇴장</string>
+    <string name="sys_role_changes">역할 변경</string>
+    <string name="sys_permission_changes">권한 변경</string>
+
+    <!-- Messaging - permission labels -->
+    <string name="perm_who_can_send">메시지를 보낼 수 있는 사람</string>
+    <string name="perm_who_can_add_members">멤버를 추가할 수 있는 사람</string>
+    <string name="perm_who_can_edit_info">그룹 정보를 편집할 수 있는 사람</string>
+    <string name="perm_who_can_delete_messages">메시지를 삭제할 수 있는 사람</string>
+    <string name="perm_who_can_mute_members">멤버를 음소거할 수 있는 사람</string>
+    <string name="perm_who_can_remove_members">멤버를 삭제할 수 있는 사람</string>
+
+    <!-- Messaging - date separators -->
+    <string name="today">오늘</string>
+    <string name="yesterday">어제</string>
+
+    <!-- Daily Reward -->
+    <string name="awesome">대단해요!</string>
+    <string name="claim_todays_reward">오늘의 보상 받기</string>
+    <string name="coins">코인</string>
+    <string name="day_fri">금</string>
+    <string name="day_mon">월</string>
+    <string name="day_sat">토</string>
+    <string name="day_streak">%1$d일 연속</string>
+    <string name="day_sun">일</string>
+    <string name="day_thu">목</string>
+    <string name="day_tue">화</string>
+    <string name="day_wed">수</string>
+    <string name="later">나중에</string>
+    <string name="milestone">마일스톤</string>
+    <string name="milestone_bonus">마일스톤 보너스!</string>
+    <string name="plus_coins">+%1$d 코인!</string>
+    <string name="reward_claimed">보상 수령 완료!</string>
+
+    <!-- Economy -->
+    <string name="bean_redeem_description">1 빈 = 1 코인. 2,000개 이상 교환 시 10% 보너스!</string>
+    <string name="bonus_coins">+%1$d 보너스</string>
+    <string name="buy_shy_coins">ShyCoins 구매</string>
+    <string name="confirm_redemption">교환 확인</string>
+    <string name="daily_reward">일일 보상</string>
+    <string name="redeem">교환</string>
+    <string name="redeem_all">모두 교환</string>
+    <string name="redeem_beans_for_coins">%1$s 빈을 %2$s 코인으로 교환하시겠습니까?</string>
+    <string name="redeem_shy_beans">ShyBeans 교환</string>
+    <string name="send_gift">선물 보내기</string>
+    <string name="shy_beans">ShyBeans</string>
+    <string name="shy_coins">ShyCoins</string>
+    <string name="testing_mode_coins">테스트 모드 — 실제 결제가 되지 않습니다. 패키지를 탭하면 즉시 코인을 받을 수 있습니다.</string>
+    <string name="filter_all">전체</string>
+    <string name="filter_gacha">가챠</string>
+    <string name="filter_gifts">선물</string>
+    <string name="filter_purchases">구매</string>
+    <string name="filter_redemptions">교환</string>
+    <string name="filter_rewards">보상</string>
+    <string name="no_filtered_transactions">%1$s 거래 내역이 없습니다</string>
+    <string name="no_transactions_yet">아직 거래 내역이 없습니다</string>
+    <string name="transaction_history">거래 내역</string>
+    <string name="transactions">거래</string>
+    <string name="wallet">지갑</string>
+
+    <!-- Super Shy -->
+    <string name="benefit_daily_bonus">일일 로그인 코인 +10% (올림 적용)</string>
+    <string name="benefit_extended_room">연장된 방 지속 시간 (12시간)</string>
+    <string name="benefit_full_room">8석 전체 방</string>
+    <string name="benefit_gold_name">모든 곳에서 금색 표시 이름</string>
+    <string name="benefit_profile_frame">독점 프로필 프레임</string>
+    <string name="benefit_star_badge">이름 옆 별 배지</string>
+    <string name="benefits">혜택</string>
+    <string name="choose_a_plan">플랜 선택</string>
+    <string name="claim_30_days_free">30일 무료 체험</string>
+    <string name="claimed">수령 완료!</string>
+    <string name="claimed_activate_backpack">활성화하려면 채팅방에서 배낭에 있는 아이템을 찾으세요.</string>
+    <string name="claiming">수령 중…</string>
+    <string name="currently_active">현재 이용 중</string>
+    <string name="days_remaining">%1$d일 남음</string>
+    <string name="one_time_payment">일시불 결제</string>
+    <string name="per_month">월</string>
+    <string name="per_year">년</string>
+    <string name="super_shy">Super Shy</string>
+    <string name="super_shy_for_life">평생 Super Shy입니다!</string>
+    <string name="tap_to_claim_backpack">탭하여 수령 — 배낭에 추가됩니다</string>
+    <string name="testing_mode_super_shy">테스트 모드 — 실제 결제가 되지 않습니다. 플랜을 탭하면 즉시 Super Shy가 활성화됩니다.</string>
+    <string name="tier_label">등급: %1$s</string>
+    <string name="tier_lifetime">평생</string>
+    <string name="tier_monthly">월간</string>
+    <string name="tier_yearly">연간</string>
+    <string name="upgrade_to_lifetime">평생 이용으로 업그레이드</string>
+
+    <!-- Legal -->
+    <string name="accept_all_and_continue">모두 동의 &amp; 계속</string>
+    <string name="community_standards">커뮤니티 규정</string>
+    <string name="cyber_bullying_policy">사이버 괴롭힘 정책</string>
+    <string name="i_have_read_and_agree">다음을 읽고 동의합니다: </string>
+    <string name="privacy_policy">개인정보 처리방침</string>
+    <string name="review_and_accept_policies">계속하려면 정책을 검토하고 동의해 주세요.</string>
+    <string name="terms_and_conditions">이용약관</string>
+    <string name="welcome_to_shytalk">ShyTalk에 오신 것을 환영합니다</string>
+
+    <!-- Auth -->
+    <string name="sign_in">로그인</string>
+    <string name="phone_number">전화번호</string>
+    <string name="verification_code">인증 코드</string>
+    <string name="continue_with_google">Google로 계속</string>
+</resources>

@@ -1,0 +1,471 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common actions -->
+    <string name="all_caps">全部</string>
+    <string name="back">返回</string>
+    <string name="cancel">取消</string>
+    <string name="change">更改</string>
+    <string name="close">关闭</string>
+    <string name="confirm">确认</string>
+    <string name="continue_button">继续</string>
+    <string name="create">创建</string>
+    <string name="delete">删除</string>
+    <string name="done">完成</string>
+    <string name="edit">编辑</string>
+    <string name="error_generic">出了点问题</string>
+    <string name="got_it">知道了</string>
+    <string name="learn_more">了解更多</string>
+    <string name="loading">加载中…</string>
+    <string name="maybe_later">以后再说</string>
+    <string name="message_action">发消息</string>
+    <string name="next">下一步</string>
+    <string name="ok">OK</string>
+    <string name="retry">重试</string>
+    <string name="save">保存</string>
+    <string name="send">发送</string>
+    <string name="sending">发送中...</string>
+    <string name="transfer">转让</string>
+    <string name="unknown">未知</string>
+    <string name="using">使用中...</string>
+    <string name="you">你</string>
+
+    <!-- Message bubbles -->
+    <string name="edited">已编辑</string>
+    <string name="tap_to_join">点击加入</string>
+    <string name="message_recalled_by_you">你撤回了这条消息</string>
+    <string name="message_recalled">这条消息已被撤回</string>
+    <string name="message_hidden_by_mod">这条消息已被管理员隐藏</string>
+    <string name="invite_to_mic">邀请上麦</string>
+    <string name="closed">已关闭</string>
+    <string name="edited_count">已编辑 (%1$d)</string>
+    <string name="read">已读</string>
+    <string name="sent">已发送</string>
+    <string name="sticker">贴纸</string>
+    <string name="image">图片</string>
+
+    <!-- Context menu -->
+    <string name="react">表情回应</string>
+    <string name="reply">回复</string>
+    <string name="copy">复制</string>
+    <string name="recall">撤回</string>
+    <string name="add_to_stickers">添加到贴纸</string>
+    <string name="hide_message">隐藏消息</string>
+    <string name="report_message">举报消息</string>
+
+    <!-- Translation -->
+    <string name="translate">翻译</string>
+    <string name="translated_from">已从%1$s翻译</string>
+    <string name="show_original">显示原文</string>
+    <string name="translation_limit_reached">已达每日上限。升级 Super Shy 享受无限翻译。</string>
+    <string name="auto_translate">自动翻译</string>
+    <string name="auto_translate_description">自动将收到的消息翻译为您的语言</string>
+    <string name="translations_remaining">今日剩余 %1$d 次翻译</string>
+
+    <!-- Settings -->
+    <string name="settings">设置</string>
+    <string name="language">语言</string>
+    <string name="blocked_users">已屏蔽用户</string>
+    <string name="account">账号</string>
+    <string name="privacy">隐私</string>
+    <string name="notifications">通知</string>
+    <string name="permissions">权限</string>
+    <string name="about">关于</string>
+    <string name="sign_out">退出登录</string>
+    <string name="sign_out_confirm">确定要退出登录吗？</string>
+
+    <!-- Home -->
+    <string name="create_room">创建房间</string>
+    <string name="create_room_prompt">为你的房间起个名字</string>
+    <string name="home">首页</string>
+    <string name="in_room_count">房间内 %1$d 人</string>
+    <string name="join">加入</string>
+    <string name="no_active_rooms">没有活跃的房间</string>
+    <string name="no_rooms">暂无房间</string>
+    <string name="room_name">房间名称</string>
+    <string name="room_name_label">房间名称</string>
+    <string name="seats_count">%1$d/%2$d 座位</string>
+    <string name="speakers_count">%1$d/%2$d 发言人</string>
+    <string name="tap_plus_to_create">点击 + 创建房间</string>
+    <string name="visitors_count">%1$d 位访客</string>
+
+    <!-- Profile -->
+    <string name="connections">关系</string>
+    <string name="display_name">显示名称</string>
+    <string name="dob_privacy_note">出生日期为必填项，但你可以在隐私设置中隐藏年龄。</string>
+    <string name="dob_required_subtitle">我们需要你的出生日期才能继续。</string>
+    <string name="follow">关注</string>
+    <string name="follow_back">回关</string>
+    <string name="followers">粉丝</string>
+    <string name="followers_count">粉丝 (%1$d)</string>
+    <string name="following">关注中</string>
+    <string name="following_count">关注中 (%1$d)</string>
+    <string name="following_list_private">该用户的关注列表为私密</string>
+    <string name="get_super_shy">获取 Super Shy</string>
+    <string name="gift_wall">礼物墙</string>
+    <string name="gift_value_coins">价值：%1$d 币</string>
+    <string name="no_followers_yet">暂无粉丝</string>
+    <string name="no_profile_visitors">暂无主页访客</string>
+    <string name="not_following_anyone">暂未关注任何人</string>
+    <string name="one_more_step">还差一步</string>
+    <string name="profile">个人主页</string>
+    <string name="profile_setup_subtitle">选择显示名称并输入出生日期</string>
+    <string name="received_times">已收到 %1$d 次</string>
+    <string name="remove_follower">移除粉丝</string>
+    <string name="report">举报</string>
+    <string name="select_date_of_birth">选择出生日期</string>
+    <string name="select_nationality">选择国籍</string>
+    <string name="search_countries">搜索国家</string>
+    <string name="selected">已选择</string>
+    <string name="set_up_your_profile">设置你的个人主页</string>
+    <string name="stalker_visit_info">%1$s 访问了你的主页，最近3个月共 %2$d 次</string>
+    <string name="stalkers_count">访客 (%1$d)</string>
+    <string name="stalkers_super_shy_description">查看谁浏览了你的主页！主页访客是 Super Shy 的专属功能。</string>
+    <string name="super_shy_benefit">Super Shy 特权</string>
+    <string name="top_senders">送礼排行</string>
+    <string name="block">屏蔽</string>
+    <string name="unblock">取消屏蔽</string>
+    <string name="undo_remove">撤销移除</string>
+    <string name="unfollow">取消关注</string>
+
+    <!-- Room -->
+    <string name="alias">备注名</string>
+    <string name="approve">批准</string>
+    <string name="audience">听众</string>
+    <string name="back_to_home">返回首页</string>
+    <string name="backpack">背包</string>
+    <string name="backpack_empty">你的背包是空的。\n转动转盘获取礼物吧！</string>
+    <string name="ban">封禁</string>
+    <string name="block_user">屏蔽用户</string>
+    <string name="block_user_confirm">确定要屏蔽 %1$s 吗？</string>
+    <string name="close_room">关闭房间</string>
+    <string name="daily">每日</string>
+    <string name="deny">拒绝</string>
+    <string name="empty_seat">空座位</string>
+    <string name="filter_gift_animations_description">过滤低价礼物的动画效果。</string>
+    <string name="gift">礼物</string>
+    <string name="gift_animations">礼物动画</string>
+    <string name="host">副房主</string>
+    <string name="hosts">副房主</string>
+    <string name="invite_to_seat">邀请上座</string>
+    <string name="kick">踢出</string>
+    <string name="kick_user">踢出用户</string>
+    <string name="kick_user_confirm">确定要将 %1$s 踢出房间吗？对方将无法重新加入。</string>
+    <string name="leave_room">离开房间</string>
+    <string name="leave_seat">离开座位</string>
+    <string name="lock_seating">锁定座位</string>
+    <string name="lock_seating_description">仅房主可以邀请用户入座</string>
+    <string name="buy_coins">购买币</string>
+    <string name="collect_all">全部领取 (%1$d)</string>
+    <string name="increased_drop_rate">提高掉落率</string>
+    <string name="loading_prices">加载价格中…</string>
+    <string name="lucky_spin">Lucky Spin</string>
+    <string name="lucky_spin_title">LUCKY SPIN</string>
+    <string name="need_more_coins">币不足！</string>
+    <string name="no_packages_available">暂无可用套餐</string>
+    <string name="no_spins_yet">暂无抽奖记录</string>
+    <string name="prizes">奖品</string>
+    <string name="skip_animation">跳过动画</string>
+    <string name="spin">抽奖</string>
+    <string name="spin_count">%1$d 次抽奖</string>
+    <string name="spin_history">抽奖历史</string>
+    <string name="spin_results">抽奖结果</string>
+    <string name="message">消息</string>
+    <string name="move_to_audience">移至听众</string>
+    <string name="move_to_seat">移至座位</string>
+    <string name="move_to_which_seat">移至哪个座位？</string>
+    <string name="mute">静音</string>
+    <string name="no_audience_members">暂无听众</string>
+    <string name="no_pending_requests">没有待处理的请求</string>
+    <string name="no_reason_given">未给出原因</string>
+    <string name="no_one_on_mic">无人上麦</string>
+    <string name="occupied">已占用</string>
+    <string name="open_for_duration">已开放 %1$s</string>
+    <string name="owner">房主</string>
+    <string name="reason_optional">原因（可选）</string>
+    <string name="reject">拒绝</string>
+    <string name="remove">移除</string>
+    <string name="remove_as_host">取消副房主</string>
+    <string name="remove_from_room">移出房间</string>
+    <string name="request">请求</string>
+    <string name="request_a_seat">申请座位</string>
+    <string name="request_seat">申请座位</string>
+    <string name="requesting">请求中</string>
+    <string name="room">房间</string>
+    <string name="room_closed">房间已关闭</string>
+    <string name="room_closing_no_super_shy">房主没有 Super Shy，房间即将关闭。</string>
+    <string name="room_closing_in">房间将在 %1$d:%2$s 后关闭</string>
+    <string name="room_closing_soon">房间即将关闭</string>
+    <string name="room_settings">房间设置</string>
+    <string name="rooms">房间</string>
+    <string name="seat_requests">座位请求</string>
+    <string name="seat_swap_with">座位 %1$d（与 %2$s 交换）</string>
+    <string name="set_alias">设置备注名</string>
+    <string name="set_alias_description">为 %1$s 设置一个备注名。只有你能看到。</string>
+    <string name="set_as_host">设为副房主</string>
+    <string name="showing_all_gift_animations">显示所有礼物动画</string>
+    <string name="showing_animations_worth">仅显示 %1$d+ 币以上的动画</string>
+    <string name="speakers">发言人</string>
+    <string name="take_a_seat">入座</string>
+    <string name="unmute">取消静音</string>
+    <string name="unmuted">已取消静音</string>
+    <string name="user">用户</string>
+    <string name="user_id">ID：%1$d</string>
+    <string name="visitor_count">%1$d 位访客</string>
+    <string name="voice">语音</string>
+    <string name="voice_unavailable">语音不可用</string>
+    <string name="you_have_super_shy_room">你拥有 Super Shy！开设自己的房间，享受最长 %1$d 小时的延长时间。</string>
+    <string name="get_super_shy_rooms">获取 Super Shy，享受最长 %1$d 小时的房间！</string>
+
+    <!-- Room - Notifications -->
+    <string name="accept">接受</string>
+    <string name="decline">拒绝</string>
+    <string name="go_back">返回</string>
+    <string name="go_to_seat">前往座位</string>
+    <string name="invited_to_sit">你被邀请入座！</string>
+    <string name="request_accepted">你的请求已被接受！</string>
+    <string name="seat_number">座位 %1$d</string>
+    <string name="user_wants_to_sit">%1$s 想要入座</string>
+
+    <!-- Room - Chat -->
+    <string name="cancel_edit">取消编辑</string>
+    <string name="edit_message_placeholder">编辑消息...</string>
+    <string name="message_placeholder">消息...</string>
+    <string name="new_messages">新消息</string>
+
+    <!-- Room - Backpack -->
+    <string name="action_cannot_be_undone">此操作无法撤销。</string>
+    <string name="confirm_send">确认发送</string>
+    <string name="from_backpack_items">来自背包：%1$d 件物品</string>
+    <string name="gifts">礼物</string>
+    <string name="send_all">全部发送</string>
+    <string name="send_all_includes">包含 %2$d 种不同礼物中的全部 %1$d 件物品。</string>
+    <string name="send_all_warning">你即将把整个背包发送给 %1$s。</string>
+    <string name="send_everything_confirm">我已了解，全部发送</string>
+    <string name="to_label">发送给</string>
+    <string name="total_cost_coins">总费用：%1$d 币</string>
+    <string name="use_button">使用</string>
+    <string name="you_have_count">你拥有：%1$d</string>
+    <string name="your_balance_coins">你的余额：%1$d 币</string>
+
+    <!-- Messaging -->
+    <string name="additional_details_optional">补充说明（可选）</string>
+    <string name="all_admins_and_mods">所有管理员 &amp; 版主</string>
+    <string name="attach_evidence">附上证据</string>
+    <string name="cant_message_user">无法向此用户发送消息</string>
+    <string name="chat">聊天</string>
+    <string name="close_group">关闭群组</string>
+    <string name="close_group_warning">这将为所有人关闭群组。消息将保留以供审核。</string>
+    <string name="compressing">压缩中...</string>
+    <string name="conversation_start_hint">从房间中的个人主页或\n用户卡片开始对话</string>
+    <string name="create_group">创建群组</string>
+    <string name="current_version">当前</string>
+    <string name="delete_conversation">删除对话</string>
+    <string name="delete_conversation_warning">这将从你的列表中移除对话。消息会保留，如果对方再次发消息将重新出现。</string>
+    <string name="description_label">描述</string>
+    <string name="description_optional">描述（可选）</string>
+    <string name="edit_history">编辑历史</string>
+    <string name="editing_message">正在编辑消息</string>
+    <string name="evidence">证据</string>
+    <string name="evidence_required">至少需要一张截图或录屏。</string>
+    <string name="general">通用</string>
+    <string name="group">群组</string>
+    <string name="group_chat">群聊</string>
+    <string name="group_name_label">群组名称</string>
+    <string name="group_name_required">群组名称 *</string>
+    <string name="group_settings">群组设置</string>
+    <string name="invite_to_room">邀请加入房间</string>
+    <string name="last_seen">上次在线 %1$s</string>
+    <string name="leave_group">退出群组</string>
+    <string name="members">成员</string>
+    <string name="members_count">%1$d 位成员</string>
+    <string name="message_ellipsis">消息...</string>
+    <string name="message_permissions">消息权限</string>
+    <string name="message_preview_image">[图片]</string>
+    <string name="message_preview_recalled">[消息已撤回]</string>
+    <string name="message_preview_room_invite">[房间邀请]</string>
+    <string name="message_preview_sticker">[贴纸]</string>
+    <string name="messages">消息</string>
+    <string name="mod_notifications">版主通知</string>
+    <string name="move_to_front">置顶</string>
+    <string name="mute_notifications">关闭通知</string>
+    <string name="mute_reason">。原因：%1$s</string>
+    <string name="muted">已静音</string>
+    <string name="muted_for_hours_minutes">你已被禁言 %1$d 小时 %2$d 分钟</string>
+    <string name="muted_for_minutes">你已被禁言 %1$d 分钟</string>
+    <string name="muted_indefinitely">你已被禁言</string>
+    <string name="new_group">新建群组</string>
+    <string name="new_group_selected">新建群组（已选 %1$d 人）</string>
+    <string name="new_message">新消息</string>
+    <string name="no_action_needed">无需操作</string>
+    <string name="no_followers_following_found">未找到粉丝或关注</string>
+    <string name="no_matches_found">未找到匹配结果</string>
+    <string name="no_messages">暂无消息</string>
+    <string name="no_pending_reports">没有待处理的举报</string>
+    <string name="no_stickers_yet">暂无贴纸</string>
+    <string name="no_users_found">未找到用户</string>
+    <string name="notify_owner_only">仅通知房主</string>
+    <string name="online">在线</string>
+    <string name="only_admins_can_send">仅管理员和版主可在此群组中发送消息</string>
+    <string name="only_owner_can_change_permissions">仅群主可更改权限。</string>
+    <string name="owner_only">仅群主</string>
+    <string name="participants">参与者</string>
+    <string name="participants_count">参与者 (%1$d)</string>
+    <string name="pin">置顶</string>
+    <string name="recent">最近</string>
+    <string name="replying_to">正在回复 %1$s</string>
+    <string name="report_message_prompt">你为什么要举报这条消息？</string>
+    <string name="report_review">举报审核</string>
+    <string name="report_user">举报 %1$s</string>
+    <string name="report_user_prompt">你为什么要举报这位用户？</string>
+    <string name="reset_to_default">恢复默认</string>
+    <string name="result_count">%1$d 条结果</string>
+    <string name="review_report">审核举报</string>
+    <string name="role_admin">管理员</string>
+    <string name="role_member">成员</string>
+    <string name="role_mod">版主</string>
+    <string name="role_owner">群主</string>
+    <string name="save_description">保存描述</string>
+    <string name="search_all_users">搜索所有用户</string>
+    <string name="search_conversations">搜索对话...</string>
+    <string name="search_messages">搜索消息...</string>
+    <string name="search_people">搜索用户...</string>
+    <string name="select_action">选择操作：</string>
+    <string name="selected_count">已选 %1$d 项</string>
+    <string name="start_conversation">开始对话</string>
+    <string name="submit_report">提交举报</string>
+    <string name="submitting">提交中...</string>
+    <string name="system_messages">系统消息</string>
+    <string name="transfer_ownership">转让所有权</string>
+    <string name="transfer_ownership_warning">选择一位成员来转让所有权。你将失去群主权限。此操作无法撤销。</string>
+    <string name="type_message">输入消息…</string>
+    <string name="typing">正在输入...</string>
+    <string name="unmute_action">取消静音</string>
+    <string name="unmute_notifications">开启通知</string>
+    <string name="unpin">取消置顶</string>
+    <string name="view_profile">查看主页</string>
+
+    <!-- Messaging - report reasons -->
+    <string name="report_reason_spam">垃圾信息</string>
+    <string name="report_reason_harassment">骚扰</string>
+    <string name="report_reason_inappropriate">不当内容</string>
+    <string name="report_reason_other">其他</string>
+
+    <!-- Messaging - report actions -->
+    <string name="report_action_warning">发出警告</string>
+    <string name="report_action_temp_suspension">临时封禁</string>
+    <string name="report_action_perm_suspension">永久封禁</string>
+    <string name="report_action_pm_ban">禁止私信</string>
+
+    <!-- Messaging - report details -->
+    <string name="report_reason_prefix">原因：%1$s</string>
+    <string name="report_type_prefix">类型：%1$s</string>
+    <string name="report_details_prefix">详情：%1$s</string>
+    <string name="report_message_prefix">消息：\"%1$s\"</string>
+    <string name="report_reporter_reported">举报人：%1$s | 被举报人：%2$s</string>
+
+    <!-- Messaging - system message labels -->
+    <string name="sys_member_joins">成员加入</string>
+    <string name="sys_member_leaves">成员退出</string>
+    <string name="sys_role_changes">角色变更</string>
+    <string name="sys_permission_changes">权限变更</string>
+
+    <!-- Messaging - permission labels -->
+    <string name="perm_who_can_send">谁可以发送消息</string>
+    <string name="perm_who_can_add_members">谁可以添加成员</string>
+    <string name="perm_who_can_edit_info">谁可以编辑群组信息</string>
+    <string name="perm_who_can_delete_messages">谁可以删除消息</string>
+    <string name="perm_who_can_mute_members">谁可以禁言成员</string>
+    <string name="perm_who_can_remove_members">谁可以移除成员</string>
+
+    <!-- Messaging - date separators -->
+    <string name="today">今天</string>
+    <string name="yesterday">昨天</string>
+
+    <!-- Daily Reward -->
+    <string name="awesome">太棒了！</string>
+    <string name="claim_todays_reward">领取今日奖励</string>
+    <string name="coins">币</string>
+    <string name="day_fri">周五</string>
+    <string name="day_mon">周一</string>
+    <string name="day_sat">周六</string>
+    <string name="day_streak">连续 %1$d 天</string>
+    <string name="day_sun">周日</string>
+    <string name="day_thu">周四</string>
+    <string name="day_tue">周二</string>
+    <string name="day_wed">周三</string>
+    <string name="later">稍后</string>
+    <string name="milestone">里程碑</string>
+    <string name="milestone_bonus">里程碑奖励！</string>
+    <string name="plus_coins">+%1$d 币！</string>
+    <string name="reward_claimed">奖励已领取！</string>
+
+    <!-- Economy -->
+    <string name="bean_redeem_description">1 豆 = 1 币。兑换 2,000+ 可获 10% 额外奖励！</string>
+    <string name="bonus_coins">+%1$d 额外</string>
+    <string name="buy_shy_coins">购买 ShyCoins</string>
+    <string name="confirm_redemption">确认兑换</string>
+    <string name="daily_reward">每日奖励</string>
+    <string name="redeem">兑换</string>
+    <string name="redeem_all">全部兑换</string>
+    <string name="redeem_beans_for_coins">将 %1$s 豆兑换为 %2$s 币？</string>
+    <string name="redeem_shy_beans">兑换 ShyBeans</string>
+    <string name="send_gift">送礼物</string>
+    <string name="shy_beans">ShyBeans</string>
+    <string name="shy_coins">ShyCoins</string>
+    <string name="testing_mode_coins">测试模式——不会产生真实费用。点击套餐即可获得币。</string>
+    <string name="filter_all">全部</string>
+    <string name="filter_gacha">扭蛋</string>
+    <string name="filter_gifts">礼物</string>
+    <string name="filter_purchases">购买</string>
+    <string name="filter_redemptions">兑换</string>
+    <string name="filter_rewards">奖励</string>
+    <string name="no_filtered_transactions">没有%1$s记录</string>
+    <string name="no_transactions_yet">暂无交易记录</string>
+    <string name="transaction_history">交易历史</string>
+    <string name="transactions">交易</string>
+    <string name="wallet">钱包</string>
+
+    <!-- Super Shy -->
+    <string name="benefit_daily_bonus">每日登录币 +10%（向上取整）</string>
+    <string name="benefit_extended_room">延长房间时长（12 小时）</string>
+    <string name="benefit_full_room">8 座位完整房间</string>
+    <string name="benefit_gold_name">全局金色显示名</string>
+    <string name="benefit_profile_frame">专属主页边框</string>
+    <string name="benefit_star_badge">名字旁的星标</string>
+    <string name="benefits">特权</string>
+    <string name="choose_a_plan">选择方案</string>
+    <string name="claim_30_days_free">领取 30 天免费</string>
+    <string name="claimed">已领取！</string>
+    <string name="claimed_activate_backpack">前往聊天房间的背包中激活它。</string>
+    <string name="claiming">领取中…</string>
+    <string name="currently_active">当前激活</string>
+    <string name="days_remaining">剩余 %1$d 天</string>
+    <string name="one_time_payment">一次性付款</string>
+    <string name="per_month">每月</string>
+    <string name="per_year">每年</string>
+    <string name="super_shy">Super Shy</string>
+    <string name="super_shy_for_life">你已永久拥有 Super Shy！</string>
+    <string name="tap_to_claim_backpack">点击领取——将添加到你的背包</string>
+    <string name="testing_mode_super_shy">测试模式——不会产生真实费用。点击方案即可激活 Super Shy。</string>
+    <string name="tier_label">方案：%1$s</string>
+    <string name="tier_lifetime">终身</string>
+    <string name="tier_monthly">月度</string>
+    <string name="tier_yearly">年度</string>
+    <string name="upgrade_to_lifetime">升级为终身</string>
+
+    <!-- Legal -->
+    <string name="accept_all_and_continue">全部接受 &amp; 继续</string>
+    <string name="community_standards">社区规范</string>
+    <string name="cyber_bullying_policy">网络欺凌政策</string>
+    <string name="i_have_read_and_agree">我已阅读并同意 </string>
+    <string name="privacy_policy">隐私政策</string>
+    <string name="review_and_accept_policies">请查阅并接受我们的政策以继续。</string>
+    <string name="terms_and_conditions">条款 &amp; 条件</string>
+    <string name="welcome_to_shytalk">欢迎来到 ShyTalk</string>
+
+    <!-- Auth -->
+    <string name="sign_in">登录</string>
+    <string name="phone_number">手机号码</string>
+    <string name="verification_code">验证码</string>
+    <string name="continue_with_google">使用 Google 继续</string>
+</resources>

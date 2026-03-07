@@ -1,0 +1,471 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common actions -->
+    <string name="all_caps">ВСІ</string>
+    <string name="back">Назад</string>
+    <string name="cancel">Скасувати</string>
+    <string name="change">Змінити</string>
+    <string name="close">Закрити</string>
+    <string name="confirm">Підтвердити</string>
+    <string name="continue_button">Продовжити</string>
+    <string name="create">Створити</string>
+    <string name="delete">Видалити</string>
+    <string name="done">Готово</string>
+    <string name="edit">Редагувати</string>
+    <string name="error_generic">Щось пішло не так</string>
+    <string name="got_it">Зрозуміло</string>
+    <string name="learn_more">Дізнатися більше</string>
+    <string name="loading">Завантаження…</string>
+    <string name="maybe_later">Можливо пізніше</string>
+    <string name="message_action">Написати</string>
+    <string name="next">Далі</string>
+    <string name="ok">OK</string>
+    <string name="retry">Повторити</string>
+    <string name="save">Зберегти</string>
+    <string name="send">Надіслати</string>
+    <string name="sending">Надсилання...</string>
+    <string name="transfer">Передати</string>
+    <string name="unknown">Невідомо</string>
+    <string name="using">Використання...</string>
+    <string name="you">Ви</string>
+
+    <!-- Message bubbles -->
+    <string name="edited">змінено</string>
+    <string name="tap_to_join">Натисніть, щоб приєднатися</string>
+    <string name="message_recalled_by_you">Ви відкликали це повідомлення</string>
+    <string name="message_recalled">Це повідомлення було відкликано</string>
+    <string name="message_hidden_by_mod">Це повідомлення було приховано модератором</string>
+    <string name="invite_to_mic">Запросити до мікрофона</string>
+    <string name="closed">Закрито</string>
+    <string name="edited_count">Змінено (%1$d)</string>
+    <string name="read">Прочитано</string>
+    <string name="sent">Надіслано</string>
+    <string name="sticker">Стікер</string>
+    <string name="image">Зображення</string>
+
+    <!-- Context menu -->
+    <string name="react">Реакція</string>
+    <string name="reply">Відповісти</string>
+    <string name="copy">Копіювати</string>
+    <string name="recall">Відкликати</string>
+    <string name="add_to_stickers">Додати до стікерів</string>
+    <string name="hide_message">Приховати повідомлення</string>
+    <string name="report_message">Поскаржитися на повідомлення</string>
+
+    <!-- Translation -->
+    <string name="translate">Перекласти</string>
+    <string name="translated_from">Перекладено з %1$s</string>
+    <string name="show_original">Показати оригінал</string>
+    <string name="translation_limit_reached">Денний ліміт вичерпано. Перейдіть на Super Shy для необмежених перекладів.</string>
+    <string name="auto_translate">Автопереклад</string>
+    <string name="auto_translate_description">Автоматично перекладати вхідні повідомлення вашою мовою</string>
+    <string name="translations_remaining">Залишилось перекладів сьогодні: %1$d</string>
+
+    <!-- Settings -->
+    <string name="settings">Налаштування</string>
+    <string name="language">Мова</string>
+    <string name="blocked_users">Заблоковані користувачі</string>
+    <string name="account">Обліковий запис</string>
+    <string name="privacy">Конфіденційність</string>
+    <string name="notifications">Сповіщення</string>
+    <string name="permissions">Дозволи</string>
+    <string name="about">Про додаток</string>
+    <string name="sign_out">Вийти</string>
+    <string name="sign_out_confirm">Ви впевнені, що хочете вийти?</string>
+
+    <!-- Home -->
+    <string name="create_room">Створити кімнату</string>
+    <string name="create_room_prompt">Дайте назву вашій кімнаті</string>
+    <string name="home">Головна</string>
+    <string name="in_room_count">%1$d у кімнаті</string>
+    <string name="join">Приєднатися</string>
+    <string name="no_active_rooms">Немає активних кімнат</string>
+    <string name="no_rooms">Немає доступних кімнат</string>
+    <string name="room_name">Назва кімнати</string>
+    <string name="room_name_label">Назва кімнати</string>
+    <string name="seats_count">%1$d/%2$d місць</string>
+    <string name="speakers_count">%1$d/%2$d спікерів</string>
+    <string name="tap_plus_to_create">Натисніть +, щоб створити</string>
+    <string name="visitors_count">%1$d відвідувачів</string>
+
+    <!-- Profile -->
+    <string name="connections">Зв\'язки</string>
+    <string name="display_name">Ім\'я</string>
+    <string name="dob_privacy_note">Дата народження є обов\'язковою, але ви можете приховати свій вік у налаштуваннях конфіденційності.</string>
+    <string name="dob_required_subtitle">Нам потрібна ваша дата народження, щоб продовжити.</string>
+    <string name="follow">Підписатися</string>
+    <string name="follow_back">Підписатися у відповідь</string>
+    <string name="followers">Підписники</string>
+    <string name="followers_count">Підписники (%1$d)</string>
+    <string name="following">Підписки</string>
+    <string name="following_count">Підписки (%1$d)</string>
+    <string name="following_list_private">Список підписок цього користувача приховано</string>
+    <string name="get_super_shy">Отримати Super Shy</string>
+    <string name="gift_wall">Стіна подарунків</string>
+    <string name="gift_value_coins">Вартість: %1$d монет</string>
+    <string name="no_followers_yet">Поки немає підписників</string>
+    <string name="no_profile_visitors">Поки немає відвідувачів профілю</string>
+    <string name="not_following_anyone">Поки ні на кого не підписаний</string>
+    <string name="one_more_step">Ще один крок</string>
+    <string name="profile">Профіль</string>
+    <string name="profile_setup_subtitle">Оберіть ім\'я та введіть дату народження</string>
+    <string name="received_times">Отримано %1$d разів</string>
+    <string name="remove_follower">Видалити підписника</string>
+    <string name="report">Поскаржитися</string>
+    <string name="select_date_of_birth">Оберіть дату народження</string>
+    <string name="select_nationality">Оберіть національність</string>
+    <string name="search_countries">Пошук країн</string>
+    <string name="selected">Обрано</string>
+    <string name="set_up_your_profile">Налаштуйте свій профіль</string>
+    <string name="stalker_visit_info">Заходив(ла) до вас %1$s, %2$d разів за останні 3 місяці</string>
+    <string name="stalkers_count">Спостерігачі (%1$d)</string>
+    <string name="stalkers_super_shy_description">Дізнайтеся, хто переглядав ваш профіль! Спостерігачі профілю — ексклюзивна функція Super Shy.</string>
+    <string name="super_shy_benefit">Перевага Super Shy</string>
+    <string name="top_senders">Топ відправників</string>
+    <string name="block">Заблокувати</string>
+    <string name="unblock">Розблокувати</string>
+    <string name="undo_remove">Скасувати видалення</string>
+    <string name="unfollow">Відписатися</string>
+
+    <!-- Room -->
+    <string name="alias">Псевдонім</string>
+    <string name="approve">Схвалити</string>
+    <string name="audience">Аудиторія</string>
+    <string name="back_to_home">На головну</string>
+    <string name="backpack">Рюкзак</string>
+    <string name="backpack_empty">Ваш рюкзак порожній.\nКрутіть колесо, щоб отримати подарунки!</string>
+    <string name="ban">Забанити</string>
+    <string name="block_user">Заблокувати користувача</string>
+    <string name="block_user_confirm">Ви впевнені, що хочете заблокувати %1$s?</string>
+    <string name="close_room">Закрити кімнату</string>
+    <string name="daily">Щоденно</string>
+    <string name="deny">Відхилити</string>
+    <string name="empty_seat">Вільне місце</string>
+    <string name="filter_gift_animations_description">Відфільтрувати анімації для дешевих подарунків.</string>
+    <string name="gift">Подарунок</string>
+    <string name="gift_animations">Анімації подарунків</string>
+    <string name="host">Ведучий</string>
+    <string name="hosts">Ведучі</string>
+    <string name="invite_to_seat">Запросити на місце</string>
+    <string name="kick">Вигнати</string>
+    <string name="kick_user">Вигнати користувача</string>
+    <string name="kick_user_confirm">Ви впевнені, що хочете вигнати %1$s з кімнати? Він не зможе повернутися.</string>
+    <string name="leave_room">Покинути кімнату</string>
+    <string name="leave_seat">Покинути місце</string>
+    <string name="lock_seating">Заблокувати розсадку</string>
+    <string name="lock_seating_description">Тільки власник може запрошувати користувачів на місця</string>
+    <string name="buy_coins">Купити монети</string>
+    <string name="collect_all">ЗІБРАТИ ВСЕ (%1$d)</string>
+    <string name="increased_drop_rate">ПІДВИЩЕНИЙ ШАНС ВИПАДІННЯ</string>
+    <string name="loading_prices">Завантаження цін…</string>
+    <string name="lucky_spin">Lucky Spin</string>
+    <string name="lucky_spin_title">LUCKY SPIN</string>
+    <string name="need_more_coins">Потрібно більше монет!</string>
+    <string name="no_packages_available">Немає доступних пакетів</string>
+    <string name="no_spins_yet">Поки немає обертань</string>
+    <string name="prizes">Призи</string>
+    <string name="skip_animation">ПРОПУСТИТИ АНІМАЦІЮ</string>
+    <string name="spin">КРУТИТИ</string>
+    <string name="spin_count">%1$d ОБЕРТАННЯ</string>
+    <string name="spin_history">Історія обертань</string>
+    <string name="spin_results">Результати обертання</string>
+    <string name="message">Повідомлення</string>
+    <string name="move_to_audience">Перемістити в аудиторію</string>
+    <string name="move_to_seat">Перемістити на місце</string>
+    <string name="move_to_which_seat">На яке місце перемістити?</string>
+    <string name="mute">Вимкнути звук</string>
+    <string name="no_audience_members">Немає глядачів</string>
+    <string name="no_pending_requests">Немає запитів на очікуванні</string>
+    <string name="no_reason_given">Причину не вказано</string>
+    <string name="no_one_on_mic">Ніхто не біля мікрофона</string>
+    <string name="occupied">Зайнято</string>
+    <string name="open_for_duration">Відкрито %1$s</string>
+    <string name="owner">Власник</string>
+    <string name="reason_optional">Причина (необов\'язково)</string>
+    <string name="reject">Відхилити</string>
+    <string name="remove">Видалити</string>
+    <string name="remove_as_host">Зняти роль ведучого</string>
+    <string name="remove_from_room">Видалити з кімнати</string>
+    <string name="request">Запит</string>
+    <string name="request_a_seat">Запросити місце</string>
+    <string name="request_seat">Запросити місце</string>
+    <string name="requesting">Запитується</string>
+    <string name="room">Кімната</string>
+    <string name="room_closed">Кімнату закрито</string>
+    <string name="room_closing_no_super_shy">Власник кімнати не має Super Shy, тому ця кімната скоро закриється.</string>
+    <string name="room_closing_in">Кімната закриється через %1$d:%2$s</string>
+    <string name="room_closing_soon">Кімната скоро закриється</string>
+    <string name="room_settings">Налаштування кімнати</string>
+    <string name="rooms">Кімнати</string>
+    <string name="seat_requests">Запити на місце</string>
+    <string name="seat_swap_with">Місце %1$d (помінятися з %2$s)</string>
+    <string name="set_alias">Встановити псевдонім</string>
+    <string name="set_alias_description">Встановіть особистий псевдонім для %1$s. Тільки ви його бачитимете.</string>
+    <string name="set_as_host">Призначити ведучим</string>
+    <string name="showing_all_gift_animations">Показані всі анімації подарунків</string>
+    <string name="showing_animations_worth">Показані анімації вартістю %1$d+ монет</string>
+    <string name="speakers">Спікери</string>
+    <string name="take_a_seat">Зайняти місце</string>
+    <string name="unmute">Увімкнути звук</string>
+    <string name="unmuted">Звук увімкнено</string>
+    <string name="user">Користувач</string>
+    <string name="user_id">ID: %1$d</string>
+    <string name="visitor_count">%1$d відвідувач(ів)</string>
+    <string name="voice">Голос</string>
+    <string name="voice_unavailable">Голос недоступний</string>
+    <string name="you_have_super_shy_room">У вас Super Shy! Відкрийте свою кімнату на строк до %1$d годин.</string>
+    <string name="get_super_shy_rooms">Отримайте Super Shy, щоб кімнати працювали до %1$d годин!</string>
+
+    <!-- Room - Notifications -->
+    <string name="accept">Прийняти</string>
+    <string name="decline">Відхилити</string>
+    <string name="go_back">Повернутися</string>
+    <string name="go_to_seat">Перейти до місця</string>
+    <string name="invited_to_sit">Вас запросили сісти!</string>
+    <string name="request_accepted">Ваш запит прийнято!</string>
+    <string name="seat_number">Місце %1$d</string>
+    <string name="user_wants_to_sit">%1$s хоче сісти</string>
+
+    <!-- Room - Chat -->
+    <string name="cancel_edit">Скасувати редагування</string>
+    <string name="edit_message_placeholder">Редагувати повідомлення...</string>
+    <string name="message_placeholder">Повідомлення...</string>
+    <string name="new_messages">Нові повідомлення</string>
+
+    <!-- Room - Backpack -->
+    <string name="action_cannot_be_undone">ЦЮ ДІЮ НЕ МОЖНА СКАСУВАТИ.</string>
+    <string name="confirm_send">Підтвердити надсилання</string>
+    <string name="from_backpack_items">З рюкзака: %1$d предметів</string>
+    <string name="gifts">Подарунки</string>
+    <string name="send_all">Надіслати все</string>
+    <string name="send_all_includes">Це включає ВСІ %1$d предметів у %2$d різних подарунках.</string>
+    <string name="send_all_warning">Ви збираєтеся надіслати ВЕСЬ свій рюкзак %1$s.</string>
+    <string name="send_everything_confirm">Я розумію, надіслати все</string>
+    <string name="to_label">Кому</string>
+    <string name="total_cost_coins">Загальна вартість: %1$d монет</string>
+    <string name="use_button">Використати</string>
+    <string name="you_have_count">У вас: %1$d</string>
+    <string name="your_balance_coins">Ваш баланс: %1$d монет</string>
+
+    <!-- Messaging -->
+    <string name="additional_details_optional">Додаткові деталі (необов\'язково)</string>
+    <string name="all_admins_and_mods">Усі адміни &amp; модератори</string>
+    <string name="attach_evidence">Прикріпити доказ</string>
+    <string name="cant_message_user">Ви не можете написати цьому користувачу</string>
+    <string name="chat">Чат</string>
+    <string name="close_group">Закрити групу</string>
+    <string name="close_group_warning">Це закриє групу для всіх. Повідомлення зберігаються для модерації.</string>
+    <string name="compressing">Стиснення...</string>
+    <string name="conversation_start_hint">Почніть розмову з профілю\nабо картки користувача в кімнаті</string>
+    <string name="create_group">Створити групу</string>
+    <string name="current_version">Поточна</string>
+    <string name="delete_conversation">Видалити переписку</string>
+    <string name="delete_conversation_warning">Це видалить переписку з вашого списку. Повідомлення зберігаються і з\'являться знову, якщо співрозмовник вам напише.</string>
+    <string name="description_label">Опис</string>
+    <string name="description_optional">Опис (необов\'язково)</string>
+    <string name="edit_history">Історія змін</string>
+    <string name="editing_message">Редагування повідомлення</string>
+    <string name="evidence">Доказ</string>
+    <string name="evidence_required">Потрібен хоча б один знімок екрана або запис.</string>
+    <string name="general">Загальне</string>
+    <string name="group">Група</string>
+    <string name="group_chat">Груповий чат</string>
+    <string name="group_name_label">Назва групи</string>
+    <string name="group_name_required">Назва групи *</string>
+    <string name="group_settings">Налаштування групи</string>
+    <string name="invite_to_room">Запросити в кімнату</string>
+    <string name="last_seen">Був(ла) в мережі %1$s</string>
+    <string name="leave_group">Покинути групу</string>
+    <string name="members">Учасники</string>
+    <string name="members_count">%1$d учасників</string>
+    <string name="message_ellipsis">Повідомлення...</string>
+    <string name="message_permissions">Дозволи повідомлень</string>
+    <string name="message_preview_image">[Зображення]</string>
+    <string name="message_preview_recalled">[Повідомлення відкликано]</string>
+    <string name="message_preview_room_invite">[Запрошення в кімнату]</string>
+    <string name="message_preview_sticker">[Стікер]</string>
+    <string name="messages">Повідомлення</string>
+    <string name="mod_notifications">Сповіщення модераторів</string>
+    <string name="move_to_front">Перемістити вгору</string>
+    <string name="mute_notifications">Вимкнути сповіщення</string>
+    <string name="mute_reason">. Причина: %1$s</string>
+    <string name="muted">Вимкнено</string>
+    <string name="muted_for_hours_minutes">Вас заглушено на %1$dгод %2$dхв</string>
+    <string name="muted_for_minutes">Вас заглушено на %1$dхв</string>
+    <string name="muted_indefinitely">Вас заглушено</string>
+    <string name="new_group">Нова група</string>
+    <string name="new_group_selected">Нова група (%1$d обрано)</string>
+    <string name="new_message">Нове повідомлення</string>
+    <string name="no_action_needed">Дій не потрібно</string>
+    <string name="no_followers_following_found">Підписників та підписок не знайдено</string>
+    <string name="no_matches_found">Збігів не знайдено</string>
+    <string name="no_messages">Поки немає повідомлень</string>
+    <string name="no_pending_reports">Немає скарг на очікуванні</string>
+    <string name="no_stickers_yet">Поки немає стікерів</string>
+    <string name="no_users_found">Користувачів не знайдено</string>
+    <string name="notify_owner_only">Сповістити тільки власника</string>
+    <string name="online">В мережі</string>
+    <string name="only_admins_can_send">Тільки адміни та модератори можуть надсилати повідомлення в цій групі</string>
+    <string name="only_owner_can_change_permissions">Тільки власник групи може змінювати дозволи.</string>
+    <string name="owner_only">Тільки власник</string>
+    <string name="participants">Учасники</string>
+    <string name="participants_count">Учасники (%1$d)</string>
+    <string name="pin">Закріпити</string>
+    <string name="recent">Нещодавні</string>
+    <string name="replying_to">Відповідь для %1$s</string>
+    <string name="report_message_prompt">Чому ви скаржитеся на це повідомлення?</string>
+    <string name="report_review">Розгляд скарги</string>
+    <string name="report_user">Поскаржитися на %1$s</string>
+    <string name="report_user_prompt">Чому ви скаржитеся на цього користувача?</string>
+    <string name="reset_to_default">Скинути за замовчуванням</string>
+    <string name="result_count">%1$d результат(ів)</string>
+    <string name="review_report">Розглянути скаргу</string>
+    <string name="role_admin">Адмін</string>
+    <string name="role_member">Учасник</string>
+    <string name="role_mod">Модератор</string>
+    <string name="role_owner">Власник</string>
+    <string name="save_description">Зберегти опис</string>
+    <string name="search_all_users">Шукати всіх користувачів</string>
+    <string name="search_conversations">Пошук переписок...</string>
+    <string name="search_messages">Пошук повідомлень...</string>
+    <string name="search_people">Пошук людей...</string>
+    <string name="select_action">Оберіть дію:</string>
+    <string name="selected_count">%1$d обрано</string>
+    <string name="start_conversation">Почати розмову</string>
+    <string name="submit_report">Надіслати скаргу</string>
+    <string name="submitting">Надсилання...</string>
+    <string name="system_messages">Системні повідомлення</string>
+    <string name="transfer_ownership">Передати власність</string>
+    <string name="transfer_ownership_warning">Оберіть учасника для передачі власності. Ви втратите права власника. Це не можна скасувати.</string>
+    <string name="type_message">Введіть повідомлення…</string>
+    <string name="typing">друкує...</string>
+    <string name="unmute_action">Увімкнути звук</string>
+    <string name="unmute_notifications">Увімкнути сповіщення</string>
+    <string name="unpin">Відкріпити</string>
+    <string name="view_profile">Переглянути профіль</string>
+
+    <!-- Messaging - report reasons -->
+    <string name="report_reason_spam">Спам</string>
+    <string name="report_reason_harassment">Цькування</string>
+    <string name="report_reason_inappropriate">Неприйнятний вміст</string>
+    <string name="report_reason_other">Інше</string>
+
+    <!-- Messaging - report actions -->
+    <string name="report_action_warning">Винести попередження</string>
+    <string name="report_action_temp_suspension">Тимчасове блокування</string>
+    <string name="report_action_perm_suspension">Постійне блокування</string>
+    <string name="report_action_pm_ban">Заборонити особисті повідомлення</string>
+
+    <!-- Messaging - report details -->
+    <string name="report_reason_prefix">Причина: %1$s</string>
+    <string name="report_type_prefix">Тип: %1$s</string>
+    <string name="report_details_prefix">Деталі: %1$s</string>
+    <string name="report_message_prefix">Повідомлення: \"%1$s\"</string>
+    <string name="report_reporter_reported">Скаржник: %1$s | Порушник: %2$s</string>
+
+    <!-- Messaging - system message labels -->
+    <string name="sys_member_joins">Учасник приєднується</string>
+    <string name="sys_member_leaves">Учасник виходить</string>
+    <string name="sys_role_changes">Зміни ролей</string>
+    <string name="sys_permission_changes">Зміни дозволів</string>
+
+    <!-- Messaging - permission labels -->
+    <string name="perm_who_can_send">Хто може надсилати повідомлення</string>
+    <string name="perm_who_can_add_members">Хто може додавати учасників</string>
+    <string name="perm_who_can_edit_info">Хто може редагувати інформацію групи</string>
+    <string name="perm_who_can_delete_messages">Хто може видаляти повідомлення</string>
+    <string name="perm_who_can_mute_members">Хто може заглушувати учасників</string>
+    <string name="perm_who_can_remove_members">Хто може видаляти учасників</string>
+
+    <!-- Messaging - date separators -->
+    <string name="today">Сьогодні</string>
+    <string name="yesterday">Вчора</string>
+
+    <!-- Daily Reward -->
+    <string name="awesome">Чудово!</string>
+    <string name="claim_todays_reward">Отримати сьогоднішню нагороду</string>
+    <string name="coins">монет</string>
+    <string name="day_fri">Пт</string>
+    <string name="day_mon">Пн</string>
+    <string name="day_sat">Сб</string>
+    <string name="day_streak">%1$d днів поспіль</string>
+    <string name="day_sun">Нд</string>
+    <string name="day_thu">Чт</string>
+    <string name="day_tue">Вт</string>
+    <string name="day_wed">Ср</string>
+    <string name="later">Пізніше</string>
+    <string name="milestone">Віха</string>
+    <string name="milestone_bonus">Бонус за віху!</string>
+    <string name="plus_coins">+%1$d монет!</string>
+    <string name="reward_claimed">Нагороду отримано!</string>
+
+    <!-- Economy -->
+    <string name="bean_redeem_description">1 боб = 1 монета. Обміняйте 2,000+ для бонусу 10%!</string>
+    <string name="bonus_coins">+%1$d бонус</string>
+    <string name="buy_shy_coins">Купити ShyCoins</string>
+    <string name="confirm_redemption">Підтвердити обмін</string>
+    <string name="daily_reward">Щоденна нагорода</string>
+    <string name="redeem">Обміняти</string>
+    <string name="redeem_all">Обміняти все</string>
+    <string name="redeem_beans_for_coins">Обміняти %1$s бобів на %2$s монет?</string>
+    <string name="redeem_shy_beans">Обміняти ShyBeans</string>
+    <string name="send_gift">Надіслати подарунок</string>
+    <string name="shy_beans">ShyBeans</string>
+    <string name="shy_coins">ShyCoins</string>
+    <string name="testing_mode_coins">Тестовий режим — реальні гроші не стягуються. Натисніть на пакет, щоб миттєво отримати монети.</string>
+    <string name="filter_all">Усі</string>
+    <string name="filter_gacha">Гача</string>
+    <string name="filter_gifts">Подарунки</string>
+    <string name="filter_purchases">Покупки</string>
+    <string name="filter_redemptions">Обміни</string>
+    <string name="filter_rewards">Нагороди</string>
+    <string name="no_filtered_transactions">Немає транзакцій: %1$s</string>
+    <string name="no_transactions_yet">Поки немає транзакцій</string>
+    <string name="transaction_history">Історія транзакцій</string>
+    <string name="transactions">Транзакції</string>
+    <string name="wallet">Гаманець</string>
+
+    <!-- Super Shy -->
+    <string name="benefit_daily_bonus">+10% щоденних монет за вхід (з округленням вгору)</string>
+    <string name="benefit_extended_room">Збільшений час кімнати (12 годин)</string>
+    <string name="benefit_full_room">Повна кімната на 8 місць</string>
+    <string name="benefit_gold_name">Золоте ім\'я скрізь</string>
+    <string name="benefit_profile_frame">Ексклюзивна рамка профілю</string>
+    <string name="benefit_star_badge">Зірковий значок поруч з ім\'ям</string>
+    <string name="benefits">Переваги</string>
+    <string name="choose_a_plan">Оберіть план</string>
+    <string name="claim_30_days_free">Отримати 30 днів безкоштовно</string>
+    <string name="claimed">Отримано!</string>
+    <string name="claimed_activate_backpack">Щоб активувати, знайдіть його в рюкзаку в чат-кімнаті.</string>
+    <string name="claiming">Отримання…</string>
+    <string name="currently_active">Зараз активно</string>
+    <string name="days_remaining">Залишилось %1$d днів</string>
+    <string name="one_time_payment">Одноразовий платіж</string>
+    <string name="per_month">на місяць</string>
+    <string name="per_year">на рік</string>
+    <string name="super_shy">Super Shy</string>
+    <string name="super_shy_for_life">Ви Super Shy назавжди!</string>
+    <string name="tap_to_claim_backpack">Натисніть, щоб отримати — додасться до рюкзака</string>
+    <string name="testing_mode_super_shy">Тестовий режим — реальні гроші не стягуються. Натисніть на план, щоб миттєво активувати Super Shy.</string>
+    <string name="tier_label">Рівень: %1$s</string>
+    <string name="tier_lifetime">Назавжди</string>
+    <string name="tier_monthly">Щомісяця</string>
+    <string name="tier_yearly">Щороку</string>
+    <string name="upgrade_to_lifetime">Перейти на довічний</string>
+
+    <!-- Legal -->
+    <string name="accept_all_and_continue">Прийняти все &amp; Продовжити</string>
+    <string name="community_standards">Стандарти спільноти</string>
+    <string name="cyber_bullying_policy">Політика боротьби з кібербулінгом</string>
+    <string name="i_have_read_and_agree">Я прочитав(ла) та погоджуюся з </string>
+    <string name="privacy_policy">Політика конфіденційності</string>
+    <string name="review_and_accept_policies">Будь ласка, ознайомтеся та прийміть наші політики для продовження.</string>
+    <string name="terms_and_conditions">Умови використання</string>
+    <string name="welcome_to_shytalk">Ласкаво просимо до ShyTalk</string>
+
+    <!-- Auth -->
+    <string name="sign_in">Увійти</string>
+    <string name="phone_number">Номер телефону</string>
+    <string name="verification_code">Код підтвердження</string>
+    <string name="continue_with_google">Продовжити з Google</string>
+</resources>

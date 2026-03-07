@@ -1,0 +1,471 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common actions -->
+    <string name="all_caps">ALLES</string>
+    <string name="back">Terug</string>
+    <string name="cancel">Annuleren</string>
+    <string name="change">Wijzigen</string>
+    <string name="close">Sluiten</string>
+    <string name="confirm">Bevestigen</string>
+    <string name="continue_button">Doorgaan</string>
+    <string name="create">Aanmaken</string>
+    <string name="delete">Verwijderen</string>
+    <string name="done">Klaar</string>
+    <string name="edit">Bewerken</string>
+    <string name="error_generic">Er is iets misgegaan</string>
+    <string name="got_it">Begrepen</string>
+    <string name="learn_more">Meer info</string>
+    <string name="loading">Laden…</string>
+    <string name="maybe_later">Misschien later</string>
+    <string name="message_action">Bericht</string>
+    <string name="next">Volgende</string>
+    <string name="ok">OK</string>
+    <string name="retry">Opnieuw proberen</string>
+    <string name="save">Opslaan</string>
+    <string name="send">Versturen</string>
+    <string name="sending">Versturen...</string>
+    <string name="transfer">Overdragen</string>
+    <string name="unknown">Onbekend</string>
+    <string name="using">Gebruiken...</string>
+    <string name="you">Jij</string>
+
+    <!-- Message bubbles -->
+    <string name="edited">bewerkt</string>
+    <string name="tap_to_join">Tik om deel te nemen</string>
+    <string name="message_recalled_by_you">Je hebt dit bericht ingetrokken</string>
+    <string name="message_recalled">Dit bericht is ingetrokken</string>
+    <string name="message_hidden_by_mod">Dit bericht is verborgen door een moderator</string>
+    <string name="invite_to_mic">Uitnodigen voor microfoon</string>
+    <string name="closed">Gesloten</string>
+    <string name="edited_count">Bewerkt (%1$d)</string>
+    <string name="read">Gelezen</string>
+    <string name="sent">Verzonden</string>
+    <string name="sticker">Sticker</string>
+    <string name="image">Afbeelding</string>
+
+    <!-- Context menu -->
+    <string name="react">Reageren</string>
+    <string name="reply">Beantwoorden</string>
+    <string name="copy">Kopiëren</string>
+    <string name="recall">Intrekken</string>
+    <string name="add_to_stickers">Toevoegen aan stickers</string>
+    <string name="hide_message">Bericht verbergen</string>
+    <string name="report_message">Bericht melden</string>
+
+    <!-- Translation -->
+    <string name="translate">Vertalen</string>
+    <string name="translated_from">Vertaald vanuit het %1$s</string>
+    <string name="show_original">Origineel tonen</string>
+    <string name="translation_limit_reached">Daglimiet bereikt. Upgrade naar Super Shy voor onbeperkte vertalingen.</string>
+    <string name="auto_translate">Automatisch vertalen</string>
+    <string name="auto_translate_description">Inkomende berichten automatisch vertalen naar jouw taal</string>
+    <string name="translations_remaining">Nog %1$d vertalingen vandaag</string>
+
+    <!-- Settings -->
+    <string name="settings">Instellingen</string>
+    <string name="language">Taal</string>
+    <string name="blocked_users">Geblokkeerde gebruikers</string>
+    <string name="account">Account</string>
+    <string name="privacy">Privacy</string>
+    <string name="notifications">Meldingen</string>
+    <string name="permissions">Machtigingen</string>
+    <string name="about">Over</string>
+    <string name="sign_out">Uitloggen</string>
+    <string name="sign_out_confirm">Weet je zeker dat je wilt uitloggen?</string>
+
+    <!-- Home -->
+    <string name="create_room">Kamer aanmaken</string>
+    <string name="create_room_prompt">Geef je kamer een naam</string>
+    <string name="home">Home</string>
+    <string name="in_room_count">%1$d in de kamer</string>
+    <string name="join">Deelnemen</string>
+    <string name="no_active_rooms">Geen actieve kamers</string>
+    <string name="no_rooms">Geen kamers beschikbaar</string>
+    <string name="room_name">Kamernaam</string>
+    <string name="room_name_label">Kamernaam</string>
+    <string name="seats_count">%1$d/%2$d stoelen</string>
+    <string name="speakers_count">%1$d/%2$d sprekers</string>
+    <string name="tap_plus_to_create">Tik op + om er een aan te maken</string>
+    <string name="visitors_count">%1$d bezoekers</string>
+
+    <!-- Profile -->
+    <string name="connections">Connecties</string>
+    <string name="display_name">Weergavenaam</string>
+    <string name="dob_privacy_note">Je geboortedatum is verplicht, maar je kunt je leeftijd verbergen in de privacy-instellingen.</string>
+    <string name="dob_required_subtitle">We hebben je geboortedatum nodig om door te gaan.</string>
+    <string name="follow">Volgen</string>
+    <string name="follow_back">Terugvolgen</string>
+    <string name="followers">Volgers</string>
+    <string name="followers_count">Volgers (%1$d)</string>
+    <string name="following">Volgend</string>
+    <string name="following_count">Volgend (%1$d)</string>
+    <string name="following_list_private">De volglijst van deze gebruiker is privé</string>
+    <string name="get_super_shy">Super Shy ontdekken</string>
+    <string name="gift_wall">Cadeaumuur</string>
+    <string name="gift_value_coins">Waarde: %1$d munten</string>
+    <string name="no_followers_yet">Nog geen volgers</string>
+    <string name="no_profile_visitors">Nog geen profielbezoekers</string>
+    <string name="not_following_anyone">Volgt nog niemand</string>
+    <string name="one_more_step">Nog één stap</string>
+    <string name="profile">Profiel</string>
+    <string name="profile_setup_subtitle">Kies een weergavenaam en voer je geboortedatum in</string>
+    <string name="received_times">%1$d keer ontvangen</string>
+    <string name="remove_follower">Volger verwijderen</string>
+    <string name="report">Melden</string>
+    <string name="select_date_of_birth">Selecteer geboortedatum</string>
+    <string name="select_nationality">Selecteer nationaliteit</string>
+    <string name="search_countries">Landen zoeken</string>
+    <string name="selected">Geselecteerd</string>
+    <string name="set_up_your_profile">Stel je profiel in</string>
+    <string name="stalker_visit_info">Heeft je %1$s bezocht, %2$d keer in de afgelopen 3 maanden</string>
+    <string name="stalkers_count">Stalkers (%1$d)</string>
+    <string name="stalkers_super_shy_description">Bekijk wie je profiel heeft bezocht! Profielstalkers is een exclusieve Super Shy functie.</string>
+    <string name="super_shy_benefit">Super Shy voordeel</string>
+    <string name="top_senders">Topverzenders</string>
+    <string name="block">Blokkeren</string>
+    <string name="unblock">Deblokkeren</string>
+    <string name="undo_remove">Verwijderen ongedaan maken</string>
+    <string name="unfollow">Ontvolgen</string>
+
+    <!-- Room -->
+    <string name="alias">Alias</string>
+    <string name="approve">Goedkeuren</string>
+    <string name="audience">Publiek</string>
+    <string name="back_to_home">Terug naar home</string>
+    <string name="backpack">Rugzak</string>
+    <string name="backpack_empty">Je rugzak is leeg.\nDraai aan het wiel om cadeaus te winnen!</string>
+    <string name="ban">Bannen</string>
+    <string name="block_user">Gebruiker blokkeren</string>
+    <string name="block_user_confirm">Weet je zeker dat je %1$s wilt blokkeren?</string>
+    <string name="close_room">Kamer sluiten</string>
+    <string name="daily">Dagelijks</string>
+    <string name="deny">Weigeren</string>
+    <string name="empty_seat">Lege stoel</string>
+    <string name="filter_gift_animations_description">Filter animaties voor goedkopere cadeaus.</string>
+    <string name="gift">Cadeau</string>
+    <string name="gift_animations">Cadeau-animaties</string>
+    <string name="host">Host</string>
+    <string name="hosts">Hosts</string>
+    <string name="invite_to_seat">Uitnodigen voor stoel</string>
+    <string name="kick">Verwijderen</string>
+    <string name="kick_user">Gebruiker verwijderen</string>
+    <string name="kick_user_confirm">Weet je zeker dat je %1$s uit de kamer wilt verwijderen? Ze kunnen niet meer terugkomen.</string>
+    <string name="leave_room">Kamer verlaten</string>
+    <string name="leave_seat">Stoel verlaten</string>
+    <string name="lock_seating">Stoelen vergrendelen</string>
+    <string name="lock_seating_description">Alleen de eigenaar kan gebruikers uitnodigen om te zitten</string>
+    <string name="buy_coins">Munten kopen</string>
+    <string name="collect_all">ALLES VERZAMELEN (%1$d)</string>
+    <string name="increased_drop_rate">VERHOOGD DROPPERCENTAGE</string>
+    <string name="loading_prices">Prijzen laden…</string>
+    <string name="lucky_spin">Lucky Spin</string>
+    <string name="lucky_spin_title">LUCKY SPIN</string>
+    <string name="need_more_coins">Meer munten nodig!</string>
+    <string name="no_packages_available">Geen pakketten beschikbaar</string>
+    <string name="no_spins_yet">Nog geen draaibeurten</string>
+    <string name="prizes">Prijzen</string>
+    <string name="skip_animation">ANIMATIE OVERSLAAN</string>
+    <string name="spin">DRAAIEN</string>
+    <string name="spin_count">%1$d DRAAIBEURT(EN)</string>
+    <string name="spin_history">Draaigeschiedenis</string>
+    <string name="spin_results">Draairesultaten</string>
+    <string name="message">Bericht</string>
+    <string name="move_to_audience">Naar publiek verplaatsen</string>
+    <string name="move_to_seat">Naar stoel verplaatsen</string>
+    <string name="move_to_which_seat">Naar welke stoel verplaatsen?</string>
+    <string name="mute">Dempen</string>
+    <string name="no_audience_members">Geen publiek aanwezig</string>
+    <string name="no_pending_requests">Geen wachtende verzoeken</string>
+    <string name="no_reason_given">Geen reden opgegeven</string>
+    <string name="no_one_on_mic">Niemand op de microfoon</string>
+    <string name="occupied">Bezet</string>
+    <string name="open_for_duration">Open sinds %1$s</string>
+    <string name="owner">Eigenaar</string>
+    <string name="reason_optional">Reden (optioneel)</string>
+    <string name="reject">Afwijzen</string>
+    <string name="remove">Verwijderen</string>
+    <string name="remove_as_host">Als host verwijderen</string>
+    <string name="remove_from_room">Uit kamer verwijderen</string>
+    <string name="request">Verzoek</string>
+    <string name="request_a_seat">Een stoel aanvragen</string>
+    <string name="request_seat">Stoel aanvragen</string>
+    <string name="requesting">Aanvragen</string>
+    <string name="room">Kamer</string>
+    <string name="room_closed">Kamer gesloten</string>
+    <string name="room_closing_no_super_shy">De kamereigenaar heeft geen Super Shy, dus deze kamer sluit binnenkort.</string>
+    <string name="room_closing_in">Kamer sluit over %1$d:%2$s</string>
+    <string name="room_closing_soon">Kamer sluit binnenkort</string>
+    <string name="room_settings">Kamerinstellingen</string>
+    <string name="rooms">Kamers</string>
+    <string name="seat_requests">Stoelverzoeken</string>
+    <string name="seat_swap_with">Stoel %1$d (ruilen met %2$s)</string>
+    <string name="set_alias">Alias instellen</string>
+    <string name="set_alias_description">Stel een persoonlijke alias in voor %1$s. Alleen jij ziet dit.</string>
+    <string name="set_as_host">Als host instellen</string>
+    <string name="showing_all_gift_animations">Alle cadeau-animaties worden getoond</string>
+    <string name="showing_animations_worth">Alleen animaties van %1$d+ munten worden getoond</string>
+    <string name="speakers">Sprekers</string>
+    <string name="take_a_seat">Ga zitten</string>
+    <string name="unmute">Dempen opheffen</string>
+    <string name="unmuted">Niet meer gedempt</string>
+    <string name="user">Gebruiker</string>
+    <string name="user_id">ID: %1$d</string>
+    <string name="visitor_count">%1$d bezoeker(s)</string>
+    <string name="voice">Spraak</string>
+    <string name="voice_unavailable">Spraak niet beschikbaar</string>
+    <string name="you_have_super_shy_room">Je hebt Super Shy! Open je eigen kamer voor maximaal %1$d uur verlengde tijd.</string>
+    <string name="get_super_shy_rooms">Neem Super Shy voor kamers die tot %1$d uur duren!</string>
+
+    <!-- Room - Notifications -->
+    <string name="accept">Accepteren</string>
+    <string name="decline">Weigeren</string>
+    <string name="go_back">Terug</string>
+    <string name="go_to_seat">Naar stoel gaan</string>
+    <string name="invited_to_sit">Je bent uitgenodigd om te zitten!</string>
+    <string name="request_accepted">Je verzoek is geaccepteerd!</string>
+    <string name="seat_number">Stoel %1$d</string>
+    <string name="user_wants_to_sit">%1$s wil gaan zitten</string>
+
+    <!-- Room - Chat -->
+    <string name="cancel_edit">Bewerking annuleren</string>
+    <string name="edit_message_placeholder">Bericht bewerken...</string>
+    <string name="message_placeholder">Bericht...</string>
+    <string name="new_messages">Nieuwe berichten</string>
+
+    <!-- Room - Backpack -->
+    <string name="action_cannot_be_undone">DEZE ACTIE KAN NIET ONGEDAAN WORDEN GEMAAKT.</string>
+    <string name="confirm_send">Versturen bevestigen</string>
+    <string name="from_backpack_items">Uit rugzak: %1$d items</string>
+    <string name="gifts">Cadeaus</string>
+    <string name="send_all">Alles versturen</string>
+    <string name="send_all_includes">Dit omvat ALLE %1$d items verdeeld over %2$d verschillende cadeaus.</string>
+    <string name="send_all_warning">Je staat op het punt je HELE rugzak naar %1$s te sturen.</string>
+    <string name="send_everything_confirm">Ik begrijp het, stuur alles</string>
+    <string name="to_label">Aan</string>
+    <string name="total_cost_coins">Totale kosten: %1$d munten</string>
+    <string name="use_button">Gebruiken</string>
+    <string name="you_have_count">Je hebt: %1$d</string>
+    <string name="your_balance_coins">Je saldo: %1$d munten</string>
+
+    <!-- Messaging -->
+    <string name="additional_details_optional">Extra details (optioneel)</string>
+    <string name="all_admins_and_mods">Alle beheerders &amp; moderators</string>
+    <string name="attach_evidence">Bewijs bijvoegen</string>
+    <string name="cant_message_user">Je kunt deze gebruiker geen bericht sturen</string>
+    <string name="chat">Chat</string>
+    <string name="close_group">Groep sluiten</string>
+    <string name="close_group_warning">Dit sluit de groep voor iedereen. Berichten worden bewaard voor moderatie.</string>
+    <string name="compressing">Comprimeren...</string>
+    <string name="conversation_start_hint">Begin een gesprek vanuit iemands\nprofiel of gebruikerskaart in een kamer</string>
+    <string name="create_group">Groep aanmaken</string>
+    <string name="current_version">Huidig</string>
+    <string name="delete_conversation">Gesprek verwijderen</string>
+    <string name="delete_conversation_warning">Het gesprek wordt uit je lijst verwijderd. Berichten worden bewaard en verschijnen opnieuw als de ander je weer een bericht stuurt.</string>
+    <string name="description_label">Beschrijving</string>
+    <string name="description_optional">Beschrijving (optioneel)</string>
+    <string name="edit_history">Bewerkingsgeschiedenis</string>
+    <string name="editing_message">Bericht bewerken</string>
+    <string name="evidence">Bewijs</string>
+    <string name="evidence_required">Ten minste één screenshot of opname is vereist.</string>
+    <string name="general">Algemeen</string>
+    <string name="group">Groep</string>
+    <string name="group_chat">Groepschat</string>
+    <string name="group_name_label">Groepsnaam</string>
+    <string name="group_name_required">Groepsnaam *</string>
+    <string name="group_settings">Groepsinstellingen</string>
+    <string name="invite_to_room">Uitnodigen voor kamer</string>
+    <string name="last_seen">Laatst gezien %1$s</string>
+    <string name="leave_group">Groep verlaten</string>
+    <string name="members">Leden</string>
+    <string name="members_count">%1$d leden</string>
+    <string name="message_ellipsis">Bericht...</string>
+    <string name="message_permissions">Berichtmachtigingen</string>
+    <string name="message_preview_image">[Afbeelding]</string>
+    <string name="message_preview_recalled">[Bericht ingetrokken]</string>
+    <string name="message_preview_room_invite">[Kameruitnodiging]</string>
+    <string name="message_preview_sticker">[Sticker]</string>
+    <string name="messages">Berichten</string>
+    <string name="mod_notifications">Moderatormeldingen</string>
+    <string name="move_to_front">Naar voren verplaatsen</string>
+    <string name="mute_notifications">Meldingen dempen</string>
+    <string name="mute_reason">. Reden: %1$s</string>
+    <string name="muted">Gedempt</string>
+    <string name="muted_for_hours_minutes">Je bent gedempt voor %1$du %2$dm</string>
+    <string name="muted_for_minutes">Je bent gedempt voor %1$dm</string>
+    <string name="muted_indefinitely">Je bent gedempt</string>
+    <string name="new_group">Nieuwe groep</string>
+    <string name="new_group_selected">Nieuwe groep (%1$d geselecteerd)</string>
+    <string name="new_message">Nieuw bericht</string>
+    <string name="no_action_needed">Geen actie nodig</string>
+    <string name="no_followers_following_found">Geen volgers of volgend gevonden</string>
+    <string name="no_matches_found">Geen resultaten gevonden</string>
+    <string name="no_messages">Nog geen berichten</string>
+    <string name="no_pending_reports">Geen openstaande meldingen</string>
+    <string name="no_stickers_yet">Nog geen stickers</string>
+    <string name="no_users_found">Geen gebruikers gevonden</string>
+    <string name="notify_owner_only">Alleen eigenaar melden</string>
+    <string name="online">Online</string>
+    <string name="only_admins_can_send">Alleen beheerders en moderators kunnen berichten sturen in deze groep</string>
+    <string name="only_owner_can_change_permissions">Alleen de groepseigenaar kan machtigingen wijzigen.</string>
+    <string name="owner_only">Alleen eigenaar</string>
+    <string name="participants">Deelnemers</string>
+    <string name="participants_count">Deelnemers (%1$d)</string>
+    <string name="pin">Vastpinnen</string>
+    <string name="recent">Recent</string>
+    <string name="replying_to">Antwoord aan %1$s</string>
+    <string name="report_message_prompt">Waarom meld je dit bericht?</string>
+    <string name="report_review">Melding beoordelen</string>
+    <string name="report_user">%1$s melden</string>
+    <string name="report_user_prompt">Waarom meld je deze gebruiker?</string>
+    <string name="reset_to_default">Standaardwaarden herstellen</string>
+    <string name="result_count">%1$d resultaat/resultaten</string>
+    <string name="review_report">Melding beoordelen</string>
+    <string name="role_admin">Beheerder</string>
+    <string name="role_member">Lid</string>
+    <string name="role_mod">Moderator</string>
+    <string name="role_owner">Eigenaar</string>
+    <string name="save_description">Beschrijving opslaan</string>
+    <string name="search_all_users">Alle gebruikers zoeken</string>
+    <string name="search_conversations">Gesprekken zoeken...</string>
+    <string name="search_messages">Berichten zoeken...</string>
+    <string name="search_people">Mensen zoeken...</string>
+    <string name="select_action">Selecteer actie:</string>
+    <string name="selected_count">%1$d geselecteerd</string>
+    <string name="start_conversation">Een gesprek starten</string>
+    <string name="submit_report">Melding indienen</string>
+    <string name="submitting">Indienen...</string>
+    <string name="system_messages">Systeemberichten</string>
+    <string name="transfer_ownership">Eigenaarschap overdragen</string>
+    <string name="transfer_ownership_warning">Selecteer een lid om het eigenaarschap aan over te dragen. Je verliest je eigenaarsprivileges. Dit kan niet ongedaan worden gemaakt.</string>
+    <string name="type_message">Typ een bericht…</string>
+    <string name="typing">aan het typen...</string>
+    <string name="unmute_action">Dempen opheffen</string>
+    <string name="unmute_notifications">Meldingen niet meer dempen</string>
+    <string name="unpin">Losmaken</string>
+    <string name="view_profile">Profiel bekijken</string>
+
+    <!-- Messaging - report reasons -->
+    <string name="report_reason_spam">Spam</string>
+    <string name="report_reason_harassment">Intimidatie</string>
+    <string name="report_reason_inappropriate">Ongepaste inhoud</string>
+    <string name="report_reason_other">Anders</string>
+
+    <!-- Messaging - report actions -->
+    <string name="report_action_warning">Waarschuwing geven</string>
+    <string name="report_action_temp_suspension">Tijdelijke schorsing</string>
+    <string name="report_action_perm_suspension">Permanente schorsing</string>
+    <string name="report_action_pm_ban">Privéberichtverbod</string>
+
+    <!-- Messaging - report details -->
+    <string name="report_reason_prefix">Reden: %1$s</string>
+    <string name="report_type_prefix">Type: %1$s</string>
+    <string name="report_details_prefix">Details: %1$s</string>
+    <string name="report_message_prefix">Bericht: \"%1$s\"</string>
+    <string name="report_reporter_reported">Melder: %1$s | Gemeld: %2$s</string>
+
+    <!-- Messaging - system message labels -->
+    <string name="sys_member_joins">Lid komt erbij</string>
+    <string name="sys_member_leaves">Lid vertrekt</string>
+    <string name="sys_role_changes">Rolwijzigingen</string>
+    <string name="sys_permission_changes">Machtigingswijzigingen</string>
+
+    <!-- Messaging - permission labels -->
+    <string name="perm_who_can_send">Wie kan berichten sturen</string>
+    <string name="perm_who_can_add_members">Wie kan leden toevoegen</string>
+    <string name="perm_who_can_edit_info">Wie kan groepsinformatie bewerken</string>
+    <string name="perm_who_can_delete_messages">Wie kan berichten verwijderen</string>
+    <string name="perm_who_can_mute_members">Wie kan leden dempen</string>
+    <string name="perm_who_can_remove_members">Wie kan leden verwijderen</string>
+
+    <!-- Messaging - date separators -->
+    <string name="today">Vandaag</string>
+    <string name="yesterday">Gisteren</string>
+
+    <!-- Daily Reward -->
+    <string name="awesome">Geweldig!</string>
+    <string name="claim_todays_reward">Dagelijkse beloning claimen</string>
+    <string name="coins">munten</string>
+    <string name="day_fri">Vr</string>
+    <string name="day_mon">Ma</string>
+    <string name="day_sat">Za</string>
+    <string name="day_streak">%1$d dagen op rij</string>
+    <string name="day_sun">Zo</string>
+    <string name="day_thu">Do</string>
+    <string name="day_tue">Di</string>
+    <string name="day_wed">Wo</string>
+    <string name="later">Later</string>
+    <string name="milestone">Mijlpaal</string>
+    <string name="milestone_bonus">Mijlpaalbonus!</string>
+    <string name="plus_coins">+%1$d munten!</string>
+    <string name="reward_claimed">Beloning geclaimd!</string>
+
+    <!-- Economy -->
+    <string name="bean_redeem_description">1 boon = 1 munt. Wissel 2.000+ in voor 10% bonus!</string>
+    <string name="bonus_coins">+%1$d bonus</string>
+    <string name="buy_shy_coins">ShyCoins kopen</string>
+    <string name="confirm_redemption">Inwisseling bevestigen</string>
+    <string name="daily_reward">Dagelijkse beloning</string>
+    <string name="redeem">Inwisselen</string>
+    <string name="redeem_all">Alles inwisselen</string>
+    <string name="redeem_beans_for_coins">%1$s bonen inwisselen voor %2$s munten?</string>
+    <string name="redeem_shy_beans">ShyBeans inwisselen</string>
+    <string name="send_gift">Cadeau sturen</string>
+    <string name="shy_beans">ShyBeans</string>
+    <string name="shy_coins">ShyCoins</string>
+    <string name="testing_mode_coins">Testmodus — er wordt geen echt geld in rekening gebracht. Tik op een pakket om direct munten te ontvangen.</string>
+    <string name="filter_all">Alles</string>
+    <string name="filter_gacha">Gacha</string>
+    <string name="filter_gifts">Cadeaus</string>
+    <string name="filter_purchases">Aankopen</string>
+    <string name="filter_redemptions">Inwisselingen</string>
+    <string name="filter_rewards">Beloningen</string>
+    <string name="no_filtered_transactions">Geen %1$s transacties</string>
+    <string name="no_transactions_yet">Nog geen transacties</string>
+    <string name="transaction_history">Transactiegeschiedenis</string>
+    <string name="transactions">Transacties</string>
+    <string name="wallet">Portemonnee</string>
+
+    <!-- Super Shy -->
+    <string name="benefit_daily_bonus">+10% dagelijkse inlogmunten (naar boven afgerond)</string>
+    <string name="benefit_extended_room">Verlengde kamerduur (12 uur)</string>
+    <string name="benefit_full_room">Volledige kamer met 8 stoelen</string>
+    <string name="benefit_gold_name">Gouden weergavenaam overal</string>
+    <string name="benefit_profile_frame">Exclusief profielkader</string>
+    <string name="benefit_star_badge">Sterbadge naast je naam</string>
+    <string name="benefits">Voordelen</string>
+    <string name="choose_a_plan">Kies een abonnement</string>
+    <string name="claim_30_days_free">Claim 30 dagen gratis</string>
+    <string name="claimed">Geclaimd!</string>
+    <string name="claimed_activate_backpack">Om het te activeren, zoek het in je rugzak terwijl je in een chatroom bent.</string>
+    <string name="claiming">Claimen…</string>
+    <string name="currently_active">Momenteel actief</string>
+    <string name="days_remaining">Nog %1$d dagen</string>
+    <string name="one_time_payment">Eenmalige betaling</string>
+    <string name="per_month">per maand</string>
+    <string name="per_year">per jaar</string>
+    <string name="super_shy">Super Shy</string>
+    <string name="super_shy_for_life">Je bent Super Shy voor altijd!</string>
+    <string name="tap_to_claim_backpack">Tik om te claimen — wordt aan je rugzak toegevoegd</string>
+    <string name="testing_mode_super_shy">Testmodus — er wordt geen echt geld in rekening gebracht. Tik op een abonnement om Super Shy direct te activeren.</string>
+    <string name="tier_label">Niveau: %1$s</string>
+    <string name="tier_lifetime">Levenslang</string>
+    <string name="tier_monthly">Maandelijks</string>
+    <string name="tier_yearly">Jaarlijks</string>
+    <string name="upgrade_to_lifetime">Upgraden naar levenslang</string>
+
+    <!-- Legal -->
+    <string name="accept_all_and_continue">Alles accepteren &amp; doorgaan</string>
+    <string name="community_standards">Communityrichtlijnen</string>
+    <string name="cyber_bullying_policy">Cyberpestbeleid</string>
+    <string name="i_have_read_and_agree">Ik heb het gelezen en ga akkoord met de </string>
+    <string name="privacy_policy">Privacybeleid</string>
+    <string name="review_and_accept_policies">Bekijk en accepteer ons beleid om door te gaan.</string>
+    <string name="terms_and_conditions">Algemene voorwaarden</string>
+    <string name="welcome_to_shytalk">Welkom bij ShyTalk</string>
+
+    <!-- Auth -->
+    <string name="sign_in">Inloggen</string>
+    <string name="phone_number">Telefoonnummer</string>
+    <string name="verification_code">Verificatiecode</string>
+    <string name="continue_with_google">Doorgaan met Google</string>
+</resources>

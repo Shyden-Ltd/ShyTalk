@@ -1,0 +1,471 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common actions -->
+    <string name="all_caps">TOUS</string>
+    <string name="back">Retour</string>
+    <string name="cancel">Annuler</string>
+    <string name="change">Modifier</string>
+    <string name="close">Fermer</string>
+    <string name="confirm">Confirmer</string>
+    <string name="continue_button">Continuer</string>
+    <string name="create">Cr&#233;er</string>
+    <string name="delete">Supprimer</string>
+    <string name="done">Termin&#233;</string>
+    <string name="edit">Modifier</string>
+    <string name="error_generic">Une erreur est survenue</string>
+    <string name="got_it">Compris</string>
+    <string name="learn_more">En savoir plus</string>
+    <string name="loading">Chargement…</string>
+    <string name="maybe_later">Peut-&#234;tre plus tard</string>
+    <string name="message_action">Message</string>
+    <string name="next">Suivant</string>
+    <string name="ok">OK</string>
+    <string name="retry">R&#233;essayer</string>
+    <string name="save">Enregistrer</string>
+    <string name="send">Envoyer</string>
+    <string name="sending">Envoi en cours...</string>
+    <string name="transfer">Transf&#233;rer</string>
+    <string name="unknown">Inconnu</string>
+    <string name="using">Utilisation...</string>
+    <string name="you">Vous</string>
+
+    <!-- Message bubbles -->
+    <string name="edited">modifi&#233;</string>
+    <string name="tap_to_join">Appuyez pour rejoindre</string>
+    <string name="message_recalled_by_you">Vous avez rappel&#233; ce message</string>
+    <string name="message_recalled">Ce message a &#233;t&#233; rappel&#233;</string>
+    <string name="message_hidden_by_mod">Ce message a &#233;t&#233; masqu&#233; par un mod&#233;rateur</string>
+    <string name="invite_to_mic">Inviter au micro</string>
+    <string name="closed">Ferm&#233;</string>
+    <string name="edited_count">Modifi&#233; (%1$d)</string>
+    <string name="read">Lu</string>
+    <string name="sent">Envoy&#233;</string>
+    <string name="sticker">Sticker</string>
+    <string name="image">Image</string>
+
+    <!-- Context menu -->
+    <string name="react">R&#233;agir</string>
+    <string name="reply">R&#233;pondre</string>
+    <string name="copy">Copier</string>
+    <string name="recall">Rappeler</string>
+    <string name="add_to_stickers">Ajouter aux Stickers</string>
+    <string name="hide_message">Masquer le message</string>
+    <string name="report_message">Signaler le message</string>
+
+    <!-- Translation -->
+    <string name="translate">Traduire</string>
+    <string name="translated_from">Traduit de %1$s</string>
+    <string name="show_original">Afficher l\'original</string>
+    <string name="translation_limit_reached">Limite quotidienne atteinte. Passez &#224; Super Shy pour des traductions illimit&#233;es.</string>
+    <string name="auto_translate">Traduction automatique</string>
+    <string name="auto_translate_description">Traduire automatiquement les messages entrants dans votre langue</string>
+    <string name="translations_remaining">%1$d traductions restantes aujourd\'hui</string>
+
+    <!-- Settings -->
+    <string name="settings">Param&#232;tres</string>
+    <string name="language">Langue</string>
+    <string name="blocked_users">Utilisateurs bloqu&#233;s</string>
+    <string name="account">Compte</string>
+    <string name="privacy">Confidentialit&#233;</string>
+    <string name="notifications">Notifications</string>
+    <string name="permissions">Autorisations</string>
+    <string name="about">&#192; propos</string>
+    <string name="sign_out">Se d&#233;connecter</string>
+    <string name="sign_out_confirm">&#202;tes-vous s&#251;r de vouloir vous d&#233;connecter ?</string>
+
+    <!-- Home -->
+    <string name="create_room">Cr&#233;er un salon</string>
+    <string name="create_room_prompt">Donnez un nom &#224; votre salon</string>
+    <string name="home">Accueil</string>
+    <string name="in_room_count">%1$d dans le salon</string>
+    <string name="join">Rejoindre</string>
+    <string name="no_active_rooms">Aucun salon actif</string>
+    <string name="no_rooms">Aucun salon disponible</string>
+    <string name="room_name">Nom du salon</string>
+    <string name="room_name_label">Nom du Salon</string>
+    <string name="seats_count">%1$d/%2$d places</string>
+    <string name="speakers_count">%1$d/%2$d intervenants</string>
+    <string name="tap_plus_to_create">Appuyez sur + pour en cr&#233;er un</string>
+    <string name="visitors_count">%1$d visiteurs</string>
+
+    <!-- Profile -->
+    <string name="connections">Connexions</string>
+    <string name="display_name">Nom d\'affichage</string>
+    <string name="dob_privacy_note">Votre date de naissance est requise, mais vous pouvez masquer votre &#226;ge dans les param&#232;tres de confidentialit&#233;.</string>
+    <string name="dob_required_subtitle">Nous avons besoin de votre date de naissance pour continuer.</string>
+    <string name="follow">Suivre</string>
+    <string name="follow_back">Suivre en retour</string>
+    <string name="followers">Abonn&#233;s</string>
+    <string name="followers_count">Abonn&#233;s (%1$d)</string>
+    <string name="following">Abonnements</string>
+    <string name="following_count">Abonnements (%1$d)</string>
+    <string name="following_list_private">La liste d\'abonnements de cet utilisateur est priv&#233;e</string>
+    <string name="get_super_shy">Obtenir Super Shy</string>
+    <string name="gift_wall">Mur de cadeaux</string>
+    <string name="gift_value_coins">Valeur : %1$d pi&#232;ces</string>
+    <string name="no_followers_yet">Aucun abonn&#233; pour le moment</string>
+    <string name="no_profile_visitors">Aucun visiteur de profil pour le moment</string>
+    <string name="not_following_anyone">Aucun abonnement pour le moment</string>
+    <string name="one_more_step">Encore une &#233;tape</string>
+    <string name="profile">Profil</string>
+    <string name="profile_setup_subtitle">Choisissez un nom d\'affichage et entrez votre date de naissance</string>
+    <string name="received_times">Re&#231;u %1$d fois</string>
+    <string name="remove_follower">Retirer l\'abonn&#233;</string>
+    <string name="report">Signaler</string>
+    <string name="select_date_of_birth">S&#233;lectionner la date de naissance</string>
+    <string name="select_nationality">S&#233;lectionner la nationalit&#233;</string>
+    <string name="search_countries">Rechercher des pays</string>
+    <string name="selected">S&#233;lectionn&#233;</string>
+    <string name="set_up_your_profile">Configurez votre profil</string>
+    <string name="stalker_visit_info">Vous a espionn&#233; %1$s, %2$d fois au cours des 3 derniers mois</string>
+    <string name="stalkers_count">Espions (%1$d)</string>
+    <string name="stalkers_super_shy_description">D&#233;couvrez qui a visit&#233; votre profil ! Les espions de profil sont une fonctionnalit&#233; exclusive Super Shy.</string>
+    <string name="super_shy_benefit">Avantage Super Shy</string>
+    <string name="top_senders">Meilleurs envoyeurs</string>
+    <string name="block">Bloquer</string>
+    <string name="unblock">D&#233;bloquer</string>
+    <string name="undo_remove">Annuler la suppression</string>
+    <string name="unfollow">Se d&#233;sabonner</string>
+
+    <!-- Room -->
+    <string name="alias">Alias</string>
+    <string name="approve">Approuver</string>
+    <string name="audience">Public</string>
+    <string name="back_to_home">Retour &#224; l\'accueil</string>
+    <string name="backpack">Sac &#224; dos</string>
+    <string name="backpack_empty">Votre sac &#224; dos est vide.\nTournez la roue pour obtenir des cadeaux !</string>
+    <string name="ban">Bannir</string>
+    <string name="block_user">Bloquer l\'utilisateur</string>
+    <string name="block_user_confirm">&#202;tes-vous s&#251;r de vouloir bloquer %1$s ?</string>
+    <string name="close_room">Fermer le salon</string>
+    <string name="daily">Quotidien</string>
+    <string name="deny">Refuser</string>
+    <string name="empty_seat">Place libre</string>
+    <string name="filter_gift_animations_description">Filtrer les animations pour les cadeaux moins chers.</string>
+    <string name="gift">Cadeau</string>
+    <string name="gift_animations">Animations de cadeaux</string>
+    <string name="host">H&#244;te</string>
+    <string name="hosts">H&#244;tes</string>
+    <string name="invite_to_seat">Inviter &#224; s\'asseoir</string>
+    <string name="kick">Expulser</string>
+    <string name="kick_user">Expulser l\'utilisateur</string>
+    <string name="kick_user_confirm">&#202;tes-vous s&#251;r de vouloir expulser %1$s du salon ? Il ne pourra pas revenir.</string>
+    <string name="leave_room">Quitter le salon</string>
+    <string name="leave_seat">Quitter la place</string>
+    <string name="lock_seating">Verrouiller les places</string>
+    <string name="lock_seating_description">Seul le propri&#233;taire peut inviter des utilisateurs &#224; s\'asseoir</string>
+    <string name="buy_coins">Acheter des pi&#232;ces</string>
+    <string name="collect_all">TOUT COLLECTER (%1$d)</string>
+    <string name="increased_drop_rate">TAUX DE CHUTE AUGMENT&#201;</string>
+    <string name="loading_prices">Chargement des prix…</string>
+    <string name="lucky_spin">Lucky Spin</string>
+    <string name="lucky_spin_title">LUCKY SPIN</string>
+    <string name="need_more_coins">Besoin de plus de pi&#232;ces !</string>
+    <string name="no_packages_available">Aucun forfait disponible</string>
+    <string name="no_spins_yet">Aucun tour pour le moment</string>
+    <string name="prizes">Prix</string>
+    <string name="skip_animation">PASSER L\'ANIMATION</string>
+    <string name="spin">TOURNER</string>
+    <string name="spin_count">%1$d TOUR(S)</string>
+    <string name="spin_history">Historique des tours</string>
+    <string name="spin_results">R&#233;sultats du tour</string>
+    <string name="message">Message</string>
+    <string name="move_to_audience">D&#233;placer vers le public</string>
+    <string name="move_to_seat">D&#233;placer vers une place</string>
+    <string name="move_to_which_seat">Vers quelle place ?</string>
+    <string name="mute">Couper le son</string>
+    <string name="no_audience_members">Aucun membre dans le public</string>
+    <string name="no_pending_requests">Aucune demande en attente</string>
+    <string name="no_reason_given">Aucune raison donn&#233;e</string>
+    <string name="no_one_on_mic">Personne au micro</string>
+    <string name="occupied">Occup&#233;</string>
+    <string name="open_for_duration">Ouvert depuis %1$s</string>
+    <string name="owner">Propri&#233;taire</string>
+    <string name="reason_optional">Raison (optionnel)</string>
+    <string name="reject">Rejeter</string>
+    <string name="remove">Retirer</string>
+    <string name="remove_as_host">Retirer le r&#244;le d\'h&#244;te</string>
+    <string name="remove_from_room">Retirer du salon</string>
+    <string name="request">Demander</string>
+    <string name="request_a_seat">Demander une place</string>
+    <string name="request_seat">Demander une place</string>
+    <string name="requesting">Demande en cours</string>
+    <string name="room">Salon</string>
+    <string name="room_closed">Salon ferm&#233;</string>
+    <string name="room_closing_no_super_shy">Le propri&#233;taire du salon n\'a pas Super Shy, ce salon fermera bient&#244;t.</string>
+    <string name="room_closing_in">Le salon ferme dans %1$d:%2$s</string>
+    <string name="room_closing_soon">Le salon ferme bient&#244;t</string>
+    <string name="room_settings">Param&#232;tres du salon</string>
+    <string name="rooms">Salons</string>
+    <string name="seat_requests">Demandes de place</string>
+    <string name="seat_swap_with">Place %1$d (&#233;changer avec %2$s)</string>
+    <string name="set_alias">D&#233;finir un alias</string>
+    <string name="set_alias_description">D&#233;finissez un alias personnel pour %1$s. Vous seul le verrez.</string>
+    <string name="set_as_host">D&#233;finir comme h&#244;te</string>
+    <string name="showing_all_gift_animations">Affichage de toutes les animations de cadeaux</string>
+    <string name="showing_animations_worth">Affichage des animations de %1$d+ pi&#232;ces uniquement</string>
+    <string name="speakers">Intervenants</string>
+    <string name="take_a_seat">Prendre une place</string>
+    <string name="unmute">R&#233;activer le son</string>
+    <string name="unmuted">Son r&#233;activ&#233;</string>
+    <string name="user">Utilisateur</string>
+    <string name="user_id">ID : %1$d</string>
+    <string name="visitor_count">%1$d visiteur(s)</string>
+    <string name="voice">Voix</string>
+    <string name="voice_unavailable">Voix indisponible</string>
+    <string name="you_have_super_shy_room">Vous avez Super Shy ! Ouvrez votre propre salon avec jusqu\'&#224; %1$d heures de dur&#233;e &#233;tendue.</string>
+    <string name="get_super_shy_rooms">Obtenez Super Shy pour profiter de salons pouvant durer jusqu\'&#224; %1$d heures !</string>
+
+    <!-- Room - Notifications -->
+    <string name="accept">Accepter</string>
+    <string name="decline">Refuser</string>
+    <string name="go_back">Retour</string>
+    <string name="go_to_seat">Aller &#224; la place</string>
+    <string name="invited_to_sit">Vous avez &#233;t&#233; invit&#233; &#224; vous asseoir !</string>
+    <string name="request_accepted">Votre demande a &#233;t&#233; accept&#233;e !</string>
+    <string name="seat_number">Place %1$d</string>
+    <string name="user_wants_to_sit">%1$s veut s\'asseoir</string>
+
+    <!-- Room - Chat -->
+    <string name="cancel_edit">Annuler la modification</string>
+    <string name="edit_message_placeholder">Modifier le message...</string>
+    <string name="message_placeholder">Message...</string>
+    <string name="new_messages">Nouveaux messages</string>
+
+    <!-- Room - Backpack -->
+    <string name="action_cannot_be_undone">CETTE ACTION NE PEUT PAS &#202;TRE ANNUL&#201;E.</string>
+    <string name="confirm_send">Confirmer l\'envoi</string>
+    <string name="from_backpack_items">Du sac &#224; dos : %1$d articles</string>
+    <string name="gifts">Cadeaux</string>
+    <string name="send_all">Tout envoyer</string>
+    <string name="send_all_includes">Cela inclut TOUS les %1$d articles de %2$d cadeaux diff&#233;rents.</string>
+    <string name="send_all_warning">Vous &#234;tes sur le point d\'envoyer TOUT votre sac &#224; dos &#224; %1$s.</string>
+    <string name="send_everything_confirm">Je comprends, tout envoyer</string>
+    <string name="to_label">&#192;</string>
+    <string name="total_cost_coins">Co&#251;t total : %1$d pi&#232;ces</string>
+    <string name="use_button">Utiliser</string>
+    <string name="you_have_count">Vous avez : %1$d</string>
+    <string name="your_balance_coins">Votre solde : %1$d pi&#232;ces</string>
+
+    <!-- Messaging -->
+    <string name="additional_details_optional">D&#233;tails suppl&#233;mentaires (optionnel)</string>
+    <string name="all_admins_and_mods">Tous les admins &amp; mods</string>
+    <string name="attach_evidence">Joindre une preuve</string>
+    <string name="cant_message_user">Vous ne pouvez pas envoyer de message &#224; cet utilisateur</string>
+    <string name="chat">Chat</string>
+    <string name="close_group">Fermer le groupe</string>
+    <string name="close_group_warning">Cela fermera le groupe pour tout le monde. Les messages sont conserv&#233;s pour la mod&#233;ration.</string>
+    <string name="compressing">Compression...</string>
+    <string name="conversation_start_hint">D&#233;marrez une conversation depuis le\nprofil ou la carte d\'un utilisateur dans un salon</string>
+    <string name="create_group">Cr&#233;er un groupe</string>
+    <string name="current_version">Actuel</string>
+    <string name="delete_conversation">Supprimer la conversation</string>
+    <string name="delete_conversation_warning">Cela supprimera la conversation de votre liste. Les messages sont conserv&#233;s et r&#233;appara&#238;tront si l\'autre personne vous envoie un message.</string>
+    <string name="description_label">Description</string>
+    <string name="description_optional">Description (optionnel)</string>
+    <string name="edit_history">Historique des modifications</string>
+    <string name="editing_message">Modification du message</string>
+    <string name="evidence">Preuve</string>
+    <string name="evidence_required">Au moins une capture d\'&#233;cran ou un enregistrement est requis.</string>
+    <string name="general">G&#233;n&#233;ral</string>
+    <string name="group">Groupe</string>
+    <string name="group_chat">Chat de groupe</string>
+    <string name="group_name_label">Nom du groupe</string>
+    <string name="group_name_required">Nom du groupe *</string>
+    <string name="group_settings">Param&#232;tres du groupe</string>
+    <string name="invite_to_room">Inviter au salon</string>
+    <string name="last_seen">Vu pour la derni&#232;re fois %1$s</string>
+    <string name="leave_group">Quitter le groupe</string>
+    <string name="members">Membres</string>
+    <string name="members_count">%1$d membres</string>
+    <string name="message_ellipsis">Message...</string>
+    <string name="message_permissions">Autorisations de message</string>
+    <string name="message_preview_image">[Image]</string>
+    <string name="message_preview_recalled">[Message rappel&#233;]</string>
+    <string name="message_preview_room_invite">[Invitation au salon]</string>
+    <string name="message_preview_sticker">[Sticker]</string>
+    <string name="messages">Messages</string>
+    <string name="mod_notifications">Notifications de mod&#233;ration</string>
+    <string name="move_to_front">Mettre en avant</string>
+    <string name="mute_notifications">D&#233;sactiver les notifications</string>
+    <string name="mute_reason">. Raison : %1$s</string>
+    <string name="muted">Mis en sourdine</string>
+    <string name="muted_for_hours_minutes">Vous &#234;tes mis en sourdine pour %1$dh %2$dm</string>
+    <string name="muted_for_minutes">Vous &#234;tes mis en sourdine pour %1$dm</string>
+    <string name="muted_indefinitely">Vous &#234;tes mis en sourdine</string>
+    <string name="new_group">Nouveau groupe</string>
+    <string name="new_group_selected">Nouveau groupe (%1$d s&#233;lectionn&#233;s)</string>
+    <string name="new_message">Nouveau message</string>
+    <string name="no_action_needed">Aucune action requise</string>
+    <string name="no_followers_following_found">Aucun abonn&#233; ou abonnement trouv&#233;</string>
+    <string name="no_matches_found">Aucune correspondance trouv&#233;e</string>
+    <string name="no_messages">Aucun message pour le moment</string>
+    <string name="no_pending_reports">Aucun signalement en attente</string>
+    <string name="no_stickers_yet">Aucun sticker pour le moment</string>
+    <string name="no_users_found">Aucun utilisateur trouv&#233;</string>
+    <string name="notify_owner_only">Notifier le propri&#233;taire uniquement</string>
+    <string name="online">En ligne</string>
+    <string name="only_admins_can_send">Seuls les admins et mods peuvent envoyer des messages dans ce groupe</string>
+    <string name="only_owner_can_change_permissions">Seul le propri&#233;taire du groupe peut modifier les autorisations.</string>
+    <string name="owner_only">Propri&#233;taire uniquement</string>
+    <string name="participants">Participants</string>
+    <string name="participants_count">Participants (%1$d)</string>
+    <string name="pin">&#201;pingler</string>
+    <string name="recent">R&#233;cents</string>
+    <string name="replying_to">R&#233;ponse &#224; %1$s</string>
+    <string name="report_message_prompt">Pourquoi signalez-vous ce message ?</string>
+    <string name="report_review">Examen du signalement</string>
+    <string name="report_user">Signaler %1$s</string>
+    <string name="report_user_prompt">Pourquoi signalez-vous cet utilisateur ?</string>
+    <string name="reset_to_default">R&#233;initialiser par d&#233;faut</string>
+    <string name="result_count">%1$d r&#233;sultat(s)</string>
+    <string name="review_report">Examiner le signalement</string>
+    <string name="role_admin">Admin</string>
+    <string name="role_member">Membre</string>
+    <string name="role_mod">Mod</string>
+    <string name="role_owner">Propri&#233;taire</string>
+    <string name="save_description">Enregistrer la description</string>
+    <string name="search_all_users">Rechercher tous les utilisateurs</string>
+    <string name="search_conversations">Rechercher des conversations...</string>
+    <string name="search_messages">Rechercher des messages...</string>
+    <string name="search_people">Rechercher des personnes...</string>
+    <string name="select_action">S&#233;lectionner une action :</string>
+    <string name="selected_count">%1$d s&#233;lectionn&#233;s</string>
+    <string name="start_conversation">D&#233;marrer une conversation</string>
+    <string name="submit_report">Envoyer le signalement</string>
+    <string name="submitting">Envoi en cours...</string>
+    <string name="system_messages">Messages syst&#232;me</string>
+    <string name="transfer_ownership">Transf&#233;rer la propri&#233;t&#233;</string>
+    <string name="transfer_ownership_warning">S&#233;lectionnez un membre pour transf&#233;rer la propri&#233;t&#233;. Vous perdrez vos privil&#232;ges de propri&#233;taire. Cette action est irr&#233;versible.</string>
+    <string name="type_message">Saisissez un message…</string>
+    <string name="typing">&#233;crit...</string>
+    <string name="unmute_action">R&#233;activer le son</string>
+    <string name="unmute_notifications">R&#233;activer les notifications</string>
+    <string name="unpin">D&#233;s&#233;pingler</string>
+    <string name="view_profile">Voir le profil</string>
+
+    <!-- Messaging - report reasons -->
+    <string name="report_reason_spam">Spam</string>
+    <string name="report_reason_harassment">Harc&#232;lement</string>
+    <string name="report_reason_inappropriate">Contenu inappropri&#233;</string>
+    <string name="report_reason_other">Autre</string>
+
+    <!-- Messaging - report actions -->
+    <string name="report_action_warning">&#201;mettre un avertissement</string>
+    <string name="report_action_temp_suspension">Suspension temporaire</string>
+    <string name="report_action_perm_suspension">Suspension permanente</string>
+    <string name="report_action_pm_ban">Interdire les PM</string>
+
+    <!-- Messaging - report details -->
+    <string name="report_reason_prefix">Raison : %1$s</string>
+    <string name="report_type_prefix">Type : %1$s</string>
+    <string name="report_details_prefix">D&#233;tails : %1$s</string>
+    <string name="report_message_prefix">Message : \"%1$s\"</string>
+    <string name="report_reporter_reported">Signaleur : %1$s | Signal&#233; : %2$s</string>
+
+    <!-- Messaging - system message labels -->
+    <string name="sys_member_joins">Un membre rejoint</string>
+    <string name="sys_member_leaves">Un membre quitte</string>
+    <string name="sys_role_changes">Changements de r&#244;le</string>
+    <string name="sys_permission_changes">Changements d\'autorisations</string>
+
+    <!-- Messaging - permission labels -->
+    <string name="perm_who_can_send">Qui peut envoyer des messages</string>
+    <string name="perm_who_can_add_members">Qui peut ajouter des membres</string>
+    <string name="perm_who_can_edit_info">Qui peut modifier les infos du groupe</string>
+    <string name="perm_who_can_delete_messages">Qui peut supprimer des messages</string>
+    <string name="perm_who_can_mute_members">Qui peut mettre en sourdine les membres</string>
+    <string name="perm_who_can_remove_members">Qui peut retirer des membres</string>
+
+    <!-- Messaging - date separators -->
+    <string name="today">Aujourd\'hui</string>
+    <string name="yesterday">Hier</string>
+
+    <!-- Daily Reward -->
+    <string name="awesome">G&#233;nial !</string>
+    <string name="claim_todays_reward">R&#233;clamer la r&#233;compense du jour</string>
+    <string name="coins">pi&#232;ces</string>
+    <string name="day_fri">Ven</string>
+    <string name="day_mon">Lun</string>
+    <string name="day_sat">Sam</string>
+    <string name="day_streak">S&#233;rie de %1$d jours</string>
+    <string name="day_sun">Dim</string>
+    <string name="day_thu">Jeu</string>
+    <string name="day_tue">Mar</string>
+    <string name="day_wed">Mer</string>
+    <string name="later">Plus tard</string>
+    <string name="milestone">Jalon</string>
+    <string name="milestone_bonus">Bonus de jalon !</string>
+    <string name="plus_coins">+%1$d pi&#232;ces !</string>
+    <string name="reward_claimed">R&#233;compense r&#233;clam&#233;e !</string>
+
+    <!-- Economy -->
+    <string name="bean_redeem_description">1 bean = 1 pi&#232;ce. &#201;changez 2 000+ pour un bonus de 10% !</string>
+    <string name="bonus_coins">+%1$d bonus</string>
+    <string name="buy_shy_coins">Acheter des ShyCoins</string>
+    <string name="confirm_redemption">Confirmer l\'&#233;change</string>
+    <string name="daily_reward">R&#233;compense quotidienne</string>
+    <string name="redeem">&#201;changer</string>
+    <string name="redeem_all">Tout &#233;changer</string>
+    <string name="redeem_beans_for_coins">&#201;changer %1$s beans contre %2$s pi&#232;ces ?</string>
+    <string name="redeem_shy_beans">&#201;changer des ShyBeans</string>
+    <string name="send_gift">Envoyer un cadeau</string>
+    <string name="shy_beans">ShyBeans</string>
+    <string name="shy_coins">ShyCoins</string>
+    <string name="testing_mode_coins">Mode test — aucun argent r&#233;el n\'est d&#233;bit&#233;. Appuyez sur un forfait pour recevoir des pi&#232;ces instantan&#233;ment.</string>
+    <string name="filter_all">Tous</string>
+    <string name="filter_gacha">Gacha</string>
+    <string name="filter_gifts">Cadeaux</string>
+    <string name="filter_purchases">Achats</string>
+    <string name="filter_redemptions">&#201;changes</string>
+    <string name="filter_rewards">R&#233;compenses</string>
+    <string name="no_filtered_transactions">Aucune transaction de type %1$s</string>
+    <string name="no_transactions_yet">Aucune transaction pour le moment</string>
+    <string name="transaction_history">Historique des transactions</string>
+    <string name="transactions">Transactions</string>
+    <string name="wallet">Portefeuille</string>
+
+    <!-- Super Shy -->
+    <string name="benefit_daily_bonus">+10% de pi&#232;ces de connexion quotidienne (arrondi)</string>
+    <string name="benefit_extended_room">Dur&#233;e de salon &#233;tendue (12 heures)</string>
+    <string name="benefit_full_room">Salon complet de 8 places</string>
+    <string name="benefit_gold_name">Nom dor&#233; partout</string>
+    <string name="benefit_profile_frame">Cadre de profil exclusif</string>
+    <string name="benefit_star_badge">Badge &#233;toile &#224; c&#244;t&#233; du nom</string>
+    <string name="benefits">Avantages</string>
+    <string name="choose_a_plan">Choisissez un forfait</string>
+    <string name="claim_30_days_free">R&#233;clamer 30 jours gratuits</string>
+    <string name="claimed">R&#233;clam&#233; !</string>
+    <string name="claimed_activate_backpack">Pour l\'activer, trouvez-le dans votre sac &#224; dos dans un salon de chat.</string>
+    <string name="claiming">R&#233;clamation…</string>
+    <string name="currently_active">Actuellement actif</string>
+    <string name="days_remaining">%1$d jours restants</string>
+    <string name="one_time_payment">Paiement unique</string>
+    <string name="per_month">par mois</string>
+    <string name="per_year">par an</string>
+    <string name="super_shy">Super Shy</string>
+    <string name="super_shy_for_life">Vous &#234;tes Super Shy &#224; vie !</string>
+    <string name="tap_to_claim_backpack">Appuyez pour r&#233;clamer — ajout&#233; &#224; votre sac &#224; dos</string>
+    <string name="testing_mode_super_shy">Mode test — aucun argent r&#233;el n\'est d&#233;bit&#233;. Appuyez sur un forfait pour activer Super Shy instantan&#233;ment.</string>
+    <string name="tier_label">Niveau : %1$s</string>
+    <string name="tier_lifetime">&#192; vie</string>
+    <string name="tier_monthly">Mensuel</string>
+    <string name="tier_yearly">Annuel</string>
+    <string name="upgrade_to_lifetime">Passer &#224; &#192; vie</string>
+
+    <!-- Legal -->
+    <string name="accept_all_and_continue">Tout accepter &amp; Continuer</string>
+    <string name="community_standards">Standards de la communaut&#233;</string>
+    <string name="cyber_bullying_policy">Politique anti-harc&#232;lement</string>
+    <string name="i_have_read_and_agree">J\'ai lu et j\'accepte les </string>
+    <string name="privacy_policy">Politique de confidentialit&#233;</string>
+    <string name="review_and_accept_policies">Veuillez consulter et accepter nos politiques pour continuer.</string>
+    <string name="terms_and_conditions">Conditions &amp; G&#233;n&#233;rales</string>
+    <string name="welcome_to_shytalk">Bienvenue sur ShyTalk</string>
+
+    <!-- Auth -->
+    <string name="sign_in">Se connecter</string>
+    <string name="phone_number">Num&#233;ro de t&#233;l&#233;phone</string>
+    <string name="verification_code">Code de v&#233;rification</string>
+    <string name="continue_with_google">Continuer avec Google</string>
+</resources>

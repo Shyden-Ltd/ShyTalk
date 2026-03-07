@@ -1,0 +1,471 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common actions -->
+    <string name="all_caps">الكل</string>
+    <string name="back">رجوع</string>
+    <string name="cancel">إلغاء</string>
+    <string name="change">تغيير</string>
+    <string name="close">إغلاق</string>
+    <string name="confirm">تأكيد</string>
+    <string name="continue_button">متابعة</string>
+    <string name="create">إنشاء</string>
+    <string name="delete">حذف</string>
+    <string name="done">تم</string>
+    <string name="edit">تعديل</string>
+    <string name="error_generic">حدث خطأ ما</string>
+    <string name="got_it">فهمت</string>
+    <string name="learn_more">اعرف المزيد</string>
+    <string name="loading">جارٍ التحميل…</string>
+    <string name="maybe_later">ربما لاحقًا</string>
+    <string name="message_action">رسالة</string>
+    <string name="next">التالي</string>
+    <string name="ok">حسنًا</string>
+    <string name="retry">إعادة المحاولة</string>
+    <string name="save">حفظ</string>
+    <string name="send">إرسال</string>
+    <string name="sending">جارٍ الإرسال...</string>
+    <string name="transfer">نقل</string>
+    <string name="unknown">غير معروف</string>
+    <string name="using">جارٍ الاستخدام...</string>
+    <string name="you">أنت</string>
+
+    <!-- Message bubbles -->
+    <string name="edited">تم التعديل</string>
+    <string name="tap_to_join">اضغط للانضمام</string>
+    <string name="message_recalled_by_you">لقد استرجعت هذه الرسالة</string>
+    <string name="message_recalled">تم استرجاع هذه الرسالة</string>
+    <string name="message_hidden_by_mod">تم إخفاء هذه الرسالة بواسطة مشرف</string>
+    <string name="invite_to_mic">دعوة للميكروفون</string>
+    <string name="closed">مغلق</string>
+    <string name="edited_count">تم التعديل (%1$d)</string>
+    <string name="read">مقروءة</string>
+    <string name="sent">مُرسلة</string>
+    <string name="sticker">ملصق</string>
+    <string name="image">صورة</string>
+
+    <!-- Context menu -->
+    <string name="react">تفاعل</string>
+    <string name="reply">رد</string>
+    <string name="copy">نسخ</string>
+    <string name="recall">استرجاع</string>
+    <string name="add_to_stickers">إضافة إلى الملصقات</string>
+    <string name="hide_message">إخفاء الرسالة</string>
+    <string name="report_message">الإبلاغ عن الرسالة</string>
+
+    <!-- Translation -->
+    <string name="translate">ترجمة</string>
+    <string name="translated_from">مترجم من %1$s</string>
+    <string name="show_original">عرض الأصل</string>
+    <string name="translation_limit_reached">تم الوصول إلى الحد اليومي. قم بالترقية إلى Super Shy للحصول على ترجمات غير محدودة.</string>
+    <string name="auto_translate">ترجمة تلقائية</string>
+    <string name="auto_translate_description">ترجمة الرسائل الواردة تلقائيًا إلى لغتك</string>
+    <string name="translations_remaining">%1$d ترجمة متبقية اليوم</string>
+
+    <!-- Settings -->
+    <string name="settings">الإعدادات</string>
+    <string name="language">اللغة</string>
+    <string name="blocked_users">المستخدمون المحظورون</string>
+    <string name="account">الحساب</string>
+    <string name="privacy">الخصوصية</string>
+    <string name="notifications">الإشعارات</string>
+    <string name="permissions">الأذونات</string>
+    <string name="about">حول</string>
+    <string name="sign_out">تسجيل الخروج</string>
+    <string name="sign_out_confirm">هل أنت متأكد أنك تريد تسجيل الخروج؟</string>
+
+    <!-- Home -->
+    <string name="create_room">إنشاء غرفة</string>
+    <string name="create_room_prompt">أعطِ غرفتك اسمًا</string>
+    <string name="home">الرئيسية</string>
+    <string name="in_room_count">%1$d في الغرفة</string>
+    <string name="join">انضمام</string>
+    <string name="no_active_rooms">لا توجد غرف نشطة</string>
+    <string name="no_rooms">لا توجد غرف متاحة</string>
+    <string name="room_name">اسم الغرفة</string>
+    <string name="room_name_label">اسم الغرفة</string>
+    <string name="seats_count">%1$d/%2$d مقاعد</string>
+    <string name="speakers_count">%1$d/%2$d متحدثين</string>
+    <string name="tap_plus_to_create">اضغط + لإنشاء واحدة</string>
+    <string name="visitors_count">%1$d زائر</string>
+
+    <!-- Profile -->
+    <string name="connections">الاتصالات</string>
+    <string name="display_name">الاسم المعروض</string>
+    <string name="dob_privacy_note">تاريخ ميلادك مطلوب ولكن يمكنك إخفاء عمرك في إعدادات الخصوصية.</string>
+    <string name="dob_required_subtitle">نحتاج إلى تاريخ ميلادك للمتابعة.</string>
+    <string name="follow">متابعة</string>
+    <string name="follow_back">متابعة بالمثل</string>
+    <string name="followers">المتابعون</string>
+    <string name="followers_count">المتابعون (%1$d)</string>
+    <string name="following">المتابَعون</string>
+    <string name="following_count">المتابَعون (%1$d)</string>
+    <string name="following_list_private">قائمة متابعات هذا المستخدم خاصة</string>
+    <string name="get_super_shy">احصل على Super Shy</string>
+    <string name="gift_wall">جدار الهدايا</string>
+    <string name="gift_value_coins">القيمة: %1$d عملة</string>
+    <string name="no_followers_yet">لا يوجد متابعون بعد</string>
+    <string name="no_profile_visitors">لا يوجد زوار للملف الشخصي بعد</string>
+    <string name="not_following_anyone">لا يتابع أحدًا بعد</string>
+    <string name="one_more_step">خطوة أخيرة</string>
+    <string name="profile">الملف الشخصي</string>
+    <string name="profile_setup_subtitle">اختر اسمًا معروضًا وأدخل تاريخ ميلادك</string>
+    <string name="received_times">تم الاستلام %1$d مرة</string>
+    <string name="remove_follower">إزالة المتابع</string>
+    <string name="report">إبلاغ</string>
+    <string name="select_date_of_birth">اختر تاريخ الميلاد</string>
+    <string name="select_nationality">اختر الجنسية</string>
+    <string name="search_countries">البحث عن الدول</string>
+    <string name="selected">محدد</string>
+    <string name="set_up_your_profile">أعدّ ملفك الشخصي</string>
+    <string name="stalker_visit_info">زار ملفك %1$s، %2$d مرة في آخر 3 أشهر</string>
+    <string name="stalkers_count">المتطفلون (%1$d)</string>
+    <string name="stalkers_super_shy_description">اكتشف من يزور ملفك الشخصي! متطفلو الملف الشخصي ميزة حصرية لـ Super Shy.</string>
+    <string name="super_shy_benefit">ميزة Super Shy</string>
+    <string name="top_senders">أكثر المرسلين</string>
+    <string name="block">حظر</string>
+    <string name="unblock">إلغاء الحظر</string>
+    <string name="undo_remove">التراجع عن الإزالة</string>
+    <string name="unfollow">إلغاء المتابعة</string>
+
+    <!-- Room -->
+    <string name="alias">الاسم المستعار</string>
+    <string name="approve">موافقة</string>
+    <string name="audience">الجمهور</string>
+    <string name="back_to_home">العودة إلى الرئيسية</string>
+    <string name="backpack">الحقيبة</string>
+    <string name="backpack_empty">حقيبتك فارغة.\nأدر العجلة للحصول على هدايا!</string>
+    <string name="ban">حظر</string>
+    <string name="block_user">حظر المستخدم</string>
+    <string name="block_user_confirm">هل أنت متأكد أنك تريد حظر %1$s؟</string>
+    <string name="close_room">إغلاق الغرفة</string>
+    <string name="daily">يومي</string>
+    <string name="deny">رفض</string>
+    <string name="empty_seat">مقعد فارغ</string>
+    <string name="filter_gift_animations_description">تصفية الرسوم المتحركة للهدايا الأرخص.</string>
+    <string name="gift">هدية</string>
+    <string name="gift_animations">رسوم الهدايا المتحركة</string>
+    <string name="host">مضيف</string>
+    <string name="hosts">المضيفون</string>
+    <string name="invite_to_seat">دعوة للجلوس</string>
+    <string name="kick">طرد</string>
+    <string name="kick_user">طرد المستخدم</string>
+    <string name="kick_user_confirm">هل أنت متأكد أنك تريد طرد %1$s من الغرفة؟ لن يتمكن من الانضمام مجددًا.</string>
+    <string name="leave_room">مغادرة الغرفة</string>
+    <string name="leave_seat">مغادرة المقعد</string>
+    <string name="lock_seating">قفل المقاعد</string>
+    <string name="lock_seating_description">فقط المالك يمكنه دعوة المستخدمين للجلوس</string>
+    <string name="buy_coins">شراء عملات</string>
+    <string name="collect_all">جمع الكل (%1$d)</string>
+    <string name="increased_drop_rate">معدل إسقاط أعلى</string>
+    <string name="loading_prices">جارٍ تحميل الأسعار…</string>
+    <string name="lucky_spin">Lucky Spin</string>
+    <string name="lucky_spin_title">Lucky Spin</string>
+    <string name="need_more_coins">تحتاج المزيد من العملات!</string>
+    <string name="no_packages_available">لا توجد حزم متاحة</string>
+    <string name="no_spins_yet">لا توجد لفّات بعد</string>
+    <string name="prizes">الجوائز</string>
+    <string name="skip_animation">تخطي الرسوم المتحركة</string>
+    <string name="spin">لف</string>
+    <string name="spin_count">%1$d لفّة</string>
+    <string name="spin_history">سجل اللفّات</string>
+    <string name="spin_results">نتائج اللفّة</string>
+    <string name="message">رسالة</string>
+    <string name="move_to_audience">نقل إلى الجمهور</string>
+    <string name="move_to_seat">نقل إلى مقعد</string>
+    <string name="move_to_which_seat">الانتقال إلى أي مقعد؟</string>
+    <string name="mute">كتم</string>
+    <string name="no_audience_members">لا يوجد أعضاء في الجمهور</string>
+    <string name="no_pending_requests">لا توجد طلبات معلقة</string>
+    <string name="no_reason_given">لم يتم تقديم سبب</string>
+    <string name="no_one_on_mic">لا أحد على الميكروفون</string>
+    <string name="occupied">مشغول</string>
+    <string name="open_for_duration">مفتوح منذ %1$s</string>
+    <string name="owner">المالك</string>
+    <string name="reason_optional">السبب (اختياري)</string>
+    <string name="reject">رفض</string>
+    <string name="remove">إزالة</string>
+    <string name="remove_as_host">إزالة كمضيف</string>
+    <string name="remove_from_room">إزالة من الغرفة</string>
+    <string name="request">طلب</string>
+    <string name="request_a_seat">طلب مقعد</string>
+    <string name="request_seat">طلب مقعد</string>
+    <string name="requesting">جارٍ الطلب</string>
+    <string name="room">غرفة</string>
+    <string name="room_closed">الغرفة مغلقة</string>
+    <string name="room_closing_no_super_shy">مالك الغرفة لا يملك Super Shy، لذا ستُغلق الغرفة قريبًا.</string>
+    <string name="room_closing_in">ستُغلق الغرفة خلال %1$d:%2$s</string>
+    <string name="room_closing_soon">ستُغلق الغرفة قريبًا</string>
+    <string name="room_settings">إعدادات الغرفة</string>
+    <string name="rooms">الغرف</string>
+    <string name="seat_requests">طلبات المقاعد</string>
+    <string name="seat_swap_with">المقعد %1$d (تبديل مع %2$s)</string>
+    <string name="set_alias">تعيين اسم مستعار</string>
+    <string name="set_alias_description">عيّن اسمًا مستعارًا لـ %1$s. أنت فقط ستراه.</string>
+    <string name="set_as_host">تعيين كمضيف</string>
+    <string name="showing_all_gift_animations">عرض جميع رسوم الهدايا المتحركة</string>
+    <string name="showing_animations_worth">عرض الرسوم المتحركة بقيمة %1$d+ عملة فقط</string>
+    <string name="speakers">المتحدثون</string>
+    <string name="take_a_seat">اجلس</string>
+    <string name="unmute">إلغاء الكتم</string>
+    <string name="unmuted">غير مكتوم</string>
+    <string name="user">مستخدم</string>
+    <string name="user_id">ID: %1$d</string>
+    <string name="visitor_count">%1$d زائر</string>
+    <string name="voice">صوت</string>
+    <string name="voice_unavailable">الصوت غير متاح</string>
+    <string name="you_have_super_shy_room">لديك Super Shy! افتح غرفتك الخاصة لمدة تصل إلى %1$d ساعات من الوقت الممتد.</string>
+    <string name="get_super_shy_rooms">احصل على Super Shy للاستمتاع بغرف تدوم حتى %1$d ساعات!</string>
+
+    <!-- Room - Notifications -->
+    <string name="accept">قبول</string>
+    <string name="decline">رفض</string>
+    <string name="go_back">العودة</string>
+    <string name="go_to_seat">اذهب إلى المقعد</string>
+    <string name="invited_to_sit">تمت دعوتك للجلوس!</string>
+    <string name="request_accepted">تم قبول طلبك!</string>
+    <string name="seat_number">المقعد %1$d</string>
+    <string name="user_wants_to_sit">%1$s يريد الجلوس</string>
+
+    <!-- Room - Chat -->
+    <string name="cancel_edit">إلغاء التعديل</string>
+    <string name="edit_message_placeholder">تعديل الرسالة...</string>
+    <string name="message_placeholder">رسالة...</string>
+    <string name="new_messages">رسائل جديدة</string>
+
+    <!-- Room - Backpack -->
+    <string name="action_cannot_be_undone">لا يمكن التراجع عن هذا الإجراء.</string>
+    <string name="confirm_send">تأكيد الإرسال</string>
+    <string name="from_backpack_items">من الحقيبة: %1$d عنصر</string>
+    <string name="gifts">هدايا</string>
+    <string name="send_all">إرسال الكل</string>
+    <string name="send_all_includes">يشمل ذلك جميع العناصر %1$d عبر %2$d هدية مختلفة.</string>
+    <string name="send_all_warning">أنت على وشك إرسال حقيبتك بالكامل إلى %1$s.</string>
+    <string name="send_everything_confirm">أفهم ذلك، أرسل كل شيء</string>
+    <string name="to_label">إلى</string>
+    <string name="total_cost_coins">التكلفة الإجمالية: %1$d عملة</string>
+    <string name="use_button">استخدام</string>
+    <string name="you_have_count">لديك: %1$d</string>
+    <string name="your_balance_coins">رصيدك: %1$d عملة</string>
+
+    <!-- Messaging -->
+    <string name="additional_details_optional">تفاصيل إضافية (اختياري)</string>
+    <string name="all_admins_and_mods">جميع المشرفين &amp; المراقبين</string>
+    <string name="attach_evidence">إرفاق دليل</string>
+    <string name="cant_message_user">لا يمكنك مراسلة هذا المستخدم</string>
+    <string name="chat">محادثة</string>
+    <string name="close_group">إغلاق المجموعة</string>
+    <string name="close_group_warning">سيؤدي هذا إلى إغلاق المجموعة للجميع. يتم الاحتفاظ بالرسائل للإشراف.</string>
+    <string name="compressing">جارٍ الضغط...</string>
+    <string name="conversation_start_hint">ابدأ محادثة من الملف الشخصي\nأو بطاقة المستخدم في غرفة</string>
+    <string name="create_group">إنشاء مجموعة</string>
+    <string name="current_version">الحالي</string>
+    <string name="delete_conversation">حذف المحادثة</string>
+    <string name="delete_conversation_warning">سيؤدي هذا إلى إزالة المحادثة من قائمتك. يتم الاحتفاظ بالرسائل وستظهر مجددًا إذا راسلك الشخص الآخر.</string>
+    <string name="description_label">الوصف</string>
+    <string name="description_optional">الوصف (اختياري)</string>
+    <string name="edit_history">سجل التعديلات</string>
+    <string name="editing_message">تعديل الرسالة</string>
+    <string name="evidence">الدليل</string>
+    <string name="evidence_required">مطلوب لقطة شاشة أو تسجيل واحد على الأقل.</string>
+    <string name="general">عام</string>
+    <string name="group">مجموعة</string>
+    <string name="group_chat">محادثة جماعية</string>
+    <string name="group_name_label">اسم المجموعة</string>
+    <string name="group_name_required">اسم المجموعة *</string>
+    <string name="group_settings">إعدادات المجموعة</string>
+    <string name="invite_to_room">دعوة إلى الغرفة</string>
+    <string name="last_seen">آخر ظهور %1$s</string>
+    <string name="leave_group">مغادرة المجموعة</string>
+    <string name="members">الأعضاء</string>
+    <string name="members_count">%1$d عضو</string>
+    <string name="message_ellipsis">رسالة...</string>
+    <string name="message_permissions">أذونات الرسائل</string>
+    <string name="message_preview_image">[صورة]</string>
+    <string name="message_preview_recalled">[تم استرجاع الرسالة]</string>
+    <string name="message_preview_room_invite">[دعوة غرفة]</string>
+    <string name="message_preview_sticker">[ملصق]</string>
+    <string name="messages">الرسائل</string>
+    <string name="mod_notifications">إشعارات المشرفين</string>
+    <string name="move_to_front">نقل إلى الأمام</string>
+    <string name="mute_notifications">كتم الإشعارات</string>
+    <string name="mute_reason">. السبب: %1$s</string>
+    <string name="muted">مكتوم</string>
+    <string name="muted_for_hours_minutes">أنت مكتوم لمدة %1$d ساعة و%2$d دقيقة</string>
+    <string name="muted_for_minutes">أنت مكتوم لمدة %1$d دقيقة</string>
+    <string name="muted_indefinitely">أنت مكتوم</string>
+    <string name="new_group">مجموعة جديدة</string>
+    <string name="new_group_selected">مجموعة جديدة (%1$d محدد)</string>
+    <string name="new_message">رسالة جديدة</string>
+    <string name="no_action_needed">لا حاجة لاتخاذ إجراء</string>
+    <string name="no_followers_following_found">لم يتم العثور على متابعين أو متابَعين</string>
+    <string name="no_matches_found">لم يتم العثور على نتائج</string>
+    <string name="no_messages">لا توجد رسائل بعد</string>
+    <string name="no_pending_reports">لا توجد بلاغات معلقة</string>
+    <string name="no_stickers_yet">لا توجد ملصقات بعد</string>
+    <string name="no_users_found">لم يتم العثور على مستخدمين</string>
+    <string name="notify_owner_only">إشعار المالك فقط</string>
+    <string name="online">متصل</string>
+    <string name="only_admins_can_send">فقط المشرفون والمراقبون يمكنهم إرسال رسائل في هذه المجموعة</string>
+    <string name="only_owner_can_change_permissions">فقط مالك المجموعة يمكنه تغيير الأذونات.</string>
+    <string name="owner_only">المالك فقط</string>
+    <string name="participants">المشاركون</string>
+    <string name="participants_count">المشاركون (%1$d)</string>
+    <string name="pin">تثبيت</string>
+    <string name="recent">الأخيرة</string>
+    <string name="replying_to">الرد على %1$s</string>
+    <string name="report_message_prompt">لماذا تبلغ عن هذه الرسالة؟</string>
+    <string name="report_review">مراجعة البلاغ</string>
+    <string name="report_user">الإبلاغ عن %1$s</string>
+    <string name="report_user_prompt">لماذا تبلغ عن هذا المستخدم؟</string>
+    <string name="reset_to_default">إعادة التعيين إلى الافتراضي</string>
+    <string name="result_count">%1$d نتيجة</string>
+    <string name="review_report">مراجعة البلاغ</string>
+    <string name="role_admin">مشرف</string>
+    <string name="role_member">عضو</string>
+    <string name="role_mod">مراقب</string>
+    <string name="role_owner">مالك</string>
+    <string name="save_description">حفظ الوصف</string>
+    <string name="search_all_users">البحث في جميع المستخدمين</string>
+    <string name="search_conversations">البحث في المحادثات...</string>
+    <string name="search_messages">البحث في الرسائل...</string>
+    <string name="search_people">البحث عن أشخاص...</string>
+    <string name="select_action">اختر إجراء:</string>
+    <string name="selected_count">%1$d محدد</string>
+    <string name="start_conversation">ابدأ محادثة</string>
+    <string name="submit_report">إرسال البلاغ</string>
+    <string name="submitting">جارٍ الإرسال...</string>
+    <string name="system_messages">رسائل النظام</string>
+    <string name="transfer_ownership">نقل الملكية</string>
+    <string name="transfer_ownership_warning">اختر عضوًا لنقل الملكية إليه. ستفقد صلاحيات المالك. لا يمكن التراجع عن هذا.</string>
+    <string name="type_message">اكتب رسالة…</string>
+    <string name="typing">يكتب...</string>
+    <string name="unmute_action">إلغاء الكتم</string>
+    <string name="unmute_notifications">إلغاء كتم الإشعارات</string>
+    <string name="unpin">إلغاء التثبيت</string>
+    <string name="view_profile">عرض الملف الشخصي</string>
+
+    <!-- Messaging - report reasons -->
+    <string name="report_reason_spam">رسائل مزعجة</string>
+    <string name="report_reason_harassment">تحرش</string>
+    <string name="report_reason_inappropriate">محتوى غير لائق</string>
+    <string name="report_reason_other">أخرى</string>
+
+    <!-- Messaging - report actions -->
+    <string name="report_action_warning">إصدار تحذير</string>
+    <string name="report_action_temp_suspension">تعليق مؤقت</string>
+    <string name="report_action_perm_suspension">تعليق دائم</string>
+    <string name="report_action_pm_ban">حظر من الرسائل الخاصة</string>
+
+    <!-- Messaging - report details -->
+    <string name="report_reason_prefix">السبب: %1$s</string>
+    <string name="report_type_prefix">النوع: %1$s</string>
+    <string name="report_details_prefix">التفاصيل: %1$s</string>
+    <string name="report_message_prefix">الرسالة: \"%1$s\"</string>
+    <string name="report_reporter_reported">المُبلّغ: %1$s | المُبلَّغ عنه: %2$s</string>
+
+    <!-- Messaging - system message labels -->
+    <string name="sys_member_joins">انضمام عضو</string>
+    <string name="sys_member_leaves">مغادرة عضو</string>
+    <string name="sys_role_changes">تغييرات الأدوار</string>
+    <string name="sys_permission_changes">تغييرات الأذونات</string>
+
+    <!-- Messaging - permission labels -->
+    <string name="perm_who_can_send">من يمكنه إرسال الرسائل</string>
+    <string name="perm_who_can_add_members">من يمكنه إضافة أعضاء</string>
+    <string name="perm_who_can_edit_info">من يمكنه تعديل معلومات المجموعة</string>
+    <string name="perm_who_can_delete_messages">من يمكنه حذف الرسائل</string>
+    <string name="perm_who_can_mute_members">من يمكنه كتم الأعضاء</string>
+    <string name="perm_who_can_remove_members">من يمكنه إزالة الأعضاء</string>
+
+    <!-- Messaging - date separators -->
+    <string name="today">اليوم</string>
+    <string name="yesterday">أمس</string>
+
+    <!-- Daily Reward -->
+    <string name="awesome">رائع!</string>
+    <string name="claim_todays_reward">اجمع مكافأة اليوم</string>
+    <string name="coins">عملات</string>
+    <string name="day_fri">الجمعة</string>
+    <string name="day_mon">الاثنين</string>
+    <string name="day_sat">السبت</string>
+    <string name="day_streak">سلسلة %1$d يوم</string>
+    <string name="day_sun">الأحد</string>
+    <string name="day_thu">الخميس</string>
+    <string name="day_tue">الثلاثاء</string>
+    <string name="day_wed">الأربعاء</string>
+    <string name="later">لاحقًا</string>
+    <string name="milestone">إنجاز</string>
+    <string name="milestone_bonus">مكافأة إنجاز!</string>
+    <string name="plus_coins">+%1$d عملة!</string>
+    <string name="reward_claimed">تم جمع المكافأة!</string>
+
+    <!-- Economy -->
+    <string name="bean_redeem_description">1 حبة = 1 عملة. استبدل 2,000+ للحصول على مكافأة 10%!</string>
+    <string name="bonus_coins">+%1$d مكافأة</string>
+    <string name="buy_shy_coins">شراء ShyCoins</string>
+    <string name="confirm_redemption">تأكيد الاستبدال</string>
+    <string name="daily_reward">المكافأة اليومية</string>
+    <string name="redeem">استبدال</string>
+    <string name="redeem_all">استبدال الكل</string>
+    <string name="redeem_beans_for_coins">استبدال %1$s حبة بـ %2$s عملة؟</string>
+    <string name="redeem_shy_beans">استبدال ShyBeans</string>
+    <string name="send_gift">إرسال هدية</string>
+    <string name="shy_beans">ShyBeans</string>
+    <string name="shy_coins">ShyCoins</string>
+    <string name="testing_mode_coins">وضع الاختبار — لن يتم تحصيل أموال حقيقية. اضغط على حزمة للحصول على العملات فورًا.</string>
+    <string name="filter_all">الكل</string>
+    <string name="filter_gacha">جاتشا</string>
+    <string name="filter_gifts">هدايا</string>
+    <string name="filter_purchases">مشتريات</string>
+    <string name="filter_redemptions">استبدالات</string>
+    <string name="filter_rewards">مكافآت</string>
+    <string name="no_filtered_transactions">لا توجد معاملات %1$s</string>
+    <string name="no_transactions_yet">لا توجد معاملات بعد</string>
+    <string name="transaction_history">سجل المعاملات</string>
+    <string name="transactions">المعاملات</string>
+    <string name="wallet">المحفظة</string>
+
+    <!-- Super Shy -->
+    <string name="benefit_daily_bonus">+10% عملات تسجيل الدخول اليومي (مقرّبة لأعلى)</string>
+    <string name="benefit_extended_room">مدة غرفة ممتدة (12 ساعة)</string>
+    <string name="benefit_full_room">غرفة كاملة من 8 مقاعد</string>
+    <string name="benefit_gold_name">اسم معروض ذهبي في كل مكان</string>
+    <string name="benefit_profile_frame">إطار ملف شخصي حصري</string>
+    <string name="benefit_star_badge">شارة نجمة بجانب الاسم</string>
+    <string name="benefits">المزايا</string>
+    <string name="choose_a_plan">اختر خطة</string>
+    <string name="claim_30_days_free">احصل على 30 يومًا مجانًا</string>
+    <string name="claimed">تم الحصول!</string>
+    <string name="claimed_activate_backpack">لتفعيله، ابحث عنه في حقيبتك أثناء التواجد في غرفة محادثة.</string>
+    <string name="claiming">جارٍ الحصول…</string>
+    <string name="currently_active">نشط حاليًا</string>
+    <string name="days_remaining">%1$d يوم متبقٍ</string>
+    <string name="one_time_payment">دفعة واحدة</string>
+    <string name="per_month">شهريًا</string>
+    <string name="per_year">سنويًا</string>
+    <string name="super_shy">Super Shy</string>
+    <string name="super_shy_for_life">أنت Super Shy مدى الحياة!</string>
+    <string name="tap_to_claim_backpack">اضغط للحصول — ستُضاف إلى حقيبتك</string>
+    <string name="testing_mode_super_shy">وضع الاختبار — لن يتم تحصيل أموال حقيقية. اضغط على خطة لتفعيل Super Shy فورًا.</string>
+    <string name="tier_label">المستوى: %1$s</string>
+    <string name="tier_lifetime">مدى الحياة</string>
+    <string name="tier_monthly">شهري</string>
+    <string name="tier_yearly">سنوي</string>
+    <string name="upgrade_to_lifetime">الترقية إلى مدى الحياة</string>
+
+    <!-- Legal -->
+    <string name="accept_all_and_continue">قبول الكل &amp; المتابعة</string>
+    <string name="community_standards">معايير المجتمع</string>
+    <string name="cyber_bullying_policy">سياسة مكافحة التنمر الإلكتروني</string>
+    <string name="i_have_read_and_agree">لقد قرأت وأوافق على </string>
+    <string name="privacy_policy">سياسة الخصوصية</string>
+    <string name="review_and_accept_policies">يرجى مراجعة سياساتنا والموافقة عليها للمتابعة.</string>
+    <string name="terms_and_conditions">الشروط &amp; الأحكام</string>
+    <string name="welcome_to_shytalk">مرحبًا بك في ShyTalk</string>
+
+    <!-- Auth -->
+    <string name="sign_in">تسجيل الدخول</string>
+    <string name="phone_number">رقم الهاتف</string>
+    <string name="verification_code">رمز التحقق</string>
+    <string name="continue_with_google">المتابعة مع Google</string>
+</resources>

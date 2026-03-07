@@ -1,0 +1,471 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common actions -->
+    <string name="all_caps">SEMUA</string>
+    <string name="back">Kembali</string>
+    <string name="cancel">Batal</string>
+    <string name="change">Ubah</string>
+    <string name="close">Tutup</string>
+    <string name="confirm">Konfirmasi</string>
+    <string name="continue_button">Lanjutkan</string>
+    <string name="create">Buat</string>
+    <string name="delete">Hapus</string>
+    <string name="done">Selesai</string>
+    <string name="edit">Edit</string>
+    <string name="error_generic">Terjadi kesalahan</string>
+    <string name="got_it">Mengerti</string>
+    <string name="learn_more">Pelajari Selengkapnya</string>
+    <string name="loading">Memuat…</string>
+    <string name="maybe_later">Nanti Saja</string>
+    <string name="message_action">Pesan</string>
+    <string name="next">Berikutnya</string>
+    <string name="ok">OK</string>
+    <string name="retry">Coba Lagi</string>
+    <string name="save">Simpan</string>
+    <string name="send">Kirim</string>
+    <string name="sending">Mengirim...</string>
+    <string name="transfer">Transfer</string>
+    <string name="unknown">Tidak diketahui</string>
+    <string name="using">Menggunakan...</string>
+    <string name="you">Kamu</string>
+
+    <!-- Message bubbles -->
+    <string name="edited">diedit</string>
+    <string name="tap_to_join">Ketuk untuk bergabung</string>
+    <string name="message_recalled_by_you">Kamu menarik pesan ini</string>
+    <string name="message_recalled">Pesan ini telah ditarik</string>
+    <string name="message_hidden_by_mod">Pesan ini disembunyikan oleh moderator</string>
+    <string name="invite_to_mic">Undang ke mic</string>
+    <string name="closed">Ditutup</string>
+    <string name="edited_count">Diedit (%1$d)</string>
+    <string name="read">Dibaca</string>
+    <string name="sent">Terkirim</string>
+    <string name="sticker">Stiker</string>
+    <string name="image">Gambar</string>
+
+    <!-- Context menu -->
+    <string name="react">Reaksi</string>
+    <string name="reply">Balas</string>
+    <string name="copy">Salin</string>
+    <string name="recall">Tarik</string>
+    <string name="add_to_stickers">Tambah ke Stiker</string>
+    <string name="hide_message">Sembunyikan Pesan</string>
+    <string name="report_message">Laporkan Pesan</string>
+
+    <!-- Translation -->
+    <string name="translate">Terjemahkan</string>
+    <string name="translated_from">Diterjemahkan dari %1$s</string>
+    <string name="show_original">Tampilkan asli</string>
+    <string name="translation_limit_reached">Batas harian tercapai. Upgrade ke Super Shy untuk terjemahan tanpa batas.</string>
+    <string name="auto_translate">Terjemahan otomatis</string>
+    <string name="auto_translate_description">Terjemahkan pesan masuk secara otomatis ke bahasa Anda</string>
+    <string name="translations_remaining">%1$d terjemahan tersisa hari ini</string>
+
+    <!-- Settings -->
+    <string name="settings">Pengaturan</string>
+    <string name="language">Bahasa</string>
+    <string name="blocked_users">Pengguna Diblokir</string>
+    <string name="account">Akun</string>
+    <string name="privacy">Privasi</string>
+    <string name="notifications">Notifikasi</string>
+    <string name="permissions">Izin</string>
+    <string name="about">Tentang</string>
+    <string name="sign_out">Keluar</string>
+    <string name="sign_out_confirm">Yakin ingin keluar?</string>
+
+    <!-- Home -->
+    <string name="create_room">Buat Ruangan</string>
+    <string name="create_room_prompt">Beri nama ruanganmu</string>
+    <string name="home">Beranda</string>
+    <string name="in_room_count">%1$d di ruangan</string>
+    <string name="join">Gabung</string>
+    <string name="no_active_rooms">Tidak ada ruangan aktif</string>
+    <string name="no_rooms">Tidak ada ruangan tersedia</string>
+    <string name="room_name">Nama ruangan</string>
+    <string name="room_name_label">Nama Ruangan</string>
+    <string name="seats_count">%1$d/%2$d kursi</string>
+    <string name="speakers_count">%1$d/%2$d pembicara</string>
+    <string name="tap_plus_to_create">Ketuk + untuk membuat</string>
+    <string name="visitors_count">%1$d pengunjung</string>
+
+    <!-- Profile -->
+    <string name="connections">Koneksi</string>
+    <string name="display_name">Nama Tampilan</string>
+    <string name="dob_privacy_note">Tanggal lahir diperlukan tetapi kamu bisa menyembunyikan umurmu di pengaturan privasi.</string>
+    <string name="dob_required_subtitle">Kami memerlukan tanggal lahirmu untuk melanjutkan.</string>
+    <string name="follow">Ikuti</string>
+    <string name="follow_back">Ikuti balik</string>
+    <string name="followers">Pengikut</string>
+    <string name="followers_count">Pengikut (%1$d)</string>
+    <string name="following">Mengikuti</string>
+    <string name="following_count">Mengikuti (%1$d)</string>
+    <string name="following_list_private">Daftar mengikuti pengguna ini bersifat privat</string>
+    <string name="get_super_shy">Dapatkan Super Shy</string>
+    <string name="gift_wall">Dinding Hadiah</string>
+    <string name="gift_value_coins">Nilai: %1$d koin</string>
+    <string name="no_followers_yet">Belum ada pengikut</string>
+    <string name="no_profile_visitors">Belum ada pengunjung profil</string>
+    <string name="not_following_anyone">Belum mengikuti siapa pun</string>
+    <string name="one_more_step">Satu Langkah Lagi</string>
+    <string name="profile">Profil</string>
+    <string name="profile_setup_subtitle">Pilih nama tampilan dan masukkan tanggal lahirmu</string>
+    <string name="received_times">Diterima %1$d kali</string>
+    <string name="remove_follower">Hapus pengikut</string>
+    <string name="report">Laporkan</string>
+    <string name="select_date_of_birth">Pilih Tanggal Lahir</string>
+    <string name="select_nationality">Pilih Kewarganegaraan</string>
+    <string name="search_countries">Cari negara</string>
+    <string name="selected">Dipilih</string>
+    <string name="set_up_your_profile">Atur Profilmu</string>
+    <string name="stalker_visit_info">Mengintip profilmu %1$s, %2$d kali dalam 3 bulan terakhir</string>
+    <string name="stalkers_count">Pengintip (%1$d)</string>
+    <string name="stalkers_super_shy_description">Lihat siapa yang mengunjungi profilmu! Pengintip profil adalah fitur eksklusif Super Shy.</string>
+    <string name="super_shy_benefit">Keuntungan Super Shy</string>
+    <string name="top_senders">Pengirim Teratas</string>
+    <string name="block">Blokir</string>
+    <string name="unblock">Buka Blokir</string>
+    <string name="undo_remove">Batalkan penghapusan</string>
+    <string name="unfollow">Berhenti Mengikuti</string>
+
+    <!-- Room -->
+    <string name="alias">Alias</string>
+    <string name="approve">Setujui</string>
+    <string name="audience">Penonton</string>
+    <string name="back_to_home">Kembali ke Beranda</string>
+    <string name="backpack">Ransel</string>
+    <string name="backpack_empty">Ranselmu kosong.\nPutar roda untuk mendapatkan hadiah!</string>
+    <string name="ban">Cekal</string>
+    <string name="block_user">Blokir Pengguna</string>
+    <string name="block_user_confirm">Yakin ingin memblokir %1$s?</string>
+    <string name="close_room">Tutup Ruangan</string>
+    <string name="daily">Harian</string>
+    <string name="deny">Tolak</string>
+    <string name="empty_seat">Kursi kosong</string>
+    <string name="filter_gift_animations_description">Sembunyikan animasi untuk hadiah yang lebih murah.</string>
+    <string name="gift">Hadiah</string>
+    <string name="gift_animations">Animasi Hadiah</string>
+    <string name="host">Host</string>
+    <string name="hosts">Host</string>
+    <string name="invite_to_seat">Undang ke kursi</string>
+    <string name="kick">Keluarkan</string>
+    <string name="kick_user">Keluarkan Pengguna</string>
+    <string name="kick_user_confirm">Yakin ingin mengeluarkan %1$s dari ruangan? Mereka tidak bisa bergabung kembali.</string>
+    <string name="leave_room">Keluar Ruangan</string>
+    <string name="leave_seat">Tinggalkan kursi</string>
+    <string name="lock_seating">Kunci Kursi</string>
+    <string name="lock_seating_description">Hanya pemilik yang bisa mengundang pengguna untuk duduk</string>
+    <string name="buy_coins">Beli koin</string>
+    <string name="collect_all">AMBIL SEMUA (%1$d)</string>
+    <string name="increased_drop_rate">PELUANG HADIAH MENINGKAT</string>
+    <string name="loading_prices">Memuat harga…</string>
+    <string name="lucky_spin">Lucky Spin</string>
+    <string name="lucky_spin_title">LUCKY SPIN</string>
+    <string name="need_more_coins">Butuh lebih banyak koin!</string>
+    <string name="no_packages_available">Tidak ada paket tersedia</string>
+    <string name="no_spins_yet">Belum ada putaran</string>
+    <string name="prizes">Hadiah</string>
+    <string name="skip_animation">LEWATI ANIMASI</string>
+    <string name="spin">PUTAR</string>
+    <string name="spin_count">%1$d PUTARAN</string>
+    <string name="spin_history">Riwayat Putaran</string>
+    <string name="spin_results">Hasil Putaran</string>
+    <string name="message">Pesan</string>
+    <string name="move_to_audience">Pindah ke Penonton</string>
+    <string name="move_to_seat">Pindah ke Kursi</string>
+    <string name="move_to_which_seat">Pindah ke kursi mana?</string>
+    <string name="mute">Bisukan</string>
+    <string name="no_audience_members">Tidak ada penonton</string>
+    <string name="no_pending_requests">Tidak ada permintaan tertunda</string>
+    <string name="no_reason_given">Tidak ada alasan diberikan</string>
+    <string name="no_one_on_mic">Tidak ada yang di mic</string>
+    <string name="occupied">Terisi</string>
+    <string name="open_for_duration">Dibuka selama %1$s</string>
+    <string name="owner">Pemilik</string>
+    <string name="reason_optional">Alasan (opsional)</string>
+    <string name="reject">Tolak</string>
+    <string name="remove">Hapus</string>
+    <string name="remove_as_host">Hapus sebagai Host</string>
+    <string name="remove_from_room">Keluarkan dari Ruangan</string>
+    <string name="request">Permintaan</string>
+    <string name="request_a_seat">Minta Kursi</string>
+    <string name="request_seat">Minta Kursi</string>
+    <string name="requesting">Meminta</string>
+    <string name="room">Ruangan</string>
+    <string name="room_closed">Ruangan Ditutup</string>
+    <string name="room_closing_no_super_shy">Pemilik ruangan tidak memiliki Super Shy, jadi ruangan ini akan segera ditutup.</string>
+    <string name="room_closing_in">Ruangan ditutup dalam %1$d:%2$s</string>
+    <string name="room_closing_soon">Ruangan Segera Ditutup</string>
+    <string name="room_settings">Pengaturan ruangan</string>
+    <string name="rooms">Ruangan</string>
+    <string name="seat_requests">Permintaan Kursi</string>
+    <string name="seat_swap_with">Kursi %1$d (tukar dengan %2$s)</string>
+    <string name="set_alias">Atur Alias</string>
+    <string name="set_alias_description">Atur alias pribadi untuk %1$s. Hanya kamu yang bisa melihatnya.</string>
+    <string name="set_as_host">Jadikan Host</string>
+    <string name="showing_all_gift_animations">Menampilkan semua animasi hadiah</string>
+    <string name="showing_animations_worth">Hanya menampilkan animasi senilai %1$d+ koin</string>
+    <string name="speakers">Pembicara</string>
+    <string name="take_a_seat">Ambil Kursi</string>
+    <string name="unmute">Aktifkan Suara</string>
+    <string name="unmuted">Suara Diaktifkan</string>
+    <string name="user">Pengguna</string>
+    <string name="user_id">ID: %1$d</string>
+    <string name="visitor_count">%1$d pengunjung</string>
+    <string name="voice">Suara</string>
+    <string name="voice_unavailable">Suara tidak tersedia</string>
+    <string name="you_have_super_shy_room">Kamu punya Super Shy! Buka ruanganmu sendiri hingga %1$d jam waktu tambahan.</string>
+    <string name="get_super_shy_rooms">Dapatkan Super Shy untuk menikmati ruangan hingga %1$d jam!</string>
+
+    <!-- Room - Notifications -->
+    <string name="accept">Terima</string>
+    <string name="decline">Tolak</string>
+    <string name="go_back">Kembali</string>
+    <string name="go_to_seat">Ke Kursi</string>
+    <string name="invited_to_sit">Kamu diundang untuk duduk!</string>
+    <string name="request_accepted">Permintaanmu diterima!</string>
+    <string name="seat_number">Kursi %1$d</string>
+    <string name="user_wants_to_sit">%1$s ingin duduk</string>
+
+    <!-- Room - Chat -->
+    <string name="cancel_edit">Batalkan edit</string>
+    <string name="edit_message_placeholder">Edit pesan...</string>
+    <string name="message_placeholder">Pesan...</string>
+    <string name="new_messages">Pesan baru</string>
+
+    <!-- Room - Backpack -->
+    <string name="action_cannot_be_undone">TINDAKAN INI TIDAK BISA DIBATALKAN.</string>
+    <string name="confirm_send">Konfirmasi Kirim</string>
+    <string name="from_backpack_items">Dari ransel: %1$d item</string>
+    <string name="gifts">Hadiah</string>
+    <string name="send_all">Kirim Semua</string>
+    <string name="send_all_includes">Ini termasuk SEMUA %1$d item dari %2$d hadiah berbeda.</string>
+    <string name="send_all_warning">Kamu akan mengirim SELURUH ranselmu ke %1$s.</string>
+    <string name="send_everything_confirm">Saya mengerti, kirim semuanya</string>
+    <string name="to_label">Kepada</string>
+    <string name="total_cost_coins">Total biaya: %1$d koin</string>
+    <string name="use_button">Gunakan</string>
+    <string name="you_have_count">Kamu punya: %1$d</string>
+    <string name="your_balance_coins">Saldomu: %1$d koin</string>
+
+    <!-- Messaging -->
+    <string name="additional_details_optional">Detail tambahan (opsional)</string>
+    <string name="all_admins_and_mods">Semua admin &amp; mod</string>
+    <string name="attach_evidence">Lampirkan Bukti</string>
+    <string name="cant_message_user">Kamu tidak bisa mengirim pesan ke pengguna ini</string>
+    <string name="chat">Chat</string>
+    <string name="close_group">Tutup Grup</string>
+    <string name="close_group_warning">Ini akan menutup grup untuk semua orang. Pesan akan disimpan untuk moderasi.</string>
+    <string name="compressing">Mengompresi...</string>
+    <string name="conversation_start_hint">Mulai percakapan dari profil seseorang\natau kartu pengguna di ruangan</string>
+    <string name="create_group">Buat Grup</string>
+    <string name="current_version">Saat ini</string>
+    <string name="delete_conversation">Hapus Percakapan</string>
+    <string name="delete_conversation_warning">Ini akan menghapus percakapan dari daftarmu. Pesan tetap disimpan dan akan muncul kembali jika orang lain mengirim pesan lagi.</string>
+    <string name="description_label">Deskripsi</string>
+    <string name="description_optional">Deskripsi (opsional)</string>
+    <string name="edit_history">Riwayat Edit</string>
+    <string name="editing_message">Mengedit pesan</string>
+    <string name="evidence">Bukti</string>
+    <string name="evidence_required">Minimal satu tangkapan layar atau rekaman diperlukan.</string>
+    <string name="general">Umum</string>
+    <string name="group">Grup</string>
+    <string name="group_chat">Chat Grup</string>
+    <string name="group_name_label">Nama Grup</string>
+    <string name="group_name_required">Nama Grup *</string>
+    <string name="group_settings">Pengaturan Grup</string>
+    <string name="invite_to_room">Undang ke Ruangan</string>
+    <string name="last_seen">Terakhir dilihat %1$s</string>
+    <string name="leave_group">Keluar Grup</string>
+    <string name="members">Anggota</string>
+    <string name="members_count">%1$d anggota</string>
+    <string name="message_ellipsis">Pesan...</string>
+    <string name="message_permissions">Izin Pesan</string>
+    <string name="message_preview_image">[Gambar]</string>
+    <string name="message_preview_recalled">[Pesan ditarik]</string>
+    <string name="message_preview_room_invite">[Undangan Ruangan]</string>
+    <string name="message_preview_sticker">[Stiker]</string>
+    <string name="messages">Pesan</string>
+    <string name="mod_notifications">Notifikasi Mod</string>
+    <string name="move_to_front">Pindah ke depan</string>
+    <string name="mute_notifications">Bisukan Notifikasi</string>
+    <string name="mute_reason">. Alasan: %1$s</string>
+    <string name="muted">Dibisukan</string>
+    <string name="muted_for_hours_minutes">Kamu dibisukan selama %1$d jam %2$d menit</string>
+    <string name="muted_for_minutes">Kamu dibisukan selama %1$d menit</string>
+    <string name="muted_indefinitely">Kamu dibisukan</string>
+    <string name="new_group">Grup Baru</string>
+    <string name="new_group_selected">Grup Baru (%1$d dipilih)</string>
+    <string name="new_message">Pesan Baru</string>
+    <string name="no_action_needed">Tidak Perlu Tindakan</string>
+    <string name="no_followers_following_found">Tidak ada pengikut atau yang diikuti</string>
+    <string name="no_matches_found">Tidak ada yang cocok</string>
+    <string name="no_messages">Belum ada pesan</string>
+    <string name="no_pending_reports">Tidak ada laporan tertunda</string>
+    <string name="no_stickers_yet">Belum ada stiker</string>
+    <string name="no_users_found">Pengguna tidak ditemukan</string>
+    <string name="notify_owner_only">Hanya beritahu pemilik</string>
+    <string name="online">Online</string>
+    <string name="only_admins_can_send">Hanya admin dan mod yang bisa mengirim pesan di grup ini</string>
+    <string name="only_owner_can_change_permissions">Hanya pemilik grup yang bisa mengubah izin.</string>
+    <string name="owner_only">Hanya pemilik</string>
+    <string name="participants">Peserta</string>
+    <string name="participants_count">Peserta (%1$d)</string>
+    <string name="pin">Sematkan</string>
+    <string name="recent">Terbaru</string>
+    <string name="replying_to">Membalas %1$s</string>
+    <string name="report_message_prompt">Mengapa kamu melaporkan pesan ini?</string>
+    <string name="report_review">Tinjauan Laporan</string>
+    <string name="report_user">Laporkan %1$s</string>
+    <string name="report_user_prompt">Mengapa kamu melaporkan pengguna ini?</string>
+    <string name="reset_to_default">Atur Ulang ke Default</string>
+    <string name="result_count">%1$d hasil</string>
+    <string name="review_report">Tinjau Laporan</string>
+    <string name="role_admin">Admin</string>
+    <string name="role_member">Anggota</string>
+    <string name="role_mod">Mod</string>
+    <string name="role_owner">Pemilik</string>
+    <string name="save_description">Simpan Deskripsi</string>
+    <string name="search_all_users">Cari semua pengguna</string>
+    <string name="search_conversations">Cari percakapan...</string>
+    <string name="search_messages">Cari pesan...</string>
+    <string name="search_people">Cari orang...</string>
+    <string name="select_action">Pilih tindakan:</string>
+    <string name="selected_count">%1$d dipilih</string>
+    <string name="start_conversation">Mulai percakapan</string>
+    <string name="submit_report">Kirim Laporan</string>
+    <string name="submitting">Mengirim...</string>
+    <string name="system_messages">Pesan Sistem</string>
+    <string name="transfer_ownership">Transfer Kepemilikan</string>
+    <string name="transfer_ownership_warning">Pilih anggota untuk mentransfer kepemilikan. Kamu akan kehilangan hak pemilik. Ini tidak bisa dibatalkan.</string>
+    <string name="type_message">Ketik pesan…</string>
+    <string name="typing">mengetik...</string>
+    <string name="unmute_action">Aktifkan Suara</string>
+    <string name="unmute_notifications">Aktifkan Notifikasi</string>
+    <string name="unpin">Lepas Sematan</string>
+    <string name="view_profile">Lihat Profil</string>
+
+    <!-- Messaging - report reasons -->
+    <string name="report_reason_spam">Spam</string>
+    <string name="report_reason_harassment">Pelecehan</string>
+    <string name="report_reason_inappropriate">Konten Tidak Pantas</string>
+    <string name="report_reason_other">Lainnya</string>
+
+    <!-- Messaging - report actions -->
+    <string name="report_action_warning">Beri Peringatan</string>
+    <string name="report_action_temp_suspension">Penangguhan Sementara</string>
+    <string name="report_action_perm_suspension">Penangguhan Permanen</string>
+    <string name="report_action_pm_ban">Larangan PM</string>
+
+    <!-- Messaging - report details -->
+    <string name="report_reason_prefix">Alasan: %1$s</string>
+    <string name="report_type_prefix">Jenis: %1$s</string>
+    <string name="report_details_prefix">Detail: %1$s</string>
+    <string name="report_message_prefix">Pesan: \"%1$s\"</string>
+    <string name="report_reporter_reported">Pelapor: %1$s | Dilaporkan: %2$s</string>
+
+    <!-- Messaging - system message labels -->
+    <string name="sys_member_joins">Anggota bergabung</string>
+    <string name="sys_member_leaves">Anggota keluar</string>
+    <string name="sys_role_changes">Perubahan peran</string>
+    <string name="sys_permission_changes">Perubahan izin</string>
+
+    <!-- Messaging - permission labels -->
+    <string name="perm_who_can_send">Siapa yang bisa mengirim pesan</string>
+    <string name="perm_who_can_add_members">Siapa yang bisa menambah anggota</string>
+    <string name="perm_who_can_edit_info">Siapa yang bisa mengedit info grup</string>
+    <string name="perm_who_can_delete_messages">Siapa yang bisa menghapus pesan</string>
+    <string name="perm_who_can_mute_members">Siapa yang bisa membisukan anggota</string>
+    <string name="perm_who_can_remove_members">Siapa yang bisa mengeluarkan anggota</string>
+
+    <!-- Messaging - date separators -->
+    <string name="today">Hari Ini</string>
+    <string name="yesterday">Kemarin</string>
+
+    <!-- Daily Reward -->
+    <string name="awesome">Luar Biasa!</string>
+    <string name="claim_todays_reward">Ambil Hadiah Hari Ini</string>
+    <string name="coins">koin</string>
+    <string name="day_fri">Jum</string>
+    <string name="day_mon">Sen</string>
+    <string name="day_sat">Sab</string>
+    <string name="day_streak">%1$d hari berturut-turut</string>
+    <string name="day_sun">Min</string>
+    <string name="day_thu">Kam</string>
+    <string name="day_tue">Sel</string>
+    <string name="day_wed">Rab</string>
+    <string name="later">Nanti</string>
+    <string name="milestone">Pencapaian</string>
+    <string name="milestone_bonus">Bonus pencapaian!</string>
+    <string name="plus_coins">+%1$d koin!</string>
+    <string name="reward_claimed">Hadiah Diambil!</string>
+
+    <!-- Economy -->
+    <string name="bean_redeem_description">1 bean = 1 koin. Tukarkan 2.000+ untuk bonus 10%!</string>
+    <string name="bonus_coins">+%1$d bonus</string>
+    <string name="buy_shy_coins">Beli ShyCoins</string>
+    <string name="confirm_redemption">Konfirmasi Penukaran</string>
+    <string name="daily_reward">Hadiah Harian</string>
+    <string name="redeem">Tukarkan</string>
+    <string name="redeem_all">Tukarkan Semua</string>
+    <string name="redeem_beans_for_coins">Tukarkan %1$s bean menjadi %2$s koin?</string>
+    <string name="redeem_shy_beans">Tukarkan ShyBeans</string>
+    <string name="send_gift">Kirim Hadiah</string>
+    <string name="shy_beans">ShyBeans</string>
+    <string name="shy_coins">ShyCoins</string>
+    <string name="testing_mode_coins">Mode uji coba — tidak ada uang sungguhan yang dikenakan. Ketuk paket untuk langsung menerima koin.</string>
+    <string name="filter_all">Semua</string>
+    <string name="filter_gacha">Gacha</string>
+    <string name="filter_gifts">Hadiah</string>
+    <string name="filter_purchases">Pembelian</string>
+    <string name="filter_redemptions">Penukaran</string>
+    <string name="filter_rewards">Hadiah</string>
+    <string name="no_filtered_transactions">Tidak ada transaksi %1$s</string>
+    <string name="no_transactions_yet">Belum ada transaksi</string>
+    <string name="transaction_history">Riwayat Transaksi</string>
+    <string name="transactions">Transaksi</string>
+    <string name="wallet">Dompet</string>
+
+    <!-- Super Shy -->
+    <string name="benefit_daily_bonus">+10% koin login harian (dibulatkan ke atas)</string>
+    <string name="benefit_extended_room">Durasi ruangan diperpanjang (12 jam)</string>
+    <string name="benefit_full_room">Ruangan penuh 8 kursi</string>
+    <string name="benefit_gold_name">Nama tampilan emas di mana saja</string>
+    <string name="benefit_profile_frame">Bingkai profil eksklusif</string>
+    <string name="benefit_star_badge">Lencana bintang di samping nama</string>
+    <string name="benefits">Keuntungan</string>
+    <string name="choose_a_plan">Pilih paket</string>
+    <string name="claim_30_days_free">Klaim 30 Hari Gratis</string>
+    <string name="claimed">Diklaim!</string>
+    <string name="claimed_activate_backpack">Untuk mengaktifkannya, temukan di ranselmu saat berada di ruang chat.</string>
+    <string name="claiming">Mengklaim…</string>
+    <string name="currently_active">Sedang Aktif</string>
+    <string name="days_remaining">%1$d hari tersisa</string>
+    <string name="one_time_payment">Pembayaran satu kali</string>
+    <string name="per_month">per bulan</string>
+    <string name="per_year">per tahun</string>
+    <string name="super_shy">Super Shy</string>
+    <string name="super_shy_for_life">Kamu Super Shy seumur hidup!</string>
+    <string name="tap_to_claim_backpack">Ketuk untuk klaim — ditambahkan ke ranselmu</string>
+    <string name="testing_mode_super_shy">Mode uji coba — tidak ada uang sungguhan yang dikenakan. Ketuk paket untuk langsung mengaktifkan Super Shy.</string>
+    <string name="tier_label">Tier: %1$s</string>
+    <string name="tier_lifetime">Seumur Hidup</string>
+    <string name="tier_monthly">Bulanan</string>
+    <string name="tier_yearly">Tahunan</string>
+    <string name="upgrade_to_lifetime">Upgrade ke Seumur Hidup</string>
+
+    <!-- Legal -->
+    <string name="accept_all_and_continue">Terima Semua &amp; Lanjutkan</string>
+    <string name="community_standards">Standar Komunitas</string>
+    <string name="cyber_bullying_policy">Kebijakan Perundungan Siber</string>
+    <string name="i_have_read_and_agree">Saya telah membaca dan menyetujui </string>
+    <string name="privacy_policy">Kebijakan Privasi</string>
+    <string name="review_and_accept_policies">Silakan tinjau dan terima kebijakan kami untuk melanjutkan.</string>
+    <string name="terms_and_conditions">Syarat &amp; Ketentuan</string>
+    <string name="welcome_to_shytalk">Selamat Datang di ShyTalk</string>
+
+    <!-- Auth -->
+    <string name="sign_in">Masuk</string>
+    <string name="phone_number">Nomor Telepon</string>
+    <string name="verification_code">Kode Verifikasi</string>
+    <string name="continue_with_google">Lanjutkan dengan Google</string>
+</resources>

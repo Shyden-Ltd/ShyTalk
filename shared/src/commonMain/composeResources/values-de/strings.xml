@@ -1,0 +1,471 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common actions -->
+    <string name="all_caps">ALLE</string>
+    <string name="back">Zurück</string>
+    <string name="cancel">Abbrechen</string>
+    <string name="change">Ändern</string>
+    <string name="close">Schließen</string>
+    <string name="confirm">Bestätigen</string>
+    <string name="continue_button">Weiter</string>
+    <string name="create">Erstellen</string>
+    <string name="delete">Löschen</string>
+    <string name="done">Fertig</string>
+    <string name="edit">Bearbeiten</string>
+    <string name="error_generic">Etwas ist schiefgelaufen</string>
+    <string name="got_it">Verstanden</string>
+    <string name="learn_more">Mehr erfahren</string>
+    <string name="loading">Laden…</string>
+    <string name="maybe_later">Vielleicht später</string>
+    <string name="message_action">Nachricht</string>
+    <string name="next">Weiter</string>
+    <string name="ok">OK</string>
+    <string name="retry">Erneut versuchen</string>
+    <string name="save">Speichern</string>
+    <string name="send">Senden</string>
+    <string name="sending">Wird gesendet...</string>
+    <string name="transfer">Übertragen</string>
+    <string name="unknown">Unbekannt</string>
+    <string name="using">Wird verwendet...</string>
+    <string name="you">Du</string>
+
+    <!-- Message bubbles -->
+    <string name="edited">bearbeitet</string>
+    <string name="tap_to_join">Tippen zum Beitreten</string>
+    <string name="message_recalled_by_you">Du hast diese Nachricht zurückgerufen</string>
+    <string name="message_recalled">Diese Nachricht wurde zurückgerufen</string>
+    <string name="message_hidden_by_mod">Diese Nachricht wurde von einem Moderator ausgeblendet</string>
+    <string name="invite_to_mic">Zum Mikrofon einladen</string>
+    <string name="closed">Geschlossen</string>
+    <string name="edited_count">Bearbeitet (%1$d)</string>
+    <string name="read">Gelesen</string>
+    <string name="sent">Gesendet</string>
+    <string name="sticker">Sticker</string>
+    <string name="image">Bild</string>
+
+    <!-- Context menu -->
+    <string name="react">Reagieren</string>
+    <string name="reply">Antworten</string>
+    <string name="copy">Kopieren</string>
+    <string name="recall">Zurückrufen</string>
+    <string name="add_to_stickers">Zu Stickern hinzufügen</string>
+    <string name="hide_message">Nachricht ausblenden</string>
+    <string name="report_message">Nachricht melden</string>
+
+    <!-- Translation -->
+    <string name="translate">Übersetzen</string>
+    <string name="translated_from">Übersetzt aus %1$s</string>
+    <string name="show_original">Original anzeigen</string>
+    <string name="translation_limit_reached">Tageslimit erreicht. Wechsle zu Super Shy für unbegrenzte Übersetzungen.</string>
+    <string name="auto_translate">Automatisch übersetzen</string>
+    <string name="auto_translate_description">Eingehende Nachrichten automatisch in deine Sprache übersetzen</string>
+    <string name="translations_remaining">%1$d Übersetzungen heute verbleibend</string>
+
+    <!-- Settings -->
+    <string name="settings">Einstellungen</string>
+    <string name="language">Sprache</string>
+    <string name="blocked_users">Blockierte Benutzer</string>
+    <string name="account">Konto</string>
+    <string name="privacy">Datenschutz</string>
+    <string name="notifications">Benachrichtigungen</string>
+    <string name="permissions">Berechtigungen</string>
+    <string name="about">Über</string>
+    <string name="sign_out">Abmelden</string>
+    <string name="sign_out_confirm">Möchtest du dich wirklich abmelden?</string>
+
+    <!-- Home -->
+    <string name="create_room">Raum erstellen</string>
+    <string name="create_room_prompt">Gib deinem Raum einen Namen</string>
+    <string name="home">Startseite</string>
+    <string name="in_room_count">%1$d im Raum</string>
+    <string name="join">Beitreten</string>
+    <string name="no_active_rooms">Keine aktiven Räume</string>
+    <string name="no_rooms">Keine Räume verfügbar</string>
+    <string name="room_name">Raumname</string>
+    <string name="room_name_label">Raumname</string>
+    <string name="seats_count">%1$d/%2$d Plätze</string>
+    <string name="speakers_count">%1$d/%2$d Sprecher</string>
+    <string name="tap_plus_to_create">Tippe auf +, um einen zu erstellen</string>
+    <string name="visitors_count">%1$d Besucher</string>
+
+    <!-- Profile -->
+    <string name="connections">Verbindungen</string>
+    <string name="display_name">Anzeigename</string>
+    <string name="dob_privacy_note">Dein Geburtsdatum ist erforderlich, aber du kannst dein Alter in den Datenschutzeinstellungen verbergen.</string>
+    <string name="dob_required_subtitle">Wir benötigen dein Geburtsdatum, um fortzufahren.</string>
+    <string name="follow">Folgen</string>
+    <string name="follow_back">Zurückfolgen</string>
+    <string name="followers">Follower</string>
+    <string name="followers_count">Follower (%1$d)</string>
+    <string name="following">Gefolgt</string>
+    <string name="following_count">Gefolgt (%1$d)</string>
+    <string name="following_list_private">Die Folgeliste dieses Benutzers ist privat</string>
+    <string name="get_super_shy">Super Shy holen</string>
+    <string name="gift_wall">Geschenkwand</string>
+    <string name="gift_value_coins">Wert: %1$d Münzen</string>
+    <string name="no_followers_yet">Noch keine Follower</string>
+    <string name="no_profile_visitors">Noch keine Profilbesucher</string>
+    <string name="not_following_anyone">Folgt noch niemandem</string>
+    <string name="one_more_step">Noch ein Schritt</string>
+    <string name="profile">Profil</string>
+    <string name="profile_setup_subtitle">Wähle einen Anzeigenamen und gib dein Geburtsdatum ein</string>
+    <string name="received_times">%1$d Mal erhalten</string>
+    <string name="remove_follower">Follower entfernen</string>
+    <string name="report">Melden</string>
+    <string name="select_date_of_birth">Geburtsdatum auswählen</string>
+    <string name="select_nationality">Nationalität auswählen</string>
+    <string name="search_countries">Länder suchen</string>
+    <string name="selected">Ausgewählt</string>
+    <string name="set_up_your_profile">Richte dein Profil ein</string>
+    <string name="stalker_visit_info">Hat dich %1$s besucht, %2$d Mal in den letzten 3 Monaten</string>
+    <string name="stalkers_count">Stalker (%1$d)</string>
+    <string name="stalkers_super_shy_description">Sieh, wer dein Profil besucht hat! Profil-Stalker ist eine exklusive Super Shy Funktion.</string>
+    <string name="super_shy_benefit">Super Shy Vorteil</string>
+    <string name="top_senders">Top-Sender</string>
+    <string name="block">Blockieren</string>
+    <string name="unblock">Entblocken</string>
+    <string name="undo_remove">Entfernung rückgängig machen</string>
+    <string name="unfollow">Entfolgen</string>
+
+    <!-- Room -->
+    <string name="alias">Alias</string>
+    <string name="approve">Genehmigen</string>
+    <string name="audience">Publikum</string>
+    <string name="back_to_home">Zurück zur Startseite</string>
+    <string name="backpack">Rucksack</string>
+    <string name="backpack_empty">Dein Rucksack ist leer.\nDrehe am Rad, um Geschenke zu erhalten!</string>
+    <string name="ban">Sperren</string>
+    <string name="block_user">Benutzer blockieren</string>
+    <string name="block_user_confirm">Möchtest du %1$s wirklich blockieren?</string>
+    <string name="close_room">Raum schließen</string>
+    <string name="daily">Täglich</string>
+    <string name="deny">Ablehnen</string>
+    <string name="empty_seat">Leerer Platz</string>
+    <string name="filter_gift_animations_description">Animationen für günstigere Geschenke ausblenden.</string>
+    <string name="gift">Geschenk</string>
+    <string name="gift_animations">Geschenkanimationen</string>
+    <string name="host">Gastgeber</string>
+    <string name="hosts">Gastgeber</string>
+    <string name="invite_to_seat">Auf Platz einladen</string>
+    <string name="kick">Rauswerfen</string>
+    <string name="kick_user">Benutzer rauswerfen</string>
+    <string name="kick_user_confirm">Möchtest du %1$s wirklich aus dem Raum werfen? Sie können nicht wieder beitreten.</string>
+    <string name="leave_room">Raum verlassen</string>
+    <string name="leave_seat">Platz verlassen</string>
+    <string name="lock_seating">Sitzplätze sperren</string>
+    <string name="lock_seating_description">Nur der Besitzer kann Benutzer zum Sitzen einladen</string>
+    <string name="buy_coins">Münzen kaufen</string>
+    <string name="collect_all">ALLE EINSAMMELN (%1$d)</string>
+    <string name="increased_drop_rate">ERHÖHTE DROPRATE</string>
+    <string name="loading_prices">Preise laden…</string>
+    <string name="lucky_spin">Lucky Spin</string>
+    <string name="lucky_spin_title">LUCKY SPIN</string>
+    <string name="need_more_coins">Mehr Münzen benötigt!</string>
+    <string name="no_packages_available">Keine Pakete verfügbar</string>
+    <string name="no_spins_yet">Noch keine Drehungen</string>
+    <string name="prizes">Preise</string>
+    <string name="skip_animation">ANIMATION ÜBERSPRINGEN</string>
+    <string name="spin">DREHEN</string>
+    <string name="spin_count">%1$d DREHUNG(EN)</string>
+    <string name="spin_history">Drehverlauf</string>
+    <string name="spin_results">Drehergebnisse</string>
+    <string name="message">Nachricht</string>
+    <string name="move_to_audience">Ins Publikum verschieben</string>
+    <string name="move_to_seat">Auf Platz verschieben</string>
+    <string name="move_to_which_seat">Auf welchen Platz verschieben?</string>
+    <string name="mute">Stummschalten</string>
+    <string name="no_audience_members">Keine Zuschauer</string>
+    <string name="no_pending_requests">Keine ausstehenden Anfragen</string>
+    <string name="no_reason_given">Kein Grund angegeben</string>
+    <string name="no_one_on_mic">Niemand am Mikrofon</string>
+    <string name="occupied">Belegt</string>
+    <string name="open_for_duration">Offen seit %1$s</string>
+    <string name="owner">Besitzer</string>
+    <string name="reason_optional">Grund (optional)</string>
+    <string name="reject">Ablehnen</string>
+    <string name="remove">Entfernen</string>
+    <string name="remove_as_host">Als Gastgeber entfernen</string>
+    <string name="remove_from_room">Aus dem Raum entfernen</string>
+    <string name="request">Anfrage</string>
+    <string name="request_a_seat">Platz anfragen</string>
+    <string name="request_seat">Platz anfragen</string>
+    <string name="requesting">Wird angefragt</string>
+    <string name="room">Raum</string>
+    <string name="room_closed">Raum geschlossen</string>
+    <string name="room_closing_no_super_shy">Der Raumbesitzer hat kein Super Shy, daher wird dieser Raum bald geschlossen.</string>
+    <string name="room_closing_in">Raum schließt in %1$d:%2$s</string>
+    <string name="room_closing_soon">Raum schließt bald</string>
+    <string name="room_settings">Raumeinstellungen</string>
+    <string name="rooms">Räume</string>
+    <string name="seat_requests">Sitzplatzanfragen</string>
+    <string name="seat_swap_with">Platz %1$d (tauschen mit %2$s)</string>
+    <string name="set_alias">Alias festlegen</string>
+    <string name="set_alias_description">Lege einen persönlichen Alias für %1$s fest. Nur du wirst diesen sehen.</string>
+    <string name="set_as_host">Als Gastgeber festlegen</string>
+    <string name="showing_all_gift_animations">Alle Geschenkanimationen werden angezeigt</string>
+    <string name="showing_animations_worth">Nur Animationen ab %1$d+ Münzen werden angezeigt</string>
+    <string name="speakers">Sprecher</string>
+    <string name="take_a_seat">Platz nehmen</string>
+    <string name="unmute">Stummschaltung aufheben</string>
+    <string name="unmuted">Nicht stummgeschaltet</string>
+    <string name="user">Benutzer</string>
+    <string name="user_id">ID: %1$d</string>
+    <string name="visitor_count">%1$d Besucher</string>
+    <string name="voice">Stimme</string>
+    <string name="voice_unavailable">Stimme nicht verfügbar</string>
+    <string name="you_have_super_shy_room">Du hast Super Shy! Öffne deinen eigenen Raum für bis zu %1$d Stunden verlängerte Zeit.</string>
+    <string name="get_super_shy_rooms">Hol dir Super Shy und genieße Räume, die bis zu %1$d Stunden dauern!</string>
+
+    <!-- Room - Notifications -->
+    <string name="accept">Annehmen</string>
+    <string name="decline">Ablehnen</string>
+    <string name="go_back">Zurück</string>
+    <string name="go_to_seat">Zum Platz gehen</string>
+    <string name="invited_to_sit">Du wurdest eingeladen, Platz zu nehmen!</string>
+    <string name="request_accepted">Deine Anfrage wurde angenommen!</string>
+    <string name="seat_number">Platz %1$d</string>
+    <string name="user_wants_to_sit">%1$s möchte sich setzen</string>
+
+    <!-- Room - Chat -->
+    <string name="cancel_edit">Bearbeitung abbrechen</string>
+    <string name="edit_message_placeholder">Nachricht bearbeiten...</string>
+    <string name="message_placeholder">Nachricht...</string>
+    <string name="new_messages">Neue Nachrichten</string>
+
+    <!-- Room - Backpack -->
+    <string name="action_cannot_be_undone">DIESE AKTION KANN NICHT RÜCKGÄNGIG GEMACHT WERDEN.</string>
+    <string name="confirm_send">Senden bestätigen</string>
+    <string name="from_backpack_items">Aus dem Rucksack: %1$d Gegenstände</string>
+    <string name="gifts">Geschenke</string>
+    <string name="send_all">Alles senden</string>
+    <string name="send_all_includes">Dies umfasst ALLE %1$d Gegenstände aus %2$d verschiedenen Geschenken.</string>
+    <string name="send_all_warning">Du bist dabei, deinen GESAMTEN Rucksack an %1$s zu senden.</string>
+    <string name="send_everything_confirm">Ich verstehe, alles senden</string>
+    <string name="to_label">An</string>
+    <string name="total_cost_coins">Gesamtkosten: %1$d Münzen</string>
+    <string name="use_button">Verwenden</string>
+    <string name="you_have_count">Du hast: %1$d</string>
+    <string name="your_balance_coins">Dein Guthaben: %1$d Münzen</string>
+
+    <!-- Messaging -->
+    <string name="additional_details_optional">Weitere Details (optional)</string>
+    <string name="all_admins_and_mods">Alle Admins &amp; Mods</string>
+    <string name="attach_evidence">Beweis anhängen</string>
+    <string name="cant_message_user">Du kannst diesem Benutzer keine Nachricht senden</string>
+    <string name="chat">Chat</string>
+    <string name="close_group">Gruppe schließen</string>
+    <string name="close_group_warning">Dies schließt die Gruppe für alle. Nachrichten bleiben zur Moderation erhalten.</string>
+    <string name="compressing">Komprimieren...</string>
+    <string name="conversation_start_hint">Starte eine Unterhaltung über das\nProfil oder die Benutzerkarte in einem Raum</string>
+    <string name="create_group">Gruppe erstellen</string>
+    <string name="current_version">Aktuell</string>
+    <string name="delete_conversation">Unterhaltung löschen</string>
+    <string name="delete_conversation_warning">Dies entfernt die Unterhaltung aus deiner Liste. Nachrichten bleiben erhalten und erscheinen wieder, wenn die andere Person dir erneut schreibt.</string>
+    <string name="description_label">Beschreibung</string>
+    <string name="description_optional">Beschreibung (optional)</string>
+    <string name="edit_history">Bearbeitungsverlauf</string>
+    <string name="editing_message">Nachricht wird bearbeitet</string>
+    <string name="evidence">Beweis</string>
+    <string name="evidence_required">Mindestens ein Screenshot oder eine Aufnahme ist erforderlich.</string>
+    <string name="general">Allgemein</string>
+    <string name="group">Gruppe</string>
+    <string name="group_chat">Gruppenchat</string>
+    <string name="group_name_label">Gruppenname</string>
+    <string name="group_name_required">Gruppenname *</string>
+    <string name="group_settings">Gruppeneinstellungen</string>
+    <string name="invite_to_room">In den Raum einladen</string>
+    <string name="last_seen">Zuletzt gesehen %1$s</string>
+    <string name="leave_group">Gruppe verlassen</string>
+    <string name="members">Mitglieder</string>
+    <string name="members_count">%1$d Mitglieder</string>
+    <string name="message_ellipsis">Nachricht...</string>
+    <string name="message_permissions">Nachrichtenberechtigungen</string>
+    <string name="message_preview_image">[Bild]</string>
+    <string name="message_preview_recalled">[Nachricht zurückgerufen]</string>
+    <string name="message_preview_room_invite">[Raumeinladung]</string>
+    <string name="message_preview_sticker">[Sticker]</string>
+    <string name="messages">Nachrichten</string>
+    <string name="mod_notifications">Mod-Benachrichtigungen</string>
+    <string name="move_to_front">Nach vorne verschieben</string>
+    <string name="mute_notifications">Benachrichtigungen stumm</string>
+    <string name="mute_reason">. Grund: %1$s</string>
+    <string name="muted">Stummgeschaltet</string>
+    <string name="muted_for_hours_minutes">Du bist für %1$dh %2$dm stummgeschaltet</string>
+    <string name="muted_for_minutes">Du bist für %1$dm stummgeschaltet</string>
+    <string name="muted_indefinitely">Du bist stummgeschaltet</string>
+    <string name="new_group">Neue Gruppe</string>
+    <string name="new_group_selected">Neue Gruppe (%1$d ausgewählt)</string>
+    <string name="new_message">Neue Nachricht</string>
+    <string name="no_action_needed">Keine Aktion erforderlich</string>
+    <string name="no_followers_following_found">Keine Follower oder Gefolgten gefunden</string>
+    <string name="no_matches_found">Keine Treffer gefunden</string>
+    <string name="no_messages">Noch keine Nachrichten</string>
+    <string name="no_pending_reports">Keine ausstehenden Meldungen</string>
+    <string name="no_stickers_yet">Noch keine Sticker</string>
+    <string name="no_users_found">Keine Benutzer gefunden</string>
+    <string name="notify_owner_only">Nur Besitzer benachrichtigen</string>
+    <string name="online">Online</string>
+    <string name="only_admins_can_send">Nur Admins und Mods können in dieser Gruppe Nachrichten senden</string>
+    <string name="only_owner_can_change_permissions">Nur der Gruppenbesitzer kann Berechtigungen ändern.</string>
+    <string name="owner_only">Nur Besitzer</string>
+    <string name="participants">Teilnehmer</string>
+    <string name="participants_count">Teilnehmer (%1$d)</string>
+    <string name="pin">Anheften</string>
+    <string name="recent">Kürzlich</string>
+    <string name="replying_to">Antwort an %1$s</string>
+    <string name="report_message_prompt">Warum meldest du diese Nachricht?</string>
+    <string name="report_review">Meldung überprüfen</string>
+    <string name="report_user">%1$s melden</string>
+    <string name="report_user_prompt">Warum meldest du diesen Benutzer?</string>
+    <string name="reset_to_default">Auf Standard zurücksetzen</string>
+    <string name="result_count">%1$d Ergebnis(se)</string>
+    <string name="review_report">Meldung überprüfen</string>
+    <string name="role_admin">Admin</string>
+    <string name="role_member">Mitglied</string>
+    <string name="role_mod">Mod</string>
+    <string name="role_owner">Besitzer</string>
+    <string name="save_description">Beschreibung speichern</string>
+    <string name="search_all_users">Alle Benutzer suchen</string>
+    <string name="search_conversations">Unterhaltungen suchen...</string>
+    <string name="search_messages">Nachrichten suchen...</string>
+    <string name="search_people">Personen suchen...</string>
+    <string name="select_action">Aktion auswählen:</string>
+    <string name="selected_count">%1$d ausgewählt</string>
+    <string name="start_conversation">Unterhaltung beginnen</string>
+    <string name="submit_report">Meldung absenden</string>
+    <string name="submitting">Wird gesendet...</string>
+    <string name="system_messages">Systemnachrichten</string>
+    <string name="transfer_ownership">Besitz übertragen</string>
+    <string name="transfer_ownership_warning">Wähle ein Mitglied, dem du den Besitz übertragen möchtest. Du verlierst deine Besitzerrechte. Dies kann nicht rückgängig gemacht werden.</string>
+    <string name="type_message">Nachricht eingeben…</string>
+    <string name="typing">schreibt...</string>
+    <string name="unmute_action">Stummschaltung aufheben</string>
+    <string name="unmute_notifications">Benachrichtigungen aktivieren</string>
+    <string name="unpin">Loslösen</string>
+    <string name="view_profile">Profil anzeigen</string>
+
+    <!-- Messaging - report reasons -->
+    <string name="report_reason_spam">Spam</string>
+    <string name="report_reason_harassment">Belästigung</string>
+    <string name="report_reason_inappropriate">Unangemessener Inhalt</string>
+    <string name="report_reason_other">Sonstiges</string>
+
+    <!-- Messaging - report actions -->
+    <string name="report_action_warning">Verwarnung aussprechen</string>
+    <string name="report_action_temp_suspension">Vorübergehende Sperrung</string>
+    <string name="report_action_perm_suspension">Dauerhafte Sperrung</string>
+    <string name="report_action_pm_ban">Von Privatnachrichten sperren</string>
+
+    <!-- Messaging - report details -->
+    <string name="report_reason_prefix">Grund: %1$s</string>
+    <string name="report_type_prefix">Typ: %1$s</string>
+    <string name="report_details_prefix">Details: %1$s</string>
+    <string name="report_message_prefix">Nachricht: \"%1$s\"</string>
+    <string name="report_reporter_reported">Melder: %1$s | Gemeldeter: %2$s</string>
+
+    <!-- Messaging - system message labels -->
+    <string name="sys_member_joins">Mitglied tritt bei</string>
+    <string name="sys_member_leaves">Mitglied verlässt</string>
+    <string name="sys_role_changes">Rollenänderungen</string>
+    <string name="sys_permission_changes">Berechtigungsänderungen</string>
+
+    <!-- Messaging - permission labels -->
+    <string name="perm_who_can_send">Wer kann Nachrichten senden</string>
+    <string name="perm_who_can_add_members">Wer kann Mitglieder hinzufügen</string>
+    <string name="perm_who_can_edit_info">Wer kann Gruppeninfo bearbeiten</string>
+    <string name="perm_who_can_delete_messages">Wer kann Nachrichten löschen</string>
+    <string name="perm_who_can_mute_members">Wer kann Mitglieder stummschalten</string>
+    <string name="perm_who_can_remove_members">Wer kann Mitglieder entfernen</string>
+
+    <!-- Messaging - date separators -->
+    <string name="today">Heute</string>
+    <string name="yesterday">Gestern</string>
+
+    <!-- Daily Reward -->
+    <string name="awesome">Toll!</string>
+    <string name="claim_todays_reward">Heutige Belohnung abholen</string>
+    <string name="coins">Münzen</string>
+    <string name="day_fri">Fr</string>
+    <string name="day_mon">Mo</string>
+    <string name="day_sat">Sa</string>
+    <string name="day_streak">%1$d-Tage-Serie</string>
+    <string name="day_sun">So</string>
+    <string name="day_thu">Do</string>
+    <string name="day_tue">Di</string>
+    <string name="day_wed">Mi</string>
+    <string name="later">Später</string>
+    <string name="milestone">Meilenstein</string>
+    <string name="milestone_bonus">Meilenstein-Bonus!</string>
+    <string name="plus_coins">+%1$d Münzen!</string>
+    <string name="reward_claimed">Belohnung abgeholt!</string>
+
+    <!-- Economy -->
+    <string name="bean_redeem_description">1 Bean = 1 Münze. Ab 2.000 einlösen für 10% Bonus!</string>
+    <string name="bonus_coins">+%1$d Bonus</string>
+    <string name="buy_shy_coins">ShyCoins kaufen</string>
+    <string name="confirm_redemption">Einlösung bestätigen</string>
+    <string name="daily_reward">Tägliche Belohnung</string>
+    <string name="redeem">Einlösen</string>
+    <string name="redeem_all">Alle einlösen</string>
+    <string name="redeem_beans_for_coins">%1$s Beans gegen %2$s Münzen einlösen?</string>
+    <string name="redeem_shy_beans">ShyBeans einlösen</string>
+    <string name="send_gift">Geschenk senden</string>
+    <string name="shy_beans">ShyBeans</string>
+    <string name="shy_coins">ShyCoins</string>
+    <string name="testing_mode_coins">Testmodus — es wird kein echtes Geld berechnet. Tippe auf ein Paket, um sofort Münzen zu erhalten.</string>
+    <string name="filter_all">Alle</string>
+    <string name="filter_gacha">Gacha</string>
+    <string name="filter_gifts">Geschenke</string>
+    <string name="filter_purchases">Käufe</string>
+    <string name="filter_redemptions">Einlösungen</string>
+    <string name="filter_rewards">Belohnungen</string>
+    <string name="no_filtered_transactions">Keine %1$s Transaktionen</string>
+    <string name="no_transactions_yet">Noch keine Transaktionen</string>
+    <string name="transaction_history">Transaktionsverlauf</string>
+    <string name="transactions">Transaktionen</string>
+    <string name="wallet">Geldbörse</string>
+
+    <!-- Super Shy -->
+    <string name="benefit_daily_bonus">+10% tägliche Login-Münzen (aufgerundet)</string>
+    <string name="benefit_extended_room">Verlängerte Raumdauer (12 Stunden)</string>
+    <string name="benefit_full_room">Voller Raum mit 8 Plätzen</string>
+    <string name="benefit_gold_name">Goldener Anzeigename überall</string>
+    <string name="benefit_profile_frame">Exklusiver Profilrahmen</string>
+    <string name="benefit_star_badge">Stern-Abzeichen neben dem Namen</string>
+    <string name="benefits">Vorteile</string>
+    <string name="choose_a_plan">Wähle einen Plan</string>
+    <string name="claim_30_days_free">30 Tage kostenlos beanspruchen</string>
+    <string name="claimed">Beansprucht!</string>
+    <string name="claimed_activate_backpack">Um es zu aktivieren, finde es in deinem Rucksack in einem Chatraum.</string>
+    <string name="claiming">Wird beansprucht…</string>
+    <string name="currently_active">Derzeit aktiv</string>
+    <string name="days_remaining">%1$d Tage verbleibend</string>
+    <string name="one_time_payment">Einmalzahlung</string>
+    <string name="per_month">pro Monat</string>
+    <string name="per_year">pro Jahr</string>
+    <string name="super_shy">Super Shy</string>
+    <string name="super_shy_for_life">Du hast Super Shy für immer!</string>
+    <string name="tap_to_claim_backpack">Tippen zum Beanspruchen — wird deinem Rucksack hinzugefügt</string>
+    <string name="testing_mode_super_shy">Testmodus — es wird kein echtes Geld berechnet. Tippe auf einen Plan, um Super Shy sofort zu aktivieren.</string>
+    <string name="tier_label">Stufe: %1$s</string>
+    <string name="tier_lifetime">Lebenslang</string>
+    <string name="tier_monthly">Monatlich</string>
+    <string name="tier_yearly">Jährlich</string>
+    <string name="upgrade_to_lifetime">Auf Lebenslang upgraden</string>
+
+    <!-- Legal -->
+    <string name="accept_all_and_continue">Alle akzeptieren &amp; fortfahren</string>
+    <string name="community_standards">Gemeinschaftsstandards</string>
+    <string name="cyber_bullying_policy">Cybermobbing-Richtlinie</string>
+    <string name="i_have_read_and_agree">Ich habe gelesen und stimme zu: </string>
+    <string name="privacy_policy">Datenschutzrichtlinie</string>
+    <string name="review_and_accept_policies">Bitte überprüfe und akzeptiere unsere Richtlinien, um fortzufahren.</string>
+    <string name="terms_and_conditions">Allgemeine Geschäftsbedingungen</string>
+    <string name="welcome_to_shytalk">Willkommen bei ShyTalk</string>
+
+    <!-- Auth -->
+    <string name="sign_in">Anmelden</string>
+    <string name="phone_number">Telefonnummer</string>
+    <string name="verification_code">Bestätigungscode</string>
+    <string name="continue_with_google">Weiter mit Google</string>
+</resources>

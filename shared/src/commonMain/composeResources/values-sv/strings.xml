@@ -1,0 +1,471 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common actions -->
+    <string name="all_caps">ALLA</string>
+    <string name="back">Tillbaka</string>
+    <string name="cancel">Avbryt</string>
+    <string name="change">Ändra</string>
+    <string name="close">Stäng</string>
+    <string name="confirm">Bekräfta</string>
+    <string name="continue_button">Fortsätt</string>
+    <string name="create">Skapa</string>
+    <string name="delete">Radera</string>
+    <string name="done">Klar</string>
+    <string name="edit">Redigera</string>
+    <string name="error_generic">Något gick fel</string>
+    <string name="got_it">Förstått</string>
+    <string name="learn_more">Läs mer</string>
+    <string name="loading">Laddar…</string>
+    <string name="maybe_later">Kanske senare</string>
+    <string name="message_action">Meddelande</string>
+    <string name="next">Nästa</string>
+    <string name="ok">OK</string>
+    <string name="retry">Försök igen</string>
+    <string name="save">Spara</string>
+    <string name="send">Skicka</string>
+    <string name="sending">Skickar...</string>
+    <string name="transfer">Överför</string>
+    <string name="unknown">Okänd</string>
+    <string name="using">Använder...</string>
+    <string name="you">Du</string>
+
+    <!-- Message bubbles -->
+    <string name="edited">redigerat</string>
+    <string name="tap_to_join">Tryck för att gå med</string>
+    <string name="message_recalled_by_you">Du återkallade detta meddelande</string>
+    <string name="message_recalled">Detta meddelande har återkallats</string>
+    <string name="message_hidden_by_mod">Detta meddelande har dolts av en moderator</string>
+    <string name="invite_to_mic">Bjud in till mikrofon</string>
+    <string name="closed">Stängt</string>
+    <string name="edited_count">Redigerat (%1$d)</string>
+    <string name="read">Läst</string>
+    <string name="sent">Skickat</string>
+    <string name="sticker">Klistermärke</string>
+    <string name="image">Bild</string>
+
+    <!-- Context menu -->
+    <string name="react">Reagera</string>
+    <string name="reply">Svara</string>
+    <string name="copy">Kopiera</string>
+    <string name="recall">Återkalla</string>
+    <string name="add_to_stickers">Lägg till i klistermärken</string>
+    <string name="hide_message">Dölj meddelande</string>
+    <string name="report_message">Rapportera meddelande</string>
+
+    <!-- Translation -->
+    <string name="translate">Översätt</string>
+    <string name="translated_from">Översatt från %1$s</string>
+    <string name="show_original">Visa original</string>
+    <string name="translation_limit_reached">Daglig gräns nådd. Uppgradera till Super Shy för obegränsade översättningar.</string>
+    <string name="auto_translate">Automatisk översättning</string>
+    <string name="auto_translate_description">Översätt inkommande meddelanden automatiskt till ditt språk</string>
+    <string name="translations_remaining">%1$d översättningar kvar idag</string>
+
+    <!-- Settings -->
+    <string name="settings">Inställningar</string>
+    <string name="language">Språk</string>
+    <string name="blocked_users">Blockerade användare</string>
+    <string name="account">Konto</string>
+    <string name="privacy">Integritet</string>
+    <string name="notifications">Aviseringar</string>
+    <string name="permissions">Behörigheter</string>
+    <string name="about">Om</string>
+    <string name="sign_out">Logga ut</string>
+    <string name="sign_out_confirm">Är du säker på att du vill logga ut?</string>
+
+    <!-- Home -->
+    <string name="create_room">Skapa rum</string>
+    <string name="create_room_prompt">Ge ditt rum ett namn</string>
+    <string name="home">Hem</string>
+    <string name="in_room_count">%1$d i rummet</string>
+    <string name="join">Gå med</string>
+    <string name="no_active_rooms">Inga aktiva rum</string>
+    <string name="no_rooms">Inga rum tillgängliga</string>
+    <string name="room_name">Rummets namn</string>
+    <string name="room_name_label">Rummets namn</string>
+    <string name="seats_count">%1$d/%2$d platser</string>
+    <string name="speakers_count">%1$d/%2$d talare</string>
+    <string name="tap_plus_to_create">Tryck + för att skapa ett</string>
+    <string name="visitors_count">%1$d besökare</string>
+
+    <!-- Profile -->
+    <string name="connections">Kontakter</string>
+    <string name="display_name">Visningsnamn</string>
+    <string name="dob_privacy_note">Ditt födelsedatum krävs men du kan dölja din ålder i sekretessinställningarna.</string>
+    <string name="dob_required_subtitle">Vi behöver ditt födelsedatum för att fortsätta.</string>
+    <string name="follow">Följ</string>
+    <string name="follow_back">Följ tillbaka</string>
+    <string name="followers">Följare</string>
+    <string name="followers_count">Följare (%1$d)</string>
+    <string name="following">Följer</string>
+    <string name="following_count">Följer (%1$d)</string>
+    <string name="following_list_private">Denna användares följlista är privat</string>
+    <string name="get_super_shy">Skaffa Super Shy</string>
+    <string name="gift_wall">Presentvägg</string>
+    <string name="gift_value_coins">Värde: %1$d mynt</string>
+    <string name="no_followers_yet">Inga följare ännu</string>
+    <string name="no_profile_visitors">Inga profilbesökare ännu</string>
+    <string name="not_following_anyone">Följer ingen ännu</string>
+    <string name="one_more_step">Ett steg till</string>
+    <string name="profile">Profil</string>
+    <string name="profile_setup_subtitle">Välj ett visningsnamn och ange ditt födelsedatum</string>
+    <string name="received_times">Mottaget %1$d gånger</string>
+    <string name="remove_follower">Ta bort följare</string>
+    <string name="report">Rapportera</string>
+    <string name="select_date_of_birth">Välj födelsedatum</string>
+    <string name="select_nationality">Välj nationalitet</string>
+    <string name="search_countries">Sök länder</string>
+    <string name="selected">Vald</string>
+    <string name="set_up_your_profile">Konfigurera din profil</string>
+    <string name="stalker_visit_info">Besökte dig %1$s, %2$d gång(er) de senaste 3 månaderna</string>
+    <string name="stalkers_count">Profilstalkers (%1$d)</string>
+    <string name="stalkers_super_shy_description">Se vem som har besökt din profil! Profilstalkers är en exklusiv Super Shy-funktion.</string>
+    <string name="super_shy_benefit">Super Shy-förmån</string>
+    <string name="top_senders">Toppgivare</string>
+    <string name="block">Blockera</string>
+    <string name="unblock">Avblockera</string>
+    <string name="undo_remove">Ångra borttagning</string>
+    <string name="unfollow">Sluta följa</string>
+
+    <!-- Room -->
+    <string name="alias">Alias</string>
+    <string name="approve">Godkänn</string>
+    <string name="audience">Publik</string>
+    <string name="back_to_home">Tillbaka till hem</string>
+    <string name="backpack">Ryggsäck</string>
+    <string name="backpack_empty">Din ryggsäck är tom.\nSnurra på hjulet för att få presenter!</string>
+    <string name="ban">Banna</string>
+    <string name="block_user">Blockera användare</string>
+    <string name="block_user_confirm">Är du säker på att du vill blockera %1$s?</string>
+    <string name="close_room">Stäng rum</string>
+    <string name="daily">Dagligen</string>
+    <string name="deny">Neka</string>
+    <string name="empty_seat">Tom plats</string>
+    <string name="filter_gift_animations_description">Filtrera bort animationer för billigare presenter.</string>
+    <string name="gift">Present</string>
+    <string name="gift_animations">Presentanimationer</string>
+    <string name="host">Värd</string>
+    <string name="hosts">Värdar</string>
+    <string name="invite_to_seat">Bjud in till plats</string>
+    <string name="kick">Sparka ut</string>
+    <string name="kick_user">Sparka ut användare</string>
+    <string name="kick_user_confirm">Är du säker på att du vill sparka ut %1$s från rummet? De kommer inte kunna gå med igen.</string>
+    <string name="leave_room">Lämna rum</string>
+    <string name="leave_seat">Lämna plats</string>
+    <string name="lock_seating">Lås platser</string>
+    <string name="lock_seating_description">Bara ägaren kan bjuda in användare att sitta</string>
+    <string name="buy_coins">Köp mynt</string>
+    <string name="collect_all">SAMLA ALLA (%1$d)</string>
+    <string name="increased_drop_rate">ÖKAD DROPPFREKVENS</string>
+    <string name="loading_prices">Laddar priser…</string>
+    <string name="lucky_spin">Lucky Spin</string>
+    <string name="lucky_spin_title">LUCKY SPIN</string>
+    <string name="need_more_coins">Behöver fler mynt!</string>
+    <string name="no_packages_available">Inga paket tillgängliga</string>
+    <string name="no_spins_yet">Inga snurr ännu</string>
+    <string name="prizes">Priser</string>
+    <string name="skip_animation">HOPPA ÖVER ANIMATION</string>
+    <string name="spin">SNURRA</string>
+    <string name="spin_count">%1$d SNURR</string>
+    <string name="spin_history">Snurrhistorik</string>
+    <string name="spin_results">Snurrresultat</string>
+    <string name="message">Meddelande</string>
+    <string name="move_to_audience">Flytta till publik</string>
+    <string name="move_to_seat">Flytta till plats</string>
+    <string name="move_to_which_seat">Flytta till vilken plats?</string>
+    <string name="mute">Tysta</string>
+    <string name="no_audience_members">Inga publikmedlemmar</string>
+    <string name="no_pending_requests">Inga väntande förfrågningar</string>
+    <string name="no_reason_given">Ingen anledning angiven</string>
+    <string name="no_one_on_mic">Ingen på mikrofon</string>
+    <string name="occupied">Upptagen</string>
+    <string name="open_for_duration">Öppet i %1$s</string>
+    <string name="owner">Ägare</string>
+    <string name="reason_optional">Anledning (valfritt)</string>
+    <string name="reject">Avvisa</string>
+    <string name="remove">Ta bort</string>
+    <string name="remove_as_host">Ta bort som värd</string>
+    <string name="remove_from_room">Ta bort från rum</string>
+    <string name="request">Förfrågan</string>
+    <string name="request_a_seat">Begär en plats</string>
+    <string name="request_seat">Begär plats</string>
+    <string name="requesting">Begär</string>
+    <string name="room">Rum</string>
+    <string name="room_closed">Rummet stängt</string>
+    <string name="room_closing_no_super_shy">Rumsägaren har inte Super Shy, så detta rum kommer snart att stängas.</string>
+    <string name="room_closing_in">Rummet stängs om %1$d:%2$s</string>
+    <string name="room_closing_soon">Rummet stängs snart</string>
+    <string name="room_settings">Rumsinställningar</string>
+    <string name="rooms">Rum</string>
+    <string name="seat_requests">Platsförfrågningar</string>
+    <string name="seat_swap_with">Plats %1$d (byt med %2$s)</string>
+    <string name="set_alias">Ange alias</string>
+    <string name="set_alias_description">Ange ett personligt alias för %1$s. Bara du ser detta.</string>
+    <string name="set_as_host">Ange som värd</string>
+    <string name="showing_all_gift_animations">Visar alla presentanimationer</string>
+    <string name="showing_animations_worth">Visar bara animationer värda %1$d+ mynt</string>
+    <string name="speakers">Talare</string>
+    <string name="take_a_seat">Ta en plats</string>
+    <string name="unmute">Slå på ljud</string>
+    <string name="unmuted">Ljud på</string>
+    <string name="user">Användare</string>
+    <string name="user_id">ID: %1$d</string>
+    <string name="visitor_count">%1$d besökare</string>
+    <string name="voice">Röst</string>
+    <string name="voice_unavailable">Röst ej tillgänglig</string>
+    <string name="you_have_super_shy_room">Du har Super Shy! Öppna ditt eget rum i upp till %1$d timmar.</string>
+    <string name="get_super_shy_rooms">Skaffa Super Shy för rum som varar upp till %1$d timmar!</string>
+
+    <!-- Room - Notifications -->
+    <string name="accept">Acceptera</string>
+    <string name="decline">Avböj</string>
+    <string name="go_back">Gå tillbaka</string>
+    <string name="go_to_seat">Gå till plats</string>
+    <string name="invited_to_sit">Du har blivit inbjuden att sitta!</string>
+    <string name="request_accepted">Din förfrågan godkändes!</string>
+    <string name="seat_number">Plats %1$d</string>
+    <string name="user_wants_to_sit">%1$s vill sitta</string>
+
+    <!-- Room - Chat -->
+    <string name="cancel_edit">Avbryt redigering</string>
+    <string name="edit_message_placeholder">Redigera meddelande...</string>
+    <string name="message_placeholder">Meddelande...</string>
+    <string name="new_messages">Nya meddelanden</string>
+
+    <!-- Room - Backpack -->
+    <string name="action_cannot_be_undone">DENNA ÅTGÄRD KAN INTE ÅNGRAS.</string>
+    <string name="confirm_send">Bekräfta skickande</string>
+    <string name="from_backpack_items">Från ryggsäck: %1$d föremål</string>
+    <string name="gifts">Presenter</string>
+    <string name="send_all">Skicka alla</string>
+    <string name="send_all_includes">Detta inkluderar ALLA %1$d föremål i %2$d olika presenter.</string>
+    <string name="send_all_warning">Du är på väg att skicka HELA din ryggsäck till %1$s.</string>
+    <string name="send_everything_confirm">Jag förstår, skicka allt</string>
+    <string name="to_label">Till</string>
+    <string name="total_cost_coins">Total kostnad: %1$d mynt</string>
+    <string name="use_button">Använd</string>
+    <string name="you_have_count">Du har: %1$d</string>
+    <string name="your_balance_coins">Ditt saldo: %1$d mynt</string>
+
+    <!-- Messaging -->
+    <string name="additional_details_optional">Ytterligare detaljer (valfritt)</string>
+    <string name="all_admins_and_mods">Alla admins &amp; mods</string>
+    <string name="attach_evidence">Bifoga bevis</string>
+    <string name="cant_message_user">Du kan inte skicka meddelande till denna användare</string>
+    <string name="chat">Chatt</string>
+    <string name="close_group">Stäng grupp</string>
+    <string name="close_group_warning">Detta stänger gruppen för alla. Meddelanden bevaras för moderering.</string>
+    <string name="compressing">Komprimerar...</string>
+    <string name="conversation_start_hint">Starta en konversation från någons\nprofil eller användarkort i ett rum</string>
+    <string name="create_group">Skapa grupp</string>
+    <string name="current_version">Aktuell</string>
+    <string name="delete_conversation">Radera konversation</string>
+    <string name="delete_conversation_warning">Detta tar bort konversationen från din lista. Meddelanden bevaras och visas igen om den andra personen skickar ett meddelande till dig.</string>
+    <string name="description_label">Beskrivning</string>
+    <string name="description_optional">Beskrivning (valfritt)</string>
+    <string name="edit_history">Redigeringshistorik</string>
+    <string name="editing_message">Redigerar meddelande</string>
+    <string name="evidence">Bevis</string>
+    <string name="evidence_required">Minst en skärmbild eller inspelning krävs.</string>
+    <string name="general">Allmänt</string>
+    <string name="group">Grupp</string>
+    <string name="group_chat">Gruppchatt</string>
+    <string name="group_name_label">Gruppnamn</string>
+    <string name="group_name_required">Gruppnamn *</string>
+    <string name="group_settings">Gruppinställningar</string>
+    <string name="invite_to_room">Bjud in till rum</string>
+    <string name="last_seen">Senast sedd %1$s</string>
+    <string name="leave_group">Lämna grupp</string>
+    <string name="members">Medlemmar</string>
+    <string name="members_count">%1$d medlemmar</string>
+    <string name="message_ellipsis">Meddelande...</string>
+    <string name="message_permissions">Meddelandebehörigheter</string>
+    <string name="message_preview_image">[Bild]</string>
+    <string name="message_preview_recalled">[Meddelande återkallat]</string>
+    <string name="message_preview_room_invite">[Rumsinbjudan]</string>
+    <string name="message_preview_sticker">[Klistermärke]</string>
+    <string name="messages">Meddelanden</string>
+    <string name="mod_notifications">Moderatoraviseringar</string>
+    <string name="move_to_front">Flytta överst</string>
+    <string name="mute_notifications">Tysta aviseringar</string>
+    <string name="mute_reason">. Anledning: %1$s</string>
+    <string name="muted">Tystad</string>
+    <string name="muted_for_hours_minutes">Du är tystad i %1$dt %2$dm</string>
+    <string name="muted_for_minutes">Du är tystad i %1$dm</string>
+    <string name="muted_indefinitely">Du är tystad</string>
+    <string name="new_group">Ny grupp</string>
+    <string name="new_group_selected">Ny grupp (%1$d valda)</string>
+    <string name="new_message">Nytt meddelande</string>
+    <string name="no_action_needed">Ingen åtgärd krävs</string>
+    <string name="no_followers_following_found">Inga följare eller följda hittades</string>
+    <string name="no_matches_found">Inga matchningar hittades</string>
+    <string name="no_messages">Inga meddelanden ännu</string>
+    <string name="no_pending_reports">Inga väntande rapporter</string>
+    <string name="no_stickers_yet">Inga klistermärken ännu</string>
+    <string name="no_users_found">Inga användare hittades</string>
+    <string name="notify_owner_only">Meddela bara ägaren</string>
+    <string name="online">Online</string>
+    <string name="only_admins_can_send">Bara admins och mods kan skicka meddelanden i denna grupp</string>
+    <string name="only_owner_can_change_permissions">Bara gruppägaren kan ändra behörigheter.</string>
+    <string name="owner_only">Bara ägaren</string>
+    <string name="participants">Deltagare</string>
+    <string name="participants_count">Deltagare (%1$d)</string>
+    <string name="pin">Fäst</string>
+    <string name="recent">Senaste</string>
+    <string name="replying_to">Svarar %1$s</string>
+    <string name="report_message_prompt">Varför rapporterar du detta meddelande?</string>
+    <string name="report_review">Rapportgranskning</string>
+    <string name="report_user">Rapportera %1$s</string>
+    <string name="report_user_prompt">Varför rapporterar du denna användare?</string>
+    <string name="reset_to_default">Återställ till standard</string>
+    <string name="result_count">%1$d resultat</string>
+    <string name="review_report">Granska rapport</string>
+    <string name="role_admin">Admin</string>
+    <string name="role_member">Medlem</string>
+    <string name="role_mod">Mod</string>
+    <string name="role_owner">Ägare</string>
+    <string name="save_description">Spara beskrivning</string>
+    <string name="search_all_users">Sök alla användare</string>
+    <string name="search_conversations">Sök konversationer...</string>
+    <string name="search_messages">Sök meddelanden...</string>
+    <string name="search_people">Sök personer...</string>
+    <string name="select_action">Välj åtgärd:</string>
+    <string name="selected_count">%1$d valda</string>
+    <string name="start_conversation">Starta en konversation</string>
+    <string name="submit_report">Skicka rapport</string>
+    <string name="submitting">Skickar...</string>
+    <string name="system_messages">Systemmeddelanden</string>
+    <string name="transfer_ownership">Överför ägande</string>
+    <string name="transfer_ownership_warning">Välj en medlem att överföra ägandet till. Du förlorar ägarrättigheter. Detta kan inte ångras.</string>
+    <string name="type_message">Skriv ett meddelande…</string>
+    <string name="typing">skriver...</string>
+    <string name="unmute_action">Slå på ljud</string>
+    <string name="unmute_notifications">Slå på aviseringar</string>
+    <string name="unpin">Lossa</string>
+    <string name="view_profile">Visa profil</string>
+
+    <!-- Messaging - report reasons -->
+    <string name="report_reason_spam">Spam</string>
+    <string name="report_reason_harassment">Trakasserier</string>
+    <string name="report_reason_inappropriate">Olämpligt innehåll</string>
+    <string name="report_reason_other">Annat</string>
+
+    <!-- Messaging - report actions -->
+    <string name="report_action_warning">Utfärda varning</string>
+    <string name="report_action_temp_suspension">Tillfällig avstängning</string>
+    <string name="report_action_perm_suspension">Permanent avstängning</string>
+    <string name="report_action_pm_ban">Bannlys från PM</string>
+
+    <!-- Messaging - report details -->
+    <string name="report_reason_prefix">Anledning: %1$s</string>
+    <string name="report_type_prefix">Typ: %1$s</string>
+    <string name="report_details_prefix">Detaljer: %1$s</string>
+    <string name="report_message_prefix">Meddelande: \"%1$s\"</string>
+    <string name="report_reporter_reported">Rapportör: %1$s | Rapporterad: %2$s</string>
+
+    <!-- Messaging - system message labels -->
+    <string name="sys_member_joins">Medlem går med</string>
+    <string name="sys_member_leaves">Medlem lämnar</string>
+    <string name="sys_role_changes">Rolländringar</string>
+    <string name="sys_permission_changes">Behörighetsändringar</string>
+
+    <!-- Messaging - permission labels -->
+    <string name="perm_who_can_send">Vem kan skicka meddelanden</string>
+    <string name="perm_who_can_add_members">Vem kan lägga till medlemmar</string>
+    <string name="perm_who_can_edit_info">Vem kan redigera gruppinfo</string>
+    <string name="perm_who_can_delete_messages">Vem kan radera meddelanden</string>
+    <string name="perm_who_can_mute_members">Vem kan tysta medlemmar</string>
+    <string name="perm_who_can_remove_members">Vem kan ta bort medlemmar</string>
+
+    <!-- Messaging - date separators -->
+    <string name="today">Idag</string>
+    <string name="yesterday">Igår</string>
+
+    <!-- Daily Reward -->
+    <string name="awesome">Fantastiskt!</string>
+    <string name="claim_todays_reward">Hämta dagens belöning</string>
+    <string name="coins">mynt</string>
+    <string name="day_fri">Fre</string>
+    <string name="day_mon">Mån</string>
+    <string name="day_sat">Lör</string>
+    <string name="day_streak">%1$d dagars svit</string>
+    <string name="day_sun">Sön</string>
+    <string name="day_thu">Tor</string>
+    <string name="day_tue">Tis</string>
+    <string name="day_wed">Ons</string>
+    <string name="later">Senare</string>
+    <string name="milestone">Milstolpe</string>
+    <string name="milestone_bonus">Milstolpebonus!</string>
+    <string name="plus_coins">+%1$d mynt!</string>
+    <string name="reward_claimed">Belöning hämtad!</string>
+
+    <!-- Economy -->
+    <string name="bean_redeem_description">1 böna = 1 mynt. Lös in 2 000+ för 10% bonus!</string>
+    <string name="bonus_coins">+%1$d bonus</string>
+    <string name="buy_shy_coins">Köp ShyCoins</string>
+    <string name="confirm_redemption">Bekräfta inlösen</string>
+    <string name="daily_reward">Daglig belöning</string>
+    <string name="redeem">Lös in</string>
+    <string name="redeem_all">Lös in alla</string>
+    <string name="redeem_beans_for_coins">Lös in %1$s bönor mot %2$s mynt?</string>
+    <string name="redeem_shy_beans">Lös in ShyBeans</string>
+    <string name="send_gift">Skicka present</string>
+    <string name="shy_beans">ShyBeans</string>
+    <string name="shy_coins">ShyCoins</string>
+    <string name="testing_mode_coins">Testläge — inga riktiga pengar debiteras. Tryck på ett paket för att omedelbart få mynt.</string>
+    <string name="filter_all">Alla</string>
+    <string name="filter_gacha">Gacha</string>
+    <string name="filter_gifts">Presenter</string>
+    <string name="filter_purchases">Köp</string>
+    <string name="filter_redemptions">Inlösen</string>
+    <string name="filter_rewards">Belöningar</string>
+    <string name="no_filtered_transactions">Inga %1$s-transaktioner</string>
+    <string name="no_transactions_yet">Inga transaktioner ännu</string>
+    <string name="transaction_history">Transaktionshistorik</string>
+    <string name="transactions">Transaktioner</string>
+    <string name="wallet">Plånbok</string>
+
+    <!-- Super Shy -->
+    <string name="benefit_daily_bonus">+10% dagliga inloggningsmynt (avrundat uppåt)</string>
+    <string name="benefit_extended_room">Förlängd rumstid (12 timmar)</string>
+    <string name="benefit_full_room">Fullt rum med 8 platser</string>
+    <string name="benefit_gold_name">Gyllene visningsnamn överallt</string>
+    <string name="benefit_profile_frame">Exklusiv profilram</string>
+    <string name="benefit_star_badge">Stjärnmärke bredvid namn</string>
+    <string name="benefits">Förmåner</string>
+    <string name="choose_a_plan">Välj en plan</string>
+    <string name="claim_30_days_free">Hämta 30 dagar gratis</string>
+    <string name="claimed">Hämtad!</string>
+    <string name="claimed_activate_backpack">För att aktivera, hitta den i din ryggsäck i ett chattrum.</string>
+    <string name="claiming">Hämtar…</string>
+    <string name="currently_active">Aktiv just nu</string>
+    <string name="days_remaining">%1$d dagar kvar</string>
+    <string name="one_time_payment">Engångsbetalning</string>
+    <string name="per_month">per månad</string>
+    <string name="per_year">per år</string>
+    <string name="super_shy">Super Shy</string>
+    <string name="super_shy_for_life">Du är Super Shy för alltid!</string>
+    <string name="tap_to_claim_backpack">Tryck för att hämta — läggs till i din ryggsäck</string>
+    <string name="testing_mode_super_shy">Testläge — inga riktiga pengar debiteras. Tryck på en plan för att omedelbart aktivera Super Shy.</string>
+    <string name="tier_label">Nivå: %1$s</string>
+    <string name="tier_lifetime">Livstid</string>
+    <string name="tier_monthly">Månadsvis</string>
+    <string name="tier_yearly">Årsvis</string>
+    <string name="upgrade_to_lifetime">Uppgradera till livstid</string>
+
+    <!-- Legal -->
+    <string name="accept_all_and_continue">Acceptera alla &amp; Fortsätt</string>
+    <string name="community_standards">Gemenskapsstandarder</string>
+    <string name="cyber_bullying_policy">Policy mot nätmobbning</string>
+    <string name="i_have_read_and_agree">Jag har läst och godkänner </string>
+    <string name="privacy_policy">Integritetspolicy</string>
+    <string name="review_and_accept_policies">Vänligen granska och acceptera våra policyer för att fortsätta.</string>
+    <string name="terms_and_conditions">Villkor &amp; Bestämmelser</string>
+    <string name="welcome_to_shytalk">Välkommen till ShyTalk</string>
+
+    <!-- Auth -->
+    <string name="sign_in">Logga in</string>
+    <string name="phone_number">Telefonnummer</string>
+    <string name="verification_code">Verifieringskod</string>
+    <string name="continue_with_google">Fortsätt med Google</string>
+</resources>
