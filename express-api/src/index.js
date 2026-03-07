@@ -40,6 +40,7 @@ app.use('/api', require('./routes/admin-gifts'));
 app.use('/api', require('./routes/admin-cleanup'));
 app.use('/api', require('./routes/admin-backup'));
 app.use('/api', require('./routes/storage'));
+app.use('/api', require('./routes/translate'));
 
 // 404 handler
 app.use((req, res) => {
