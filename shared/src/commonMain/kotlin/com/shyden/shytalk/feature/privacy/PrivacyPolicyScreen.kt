@@ -24,6 +24,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.ui.PlatformWebView
 import com.shyden.shytalk.core.util.Constants
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,10 +40,10 @@ fun PrivacyPolicyScreen(
         topBar = {
             if (!showActions && onNavigateBack != null) {
                 TopAppBar(
-                    title = { Text("Privacy Policy") },
+                    title = { Text(stringResource(Res.string.privacy_policy)) },
                     navigationIcon = {
                         IconButton(onClick = onNavigateBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.back))
                         }
                     }
                 )
@@ -72,13 +75,13 @@ fun PrivacyPolicyScreen(
                             contentColor = MaterialTheme.colorScheme.error
                         )
                     ) {
-                        Text("Decline")
+                        Text(stringResource(Res.string.decline))
                     }
                     Button(
                         onClick = onAccept,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Accept")
+                        Text(stringResource(Res.string.accept))
                     }
                 }
             }

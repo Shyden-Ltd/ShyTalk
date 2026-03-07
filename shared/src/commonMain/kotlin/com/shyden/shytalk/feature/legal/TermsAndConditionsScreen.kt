@@ -14,6 +14,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.shyden.shytalk.core.ui.PlatformWebView
 import com.shyden.shytalk.core.util.Constants
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -23,10 +26,10 @@ fun TermsAndConditionsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Terms & Conditions") },
+                title = { Text(stringResource(Res.string.terms_and_conditions)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.back))
                     }
                 }
             )
