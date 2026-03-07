@@ -38,6 +38,9 @@ import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 data class Sticker(
     val id: String,
@@ -71,7 +74,7 @@ fun StickerPicker(
                     verticalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        text = "No stickers yet",
+                        text = stringResource(Res.string.no_stickers_yet),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -99,7 +102,7 @@ fun StickerPicker(
                         ) {
                             Icon(
                                 Icons.Default.Add,
-                                contentDescription = "Add sticker",
+                                contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
@@ -111,7 +114,7 @@ fun StickerPicker(
                             .data(sticker.localPath ?: sticker.url)
                             .crossfade(false)
                             .build(),
-                        contentDescription = "Sticker",
+                        contentDescription = stringResource(Res.string.sticker),
                         modifier = Modifier
                             .size(72.dp)
                             .clip(RoundedCornerShape(8.dp))
@@ -133,7 +136,7 @@ fun StickerPicker(
     if (longPressedSticker != null) {
         AlertDialog(
             onDismissRequest = { longPressedSticker = null },
-            title = { Text("Sticker") },
+            title = { Text(stringResource(Res.string.sticker)) },
             text = {
                 Column {
                     if (onMoveToFront != null) {
@@ -141,7 +144,7 @@ fun StickerPicker(
                             onMoveToFront(longPressedSticker!!.id)
                             longPressedSticker = null
                         }) {
-                            Text("Move to front")
+                            Text(stringResource(Res.string.move_to_front))
                         }
                     }
                     if (onDeleteSticker != null) {
@@ -149,7 +152,7 @@ fun StickerPicker(
                             onDeleteSticker(longPressedSticker!!.id)
                             longPressedSticker = null
                         }) {
-                            Text("Delete", color = MaterialTheme.colorScheme.error)
+                            Text(stringResource(Res.string.delete), color = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
@@ -157,7 +160,7 @@ fun StickerPicker(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { longPressedSticker = null }) {
-                    Text("Cancel")
+                    Text(stringResource(Res.string.cancel))
                 }
             }
         )

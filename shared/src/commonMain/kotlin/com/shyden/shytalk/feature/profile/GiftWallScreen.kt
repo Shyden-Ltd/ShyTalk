@@ -43,6 +43,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.Gift
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,10 +59,10 @@ fun GiftWallScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Gift Wall") },
+                title = { Text(stringResource(Res.string.gift_wall)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.back))
                     }
                 }
             )
@@ -134,18 +137,18 @@ fun GiftWallContent(
                     Text(gift.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "Received ${wallEntry?.receivedCount ?: 0} times",
+                        stringResource(Res.string.received_times, wallEntry?.receivedCount ?: 0),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        "Value: ${gift.coinValue} coins",
+                        stringResource(Res.string.gift_value_coins, gift.coinValue),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
                     if (state.senders.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("Top Senders", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Text(stringResource(Res.string.top_senders), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                         state.senders.take(5).forEach { sender ->
                             Text("${sender.userId.take(8)}... - ${sender.count}x",
                                 style = MaterialTheme.typography.bodySmall)

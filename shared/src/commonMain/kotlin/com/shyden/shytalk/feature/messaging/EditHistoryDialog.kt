@@ -17,6 +17,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.model.MessageEdit
 import com.shyden.shytalk.core.util.formatRelativeTime
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun EditHistoryDialog(
@@ -26,7 +29,7 @@ fun EditHistoryDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Edit History") },
+        title = { Text(stringResource(Res.string.edit_history)) },
         text = {
             Column(
                 modifier = Modifier
@@ -35,7 +38,7 @@ fun EditHistoryDialog(
             ) {
                 // Current version
                 Text(
-                    text = "Current",
+                    text = stringResource(Res.string.current_version),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -69,7 +72,7 @@ fun EditHistoryDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Close")
+                Text(stringResource(Res.string.close))
             }
         }
     )

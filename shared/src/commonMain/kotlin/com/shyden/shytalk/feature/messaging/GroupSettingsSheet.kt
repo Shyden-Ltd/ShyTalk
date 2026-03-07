@@ -56,6 +56,9 @@ import com.shyden.shytalk.core.model.MuteInfo
 import com.shyden.shytalk.core.model.SystemMessageConfig
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Constants
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,7 +86,11 @@ fun GroupSettingsSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("General", "Members", "Permissions")
+    val tabs = listOf(
+        stringResource(Res.string.general),
+        stringResource(Res.string.members),
+        stringResource(Res.string.permissions)
+    )
     val isOwner = currentUserRole == GroupRole.OWNER
     val permissions = conversation?.permissions ?: GroupPermissions()
 
@@ -182,7 +189,7 @@ private fun GeneralTab(
                 OutlinedTextField(
                     value = editingName,
                     onValueChange = { editingName = it },
-                    label = { Text("Group Name") },
+                    label = { Text(stringResource(Res.string.group_name_label)) },
                     modifier = Modifier.weight(1f),
                     singleLine = true
                 )
@@ -195,7 +202,7 @@ private fun GeneralTab(
                     },
                     enabled = editingName.isNotBlank() && editingName != conversationName
                 ) {
-                    Text("Save")
+                    Text(stringResource(Res.string.save))
                 }
             }
         } else {
@@ -213,7 +220,7 @@ private fun GeneralTab(
                         editingDescription = it
                     }
                 },
-                label = { Text("Description") },
+                label = { Text(stringResource(Res.string.description_label)) },
                 modifier = Modifier.fillMaxWidth(),
                 maxLines = 4,
                 supportingText = {
@@ -225,7 +232,7 @@ private fun GeneralTab(
                     onClick = { onUpdateGroupDescription(editingDescription.trim()) },
                     modifier = Modifier.align(Alignment.End)
                 ) {
-                    Text("Save Description")
+                    Text(stringResource(Res.string.save_description))
                 }
             }
         } else if (!conversation?.groupDescription.isNullOrBlank()) {
@@ -247,10 +254,10 @@ private fun GeneralTab(
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
             ) {
-                Text("Close Group", color = MaterialTheme.colorScheme.onError)
+                Text(stringResource(Res.string.close_group), color = MaterialTheme.colorScheme.onError)
             }
             Text(
-                text = "This will close the group for everyone. Messages are preserved for moderation.",
+                text = stringResource(Res.string.close_group_warning),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp)
@@ -261,7 +268,7 @@ private fun GeneralTab(
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
             ) {
-                Text("Leave Group", color = MaterialTheme.colorScheme.onError)
+                Text(stringResource(Res.string.leave_group), color = MaterialTheme.colorScheme.onError)
             }
         }
     }
@@ -283,7 +290,7 @@ private fun MembersTab(
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "Participants (${participants.size})",
+            text = stringResource(Res.string.participants_count, participants.size),
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary
         )
@@ -339,7 +346,7 @@ private fun MembersTab(
                         )
                         if (isMuted) {
                             Text(
-                                text = "Muted",
+                                text = stringResource(Res.string.muted),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.error
                             )
@@ -376,7 +383,7 @@ private fun MembersTab(
                     // Unmute button — check whoCanMuteMembers permission
                     if (isMuted && permissions.whoCanMuteMembers.isAllowed(currentUserRole)) {
                         TextButton(onClick = { onUnmuteMember(user.uid) }) {
-                            Text("Unmute", style = MaterialTheme.typography.labelSmall)
+                            Text(stringResource(Res.string.unmute_action), style = MaterialTheme.typography.labelSmall)
                         }
                     }
 
@@ -387,7 +394,7 @@ private fun MembersTab(
                         IconButton(onClick = { onRemoveParticipant(user.uid) }) {
                             Icon(
                                 Icons.Default.RemoveCircle,
-                                contentDescription = "Remove",
+                                contentDescription = stringResource(Res.string.delete),
                                 tint = MaterialTheme.colorScheme.error
                             )
                         }
@@ -417,7 +424,7 @@ private fun PermissionsTab(
 
     if (!isOwner) {
         Text(
-            text = "Only the group owner can change permissions.",
+            text = stringResource(Res.string.only_owner_can_change_permissions),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -429,25 +436,25 @@ private fun PermissionsTab(
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
     ) {
-        Text("Message Permissions", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        Text(stringResource(Res.string.message_permissions), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
         Spacer(modifier = Modifier.height(8.dp))
 
-        PermissionLevelSelector("Who can send messages", permissions.whoCanSend) {
+        PermissionLevelSelector(stringResource(Res.string.perm_who_can_send), permissions.whoCanSend) {
             onUpdatePermissions(permissions.copy(whoCanSend = it))
         }
-        PermissionLevelSelector("Who can add members", permissions.whoCanAddMembers) {
+        PermissionLevelSelector(stringResource(Res.string.perm_who_can_add_members), permissions.whoCanAddMembers) {
             onUpdatePermissions(permissions.copy(whoCanAddMembers = it))
         }
-        PermissionLevelSelector("Who can edit group info", permissions.whoCanEditInfo) {
+        PermissionLevelSelector(stringResource(Res.string.perm_who_can_edit_info), permissions.whoCanEditInfo) {
             onUpdatePermissions(permissions.copy(whoCanEditInfo = it))
         }
-        PermissionLevelSelector("Who can delete messages", permissions.whoCanDeleteMessages) {
+        PermissionLevelSelector(stringResource(Res.string.perm_who_can_delete_messages), permissions.whoCanDeleteMessages) {
             onUpdatePermissions(permissions.copy(whoCanDeleteMessages = it))
         }
-        PermissionLevelSelector("Who can mute members", permissions.whoCanMuteMembers) {
+        PermissionLevelSelector(stringResource(Res.string.perm_who_can_mute_members), permissions.whoCanMuteMembers) {
             onUpdatePermissions(permissions.copy(whoCanMuteMembers = it))
         }
-        PermissionLevelSelector("Who can remove members", permissions.whoCanRemoveMembers) {
+        PermissionLevelSelector(stringResource(Res.string.perm_who_can_remove_members), permissions.whoCanRemoveMembers) {
             onUpdatePermissions(permissions.copy(whoCanRemoveMembers = it))
         }
 
@@ -455,19 +462,19 @@ private fun PermissionsTab(
         HorizontalDivider()
         Spacer(modifier = Modifier.height(8.dp))
 
-        Text("System Messages", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        Text(stringResource(Res.string.system_messages), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
         Spacer(modifier = Modifier.height(8.dp))
 
-        SysMessageRow("Member joins", sysConfig.showJoins) {
+        SysMessageRow(stringResource(Res.string.sys_member_joins), sysConfig.showJoins) {
             onUpdateSystemMessageConfig(sysConfig.copy(showJoins = !sysConfig.showJoins))
         }
-        SysMessageRow("Member leaves", sysConfig.showLeaves) {
+        SysMessageRow(stringResource(Res.string.sys_member_leaves), sysConfig.showLeaves) {
             onUpdateSystemMessageConfig(sysConfig.copy(showLeaves = !sysConfig.showLeaves))
         }
-        SysMessageRow("Role changes", sysConfig.showRoleChanges) {
+        SysMessageRow(stringResource(Res.string.sys_role_changes), sysConfig.showRoleChanges) {
             onUpdateSystemMessageConfig(sysConfig.copy(showRoleChanges = !sysConfig.showRoleChanges))
         }
-        SysMessageRow("Permission changes", sysConfig.showPermissionChanges) {
+        SysMessageRow(stringResource(Res.string.sys_permission_changes), sysConfig.showPermissionChanges) {
             onUpdateSystemMessageConfig(sysConfig.copy(showPermissionChanges = !sysConfig.showPermissionChanges))
         }
 
@@ -475,10 +482,10 @@ private fun PermissionsTab(
         HorizontalDivider()
         Spacer(modifier = Modifier.height(8.dp))
 
-        Text("Mod Notifications", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        Text(stringResource(Res.string.mod_notifications), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
         Spacer(modifier = Modifier.height(8.dp))
 
-        ModNotifyRow("Notify owner only", modNotifyMode == "OWNER_ONLY") {
+        ModNotifyRow(stringResource(Res.string.notify_owner_only), modNotifyMode == "OWNER_ONLY") {
             val newMode = if (modNotifyMode == "ALL_ADMINS") "OWNER_ONLY" else "ALL_ADMINS"
             onUpdateModNotifyMode(newMode)
         }
@@ -492,7 +499,7 @@ private fun PermissionsTab(
             onClick = { showTransferDialog = true },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Transfer Ownership")
+            Text(stringResource(Res.string.transfer_ownership))
         }
 
         // Reset to Default
@@ -505,17 +512,17 @@ private fun PermissionsTab(
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Reset to Default")
+            Text(stringResource(Res.string.reset_to_default))
         }
     }
 
     if (showTransferDialog) {
         AlertDialog(
             onDismissRequest = { showTransferDialog = false },
-            title = { Text("Transfer Ownership") },
+            title = { Text(stringResource(Res.string.transfer_ownership)) },
             text = {
                 Column {
-                    Text("Select a member to transfer ownership to. You will lose owner privileges. This cannot be undone.")
+                    Text(stringResource(Res.string.transfer_ownership_warning))
                     Spacer(modifier = Modifier.height(12.dp))
                     participants.filter { it.uid != currentUserId }.forEach { user ->
                         TextButton(
@@ -542,7 +549,7 @@ private fun PermissionsTab(
                     },
                     enabled = transferTarget != null
                 ) {
-                    Text("Transfer", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(Res.string.transfer), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
@@ -550,7 +557,7 @@ private fun PermissionsTab(
                     showTransferDialog = false
                     transferTarget = null
                 }) {
-                    Text("Cancel")
+                    Text(stringResource(Res.string.cancel))
                 }
             }
         )
@@ -573,7 +580,7 @@ private fun ModNotifyRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(text = label, style = MaterialTheme.typography.bodyMedium)
             Text(
-                text = if (isEnabled) "Owner only" else "All admins & mods",
+                text = if (isEnabled) stringResource(Res.string.owner_only) else stringResource(Res.string.all_admins_and_mods),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

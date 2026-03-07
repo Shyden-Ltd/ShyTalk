@@ -36,7 +36,10 @@ import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.formatRelativeTime
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.ui.theme.SpeakingGreen
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun ConversationListItem(
@@ -127,9 +130,9 @@ fun ConversationListItem(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 val resolvedName = if (isGroup) {
-                    groupName ?: "Group"
+                    groupName ?: stringResource(Res.string.group)
                 } else {
-                    otherUser?.uid?.let { aliases[it] } ?: otherUser?.displayName ?: "Unknown"
+                    otherUser?.uid?.let { aliases[it] } ?: otherUser?.displayName ?: stringResource(Res.string.unknown)
                 }
                 StyledDisplayName(
                     displayName = resolvedName,
@@ -139,9 +142,9 @@ fun ConversationListItem(
                 )
                 if (isGroup && currentUserRole != GroupRole.MEMBER) {
                     val (badgeColor, badgeLabel) = when (currentUserRole) {
-                        GroupRole.OWNER -> Pair(androidx.compose.ui.graphics.Color(0xFFFFD700), "Owner")
-                        GroupRole.ADMIN -> Pair(androidx.compose.ui.graphics.Color(0xFFFFC107), "Admin")
-                        GroupRole.MOD -> Pair(androidx.compose.ui.graphics.Color(0xFF009688), "Mod")
+                        GroupRole.OWNER -> Pair(androidx.compose.ui.graphics.Color(0xFFFFD700), stringResource(Res.string.role_owner))
+                        GroupRole.ADMIN -> Pair(androidx.compose.ui.graphics.Color(0xFFFFC107), stringResource(Res.string.role_admin))
+                        GroupRole.MOD -> Pair(androidx.compose.ui.graphics.Color(0xFF009688), stringResource(Res.string.role_mod))
                         else -> Pair(MaterialTheme.colorScheme.outline, "")
                     }
                     if (badgeLabel.isNotEmpty()) {
@@ -155,7 +158,7 @@ fun ConversationListItem(
                 if (isPinned) {
                     Icon(
                         Icons.Default.PushPin,
-                        contentDescription = "Pinned",
+                        contentDescription = stringResource(Res.string.pin),
                         modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
@@ -163,7 +166,7 @@ fun ConversationListItem(
                 if (isMuted) {
                     Icon(
                         Icons.Default.NotificationsOff,
-                        contentDescription = "Muted",
+                        contentDescription = stringResource(Res.string.muted),
                         modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -177,12 +180,12 @@ fun ConversationListItem(
                 (otherUser?.lastSeenAt ?: 0) > onlineThreshold
 
             val previewText = when {
-                lastMessageText == "[Message recalled]" -> "[Message recalled]"
-                lastMessageType == "IMAGE" -> "[Image]"
-                lastMessageType == "STICKER" -> "[Sticker]"
-                lastMessageType == "ROOM_INVITE" -> "[Room Invite]"
+                lastMessageText == "[Message recalled]" -> stringResource(Res.string.message_preview_recalled)
+                lastMessageType == "IMAGE" -> stringResource(Res.string.message_preview_image)
+                lastMessageType == "STICKER" -> stringResource(Res.string.message_preview_sticker)
+                lastMessageType == "ROOM_INVITE" -> stringResource(Res.string.message_preview_room_invite)
                 !lastMessageText.isNullOrBlank() -> lastMessageText
-                else -> "Start a conversation"
+                else -> stringResource(Res.string.start_conversation)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (isOnline) {

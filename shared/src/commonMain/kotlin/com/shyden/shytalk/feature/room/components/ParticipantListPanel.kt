@@ -41,6 +41,9 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.ui.unit.sp
 import com.shyden.shytalk.core.util.flagEmojiForCode
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 data class ParticipantInfo(
     val user: User,
@@ -79,12 +82,12 @@ fun ParticipantListPanel(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Participants",
+                    text = stringResource(Res.string.participants),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f)
                 )
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Close")
+                    Icon(Icons.Default.Close, contentDescription = stringResource(Res.string.close))
                 }
             }
             HorizontalDivider()
@@ -96,11 +99,11 @@ fun ParticipantListPanel(
 
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 // Voice section
-                item { SectionHeader("Voice", voiceUsers.size) }
+                item { SectionHeader(stringResource(Res.string.voice), voiceUsers.size) }
                 if (voiceUsers.isEmpty()) {
                     item {
                         Text(
-                            text = "No one on mic",
+                            text = stringResource(Res.string.no_one_on_mic),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
@@ -118,12 +121,12 @@ fun ParticipantListPanel(
                 // Audience section
                 item {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                    SectionHeader("Audience", audienceUsers.size)
+                    SectionHeader(stringResource(Res.string.audience), audienceUsers.size)
                 }
                 if (audienceUsers.isEmpty()) {
                     item {
                         Text(
-                            text = "No audience members",
+                            text = stringResource(Res.string.no_audience_members),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
@@ -225,7 +228,8 @@ private fun ParticipantRow(
         }
 
         // Name
-        val resolvedName = aliases[participant.user.uid] ?: participant.user.displayName.ifEmpty { "Unknown" }
+        val unknownText = stringResource(Res.string.unknown)
+    val resolvedName = aliases[participant.user.uid] ?: participant.user.displayName.ifEmpty { unknownText }
         StyledDisplayName(
             displayName = resolvedName,
             isSuperShy = participant.user.isSuperShy,
@@ -238,7 +242,7 @@ private fun ParticipantRow(
             IconButton(onClick = { onApprove?.invoke() }, modifier = Modifier.size(32.dp)) {
                 Icon(
                     Icons.Default.Check,
-                    contentDescription = "Approve",
+                    contentDescription = stringResource(Res.string.approve),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(18.dp)
                 )
@@ -246,14 +250,14 @@ private fun ParticipantRow(
             IconButton(onClick = { onDeny?.invoke() }, modifier = Modifier.size(32.dp)) {
                 Icon(
                     Icons.Default.Close,
-                    contentDescription = "Deny",
+                    contentDescription = stringResource(Res.string.deny),
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(18.dp)
                 )
             }
         } else if (pendingRequest != null) {
             Text(
-                text = "Requesting",
+                text = stringResource(Res.string.requesting),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.tertiary
             )
@@ -261,7 +265,7 @@ private fun ParticipantRow(
             IconButton(onClick = onInvite, modifier = Modifier.size(32.dp)) {
                 Icon(
                     Icons.Default.PersonAdd,
-                    contentDescription = "Invite to seat",
+                    contentDescription = stringResource(Res.string.invite_to_seat),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(18.dp)
                 )
@@ -278,7 +282,7 @@ private fun ParticipantRow(
                     MaterialTheme.colorScheme.tertiary
             ) {
                 Text(
-                    text = if (participant.role == RoomRole.OWNER) "Owner" else "Host",
+                    text = if (participant.role == RoomRole.OWNER) stringResource(Res.string.owner) else stringResource(Res.string.host),
                     style = MaterialTheme.typography.labelSmall,
                     color = if (participant.role == RoomRole.OWNER)
                         MaterialTheme.colorScheme.onPrimary
@@ -293,7 +297,7 @@ private fun ParticipantRow(
         if (participant.isMuted) {
             Icon(
                 Icons.Default.MicOff,
-                contentDescription = "Muted",
+                contentDescription = stringResource(Res.string.muted),
                 modifier = Modifier.size(16.dp),
                 tint = MaterialTheme.colorScheme.error
             )

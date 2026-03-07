@@ -33,6 +33,9 @@ import com.shyden.shytalk.core.model.RoomState
 import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.flagEmojiForCode
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 private val BottomGradient = Brush.verticalGradient(
     colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
@@ -162,8 +165,8 @@ fun RoomListItem(
                         )
                         Text(
                             text = if (room.state == RoomState.CLOSED)
-                                "${seatUsers.size}/$totalSeats speakers"
-                            else "$occupiedSeats/$totalSeats seats",
+                                stringResource(Res.string.speakers_count, seatUsers.size, totalSeats)
+                            else stringResource(Res.string.seats_count, occupiedSeats, totalSeats),
                             style = MaterialTheme.typography.bodySmall,
                             color = WhiteAlpha80
                         )
@@ -172,8 +175,8 @@ fun RoomListItem(
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
                             text = if (room.state == RoomState.CLOSED)
-                                "${room.firstJoinTimestamps.size} visitors"
-                            else "${room.participantIds.size} in room",
+                                stringResource(Res.string.visitors_count, room.firstJoinTimestamps.size)
+                            else stringResource(Res.string.in_room_count, room.participantIds.size),
                             style = MaterialTheme.typography.labelMedium,
                             color = Color.White
                         )

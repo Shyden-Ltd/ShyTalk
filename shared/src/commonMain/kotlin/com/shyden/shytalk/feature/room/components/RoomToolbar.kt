@@ -26,6 +26,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,7 +61,7 @@ fun RoomToolbar(
                     Spacer(modifier = Modifier.width(4.dp))
                     Icon(
                         Icons.Default.Edit,
-                        contentDescription = "Room name",
+                        contentDescription = stringResource(Res.string.room_name),
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -67,7 +70,7 @@ fun RoomToolbar(
                     val minutes = (roomExpiryRemainingMs / 60_000).toInt()
                     val seconds = ((roomExpiryRemainingMs % 60_000) / 1_000).toInt()
                     Text(
-                        text = "Room closing in ${minutes}:${seconds.toString().padStart(2, '0')}",
+                        text = stringResource(Res.string.room_closing_in, minutes, seconds.toString().padStart(2, '0')),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.error
                     )
@@ -79,14 +82,14 @@ fun RoomToolbar(
                 onClick = onBack,
                 modifier = Modifier.testTag("room_backButton")
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go back")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.go_back))
             }
         },
         actions = {
             IconButton(onClick = onSettings) {
                 Icon(
                     Icons.Default.Settings,
-                    contentDescription = "Room settings",
+                    contentDescription = stringResource(Res.string.room_settings),
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -97,7 +100,7 @@ fun RoomToolbar(
                 ) {
                     Icon(
                         Icons.Default.People,
-                        contentDescription = "Participants",
+                        contentDescription = stringResource(Res.string.participants),
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(2.dp))

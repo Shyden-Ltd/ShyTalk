@@ -37,6 +37,9 @@ import com.shyden.shytalk.core.model.BannerActionType
 import com.shyden.shytalk.core.model.ChatRoom
 import com.shyden.shytalk.core.ui.DegradedModeBanner
 import com.shyden.shytalk.feature.home.RoomListContent
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 enum class BottomNavTab(val label: String) {
     Rooms("Rooms"),
@@ -71,16 +74,16 @@ fun MainScreen(
                 title = {
                     Text(
                         when (selectedTab) {
-                            BottomNavTab.Rooms -> "Rooms"
-                            BottomNavTab.Messages -> "Messages"
-                            BottomNavTab.Profile -> "Profile"
+                            BottomNavTab.Rooms -> stringResource(Res.string.rooms)
+                            BottomNavTab.Messages -> stringResource(Res.string.messages)
+                            BottomNavTab.Profile -> stringResource(Res.string.profile)
                         }
                     )
                 },
                 actions = {
                     if (selectedTab == BottomNavTab.Profile) {
                         IconButton(onClick = onNavigateToSettings, modifier = Modifier.testTag("main_settingsButton")) {
-                            Icon(Icons.Default.Settings, contentDescription = "Settings")
+                            Icon(Icons.Default.Settings, contentDescription = stringResource(Res.string.settings))
                         }
                     }
                 }
@@ -92,7 +95,7 @@ fun MainScreen(
                     selected = selectedTab == BottomNavTab.Rooms,
                     onClick = { selectedTabName = BottomNavTab.Rooms.name },
                     icon = { Icon(Icons.Default.MeetingRoom, contentDescription = null) },
-                    label = { Text("Rooms") },
+                    label = { Text(stringResource(Res.string.rooms)) },
                     modifier = Modifier.testTag("main_roomsTab")
                 )
                 NavigationBarItem(
@@ -114,14 +117,14 @@ fun MainScreen(
                             Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null)
                         }
                     },
-                    label = { Text("Messages") },
+                    label = { Text(stringResource(Res.string.messages)) },
                     modifier = Modifier.testTag("main_messagesTab")
                 )
                 NavigationBarItem(
                     selected = selectedTab == BottomNavTab.Profile,
                     onClick = { selectedTabName = BottomNavTab.Profile.name },
                     icon = { Icon(Icons.Default.Person, contentDescription = null) },
-                    label = { Text("Profile") },
+                    label = { Text(stringResource(Res.string.profile)) },
                     modifier = Modifier.testTag("main_profileTab")
                 )
             }
@@ -134,7 +137,7 @@ fun MainScreen(
                         containerColor = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.testTag("main_createRoomFab")
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = "Create Room")
+                        Icon(Icons.Default.Add, contentDescription = stringResource(Res.string.create_room))
                     }
                 }
                 BottomNavTab.Messages -> {
@@ -143,7 +146,7 @@ fun MainScreen(
                         containerColor = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.testTag("main_newMessageFab")
                     ) {
-                        Icon(Icons.Default.Edit, contentDescription = "New Message")
+                        Icon(Icons.Default.Edit, contentDescription = stringResource(Res.string.new_message))
                     }
                 }
                 else -> {}

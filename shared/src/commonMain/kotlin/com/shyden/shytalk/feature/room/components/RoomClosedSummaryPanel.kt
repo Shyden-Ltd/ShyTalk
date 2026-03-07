@@ -40,6 +40,9 @@ import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.flagEmojiForCode
 import com.shyden.shytalk.feature.room.RoomClosedSummary
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun RoomClosedSummaryPanel(
@@ -69,7 +72,7 @@ fun RoomClosedSummaryPanel(
         )
 
         Text(
-            text = "Room Closed",
+            text = stringResource(Res.string.room_closed),
             style = MaterialTheme.typography.headlineMedium.copy(shadow = textShadow),
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
@@ -104,7 +107,7 @@ fun RoomClosedSummaryPanel(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Open for $durationText",
+                text = stringResource(Res.string.open_for_duration, durationText),
                 style = MaterialTheme.typography.bodyLarge.copy(shadow = textShadow),
                 color = MaterialTheme.colorScheme.onBackground
             )
@@ -125,7 +128,7 @@ fun RoomClosedSummaryPanel(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "${summary.totalVisitors} visitor${if (summary.totalVisitors != 1) "s" else ""}",
+                text = stringResource(Res.string.visitor_count, summary.totalVisitors),
                 style = MaterialTheme.typography.bodyLarge.copy(shadow = textShadow),
                 color = MaterialTheme.colorScheme.onBackground
             )
@@ -140,7 +143,7 @@ fun RoomClosedSummaryPanel(
         // Hosts section
         if (summary.hostUsers.isNotEmpty()) {
             Text(
-                text = "Hosts",
+                text = stringResource(Res.string.hosts),
                 style = MaterialTheme.typography.titleMedium.copy(shadow = textShadow),
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onBackground,
@@ -170,7 +173,7 @@ fun RoomClosedSummaryPanel(
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = "Speakers",
+                text = stringResource(Res.string.speakers),
                 style = MaterialTheme.typography.titleMedium.copy(shadow = textShadow),
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onBackground,
@@ -198,7 +201,7 @@ fun RoomClosedSummaryPanel(
         Spacer(modifier = Modifier.height(32.dp))
 
         Button(onClick = onDismiss) {
-            Text("Back to Home")
+            Text(stringResource(Res.string.back_to_home))
         }
     }
 }

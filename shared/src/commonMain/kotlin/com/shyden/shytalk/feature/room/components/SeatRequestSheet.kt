@@ -23,6 +23,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.model.SeatRequest
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,14 +47,14 @@ fun SeatRequestSheet(
                 .padding(16.dp)
         ) {
             Text(
-                text = "Seat Requests",
+                text = stringResource(Res.string.seat_requests),
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
             if (requests.isEmpty()) {
                 Text(
-                    text = "No pending requests",
+                    text = stringResource(Res.string.no_pending_requests),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -75,7 +78,7 @@ fun SeatRequestSheet(
                                         style = MaterialTheme.typography.bodyMedium
                                     )
                                     Text(
-                                        text = "Seat ${request.seatIndex + 1}",
+                                        text = stringResource(Res.string.seat_number, request.seatIndex + 1),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -84,7 +87,7 @@ fun SeatRequestSheet(
                                 IconButton(onClick = { onApprove(request) }) {
                                     Icon(
                                         Icons.Default.Check,
-                                        contentDescription = "Approve",
+                                        contentDescription = stringResource(Res.string.approve),
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 }
@@ -92,7 +95,7 @@ fun SeatRequestSheet(
                                 IconButton(onClick = { onDeny(request) }) {
                                     Icon(
                                         Icons.Default.Close,
-                                        contentDescription = "Deny",
+                                        contentDescription = stringResource(Res.string.deny),
                                         tint = MaterialTheme.colorScheme.error
                                     )
                                 }

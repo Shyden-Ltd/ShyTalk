@@ -49,6 +49,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shyden.shytalk.core.model.CoinPackage
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,10 +85,10 @@ fun WalletScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Wallet") },
+                title = { Text(stringResource(Res.string.wallet)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.go_back))
                     }
                 },
                 actions = {
@@ -93,7 +96,7 @@ fun WalletScreen(
                         onClick = onNavigateToTransactions,
                         modifier = Modifier.testTag("wallet_transactionsButton")
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ReceiptLong, contentDescription = "Transaction History")
+                        Icon(Icons.AutoMirrored.Filled.ReceiptLong, contentDescription = stringResource(Res.string.transaction_history))
                     }
                 }
             )
@@ -117,12 +120,12 @@ fun WalletScreen(
                     Tab(
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
-                        text = { Text("Shy Coins") }
+                        text = { Text(stringResource(Res.string.shy_coins)) }
                     )
                     Tab(
                         selected = selectedTab == 1,
                         onClick = { selectedTab = 1 },
-                        text = { Text("Shy Beans") }
+                        text = { Text(stringResource(Res.string.shy_beans)) }
                     )
                 }
 
@@ -158,7 +161,7 @@ private fun CoinsTab(
             .padding(16.dp)
     ) {
         BalanceCard(
-            label = "Shy Coins",
+            label = stringResource(Res.string.shy_coins),
             amount = coinBalance,
             icon = "\uD83E\uDE99",
             containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -174,8 +177,7 @@ private fun CoinsTab(
             )
         ) {
             Text(
-                text = "Testing mode — no real money is charged. " +
-                    "Tap a package to instantly receive coins.",
+                text = stringResource(Res.string.testing_mode_coins),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onTertiaryContainer,
                 modifier = Modifier.padding(12.dp)
@@ -184,7 +186,7 @@ private fun CoinsTab(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text("Buy Shy Coins", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(stringResource(Res.string.buy_shy_coins), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
 
         // Grid rendered inline to avoid nested scrollable issues
@@ -229,7 +231,7 @@ private fun BeansTab(
             .padding(16.dp)
     ) {
         BalanceCard(
-            label = "Shy Beans",
+            label = stringResource(Res.string.shy_beans),
             amount = beanBalance,
             icon = "\uD83E\uDED8",
             containerColor = MaterialTheme.colorScheme.tertiaryContainer,
@@ -238,9 +240,9 @@ private fun BeansTab(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        Text("Redeem Shy Beans", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(stringResource(Res.string.redeem_shy_beans), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Text(
-            "1 bean = 1 coin. Redeem 2,000+ for a 10% bonus!",
+            stringResource(Res.string.bean_redeem_description),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -256,7 +258,7 @@ private fun BeansTab(
                 row.forEach { preset ->
                     val isRedeemAll = preset == -1L
                     val amount = if (isRedeemAll) beanBalance else preset
-                    val label = if (isRedeemAll) "Redeem All" else formatNumber(preset)
+                    val label = if (isRedeemAll) stringResource(Res.string.redeem_all) else formatNumber(preset)
                     val hasBonus = amount >= 2_000
                     val enabled = !isPurchasing && amount > 0 && amount <= beanBalance
 
@@ -298,21 +300,21 @@ private fun BeansTab(
         val coins = if (amount >= 2_000) (amount * 1.1).toLong() else amount
         AlertDialog(
             onDismissRequest = { confirmAmount = null },
-            title = { Text("Confirm Redemption") },
+            title = { Text(stringResource(Res.string.confirm_redemption)) },
             text = {
-                Text("Redeem ${formatNumber(amount)} beans for ${formatNumber(coins)} coins?")
+                Text(stringResource(Res.string.redeem_beans_for_coins, formatNumber(amount), formatNumber(coins)))
             },
             confirmButton = {
                 TextButton(onClick = {
                     confirmAmount = null
                     onRedeem(amount)
                 }) {
-                    Text("Redeem")
+                    Text(stringResource(Res.string.redeem))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { confirmAmount = null }) {
-                    Text("Cancel")
+                    Text(stringResource(Res.string.cancel))
                 }
             }
         )
@@ -366,7 +368,7 @@ internal fun CoinPackageCard(pkg: CoinPackage, enabled: Boolean = true, onClick:
         ) {
             Text("${pkg.coins}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
             if (pkg.bonusCoins > 0) {
-                Text("+${pkg.bonusCoins} bonus", color = Color(0xFF4CAF50), style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(Res.string.bonus_coins, pkg.bonusCoins), color = Color(0xFF4CAF50), style = MaterialTheme.typography.bodySmall)
             }
             Spacer(modifier = Modifier.height(4.dp))
             Text(pkg.displayPrice, style = MaterialTheme.typography.bodyMedium)
@@ -392,7 +394,7 @@ fun CoinPurchaseSheetContent(
             .padding(16.dp)
     ) {
         BalanceCard(
-            label = "Shy Coins",
+            label = stringResource(Res.string.shy_coins),
             amount = coinBalance,
             icon = "\uD83E\uDE99",
             containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -401,7 +403,7 @@ fun CoinPurchaseSheetContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text("Buy Shy Coins", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(stringResource(Res.string.buy_shy_coins), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
 
         val sheetRows = coinPackages.chunked(2)

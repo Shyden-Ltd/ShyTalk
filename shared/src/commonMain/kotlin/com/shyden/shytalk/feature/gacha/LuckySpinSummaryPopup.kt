@@ -43,6 +43,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.GachaGift
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 private data class GroupedWin(
     val giftId: String,
@@ -105,7 +108,7 @@ fun LuckySpinSummaryPopup(
         ) {
                 // Title
                 Text(
-                    text = "Spin Results",
+                    text = stringResource(Res.string.spin_results),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Black,
                     color = Color.White,
@@ -115,7 +118,7 @@ fun LuckySpinSummaryPopup(
                 )
 
                 Text(
-                    text = "${wins.size} SPIN${if (wins.size > 1) "S" else ""}${if (spinTier.boostedDrop) "  \u2605 INCREASED DROP RATE" else ""}",
+                    text = stringResource(Res.string.spin_count, wins.size) + (if (spinTier.boostedDrop) "  \u2605 " + stringResource(Res.string.increased_drop_rate) else ""),
                     color = Color.White.copy(alpha = 0.35f),
                     fontSize = 10.sp,
                     letterSpacing = 2.sp,
@@ -154,7 +157,7 @@ fun LuckySpinSummaryPopup(
 
                 // Total coins
                 Text(
-                    text = "\uD83E\uDE99 ${totalCoins.formatWithCommas()} Coins",
+                    text = "\uD83E\uDE99 ${totalCoins.formatWithCommas()} " + stringResource(Res.string.coins),
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Black,
                     style = MaterialTheme.typography.headlineLarge.copy(
@@ -202,7 +205,7 @@ fun LuckySpinSummaryPopup(
                         .height(34.dp)
                 ) {
                     Text(
-                        text = "Close",
+                        text = stringResource(Res.string.close),
                         color = Color.White.copy(alpha = 0.6f),
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp

@@ -78,10 +78,13 @@ import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.formatRelativeTime
 import com.shyden.shytalk.core.util.isKeyboardVisible
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.ui.theme.SpeakingGreen
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -203,7 +206,7 @@ fun PrivateChatScreen(
                         onClick = onNavigateBack,
                         modifier = Modifier.testTag("privateChat_backButton")
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.back))
                     }
                 },
                 title = {
@@ -230,7 +233,7 @@ fun PrivateChatScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = "${uiState.groupParticipants.size} members",
+                                    text = stringResource(Res.string.members_count, uiState.groupParticipants.size),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -271,7 +274,7 @@ fun PrivateChatScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 val resolvedName = otherUser?.uid?.let { uiState.aliases[it] }
-                                    ?: otherUser?.displayName ?: "Chat"
+                                    ?: otherUser?.displayName ?: stringResource(Res.string.chat)
                                 StyledDisplayName(
                                     displayName = resolvedName,
                                     isSuperShy = otherUser?.isSuperShy == true,
@@ -279,13 +282,13 @@ fun PrivateChatScreen(
                                 )
                                 if (uiState.isOtherUserTyping) {
                                     Text(
-                                        text = "typing...",
+                                        text = stringResource(Res.string.typing),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = SpeakingGreen
                                     )
                                 } else if (otherUser?.hideOnlineStatus != true && !uiState.isSystemConversation) {
                                     Text(
-                                        text = if (isOnline) "Online" else otherUser?.lastSeenAt?.let { "Last seen ${formatRelativeTime(it)}" } ?: "",
+                                        text = if (isOnline) stringResource(Res.string.online) else otherUser?.lastSeenAt?.let { stringResource(Res.string.last_seen, formatRelativeTime(it)) } ?: "",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = if (isOnline) SpeakingGreen else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -296,26 +299,26 @@ fun PrivateChatScreen(
                 },
                 actions = {
                     IconButton(onClick = { viewModel.toggleSearch() }) {
-                        Icon(Icons.Default.Search, contentDescription = "Search messages")
+                        Icon(Icons.Default.Search, contentDescription = null)
                     }
                     if (!uiState.isSystemConversation) {
                         Box {
                             IconButton(onClick = { showOverflowMenu = true }) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                                Icon(Icons.Default.MoreVert, contentDescription = null)
                             }
                             DropdownMenu(
                                 expanded = showOverflowMenu,
                                 onDismissRequest = { showOverflowMenu = false }
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text(if (uiState.isMuted) "Unmute Notifications" else "Mute Notifications") },
+                                    text = { Text(if (uiState.isMuted) stringResource(Res.string.unmute_notifications) else stringResource(Res.string.mute_notifications)) },
                                     onClick = {
                                         showOverflowMenu = false
                                         viewModel.toggleMute()
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text(if (uiState.isPinned) "Unpin" else "Pin") },
+                                    text = { Text(if (uiState.isPinned) stringResource(Res.string.unpin) else stringResource(Res.string.pin)) },
                                     onClick = {
                                         showOverflowMenu = false
                                         viewModel.togglePin()
@@ -323,7 +326,7 @@ fun PrivateChatScreen(
                                 )
                                 if (uiState.isGroup) {
                                     DropdownMenuItem(
-                                        text = { Text("Group Settings") },
+                                        text = { Text(stringResource(Res.string.group_settings)) },
                                         onClick = {
                                             showOverflowMenu = false
                                             showGroupSettings = true
@@ -332,7 +335,7 @@ fun PrivateChatScreen(
                                 }
                                 if (!uiState.isGroup) {
                                     DropdownMenuItem(
-                                        text = { Text("View Profile") },
+                                        text = { Text(stringResource(Res.string.view_profile)) },
                                         onClick = {
                                             showOverflowMenu = false
                                             otherUser?.uid?.let { onNavigateToUserProfile(it) }
@@ -340,11 +343,12 @@ fun PrivateChatScreen(
                                     )
                                 }
                                 if (activeRoomId != null) {
+                                    val roomFallback = stringResource(Res.string.room)
                                     DropdownMenuItem(
-                                        text = { Text("Invite to Room") },
+                                        text = { Text(stringResource(Res.string.invite_to_room)) },
                                         onClick = {
                                             showOverflowMenu = false
-                                            viewModel.sendRoomInvite(activeRoomId, activeRoomName ?: "Room")
+                                            viewModel.sendRoomInvite(activeRoomId, activeRoomName ?: roomFallback)
                                         }
                                     )
                                 }
@@ -353,7 +357,7 @@ fun PrivateChatScreen(
                                     DropdownMenuItem(
                                         text = {
                                             Text(
-                                                "Delete Conversation",
+                                                stringResource(Res.string.delete_conversation),
                                                 color = MaterialTheme.colorScheme.error
                                             )
                                         },
@@ -385,7 +389,7 @@ fun PrivateChatScreen(
                     color = MaterialTheme.colorScheme.errorContainer
                 ) {
                     Text(
-                        text = uiState.blockReason ?: "You can't message this user",
+                        text = uiState.blockReason ?: stringResource(Res.string.cant_message_user),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onErrorContainer,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -408,20 +412,20 @@ fun PrivateChatScreen(
                         OutlinedTextField(
                             value = uiState.searchQuery,
                             onValueChange = { viewModel.searchMessages(it) },
-                            placeholder = { Text("Search messages...") },
+                            placeholder = { Text(stringResource(Res.string.search_messages)) },
                             modifier = Modifier.weight(1f),
                             singleLine = true,
                             shape = RoundedCornerShape(24.dp),
                             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
                         )
                         IconButton(onClick = { viewModel.toggleSearch() }) {
-                            Icon(Icons.Default.Close, contentDescription = "Close search")
+                            Icon(Icons.Default.Close, contentDescription = stringResource(Res.string.close))
                         }
                     }
                 }
                 if (uiState.searchResults.isNotEmpty()) {
                     Text(
-                        text = "${uiState.searchResults.size} result(s)",
+                        text = stringResource(Res.string.result_count, uiState.searchResults.size),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
@@ -561,12 +565,12 @@ fun PrivateChatScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Replying to ${replyMsg.senderName}",
+                                text = stringResource(Res.string.replying_to, replyMsg.senderName),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                text = if (replyMsg.imageUrls.isNotEmpty()) "[Image]" else replyMsg.text,
+                                text = if (replyMsg.imageUrls.isNotEmpty()) stringResource(Res.string.message_preview_image) else replyMsg.text,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
@@ -574,7 +578,7 @@ fun PrivateChatScreen(
                             )
                         }
                         IconButton(onClick = { viewModel.cancelReply() }) {
-                            Icon(Icons.Default.Close, contentDescription = "Cancel reply", modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Close, contentDescription = stringResource(Res.string.cancel), modifier = Modifier.size(18.dp))
                         }
                     }
                 }
@@ -600,7 +604,7 @@ fun PrivateChatScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Editing message",
+                            text = stringResource(Res.string.editing_message),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.weight(1f)
@@ -609,7 +613,7 @@ fun PrivateChatScreen(
                             viewModel.cancelEditing()
                             messageText = ""
                         }) {
-                            Icon(Icons.Default.Close, contentDescription = "Cancel edit", modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Close, contentDescription = stringResource(Res.string.cancel), modifier = Modifier.size(18.dp))
                         }
                     }
                 }
@@ -652,16 +656,18 @@ fun PrivateChatScreen(
                                 if (remaining > 0) {
                                     val mins = remaining / 60000
                                     val hrs = mins / 60
-                                    append("You are muted for ")
-                                    if (hrs > 0) append("${hrs}h ${mins % 60}m")
-                                    else append("${mins}m")
+                                    if (hrs > 0) {
+                                        append(stringResource(Res.string.muted_for_hours_minutes, hrs.toInt(), (mins % 60).toInt()))
+                                    } else {
+                                        append(stringResource(Res.string.muted_for_minutes, mins.toInt()))
+                                    }
                                 } else {
-                                    append("You are muted")
+                                    append(stringResource(Res.string.muted_indefinitely))
                                 }
                             } else {
-                                append("You are muted")
+                                append(stringResource(Res.string.muted_indefinitely))
                             }
-                            muteInfo.reason?.let { append(". Reason: $it") }
+                            muteInfo.reason?.let { append(stringResource(Res.string.mute_reason, it)) }
                         }
                         Text(
                             text = muteText,
@@ -683,7 +689,7 @@ fun PrivateChatScreen(
                     color = MaterialTheme.colorScheme.surfaceVariant
                 ) {
                     Text(
-                        text = "Only admins and mods can send messages in this group",
+                        text = stringResource(Res.string.only_admins_can_send),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
@@ -711,14 +717,14 @@ fun PrivateChatScreen(
                                 if (uiState.isUploadingImages) {
                                     CircularProgressIndicator(modifier = Modifier.size(20.dp))
                                 } else {
-                                    Icon(Icons.Default.Image, contentDescription = "Send image")
+                                    Icon(Icons.Default.Image, contentDescription = stringResource(Res.string.image))
                                 }
                             }
                         }
                         IconButton(
                             onClick = { viewModel.toggleStickerPicker() }
                         ) {
-                            Icon(Icons.Default.EmojiEmotions, contentDescription = "Stickers")
+                            Icon(Icons.Default.EmojiEmotions, contentDescription = stringResource(Res.string.sticker))
                         }
                         OutlinedTextField(
                             value = messageText,
@@ -728,7 +734,7 @@ fun PrivateChatScreen(
                                     if (it.isNotEmpty()) viewModel.onTextChanged()
                                 }
                             },
-                            placeholder = { Text("Message...") },
+                            placeholder = { Text(stringResource(Res.string.message_ellipsis)) },
                             modifier = Modifier.weight(1f).testTag("privateChat_messageInput"),
                             maxLines = 4,
                             shape = RoundedCornerShape(24.dp)
@@ -751,7 +757,7 @@ fun PrivateChatScreen(
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.Send,
-                                contentDescription = "Send",
+                                contentDescription = stringResource(Res.string.send),
                                 tint = if (messageText.isNotBlank()) MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -842,11 +848,11 @@ private fun ReportMessageDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Report Message") },
+        title = { Text(stringResource(Res.string.report_message)) },
         text = {
             Column {
                 Text(
-                    text = "Why are you reporting this message?",
+                    text = stringResource(Res.string.report_message_prompt),
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -870,7 +876,7 @@ private fun ReportMessageDialog(
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
-                    placeholder = { Text("Additional details (optional)") },
+                    placeholder = { Text(stringResource(Res.string.additional_details_optional)) },
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 3
                 )
@@ -878,12 +884,12 @@ private fun ReportMessageDialog(
         },
         confirmButton = {
             TextButton(onClick = { onSubmit(selectedReason, description) }) {
-                Text("Submit Report")
+                Text(stringResource(Res.string.submit_report))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(Res.string.cancel))
             }
         }
     )
@@ -896,8 +902,8 @@ private fun DateSeparator(timestampMs: Long) {
     val today = Instant.fromEpochMilliseconds(currentTimeMillis()).toLocalDateTime(tz).date
 
     val label = when {
-        date == today -> "Today"
-        date.toEpochDays() == today.toEpochDays() - 1 -> "Yesterday"
+        date == today -> stringResource(Res.string.today)
+        date.toEpochDays() == today.toEpochDays() - 1 -> stringResource(Res.string.yesterday)
         else -> {
             val month = date.month.name.lowercase().replaceFirstChar { it.uppercase() }.take(3)
             "$month ${date.dayOfMonth}, ${date.year}"

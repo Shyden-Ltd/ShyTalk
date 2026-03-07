@@ -28,6 +28,9 @@ import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.compose.runtime.collectAsState
 import com.shyden.shytalk.core.util.formatDateForDisplay
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun RequiredDOBScreen(
@@ -63,14 +66,14 @@ fun RequiredDOBScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "One More Step",
+                text = stringResource(Res.string.one_more_step),
                 style = MaterialTheme.typography.headlineMedium
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "We need your date of birth to continue.",
+                text = stringResource(Res.string.dob_required_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -85,7 +88,7 @@ fun RequiredDOBScreen(
                     text = if (selectedDateMillis != null) {
                         formatDateForDisplay(selectedDateMillis!!)
                     } else {
-                        "Select Date of Birth"
+                        stringResource(Res.string.select_date_of_birth)
                     }
                 )
             }
@@ -102,7 +105,7 @@ fun RequiredDOBScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Your date of birth is required but you can hide your age in privacy settings.",
+                text = stringResource(Res.string.dob_privacy_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -125,7 +128,7 @@ fun RequiredDOBScreen(
                         color = MaterialTheme.colorScheme.onPrimary
                     )
                 } else {
-                    Text("Continue")
+                    Text(stringResource(Res.string.continue_button))
                 }
             }
         }

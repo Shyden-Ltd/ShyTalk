@@ -30,6 +30,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.util.countries
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun CountryPickerDialog(
@@ -52,13 +55,13 @@ fun CountryPickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Select Nationality") },
+        title = { Text(stringResource(Res.string.select_nationality)) },
         text = {
             Column {
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search countries") },
+                    placeholder = { Text(stringResource(Res.string.search_countries)) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
@@ -90,7 +93,7 @@ fun CountryPickerDialog(
                             if (country.code == selectedCode) {
                                 Icon(
                                     Icons.Default.Check,
-                                    contentDescription = "Selected",
+                                    contentDescription = stringResource(Res.string.selected),
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             }
@@ -103,7 +106,7 @@ fun CountryPickerDialog(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(Res.string.cancel))
             }
         }
     )

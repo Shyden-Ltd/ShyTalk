@@ -17,6 +17,9 @@ import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.model.CurrencyType
 import com.shyden.shytalk.core.model.Transaction
 import com.shyden.shytalk.core.model.TransactionType
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime

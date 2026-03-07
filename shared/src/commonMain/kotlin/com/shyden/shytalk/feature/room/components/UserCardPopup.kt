@@ -52,6 +52,9 @@ import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.feature.messaging.ReportUserDialog
 import com.shyden.shytalk.ui.components.FlagBadge
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -174,7 +177,7 @@ fun UserCardPopup(
                         contentColor = MaterialTheme.colorScheme.onPrimary
                     ) {
                         Text(
-                            text = "Host",
+                            text = stringResource(Res.string.host),
                             style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                         )
@@ -188,7 +191,7 @@ fun UserCardPopup(
                     modifier = Modifier.clickable { onViewProfile() }
                 ) {
                     Text(
-                        text = "View Profile",
+                        text = stringResource(Res.string.view_profile),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
@@ -207,7 +210,7 @@ fun UserCardPopup(
             if (user.uniqueId != 0L) {
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "ID: ${user.uniqueId}",
+                    text = stringResource(Res.string.user_id, user.uniqueId),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -217,16 +220,16 @@ fun UserCardPopup(
             if (!isSelf) {
                 val iconActions = buildList {
                     if (onMessage != null) {
-                        add(IconAction(Icons.AutoMirrored.Filled.Chat, "Message", null, onMessage))
+                        add(IconAction(Icons.AutoMirrored.Filled.Chat, stringResource(Res.string.message), null, onMessage))
                     }
                     if (onSendGift != null) {
-                        add(IconAction(Icons.Default.CardGiftcard, "Gift", null, onSendGift))
+                        add(IconAction(Icons.Default.CardGiftcard, stringResource(Res.string.gift), null, onSendGift))
                     }
                     if (onSetAlias != null) {
-                        add(IconAction(Icons.Default.Badge, "Alias", null) { showAliasDialog = true })
+                        add(IconAction(Icons.Default.Badge, stringResource(Res.string.alias), null) { showAliasDialog = true })
                     }
                     if (onMuteToggle != null && !isTargetMuted) {
-                        add(IconAction(Icons.Default.MicOff, "Mute", null) {
+                        add(IconAction(Icons.Default.MicOff, stringResource(Res.string.mute), null) {
                             onMuteToggle()
                             onDismiss()
                         })
@@ -257,36 +260,36 @@ fun UserCardPopup(
                 HorizontalDivider()
 
                 if (onInvite != null) {
-                    UserCardTextRow(text = "Invite to Mic", onClick = onInvite)
+                    UserCardTextRow(text = stringResource(Res.string.invite_to_mic), onClick = onInvite)
                 }
 
                 if (onMakeHost != null) {
-                    UserCardTextRow(text = "Set as Host") {
+                    UserCardTextRow(text = stringResource(Res.string.set_as_host)) {
                         onMakeHost()
                         onDismiss()
                     }
                 }
 
                 if (onRemoveHost != null) {
-                    UserCardTextRow(text = "Remove as Host") {
+                    UserCardTextRow(text = stringResource(Res.string.remove_as_host)) {
                         onRemoveHost()
                         onDismiss()
                     }
                 }
 
                 if (onMoveSeat != null && emptySeats.isNotEmpty()) {
-                    UserCardTextRow(text = "Move to Seat") { showMoveDialog = true }
+                    UserCardTextRow(text = stringResource(Res.string.move_to_seat)) { showMoveDialog = true }
                 }
 
                 if (onRemoveFromSeat != null) {
-                    UserCardTextRow(text = "Move to Audience") {
+                    UserCardTextRow(text = stringResource(Res.string.move_to_audience)) {
                         onRemoveFromSeat()
                         onDismiss()
                     }
                 }
 
                 UserCardTextRow(
-                    text = if (isBlocked) "Unblock" else "Block",
+                    text = if (isBlocked) stringResource(Res.string.unblock) else stringResource(Res.string.block),
                     color = if (isBlocked) null else MaterialTheme.colorScheme.error
                 ) {
                     if (isBlocked) onUnblock() else showBlockConfirm = true
@@ -294,14 +297,14 @@ fun UserCardPopup(
 
                 if (onReportUser != null) {
                     UserCardTextRow(
-                        text = "Report",
+                        text = stringResource(Res.string.report),
                         color = MaterialTheme.colorScheme.error
                     ) { showReportDialog = true }
                 }
 
                 if (onKickFromRoom != null) {
                     UserCardTextRow(
-                        text = "Remove from Room",
+                        text = stringResource(Res.string.remove_from_room),
                         color = MaterialTheme.colorScheme.error
                     ) { showKickConfirm = true }
                 }
@@ -314,19 +317,19 @@ fun UserCardPopup(
     if (showBlockConfirm) {
         AlertDialog(
             onDismissRequest = { showBlockConfirm = false },
-            title = { Text("Block User") },
-            text = { Text("Are you sure you want to block ${user.displayName}?") },
+            title = { Text(stringResource(Res.string.block_user)) },
+            text = { Text(stringResource(Res.string.block_user_confirm, user.displayName)) },
             confirmButton = {
                 TextButton(onClick = {
                     showBlockConfirm = false
                     onBlock()
                 }) {
-                    Text("Block")
+                    Text(stringResource(Res.string.block))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showBlockConfirm = false }) {
-                    Text("Cancel")
+                    Text(stringResource(Res.string.cancel))
                 }
             }
         )
@@ -338,16 +341,16 @@ fun UserCardPopup(
                 showKickConfirm = false
                 kickReason = ""
             },
-            title = { Text("Kick User") },
+            title = { Text(stringResource(Res.string.kick_user)) },
             text = {
                 Column {
-                    Text("Are you sure you want to kick ${user.displayName} from the room? They will not be able to rejoin.")
+                    Text(stringResource(Res.string.kick_user_confirm, user.displayName))
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = kickReason,
                         onValueChange = { kickReason = it },
-                        label = { Text("Reason (optional)") },
-                        placeholder = { Text("No reason given") },
+                        label = { Text(stringResource(Res.string.reason_optional)) },
+                        placeholder = { Text(stringResource(Res.string.no_reason_given)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -361,7 +364,7 @@ fun UserCardPopup(
                     onKickFromRoom?.invoke(reason)
                     onDismiss()
                 }) {
-                    Text("Kick", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(Res.string.kick), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
@@ -369,7 +372,7 @@ fun UserCardPopup(
                     showKickConfirm = false
                     kickReason = ""
                 }) {
-                    Text("Cancel")
+                    Text(stringResource(Res.string.cancel))
                 }
             }
         )
@@ -398,15 +401,15 @@ fun UserCardPopup(
     if (showMoveDialog) {
         AlertDialog(
             onDismissRequest = { showMoveDialog = false },
-            title = { Text("Move to which seat?") },
+            title = { Text(stringResource(Res.string.move_to_which_seat)) },
             text = {
                 Column {
                     emptySeats.forEach { targetIndex ->
                         val occupantName = seatOccupantNames[targetIndex]
                         val label = if (occupantName != null) {
-                            "Seat ${targetIndex + 1} (swap with $occupantName)"
+                            stringResource(Res.string.seat_swap_with, targetIndex + 1, occupantName)
                         } else {
-                            "Seat ${targetIndex + 1}"
+                            stringResource(Res.string.seat_number, targetIndex + 1)
                         }
                         TextButton(onClick = {
                             showMoveDialog = false
@@ -421,7 +424,7 @@ fun UserCardPopup(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { showMoveDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(Res.string.cancel))
                 }
             }
         )
@@ -430,11 +433,11 @@ fun UserCardPopup(
     if (showAliasDialog && onSetAlias != null) {
         AlertDialog(
             onDismissRequest = { showAliasDialog = false },
-            title = { Text("Set Alias") },
+            title = { Text(stringResource(Res.string.set_alias)) },
             text = {
                 Column {
                     Text(
-                        text = "Set a personal alias for ${user.displayName}. Only you will see this.",
+                        text = stringResource(Res.string.set_alias_description, user.displayName),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -442,7 +445,7 @@ fun UserCardPopup(
                     OutlinedTextField(
                         value = aliasText,
                         onValueChange = { if (it.length <= 30) aliasText = it },
-                        label = { Text("Alias") },
+                        label = { Text(stringResource(Res.string.alias)) },
                         placeholder = { Text(user.displayName) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -459,7 +462,7 @@ fun UserCardPopup(
                         showAliasDialog = false
                     }
                 ) {
-                    Text("Save")
+                    Text(stringResource(Res.string.save))
                 }
             },
             dismissButton = {
@@ -470,11 +473,11 @@ fun UserCardPopup(
                             aliasText = ""
                             showAliasDialog = false
                         }) {
-                            Text("Remove", color = MaterialTheme.colorScheme.error)
+                            Text(stringResource(Res.string.remove), color = MaterialTheme.colorScheme.error)
                         }
                     }
                     TextButton(onClick = { showAliasDialog = false }) {
-                        Text("Cancel")
+                        Text(stringResource(Res.string.cancel))
                     }
                 }
             }

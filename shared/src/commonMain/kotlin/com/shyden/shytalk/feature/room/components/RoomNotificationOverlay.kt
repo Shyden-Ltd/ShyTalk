@@ -24,6 +24,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.model.SeatRequest
 import com.shyden.shytalk.feature.room.RoomNotification
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun RoomNotificationOverlay(
@@ -66,56 +69,56 @@ fun RoomNotificationOverlay(
                     when (notif) {
                         is RoomNotification.SeatRequestReceived -> {
                             Text(
-                                text = "${notif.request.userName} wants to sit",
+                                text = stringResource(Res.string.user_wants_to_sit, notif.request.userName),
                                 style = MaterialTheme.typography.bodyLarge,
                                 textAlign = TextAlign.Center
                             )
                             Text(
-                                text = "Seat ${notif.request.seatIndex + 1}",
+                                text = stringResource(Res.string.seat_number, notif.request.seatIndex + 1),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 OutlinedButton(onClick = { onDenySeatRequest(notif.request) }) {
-                                    Text("Deny")
+                                    Text(stringResource(Res.string.deny))
                                 }
                                 Button(onClick = { onApproveSeatRequest(notif.request) }) {
-                                    Text("Accept")
+                                    Text(stringResource(Res.string.accept))
                                 }
                             }
                         }
                         is RoomNotification.RequestApproved -> {
                             Text(
-                                text = "Your request was accepted!",
+                                text = stringResource(Res.string.request_accepted),
                                 style = MaterialTheme.typography.bodyLarge,
                                 textAlign = TextAlign.Center
                             )
                             Text(
-                                text = "Seat ${notif.request.seatIndex + 1}",
+                                text = stringResource(Res.string.seat_number, notif.request.seatIndex + 1),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 OutlinedButton(onClick = { onDeclineApprovedRequest(notif.request) }) {
-                                    Text("Decline")
+                                    Text(stringResource(Res.string.decline))
                                 }
                                 Button(onClick = { onAcceptApprovedRequest(notif.request) }) {
-                                    Text("Go to Seat")
+                                    Text(stringResource(Res.string.go_to_seat))
                                 }
                             }
                         }
                         is RoomNotification.InviteReceived -> {
                             Text(
-                                text = "You've been invited to sit!",
+                                text = stringResource(Res.string.invited_to_sit),
                                 style = MaterialTheme.typography.bodyLarge,
                                 textAlign = TextAlign.Center
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 OutlinedButton(onClick = onDeclineInvite) {
-                                    Text("Decline")
+                                    Text(stringResource(Res.string.decline))
                                 }
                                 Button(onClick = onAcceptInvite) {
-                                    Text("Accept")
+                                    Text(stringResource(Res.string.accept))
                                 }
                             }
                         }

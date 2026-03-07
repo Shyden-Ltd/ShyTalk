@@ -64,6 +64,9 @@ import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.GroupPermissions
 import com.shyden.shytalk.core.model.GroupRole
 import com.shyden.shytalk.core.util.Constants
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -99,10 +102,10 @@ fun GroupSetupScreen(
             TopAppBar(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.back))
                     }
                 },
-                title = { Text("New Group") }
+                title = { Text(stringResource(Res.string.new_group)) }
             )
         }
     ) { padding ->
@@ -126,7 +129,7 @@ fun GroupSetupScreen(
                 if (uiState.groupPhotoBytes != null) {
                     AsyncImage(
                         model = uiState.groupPhotoBytes,
-                        contentDescription = "Group photo",
+                        contentDescription = stringResource(Res.string.group),
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
@@ -138,7 +141,7 @@ fun GroupSetupScreen(
                     ) {
                         Icon(
                             Icons.Default.Group,
-                            contentDescription = "Group photo",
+                            contentDescription = stringResource(Res.string.group),
                             modifier = Modifier.padding(20.dp),
                             tint = MaterialTheme.colorScheme.onPrimaryContainer
                         )
@@ -155,7 +158,7 @@ fun GroupSetupScreen(
                     ) {
                         Icon(
                             Icons.Default.CameraAlt,
-                            contentDescription = "Change photo",
+                            contentDescription = null,
                             modifier = Modifier.padding(5.dp),
                             tint = MaterialTheme.colorScheme.onPrimary
                         )
@@ -169,7 +172,7 @@ fun GroupSetupScreen(
             OutlinedTextField(
                 value = uiState.groupName,
                 onValueChange = { viewModel.setGroupName(it) },
-                label = { Text("Group Name *") },
+                label = { Text(stringResource(Res.string.group_name_required)) },
                 modifier = Modifier.fillMaxWidth().testTag("groupSetup_nameField"),
                 singleLine = true
             )
@@ -180,7 +183,7 @@ fun GroupSetupScreen(
             OutlinedTextField(
                 value = uiState.groupDescription,
                 onValueChange = { viewModel.setGroupDescription(it) },
-                label = { Text("Description (optional)") },
+                label = { Text(stringResource(Res.string.description_optional)) },
                 modifier = Modifier.fillMaxWidth(),
                 maxLines = 4,
                 supportingText = {
@@ -194,7 +197,7 @@ fun GroupSetupScreen(
 
             // Participants with role assignment
             Text(
-                text = "Participants",
+                text = stringResource(Res.string.participants),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary
             )
@@ -221,7 +224,7 @@ fun GroupSetupScreen(
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
-                    text = "You",
+                    text = stringResource(Res.string.you),
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.weight(1f)
                 )
@@ -288,7 +291,7 @@ fun GroupSetupScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Permissions",
+                    text = stringResource(Res.string.permissions),
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.weight(1f)
@@ -303,32 +306,32 @@ fun GroupSetupScreen(
             AnimatedVisibility(visible = showPermissions) {
                 Column {
                     PermissionLevelSelector(
-                        label = "Who can send messages",
+                        label = stringResource(Res.string.perm_who_can_send),
                         currentLevel = uiState.permissions.whoCanSend,
                         onLevelChanged = { viewModel.updatePermission("whoCanSend", it) }
                     )
                     PermissionLevelSelector(
-                        label = "Who can add members",
+                        label = stringResource(Res.string.perm_who_can_add_members),
                         currentLevel = uiState.permissions.whoCanAddMembers,
                         onLevelChanged = { viewModel.updatePermission("whoCanAddMembers", it) }
                     )
                     PermissionLevelSelector(
-                        label = "Who can edit group info",
+                        label = stringResource(Res.string.perm_who_can_edit_info),
                         currentLevel = uiState.permissions.whoCanEditInfo,
                         onLevelChanged = { viewModel.updatePermission("whoCanEditInfo", it) }
                     )
                     PermissionLevelSelector(
-                        label = "Who can delete messages",
+                        label = stringResource(Res.string.perm_who_can_delete_messages),
                         currentLevel = uiState.permissions.whoCanDeleteMessages,
                         onLevelChanged = { viewModel.updatePermission("whoCanDeleteMessages", it) }
                     )
                     PermissionLevelSelector(
-                        label = "Who can mute members",
+                        label = stringResource(Res.string.perm_who_can_mute_members),
                         currentLevel = uiState.permissions.whoCanMuteMembers,
                         onLevelChanged = { viewModel.updatePermission("whoCanMuteMembers", it) }
                     )
                     PermissionLevelSelector(
-                        label = "Who can remove members",
+                        label = stringResource(Res.string.perm_who_can_remove_members),
                         currentLevel = uiState.permissions.whoCanRemoveMembers,
                         onLevelChanged = { viewModel.updatePermission("whoCanRemoveMembers", it) }
                     )
@@ -346,7 +349,7 @@ fun GroupSetupScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "System Messages",
+                    text = stringResource(Res.string.system_messages),
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.weight(1f)
@@ -360,16 +363,16 @@ fun GroupSetupScreen(
 
             AnimatedVisibility(visible = showSystemMessages) {
                 Column {
-                    SystemMessageToggle("Member joins", uiState.systemMessageConfig.showJoins) {
+                    SystemMessageToggle(stringResource(Res.string.sys_member_joins), uiState.systemMessageConfig.showJoins) {
                         viewModel.toggleSystemMessage("showJoins")
                     }
-                    SystemMessageToggle("Member leaves", uiState.systemMessageConfig.showLeaves) {
+                    SystemMessageToggle(stringResource(Res.string.sys_member_leaves), uiState.systemMessageConfig.showLeaves) {
                         viewModel.toggleSystemMessage("showLeaves")
                     }
-                    SystemMessageToggle("Role changes", uiState.systemMessageConfig.showRoleChanges) {
+                    SystemMessageToggle(stringResource(Res.string.sys_role_changes), uiState.systemMessageConfig.showRoleChanges) {
                         viewModel.toggleSystemMessage("showRoleChanges")
                     }
-                    SystemMessageToggle("Permission changes", uiState.systemMessageConfig.showPermissionChanges) {
+                    SystemMessageToggle(stringResource(Res.string.sys_permission_changes), uiState.systemMessageConfig.showPermissionChanges) {
                         viewModel.toggleSystemMessage("showPermissionChanges")
                     }
                 }
@@ -388,7 +391,7 @@ fun GroupSetupScreen(
                 } else {
                     Icon(Icons.Default.Check, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Create Group")
+                    Text(stringResource(Res.string.create_group))
                 }
             }
 
@@ -403,10 +406,10 @@ fun RoleBadge(
     onClick: (() -> Unit)? = null
 ) {
     val (color, icon, label) = when (role) {
-        GroupRole.OWNER -> Triple(Color(0xFFFFD700), Icons.Default.Star, "Owner")
-        GroupRole.ADMIN -> Triple(Color(0xFFFFC107), Icons.Default.Shield, "Admin")
-        GroupRole.MOD -> Triple(Color(0xFF009688), Icons.Default.Star, "Mod")
-        GroupRole.MEMBER -> Triple(MaterialTheme.colorScheme.outline, null, "Member")
+        GroupRole.OWNER -> Triple(Color(0xFFFFD700), Icons.Default.Star, stringResource(Res.string.role_owner))
+        GroupRole.ADMIN -> Triple(Color(0xFFFFC107), Icons.Default.Shield, stringResource(Res.string.role_admin))
+        GroupRole.MOD -> Triple(Color(0xFF009688), Icons.Default.Star, stringResource(Res.string.role_mod))
+        GroupRole.MEMBER -> Triple(MaterialTheme.colorScheme.outline, null, stringResource(Res.string.role_member))
     }
 
     AssistChip(
@@ -459,7 +462,7 @@ fun PermissionLevelSelector(
 
         Box {
             Text(
-                text = "Change",
+                text = stringResource(Res.string.change),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary
             )

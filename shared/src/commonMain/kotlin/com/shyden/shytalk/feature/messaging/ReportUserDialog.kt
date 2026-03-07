@@ -38,6 +38,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 private val reportReasons = listOf("Spam", "Harassment", "Inappropriate Content", "Other")
 
@@ -60,11 +63,11 @@ fun ReportUserDialog(
 
     AlertDialog(
         onDismissRequest = { if (!isSubmitting) onDismiss() },
-        title = { Text("Report $userName") },
+        title = { Text(stringResource(Res.string.report_user, userName)) },
         text = {
             Column {
                 Text(
-                    text = "Why are you reporting this user?",
+                    text = stringResource(Res.string.report_user_prompt),
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -89,7 +92,7 @@ fun ReportUserDialog(
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
-                    placeholder = { Text("Additional details (optional)") },
+                    placeholder = { Text(stringResource(Res.string.additional_details_optional)) },
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 3,
                     enabled = !isSubmitting
@@ -99,13 +102,13 @@ fun ReportUserDialog(
                 if (requiresEvidence) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "Evidence",
+                        text = stringResource(Res.string.evidence),
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "At least one screenshot or recording is required.",
+                        text = stringResource(Res.string.evidence_required),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -120,7 +123,7 @@ fun ReportUserDialog(
                                 Box(modifier = Modifier.size(72.dp)) {
                                     AsyncImage(
                                         model = bytes,
-                                        contentDescription = "Evidence ${index + 1}",
+                                        contentDescription = null,
                                         modifier = Modifier
                                             .size(72.dp)
                                             .clip(RoundedCornerShape(8.dp)),
@@ -135,7 +138,7 @@ fun ReportUserDialog(
                                         ) {
                                             Icon(
                                                 Icons.Default.Close,
-                                                contentDescription = "Remove",
+                                                contentDescription = stringResource(Res.string.delete),
                                                 modifier = Modifier.size(16.dp),
                                                 tint = MaterialTheme.colorScheme.error
                                             )
@@ -158,7 +161,7 @@ fun ReportUserDialog(
                                 strokeWidth = 2.dp
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Compressing...")
+                            Text(stringResource(Res.string.compressing))
                         } else {
                             Icon(
                                 Icons.Default.AddPhotoAlternate,
@@ -166,7 +169,7 @@ fun ReportUserDialog(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Attach Evidence")
+                            Text(stringResource(Res.string.attach_evidence))
                         }
                     }
                 }
@@ -193,9 +196,9 @@ fun ReportUserDialog(
                         strokeWidth = 2.dp
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Submitting...")
+                    Text(stringResource(Res.string.submitting))
                 } else {
-                    Text("Submit Report")
+                    Text(stringResource(Res.string.submit_report))
                 }
             }
         },
@@ -204,7 +207,7 @@ fun ReportUserDialog(
                 onClick = onDismiss,
                 enabled = !isSubmitting
             ) {
-                Text("Cancel")
+                Text(stringResource(Res.string.cancel))
             }
         }
     )

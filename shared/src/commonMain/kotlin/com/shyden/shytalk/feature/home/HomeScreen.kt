@@ -33,6 +33,9 @@ import org.koin.compose.viewmodel.koinViewModel
 import androidx.compose.runtime.collectAsState
 import com.shyden.shytalk.core.model.Banner
 import com.shyden.shytalk.core.model.ChatRoom
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -117,12 +120,12 @@ fun RoomListContent(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
-                                    text = "No active rooms",
+                                    text = stringResource(Res.string.no_active_rooms),
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = "Tap + to create one",
+                                    text = stringResource(Res.string.tap_plus_to_create),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

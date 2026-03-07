@@ -68,6 +68,9 @@ import com.shyden.shytalk.core.model.GachaGift
 import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.model.Transaction
 import com.shyden.shytalk.core.ui.SuperShyGold
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.feature.shop.CoinPackageCard
 import com.shyden.shytalk.feature.shop.formatNumber
@@ -431,7 +434,7 @@ fun LuckySpinOverlay(
                     onDismissResults()
                     onDismiss()
                 }) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    Icon(Icons.Default.Close, contentDescription = stringResource(Res.string.close), tint = Color.White)
                 }
 
                 Spacer(modifier = Modifier.weight(1f))
@@ -498,7 +501,7 @@ fun LuckySpinOverlay(
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                             Icon(
                                 Icons.Default.Add,
-                                contentDescription = "Buy coins",
+                                contentDescription = stringResource(Res.string.buy_coins),
                                 tint = SuperShyGold,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -509,7 +512,7 @@ fun LuckySpinOverlay(
 
             // Title
             Text(
-                text = "LUCKY SPIN",
+                text = stringResource(Res.string.lucky_spin_title),
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 2.sp,
@@ -543,7 +546,7 @@ fun LuckySpinOverlay(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "SKIP ANIMATION",
+                    text = stringResource(Res.string.skip_animation),
                     color = Color.White.copy(alpha = 0.3f),
                     fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -628,7 +631,7 @@ fun LuckySpinOverlay(
             // Spin tier buttons — equal height via IntrinsicSize
             if (!gachaState.configLoaded && phase == SpinPhase.IDLE) {
                 Text(
-                    text = "Loading prices...",
+                    text = stringResource(Res.string.loading_prices),
                     color = Color.White.copy(alpha = 0.5f),
                     fontSize = 14.sp
                 )
@@ -687,7 +690,7 @@ fun LuckySpinOverlay(
                                     maxLines = 1
                                 )
                                 Text(
-                                    text = "SPIN",
+                                    text = stringResource(Res.string.spin),
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White.copy(alpha = 0.55f),
@@ -714,7 +717,7 @@ fun LuckySpinOverlay(
                                 }
                                 // All buttons show the drop rate line — visible text only for boosted tier
                                 Text(
-                                    text = if (tier.boostedDrop) "INCREASED DROP RATE" else "",
+                                    text = if (tier.boostedDrop) stringResource(Res.string.increased_drop_rate) else "",
                                     fontSize = 7.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     letterSpacing = 0.sp,
@@ -741,7 +744,7 @@ fun LuckySpinOverlay(
                     shape = RoundedCornerShape(50)
                 ) {
                     Text(
-                        text = "COLLECT ALL (${allWins.size})",
+                        text = stringResource(Res.string.collect_all, allWins.size),
                         color = Color(0xFFFFD700),
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 14.sp,
@@ -828,13 +831,13 @@ private fun InlineCoinShop(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Need more coins!",
+                    text = stringResource(Res.string.need_more_coins),
                     color = Color(0xFFFFD700),
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 20.sp
                 )
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    Icon(Icons.Default.Close, contentDescription = stringResource(Res.string.close), tint = Color.White)
                 }
             }
 
@@ -849,7 +852,7 @@ private fun InlineCoinShop(
 
             if (coinPackages.isEmpty()) {
                 Text(
-                    text = "No packages available",
+                    text = stringResource(Res.string.no_packages_available),
                     color = Color.White.copy(alpha = 0.5f),
                     fontSize = 14.sp
                 )
@@ -908,13 +911,13 @@ private fun InlineSpinHistory(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Spin History",
+                    text = stringResource(Res.string.spin_history),
                     color = Color.White,
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 20.sp
                 )
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    Icon(Icons.Default.Close, contentDescription = stringResource(Res.string.close), tint = Color.White)
                 }
             }
 
@@ -922,7 +925,7 @@ private fun InlineSpinHistory(
 
             if (sorted.isEmpty()) {
                 Text(
-                    text = "No spins yet",
+                    text = stringResource(Res.string.no_spins_yet),
                     color = Color.White.copy(alpha = 0.5f),
                     fontSize = 14.sp
                 )
@@ -1063,13 +1066,13 @@ private fun InlinePrizeCatalog(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Prizes",
+                    text = stringResource(Res.string.prizes),
                     color = Color.White,
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 20.sp
                 )
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    Icon(Icons.Default.Close, contentDescription = stringResource(Res.string.close), tint = Color.White)
                 }
             }
 

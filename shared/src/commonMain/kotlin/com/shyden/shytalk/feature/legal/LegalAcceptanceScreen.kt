@@ -25,6 +25,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 const val CURRENT_LEGAL_VERSION = 5
 
@@ -56,12 +59,12 @@ fun LegalAcceptanceScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             Text(
-                text = "Welcome to ShyTalk",
+                text = stringResource(Res.string.welcome_to_shytalk),
                 style = MaterialTheme.typography.headlineMedium
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Please review and accept our policies to continue.",
+                text = stringResource(Res.string.review_and_accept_policies),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -70,7 +73,7 @@ fun LegalAcceptanceScreen(
 
             // Privacy Policy
             LegalCheckRow(
-                title = "Privacy Policy",
+                title = stringResource(Res.string.privacy_policy),
                 checked = privacyChecked,
                 onCheckedChange = { privacyChecked = it },
                 onViewDocument = onViewPrivacyPolicy
@@ -80,7 +83,7 @@ fun LegalAcceptanceScreen(
 
             // Community Standards
             LegalCheckRow(
-                title = "Community Standards",
+                title = stringResource(Res.string.community_standards),
                 checked = communityChecked,
                 onCheckedChange = { communityChecked = it },
                 onViewDocument = onViewCommunityStandards
@@ -90,7 +93,7 @@ fun LegalAcceptanceScreen(
 
             // Terms & Conditions
             LegalCheckRow(
-                title = "Terms & Conditions",
+                title = stringResource(Res.string.terms_and_conditions),
                 checked = termsChecked,
                 onCheckedChange = { termsChecked = it },
                 onViewDocument = onViewTerms
@@ -100,7 +103,7 @@ fun LegalAcceptanceScreen(
 
             // Cyber Bullying Policy
             LegalCheckRow(
-                title = "Cyber Bullying Policy",
+                title = stringResource(Res.string.cyber_bullying_policy),
                 checked = cyberBullyingChecked,
                 onCheckedChange = { cyberBullyingChecked = it },
                 onViewDocument = onViewCyberBullyingPolicy
@@ -113,7 +116,7 @@ fun LegalAcceptanceScreen(
                 enabled = allChecked,
                 modifier = Modifier.fillMaxWidth().testTag("legal_acceptButton")
             ) {
-                Text("Accept All & Continue")
+                Text(stringResource(Res.string.accept_all_and_continue))
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -140,7 +143,7 @@ private fun LegalCheckRow(
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-            text = "I have read and agree to the ",
+            text = stringResource(Res.string.i_have_read_and_agree),
             style = MaterialTheme.typography.bodyMedium
         )
         TextButton(onClick = onViewDocument) {

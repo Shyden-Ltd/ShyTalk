@@ -30,6 +30,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.compose.runtime.collectAsState
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,7 +59,7 @@ fun RoomSettingsSheet(
                 .padding(16.dp)
         ) {
             Text(
-                text = "Room Settings",
+                text = stringResource(Res.string.room_settings),
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
@@ -73,11 +76,11 @@ fun RoomSettingsSheet(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Lock Seating",
+                            text = stringResource(Res.string.lock_seating),
                             style = MaterialTheme.typography.bodyLarge
                         )
                         Text(
-                            text = "Only the owner can invite users to sit",
+                            text = stringResource(Res.string.lock_seating_description),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -104,7 +107,7 @@ fun RoomSettingsSheet(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Move to Audience")
+                        Text(stringResource(Res.string.move_to_audience))
                     }
                 } else {
                     val isHost = viewModel.currentUserId in room.hostIds
@@ -116,7 +119,7 @@ fun RoomSettingsSheet(
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(if (isHost) "Take a Seat" else "Request a Seat")
+                            Text(if (isHost) stringResource(Res.string.take_a_seat) else stringResource(Res.string.request_a_seat))
                         }
                     }
                 }
@@ -131,21 +134,21 @@ fun RoomSettingsSheet(
                 mutableStateOf(uiState.minGiftAnimationValue.toFloat())
             }
             Text(
-                text = "Gift Animations",
+                text = stringResource(Res.string.gift_animations),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = if (sliderValue.toInt() == 0) "Showing all gift animations"
-                       else "Only showing animations worth ${sliderValue.toInt()}+ coins",
+                text = if (sliderValue.toInt() == 0) stringResource(Res.string.showing_all_gift_animations)
+                       else stringResource(Res.string.showing_animations_worth, sliderValue.toInt()),
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Filter out animations for cheaper gifts.",
+                text = stringResource(Res.string.filter_gift_animations_description),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -171,7 +174,7 @@ fun RoomSettingsSheet(
                     ),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Close Room")
+                    Text(stringResource(Res.string.close_room))
                 }
             }
 

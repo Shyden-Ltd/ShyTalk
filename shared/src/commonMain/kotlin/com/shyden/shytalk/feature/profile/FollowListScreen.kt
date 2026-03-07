@@ -57,6 +57,9 @@ import com.shyden.shytalk.core.model.ProfileVisitor
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.util.formatRelativeTime
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,10 +85,10 @@ fun FollowListScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Connections") },
+                title = { Text(stringResource(Res.string.connections)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.back))
                     }
                 }
             )
@@ -108,13 +111,13 @@ fun FollowListScreen(
                 Tab(
                     selected = uiState.selectedTab == FollowTab.FOLLOWING,
                     onClick = { viewModel.selectTab(FollowTab.FOLLOWING) },
-                    text = { Text("Following (${uiState.following.size})") },
+                    text = { Text(stringResource(Res.string.following_count, uiState.following.size)) },
                     modifier = Modifier.testTag("followList_followingTab")
                 )
                 Tab(
                     selected = uiState.selectedTab == FollowTab.FOLLOWERS,
                     onClick = { viewModel.selectTab(FollowTab.FOLLOWERS) },
-                    text = { Text("Followers (${uiState.followers.size})") },
+                    text = { Text(stringResource(Res.string.followers_count, uiState.followers.size)) },
                     modifier = Modifier.testTag("followList_followersTab")
                 )
                 if (uiState.isOwnList) {
@@ -127,10 +130,10 @@ fun FollowListScreen(
                             }
                             if (newCount > 0 && uiState.selectedTab != FollowTab.STALKERS) {
                                 BadgedBox(badge = { Badge { Text("$newCount") } }) {
-                                    Text("Stalkers (${uiState.stalkers.size})")
+                                    Text(stringResource(Res.string.stalkers_count, uiState.stalkers.size))
                                 }
                             } else {
-                                Text("Stalkers (${uiState.stalkers.size})")
+                                Text(stringResource(Res.string.stalkers_count, uiState.stalkers.size))
                             }
                         }
                     )
@@ -157,12 +160,12 @@ fun FollowListScreen(
                             modifier = Modifier.padding(32.dp)
                         ) {
                             Text(
-                                text = "Super Shy Benefit",
+                                text = stringResource(Res.string.super_shy_benefit),
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                text = "See who's been visiting your profile! Profile stalkers is an exclusive Super Shy feature.",
+                                text = stringResource(Res.string.stalkers_super_shy_description),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.fillMaxWidth(),
@@ -171,7 +174,7 @@ fun FollowListScreen(
                             androidx.compose.material3.FilledTonalButton(
                                 onClick = onNavigateToSuperShy
                             ) {
-                                Text("Get Super Shy")
+                                Text(stringResource(Res.string.get_super_shy))
                             }
                         }
                     }
@@ -181,7 +184,7 @@ fun FollowListScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "No profile visitors yet",
+                            text = stringResource(Res.string.no_profile_visitors),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -218,7 +221,7 @@ fun FollowListScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "This user's following list is private",
+                            text = stringResource(Res.string.following_list_private),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -230,9 +233,9 @@ fun FollowListScreen(
                     ) {
                         Text(
                             text = if (uiState.selectedTab == FollowTab.FOLLOWERS)
-                                "No followers yet"
+                                stringResource(Res.string.no_followers_yet)
                             else
-                                "Not following anyone yet",
+                                stringResource(Res.string.not_following_anyone),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -311,7 +314,8 @@ private fun FollowUserRow(
 
         // Name
         Column(modifier = Modifier.weight(1f)) {
-            val resolvedName = aliases[user.uid] ?: user.displayName.ifEmpty { "Unknown" }
+            val unknownText = stringResource(Res.string.unknown)
+            val resolvedName = aliases[user.uid] ?: user.displayName.ifEmpty { unknownText }
             StyledDisplayName(
                 displayName = resolvedName,
                 isSuperShy = user.isSuperShy,
@@ -331,7 +335,7 @@ private fun FollowUserRow(
                         }
                         Icon(
                             imageVector = icon,
-                            contentDescription = if (iFollowThisUser) "Unfollow" else "Follow",
+                            contentDescription = if (iFollowThisUser) stringResource(Res.string.unfollow) else stringResource(Res.string.follow),
                             tint = if (iFollowThisUser) MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -343,7 +347,7 @@ private fun FollowUserRow(
                         Icon(
                             imageVector = if (iFollowThisUser) Icons.Default.People
                                 else Icons.Default.PersonAdd,
-                            contentDescription = if (iFollowThisUser) "Unfollow" else "Follow back",
+                            contentDescription = if (iFollowThisUser) stringResource(Res.string.unfollow) else stringResource(Res.string.follow_back),
                             tint = if (iFollowThisUser) MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -353,7 +357,7 @@ private fun FollowUserRow(
                         IconButton(onClick = onUndoRemove) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.Undo,
-                                contentDescription = "Undo remove",
+                                contentDescription = stringResource(Res.string.undo_remove),
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
@@ -361,7 +365,7 @@ private fun FollowUserRow(
                         IconButton(onClick = onRemoveFollower) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "Remove follower",
+                                contentDescription = stringResource(Res.string.remove_follower),
                                 tint = MaterialTheme.colorScheme.error
                             )
                         }
@@ -417,9 +421,10 @@ private fun StalkerUserRow(
 
         // Name and visit count
         Column(modifier = Modifier.weight(1f)) {
+            val unknownText = stringResource(Res.string.unknown)
             val resolvedName = aliases[visitor.visitorId]
-                ?: user?.displayName?.ifEmpty { "Unknown" }
-                ?: "Unknown"
+                ?: user?.displayName?.ifEmpty { unknownText }
+                ?: unknownText
             StyledDisplayName(
                 displayName = resolvedName,
                 isSuperShy = user?.isSuperShy == true,
@@ -429,7 +434,7 @@ private fun StalkerUserRow(
                 formatRelativeTime(visitor.lastVisitedAt)
             }
             Text(
-                text = "Stalked you $agoText, ${visitor.visitCount} time${if (visitor.visitCount != 1L) "s" else ""} in the last 3 months",
+                text = stringResource(Res.string.stalker_visit_info, agoText, visitor.visitCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

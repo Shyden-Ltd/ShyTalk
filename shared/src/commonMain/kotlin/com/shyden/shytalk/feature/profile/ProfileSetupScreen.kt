@@ -31,6 +31,9 @@ import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.compose.runtime.collectAsState
 import com.shyden.shytalk.core.util.formatDateForDisplay
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,14 +71,14 @@ fun ProfileSetupScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Set Up Your Profile",
+                text = stringResource(Res.string.set_up_your_profile),
                 style = MaterialTheme.typography.headlineMedium
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Choose a display name and enter your date of birth",
+                text = stringResource(Res.string.profile_setup_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -85,7 +88,7 @@ fun ProfileSetupScreen(
             OutlinedTextField(
                 value = displayName,
                 onValueChange = { if (it.length <= 20) displayName = it },
-                label = { Text("Display Name") },
+                label = { Text(stringResource(Res.string.display_name)) },
                 modifier = Modifier.fillMaxWidth().testTag("profileSetup_displayNameField"),
                 singleLine = true,
                 supportingText = { Text("${displayName.length}/20") }
@@ -102,7 +105,7 @@ fun ProfileSetupScreen(
                     text = if (selectedDateMillis != null) {
                         formatDateForDisplay(selectedDateMillis!!)
                     } else {
-                        "Select Date of Birth"
+                        stringResource(Res.string.select_date_of_birth)
                     }
                 )
             }
@@ -119,7 +122,7 @@ fun ProfileSetupScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Your date of birth is required but you can hide your age in privacy settings.",
+                text = stringResource(Res.string.dob_privacy_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -145,7 +148,7 @@ fun ProfileSetupScreen(
                         color = MaterialTheme.colorScheme.onPrimary
                     )
                 } else {
-                    Text("Continue")
+                    Text(stringResource(Res.string.continue_button))
                 }
             }
         }

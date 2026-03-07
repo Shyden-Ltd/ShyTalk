@@ -65,6 +65,9 @@ import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.feature.gifting.GiftingViewModel
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 import kotlin.math.ceil
 
 private val CyanAccent = Color(0xFF00BCD4)
@@ -137,7 +140,7 @@ fun BackpackSheet(
                     onClick = { viewModel.setActiveTab(0) },
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Gifts")
+                            Text(stringResource(Res.string.gifts))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("\uD83E\uDE99", fontSize = 10.sp)
                             Text(
@@ -154,7 +157,7 @@ fun BackpackSheet(
                     onClick = { viewModel.setActiveTab(1) },
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Backpack")
+                            Text(stringResource(Res.string.backpack))
                             if (backpackValue > 0) {
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("\uD83E\uDE99", fontSize = 10.sp)
@@ -194,7 +197,7 @@ fun BackpackSheet(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            "Your backpack is empty.\nSpin the wheel to get gifts!",
+                            stringResource(Res.string.backpack_empty),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
@@ -223,7 +226,7 @@ fun BackpackSheet(
                     onQuantityClick = {},
                     onSendClick = { viewModel.activateTrial() },
                     onSendAllClick = null,
-                    sendLabel = "Use",
+                    sendLabel = stringResource(Res.string.use_button),
                     isSelfUse = true
                 )
             } else {
@@ -330,7 +333,7 @@ private fun RecipientRow(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
     ) {
         Text(
-            "To",
+            stringResource(Res.string.to_label),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(end = 8.dp)
@@ -369,7 +372,7 @@ private fun RecipientRow(
                 ),
                 modifier = Modifier.height(32.dp)
             ) {
-                Text("ALL", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(Res.string.all_caps), fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -769,7 +772,7 @@ private fun BottomBar(
                 modifier = Modifier.height(36.dp)
             ) {
                 Text(
-                    "Send All",
+                    stringResource(Res.string.send_all),
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     fontSize = 12.sp
@@ -791,9 +794,9 @@ private fun BottomBar(
         ) {
             Text(
                 when {
-                    state.isSending -> if (isSelfUse) "Using..." else "Sending..."
+                    state.isSending -> if (isSelfUse) stringResource(Res.string.using) else stringResource(Res.string.sending)
                     sendLabel != null -> sendLabel
-                    else -> "Send"
+                    else -> stringResource(Res.string.send)
                 },
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
@@ -887,7 +890,7 @@ private fun ConfirmSendDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Confirm Send") },
+        title = { Text(stringResource(Res.string.confirm_send)) },
         text = {
             Column {
                 val headerText = if (recipientCount > 1)
@@ -902,23 +905,23 @@ private fun ConfirmSendDialog(
                 Spacer(modifier = Modifier.height(12.dp))
                 if (isBackpackTab) {
                     val ownedQty = state.backpackItems.find { it.giftId == gift.id }?.quantity ?: 0
-                    Text("From backpack: $totalItems items")
-                    Text("You have: $ownedQty")
+                    Text(stringResource(Res.string.from_backpack_items, totalItems))
+                    Text(stringResource(Res.string.you_have_count, ownedQty))
                 } else {
                     val totalCost = gift.coinValue.toLong() * totalItems
-                    Text("Total cost: $totalCost coins")
-                    Text("Your balance: ${state.coinBalance} coins")
+                    Text(stringResource(Res.string.total_cost_coins, totalCost))
+                    Text(stringResource(Res.string.your_balance_coins, state.coinBalance))
                 }
             }
         },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text("Confirm", color = CyanAccent)
+                Text(stringResource(Res.string.confirm), color = CyanAccent)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(Res.string.cancel))
             }
         }
     )
@@ -978,13 +981,13 @@ private fun SendAllConfirmDialog(
         text = {
             Column {
                 Text(
-                    "You are about to send your ENTIRE backpack to $recipientName.",
+                    stringResource(Res.string.send_all_warning, recipientName),
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    "This includes ALL $totalItems items across $uniqueGifts different gifts.",
+                    stringResource(Res.string.send_all_includes, totalItems, uniqueGifts),
                     style = MaterialTheme.typography.bodyMedium
                 )
                 if (totalValue > 0) {
@@ -998,7 +1001,7 @@ private fun SendAllConfirmDialog(
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    "THIS ACTION CANNOT BE UNDONE.",
+                    stringResource(Res.string.action_cannot_be_undone),
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Black,
                     color = Color(0xFFD32F2F)
@@ -1013,12 +1016,12 @@ private fun SendAllConfirmDialog(
                     contentColor = Color.White
                 )
             ) {
-                Text("I understand, send everything", fontWeight = FontWeight.Bold)
+                Text(stringResource(Res.string.send_everything_confirm), fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(Res.string.cancel))
             }
         }
     )

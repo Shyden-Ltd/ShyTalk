@@ -60,6 +60,9 @@ import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.Seat
 import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun ChatPanel(
@@ -192,7 +195,7 @@ fun ChatPanel(
                         }
                 ) {
                     Text(
-                        text = "New messages",
+                        text = stringResource(Res.string.new_messages),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
@@ -215,7 +218,7 @@ fun ChatPanel(
                 }) {
                     Icon(
                         Icons.Default.Close,
-                        contentDescription = "Cancel edit",
+                        contentDescription = stringResource(Res.string.cancel_edit),
                         tint = MaterialTheme.colorScheme.error
                     )
                 }
@@ -224,7 +227,7 @@ fun ChatPanel(
             OutlinedTextField(
                 value = messageText,
                 onValueChange = { if (it.length <= 200) messageText = it },
-                placeholder = { Text(if (isEditing) "Edit message..." else "Message...") },
+                placeholder = { Text(if (isEditing) stringResource(Res.string.edit_message_placeholder) else stringResource(Res.string.message_placeholder)) },
                 modifier = Modifier.weight(1f).testTag("room_chatInput")
                     .onFocusChanged { isInputFocused = it.isFocused },
                 maxLines = 4,
@@ -250,7 +253,7 @@ fun ChatPanel(
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.Send,
-                        contentDescription = "Send",
+                        contentDescription = stringResource(Res.string.send),
                         tint = if (messageText.isNotBlank()) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -267,7 +270,7 @@ fun ChatPanel(
                 ) {
                     Icon(
                         imageVector = if (isVoiceUnavailable || isSelfMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                        contentDescription = if (isVoiceUnavailable) "Voice unavailable" else if (isSelfMuted) "Unmute" else "Mute",
+                        contentDescription = if (isVoiceUnavailable) stringResource(Res.string.voice_unavailable) else if (isSelfMuted) stringResource(Res.string.unmute) else stringResource(Res.string.mute),
                         tint = if (isVoiceUnavailable) MaterialTheme.colorScheme.onSurfaceVariant
                               else if (isSelfMuted) MaterialTheme.colorScheme.error
                               else SpeakingGreen
@@ -291,7 +294,7 @@ fun ChatPanel(
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.Chat,
-                            contentDescription = "Messages",
+                            contentDescription = stringResource(Res.string.messages),
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -319,7 +322,7 @@ fun ChatPanel(
                 ) {
                     Icon(
                         Icons.Default.Backpack,
-                        contentDescription = "Backpack",
+                        contentDescription = stringResource(Res.string.backpack),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }

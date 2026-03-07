@@ -12,6 +12,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.ui.SuperShyGold
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun ExpiryUpsellDialog(
@@ -24,27 +27,27 @@ fun ExpiryUpsellDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                "Room Closing Soon",
+                stringResource(Res.string.room_closing_soon),
                 fontWeight = FontWeight.Bold
             )
         },
         text = {
             Column {
                 Text(
-                    "The room owner doesn't have Super Shy, so this room will close soon.",
+                    stringResource(Res.string.room_closing_no_super_shy),
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 if (isViewerSuperShy) {
                     Text(
-                        "You have Super Shy! Open your own room for up to $superShyDurationHours hours of extended time.",
+                        stringResource(Res.string.you_have_super_shy_room, superShyDurationHours),
                         style = MaterialTheme.typography.bodyMedium,
                         color = SuperShyGold,
                         fontWeight = FontWeight.Bold
                     )
                 } else {
                     Text(
-                        "Get Super Shy to enjoy rooms that last up to $superShyDurationHours hours!",
+                        stringResource(Res.string.get_super_shy_rooms, superShyDurationHours),
                         style = MaterialTheme.typography.bodyMedium,
                         color = SuperShyGold,
                         fontWeight = FontWeight.Bold
@@ -55,21 +58,21 @@ fun ExpiryUpsellDialog(
         confirmButton = {
             if (isViewerSuperShy) {
                 TextButton(onClick = onDismiss) {
-                    Text("Got it")
+                    Text(stringResource(Res.string.got_it))
                 }
             } else {
                 TextButton(onClick = {
                     onDismiss()
                     onOpenSuperShy()
                 }) {
-                    Text("Learn More", color = SuperShyGold)
+                    Text(stringResource(Res.string.learn_more), color = SuperShyGold)
                 }
             }
         },
         dismissButton = if (!isViewerSuperShy) {
             {
                 TextButton(onClick = onDismiss) {
-                    Text("Maybe Later")
+                    Text(stringResource(Res.string.maybe_later))
                 }
             }
         } else null

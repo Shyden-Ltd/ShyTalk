@@ -32,8 +32,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
-private val FILTERS = listOf("All", "Purchases", "Gifts", "Gacha", "Rewards", "Redemptions")
+// Filter keys (non-localized, used as identifiers)
+private val FILTER_KEYS = listOf("All", "Purchases", "Gifts", "Gacha", "Rewards", "Redemptions")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,10 +51,10 @@ fun TransactionHistoryScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Transactions") },
+                title = { Text(stringResource(Res.string.transactions)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.go_back))
                     }
                 }
             )
@@ -70,13 +74,21 @@ fun TransactionHistoryScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                FILTERS.forEach { filter ->
+                val filterLabels = mapOf(
+                    "All" to stringResource(Res.string.filter_all),
+                    "Purchases" to stringResource(Res.string.filter_purchases),
+                    "Gifts" to stringResource(Res.string.filter_gifts),
+                    "Gacha" to stringResource(Res.string.filter_gacha),
+                    "Rewards" to stringResource(Res.string.filter_rewards),
+                    "Redemptions" to stringResource(Res.string.filter_redemptions)
+                )
+                FILTER_KEYS.forEach { filter ->
                     val selected = if (filter == "All") state.selectedFilter == null
                     else state.selectedFilter == filter
                     FilterChip(
                         selected = selected,
                         onClick = { viewModel.setFilter(if (filter == "All") null else filter) },
-                        label = { Text(filter) }
+                        label = { Text(filterLabels[filter] ?: filter) }
                     )
                 }
             }
@@ -96,8 +108,8 @@ fun TransactionHistoryScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = if (state.selectedFilter != null) "No ${state.selectedFilter?.lowercase()} transactions"
-                            else "No transactions yet",
+                            text = if (state.selectedFilter != null) stringResource(Res.string.no_filtered_transactions, state.selectedFilter?.lowercase() ?: "")
+                            else stringResource(Res.string.no_transactions_yet),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

@@ -43,6 +43,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material3.CircularProgressIndicator
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.ui.SuperShyGold
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,7 +78,7 @@ fun SuperShyBottomSheet(
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
-                        "Testing mode \u2014 no real money is charged. Tap a plan to instantly activate Super Shy.",
+                        stringResource(Res.string.testing_mode_super_shy),
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFFE65100),
                         modifier = Modifier.padding(12.dp)
@@ -93,7 +96,7 @@ fun SuperShyBottomSheet(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                "Super Shy",
+                stringResource(Res.string.super_shy),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = SuperShyGold
@@ -102,12 +105,12 @@ fun SuperShyBottomSheet(
 
             // Benefits list
             val benefits = listOf(
-                "Gold display name everywhere",
-                "Star badge next to name",
-                "+10% daily login coins (rounded up)",
-                "Exclusive profile frame",
-                "Extended room duration (12 hours)",
-                "Full room of 8 seats"
+                stringResource(Res.string.benefit_gold_name),
+                stringResource(Res.string.benefit_star_badge),
+                stringResource(Res.string.benefit_daily_bonus),
+                stringResource(Res.string.benefit_profile_frame),
+                stringResource(Res.string.benefit_extended_room),
+                stringResource(Res.string.benefit_full_room)
             )
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -117,7 +120,7 @@ fun SuperShyBottomSheet(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        "Benefits",
+                        stringResource(Res.string.benefits),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -168,7 +171,7 @@ fun SuperShyBottomSheet(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            "You're Super Shy for life!",
+                            stringResource(Res.string.super_shy_for_life),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = SuperShyGold,
@@ -190,21 +193,21 @@ fun SuperShyBottomSheet(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            "Currently Active",
+                            stringResource(Res.string.currently_active),
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = SuperShyGold
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            "Tier: ${user.superShyTier ?: "monthly"}",
+                            stringResource(Res.string.tier_label, user.superShyTier ?: "monthly"),
                             style = MaterialTheme.typography.bodyMedium
                         )
                         user.superShyExpiry?.let { expiry ->
                             val daysLeft = ((expiry - com.shyden.shytalk.core.util.currentTimeMillis()) / 86_400_000).toInt()
                             if (daysLeft > 0) {
                                 Text(
-                                    "$daysLeft days remaining",
+                                    stringResource(Res.string.days_remaining, daysLeft),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -214,15 +217,15 @@ fun SuperShyBottomSheet(
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    "Upgrade to Lifetime",
+                    stringResource(Res.string.upgrade_to_lifetime),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 SuperShyPricingCard(
-                    tier = "Lifetime",
+                    tier = stringResource(Res.string.tier_lifetime),
                     price = "$99.99",
-                    description = "One-time payment",
+                    description = stringResource(Res.string.one_time_payment),
                     onClick = { effectivePurchase("super_shy_lifetime") },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !isPurchasing
@@ -274,13 +277,13 @@ fun SuperShyBottomSheet(
                             when {
                                 claimed -> {
                                     Text(
-                                        "Claimed!",
+                                        stringResource(Res.string.claimed),
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = SuperShyGold
                                     )
                                     Text(
-                                        "To activate it, find it in your backpack while in a chat room.",
+                                        stringResource(Res.string.claimed_activate_backpack),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         textAlign = TextAlign.Center
@@ -288,7 +291,7 @@ fun SuperShyBottomSheet(
                                 }
                                 claiming -> {
                                     Text(
-                                        "Claiming...",
+                                        stringResource(Res.string.claiming),
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = SuperShyGold
@@ -296,13 +299,13 @@ fun SuperShyBottomSheet(
                                 }
                                 else -> {
                                     Text(
-                                        "Claim 30 Days Free",
+                                        stringResource(Res.string.claim_30_days_free),
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = SuperShyGold
                                     )
                                     Text(
-                                        "Tap to claim — added to your backpack",
+                                        stringResource(Res.string.tap_to_claim_backpack),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -313,7 +316,7 @@ fun SuperShyBottomSheet(
                     Spacer(modifier = Modifier.height(12.dp))
                 }
                 Text(
-                    "Choose a plan",
+                    stringResource(Res.string.choose_a_plan),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold
                 )
@@ -323,17 +326,17 @@ fun SuperShyBottomSheet(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     SuperShyPricingCard(
-                        tier = "Monthly",
+                        tier = stringResource(Res.string.tier_monthly),
                         price = "$4.99",
-                        description = "per month",
+                        description = stringResource(Res.string.per_month),
                         onClick = { effectivePurchase("super_shy_monthly") },
                         modifier = Modifier.weight(1f),
                         enabled = !isPurchasing
                     )
                     SuperShyPricingCard(
-                        tier = "Yearly",
+                        tier = stringResource(Res.string.tier_yearly),
                         price = "$39.99",
-                        description = "per year",
+                        description = stringResource(Res.string.per_year),
                         onClick = { effectivePurchase("super_shy_yearly") },
                         modifier = Modifier.weight(1f),
                         enabled = !isPurchasing
@@ -341,9 +344,9 @@ fun SuperShyBottomSheet(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 SuperShyPricingCard(
-                    tier = "Lifetime",
+                    tier = stringResource(Res.string.tier_lifetime),
                     price = "$99.99",
-                    description = "One-time payment",
+                    description = stringResource(Res.string.one_time_payment),
                     onClick = { effectivePurchase("super_shy_lifetime") },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !isPurchasing

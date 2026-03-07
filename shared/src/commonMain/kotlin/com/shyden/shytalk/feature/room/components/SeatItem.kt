@@ -60,6 +60,9 @@ import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.ui.SuperShyGold
 import com.shyden.shytalk.core.util.flagEmojiForCode
 import com.shyden.shytalk.ui.components.FlagBadge
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -170,7 +173,7 @@ fun SeatItem(
                 if (seat.state == SeatState.OCCUPIED && photoUrl != null) {
                     AsyncImage(
                         model = photoUrl,
-                        contentDescription = user?.displayName ?: "User",
+                        contentDescription = user?.displayName ?: stringResource(Res.string.user),
                         modifier = Modifier
                             .size(seatSize)
                             .clip(CircleShape),
@@ -183,7 +186,7 @@ fun SeatItem(
                         } else {
                             Icons.Default.PersonAdd
                         },
-                        contentDescription = if (seat.state == SeatState.OCCUPIED) "Occupied" else "Empty seat",
+                        contentDescription = if (seat.state == SeatState.OCCUPIED) stringResource(Res.string.occupied) else stringResource(Res.string.empty_seat),
                         modifier = Modifier.padding(iconPadding),
                         tint = if (seat.state == SeatState.OCCUPIED) {
                             MaterialTheme.colorScheme.onPrimaryContainer
@@ -212,7 +215,7 @@ fun SeatItem(
             ) {
                 if (canLeaveSeat) {
                     DropdownMenuItem(
-                        text = { Text("Leave seat") },
+                        text = { Text(stringResource(Res.string.leave_seat)) },
                         onClick = {
                             showMenu = false
                             onClick()
@@ -234,7 +237,8 @@ fun SeatItem(
         )
 
         if (seat.state == SeatState.OCCUPIED && user != null) {
-            val name = aliases[user.uid]?.ifEmpty { null } ?: user.displayName.ifEmpty { "User" }
+            val userText = stringResource(Res.string.user)
+            val name = aliases[user.uid]?.ifEmpty { null } ?: user.displayName.ifEmpty { userText }
             val isHostOrOwner = seatRole == RoomRole.OWNER || seatRole == RoomRole.HOST
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -269,14 +273,14 @@ fun SeatItem(
                 Spacer(modifier = Modifier.width(3.dp))
                 Icon(
                     if (seat.isMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                    contentDescription = if (seat.isMuted) "Muted" else "Unmuted",
+                    contentDescription = if (seat.isMuted) stringResource(Res.string.muted) else stringResource(Res.string.unmuted),
                     modifier = Modifier.size(12.dp),
                     tint = if (seat.isMuted) MaterialTheme.colorScheme.error else SpeakingGreen
                 )
             }
         } else {
             Text(
-                text = if (isRequestSeat) "Request" else "Seat ${seatIndex + 1}",
+                text = if (isRequestSeat) stringResource(Res.string.request) else stringResource(Res.string.seat_number, seatIndex + 1),
                 style = textShadowStyle,
                 color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center,

@@ -51,6 +51,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shyden.shytalk.core.ui.SuperShyGold
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.Instant
@@ -106,7 +109,7 @@ fun DailyRewardDialog(
                 )
                 if (state.currentStreak > 0) {
                     Text(
-                        text = "${state.currentStreak}-day streak",
+                        text = stringResource(Res.string.day_streak, state.currentStreak),
                         style = MaterialTheme.typography.bodySmall,
                         color = SuperShyGold,
                         fontWeight = FontWeight.Bold
@@ -131,7 +134,7 @@ fun DailyRewardDialog(
                         )
                     } else {
                         Text(
-                            text = "+${reward.coinsAwarded} coins!",
+                            text = stringResource(Res.string.plus_coins, reward.coinsAwarded),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = SuperShyGold
@@ -139,7 +142,7 @@ fun DailyRewardDialog(
                     }
                     if (reward.isMilestone) {
                         Text(
-                            "Milestone bonus!",
+                            stringResource(Res.string.milestone_bonus),
                             color = Color(0xFFFF6B35),
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp
@@ -153,7 +156,15 @@ fun DailyRewardDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun").forEach { day ->
+                    listOf(
+                        stringResource(Res.string.day_mon),
+                        stringResource(Res.string.day_tue),
+                        stringResource(Res.string.day_wed),
+                        stringResource(Res.string.day_thu),
+                        stringResource(Res.string.day_fri),
+                        stringResource(Res.string.day_sat),
+                        stringResource(Res.string.day_sun)
+                    ).forEach { day ->
                         Text(
                             text = day,
                             fontSize = 10.sp,
@@ -223,7 +234,7 @@ fun DailyRewardDialog(
                     viewModel.dismissDialog()
                     onDismiss()
                 }) {
-                    Text("Close")
+                    Text(stringResource(Res.string.close))
                 }
             } else {
                 Button(
@@ -237,7 +248,7 @@ fun DailyRewardDialog(
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Text("Claim Today's Reward")
+                        Text(stringResource(Res.string.claim_todays_reward))
                     }
                 }
             }
@@ -247,7 +258,7 @@ fun DailyRewardDialog(
                 viewModel.dismissDialog()
                 onDismiss()
             }) {
-                Text(if (state.hasClaimedToday) "" else "Later")
+                Text(if (state.hasClaimedToday) "" else stringResource(Res.string.later))
             }
         }
     )
@@ -314,7 +325,7 @@ private fun DayCell(
             if (isClaimed) {
                 Icon(
                     Icons.Filled.Check,
-                    contentDescription = "Claimed",
+                    contentDescription = stringResource(Res.string.claimed),
                     tint = Color.White,
                     modifier = Modifier.size(12.dp)
                 )
@@ -338,7 +349,7 @@ private fun DayCell(
         if (isMilestone) {
             Icon(
                 Icons.Filled.Star,
-                contentDescription = "Milestone",
+                contentDescription = stringResource(Res.string.milestone),
                 tint = Color(0xFFFF6B35),
                 modifier = Modifier
                     .size(10.dp)
@@ -380,7 +391,7 @@ fun DailyRewardCelebrationDialog(
         },
         title = {
             Text(
-                text = "Reward Claimed!",
+                text = stringResource(Res.string.reward_claimed),
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
@@ -407,7 +418,7 @@ fun DailyRewardCelebrationDialog(
                         color = SuperShyGold
                     )
                     Text(
-                        text = "coins",
+                        text = stringResource(Res.string.coins),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -416,7 +427,7 @@ fun DailyRewardCelebrationDialog(
                 if (reward.isMilestone) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Milestone bonus!",
+                        text = stringResource(Res.string.milestone_bonus),
                         color = Color(0xFFFF6B35),
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp
@@ -426,7 +437,7 @@ fun DailyRewardCelebrationDialog(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "${state.currentStreak}-day streak",
+                    text = stringResource(Res.string.day_streak, state.currentStreak),
                     style = MaterialTheme.typography.bodyMedium,
                     color = SuperShyGold,
                     fontWeight = FontWeight.SemiBold
@@ -438,7 +449,7 @@ fun DailyRewardCelebrationDialog(
                 viewModel.dismissCelebration()
                 onDismiss()
             }) {
-                Text("Awesome!")
+                Text(stringResource(Res.string.awesome))
             }
         }
     )

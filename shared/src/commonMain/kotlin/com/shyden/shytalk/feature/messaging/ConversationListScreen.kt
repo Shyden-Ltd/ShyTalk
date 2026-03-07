@@ -46,6 +46,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -72,7 +75,7 @@ fun ConversationListScreen(
             OutlinedTextField(
                 value = uiState.searchQuery,
                 onValueChange = { viewModel.onSearchQueryChanged(it) },
-                placeholder = { Text("Search conversations...") },
+                placeholder = { Text(stringResource(Res.string.search_conversations)) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -85,7 +88,7 @@ fun ConversationListScreen(
                         viewModel.onSearchQueryChanged("")
                         showSearch = false
                     }) {
-                        Icon(Icons.Default.Close, contentDescription = "Close search")
+                        Icon(Icons.Default.Close, contentDescription = stringResource(Res.string.close))
                     }
                 }
             )
@@ -126,13 +129,13 @@ fun ConversationListScreen(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                             )
                             Text(
-                                text = if (uiState.searchQuery.isNotBlank()) "No matches found" else "No messages yet",
+                                text = if (uiState.searchQuery.isNotBlank()) stringResource(Res.string.no_matches_found) else stringResource(Res.string.no_messages),
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             if (uiState.searchQuery.isBlank()) {
                                 Text(
-                                    text = "Start a conversation from someone's\nprofile or user card in a room",
+                                    text = stringResource(Res.string.conversation_start_hint),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                     textAlign = TextAlign.Center
@@ -192,7 +195,7 @@ fun ConversationListScreen(
                                 ) {
                                     val isPinned = conversationWithUser.settings?.isPinned == true
                                     DropdownMenuItem(
-                                        text = { Text(if (isPinned) "Unpin" else "Pin") },
+                                        text = { Text(if (isPinned) stringResource(Res.string.unpin) else stringResource(Res.string.pin)) },
                                         onClick = {
                                             contextMenuConversationId = null
                                             viewModel.pinConversation(cId)
@@ -200,7 +203,7 @@ fun ConversationListScreen(
                                     )
                                     if (!conversationWithUser.isGroup) {
                                         DropdownMenuItem(
-                                            text = { Text("Delete Conversation") },
+                                            text = { Text(stringResource(Res.string.delete_conversation)) },
                                             onClick = {
                                                 contextMenuConversationId = null
                                                 showDeleteConfirm = cId
@@ -221,19 +224,19 @@ fun ConversationListScreen(
     showDeleteConfirm?.let { conversationId ->
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = null },
-            title = { Text("Delete Conversation") },
-            text = { Text("This will remove the conversation from your list. Messages are preserved and will reappear if the other person messages you again.") },
+            title = { Text(stringResource(Res.string.delete_conversation)) },
+            text = { Text(stringResource(Res.string.delete_conversation_warning)) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.hideConversation(conversationId)
                     showDeleteConfirm = null
                 }) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(Res.string.delete), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = null }) {
-                    Text("Cancel")
+                    Text(stringResource(Res.string.cancel))
                 }
             }
         )

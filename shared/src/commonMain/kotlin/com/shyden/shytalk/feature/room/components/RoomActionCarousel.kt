@@ -40,6 +40,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shyden.shytalk.core.ui.SuperShyGold
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 import kotlinx.coroutines.delay
 
 private const val PAGE_COUNT = 2
@@ -79,7 +82,7 @@ fun RoomActionCarousel(
                 when (page) {
                     0 -> SquareCarouselBanner(
                         icon = { MiniLuckySpinIcon(modifier = Modifier.size(28.dp)) },
-                        title = "Lucky Spin",
+                        title = stringResource(Res.string.lucky_spin),
                         gradientColors = listOf(Color(0xFFE53935), Color(0xFFFF6B35)),
                         onClick = onOpenGacha
                     )
@@ -92,7 +95,7 @@ fun RoomActionCarousel(
                                 modifier = Modifier.size(28.dp)
                             )
                         },
-                        title = "Daily",
+                        title = stringResource(Res.string.daily),
                         gradientColors = listOf(Color(0xFFFF6B35), Color(0xFFFFD700)),
                         onClick = onOpenDailyReward
                     )

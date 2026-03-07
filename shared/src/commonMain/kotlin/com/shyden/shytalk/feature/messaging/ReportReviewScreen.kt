@@ -45,6 +45,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shyden.shytalk.core.util.formatRelativeTime
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,10 +72,10 @@ fun ReportReviewScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Report Review") },
+                title = { Text(stringResource(Res.string.report_review)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.back))
                     }
                 }
             )
@@ -91,7 +94,7 @@ fun ReportReviewScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "No pending reports",
+                    text = stringResource(Res.string.no_pending_reports),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -159,7 +162,7 @@ private fun ReportCard(
             }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Reason: ${report.reason}",
+                text = stringResource(Res.string.report_reason_prefix, report.reason),
                 style = MaterialTheme.typography.bodyMedium
             )
             if (report.description.isNotBlank()) {
@@ -173,7 +176,7 @@ private fun ReportCard(
             if (report.messageText.isNotBlank()) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Message: \"${report.messageText}\"",
+                    text = stringResource(Res.string.report_message_prefix, report.messageText),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2
@@ -181,7 +184,7 @@ private fun ReportCard(
             }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Reporter: ${report.reporterName} | Reported: ${report.reportedUserName}",
+                text = stringResource(Res.string.report_reporter_reported, report.reporterName, report.reportedUserName),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -198,25 +201,25 @@ private fun ReportActionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Review Report") },
+        title = { Text(stringResource(Res.string.review_report)) },
         text = {
             Column {
-                Text("Type: ${report.type}", style = MaterialTheme.typography.bodyMedium)
-                Text("Reason: ${report.reason}", style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(Res.string.report_type_prefix, report.type), style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(Res.string.report_reason_prefix, report.reason), style = MaterialTheme.typography.bodyMedium)
                 if (report.description.isNotBlank()) {
-                    Text("Details: ${report.description}", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(Res.string.report_details_prefix, report.description), style = MaterialTheme.typography.bodySmall)
                 }
                 Spacer(modifier = Modifier.height(16.dp))
                 HorizontalDivider()
                 Spacer(modifier = Modifier.height(8.dp))
-                Text("Select action:", style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(Res.string.select_action), style = MaterialTheme.typography.titleSmall)
                 Spacer(modifier = Modifier.height(8.dp))
 
                 val actions = listOf(
-                    "warning" to "Issue Warning",
-                    "temp_suspension" to "Temporary Suspension",
-                    "perm_suspension" to "Permanent Suspension",
-                    "pm_ban" to "Ban from PM"
+                    "warning" to stringResource(Res.string.report_action_warning),
+                    "temp_suspension" to stringResource(Res.string.report_action_temp_suspension),
+                    "perm_suspension" to stringResource(Res.string.report_action_perm_suspension),
+                    "pm_ban" to stringResource(Res.string.report_action_pm_ban)
                 )
                 actions.forEach { (action, label) ->
                     Row(
@@ -248,13 +251,13 @@ private fun ReportActionDialog(
                         tint = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("No Action Needed")
+                    Text(stringResource(Res.string.no_action_needed))
                 }
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(Res.string.cancel))
             }
         }
     )

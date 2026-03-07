@@ -52,6 +52,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -75,8 +78,8 @@ fun NewMessageScreen(
 
     val selectedCount = uiState.selectedIds.size
     val title = when {
-        selectedCount >= 2 -> "New Group ($selectedCount selected)"
-        else -> "New Message"
+        selectedCount >= 2 -> stringResource(Res.string.new_group_selected, selectedCount)
+        else -> stringResource(Res.string.new_message)
     }
 
     Scaffold(
@@ -85,7 +88,7 @@ fun NewMessageScreen(
             TopAppBar(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.back))
                     }
                 },
                 title = { Text(title) }
@@ -101,7 +104,7 @@ fun NewMessageScreen(
             // Recent users row
             if (uiState.recentUsers.isNotEmpty() && uiState.searchQuery.isBlank() && !uiState.searchAllMode) {
                 Text(
-                    text = "Recent",
+                    text = stringResource(Res.string.recent),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -124,7 +127,7 @@ fun NewMessageScreen(
             // Selected count
             if (selectedCount > 0) {
                 Text(
-                    text = "$selectedCount selected",
+                    text = stringResource(Res.string.selected_count, selectedCount),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -135,14 +138,14 @@ fun NewMessageScreen(
             OutlinedTextField(
                 value = uiState.searchQuery,
                 onValueChange = { viewModel.setSearchQuery(it) },
-                placeholder = { Text("Search people...") },
+                placeholder = { Text(stringResource(Res.string.search_people)) },
                 modifier = Modifier.fillMaxWidth().testTag("newMessage_searchField"),
                 singleLine = true,
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
                     if (uiState.searchQuery.isNotEmpty()) {
                         IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear")
+                            Icon(Icons.Default.Close, contentDescription = stringResource(Res.string.close))
                         }
                     }
                 }
@@ -154,7 +157,7 @@ fun NewMessageScreen(
             FilterChip(
                 selected = uiState.searchAllMode,
                 onClick = { viewModel.toggleSearchAllMode() },
-                label = { Text("Search all users") }
+                label = { Text(stringResource(Res.string.search_all_users)) }
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -192,7 +195,7 @@ fun NewMessageScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = if (uiState.searchAllMode) "No users found" else "No followers or following found",
+                            text = if (uiState.searchAllMode) stringResource(Res.string.no_users_found) else stringResource(Res.string.no_followers_following_found),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -216,7 +219,7 @@ fun NewMessageScreen(
 
             // Dynamic bottom button
             if (selectedCount >= 2) {
-                // Next → Group Setup
+                // Next -> Group Setup
                 Button(
                     onClick = {
                         val ids = uiState.selectedIds.joinToString(",")
@@ -226,10 +229,10 @@ fun NewMessageScreen(
                 ) {
                     Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Next")
+                    Text(stringResource(Res.string.next))
                 }
             } else if (selectedCount == 1) {
-                // Message → Direct PM
+                // Message -> Direct PM
                 Button(
                     onClick = {
                         val userId = uiState.selectedIds.first()
@@ -239,7 +242,7 @@ fun NewMessageScreen(
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Message")
+                    Text(stringResource(Res.string.message_action))
                 }
             }
 
