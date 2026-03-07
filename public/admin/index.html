@@ -5910,7 +5910,7 @@
         });
         const data = await resp.json();
         if (!resp.ok) throw new Error(data.error || "Failed to load");
-        const config = data.config || {};
+        const config = data;
 
         for (const f of ECO_NUMBER_FIELDS) {
           const el = $(`#eco-${f}`);

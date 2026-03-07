@@ -29,6 +29,25 @@ router.get('/api/config/:key', async (req, res) => {
       if (req.params.key === 'app') {
         return res.json({ minVersionCode: 1, latestVersionCode: 1, latestVersionName: '' });
       }
+      if (req.params.key === 'economy') {
+        const defaults = {
+          beanConversionRate: 0.6,
+          beanRedeemBonusThreshold: 2000,
+          beanRedeemBonusMultiplier: 1.1,
+          pullCosts: { '1': 10, '10': 100, '100': 1000 },
+          broadcastSendThreshold: 0,
+          broadcastWinThreshold: 5000,
+          dropRateExponent: 1.5,
+          pitySoftStart: 80,
+          pityHardLimit: 120,
+          pitySoftMaxShift: 0.15,
+          pityHighValueThreshold: 5000,
+          dailyBase: 50,
+          milestoneRewards: { '7': 100, '14': 200, '30': 500, '60': 1000, '90': 2000 },
+        };
+        await db.doc('config/economy').set(defaults);
+        return res.json(defaults);
+      }
       return res.status(404).json({ error: 'Config not found' });
     }
     // Remove the Firestore doc id field, return plain config object
