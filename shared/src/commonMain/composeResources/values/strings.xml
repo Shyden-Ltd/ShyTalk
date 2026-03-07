@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common actions -->
+    <string name="cancel">Cancel</string>
+    <string name="confirm">Confirm</string>
+    <string name="ok">OK</string>
+    <string name="save">Save</string>
+    <string name="delete">Delete</string>
+    <string name="edit">Edit</string>
+    <string name="close">Close</string>
+    <string name="done">Done</string>
+    <string name="retry">Retry</string>
+    <string name="back">Back</string>
+    <string name="send">Send</string>
+    <string name="loading">Loading…</string>
+    <string name="error_generic">Something went wrong</string>
+
+    <!-- Message bubbles -->
+    <string name="edited">edited</string>
+    <string name="tap_to_join">Tap to join</string>
+    <string name="message_recalled_by_you">You recalled this message</string>
+    <string name="message_recalled">This message was recalled</string>
+    <string name="message_hidden_by_mod">This message was hidden by a moderator</string>
+    <string name="invite_to_mic">Invite to mic</string>
+
+    <!-- Context menu -->
+    <string name="react">React</string>
+    <string name="reply">Reply</string>
+    <string name="copy">Copy</string>
+    <string name="recall">Recall</string>
+    <string name="add_to_stickers">Add to Stickers</string>
+    <string name="hide_message">Hide Message</string>
+    <string name="report_message">Report Message</string>
+
+    <!-- Translation -->
+    <string name="translate">Translate</string>
+    <string name="translated_from">Translated from %1$s</string>
+    <string name="show_original">Show original</string>
+    <string name="translation_limit_reached">Daily limit reached. Upgrade to SuperShy for unlimited translations.</string>
+    <string name="auto_translate">Auto-translate</string>
+    <string name="translations_remaining">%1$d translations remaining today</string>
+
+    <!-- Settings -->
+    <string name="settings">Settings</string>
+    <string name="language">Language</string>
+    <string name="blocked_users">Blocked Users</string>
+    <string name="account">Account</string>
+    <string name="privacy">Privacy</string>
+    <string name="notifications">Notifications</string>
+    <string name="permissions">Permissions</string>
+    <string name="about">About</string>
+    <string name="sign_out">Sign Out</string>
+    <string name="sign_out_confirm">Are you sure you want to sign out?</string>
+
+    <!-- Home -->
+    <string name="home">Home</string>
+    <string name="create_room">Create Room</string>
+    <string name="room_name">Room name</string>
+    <string name="join">Join</string>
+    <string name="no_rooms">No rooms available</string>
+
+    <!-- Profile -->
+    <string name="profile">Profile</string>
+    <string name="followers">Followers</string>
+    <string name="following">Following</string>
+    <string name="follow">Follow</string>
+    <string name="unfollow">Unfollow</string>
+    <string name="block">Block</string>
+    <string name="unblock">Unblock</string>
+    <string name="report">Report</string>
+
+    <!-- Room -->
+    <string name="room">Room</string>
+    <string name="mute">Mute</string>
+    <string name="unmute">Unmute</string>
+    <string name="leave_room">Leave Room</string>
+    <string name="close_room">Close Room</string>
+    <string name="request_seat">Request Seat</string>
+    <string name="approve">Approve</string>
+    <string name="reject">Reject</string>
+    <string name="kick">Kick</string>
+    <string name="ban">Ban</string>
+
+    <!-- Messaging -->
+    <string name="messages">Messages</string>
+    <string name="type_message">Type a message…</string>
+    <string name="no_messages">No messages yet</string>
+    <string name="group_chat">Group Chat</string>
+    <string name="new_message">New Message</string>
+
+    <!-- Economy -->
+    <string name="wallet">Wallet</string>
+    <string name="shy_coins">ShyCoins</string>
+    <string name="shy_beans">ShyBeans</string>
+    <string name="send_gift">Send Gift</string>
+    <string name="daily_reward">Daily Reward</string>
+
+    <!-- Auth -->
+    <string name="sign_in">Sign In</string>
+    <string name="phone_number">Phone Number</string>
+    <string name="verification_code">Verification Code</string>
+    <string name="continue_with_google">Continue with Google</string>
+</resources>
