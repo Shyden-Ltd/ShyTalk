@@ -682,4 +682,30 @@ class AppSettingsViewModelTest {
         assertFalse(vm.uiState.value.selfDestructAlertEnabled)
         assertEquals("Failed to update privacy setting", vm.uiState.value.error)
     }
+
+    // ===== Language =====
+
+    @Test
+    fun `setLanguage updates state and calls updateProfile`() = runTest {
+        coEvery { userRepository.updateProfile(any(), any()) } returns Resource.Success(Unit)
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.setLanguage("es")
+        advanceUntilIdle()
+
+        assertEquals("es", vm.uiState.value.language)
+        coVerify { userRepository.updateProfile(currentUserId, match { it["language"] == "es" }) }
+    }
+
+    @Test
+    fun `init loads language from user`() = runTest {
+        val user = TestData.createTestUser(uid = currentUserId, language = "ja")
+        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        assertEquals("ja", vm.uiState.value.language)
+    }
 }

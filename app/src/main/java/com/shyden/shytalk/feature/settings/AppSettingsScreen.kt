@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
@@ -79,6 +80,7 @@ import com.shyden.shytalk.BuildConfig
 import com.shyden.shytalk.R
 import com.shyden.shytalk.core.model.PmPrivacy
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.util.LanguagePreference
 
 private enum class SettingsPage { Main, BlockedUsers, Account, Privacy, Notifications, Permissions, About }
 
@@ -123,8 +125,10 @@ fun AppSettingsScreen(
     } else {
         when (currentPage) {
             SettingsPage.Main -> SettingsMainPage(
+                uiState = uiState,
                 onNavigateBack = onNavigateBack,
                 onNavigateToPage = { currentPageName = it.name },
+                onSetLanguage = { viewModel.setLanguage(it) },
                 onSignOut = { showSignOutDialog = true },
                 snackbarHostState = snackbarHostState
             )
@@ -291,14 +295,40 @@ fun AppSettingsScreen(
 
 // ===== Main Settings Menu =====
 
+private val SUPPORTED_LANGUAGES = listOf(
+    "en" to "English",
+    "es" to "Español",
+    "ar" to "العربية",
+    "ja" to "日本語",
+    "ko" to "한국어",
+    "zh" to "中文",
+    "fr" to "Français",
+    "de" to "Deutsch",
+    "pt" to "Português",
+    "ru" to "Русский",
+    "hi" to "हिन्दी",
+    "tr" to "Türkçe",
+    "it" to "Italiano",
+    "th" to "ไทย",
+    "vi" to "Tiếng Việt",
+    "id" to "Bahasa Indonesia",
+    "pl" to "Polski",
+    "nl" to "Nederlands",
+    "sv" to "Svenska",
+    "uk" to "Українська"
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsMainPage(
+    uiState: AppSettingsUiState,
     onNavigateBack: () -> Unit,
     onNavigateToPage: (SettingsPage) -> Unit,
+    onSetLanguage: (String) -> Unit,
     onSignOut: () -> Unit,
     snackbarHostState: SnackbarHostState
 ) {
+    var showLanguageDialog by remember { mutableStateOf(false) }
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -345,6 +375,13 @@ private fun SettingsMainPage(
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             SettingsMenuItem(
+                icon = Icons.Default.Language,
+                title = "Language",
+                subtitle = SUPPORTED_LANGUAGES.firstOrNull { it.first == uiState.language }?.second ?: "English",
+                onClick = { showLanguageDialog = true }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            SettingsMenuItem(
                 icon = Icons.Default.Security,
                 title = "Permissions",
                 onClick = { onNavigateToPage(SettingsPage.Permissions) }
@@ -380,12 +417,56 @@ private fun SettingsMainPage(
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
+
+    if (showLanguageDialog) {
+        AlertDialog(
+            onDismissRequest = { showLanguageDialog = false },
+            title = { Text("Language") },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState())
+                ) {
+                    SUPPORTED_LANGUAGES.forEach { (code, name) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onSetLanguage(code)
+                                    showLanguageDialog = false
+                                }
+                                .padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            androidx.compose.material3.RadioButton(
+                                selected = uiState.language == code,
+                                onClick = {
+                                    onSetLanguage(code)
+                                    showLanguageDialog = false
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = name,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showLanguageDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 @Composable
 private fun SettingsMenuItem(
     icon: ImageVector,
     title: String,
+    subtitle: String? = null,
     onClick: () -> Unit
 ) {
     Row(
@@ -401,11 +482,19 @@ private fun SettingsMenuItem(
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.weight(1f)
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
         Icon(
             Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,

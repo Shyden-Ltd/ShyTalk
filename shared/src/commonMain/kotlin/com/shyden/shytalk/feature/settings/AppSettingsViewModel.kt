@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.model.PmPrivacy
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.util.LanguagePreference
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.remote.AppConfigService
 import com.shyden.shytalk.data.repository.AuthRepository
@@ -45,7 +46,8 @@ data class AppSettingsUiState(
     val cacheCleared: Boolean = false,
     val showClearCacheDialog: Boolean = false,
     val updateCheckResult: UpdateCheckResult? = null,
-    val isCheckingUpdate: Boolean = false
+    val isCheckingUpdate: Boolean = false,
+    val language: String = LanguagePreference.get()
 )
 
 class AppSettingsViewModel(
@@ -100,7 +102,8 @@ class AppSettingsViewModel(
                             dndEndHour = user.dndEndHour,
                             dndEndMinute = user.dndEndMinute,
                             minGiftAnimationValue = user.minGiftAnimationValue,
-                            selfDestructAlertEnabled = user.selfDestructAlertEnabled
+                            selfDestructAlertEnabled = user.selfDestructAlertEnabled,
+                            language = user.language
                         )
                     }
                 }
@@ -253,6 +256,14 @@ class AppSettingsViewModel(
         _uiState.update { it.copy(minGiftAnimationValue = value) }
         viewModelScope.launch {
             userRepository.updateProfile(currentUserId, mapOf("minGiftAnimationValue" to value))
+        }
+    }
+
+    fun setLanguage(languageCode: String) {
+        _uiState.update { it.copy(language = languageCode) }
+        LanguagePreference.set(languageCode)
+        viewModelScope.launch {
+            userRepository.updateProfile(currentUserId, mapOf("language" to languageCode))
         }
     }
 
