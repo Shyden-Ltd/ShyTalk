@@ -42,7 +42,10 @@ import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.util.flagEmojiForCode
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.ui.components.FlagBadge
+import org.jetbrains.compose.resources.stringResource
 
 private val BubbleShape = RoundedCornerShape(
     topStart = 4.dp,
@@ -159,7 +162,7 @@ fun MessageBubble(
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 Icons.Default.Mic,
-                                contentDescription = "Invite to mic",
+                                contentDescription = stringResource(Res.string.invite_to_mic),
                                 modifier = Modifier.size(16.dp),
                                 tint = MaterialTheme.colorScheme.primary
                             )
@@ -232,7 +235,7 @@ fun MessageBubble(
                             )
                             if (message.isEdited) {
                                 Text(
-                                    text = "edited",
+                                    text = stringResource(Res.string.edited),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontStyle = FontStyle.Italic,
                                     color = if (isSelf) {

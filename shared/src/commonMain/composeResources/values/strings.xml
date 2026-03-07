@@ -22,6 +22,12 @@
     <string name="message_recalled">This message was recalled</string>
     <string name="message_hidden_by_mod">This message was hidden by a moderator</string>
     <string name="invite_to_mic">Invite to mic</string>
+    <string name="closed">Closed</string>
+    <string name="edited_count">Edited (%1$d)</string>
+    <string name="read">Read</string>
+    <string name="sent">Sent</string>
+    <string name="sticker">Sticker</string>
+    <string name="image">Image</string>
 
     <!-- Context menu -->
     <string name="react">React</string>
