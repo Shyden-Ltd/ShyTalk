@@ -58,6 +58,7 @@
     <string name="show_original">Show original</string>
     <string name="translation_limit_reached">Daily limit reached. Upgrade to SuperShy for unlimited translations.</string>
     <string name="auto_translate">Auto-translate</string>
+    <string name="auto_translate_description">Automatically translate incoming messages to your language</string>
     <string name="translations_remaining">%1$d translations remaining today</string>
 
     <!-- Settings -->

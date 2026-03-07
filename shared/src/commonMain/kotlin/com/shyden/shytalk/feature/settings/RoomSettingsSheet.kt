@@ -129,6 +129,35 @@ fun RoomSettingsSheet(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
+            // Auto-translate toggle (SuperShy only)
+            if (uiState.isSuperShy) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(Res.string.auto_translate),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Text(
+                            text = stringResource(Res.string.auto_translate_description),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = uiState.autoTranslate,
+                        onCheckedChange = { viewModel.toggleAutoTranslate() }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
             // Gift Animations filter (per-user setting)
             var sliderValue by remember(uiState.minGiftAnimationValue) {
                 mutableStateOf(uiState.minGiftAnimationValue.toFloat())

@@ -13,6 +13,7 @@ import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.ui.effects.AnimationQueue
 import com.shyden.shytalk.core.util.Constants
+import com.shyden.shytalk.core.util.LanguagePreference
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.logD
@@ -152,6 +153,7 @@ class RoomViewModel(
     private var userObserverJob: Job? = null
     private var observedUserIds: Set<String> = emptySet()
     private var expiryUpsellShown = false
+    private val autoTranslatedMessageIds = mutableSetOf<String>()
 
     // Gift animation queue — room-wide gift events
     val giftAnimationQueue = AnimationQueue()
@@ -715,6 +717,7 @@ class RoomViewModel(
             lastFilteredMessages = filtered
             _uiState.update { it.copy(messages = filtered) }
             loadMessageSenderUsers(filtered)
+            autoTranslateNewMessages(filtered)
         }
     }
 
@@ -1863,6 +1866,32 @@ class RoomViewModel(
 
     fun setRoomScreenVisible(visible: Boolean) {
         roomLifecycleManager.setRoomScreenVisible(visible)
+    }
+
+    private fun autoTranslateNewMessages(messages: List<Message>) {
+        if (!LanguagePreference.getAutoTranslate()) return
+        val repo = translationRepository ?: return
+        val uid = _uiState.value.currentUserId
+        val targetLang = LanguagePreference.get()
+        val toTranslate = messages.filter { msg ->
+            msg.senderId != uid &&
+            msg.senderId != "system" &&
+            msg.type == com.shyden.shytalk.core.model.MessageType.TEXT &&
+            msg.text.isNotBlank() &&
+            msg.messageId !in autoTranslatedMessageIds &&
+            !_uiState.value.translations.containsKey(msg.messageId)
+        }
+        for (msg in toTranslate) {
+            autoTranslatedMessageIds.add(msg.messageId)
+            viewModelScope.launch {
+                when (val result = repo.translate(msg.text, targetLang, "rooms/$roomId/messages/${msg.messageId}")) {
+                    is Resource.Success -> _uiState.update {
+                        it.copy(translations = it.translations + (msg.messageId to result.data.translatedText))
+                    }
+                    else -> { /* ignore errors for auto-translate */ }
+                }
+            }
+        }
     }
 
     fun translateMessage(messageId: String) {

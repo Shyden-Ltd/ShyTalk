@@ -7,6 +7,7 @@ import com.shyden.shytalk.core.model.SeatRequest
 import com.shyden.shytalk.core.util.Constants.SEAT_REQUEST_IMMEDIATE_THRESHOLD_MS
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
+import com.shyden.shytalk.core.util.LanguagePreference
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.SeatRequestRepository
@@ -27,6 +28,8 @@ data class RoomSettingsUiState(
     val pendingRequests: List<SeatRequest> = emptyList(),
     val userNames: Map<String, String> = emptyMap(),
     val minGiftAnimationValue: Int = 0,
+    val isSuperShy: Boolean = false,
+    val autoTranslate: Boolean = false,
     val isLoading: Boolean = false,
     val error: String? = null
 )
@@ -49,12 +52,18 @@ class RoomSettingsViewModel(
     fun loadRoom(roomId: String) {
         currentRoomId = roomId
         viewModelScope.launch {
-            // Load the user's gift animation preference
+            // Load the user's preferences and SuperShy status
             val uid = currentUserId
             if (uid.isNotEmpty()) {
                 when (val result = userRepository.getUser(uid)) {
                     is Resource.Success -> {
-                        _uiState.update { it.copy(minGiftAnimationValue = result.data.minGiftAnimationValue) }
+                        _uiState.update {
+                            it.copy(
+                                minGiftAnimationValue = result.data.minGiftAnimationValue,
+                                isSuperShy = result.data.isSuperShy,
+                                autoTranslate = LanguagePreference.getAutoTranslate()
+                            )
+                        }
                     }
                     else -> {}
                 }
@@ -217,6 +226,12 @@ class RoomSettingsViewModel(
         viewModelScope.launch {
             roomRepository.closeRoom(currentRoomId)
         }
+    }
+
+    fun toggleAutoTranslate() {
+        val newValue = !_uiState.value.autoTranslate
+        LanguagePreference.setAutoTranslate(newValue)
+        _uiState.update { it.copy(autoTranslate = newValue) }
     }
 
     fun setMinGiftAnimationValue(value: Int) {

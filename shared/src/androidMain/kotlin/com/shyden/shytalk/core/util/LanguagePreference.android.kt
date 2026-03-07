@@ -8,6 +8,7 @@ import android.content.SharedPreferences
 actual object LanguagePreference {
     private const val PREFS_NAME = "shytalk_prefs"
     private const val KEY_LANGUAGE = "preferred_language"
+    private const val KEY_AUTO_TRANSLATE = "auto_translate"
     private var prefs: SharedPreferences? = null
 
     fun init(context: Context) {
@@ -20,5 +21,12 @@ actual object LanguagePreference {
 
     actual fun set(languageCode: String) {
         prefs?.edit()?.putString(KEY_LANGUAGE, languageCode)?.apply()
+    }
+
+    actual fun getAutoTranslate(): Boolean =
+        prefs?.getBoolean(KEY_AUTO_TRANSLATE, false) ?: false
+
+    actual fun setAutoTranslate(enabled: Boolean) {
+        prefs?.edit()?.putBoolean(KEY_AUTO_TRANSLATE, enabled)?.apply()
     }
 }
