@@ -536,6 +536,10 @@ fun PrivateChatScreen(
                             } else if (!uiState.isGroup && uiState.isModOrAbove) {
                                 { viewModel.hideMessage(message.messageId) }
                             } else null,
+                            onTranslate = if (!isSent && message.text.isNotBlank()) {
+                                { viewModel.translateMessage(message.messageId) }
+                            } else null,
+                            translatedText = uiState.translations[message.messageId],
                             isModOrAbove = uiState.isModOrAbove,
                             isGroupChat = uiState.isGroup
                         )

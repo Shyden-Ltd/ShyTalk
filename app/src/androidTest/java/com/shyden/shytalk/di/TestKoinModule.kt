@@ -102,7 +102,7 @@ val testModule = module {
     viewModel { ProfileViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { RequiredDOBViewModel(get(), get()) }
     viewModel { params -> FollowListViewModel(params[0], params[1], get(), get()) }
-    viewModel { params -> RoomViewModel(params[0], get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    viewModel { params -> RoomViewModel(params[0], get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { AppSettingsViewModel(get(), get(), get()) }
     viewModel { RoomSettingsViewModel(get(), get(), get(), get()) }
     viewModel { ConversationListViewModel(get(), get(), get()) }
@@ -116,7 +116,8 @@ val testModule = module {
             typingRepository = get(),
             reportRepository = get(),
             storageRepository = get(),
-            initialConversationId = values.getOrNull(1) as? String
+            initialConversationId = values.getOrNull(1) as? String,
+            translationRepository = get()
         )
     }
     viewModel { ReportReviewViewModel(get(), get()) }

@@ -86,6 +86,8 @@ fun PrivateMessageBubble(
     onRecall: () -> Unit = {},
     onSaveSticker: ((String) -> Unit)? = null,
     onHideMessage: (() -> Unit)? = null,
+    onTranslate: (() -> Unit)? = null,
+    translatedText: String? = null,
     isModOrAbove: Boolean = false,
     isGroupChat: Boolean = false,
     modifier: Modifier = Modifier
@@ -381,6 +383,24 @@ fun PrivateMessageBubble(
                             else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+
+                    // Translated text
+                    if (translatedText != null && message.text.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = translatedText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontStyle = FontStyle.Italic,
+                            color = if (isSent) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                        )
+                        Text(
+                            text = stringResource(Res.string.show_original),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.clickable { /* toggle handled by VM */ }
+                        )
+                    }
                 }
 
                 // Bottom row: edited indicator + timestamp + read receipt / sending indicator
@@ -482,6 +502,15 @@ fun PrivateMessageBubble(
                             clipboardManager.setText(AnnotatedString(message.text))
                         }
                     )
+                    if (onTranslate != null && message.text.isNotBlank() && translatedText == null) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(Res.string.translate)) },
+                            onClick = {
+                                showContextMenu = false
+                                onTranslate()
+                            }
+                        )
+                    }
                     if (canEdit) {
                         DropdownMenuItem(
                             text = { Text(stringResource(Res.string.edit)) },

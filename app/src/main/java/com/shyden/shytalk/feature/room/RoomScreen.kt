@@ -789,6 +789,8 @@ fun RoomScreen(
                         onEditMessage = { viewModel.editMessage(it) },
                         onCancelEdit = { viewModel.cancelEditMessage() },
                         aliases = uiState.aliases,
+                        translations = uiState.translations,
+                        onTranslateMessage = { viewModel.translateMessage(it) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)

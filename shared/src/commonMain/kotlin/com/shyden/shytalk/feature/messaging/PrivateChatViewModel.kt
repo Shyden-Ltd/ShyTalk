@@ -29,6 +29,7 @@ import com.shyden.shytalk.data.repository.PrivateMessageRepository
 import com.shyden.shytalk.data.repository.ReportRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.StorageRepository
+import com.shyden.shytalk.data.repository.TranslationRepository
 import com.shyden.shytalk.data.repository.TypingRepository
 import com.shyden.shytalk.data.repository.UserRepository
 import io.ktor.client.HttpClient
@@ -88,7 +89,8 @@ data class PrivateChatUiState(
     val isRefreshing: Boolean = false,
     val aliases: Map<String, String> = emptyMap(),
     // Room invite preview data: roomId → (room, seatUsers)
-    val roomInvites: Map<String, RoomInvitePreview> = emptyMap()
+    val roomInvites: Map<String, RoomInvitePreview> = emptyMap(),
+    val translations: Map<String, String> = emptyMap()
 )
 
 class PrivateChatViewModel(
@@ -105,7 +107,8 @@ class PrivateChatViewModel(
     private val stickerStorage: StickerStorage? = null,
     private val initialConversationId: String? = null,
     private val conversationWs: ConversationWebSocketService? = null,
-    private val roomRepository: RoomRepository? = null
+    private val roomRepository: RoomRepository? = null,
+    private val translationRepository: TranslationRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PrivateChatUiState())
@@ -1219,6 +1222,23 @@ class PrivateChatViewModel(
                 _uiState.update { state ->
                     state.copy(roomInvites = state.roomInvites + (roomId to RoomInvitePreview(room, seatUsers)))
                 }
+            }
+        }
+    }
+
+    fun translateMessage(messageId: String) {
+        val repo = translationRepository ?: return
+        val message = _uiState.value.messages.find { it.messageId == messageId } ?: return
+        if (_uiState.value.translations.containsKey(messageId)) return
+        val convId = _uiState.value.conversationId
+        val targetLang = com.shyden.shytalk.core.util.LanguagePreference.get()
+        viewModelScope.launch {
+            val messagePath = if (convId.isNotEmpty()) "conversations/$convId/messages/$messageId" else null
+            when (val result = repo.translate(message.text, targetLang, messagePath)) {
+                is Resource.Success -> _uiState.update {
+                    it.copy(translations = it.translations + (messageId to result.data.translatedText))
+                }
+                else -> { /* Loading or Error — silently fail */ }
             }
         }
     }

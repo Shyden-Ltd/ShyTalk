@@ -27,6 +27,7 @@ import com.shyden.shytalk.data.repository.EconomyRepository
 import com.shyden.shytalk.data.repository.MessageRepository
 import com.shyden.shytalk.data.repository.ReportRepository
 import com.shyden.shytalk.data.repository.StorageRepository
+import com.shyden.shytalk.data.repository.TranslationRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.SeatRequestRepository
 import com.shyden.shytalk.data.repository.UserRepository
@@ -105,7 +106,8 @@ data class RoomUiState(
     val aliases: Map<String, String> = emptyMap(),
     val maxRoomDurationMs: Long = Constants.MAX_ROOM_DURATION_MS,
     val showExpiryUpsellDialog: Boolean = false,
-    val effectiveSeatCount: Int = Constants.MAX_SEATS
+    val effectiveSeatCount: Int = Constants.MAX_SEATS,
+    val translations: Map<String, String> = emptyMap()
 )
 
 class RoomViewModel(
@@ -120,7 +122,8 @@ class RoomViewModel(
     private val roomLifecycleManager: RoomLifecycleManager,
     private val reportRepository: ReportRepository,
     private val storageRepository: StorageRepository,
-    private val economyRepository: EconomyRepository
+    private val economyRepository: EconomyRepository,
+    private val translationRepository: TranslationRepository? = null
 ) : ViewModel() {
 
     companion object {
@@ -1860,6 +1863,21 @@ class RoomViewModel(
 
     fun setRoomScreenVisible(visible: Boolean) {
         roomLifecycleManager.setRoomScreenVisible(visible)
+    }
+
+    fun translateMessage(messageId: String) {
+        val repo = translationRepository ?: return
+        val message = _uiState.value.messages.find { it.messageId == messageId } ?: return
+        if (_uiState.value.translations.containsKey(messageId)) return
+        val targetLang = com.shyden.shytalk.core.util.LanguagePreference.get()
+        viewModelScope.launch {
+            when (val result = repo.translate(message.text, targetLang, "rooms/$roomId/messages/$messageId")) {
+                is Resource.Success -> _uiState.update {
+                    it.copy(translations = it.translations + (messageId to result.data.translatedText))
+                }
+                else -> { /* Loading or Error */ }
+            }
+        }
     }
 
     override fun onCleared() {

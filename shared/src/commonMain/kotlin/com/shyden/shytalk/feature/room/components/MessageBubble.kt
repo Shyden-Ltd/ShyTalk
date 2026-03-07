@@ -110,6 +110,8 @@ fun MessageBubble(
     onTapUser: () -> Unit,
     onInvite: () -> Unit,
     onEditMessage: (() -> Unit)? = null,
+    onTranslate: (() -> Unit)? = null,
+    translatedText: String? = null,
     aliases: Map<String, String> = emptyMap()
 ) {
     val canInvite = (currentRole == RoomRole.OWNER || currentRole == RoomRole.HOST)
@@ -243,6 +245,27 @@ fun MessageBubble(
                                     } else {
                                         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                     }
+                                )
+                            }
+                            if (translatedText != null) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = translatedText,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontStyle = FontStyle.Italic,
+                                    color = if (isSelf) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                                    }
+                                )
+                            }
+                            if (onTranslate != null && translatedText == null && !isSelf) {
+                                Text(
+                                    text = stringResource(Res.string.translate),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.clickable { onTranslate() }
                                 )
                             }
                         }
