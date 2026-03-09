@@ -2711,23 +2711,10 @@
           .gift-actions button { padding: 3px 6px; font-size: 11px; }
         }
 
-        /* Profile Preview Panel */
-        .profile-preview { background: var(--surface); border-radius: 12px; overflow: hidden; margin-bottom: 16px; border: 1px solid var(--border); }
-        .profile-preview-toggle { display: flex; gap: 6px; padding: 10px 12px; background: var(--surface2); }
-        .profile-preview-toggle button { padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; background: transparent; color: var(--text2); border: 1px solid var(--border); }
-        .profile-preview-toggle button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-        .profile-preview-cover { height: 120px; background-size: cover; background-position: center; background-color: var(--surface2); }
-        .profile-preview-avatar { width: 72px; height: 72px; border-radius: 50%; border: 3px solid var(--surface); margin-top: -36px; margin-left: 16px; object-fit: cover; background-color: var(--surface2); display: block; }
-        .profile-preview-info { padding: 8px 16px 16px; }
-        .profile-preview-name { font-size: 18px; font-weight: 600; color: var(--text); }
-        .profile-preview-id { font-size: 13px; color: var(--text2); margin-top: 2px; }
-        .profile-preview-desc { font-size: 13px; color: var(--text2); margin-top: 8px; white-space: pre-wrap; max-height: 60px; overflow: hidden; }
-        .profile-preview-badges { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
-        .profile-preview-badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
-        .profile-preview-badge.supershy { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; }
-        .profile-preview-badge.usertype { background: var(--accent); color: #fff; }
-        .profile-preview-stats { display: flex; gap: 24px; margin-top: 12px; font-size: 13px; color: var(--text2); }
-        .profile-preview-stats strong { color: var(--text); }
+        /* Profile Preview Panel — side-by-side */
+        .profile-preview-row { display: flex; gap: 24px; margin-bottom: 24px; }
+        .profile-preview-row .preview-card { flex: 1; background: var(--surface2); border-radius: 12px; padding: 16px; text-align: center; }
+        @media (max-width: 700px) { .profile-preview-row { flex-direction: column; } }
     </style>
 <script src="/js/logger.js"></script>
 </head>
@@ -2791,22 +2778,32 @@
             </div>
 
             <div class="user-subpanel visible" data-subtab="profile">
-            <!-- Profile Preview -->
-            <div class="profile-preview" id="profile-preview" style="display:none;">
-                <div class="profile-preview-toggle">
-                    <button id="preview-current-btn" class="active">Current</button>
-                    <button id="preview-draft-btn">Preview</button>
-                </div>
-                <div id="profile-preview-cover" class="profile-preview-cover"></div>
-                <img id="profile-preview-avatar" class="profile-preview-avatar" alt="Profile photo">
-                <div class="profile-preview-info">
-                    <div class="profile-preview-name" id="preview-name"></div>
-                    <div class="profile-preview-id" id="preview-id"></div>
-                    <div class="profile-preview-badges" id="preview-badges"></div>
-                    <div class="profile-preview-desc" id="preview-desc"></div>
-                    <div class="profile-preview-stats" id="preview-stats"></div>
-                </div>
+            <!-- Side-by-side Profile Preview -->
+            <div class="profile-preview-row" id="profile-preview" style="display:none;">
+              <div class="preview-card">
+                <h4 style="margin:0 0 12px 0; color:var(--text2); font-size:13px;">Current Profile</h4>
+                <div id="pc-cover" style="height:80px; border-radius:8px; background:#333; margin-bottom:-24px; background-size:cover; background-position:center;"></div>
+                <img id="pc-avatar" style="width:48px; height:48px; border-radius:50%; border:3px solid var(--surface2); margin-bottom:8px; object-fit:cover;" alt="Avatar">
+                <div id="pc-name" style="font-weight:600; color:var(--text);"></div>
+                <div id="pc-id" style="font-size:12px; color:var(--text2);"></div>
+                <div id="pc-badge" style="font-size:11px; color:var(--accent); margin:4px 0;"></div>
+                <div id="pc-desc" style="font-size:12px; color:var(--text2); margin:8px 0; max-height:60px; overflow:hidden;"></div>
+                <div id="pc-flag" style="font-size:13px;"></div>
+                <div id="pc-counts" style="font-size:11px; color:var(--text2); margin-top:8px;"></div>
+              </div>
+              <div class="preview-card">
+                <h4 style="margin:0 0 12px 0; color:var(--text2); font-size:13px;">Draft Preview</h4>
+                <div id="pd-cover" style="height:80px; border-radius:8px; background:#333; margin-bottom:-24px; background-size:cover; background-position:center;"></div>
+                <img id="pd-avatar" style="width:48px; height:48px; border-radius:50%; border:3px solid var(--surface2); margin-bottom:8px; object-fit:cover;" alt="Avatar">
+                <div id="pd-name" style="font-weight:600; color:var(--text);"></div>
+                <div id="pd-id" style="font-size:12px; color:var(--text2);"></div>
+                <div id="pd-badge" style="font-size:11px; color:var(--accent); margin:4px 0;"></div>
+                <div id="pd-desc" style="font-size:12px; color:var(--text2); margin:8px 0; max-height:60px; overflow:hidden;"></div>
+                <div id="pd-flag" style="font-size:13px;"></div>
+                <div id="pd-counts" style="font-size:11px; color:var(--text2); margin-top:8px;"></div>
+              </div>
             </div>
+
             <!-- Identity -->
             <div class="form-section">
                 <h3>Identity</h3>
@@ -2819,11 +2816,50 @@
                     <input type="text" data-field="displayName" aria-label="Display Name">
                 </div>
                 <div class="field-group">
+                    <label>User Type</label>
+                    <select data-field="userType" aria-label="User Type">
+                        <option value="MEMBER">MEMBER</option>
+                        <option value="SHYTALK_OFFICIAL">SHYTALK_OFFICIAL</option>
+                        <option value="MC_SINGER">MC_SINGER</option>
+                        <option value="MC_EVENT_HOST">MC_EVENT_HOST</option>
+                        <option value="TEACHER">TEACHER</option>
+                    </select>
+                </div>
+                <div class="field-group">
+                    <label>Nationality</label>
+                    <div class="field-row">
+                        <select data-field="nationality" id="nationality-select"
+                                aria-label="Nationality"></select>
+                        <button class="btn-clear" data-clear="nationality">Clear</button>
+                    </div>
+                </div>
+                <div class="field-group">
+                    <label>Description</label>
+                    <div class="field-row">
+                        <textarea data-field="description" rows="3"
+                                  aria-label="Description"></textarea>
+                        <button class="btn-clear" data-clear="description">Clear</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Account -->
+            <div class="form-section">
+                <h3>Account</h3>
+                <div class="field-group">
                     <label>Email</label>
                     <div class="field-row">
                         <input type="text" data-field="email" id="email-input" aria-label="Email">
                         <button class="btn-clear" id="email-toggle" type="button">Show</button>
                         <button class="btn-clear" data-clear="email">Clear</button>
+                    </div>
+                </div>
+                <div class="field-group">
+                    <label>Date of Birth</label>
+                    <div class="field-row">
+                        <input type="datetime-local" data-field="dateOfBirth"
+                               aria-label="Date of Birth">
+                        <button class="btn-clear" data-clear="dateOfBirth">Clear</button>
                     </div>
                 </div>
                 <div class="field-group">
@@ -2844,37 +2880,11 @@
                     </div>
                     <div id="temp-id-current" style="font-size:12px;color:var(--text2);margin-top:4px;"></div>
                 </div>
-                <div class="field-group">
-                    <label>User Type</label>
-                    <select data-field="userType" aria-label="User Type">
-                        <option value="MEMBER">MEMBER</option>
-                        <option value="SHYTALK_OFFICIAL">SHYTALK_OFFICIAL</option>
-                        <option value="MC_SINGER">MC_SINGER</option>
-                        <option value="MC_EVENT_HOST">MC_EVENT_HOST</option>
-                        <option value="TEACHER">TEACHER</option>
-                    </select>
-                </div>
-                <div class="field-group">
-                    <label>Nationality</label>
-                    <div class="field-row">
-                        <select data-field="nationality" id="nationality-select"
-                                aria-label="Nationality"></select>
-                        <button class="btn-clear" data-clear="nationality">Clear</button>
-                    </div>
-                </div>
             </div>
 
-            <!-- Profile -->
+            <!-- Media -->
             <div class="form-section">
-                <h3>Profile</h3>
-                <div class="field-group">
-                    <label>Description</label>
-                    <div class="field-row">
-                        <textarea data-field="description" rows="3"
-                                  aria-label="Description"></textarea>
-                        <button class="btn-clear" data-clear="description">Clear</button>
-                    </div>
-                </div>
+                <h3>Media</h3>
                 <div class="field-group">
                     <label>Profile Photo URL</label>
                     <div class="field-row">
@@ -2908,28 +2918,6 @@
                     <label for="cb-hideAge">Hide Age</label>
                 </div>
             </div>
-
-            <!-- Timestamps -->
-            <div class="form-section">
-                <h3>Timestamps</h3>
-                <div class="field-group">
-                    <label>Date of Birth</label>
-                    <div class="field-row">
-                        <input type="datetime-local" data-field="dateOfBirth"
-                               aria-label="Date of Birth">
-                        <button class="btn-clear" data-clear="dateOfBirth">Clear</button>
-                    </div>
-                </div>
-                <div class="field-group">
-                    <label>Created At <span class="readonly-badge">READ ONLY</span></label>
-                    <div class="uid-display" id="field-createdAt"></div>
-                </div>
-                <div class="field-group">
-                    <label>Last Seen At <span class="readonly-badge">READ ONLY</span></label>
-                    <div class="uid-display" id="field-lastSeenAt"></div>
-                </div>
-            </div>
-
 
             <!-- Lists -->
             <div class="form-section">
@@ -2965,6 +2953,12 @@
                                    aria-label="Add follower user ID">
                             <button type="button">Add</button>
                         </div>
+                    </div>
+                </div>
+                <div class="field-group">
+                    <label>Stalkers <span class="readonly-badge">READ ONLY</span></label>
+                    <div id="stalkers-list" style="min-height:32px; padding:8px; background:var(--surface2); border-radius:6px; font-size:13px;">
+                        <span style="color:var(--text2); font-style:italic;">Loading...</span>
                     </div>
                 </div>
             </div>
@@ -4539,9 +4533,11 @@
         }
       }
 
-      // Read-only timestamps
-      $("#field-createdAt").textContent = data.createdAt ? new Date(data.createdAt).toLocaleString() : "—";
-      $("#field-lastSeenAt").textContent = data.lastSeenAt ? new Date(data.lastSeenAt).toLocaleString() : "—";
+      // Read-only timestamps (elements may be in moderation sub-tab)
+      var _createdAtEl = $("#field-createdAt");
+      if (_createdAtEl) _createdAtEl.textContent = data.createdAt ? new Date(data.createdAt).toLocaleString() : "\u2014";
+      var _lastSeenEl = $("#field-lastSeenAt");
+      if (_lastSeenEl) _lastSeenEl.textContent = data.lastSeenAt ? new Date(data.lastSeenAt).toLocaleString() : "\u2014";
 
       userForm.classList.add("visible");
     }
@@ -10444,117 +10440,109 @@
     // ══════════════════════════════════════════════════════════════
 
     // ══════════════════════════════════════════════════════════════
-    // PROFILE PREVIEW PANEL (Users tab - Profile sub-tab)
+    // PROFILE PREVIEW PANEL — side-by-side (Users tab - Profile sub-tab)
     // ══════════════════════════════════════════════════════════════
 
-    let _previewMode = "current";
-    let _previewUserData = null;
-
-    function renderProfilePreview(data) {
-        if (!data) return;
-        const coverEl = document.getElementById("profile-preview-cover");
-        const avatarEl = document.getElementById("profile-preview-avatar");
-        const nameEl = document.getElementById("preview-name");
-        const idEl = document.getElementById("preview-id");
-        const badgesEl = document.getElementById("preview-badges");
-        const descEl = document.getElementById("preview-desc");
-        const statsEl = document.getElementById("preview-stats");
-
-        // Cover photo
-        const coverUrl = data.coverPhotoUrl;
-        coverEl.style.backgroundImage = coverUrl ? `url(${coverUrl})` : "none";
-
-        // Avatar
-        const photoUrl = data.profilePhotoUrl || data.avatarUrl || "";
-        if (photoUrl) {
-            avatarEl.src = photoUrl;
-            avatarEl.style.display = "block";
-        } else {
-            avatarEl.src = "";
-            avatarEl.style.display = "block";
-        }
-
-        // Name
-        nameEl.textContent = data.displayName || "(no name)";
-
-        // ID — show temp ID if active, otherwise real ID
-        const tempId = data.tempUniqueId;
-        const tempExpiry = data.tempUniqueIdExpiry;
-        const isActive = tempId && tempExpiry && tempExpiry > Date.now();
-        const displayId = isActive ? tempId : (data.uniqueId || "");
-        idEl.textContent = displayId ? `ID: ${displayId}` : "";
-
-        // Badges
-        let badgesHtml = "";
-        if (data.isSuperShy) badgesHtml += '<span class="profile-preview-badge supershy">Super Shy</span>';
-        if (data.userType && data.userType !== "MEMBER") badgesHtml += `<span class="profile-preview-badge usertype">${escapeHtml(data.userType)}</span>`;
-        if (data.nationality) badgesHtml += `<span class="profile-preview-badge" style="background:var(--surface2);color:var(--text);">${escapeHtml(data.nationality)}</span>`;
-        badgesEl.innerHTML = badgesHtml;
-
-        // Description
-        descEl.textContent = data.description || "";
-
-        // Stats (follower/following counts)
-        const followers = Array.isArray(data.followerIds) ? data.followerIds.length : (data.followerIds?.size || 0);
-        const following = Array.isArray(data.followingIds) ? data.followingIds.length : (data.followingIds?.size || 0);
-        statsEl.innerHTML = `<span><strong>${followers}</strong> Followers</span><span><strong>${following}</strong> Following</span>`;
+    function updateCurrentPreview() {
+      if (!currentUid) return;
+      var u = loadedData;
+      document.getElementById('pc-name').textContent = u.displayName || '';
+      document.getElementById('pc-id').textContent = u.uniqueId ? '#' + u.uniqueId : '';
+      document.getElementById('pc-badge').textContent = u.userType || '';
+      document.getElementById('pc-desc').textContent = u.description || '';
+      setPreviewFlag('pc-flag', u.nationality);
+      setPreviewImage('pc-avatar', u.profilePhotoUrl);
+      setPreviewCoverImage('pc-cover', u.coverPhotoUrl);
+      setPreviewCounts('pc-counts', u);
     }
 
-    function updateProfilePreview() {
-        if (_previewMode === "current") {
-            renderProfilePreview(_previewUserData);
-        } else {
-            // Read from form fields for draft preview
-            const draft = { ..._previewUserData };
-            const nameEl = document.querySelector('[data-field="displayName"]');
-            if (nameEl) draft.displayName = nameEl.value;
-            const descEl = document.querySelector('[data-field="description"]');
-            if (descEl) draft.description = descEl.value;
-            const nationalityEl = document.querySelector('[data-field="nationality"]');
-            if (nationalityEl) draft.nationality = nationalityEl.value;
-            // SuperShy from economy section
-            const superShyEl = document.getElementById("eco-super-shy");
-            if (superShyEl) draft.isSuperShy = superShyEl.value === "true";
-            // UserType
-            const userTypeEl = document.querySelector('[data-field="userType"]');
-            if (userTypeEl) draft.userType = userTypeEl.value;
-            renderProfilePreview(draft);
-        }
+    function updateDraftPreview() {
+      if (!currentUid) return;
+      var getVal = function(sel) { var el = document.querySelector(sel); return el ? (el.type === 'checkbox' ? el.checked : el.value) : ''; };
+      document.getElementById('pd-name').textContent = getVal('[data-field="displayName"]') || '';
+      document.getElementById('pd-id').textContent = loadedData.uniqueId ? '#' + loadedData.uniqueId : '';
+      document.getElementById('pd-badge').textContent = getVal('[data-field="userType"]') || '';
+      document.getElementById('pd-desc').textContent = getVal('[data-field="description"]') || '';
+      setPreviewFlag('pd-flag', getVal('[data-field="nationality"]'));
+      setPreviewImage('pd-avatar', getVal('[data-field="profilePhotoUrl"]'));
+      setPreviewCoverImage('pd-cover', getVal('[data-field="coverPhotoUrl"]'));
+      setPreviewCounts('pd-counts', loadedData);
     }
 
-    // Toggle buttons
-    document.getElementById("preview-current-btn").addEventListener("click", () => {
-        _previewMode = "current";
-        document.getElementById("preview-current-btn").classList.add("active");
-        document.getElementById("preview-draft-btn").classList.remove("active");
-        updateProfilePreview();
+    function setPreviewFlag(id, nationality) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      if (nationality) {
+        el.textContent = codeToFlag(nationality) + ' ' + (countryNames.of(nationality) || nationality);
+      } else {
+        el.textContent = '';
+      }
+    }
+
+    function setPreviewImage(id, url) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.src = url || '';
+      el.style.display = url ? 'inline-block' : 'none';
+    }
+
+    function setPreviewCoverImage(id, url) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.style.backgroundImage = url ? 'url(' + url + ')' : '';
+      el.style.backgroundColor = url ? '' : '#333';
+    }
+
+    function setPreviewCounts(id, data) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      var following = Array.isArray(data.followingIds) ? data.followingIds.length : 0;
+      var followers = Array.isArray(data.followerIds) ? data.followerIds.length : 0;
+      var stalkers = data._stalkerCount !== undefined ? data._stalkerCount : '...';
+      el.textContent = 'Following: ' + following + ' | Followers: ' + followers + ' | Stalkers: ' + stalkers;
+    }
+
+    async function loadStalkers(uid) {
+      try {
+        var data = await apiCall('GET', '/api/user/' + uid + '/stalkers');
+        loadedData._stalkerCount = data.count;
+        var container = document.getElementById('stalkers-list');
+        if (!container) return;
+        while (container.firstChild) container.removeChild(container.firstChild);
+        if (data.stalkers.length === 0) {
+          var empty = document.createElement('span');
+          empty.style.cssText = 'color:var(--text2); font-style:italic;';
+          empty.textContent = 'No stalkers';
+          container.appendChild(empty);
+        } else {
+          data.stalkers.forEach(function(id) {
+            var tag = document.createElement('span');
+            tag.style.cssText = 'display:inline-block; padding:2px 8px; margin:2px; background:var(--surface); border:1px solid var(--border); border-radius:4px; font-size:12px; color:var(--text);';
+            tag.textContent = id;
+            container.appendChild(tag);
+          });
+        }
+        updateCurrentPreview();
+        updateDraftPreview();
+      } catch (err) {
+        console.error('Failed to load stalkers:', err);
+      }
+    }
+
+    // Wire draft preview live updates
+    document.querySelectorAll('[data-field="displayName"], [data-field="description"], [data-field="userType"], [data-field="nationality"], [data-field="profilePhotoUrl"], [data-field="coverPhotoUrl"]').forEach(function(el) {
+      el.addEventListener('input', updateDraftPreview);
+      el.addEventListener('change', updateDraftPreview);
     });
 
-    document.getElementById("preview-draft-btn").addEventListener("click", () => {
-        _previewMode = "draft";
-        document.getElementById("preview-draft-btn").classList.add("active");
-        document.getElementById("preview-current-btn").classList.remove("active");
-        updateProfilePreview();
-    });
-
-    // Live update on form changes when in preview mode
-    document.addEventListener("input", (e) => {
-        if (_previewMode === "draft") updateProfilePreview();
-    });
-    document.addEventListener("change", (e) => {
-        if (_previewMode === "draft") updateProfilePreview();
-    });
-
-    // Hook into populateFormFull to store data and render preview
+    // Hook into populateFormFull to render side-by-side previews and load stalkers
     const _origPopulateFullForPreview = populateFormFull;
     populateFormFull = async function(data) {
         await _origPopulateFullForPreview(data);
-        _previewUserData = { ...data };
-        _previewMode = "current";
-        document.getElementById("preview-current-btn").classList.add("active");
-        document.getElementById("preview-draft-btn").classList.remove("active");
-        document.getElementById("profile-preview").style.display = "block";
-        updateProfilePreview();
+        updateCurrentPreview();
+        updateDraftPreview();
+        loadStalkers(currentUid);
+        document.getElementById("profile-preview").style.display = "flex";
     };
 
     // ══════════════════════════════════════════════════════════════
