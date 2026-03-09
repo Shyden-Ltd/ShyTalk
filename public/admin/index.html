@@ -308,7 +308,7 @@
           cursor: pointer;
         }
 
-        .uid-display {
+        .uid-display, .readonly-field {
           padding: 8px 12px;
           background: var(--surface2);
           border: 1px solid var(--border);
@@ -316,6 +316,11 @@
           color: var(--text2);
           font-size: 13px;
           font-family: monospace;
+          cursor: not-allowed;
+          opacity: 0.85;
+        }
+        input.readonly-field, select.readonly-field {
+          pointer-events: none;
         }
 
         /* User save bar removed — per-field auto-save handles user fields */
@@ -2946,8 +2951,8 @@
                     </div>
                 </div>
                 <div class="field-group">
-                    <label>Unique ID <span style="font-size:0.8em;color:#888">(read-only)</span></label>
-                    <input type="number" data-field="uniqueId" aria-label="Unique ID" readonly style="opacity:0.7;cursor:not-allowed">
+                    <label>Unique ID <span class="readonly-badge">READ ONLY</span></label>
+                    <input type="number" data-field="uniqueId" aria-label="Unique ID" readonly class="readonly-field">
                 </div>
                 <div class="field-group" id="temp-id-section">
                     <label>Temporary ID</label>
