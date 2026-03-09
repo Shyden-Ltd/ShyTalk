@@ -40,7 +40,7 @@ router.get('/admin/alerts', async (req, res) => {
     res.json({ alerts });
   } catch (err) {
     log.error('admin-alerts', 'Error listing alerts', { error: err.message });
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: err.message || 'Internal server error' });
   }
 });
 
