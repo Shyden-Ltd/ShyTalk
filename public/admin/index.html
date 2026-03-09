@@ -232,6 +232,12 @@
           font-family: inherit;
         }
 
+        /* Ensure native dropdown options are readable on all OS themes */
+        select option {
+          background: #1a1a2e;
+          color: #e0e0e0;
+        }
+
         .field-group input:focus,
         .field-group textarea:focus,
         .field-group select:focus {
@@ -2281,7 +2287,7 @@
         .device-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; margin-bottom: 10px; }
         .device-info-item { font-size: 12px; }
         .device-info-item .label { color: var(--text2); }
-        .device-info-item .value { color: var(--text1, #fff); font-weight: 500; }
+        .device-info-item .value { color: var(--text); font-weight: 500; }
 
         /* --- User Sub-tabs --- */
         .user-subtabs { display: flex; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
@@ -3078,7 +3084,7 @@
                 <h3>Issue Warning</h3>
                 <div style="display:flex;flex-direction:column;gap:10px;">
                     <select id="direct-warn-reason" aria-label="Warning Reason"
-                            style="padding:8px;background:var(--surface);color:var(--text1);border:1px solid var(--border);border-radius:6px;">
+                            style="padding:8px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;">
                         <option value="">Select reason...</option>
                         <option value="Spam">Spam</option>
                         <option value="Harassment">Harassment</option>
@@ -3100,7 +3106,7 @@
                     </div>
                     <textarea id="direct-warn-note" rows="2" placeholder="Admin note (optional)"
                               aria-label="Warning Note"
-                              style="padding:8px;background:var(--surface);color:var(--text1);border:1px solid var(--border);border-radius:6px;resize:vertical;font-family:inherit;"></textarea>
+                              style="padding:8px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;resize:vertical;font-family:inherit;"></textarea>
                     <button type="button" id="direct-warn-btn" class="btn-warn"
                             style="align-self:flex-start;">Issue Warning
                     </button>
@@ -10034,10 +10040,10 @@
               reasonInput.type = "text";
               reasonInput.className = "ban-reason-input";
               reasonInput.placeholder = "Ban reason...";
-              reasonInput.style.cssText = "flex:1;min-width:120px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface1);color:var(--text1, #fff);font-size:12px;";
+              reasonInput.style.cssText = "flex:1;min-width:120px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface1);color:var(--text);font-size:12px;";
               const durationSelect = document.createElement("select");
               durationSelect.className = "ban-duration-select";
-              durationSelect.style.cssText = "padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface1);color:var(--text1, #fff);font-size:12px;";
+              durationSelect.style.cssText = "padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface1);color:var(--text);font-size:12px;";
               [["", "Permanent"], ["1h", "1 Hour"], ["24h", "24 Hours"], ["7d", "7 Days"], ["30d", "30 Days"]].forEach(([val, txt]) => {
                 const opt = document.createElement("option");
                 opt.value = val;
