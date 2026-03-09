@@ -46,6 +46,50 @@ async function getFirebaseAuthInfo(uid) {
   }
 }
 
+/**
+ * Normalize snake_case fields and compute GCS display score.
+ */
+function enrichUser(user) {
+  user.displayName      = user.displayName      ?? user.display_name      ?? null;
+  user.profilePhotoUrl  = user.profilePhotoUrl  ?? user.profile_photo_url ?? null;
+  user.coverPhotoUrl    = user.coverPhotoUrl    ?? user.cover_photo_url   ?? null;
+  user.dateOfBirth      = user.dateOfBirth      ?? user.date_of_birth     ?? null;
+  user.uniqueId         = user.uniqueId         ?? user.unique_id         ?? null;
+  user.isSuperShy       = user.isSuperShy       ?? user.is_super_shy      ?? false;
+  user.superShyExpiry   = user.superShyExpiry   ?? user.super_shy_expiry  ?? null;
+  user.superShyTier     = user.superShyTier     ?? user.super_shy_tier    ?? null;
+  user.loginStreak      = user.loginStreak      ?? user.login_streak      ?? 0;
+  user.shyCoins         = user.shyCoins         ?? user.shy_coins         ?? 0;
+  user.shyBeans         = user.shyBeans         ?? user.shy_beans         ?? 0;
+  user.warningCount     = user.warningCount     ?? user.warning_count     ?? 0;
+  user.luckScore        = user.luckScore        ?? user.luck_score        ?? 0;
+  user.pityCounter      = user.pityCounter      ?? user.pity_counter      ?? 0;
+  user.gcsScore         = user.gcsScore         ?? user.gcs_score         ?? 100;
+  user.gcsLastDeductionAt = user.gcsLastDeductionAt ?? user.gcs_last_deduction_at ?? null;
+  user.hasActiveWarning = user.hasActiveWarning ?? user.has_active_warning ?? false;
+  user.warningReason    = user.warningReason    ?? user.warning_reason    ?? null;
+  user.userType         = user.userType         ?? user.user_type         ?? 'MEMBER';
+  user.gcsDisplayScore  = computeDisplayScore(user.gcsScore, user.gcsLastDeductionAt);
+  return user;
+}
+
+/**
+ * Fetch email + phone from Firebase Auth and backfill into Firestore if missing.
+ */
+async function backfillAuthInfo(user, uid) {
+  if (!user.email || !user.phoneNumber) {
+    const authInfo = await getFirebaseAuthInfo(uid);
+    if (!user.email && authInfo.email) {
+      user.email = authInfo.email;
+      db.doc(`users/${uid}`).update({ email: authInfo.email }).catch(err => log.error('admin-users', 'Failed to backfill email', { uid, error: err.message }));
+    }
+    if (!user.phoneNumber && authInfo.phoneNumber) {
+      user.phoneNumber = authInfo.phoneNumber;
+      db.doc(`users/${uid}`).update({ phoneNumber: authInfo.phoneNumber }).catch(err => log.error('admin-users', 'Failed to backfill phoneNumber', { uid, error: err.message }));
+    }
+  }
+}
+
 // ══════════════════════════════════════════════════════════════
 // USER CRUD (admin)
 // ══════════════════════════════════════════════════════════════
@@ -57,44 +101,8 @@ router.get('/user/:uid', async (req, res) => {
 
     const snap = await db.doc(`users/${req.params.uid}`).get();
     if (!snap.exists) return res.status(404).json({ error: 'User not found' });
-    const user = { id: snap.id, ...snap.data() };
-
-    // Normalize snake_case → camelCase for admin panel compatibility
-    user.displayName      = user.displayName      ?? user.display_name      ?? null;
-    user.profilePhotoUrl  = user.profilePhotoUrl  ?? user.profile_photo_url ?? null;
-    user.coverPhotoUrl    = user.coverPhotoUrl    ?? user.cover_photo_url   ?? null;
-    user.dateOfBirth      = user.dateOfBirth      ?? user.date_of_birth     ?? null;
-    user.uniqueId         = user.uniqueId         ?? user.unique_id         ?? null;
-    user.isSuperShy       = user.isSuperShy       ?? user.is_super_shy      ?? false;
-    user.superShyExpiry   = user.superShyExpiry   ?? user.super_shy_expiry  ?? null;
-    user.superShyTier     = user.superShyTier     ?? user.super_shy_tier    ?? null;
-    user.loginStreak      = user.loginStreak      ?? user.login_streak      ?? 0;
-    user.shyCoins         = user.shyCoins         ?? user.shy_coins         ?? 0;
-    user.shyBeans         = user.shyBeans         ?? user.shy_beans         ?? 0;
-    user.warningCount     = user.warningCount     ?? user.warning_count     ?? 0;
-    user.luckScore        = user.luckScore        ?? user.luck_score        ?? 0;
-    user.pityCounter      = user.pityCounter      ?? user.pity_counter      ?? 0;
-    user.gcsScore         = user.gcsScore         ?? user.gcs_score         ?? 100;
-    user.gcsLastDeductionAt = user.gcsLastDeductionAt ?? user.gcs_last_deduction_at ?? null;
-    user.hasActiveWarning = user.hasActiveWarning ?? user.has_active_warning ?? false;
-    user.warningReason    = user.warningReason    ?? user.warning_reason    ?? null;
-    user.userType         = user.userType         ?? user.user_type         ?? 'MEMBER';
-
-    // Fetch email + phone from Firebase Auth if not already in Firestore
-    if (!user.email || !user.phoneNumber) {
-      const authInfo = await getFirebaseAuthInfo(req.params.uid);
-      if (!user.email && authInfo.email) {
-        user.email = authInfo.email;
-        db.doc(`users/${req.params.uid}`).update({ email: authInfo.email }).catch(err => log.error('admin-users', 'Failed to backfill email', { uid: req.params.uid, error: err.message }));
-      }
-      if (!user.phoneNumber && authInfo.phoneNumber) {
-        user.phoneNumber = authInfo.phoneNumber;
-        db.doc(`users/${req.params.uid}`).update({ phoneNumber: authInfo.phoneNumber }).catch(err => log.error('admin-users', 'Failed to backfill phoneNumber', { uid: req.params.uid, error: err.message }));
-      }
-    }
-
-    // Enrich with GCS display score
-    user.gcsDisplayScore = computeDisplayScore(user.gcsScore, user.gcsLastDeductionAt);
+    const user = enrichUser({ id: snap.id, ...snap.data() });
+    await backfillAuthInfo(user, req.params.uid);
 
     res.json(user);
   } catch (err) {
@@ -141,7 +149,7 @@ router.patch('/user/:uid', async (req, res) => {
       'hasActiveWarning', 'pmPrivacy', 'acceptedLegalVersion',
       'currentRoomId',
       // Fields editable from admin panel form
-      'email', 'uniqueId',
+      'email',
       'blockedUserIds', 'followingIds', 'followerIds',
       'hideFollowing', 'hideOnlineStatus', 'hideAge',
     ];
@@ -348,19 +356,14 @@ router.get('/search/uniqueId/:id', async (req, res) => {
         .get();
       if (tempSnap.empty) return res.status(404).json({ error: 'User not found' });
       const doc = tempSnap.docs[0];
-      const user = { id: doc.id, ...doc.data() };
-      const gcsScore = user.gcsScore ?? user.gcs_score ?? 100;
-      const gcsLastDeductionAt = user.gcsLastDeductionAt ?? user.gcs_last_deduction_at ?? null;
-      user.gcsDisplayScore = computeDisplayScore(gcsScore, gcsLastDeductionAt);
+      const user = enrichUser({ id: doc.id, ...doc.data() });
+      await backfillAuthInfo(user, doc.id);
       return res.json(user);
     }
 
     const doc = snapshot.docs[0];
-    const user = { id: doc.id, ...doc.data() };
-
-    const gcsScore = user.gcsScore ?? user.gcs_score ?? 100;
-    const gcsLastDeductionAt = user.gcsLastDeductionAt ?? user.gcs_last_deduction_at ?? null;
-    user.gcsDisplayScore = computeDisplayScore(gcsScore, gcsLastDeductionAt);
+    const user = enrichUser({ id: doc.id, ...doc.data() });
+    await backfillAuthInfo(user, doc.id);
 
     res.json(user);
   } catch (err) {

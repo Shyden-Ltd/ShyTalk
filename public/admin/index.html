@@ -2824,7 +2824,7 @@
                 </div>
                 <div class="field-group">
                     <label>Unique ID</label>
-                    <input type="number" data-field="uniqueId" aria-label="Unique ID">
+                    <input type="number" data-field="uniqueId" aria-label="Unique ID" readonly style="opacity:0.7;cursor:not-allowed">
                 </div>
                 <div class="field-group" id="temp-id-section">
                     <label>Temporary ID</label>
@@ -4600,6 +4600,8 @@
       return a === b;
     }
 
+    const READONLY_FIELDS = ["uniqueId"];
+
     function getModifiedFields() {
       const modified = {};
 
@@ -4607,6 +4609,7 @@
       for (const el of $$("[data-field]")) {
         const field = el.dataset.field;
         if (ARRAY_FIELDS.includes(field)) continue; // handled separately
+        if (READONLY_FIELDS.includes(field)) continue;
         const current = getFieldValue(field);
         const original = getOriginalValue(field);
 
