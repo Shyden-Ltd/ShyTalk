@@ -11,6 +11,7 @@ const router = require('express').Router();
 const { db } = require('../utils/firebase');
 const { requireAdmin } = require('../middleware/auth');
 const { generateId, now } = require('../utils/helpers');
+const { sendSystemPm } = require('../utils/system-pm');
 const log = require('../utils/log');
 
 // ─── List all device bindings (paginated + searchable) ──────────
@@ -105,6 +106,7 @@ router.delete('/admin/devices/:deviceId', async (req, res) => {
     if (!snap.exists) {
       return res.status(404).json({ error: 'Device binding not found' });
     }
+    const deviceData = snap.data();
 
     await db.doc(`deviceBindings/${deviceId}`).delete();
 
@@ -116,6 +118,11 @@ router.delete('/admin/devices/:deviceId', async (req, res) => {
       details: `Unbound device ${deviceId}`,
       createdAt: now(),
     });
+
+    // Send system PM to the bound user (non-blocking)
+    if (deviceData.userId) {
+      try { await sendSystemPm(deviceData.userId, 'Your device binding has been reset by a moderator.'); } catch (e) { log.warn('system-pm', 'Failed to send', { error: e.message }); }
+    }
 
     res.json({ success: true });
   } catch (err) {

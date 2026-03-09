@@ -14,6 +14,7 @@ const router = require('express').Router();
 const { db } = require('../utils/firebase');
 const { requireAdmin } = require('../middleware/auth');
 const { generateId, now } = require('../utils/helpers');
+const { sendSystemPm } = require('../utils/system-pm');
 const log = require('../utils/log');
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -89,6 +90,11 @@ router.post('/admin/bans/device', async (req, res) => {
       createdAt: now(),
     });
 
+    // Send system PM if linked to a user (non-blocking)
+    if (linkedUserId) {
+      try { await sendSystemPm(linkedUserId, 'A restriction has been placed on your account.'); } catch (e) { log.warn('system-pm', 'Failed to send', { userId: linkedUserId, error: e.message }); }
+    }
+
     res.json({ success: true });
   } catch (err) {
     log.error('admin-bans', 'Error banning device', { error: err.message });
@@ -133,6 +139,11 @@ router.post('/admin/bans/network', async (req, res) => {
       details: `Type: ${type}, Reason: ${reason}, Duration: ${duration || 'permanent'}`,
       createdAt: now(),
     });
+
+    // Send system PM if linked to a user (non-blocking)
+    if (linkedUserId) {
+      try { await sendSystemPm(linkedUserId, 'A restriction has been placed on your account.'); } catch (e) { log.warn('system-pm', 'Failed to send', { userId: linkedUserId, error: e.message }); }
+    }
 
     res.json({ success: true });
   } catch (err) {
@@ -209,6 +220,9 @@ router.post('/admin/bans/unban-all/:userId', async (req, res) => {
       details: `Removed ${allDocs.length} ban(s)`,
       createdAt: now(),
     });
+
+    // Send system PM about restriction lifted (non-blocking)
+    try { await sendSystemPm(userId, 'A restriction on your account has been lifted.'); } catch (e) { log.warn('system-pm', 'Failed to send', { userId, error: e.message }); }
 
     res.json({ success: true, removed: allDocs.length });
   } catch (err) {

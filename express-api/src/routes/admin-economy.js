@@ -16,6 +16,7 @@ const router = require('express').Router();
 const { db } = require('../utils/firebase');
 const { requireAdmin } = require('../middleware/auth');
 const { generateId, now } = require('../utils/helpers');
+const { sendSystemPm } = require('../utils/system-pm');
 const log = require('../utils/log');
 
 // ── Economy snapshot ──
@@ -98,6 +99,12 @@ router.post('/users/:uid/adjust-balance', async (req, res) => {
         createdAt:    timestamp,
       }),
     ]);
+
+    // Send system PM about balance adjustment (non-blocking)
+    const currencyName = currency === 'coins' ? 'Shy Coins' : 'Shy Beans';
+    const absAmount = Math.abs(amount);
+    const action = amount > 0 ? 'were added to' : 'were deducted from';
+    try { await sendSystemPm(req.params.uid, `${absAmount} ${currencyName} ${action} your account.`); } catch (e) { log.warn('system-pm', 'Failed to send', { uid: req.params.uid, error: e.message }); }
 
     res.json({ success: true, newBalance, currency });
   } catch (err) {

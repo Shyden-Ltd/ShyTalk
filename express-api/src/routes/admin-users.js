@@ -173,6 +173,21 @@ router.patch('/user/:uid', async (req, res) => {
       createdAt:    now(),
     });
 
+    // Send system messages for user-visible changes (non-blocking)
+    const uid = req.params.uid;
+    const pmMessages = [];
+    if (updates.displayName !== undefined) pmMessages.push('Your display name was updated by a moderator.');
+    if (updates.profilePhotoUrl === '' || updates.profilePhotoUrl === null) pmMessages.push('Your profile photo was removed by a moderator.');
+    if (updates.coverPhotoUrl === '' || updates.coverPhotoUrl === null) pmMessages.push('Your cover photo was removed by a moderator.');
+    if (updates.description === '' || updates.description === null) pmMessages.push('Your profile description was cleared by a moderator.');
+    if (updates.isSuperShy !== undefined) {
+      pmMessages.push(updates.isSuperShy ? 'Super Shy has been activated on your account.' : 'Super Shy has been removed from your account.');
+    }
+    if (updates.superShyExpiry !== undefined) pmMessages.push('Your Super Shy expiry date has been updated.');
+    for (const msg of pmMessages) {
+      try { await sendSystemPm(uid, msg); } catch (e) { log.warn('system-pm', 'Failed to send', { uid, error: e.message }); }
+    }
+
     res.json({ success: true, updatedFields: Object.keys(updates) });
   } catch (err) {
     log.error('admin-users', 'PATCH /user/:uid failed', { uid: req.params.uid, error: err.message });
@@ -448,6 +463,9 @@ router.post('/user/:uid/suspend', async (req, res) => {
       }),
     ]);
 
+    // Send system PM about suspension (non-blocking)
+    try { await sendSystemPm(req.params.uid, `Your account has been suspended. Reason: ${body.reason.trim()}`); } catch (e) { log.warn('system-pm', 'Failed to send', { uid: req.params.uid, error: e.message }); }
+
     // Auto-apply device and network bans (fire-and-forget)
     autoApplyBans(req.params.uid, body.endDate ? body.endDate : null)
       .catch(err => log.error('admin-users', 'Failed to auto-apply bans', { uid: req.params.uid, error: err.message }));
@@ -503,6 +521,9 @@ router.post('/user/:uid/unsuspend', async (req, res) => {
         createdAt:    now(),
       }),
     ]);
+
+    // Send system PM about unsuspension (non-blocking)
+    try { await sendSystemPm(req.params.uid, 'Your account suspension has been lifted.'); } catch (e) { log.warn('system-pm', 'Failed to send', { uid: req.params.uid, error: e.message }); }
 
     clearSuspensionCache(req.params.uid);
     res.json({ success: true });

@@ -39,6 +39,16 @@ jest.mock('../../src/utils/helpers', () => ({
   now: jest.fn(() => 1709856000000),
 }));
 
+jest.mock('../../src/utils/log', () => ({
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+}));
+
+jest.mock('../../src/utils/system-pm', () => ({
+  sendSystemPm: jest.fn().mockResolvedValue(),
+}));
+
 // ─── App setup ───────────────────────────────────────────────────
 
 const adminDevicesRouter = require('../../src/routes/admin-devices');

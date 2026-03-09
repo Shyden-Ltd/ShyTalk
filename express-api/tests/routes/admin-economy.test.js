@@ -38,7 +38,12 @@ jest.mock('../../src/utils/helpers', () => ({
 
 jest.mock('../../src/utils/log', () => ({
   info: jest.fn(),
+  warn: jest.fn(),
   error: jest.fn(),
+}));
+
+jest.mock('../../src/utils/system-pm', () => ({
+  sendSystemPm: jest.fn().mockResolvedValue(),
 }));
 
 jest.mock('../../src/middleware/auth', () => ({
