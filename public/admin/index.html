@@ -2269,7 +2269,7 @@
         .device-status-banned { color:var(--danger);font-weight:600; }
 
         /* --- Bans Section (Users tab) --- */
-        #bans-section { display:none; }
+        /* bans content is now merged inside #suspension-section */
         .bans-list { display:flex;flex-direction:column;gap:6px;margin:8px 0; }
         .ban-item { display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--surface2);border-radius:6px;font-size:13px; }
         .ban-item-info { display:flex;flex-direction:column;gap:2px; }
@@ -2965,81 +2965,16 @@
             </div><!-- end profile subpanel -->
 
             <div class="user-subpanel" data-subtab="moderation">
-            <!-- Suspension -->
-            <div class="form-section" id="suspension-section" style="display:none;">
-                <h3>Suspension</h3>
-                <div id="suspension-status" class="suspension-status not-suspended">Not Suspended
-                </div>
-                <div id="pre-suspension-info"
-                     style="display:none;margin-top:12px;padding:12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);">
-                    <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">Original
-                        Profile (before suspension)
-                    </div>
-                    <div style="display:flex;align-items:center;gap:12px;">
-                        <img id="pre-suspension-photo" src="" alt="Pre-suspension profile photo"
-                             style="width:40px;height:40px;border-radius:50%;object-fit:cover;display:none;"/>
-                        <div>
-                            <div id="pre-suspension-name" style="font-weight:600;"></div>
-                            <div id="pre-suspension-cover"
-                                 style="font-size:12px;color:var(--text2);display:none;">Has cover
-                                photo
-                            </div>
-                        </div>
-                    </div>
+            <!-- Account Info -->
+            <div class="form-section" id="account-info-section">
+                <h3>Account Info</h3>
+                <div class="field-group">
+                    <label>Created At <span class="readonly-badge">READ ONLY</span></label>
+                    <div class="uid-display" id="field-createdAt"></div>
                 </div>
                 <div class="field-group">
-                    <label>Reason</label>
-                    <textarea id="suspend-reason" rows="2" placeholder="Reason for suspension"
-                              aria-label="Suspension Reason"></textarea>
-                </div>
-                <div class="field-group">
-                    <label>Duration</label>
-                    <div class="duration-presets">
-                        <button type="button" data-days="1">1 Day</button>
-                        <button type="button" data-days="3">3 Days</button>
-                        <button type="button" data-days="7">7 Days</button>
-                        <button type="button" data-days="30">30 Days</button>
-                        <button type="button" data-days="0">Permanent</button>
-                    </div>
-                    <input type="datetime-local" id="suspend-end-date"
-                           aria-label="Suspension End Date">
-                </div>
-                <div class="checkbox-row">
-                    <input type="checkbox" id="suspend-can-appeal">
-                    <label for="suspend-can-appeal">User can appeal</label>
-                </div>
-                <div class="suspension-actions">
-                    <button type="button" class="btn-suspend" id="suspend-btn" data-log="suspend-user">Suspend User</button>
-                    <button type="button" class="btn-unsuspend" id="unsuspend-btn"
-                            style="display:none;">Unsuspend User
-                    </button>
-                </div>
-            </div>
-
-            <!-- Bans & Restrictions -->
-            <div class="form-section" id="bans-section" style="display:none;">
-                <h3>Bans &amp; Restrictions</h3>
-                <div style="margin-bottom:10px;">
-                    <strong style="font-size:13px;color:var(--text2);">Device Bans</strong>
-                    <div class="bans-list" id="bans-device-list">
-                        <div style="color:var(--text2);font-size:12px;font-style:italic;">No device bans</div>
-                    </div>
-                </div>
-                <div style="margin-bottom:10px;">
-                    <strong style="font-size:13px;color:var(--text2);">Network Bans</strong>
-                    <div class="bans-list" id="bans-network-list">
-                        <div style="color:var(--text2);font-size:12px;font-style:italic;">No network bans</div>
-                    </div>
-                </div>
-                <div style="margin-bottom:10px;">
-                    <strong style="font-size:13px;color:var(--text2);">Bound Devices</strong>
-                    <div id="bans-devices-bound-list"></div>
-                </div>
-                <div class="bans-quick-actions">
-                    <button type="button" id="bans-ban-all-devices" style="background:#e67e22;color:#fff;">Ban All Devices</button>
-                    <button type="button" id="bans-ban-last-ip" style="background:#8e44ad;color:#fff;">Ban Last IP</button>
-                    <button type="button" id="bans-unban-all" style="background:#2ecc71;color:#fff;">Unban All</button>
-                    <button type="button" id="bans-view-logs" style="background:var(--accent);color:#fff;">View Logs</button>
+                    <label>Last Seen At <span class="readonly-badge">READ ONLY</span></label>
+                    <div class="uid-display" id="field-lastSeenAt"></div>
                 </div>
             </div>
 
@@ -3102,6 +3037,91 @@
                     <button type="button" id="direct-warn-btn" class="btn-warn"
                             style="align-self:flex-start;">Issue Warning
                     </button>
+                </div>
+            </div>
+
+            <!-- Suspension & Bans -->
+            <div class="form-section" id="suspension-section" style="display:none;">
+                <h3>Suspension &amp; Bans</h3>
+
+                <!-- Suspension sub-section -->
+                <div style="margin-bottom:16px;">
+                    <strong style="font-size:13px;color:var(--text2);display:block;margin-bottom:8px;">Suspension</strong>
+                    <div id="suspension-status" class="suspension-status not-suspended">Not Suspended
+                    </div>
+                    <div id="pre-suspension-info"
+                         style="display:none;margin-top:12px;padding:12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);">
+                        <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">Original
+                            Profile (before suspension)
+                        </div>
+                        <div style="display:flex;align-items:center;gap:12px;">
+                            <img id="pre-suspension-photo" src="" alt="Pre-suspension profile photo"
+                                 style="width:40px;height:40px;border-radius:50%;object-fit:cover;display:none;"/>
+                            <div>
+                                <div id="pre-suspension-name" style="font-weight:600;"></div>
+                                <div id="pre-suspension-cover"
+                                     style="font-size:12px;color:var(--text2);display:none;">Has cover
+                                    photo
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="field-group">
+                        <label>Reason</label>
+                        <textarea id="suspend-reason" rows="2" placeholder="Reason for suspension"
+                                  aria-label="Suspension Reason"></textarea>
+                    </div>
+                    <div class="field-group">
+                        <label>Duration</label>
+                        <div class="duration-presets">
+                            <button type="button" data-days="1">1 Day</button>
+                            <button type="button" data-days="3">3 Days</button>
+                            <button type="button" data-days="7">7 Days</button>
+                            <button type="button" data-days="30">30 Days</button>
+                            <button type="button" data-days="0">Permanent</button>
+                        </div>
+                        <input type="datetime-local" id="suspend-end-date"
+                               aria-label="Suspension End Date">
+                    </div>
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="suspend-can-appeal">
+                        <label for="suspend-can-appeal">User can appeal</label>
+                    </div>
+                    <div class="suspension-actions">
+                        <button type="button" class="btn-suspend" id="suspend-btn" data-log="suspend-user">Suspend User</button>
+                        <button type="button" class="btn-unsuspend" id="unsuspend-btn"
+                                style="display:none;">Unsuspend User
+                        </button>
+                    </div>
+                </div>
+
+                <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+
+                <!-- Bans sub-section -->
+                <div>
+                    <strong style="font-size:13px;color:var(--text2);display:block;margin-bottom:8px;">Bans &amp; Restrictions</strong>
+                    <div style="margin-bottom:10px;">
+                        <strong style="font-size:13px;color:var(--text2);">Device Bans</strong>
+                        <div class="bans-list" id="bans-device-list">
+                            <div style="color:var(--text2);font-size:12px;font-style:italic;">No device bans</div>
+                        </div>
+                    </div>
+                    <div style="margin-bottom:10px;">
+                        <strong style="font-size:13px;color:var(--text2);">Network Bans</strong>
+                        <div class="bans-list" id="bans-network-list">
+                            <div style="color:var(--text2);font-size:12px;font-style:italic;">No network bans</div>
+                        </div>
+                    </div>
+                    <div style="margin-bottom:10px;">
+                        <strong style="font-size:13px;color:var(--text2);">Bound Devices</strong>
+                        <div id="bans-devices-bound-list"></div>
+                    </div>
+                    <div class="bans-quick-actions">
+                        <button type="button" id="bans-ban-all-devices" style="background:#e67e22;color:#fff;">Ban All Devices</button>
+                        <button type="button" id="bans-ban-last-ip" style="background:#8e44ad;color:#fff;">Ban Last IP</button>
+                        <button type="button" id="bans-unban-all" style="background:#2ecc71;color:#fff;">Unban All</button>
+                        <button type="button" id="bans-view-logs" style="background:var(--accent);color:#fff;">View Logs</button>
+                    </div>
                 </div>
             </div>
 
@@ -4533,11 +4553,9 @@
         }
       }
 
-      // Read-only timestamps (elements may be in moderation sub-tab)
-      var _createdAtEl = $("#field-createdAt");
-      if (_createdAtEl) _createdAtEl.textContent = data.createdAt ? new Date(data.createdAt).toLocaleString() : "\u2014";
-      var _lastSeenEl = $("#field-lastSeenAt");
-      if (_lastSeenEl) _lastSeenEl.textContent = data.lastSeenAt ? new Date(data.lastSeenAt).toLocaleString() : "\u2014";
+      // Read-only timestamps (in Account Info section of moderation sub-tab)
+      $("#field-createdAt").textContent = data.createdAt ? new Date(data.createdAt).toLocaleString() : "\u2014";
+      $("#field-lastSeenAt").textContent = data.lastSeenAt ? new Date(data.lastSeenAt).toLocaleString() : "\u2014";
 
       userForm.classList.add("visible");
     }
@@ -9985,13 +10003,12 @@
     // BANS & RESTRICTIONS (Users tab)
     // ══════════════════════════════════════════════════════════════
 
-    const bansSection = $("#bans-section");
     const bansDeviceList = $("#bans-device-list");
     const bansNetworkList = $("#bans-network-list");
     const bansDevicesBoundList = $("#bans-devices-bound-list");
 
     async function populateBansSection(uid) {
-      bansSection.style.display = "block";
+      // Bans content is now inside suspension-section, no separate display toggle needed
       bansDeviceList.innerHTML = '<div style="color:var(--text2);font-size:12px;">Loading...</div>';
       bansNetworkList.innerHTML = '<div style="color:var(--text2);font-size:12px;">Loading...</div>';
       bansDevicesBoundList.innerHTML = '<div style="color:var(--text2);font-size:12px;">Loading...</div>';
