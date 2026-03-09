@@ -197,8 +197,8 @@ router.patch('/user/:uid', async (req, res) => {
 
     res.json({ success: true, updatedFields: Object.keys(updates) });
   } catch (err) {
-    log.error('admin-users', 'PATCH /user/:uid failed', { uid: req.params.uid, error: err.message });
-    res.status(500).json({ error: 'Internal server error' });
+    log.error('admin-users', 'PATCH /user/:uid failed', { uid: req.params.uid, error: err.message, stack: err.stack });
+    res.status(500).json({ error: err.message || 'Internal server error' });
   }
 });
 

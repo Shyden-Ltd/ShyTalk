@@ -24,7 +24,7 @@ class RtdbConversationService : ConversationWebSocketService {
         private const val TYPING_TIMEOUT_MS = 5_000L
     }
 
-    private val db by lazy { FirebaseDatabase.getInstance() }
+    private val db by lazy { FirebaseDatabase.getInstance("https://shytalk-7ba69-default-rtdb.asia-southeast1.firebasedatabase.app") }
 
     private var currentConversationId: String? = null
     private var currentUserId: String? = null

@@ -13,7 +13,7 @@ const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH
 
 if (!admin.apps.length) {
   const initOptions = {
-    databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}-default-rtdb.firebaseio.com`,
+    databaseURL: process.env.FIREBASE_DATABASE_URL || `https://${process.env.FIREBASE_PROJECT_ID}-default-rtdb.asia-southeast1.firebasedatabase.app`,
   };
 
   if (serviceAccountPath) {

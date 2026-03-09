@@ -25,7 +25,7 @@ class RtdbTypingRepository : TypingRepository {
         private const val TYPING_TIMEOUT_MS = 5_000L
     }
 
-    private val db by lazy { FirebaseDatabase.getInstance() }
+    private val db by lazy { FirebaseDatabase.getInstance("https://shytalk-7ba69-default-rtdb.asia-southeast1.firebasedatabase.app") }
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private var clearRunnable: Runnable? = null

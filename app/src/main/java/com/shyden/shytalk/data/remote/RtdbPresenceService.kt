@@ -34,7 +34,7 @@ class RtdbPresenceService(
         private const val TAG = "RtdbPresenceService"
     }
 
-    private val db by lazy { FirebaseDatabase.getInstance() }
+    private val db by lazy { FirebaseDatabase.getInstance("https://shytalk-7ba69-default-rtdb.asia-southeast1.firebasedatabase.app") }
     private val scope by lazy { CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate) }
 
     private var currentRoomId: String? = null
