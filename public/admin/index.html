@@ -19,6 +19,17 @@
           --warning: #f39c12;
         }
 
+        /* Hide number input spinners globally */
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        input[type="number"] {
+          -moz-appearance: textfield;
+          appearance: textfield;
+        }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
@@ -4228,6 +4239,27 @@
     const app = initializeApp(FIREBASE_CONFIG);
     const auth = getAuth(app);
     const clientDb = getClientFirestore(app);
+
+    // --- Number input sanitization (global) ---
+    // Block scroll-to-change on all number inputs
+    document.addEventListener("wheel", (e) => {
+      if (e.target.type === "number") e.target.blur();
+    }, { passive: true });
+    // Block e/E/+/- keys; block . except on decimal fields (step="0.01")
+    document.addEventListener("keydown", (e) => {
+      if (e.target.type !== "number") return;
+      if (["e", "E", "+", "-"].includes(e.key)) return e.preventDefault();
+      if (e.key === "." && e.target.step !== "0.01") e.preventDefault();
+    });
+    // Strip non-integer characters on paste/input
+    document.addEventListener("input", (e) => {
+      if (e.target.type === "number" && e.target.step !== "0.01") {
+        const v = e.target.value;
+        if (v && !/^-?\d*$/.test(v)) {
+          e.target.value = v.replace(/[^\d-]/g, "").replace(/(?!^)-/g, "");
+        }
+      }
+    });
 
     // --- DOM refs ---
     const $ = (sel) => document.querySelector(sel);
