@@ -4293,7 +4293,16 @@
       try {
         await signInWithEmailAndPassword(auth, email, pass);
       } catch (err) {
-        loginError.textContent = err.message;
+        if (err.code === "auth/visibility-check-was-unavailable" || (err.message && err.message.includes("visibility-check"))) {
+          // Transient reCAPTCHA issue — retry once
+          try {
+            await signInWithEmailAndPassword(auth, email, pass);
+          } catch (retryErr) {
+            loginError.textContent = retryErr.message;
+          }
+        } else {
+          loginError.textContent = err.message;
+        }
       }
       loginBtn.disabled = false;
     });
@@ -4614,9 +4623,17 @@
         const original = getOriginalValue(field);
 
         if (TIMESTAMP_FIELDS.includes(field)) {
-          const truncate = (v) => v ? String(v).slice(0, 16) : null;
-          if (truncate(current) !== truncate(original)) modified[field] = current;
+          // Normalize to minute-precision epoch for comparison (datetime-local has no seconds)
+          const toMinuteEpoch = (v) => {
+            if (!v) return null;
+            const ms = typeof v === "number" ? v : new Date(v).getTime();
+            return isNaN(ms) ? null : Math.floor(ms / 60000);
+          };
+          if (toMinuteEpoch(current) !== toMinuteEpoch(original)) {
+            modified[field] = current;
+          }
         } else if (!valuesEqual(current, original)) {
+          console.log(`[BASE DIFF] ${field}: current=${JSON.stringify(current)} vs original=${JSON.stringify(original)}`);
           modified[field] = current;
         }
       }
@@ -4662,8 +4679,12 @@
       const original = getOriginalValue(field);
 
       if (TIMESTAMP_FIELDS.includes(field)) {
-        const truncate = (v) => v ? String(v).slice(0, 16) : null;
-        el.classList.toggle("modified", truncate(current) !== truncate(original));
+        const toMinuteEpoch = (v) => {
+          if (!v) return null;
+          const ms = typeof v === "number" ? v : new Date(v).getTime();
+          return isNaN(ms) ? null : Math.floor(ms / 60000);
+        };
+        el.classList.toggle("modified", toMinuteEpoch(current) !== toMinuteEpoch(original));
       } else {
         el.classList.toggle("modified", !valuesEqual(current, original));
       }
@@ -6231,8 +6252,9 @@
           normV = Number(v) || 0;
           normO = Number(orig) || 0;
         } else if (NULLABLE_ECO.includes(k)) {
-          normV = v || null;
-          normO = orig || null;
+          // Truncate to minute precision (datetime-local loses seconds)
+          normV = v ? Math.floor(v / 60000) : null;
+          normO = orig ? Math.floor(orig / 60000) : null;
         }
         if (normV !== normO) {
           modified[k] = v;
@@ -8674,8 +8696,8 @@
       } else {
         bannerActionValueInput.value = banner?.action_value || "";
       }
-      bannerStartDate.value = banner?.start_date ? new Date(banner.start_date).toISOString().slice(0, 16) : "";
-      bannerEndDate.value = banner?.end_date ? new Date(banner.end_date).toISOString().slice(0, 16) : "";
+      bannerStartDate.value = banner?.start_date ? isoToLocal(banner.start_date) : "";
+      bannerEndDate.value = banner?.end_date ? isoToLocal(banner.end_date) : "";
       bannerActiveCheck.checked = banner ? !!banner.is_active : true;
       bannerFileInput.value = "";
       if (banner?.image_url) {
