@@ -5670,8 +5670,24 @@
       populateGcsSection(data);
       showDirectWarnSection();
       loadReportHistory(data.uid);
-      // Suspended banner
-      document.getElementById("suspended-banner").style.display = data.isSuspended ? "block" : "none";
+      // Suspended banner — auto-hide when timed suspension expires
+      var banner = document.getElementById("suspended-banner");
+      if (window._suspensionTimer) { clearTimeout(window._suspensionTimer); window._suspensionTimer = null; }
+      if (data.isSuspended) {
+        banner.style.display = "block";
+        if (data.suspensionEndDate) {
+          var msLeft = new Date(data.suspensionEndDate).getTime() - Date.now();
+          if (msLeft <= 0) {
+            banner.style.display = "none";
+          } else {
+            window._suspensionTimer = setTimeout(function() {
+              banner.style.display = "none";
+            }, msLeft);
+          }
+        }
+      } else {
+        banner.style.display = "none";
+      }
       // Show sub-tabs and default to Profile
       document.getElementById("user-subtabs").style.display = "flex";
       switchUserSubtab("profile");
