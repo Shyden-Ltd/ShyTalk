@@ -246,26 +246,33 @@
 
         .field-group textarea { resize: vertical; min-height: 60px; }
 
-        .field-group input.modified,
-        .field-group textarea.modified,
-        .field-group select.modified {
-          border-color: var(--warning);
-          background: rgba(243, 156, 18, 0.08);
+        /* --- Auto-save field feedback --- */
+        .field-feedback {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          margin-left: 8px;
+          font-size: 0.8rem;
+          opacity: 0;
+          transition: opacity 0.3s ease;
         }
-
-        /* Highlight the label when its sibling input is modified */
-        .field-group:has(.modified) > label {
-          color: var(--warning);
+        .field-feedback.visible { opacity: 1; }
+        .field-feedback.saved { color: #2ecc71; }
+        .field-feedback.failed { color: #e74c3c; }
+        .field-feedback .undo-link {
+          cursor: pointer;
+          color: #90caf9;
+          text-decoration: underline;
+          font-size: 0.75rem;
         }
-
-        /* Checkbox row highlighting */
-        .checkbox-row:has(input.modified) {
-          background: rgba(243, 156, 18, 0.08);
-          border-radius: 6px;
-          padding: 4px 8px;
+        .field-saving { border-color: #f39c12 !important; }
+        .field-save-failed {
+          border-color: #e74c3c !important;
+          animation: flash-red 0.5s ease;
         }
-        .checkbox-row:has(input.modified) label {
-          color: var(--warning);
+        @keyframes flash-red {
+          0%, 100% { border-color: #e74c3c; }
+          50% { border-color: #ff7961; }
         }
 
         .btn-clear {
@@ -311,7 +318,8 @@
           font-family: monospace;
         }
 
-        /* --- Save bar --- */
+        /* User save bar removed — per-field auto-save handles user fields */
+        /* Keep .save-bar for economy config and other non-user save bars */
         .save-bar {
           display: flex;
           gap: 12px;
@@ -379,15 +387,7 @@
           overflow: hidden;
         }
 
-        .list-widget.modified {
-          border-color: var(--warning);
-          background: rgba(243, 156, 18, 0.08);
-        }
-
-        /* Highlight list widget label */
-        .field-group:has(.list-widget.modified) > label {
-          color: var(--warning);
-        }
+        /* List widget modified styles removed — replaced by auto-save */
 
         .list-items {
           max-height: 180px;
@@ -2294,9 +2294,7 @@
         .user-subtab { padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; background: var(--surface2); color: var(--text2); border: none; transition: background 0.2s; }
         .user-subtab:hover { background: var(--surface3, #444); }
         .user-subtab.active { background: var(--accent); color: #fff; }
-        .user-subtab.has-changes { position: relative; }
-        .user-subtab.has-changes::after { content: ''; position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; background: var(--warning, #f39c12); border-radius: 50%; }
-        .user-subtab.active.has-changes::after { background: #fff; }
+        /* Sub-tab change indicators removed — replaced by auto-save */
         .user-subpanel { display: none; }
         .user-subpanel.visible { display: block; }
 
@@ -3228,11 +3226,7 @@
             </div>
             </div><!-- end economy subpanel -->
 
-            <!-- Save -->
-            <div class="save-bar">
-                <button id="save-btn" data-log="save-user-changes">Save Changes</button>
-                <span class="save-info" id="save-info"></span>
-            </div>
+            <!-- Save bar removed — per-field auto-save handles saving -->
         </div>
 
         <!-- Appeals Panel -->
@@ -4161,8 +4155,7 @@
     const searchBtn = $("#search-btn");
     const userForm = $("#user-form");
     const fieldUid = $("#field-uid");
-    const saveBtn = $("#save-btn");
-    const saveInfo = $("#save-info");
+    // saveBtn and saveInfo removed — replaced by per-field auto-save
     const toast = $("#toast");
 
     // --- State ---
@@ -4393,8 +4386,7 @@
     emailInput.addEventListener("input", () => {
       if (emailRevealed) {
         realEmail = emailInput.value;
-        updateFieldHighlight("email");
-        updateSaveInfo();
+        // Auto-save on blur is handled by attachAutoSaveListeners
       }
     });
 
@@ -4423,24 +4415,10 @@
         btn.addEventListener("click", () => {
           listWidgetData[field].splice(i, 1);
           renderListWidget(field);
-          updateListHighlight(field);
-          updateSaveInfo();
         });
         div.appendChild(btn);
         container.appendChild(div);
       }
-      updateListHighlight(field);
-    }
-
-    function updateListHighlight(field) {
-      const widget = getListWidget(field);
-      if (!widget) return;
-      const current = (listWidgetData[field] || []).map((s) => s.replace(/\s*\(.*\)$/, ""));
-      const original = Array.isArray(loadedData[field])
-        ? loadedData[field].map((s) => String(s).replace(/\s*\(.*\)$/, ""))
-        : [];
-      const changed = !valuesEqual(current, original);
-      widget.classList.toggle("modified", changed);
     }
 
     // Wire up list widget add buttons
@@ -4460,7 +4438,6 @@
         listWidgetData[field].push(val);
         addInput.value = "";
         renderListWidget(field);
-        updateSaveInfo();
       };
 
       addBtn.addEventListener("click", doAdd);
@@ -4544,8 +4521,6 @@
         const field = el.dataset.field;
         const val = data[field];
 
-        el.classList.remove("modified");
-
         if (ARRAY_FIELDS.includes(field)) continue; // handled by list widgets
         if (BOOLEAN_FIELDS.includes(field)) {
           el.checked = val === true;
@@ -4568,7 +4543,6 @@
       $("#field-createdAt").textContent = data.createdAt ? new Date(data.createdAt).toLocaleString() : "—";
       $("#field-lastSeenAt").textContent = data.lastSeenAt ? new Date(data.lastSeenAt).toLocaleString() : "—";
 
-      saveInfo.textContent = "";
       userForm.classList.add("visible");
     }
 
@@ -4617,106 +4591,338 @@
 
     const READONLY_FIELDS = ["uniqueId"];
 
-    function getModifiedFields() {
-      const modified = {};
+    // ══════════════════════════════════════════════════════════════
+    // AUTO-SAVE INFRASTRUCTURE
+    // ══════════════════════════════════════════════════════════════
 
-      // Check regular form fields
-      for (const el of $$("[data-field]")) {
-        const field = el.dataset.field;
-        if (ARRAY_FIELDS.includes(field)) continue; // handled separately
-        if (READONLY_FIELDS.includes(field)) continue;
-        const current = getFieldValue(field);
-        const original = getOriginalValue(field);
+    const ECONOMY_FIELDS = ["isSuperShy", "superShyExpiry", "loginStreak", "pityCounter"];
 
-        if (TIMESTAMP_FIELDS.includes(field)) {
-          // Normalize to minute-precision epoch for comparison (datetime-local has no seconds)
-          const toMinuteEpoch = (v) => {
-            if (!v) return null;
-            const ms = typeof v === "number" ? v : new Date(v).getTime();
-            return isNaN(ms) ? null : Math.floor(ms / 60000);
-          };
-          if (toMinuteEpoch(current) !== toMinuteEpoch(original)) {
-            modified[field] = current;
-          }
-        } else if (!valuesEqual(current, original)) {
-          console.log(`[BASE DIFF] ${field}: current=${JSON.stringify(current)} vs original=${JSON.stringify(original)}`);
-          modified[field] = current;
-        }
-      }
+    const autoSaveState = {
+      pendingNotifyFields: [],
+      notifyTimer: null,
+      NOTIFY_DEBOUNCE_MS: 30000,
+    };
 
-      // Check list widget fields
-      for (const field of ARRAY_FIELDS) {
-        const current = getFieldValue(field);
-        const original = getOriginalValue(field);
-        if (!valuesEqual(current, original)) {
-          modified[field] = current;
-        }
-      }
-
-      return modified;
-    }
-
-    // Mark modified fields visually
-    document.addEventListener("input", (e) => {
-      const el = e.target;
-      const field = el.dataset?.field;
-      if (!field) return;
-      updateFieldHighlight(field);
-      updateSaveInfo();
-    });
-
-    document.addEventListener("change", (e) => {
-      const el = e.target;
-      const field = el.dataset?.field;
-      if (!field) return;
-      updateFieldHighlight(field);
-      updateSaveInfo();
-    });
-
-    function updateFieldHighlight(field) {
-      if (ARRAY_FIELDS.includes(field)) {
-        updateListHighlight(field);
-        return;
-      }
-
-      const el = getFieldEl(field);
-      if (!el) return;
+    function isFieldChanged(field) {
       const current = getFieldValue(field);
       const original = getOriginalValue(field);
-
       if (TIMESTAMP_FIELDS.includes(field)) {
         const toMinuteEpoch = (v) => {
           if (!v) return null;
           const ms = typeof v === "number" ? v : new Date(v).getTime();
           return isNaN(ms) ? null : Math.floor(ms / 60000);
         };
-        el.classList.toggle("modified", toMinuteEpoch(current) !== toMinuteEpoch(original));
-      } else {
-        el.classList.toggle("modified", !valuesEqual(current, original));
+        return toMinuteEpoch(current) !== toMinuteEpoch(original);
+      }
+      return !valuesEqual(current, original);
+    }
+
+    function showFieldFeedback(fieldEl, status, previousValue) {
+      // Find or create feedback span next to the field element
+      let container = fieldEl.parentElement;
+      let feedback = container.querySelector(".field-feedback");
+      if (feedback) {
+        feedback.remove();
+      }
+      feedback = document.createElement("span");
+      feedback.className = "field-feedback";
+
+      if (status === "saving") {
+        const text = document.createElement("span");
+        text.textContent = "Saving\u2026";
+        feedback.appendChild(text);
+        feedback.classList.add("visible");
+        container.appendChild(feedback);
+        return;
+      }
+
+      if (status === "saved") {
+        feedback.classList.add("saved");
+        const tick = document.createElement("span");
+        tick.textContent = "\u2713 Saved";
+        feedback.appendChild(tick);
+
+        if (previousValue !== undefined) {
+          const undoLink = document.createElement("span");
+          undoLink.className = "undo-link";
+          undoLink.textContent = "Undo";
+          undoLink.addEventListener("click", () => {
+            undoFieldSave(fieldEl, previousValue);
+          });
+          feedback.appendChild(undoLink);
+        }
+
+        feedback.classList.add("visible");
+        container.appendChild(feedback);
+
+        // Fade out after 5s
+        setTimeout(() => {
+          feedback.classList.remove("visible");
+          setTimeout(() => { if (feedback.parentElement) feedback.remove(); }, 400);
+        }, 5000);
+        return;
+      }
+
+      if (status === "failed") {
+        feedback.classList.add("failed");
+        const text = document.createElement("span");
+        text.textContent = "\u2717 Save failed";
+        feedback.appendChild(text);
+        feedback.classList.add("visible");
+        container.appendChild(feedback);
+
+        // Fade out after 8s
+        setTimeout(() => {
+          feedback.classList.remove("visible");
+          setTimeout(() => { if (feedback.parentElement) feedback.remove(); }, 400);
+        }, 8000);
+        return;
       }
     }
 
-    function updateSaveInfo() {
-      const count = Object.keys(getModifiedFields()).length;
-      saveInfo.textContent = count > 0 ? `${count} field${count > 1 ? "s" : ""} modified` : "";
-      updateSubtabIndicators();
+    function getEconomyFieldValue(fieldName) {
+      if (fieldName === "isSuperShy") return $("#eco-super-shy").value === "true";
+      if (fieldName === "superShyExpiry") {
+        const isSuperShy = $("#eco-super-shy").value === "true";
+        const expiryVal = $("#eco-super-shy-expiry").value;
+        return isSuperShy && expiryVal ? new Date(expiryVal).getTime() : null;
+      }
+      if (fieldName === "loginStreak") return parseInt($("#eco-streak").value) || 0;
+      if (fieldName === "pityCounter") return parseInt($("#eco-pity").value) || 0;
+      return undefined;
     }
 
-    const ECONOMY_FIELDS = ["isSuperShy", "superShyExpiry", "loginStreak", "pityCounter"];
-    function updateSubtabIndicators() {
-      const modified = getModifiedFields();
-      const modKeys = Object.keys(modified);
-      document.querySelectorAll(".user-subtab").forEach(btn => {
-        const subtab = btn.dataset.subtab;
-        const panel = document.querySelector(`.user-subpanel[data-subtab="${subtab}"]`);
-        if (!panel) return;
-        let hasChanges = panel.querySelector(".modified") !== null;
-        if (subtab === "economy" && !hasChanges) {
-          hasChanges = modKeys.some(k => ECONOMY_FIELDS.includes(k));
-        }
-        btn.classList.toggle("has-changes", hasChanges);
-      });
+    function getEconomyFieldEl(fieldName) {
+      if (fieldName === "isSuperShy") return document.getElementById("eco-super-shy");
+      if (fieldName === "superShyExpiry") return document.getElementById("eco-super-shy-expiry");
+      if (fieldName === "loginStreak") return document.getElementById("eco-streak");
+      if (fieldName === "pityCounter") return document.getElementById("eco-pity");
+      return null;
     }
+
+    function isEconomyFieldChanged(fieldName) {
+      const v = getEconomyFieldValue(fieldName);
+      const orig = loadedData[fieldName];
+      if (fieldName === "isSuperShy") return !!v !== !!orig;
+      if (fieldName === "loginStreak" || fieldName === "pityCounter") return (Number(v) || 0) !== (Number(orig) || 0);
+      if (fieldName === "superShyExpiry") {
+        const normV = v ? Math.floor(v / 60000) : null;
+        const normO = orig ? Math.floor(orig / 60000) : null;
+        return normV !== normO;
+      }
+      return v !== orig;
+    }
+
+    async function autoSaveField(fieldEl) {
+      if (!currentUid) return;
+
+      const field = fieldEl.dataset ? fieldEl.dataset.field : null;
+      if (!field) return;
+      if (READONLY_FIELDS.includes(field)) return;
+
+      // Skip list (array) fields — they need uniqueId resolution
+      if (ARRAY_FIELDS.includes(field)) return;
+
+      const current = getFieldValue(field);
+      const original = getOriginalValue(field);
+
+      // Check if actually changed
+      if (TIMESTAMP_FIELDS.includes(field)) {
+        const toMinuteEpoch = (v) => {
+          if (!v) return null;
+          const ms = typeof v === "number" ? v : new Date(v).getTime();
+          return isNaN(ms) ? null : Math.floor(ms / 60000);
+        };
+        if (toMinuteEpoch(current) === toMinuteEpoch(original)) return;
+      } else {
+        if (valuesEqual(current, original)) return;
+      }
+
+      const previousValue = original;
+      fieldEl.classList.add("field-saving");
+      showFieldFeedback(fieldEl, "saving");
+
+      try {
+        await apiCall("PATCH", "/api/user/" + currentUid + "?silent=true", { [field]: current });
+        fieldEl.classList.remove("field-saving");
+        fieldEl.classList.remove("field-save-failed");
+        loadedData[field] = current;
+        showFieldFeedback(fieldEl, "saved", previousValue);
+        queueNotifyField(field);
+      } catch (err) {
+        fieldEl.classList.remove("field-saving");
+        fieldEl.classList.add("field-save-failed");
+        showFieldFeedback(fieldEl, "failed");
+        showToast("Auto-save failed: " + err.message, "error");
+      }
+    }
+
+    async function autoSaveEconomyField(fieldName) {
+      if (!currentUid) return;
+      if (!isEconomyFieldChanged(fieldName)) return;
+
+      const el = getEconomyFieldEl(fieldName);
+      if (!el) return;
+
+      const value = getEconomyFieldValue(fieldName);
+      const previousValue = loadedData[fieldName];
+
+      el.classList.add("field-saving");
+      showFieldFeedback(el, "saving");
+
+      try {
+        await apiCall("PATCH", "/api/user/" + currentUid + "?silent=true", { [fieldName]: value });
+        el.classList.remove("field-saving");
+        el.classList.remove("field-save-failed");
+        loadedData[fieldName] = value;
+        showFieldFeedback(el, "saved", previousValue);
+        queueNotifyField(fieldName);
+      } catch (err) {
+        el.classList.remove("field-saving");
+        el.classList.add("field-save-failed");
+        showFieldFeedback(el, "failed");
+        showToast("Auto-save failed: " + err.message, "error");
+      }
+    }
+
+    async function undoFieldSave(fieldEl, previousValue) {
+      if (!currentUid) return;
+
+      // Determine field name — could be data-field or economy field
+      const field = fieldEl.dataset ? fieldEl.dataset.field : null;
+      const ecoFieldName = ECONOMY_FIELDS.find(f => getEconomyFieldEl(f) === fieldEl);
+
+      const fieldName = field || ecoFieldName;
+      if (!fieldName) return;
+
+      fieldEl.classList.add("field-saving");
+      showFieldFeedback(fieldEl, "saving");
+
+      try {
+        await apiCall("PATCH", "/api/user/" + currentUid + "?silent=true", { [fieldName]: previousValue });
+        fieldEl.classList.remove("field-saving");
+        loadedData[fieldName] = previousValue;
+
+        // Restore the form field value
+        if (ecoFieldName) {
+          if (ecoFieldName === "isSuperShy") {
+            $("#eco-super-shy").value = previousValue ? "true" : "false";
+            $("#eco-super-shy-expiry").disabled = !previousValue;
+          } else if (ecoFieldName === "superShyExpiry") {
+            if (previousValue) {
+              const d = new Date(previousValue);
+              const pad = n => String(n).padStart(2, '0');
+              $("#eco-super-shy-expiry").value = d.getFullYear() + "-" + pad(d.getMonth()+1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
+            } else {
+              $("#eco-super-shy-expiry").value = "";
+            }
+          } else if (ecoFieldName === "loginStreak") {
+            $("#eco-streak").value = previousValue || 0;
+          } else if (ecoFieldName === "pityCounter") {
+            $("#eco-pity").value = previousValue || 0;
+          }
+        } else if (BOOLEAN_FIELDS.includes(fieldName)) {
+          fieldEl.checked = previousValue === true;
+        } else if (TIMESTAMP_FIELDS.includes(fieldName)) {
+          fieldEl.value = isoToLocal(previousValue);
+        } else if (fieldName === "email") {
+          realEmail = previousValue || "";
+          emailInput.value = emailRevealed ? realEmail : maskEmail(realEmail);
+        } else {
+          fieldEl.value = previousValue ?? "";
+        }
+
+        showFieldFeedback(fieldEl, "saved");
+        showToast("Undo successful");
+      } catch (err) {
+        fieldEl.classList.remove("field-saving");
+        showFieldFeedback(fieldEl, "failed");
+        showToast("Undo failed: " + err.message, "error");
+      }
+    }
+
+    function queueNotifyField(fieldName) {
+      if (!autoSaveState.pendingNotifyFields.includes(fieldName)) {
+        autoSaveState.pendingNotifyFields.push(fieldName);
+      }
+      if (autoSaveState.notifyTimer) {
+        clearTimeout(autoSaveState.notifyTimer);
+      }
+      autoSaveState.notifyTimer = setTimeout(flushNotifications, autoSaveState.NOTIFY_DEBOUNCE_MS);
+    }
+
+    async function flushNotifications() {
+      if (autoSaveState.notifyTimer) {
+        clearTimeout(autoSaveState.notifyTimer);
+        autoSaveState.notifyTimer = null;
+      }
+      if (!currentUid || autoSaveState.pendingNotifyFields.length === 0) return;
+      const fields = [...autoSaveState.pendingNotifyFields];
+      autoSaveState.pendingNotifyFields = [];
+      try {
+        await apiCall("POST", "/api/user/" + currentUid + "/notify-changes", { fields: fields });
+      } catch (err) {
+        console.warn("Failed to send change notification PM:", err);
+      }
+    }
+
+    function attachAutoSaveListeners() {
+      // Remove any previous auto-save listeners by using a flag
+      if (window._autoSaveListenersAttached) return;
+      window._autoSaveListenersAttached = true;
+
+      // For data-field elements: blur for text inputs, change for checkboxes/selects
+      document.addEventListener("blur", (e) => {
+        const el = e.target;
+        const field = el.dataset ? el.dataset.field : null;
+        if (!field) return;
+        if (ARRAY_FIELDS.includes(field)) return;
+        if (el.type === "checkbox" || el.tagName === "SELECT") return;
+        autoSaveField(el);
+      }, true); // useCapture for blur since it doesn't bubble
+
+      document.addEventListener("change", (e) => {
+        const el = e.target;
+        const field = el.dataset ? el.dataset.field : null;
+        if (!field) return;
+        if (ARRAY_FIELDS.includes(field)) return;
+        if (el.type === "checkbox" || el.tagName === "SELECT") {
+          autoSaveField(el);
+        }
+      });
+
+      // Economy field auto-save
+      const ecoSuperShy = document.getElementById("eco-super-shy");
+      if (ecoSuperShy) {
+        ecoSuperShy.addEventListener("change", () => {
+          autoSaveEconomyField("isSuperShy");
+        });
+      }
+
+      const ecoExpiry = document.getElementById("eco-super-shy-expiry");
+      if (ecoExpiry) {
+        ecoExpiry.addEventListener("change", () => {
+          autoSaveEconomyField("superShyExpiry");
+        });
+      }
+
+      const ecoStreak = document.getElementById("eco-streak");
+      if (ecoStreak) {
+        ecoStreak.addEventListener("blur", () => {
+          autoSaveEconomyField("loginStreak");
+        });
+      }
+
+      const ecoPity = document.getElementById("eco-pity");
+      if (ecoPity) {
+        ecoPity.addEventListener("blur", () => {
+          autoSaveEconomyField("pityCounter");
+        });
+      }
+    }
+
+    // Attach auto-save listeners once on page load
+    attachAutoSaveListeners();
 
     // --- Clear buttons ---
     for (const btn of $$("[data-clear]")) {
@@ -4728,14 +4934,13 @@
           emailRevealed = true;
           emailToggle.textContent = "Hide";
           emailInput.readOnly = false;
-          updateFieldHighlight("email");
-          updateSaveInfo();
+          autoSaveField(emailInput);
           return;
         }
         const el = getFieldEl(field);
         if (!el) return;
         el.value = "";
-        el.dispatchEvent(new Event("input", { bubbles: true }));
+        autoSaveField(el);
       });
     }
 
@@ -4764,75 +4969,7 @@
       searchBtn.textContent = "Search";
     }
 
-    // --- Save ---
-    saveBtn.addEventListener("click", async () => {
-      const modified = getModifiedFields();
-      const count = Object.keys(modified).length;
-
-      if (count === 0) {
-        showToast("No changes to save", "error");
-        return;
-      }
-
-      saveBtn.disabled = true;
-      saveBtn.textContent = "Saving...";
-
-      try {
-        // Convert ShyTalk uniqueIds back to Firebase UIDs for list fields
-        const listFieldsToResolve = ARRAY_FIELDS.filter((f) => f in modified);
-        if (listFieldsToResolve.length > 0) {
-          const allUniqueIds = new Set();
-          for (const field of listFieldsToResolve) {
-            modified[field].forEach((v) => {
-              const n = Number(v);
-              if (Number.isFinite(n)) allUniqueIds.add(n);
-            });
-          }
-
-          let uniqueIdToUid = {};
-          if (allUniqueIds.size > 0) {
-            const result = await apiCall("POST", "/api/resolve/uniqueIds-to-uids", { uniqueIds: [...allUniqueIds] });
-            uniqueIdToUid = result.mapping;
-          }
-
-          for (const field of listFieldsToResolve) {
-            modified[field] = modified[field].map((v) => {
-              const n = Number(v);
-              const resolved = Number.isFinite(n) ? uniqueIdToUid[n] : undefined;
-              if (!resolved) throw new Error(`Could not resolve ShyTalk ID "${v}" to a user`);
-              return resolved;
-            });
-          }
-        }
-
-        const result = await apiCall("PATCH", `/api/user/${currentUid}`, modified);
-        showToast(`Saved ${result.updatedFields.length} field(s)`);
-
-        // Update local state so highlights reset
-        for (const [k, v] of Object.entries(modified)) {
-          if (ARRAY_FIELDS.includes(k)) {
-            // Store display versions (with names) for comparison
-            loadedData[k] = [...(listWidgetData[k] || [])];
-          } else {
-            loadedData[k] = getFieldValue(k);
-          }
-        }
-
-        // Reset highlights
-        for (const el of $$("[data-field]")) {
-          el.classList.remove("modified");
-        }
-        for (const field of ARRAY_FIELDS) {
-          updateListHighlight(field);
-        }
-        updateSaveInfo();
-      } catch (err) {
-        showToast(err.message, "error");
-      }
-
-      saveBtn.disabled = false;
-      saveBtn.textContent = "Save Changes";
-    });
+    // Save handler removed — replaced by per-field auto-save
 
     // --- Tab switching ---
     const tabUsers = $("#tab-users");
@@ -5395,6 +5532,8 @@
     async function doSearchFinal() {
       const q = searchUid.value.trim();
       if (!q) return;
+      // Flush any pending change notifications before switching users
+      await flushNotifications();
       searchBtn.disabled = true;
       searchBtn.textContent = "Searching...";
       userForm.classList.remove("visible");
@@ -6178,14 +6317,10 @@
       if (!isSuperShy) {
         $("#eco-super-shy-expiry").value = "";
       }
-      updateSaveInfo();
+      // Auto-save handled by attachAutoSaveListeners
     });
 
-    // Track economy field changes for sub-tab indicators
-    for (const id of ["eco-super-shy-expiry", "eco-streak", "eco-pity"]) {
-      const el = document.getElementById(id);
-      if (el) el.addEventListener("input", updateSaveInfo);
-    }
+    // Economy field change tracking removed — auto-save handles this
 
     // Apply coins add/deduct (uses dedicated audit endpoint)
     $("#eco-coins-apply").addEventListener("click", async () => {
@@ -6234,40 +6369,7 @@
       populateGiftSelect();
     };
 
-    // Include economy fields in save (coins/beans excluded — managed via add/deduct buttons)
-    const _origGetModified = getModifiedFields;
-    getModifiedFields = function() {
-      const modified = _origGetModified();
-      const isSuperShy = $("#eco-super-shy").value === "true";
-      const expiryVal = $("#eco-super-shy-expiry").value;
-      const ecoFields = {
-        isSuperShy,
-        superShyExpiry: isSuperShy && expiryVal ? new Date(expiryVal).getTime() : null,
-        loginStreak: parseInt($("#eco-streak").value) || 0,
-        pityCounter: parseInt($("#eco-pity").value) || 0,
-      };
-      const NUMERIC_ECO = ["loginStreak", "pityCounter"];
-      const NULLABLE_ECO = ["superShyExpiry"];
-      for (const [k, v] of Object.entries(ecoFields)) {
-        const orig = loadedData[k];
-        let normV = v, normO = orig;
-        if (k === "isSuperShy") {
-          normV = !!v;
-          normO = !!orig;
-        } else if (NUMERIC_ECO.includes(k)) {
-          normV = Number(v) || 0;
-          normO = Number(orig) || 0;
-        } else if (NULLABLE_ECO.includes(k)) {
-          // Truncate to minute precision (datetime-local loses seconds)
-          normV = v ? Math.floor(v / 60000) : null;
-          normO = orig ? Math.floor(orig / 60000) : null;
-        }
-        if (normV !== normO) {
-          modified[k] = v;
-        }
-      }
-      return modified;
-    };
+    // Economy getModifiedFields override removed — economy fields now auto-save individually
 
     // Backpack management
     let _backpackItems = [];
