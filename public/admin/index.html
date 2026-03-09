@@ -2715,6 +2715,89 @@
         .profile-preview-row { display: flex; gap: 24px; margin-bottom: 24px; }
         .profile-preview-row .preview-card { flex: 1; background: var(--surface2); border-radius: 12px; padding: 16px; text-align: center; }
         @media (max-width: 700px) { .profile-preview-row { flex-direction: column; } }
+
+        /* Backpack visual grid */
+        .backpack-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+          gap: 10px;
+          padding: 8px 0;
+          min-height: 60px;
+        }
+        .backpack-item {
+          position: relative;
+          background: var(--surface2);
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          padding: 10px 8px;
+          text-align: center;
+          cursor: pointer;
+          transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .backpack-item:hover {
+          border-color: var(--accent);
+          box-shadow: 0 0 0 1px var(--accent);
+        }
+        .backpack-item img {
+          width: 44px;
+          height: 44px;
+          object-fit: contain;
+          display: block;
+          margin: 0 auto 4px;
+        }
+        .backpack-qty-badge {
+          position: absolute;
+          top: 4px;
+          right: 4px;
+          background: var(--accent);
+          color: #fff;
+          font-size: 0.65rem;
+          font-weight: 700;
+          padding: 1px 5px;
+          border-radius: 8px;
+          min-width: 18px;
+          text-align: center;
+          line-height: 1.4;
+        }
+        .backpack-item-name {
+          font-size: 0.7rem;
+          color: var(--text2);
+          margin-top: 2px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .backpack-remove-btn {
+          position: absolute;
+          top: 3px;
+          left: 3px;
+          background: rgba(231, 76, 60, 0.85);
+          color: #fff;
+          border: none;
+          border-radius: 50%;
+          width: 18px;
+          height: 18px;
+          font-size: 11px;
+          cursor: pointer;
+          display: none;
+          align-items: center;
+          justify-content: center;
+          line-height: 1;
+          padding: 0;
+        }
+        .backpack-item:hover .backpack-remove-btn { display: flex; }
+        .backpack-edit-overlay {
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          background: rgba(0,0,0,0.9);
+          padding: 6px;
+          border-radius: 0 0 8px 8px;
+          display: none;
+        }
+        .backpack-item.editing .backpack-edit-overlay { display: block; }
+        .backpack-item.editing { border-color: var(--accent); }
     </style>
 <script src="/js/logger.js"></script>
 </head>
@@ -3190,29 +3273,18 @@
             <!-- Backpack -->
             <div class="form-section">
                 <h3>Backpack</h3>
-                <div style="display:flex;gap:8px;margin-bottom:8px">
-                    <input type="text" id="backpack-search"
-                           placeholder="Search by name, type, or ID..." aria-label="Search backpack"
-                           style="flex:1">
-                    <select id="backpack-filter-type" aria-label="Filter by type"
-                            style="width:120px">
-                        <option value="">All Types</option>
+                <div style="display:flex;gap:8px;margin-bottom:12px;">
+                    <input type="text" id="backpack-search" placeholder="Search gifts..." aria-label="Search backpack" style="flex:1;">
+                    <select id="backpack-category-filter" aria-label="Filter by category" style="width:140px;">
+                        <option value="">All Categories</option>
                     </select>
                 </div>
-                <div id="backpack-container">
-                    <p style="color:var(--text2)">Loading backpack...</p>
-                </div>
-                <div id="backpack-pending-bar" style="display:none;margin-top:8px;padding:8px 12px;background:var(--surface2);border:1px solid var(--accent);border-radius:8px;display:none;align-items:center;gap:8px">
-                    <span id="backpack-pending-count" style="flex:1;font-size:0.9em;color:var(--accent)"></span>
-                    <button type="button" id="backpack-save-btn" style="padding:6px 16px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:0.85em">Save Changes</button>
-                    <button type="button" id="backpack-discard-btn" style="padding:6px 12px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:0.85em">Discard</button>
-                </div>
-                <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
-                    <select id="backpack-gift-select" aria-label="Select gift" style="flex:1">
+                <div id="backpack-grid" class="backpack-grid"></div>
+                <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
+                    <select id="backpack-gift-select" aria-label="Select gift" style="flex:1;">
                         <option value="">Add gift...</option>
                     </select>
-                    <input type="number" id="backpack-qty" placeholder="Qty" min="1" value="1"
-                           aria-label="Quantity" style="width:70px">
+                    <input type="number" id="backpack-qty" placeholder="Qty" min="1" value="1" aria-label="Quantity" style="width:70px;">
                     <button type="button" id="backpack-add-btn" class="btn-sm">Add</button>
                     <button type="button" id="backpack-clear-btn" style="padding:4px 10px;background:var(--danger);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:0.8em">Clear All</button>
                 </div>
@@ -6388,177 +6460,210 @@
     // Backpack management
     let _backpackItems = [];
     let _giftCatalog = [];
-    let _backpackEdits = {}; // giftId -> newQty (pending changes)
+    let _backpackEdits = {};
 
     async function loadBackpack(uid) {
-      const container = $("#backpack-container");
-      container.innerHTML = '<p style="color:var(--text2)">Loading...</p>';
+      const container = document.getElementById("backpack-grid");
+      if (!container) return;
+      while (container.firstChild) container.removeChild(container.firstChild);
+      const loading = document.createElement("p");
+      loading.style.cssText = "color:var(--text2);grid-column:1/-1;text-align:center;";
+      loading.textContent = "Loading backpack...";
+      container.appendChild(loading);
       _backpackEdits = {};
-      updatePendingBar();
       try {
-        const data = await apiCall("GET", `/api/users/${uid}/backpack`);
+        const data = await apiCall("GET", "/api/users/" + uid + "/backpack");
         _backpackItems = Array.isArray(data) ? data : (data.items || []);
         renderBackpack();
+        populateCategoryFilter();
       } catch (err) {
-        container.innerHTML = `<p style="color:var(--danger)">${escapeHtml(err.message)}</p>`;
-      }
-    }
-
-    function markEdit(giftId, newQty, originalQty) {
-      if (newQty === originalQty) {
-        delete _backpackEdits[giftId];
-      } else {
-        _backpackEdits[giftId] = newQty;
-      }
-      updatePendingBar();
-      // Update row styling
-      const row = $(`#bp-row-${giftId}`);
-      if (row) {
-        const changed = newQty !== originalQty;
-        row.style.borderLeft = changed ? "3px solid var(--accent)" : "3px solid transparent";
-        const label = row.querySelector(".bp-qty-label");
-        if (label) {
-          if (newQty === 0) {
-            label.textContent = "will be removed";
-            label.style.color = "var(--danger)";
-          } else if (changed) {
-            label.textContent = `${originalQty} \u2192 ${newQty}`;
-            label.style.color = "var(--accent)";
-          } else {
-            label.textContent = "";
-            label.style.color = "";
-          }
-        }
-      }
-    }
-
-    function updatePendingBar() {
-      const bar = $("#backpack-pending-bar");
-      const count = Object.keys(_backpackEdits).length;
-      if (count === 0) {
-        bar.style.display = "none";
-      } else {
-        bar.style.display = "flex";
-        $("#backpack-pending-count").textContent = `${count} unsaved change${count > 1 ? "s" : ""}`;
+        while (container.firstChild) container.removeChild(container.firstChild);
+        const errEl = document.createElement("p");
+        errEl.style.color = "var(--danger)";
+        errEl.textContent = err.message;
+        container.appendChild(errEl);
       }
     }
 
     function renderBackpack() {
-      const container = $("#backpack-container");
-      const searchText = ($("#backpack-search").value || "").toLowerCase();
+      const container = document.getElementById("backpack-grid");
+      if (!container) return;
+      while (container.firstChild) container.removeChild(container.firstChild);
+
+      const searchText = (document.getElementById("backpack-search")?.value || "").toLowerCase();
+      const catFilter = document.getElementById("backpack-category-filter")?.value || "";
+
+      const catalogMap = {};
+      _giftCatalog.forEach(function(g) { catalogMap[g.id] = g; });
 
       let filtered = _backpackItems;
       if (searchText) {
-        filtered = filtered.filter(item => {
-          const name = (item.giftName || item.giftId || "").toLowerCase();
-          const id = (item.giftId || "").toLowerCase();
-          return name.includes(searchText) || id.includes(searchText);
+        filtered = filtered.filter(function(item) {
+          const gift = catalogMap[item.giftId] || {};
+          const name = (gift.name || item.giftName || item.giftId || "").toLowerCase();
+          return name.includes(searchText) || (item.giftId || "").toLowerCase().includes(searchText);
+        });
+      }
+      if (catFilter) {
+        filtered = filtered.filter(function(item) {
+          const gift = catalogMap[item.giftId] || {};
+          return gift.category === catFilter;
         });
       }
 
-      if (_backpackItems.length === 0) {
-        container.innerHTML = '<p style="color:var(--text2)">Backpack is empty</p>';
-      } else if (filtered.length === 0) {
-        container.innerHTML = '<p style="color:var(--text2)">No items match your search</p>';
-      } else {
-        container.innerHTML = filtered.map(item => {
-          const gid = escapeHtml(item.giftId);
-          const editedQty = _backpackEdits[item.giftId];
-          const currentVal = editedQty !== undefined ? editedQty : item.quantity;
-          const isChanged = editedQty !== undefined;
-          const borderStyle = isChanged ? "3px solid var(--accent)" : "3px solid transparent";
-          let changeLabel = "";
-          if (isChanged) {
-            changeLabel = currentVal === 0
-              ? '<span class="bp-qty-label" style="color:var(--danger);font-size:0.8em;margin-left:6px">will be removed</span>'
-              : `<span class="bp-qty-label" style="color:var(--accent);font-size:0.8em;margin-left:6px">${item.quantity} \u2192 ${currentVal}</span>`;
-          } else {
-            changeLabel = '<span class="bp-qty-label" style="font-size:0.8em;margin-left:6px"></span>';
+      if (filtered.length === 0) {
+        const empty = document.createElement("div");
+        empty.style.cssText = "grid-column:1/-1;text-align:center;color:var(--text2);padding:24px;";
+        empty.textContent = _backpackItems.length === 0 ? "Backpack is empty" : "No matching gifts";
+        container.appendChild(empty);
+        return;
+      }
+
+      filtered.forEach(function(item) {
+        const gift = catalogMap[item.giftId] || {};
+        const editedQty = _backpackEdits[item.giftId];
+        const displayQty = editedQty !== undefined ? editedQty : item.quantity;
+        if (displayQty <= 0 && editedQty === undefined) return;
+
+        const card = document.createElement("div");
+        card.className = "backpack-item";
+        card.dataset.giftId = item.giftId;
+
+        // Remove button (X)
+        const removeBtn = document.createElement("button");
+        removeBtn.className = "backpack-remove-btn";
+        removeBtn.textContent = "\u00D7";
+        removeBtn.title = "Remove";
+        removeBtn.addEventListener("click", function(e) {
+          e.stopPropagation();
+          autoSaveBackpackItem(item.giftId, 0, item.quantity);
+        });
+        card.appendChild(removeBtn);
+
+        // Quantity badge
+        const badge = document.createElement("span");
+        badge.className = "backpack-qty-badge";
+        badge.textContent = String(displayQty);
+        card.appendChild(badge);
+
+        // Gift icon
+        const img = document.createElement("img");
+        img.src = gift.iconUrl || "";
+        img.alt = gift.name || item.giftName || item.giftId;
+        img.loading = "lazy";
+        img.onerror = function() { this.style.display = "none"; };
+        card.appendChild(img);
+
+        // Gift name
+        const nameEl = document.createElement("div");
+        nameEl.className = "backpack-item-name";
+        nameEl.textContent = gift.name || item.giftName || item.giftId;
+        nameEl.title = gift.name || item.giftName || item.giftId;
+        card.appendChild(nameEl);
+
+        // Edit overlay
+        const overlay = document.createElement("div");
+        overlay.className = "backpack-edit-overlay";
+        const qtyInput = document.createElement("input");
+        qtyInput.type = "number";
+        qtyInput.min = "0";
+        qtyInput.value = String(displayQty);
+        qtyInput.style.cssText = "width:100%;text-align:center;padding:4px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;";
+        qtyInput.addEventListener("blur", function() {
+          const newQty = Math.max(0, parseInt(qtyInput.value, 10) || 0);
+          card.classList.remove("editing");
+          if (newQty !== item.quantity) {
+            autoSaveBackpackItem(item.giftId, newQty, item.quantity);
           }
-          return `<div id="bp-row-${gid}" style="display:flex;justify-content:space-between;align-items:center;padding:5px 6px;border-bottom:1px solid var(--border);border-left:${borderStyle};transition:border-left 0.2s">
-            <span style="flex:1;min-width:0">
-              ${escapeHtml(item.giftName || item.giftId)}
-              <span style="color:var(--text2)">x${item.quantity}</span>
-              ${changeLabel}
-            </span>
-            <div style="display:flex;gap:4px;align-items:center;flex-shrink:0">
-              <input type="number" data-gift-id="${gid}" data-original="${item.quantity}" min="0" value="${currentVal}" style="width:55px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);text-align:center;font-size:0.85em" onchange="window._bpQtyChanged(this)">
-              <button type="button" style="padding:3px 8px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:0.85em" onclick="window._bpSetQty('${gid}', 0, ${item.quantity})" title="Set to 0">&times;</button>
-            </div>
-          </div>`;
-        }).join("");
+        });
+        qtyInput.addEventListener("keydown", function(e) {
+          if (e.key === "Enter") { qtyInput.blur(); }
+          if (e.key === "Escape") { card.classList.remove("editing"); }
+        });
+        overlay.appendChild(qtyInput);
+        card.appendChild(overlay);
+
+        // Click to toggle edit
+        card.addEventListener("click", function(e) {
+          if (e.target === removeBtn) return;
+          document.querySelectorAll(".backpack-item.editing").forEach(function(other) {
+            if (other !== card) other.classList.remove("editing");
+          });
+          card.classList.toggle("editing");
+          if (card.classList.contains("editing")) {
+            qtyInput.focus();
+            qtyInput.select();
+          }
+        });
+
+        container.appendChild(card);
+      });
+    }
+
+    async function autoSaveBackpackItem(giftId, newQty, originalQty) {
+      try {
+        await apiCall("POST", "/api/users/" + currentUid + "/backpack", { giftId: giftId, quantity: newQty });
+        const item = _backpackItems.find(function(i) { return i.giftId === giftId; });
+        if (item) {
+          if (newQty <= 0) {
+            _backpackItems = _backpackItems.filter(function(i) { return i.giftId !== giftId; });
+          } else {
+            item.quantity = newQty;
+          }
+        }
+        delete _backpackEdits[giftId];
+        renderBackpack();
+        showBackpackToast("Saved", giftId, originalQty, newQty);
+      } catch (err) {
+        showToast("Failed to save: " + err.message, "error");
       }
     }
 
-    window._bpQtyChanged = function(input) {
-      const giftId = input.dataset.giftId;
-      const original = parseInt(input.dataset.original);
-      const newQty = Math.max(0, parseInt(input.value) || 0);
-      input.value = newQty;
-      markEdit(giftId, newQty, original);
-    };
-
-    window._bpSetQty = function(giftId, qty, originalQty) {
-      const input = $(`#bp-row-${giftId} input[type="number"]`);
-      if (input) input.value = qty;
-      markEdit(giftId, qty, originalQty);
-    };
-
-    // Search & filter triggers
-    $("#backpack-search").addEventListener("input", renderBackpack);
-    $("#backpack-filter-type").addEventListener("change", renderBackpack);
-
-    // Save all pending changes
-    $("#backpack-save-btn").addEventListener("click", async () => {
-      if (!currentUid) return;
-      const edits = Object.entries(_backpackEdits);
-      if (edits.length === 0) return;
-
-      const btn = $("#backpack-save-btn");
-      btn.disabled = true;
-      btn.textContent = "Saving...";
-
-      let saved = 0;
-      let errors = 0;
-      for (const [giftId, newQty] of edits) {
-        try {
-          await apiCall("POST", `/api/users/${currentUid}/backpack`, { giftId, quantity: newQty });
-          saved++;
-        } catch (err) {
-          errors++;
-          console.error(`Failed to update ${giftId}:`, err);
-        }
-      }
-
-      btn.disabled = false;
-      btn.textContent = "Save Changes";
-
-      if (errors > 0) {
-        showToast(`Saved ${saved}, failed ${errors}`, "error");
+    function showBackpackToast(msg, giftId, oldQty, newQty) {
+      const gift = _giftCatalog.find(function(g) { return g.id === giftId; });
+      const name = gift ? gift.name : giftId;
+      if (newQty <= 0) {
+        showToast(name + " removed (was " + oldQty + ")");
       } else {
-        showToast(`Saved ${saved} change${saved > 1 ? "s" : ""}`, "success");
+        showToast(name + ": " + oldQty + " \u2192 " + newQty);
       }
-      loadBackpack(currentUid);
-    });
+    }
 
-    // Discard pending changes
-    $("#backpack-discard-btn").addEventListener("click", () => {
-      _backpackEdits = {};
-      updatePendingBar();
-      renderBackpack();
-    });
+    function populateCategoryFilter() {
+      const select = document.getElementById("backpack-category-filter");
+      if (!select) return;
+      while (select.options.length > 1) select.remove(1);
+      const categories = new Set();
+      _giftCatalog.forEach(function(g) { if (g.category) categories.add(g.category); });
+      [...categories].sort().forEach(function(cat) {
+        const opt = document.createElement("option");
+        opt.value = cat;
+        opt.textContent = cat;
+        select.appendChild(opt);
+      });
+    }
 
     async function populateGiftSelect() {
-      const select = $("#backpack-gift-select");
+      const select = document.getElementById("backpack-gift-select");
+      if (!select) return;
       try {
         const raw = await apiCall("GET", "/api/gifts");
         _giftCatalog = Array.isArray(raw) ? raw : (raw.gifts || []);
-        select.innerHTML = '<option value="">Add gift...</option>' +
-          _giftCatalog.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join("");
+        while (select.options.length > 1) select.remove(1);
+        _giftCatalog.forEach(function(g) {
+          const opt = document.createElement("option");
+          opt.value = g.id;
+          opt.textContent = g.name || g.id;
+          select.appendChild(opt);
+        });
       } catch (err) {
         // Gift catalog not available
       }
     }
+
+    // Search & filter triggers
+    document.getElementById("backpack-search")?.addEventListener("input", renderBackpack);
+    document.getElementById("backpack-category-filter")?.addEventListener("change", renderBackpack);
 
     // Add gift to backpack (immediate)
     $("#backpack-add-btn").addEventListener("click", async () => {
@@ -6578,16 +6683,99 @@
       }
     });
 
-    // Clear all backpack items
+    // Clear all backpack items with destructive protection
     $("#backpack-clear-btn").addEventListener("click", () => {
       if (_backpackItems.length === 0) { showToast("Backpack is already empty", "error"); return; }
-      if (!confirm("Set all items to 0? You'll still need to click Save Changes.")) return;
-      for (const item of _backpackItems) {
-        _backpackEdits[item.giftId] = 0;
-      }
-      updatePendingBar();
-      renderBackpack();
+      showClearAllConfirmation();
     });
+
+    function showClearAllConfirmation() {
+      const overlay = document.createElement("div");
+      overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;";
+
+      const dialog = document.createElement("div");
+      dialog.style.cssText = "background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:400px;width:90%;text-align:center;";
+
+      const title = document.createElement("h3");
+      title.style.cssText = "color:var(--danger);margin:0 0 12px 0;";
+      title.textContent = "Clear All Items?";
+      dialog.appendChild(title);
+
+      const warning = document.createElement("p");
+      warning.style.cssText = "color:var(--text2);margin:0 0 20px 0;font-size:14px;";
+      warning.textContent = "This will permanently remove all items from this user's backpack. This action cannot be undone.";
+      dialog.appendChild(warning);
+
+      const btnRow = document.createElement("div");
+      btnRow.style.cssText = "display:flex;gap:12px;justify-content:center;";
+
+      const cancelBtn = document.createElement("button");
+      cancelBtn.style.cssText = "padding:8px 20px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:14px;";
+      cancelBtn.textContent = "Cancel";
+      cancelBtn.addEventListener("click", function() { document.body.removeChild(overlay); });
+      btnRow.appendChild(cancelBtn);
+
+      const confirmBtn = document.createElement("button");
+      confirmBtn.style.cssText = "padding:8px 20px;background:var(--danger);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;opacity:0.5;";
+      confirmBtn.disabled = true;
+      let countdown = 5;
+      confirmBtn.textContent = "Confirm (" + countdown + ")";
+
+      const timer = setInterval(function() {
+        countdown--;
+        if (countdown <= 0) {
+          clearInterval(timer);
+          confirmBtn.disabled = false;
+          confirmBtn.style.opacity = "1";
+          confirmBtn.textContent = "Confirm Clear All";
+        } else {
+          confirmBtn.textContent = "Confirm (" + countdown + ")";
+        }
+      }, 1000);
+
+      confirmBtn.addEventListener("click", async function() {
+        if (confirmBtn.disabled) return;
+        clearInterval(timer);
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = "Clearing...";
+        await clearAllBackpack();
+        document.body.removeChild(overlay);
+      });
+      btnRow.appendChild(confirmBtn);
+
+      dialog.appendChild(btnRow);
+      overlay.appendChild(dialog);
+
+      overlay.addEventListener("click", function(e) {
+        if (e.target === overlay) {
+          clearInterval(timer);
+          document.body.removeChild(overlay);
+        }
+      });
+
+      document.body.appendChild(overlay);
+    }
+
+    async function clearAllBackpack() {
+      let cleared = 0;
+      let errors = 0;
+      for (const item of _backpackItems) {
+        try {
+          await apiCall("POST", "/api/users/" + currentUid + "/backpack", { giftId: item.giftId, quantity: 0 });
+          cleared++;
+        } catch (err) {
+          errors++;
+        }
+      }
+      _backpackItems = [];
+      _backpackEdits = {};
+      renderBackpack();
+      if (errors > 0) {
+        showToast("Cleared " + cleared + ", failed " + errors, "error");
+      } else {
+        showToast("Backpack cleared (" + cleared + " items removed)");
+      }
+    }
 
     // Transaction history
     $("#tx-load-btn").addEventListener("click", async () => {
