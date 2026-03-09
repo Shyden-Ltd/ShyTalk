@@ -69,16 +69,8 @@ fun GoogleSignInScreen(
         }
     }
 
-    if (isBanned) {
-        BanScreen(
-            banType = if (uiState.isDeviceBanned) "device" else "network",
-            reason = uiState.banReason,
-            expiresAt = uiState.banExpiresAt,
-            onSignOut = { viewModel.signOut() }
-        )
-        return
-    }
-
+    // Suspension takes priority over ban — show suspension screen first,
+    // with ban details included if the device/network is also banned
     if (uiState.isSuspended) {
         SuspensionScreen(
             reason = uiState.suspensionReason,
@@ -87,7 +79,21 @@ fun GoogleSignInScreen(
             appealStatus = uiState.suspensionAppealStatus,
             onSubmitAppeal = { viewModel.submitAppeal(it) },
             onSignOut = { viewModel.signOut() },
-            isLoading = uiState.isLoading
+            isLoading = uiState.isLoading,
+            isDeviceBanned = uiState.isDeviceBanned,
+            isNetworkBanned = uiState.isNetworkBanned,
+            banReason = uiState.banReason,
+            banExpiresAt = uiState.banExpiresAt
+        )
+        return
+    }
+
+    if (isBanned) {
+        BanScreen(
+            banType = if (uiState.isDeviceBanned) "device" else "network",
+            reason = uiState.banReason,
+            expiresAt = uiState.banExpiresAt,
+            onSignOut = { viewModel.signOut() }
         )
         return
     }

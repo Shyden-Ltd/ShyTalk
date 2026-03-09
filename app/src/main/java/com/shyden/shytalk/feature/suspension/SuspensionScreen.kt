@@ -71,7 +71,11 @@ fun SuspensionScreen(
     appealStatus: String?,
     onSubmitAppeal: (String) -> Unit,
     onSignOut: () -> Unit,
-    isLoading: Boolean
+    isLoading: Boolean,
+    isDeviceBanned: Boolean = false,
+    isNetworkBanned: Boolean = false,
+    banReason: String? = null,
+    banExpiresAt: String? = null
 ) {
     var appealText by remember { mutableStateOf("") }
     var appealSubmitted by remember { mutableStateOf(false) }
@@ -246,6 +250,54 @@ fun SuspensionScreen(
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        }
+
+        // Show device/network ban info if also banned
+        if ((isDeviceBanned || isNetworkBanned) && !countdownExpired) {
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = stringResource(
+                            if (isDeviceBanned && isNetworkBanned) Res.string.suspension_also_device_and_network_banned
+                            else if (isDeviceBanned) Res.string.suspension_also_device_banned
+                            else Res.string.suspension_also_network_banned
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.error
+                    )
+
+                    if (!banReason.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = stringResource(Res.string.ban_reason, banReason),
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    if (!banExpiresAt.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = stringResource(Res.string.ban_expires, banExpiresAt),
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         }
 

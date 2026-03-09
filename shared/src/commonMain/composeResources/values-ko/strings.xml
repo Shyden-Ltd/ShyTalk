@@ -487,6 +487,9 @@
     <string name="appeal_unsuccessful">Your appeal has been reviewed and was not successful. You cannot submit another appeal.</string>
     <string name="ban_expires">Expires: %1$s</string>
     <string name="ban_permanent">This ban is permanent.</string>
+    <string name="suspension_also_device_banned">기기도 차단되었습니다.</string>
+    <string name="suspension_also_network_banned">네트워크도 차단되었습니다.</string>
+    <string name="suspension_also_device_and_network_banned">기기와 네트워크도 차단되었습니다.</string>
     <string name="ban_reason">Reason: %1$s</string>
     <string name="banned_by">Banned by: %1$s</string>
     <string name="banned_from_room">Banned from Room</string>

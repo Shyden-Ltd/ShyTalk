@@ -664,6 +664,11 @@
     <string name="ban_expires">Expires: %1$s</string>
     <string name="ban_permanent">This ban is permanent.</string>
 
+    <!-- Ban info on suspension screen -->
+    <string name="suspension_also_device_banned">Your device has also been banned.</string>
+    <string name="suspension_also_network_banned">Your network has also been banned.</string>
+    <string name="suspension_also_device_and_network_banned">Your device and network have also been banned.</string>
+
     <!-- Support -->
     <string name="support_contact">For support, contact shytalk.help@gmail.com</string>
 

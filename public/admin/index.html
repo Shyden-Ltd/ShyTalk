@@ -2333,7 +2333,7 @@
         /* --- Bans Section (Users tab) --- */
         /* bans content is now merged inside #suspension-section */
         .bans-list { display:flex;flex-direction:column;gap:6px;margin:8px 0; }
-        .ban-item { display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--surface2);border-radius:6px;font-size:13px; }
+        .ban-item { display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--surface2);border-radius:6px;font-size:13px;margin-bottom:4px; }
         .ban-item-info { display:flex;flex-direction:column;gap:2px; }
         .ban-item-type { font-size:11px;color:var(--text2);text-transform:uppercase; }
         .bans-quick-actions { display:flex;gap:8px;flex-wrap:wrap;margin-top:10px; }
@@ -10498,13 +10498,36 @@
         if (deviceBans.length === 0) {
           bansDeviceList.innerHTML = '<div style="color:var(--text2);font-size:12px;font-style:italic;">No device bans</div>';
         } else {
-          bansDeviceList.innerHTML = deviceBans.map(b => `
-            <div class="ban-item">
-              <div class="ban-item-info">
-                <span>${escapeHtml(b.deviceId || b.id)}</span>
-                <span class="ban-item-type">${escapeHtml(b.reason || "No reason")} | ${escapeHtml(b.duration || "permanent")}</span>
-              </div>
-            </div>`).join("");
+          bansDeviceList.textContent = "";
+          deviceBans.forEach(b => {
+            const item = document.createElement("div");
+            item.className = "ban-item";
+            item.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px;";
+            const info = document.createElement("div");
+            info.className = "ban-item-info";
+            info.style.flex = "1";
+            const idSpan = document.createElement("span");
+            idSpan.textContent = b.deviceId || b.id;
+            const detailSpan = document.createElement("span");
+            detailSpan.className = "ban-item-type";
+            detailSpan.textContent = (b.reason || "No reason") + " | " + (b.duration || "permanent") + (b.autoApplied ? " (auto)" : "");
+            info.appendChild(idSpan);
+            info.appendChild(detailSpan);
+            item.appendChild(info);
+            const removeBtn = document.createElement("button");
+            removeBtn.textContent = "Remove";
+            removeBtn.style.cssText = "padding:4px 10px;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;background:var(--danger);color:#fff;white-space:nowrap;";
+            removeBtn.addEventListener("click", async () => {
+              if (!confirm("Remove this device ban?")) return;
+              try {
+                await apiCall("DELETE", "/api/admin/bans/device/" + encodeURIComponent(b.deviceId || b.id));
+                showToast("Device ban removed", "success");
+                populateBansSection(currentUid);
+              } catch (err) { showToast(err.message, "error"); }
+            });
+            item.appendChild(removeBtn);
+            bansDeviceList.appendChild(item);
+          });
         }
 
         // Network bans
@@ -10512,13 +10535,36 @@
         if (networkBans.length === 0) {
           bansNetworkList.innerHTML = '<div style="color:var(--text2);font-size:12px;font-style:italic;">No network bans</div>';
         } else {
-          bansNetworkList.innerHTML = networkBans.map(b => `
-            <div class="ban-item">
-              <div class="ban-item-info">
-                <span>${escapeHtml(b.value || b.id)} (${escapeHtml(b.type || "ip")})</span>
-                <span class="ban-item-type">${escapeHtml(b.reason || "No reason")} | ${escapeHtml(b.duration || "permanent")}</span>
-              </div>
-            </div>`).join("");
+          bansNetworkList.textContent = "";
+          networkBans.forEach(b => {
+            const item = document.createElement("div");
+            item.className = "ban-item";
+            item.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px;";
+            const info = document.createElement("div");
+            info.className = "ban-item-info";
+            info.style.flex = "1";
+            const valSpan = document.createElement("span");
+            valSpan.textContent = (b.value || b.id) + " (" + (b.type || "ip") + ")";
+            const detailSpan = document.createElement("span");
+            detailSpan.className = "ban-item-type";
+            detailSpan.textContent = (b.reason || "No reason") + " | " + (b.duration || "permanent") + (b.autoApplied ? " (auto)" : "");
+            info.appendChild(valSpan);
+            info.appendChild(detailSpan);
+            item.appendChild(info);
+            const removeBtn = document.createElement("button");
+            removeBtn.textContent = "Remove";
+            removeBtn.style.cssText = "padding:4px 10px;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;background:var(--danger);color:#fff;white-space:nowrap;";
+            removeBtn.addEventListener("click", async () => {
+              if (!confirm("Remove this network ban (" + (b.value || b.id) + ")?")) return;
+              try {
+                await apiCall("DELETE", "/api/admin/bans/network/" + encodeURIComponent(b.id));
+                showToast("Network ban removed", "success");
+                populateBansSection(currentUid);
+              } catch (err) { showToast(err.message, "error"); }
+            });
+            item.appendChild(removeBtn);
+            bansNetworkList.appendChild(item);
+          });
         }
 
         // Bound devices (expandable cards with per-device ban controls)
@@ -10628,7 +10674,7 @@
               const reasonInput = document.createElement("input");
               reasonInput.type = "text";
               reasonInput.className = "ban-reason-input";
-              reasonInput.placeholder = "Ban reason...";
+              reasonInput.placeholder = "Reason (optional)...";
               reasonInput.style.cssText = "flex:1;min-width:120px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface1);color:var(--text);font-size:12px;";
               const durationSelect = document.createElement("select");
               durationSelect.className = "ban-duration-select";
@@ -10684,12 +10730,11 @@
       if (action === "ban") {
         const reasonInput = btn.closest(".device-card-body").querySelector(".ban-reason-input");
         const durationSelect = btn.closest(".device-card-body").querySelector(".ban-duration-select");
-        const reason = reasonInput?.value?.trim();
-        if (!reason) { showToast("Enter a reason", "error"); return; }
+        const reason = reasonInput?.value?.trim() || "";
         try {
           await apiCall("POST", "/api/admin/bans/device", {
             deviceId,
-            reason,
+            reason: reason || null,
             duration: durationSelect?.value || null,
             linkedUserId: currentUid
           });

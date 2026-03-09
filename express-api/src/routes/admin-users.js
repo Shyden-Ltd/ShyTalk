@@ -26,6 +26,7 @@ const { requireAdmin, clearSuspensionCache } = require('../middleware/auth');
 const { generateId, now } = require('../utils/helpers');
 const { computeDisplayScore } = require('../utils/gcs');
 const { sendSystemPm } = require('../utils/system-pm');
+const { getDoc } = require('../utils/firestore-helpers');
 const log = require('../utils/log');
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -795,6 +796,10 @@ router.post('/user/:uid/unsuspend', async (req, res) => {
       }),
     ]);
 
+    // Lift auto-applied bans (non-blocking)
+    liftAutoAppliedBans(req.params.uid, req.auth.uid)
+      .catch(err => log.error('admin-users', 'Failed to lift auto-applied bans', { uid: req.params.uid, error: err.message }));
+
     // Send system PM about unsuspension (non-blocking)
     try { await sendSystemPm(req.params.uid, 'Your account suspension has been lifted.'); } catch (e) { log.warn('system-pm', 'Failed to send', { uid: req.params.uid, error: e.message }); }
 
@@ -909,6 +914,44 @@ async function autoApplyBans(uid, endDate) {
   const deviceCount = bindingsSnap.docs.length;
   const networkCount = lastIp ? 1 : 0;
   log.info('admin-users', 'Auto-bans applied', { uid, deviceBans: deviceCount, networkBans: networkCount });
+}
+
+// ══════════════════════════════════════════════════════════════
+// HELPER: Lift auto-applied bans on unsuspension
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Remove device and network bans that were auto-applied during suspension.
+ * Only removes bans with autoApplied === true and linkedUserId === uid.
+ * Manually-applied bans are left untouched.
+ */
+async function liftAutoAppliedBans(uid, adminUid) {
+  const [deviceSnap, networkSnap] = await Promise.all([
+    db.collection('deviceBans')
+      .where('linkedUserId', '==', uid)
+      .where('autoApplied', '==', true)
+      .get(),
+    db.collection('networkBans')
+      .where('linkedUserId', '==', uid)
+      .where('autoApplied', '==', true)
+      .get(),
+  ]);
+
+  const allDocs = [...deviceSnap.docs, ...networkSnap.docs];
+  if (allDocs.length === 0) return;
+
+  await Promise.all(allDocs.map(d => d.ref.delete()));
+
+  // Audit log
+  await db.doc(`adminAuditLog/${generateId()}`).set({
+    adminId:      adminUid,
+    action:       'LIFT_AUTO_BANS',
+    targetUserId: uid,
+    details:      `Removed ${allDocs.length} auto-applied ban(s) on unsuspension`,
+    createdAt:    now(),
+  });
+
+  log.info('admin-users', 'Auto-applied bans lifted', { uid, removed: allDocs.length });
 }
 
 // ══════════════════════════════════════════════════════════════

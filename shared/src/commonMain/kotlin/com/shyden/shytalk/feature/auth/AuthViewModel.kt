@@ -90,8 +90,7 @@ class AuthViewModel(
                 is Resource.Loading -> {}
             }
 
-            if (checkAndApplyBan()) return@launch
-
+            checkAndApplyBan()
             resolveProfileState(userId)
         }
     }
@@ -143,16 +142,17 @@ class AuthViewModel(
             is Resource.Loading -> {}
         }
 
-        if (checkAndApplyBan()) return
-
+        checkAndApplyBan()
         resolveProfileState(userId)
     }
 
     /**
      * Checks device/network ban status via the API.
-     * Returns true if the device is banned (caller should return early).
+     * Stores ban info in state but does NOT block the auth flow,
+     * so suspension status can also be resolved. The UI decides
+     * which screen to show based on the combined state.
      */
-    private suspend fun checkAndApplyBan(): Boolean {
+    private suspend fun checkAndApplyBan() {
         when (val result = deviceRepository.checkBanStatus(deviceId)) {
             is Resource.Success -> {
                 val ban = result.data
@@ -161,14 +161,12 @@ class AuthViewModel(
                     val isDevice = ban.banType == "device"
                     _uiState.update {
                         it.copy(
-                            isLoading = false,
                             isDeviceBanned = isDevice,
                             isNetworkBanned = !isDevice,
                             banReason = ban.reason,
                             banExpiresAt = ban.expiresAt
                         )
                     }
-                    return true
                 }
             }
             is Resource.Error -> {
@@ -176,7 +174,6 @@ class AuthViewModel(
             }
             is Resource.Loading -> {}
         }
-        return false
     }
 
     private suspend fun resolveProfileState(userId: String) {
