@@ -181,9 +181,9 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // ── Reports — server manages all access (Admin SDK bypasses rules)
+    // ── Reports — admin reads (for real-time listeners), server writes
     match /reports/{reportId} {
-      allow read: if false;
+      allow read: if request.auth != null && request.auth.token.admin == true;
       allow create: if false;
       allow update: if false;
     }
