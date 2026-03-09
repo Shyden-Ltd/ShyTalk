@@ -55,6 +55,16 @@ function enrichUser(user) {
   user.displayName      = user.displayName      ?? user.display_name      ?? null;
   user.profilePhotoUrl  = user.profilePhotoUrl  ?? user.profile_photo_url ?? null;
   user.coverPhotoUrl    = user.coverPhotoUrl    ?? user.cover_photo_url   ?? null;
+
+  // For suspended users, show real profile data to admins (not the masked "Suspended Account")
+  if (user.isSuspended) {
+    const preName  = user.preSuspensionDisplayName  ?? user.pre_suspension_display_name;
+    const prePhoto = user.preSuspensionProfilePhotoUrl ?? user.pre_suspension_profile_photo_url;
+    const preCover = user.preSuspensionCoverPhotoUrl ?? user.pre_suspension_cover_photo_url;
+    if (preName)  user.displayName     = preName;
+    if (prePhoto) user.profilePhotoUrl = prePhoto;
+    if (preCover) user.coverPhotoUrl   = preCover;
+  }
   user.dateOfBirth      = user.dateOfBirth      ?? user.date_of_birth     ?? null;
   user.uniqueId         = user.uniqueId         ?? user.unique_id         ?? null;
   user.isSuperShy       = user.isSuperShy       ?? user.is_super_shy      ?? false;
