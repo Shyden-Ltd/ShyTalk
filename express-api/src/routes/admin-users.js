@@ -171,6 +171,14 @@ router.patch('/user/:uid', async (req, res) => {
       return res.status(400).json({ error: 'No valid fields to update' });
     }
 
+    // Validate string length limits
+    const maxLengths = { displayName: 20, description: 200, nationality: 3 };
+    for (const [field, max] of Object.entries(maxLengths)) {
+      if (field in updates && typeof updates[field] === 'string' && updates[field].length > max) {
+        return res.status(400).json({ error: `${field} must be ${max} characters or fewer` });
+      }
+    }
+
     // Validate array fields
     for (const arrayField of ['blockedUserIds', 'followingIds', 'followerIds']) {
       if (arrayField in updates && !Array.isArray(updates[arrayField])) {

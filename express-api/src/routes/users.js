@@ -75,7 +75,7 @@ router.patch('/users/:uid', async (req, res) => {
       'displayName', 'description', 'nationality', 'profilePhotoUrl', 'coverPhotoUrl',
       'pmPrivacy', 'currentRoomId', 'lastRoomName', 'language',
     ];
-    const maxLengths = { displayName: 30, description: 200, nationality: 3, language: 10, lastRoomName: 50 };
+    const maxLengths = { displayName: 20, description: 200, nationality: 3, language: 10, lastRoomName: 50 };
     for (const key of stringFields) {
       if (key in updates && updates[key] !== null && typeof updates[key] !== 'string') {
         return res.status(400).json({ error: `${key} must be a string` });

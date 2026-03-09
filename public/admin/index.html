@@ -392,6 +392,16 @@
           letter-spacing: 0.5px;
         }
 
+        .char-counter {
+          display: block;
+          font-size: 11px;
+          color: var(--text-secondary);
+          text-align: right;
+          margin-top: 2px;
+        }
+        .char-counter.near-limit { color: var(--warning); }
+        .char-counter.at-limit { color: var(--danger); font-weight: 600; }
+
         /* --- List widget --- */
         .list-widget {
           border: 1px solid var(--border);
@@ -2909,7 +2919,8 @@
                 </div>
                 <div class="field-group">
                     <label>Display Name</label>
-                    <input type="text" data-field="displayName" aria-label="Display Name">
+                    <input type="text" data-field="displayName" maxlength="20" aria-label="Display Name">
+                    <span class="char-counter" id="counter-displayName">0/20</span>
                 </div>
                 <div class="field-group">
                     <label>User Type</label>
@@ -2932,10 +2943,11 @@
                 <div class="field-group">
                     <label>Description</label>
                     <div class="field-row">
-                        <textarea data-field="description" rows="3"
+                        <textarea data-field="description" rows="3" maxlength="200"
                                   aria-label="Description"></textarea>
                         <button class="btn-clear" data-clear="description">Clear</button>
                     </div>
+                    <span class="char-counter" id="counter-description">0/200</span>
                 </div>
             </div>
 
@@ -4980,6 +4992,28 @@
       }
     }
 
+    // Character counter config: field → max length
+    var CHAR_LIMITS = { displayName: 20, description: 200 };
+
+    function updateCharCounter(field, len) {
+      var counter = document.getElementById('counter-' + field);
+      if (!counter) return;
+      var max = CHAR_LIMITS[field];
+      counter.textContent = len + '/' + max;
+      counter.classList.remove('near-limit', 'at-limit');
+      if (len >= max) counter.classList.add('at-limit');
+      else if (len >= max * 0.9) counter.classList.add('near-limit');
+    }
+
+    // Attach input listeners for character counters
+    document.addEventListener('input', function(e) {
+      var el = e.target;
+      var field = el.dataset ? el.dataset.field : null;
+      if (field && CHAR_LIMITS[field]) {
+        updateCharCounter(field, (el.value || '').length);
+      }
+    });
+
     function attachAutoSaveListeners() {
       // Remove any previous auto-save listeners by using a flag
       if (window._autoSaveListenersAttached) return;
@@ -5054,6 +5088,7 @@
         const el = getFieldEl(field);
         if (!el) return;
         el.value = "";
+        if (CHAR_LIMITS[field]) updateCharCounter(field, 0);
         autoSaveField(el);
       });
     }
@@ -10781,6 +10816,16 @@
         updateDraftPreview();
         loadStalkers(currentUid);
         document.getElementById("profile-preview").style.display = "flex";
+    };
+
+    // Update character counters when user data loads
+    var _origPopulateFullForCounters = populateFormFull;
+    populateFormFull = async function(data) {
+        await _origPopulateFullForCounters(data);
+        Object.keys(CHAR_LIMITS).forEach(function(field) {
+          var el = document.querySelector('[data-field="' + field + '"]');
+          if (el) updateCharCounter(field, (el.value || '').length);
+        });
     };
 
     // ══════════════════════════════════════════════════════════════
