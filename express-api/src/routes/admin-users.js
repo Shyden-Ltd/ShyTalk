@@ -4,6 +4,7 @@
  * GET    /user/:uid                 → Full user profile (admin)
  * GET    /user/:uid/auth-debug      → Debug endpoint
  * PATCH  /user/:uid                 → Update user fields (admin)
+ * POST   /user/:uid/notify-changes  → Batched change notification PM (admin)
  * POST   /user/:uid/warn            → Issue warning (admin)
  * POST   /user/:uid/reset-gcs       → Reset GCS score (admin)
  * GET    /conversations/:id/messages → Admin view conversation messages
@@ -211,6 +212,55 @@ router.patch('/user/:uid', async (req, res) => {
   } catch (err) {
     log.error('admin-users', 'PATCH /user/:uid failed', { uid: req.params.uid, error: err.message, stack: err.stack });
     res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+// ── Batched change notification ──
+router.post('/user/:uid/notify-changes', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+
+    const { fields } = req.body;
+    if (!Array.isArray(fields) || fields.length === 0) {
+      return res.status(400).json({ error: 'fields must be a non-empty array' });
+    }
+
+    // Only notify for user-visible fields
+    const NOTIFIABLE = new Set([
+      'displayName', 'userType', 'email', 'description',
+      'profilePhotoUrl', 'coverPhotoUrl',
+    ]);
+    const relevant = fields.filter(f => NOTIFIABLE.has(f));
+    if (relevant.length === 0) {
+      return res.json({ ok: true, notified: false, reason: 'No notifiable fields' });
+    }
+
+    const friendlyNames = {
+      displayName: 'display name',
+      userType: 'account type',
+      email: 'email address',
+      description: 'profile description',
+      profilePhotoUrl: 'profile photo',
+      coverPhotoUrl: 'cover photo',
+    };
+
+    const fieldList = relevant.map(f => friendlyNames[f] || f).join(', ');
+    const text = `A moderator has updated your profile. Changed: ${fieldList}.`;
+    await sendSystemPm(req.params.uid, text);
+
+    log.info('admin-users', 'Sent batched change notification', {
+      adminId: req.auth.uid,
+      targetUid: req.params.uid,
+      fields: relevant,
+    });
+
+    res.json({ ok: true, notified: true, fields: relevant });
+  } catch (err) {
+    log.error('admin-users', 'notify-changes failed', {
+      uid: req.params.uid,
+      error: err.message,
+    });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
