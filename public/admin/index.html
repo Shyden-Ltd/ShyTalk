@@ -6852,7 +6852,7 @@
           ? `/api/users/${currentUid}/transactions?type=${typeFilter}`
           : `/api/users/${currentUid}/transactions`;
         const data = await apiCall("GET", url);
-        const txs = data.transactions || [];
+        const txs = Array.isArray(data) ? data : (data.transactions || []);
         if (txs.length === 0) {
           txList.innerHTML = '<p style="color:var(--text2)">No transactions found</p>';
         } else {
