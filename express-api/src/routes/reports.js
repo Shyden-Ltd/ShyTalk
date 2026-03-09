@@ -296,7 +296,7 @@ router.post('/reports/:id/resolve', async (req, res) => {
 
         // Send warning PM (fire-and-forget)
         sendSystemPm(report.reportedUserId,
-          `\u26a0\ufe0f You have received a warning.\n\nReason: ${warningReason}\n\nYour Good Character Score has been reduced by ${deduction} points (now ${newGcs}/100).`
+          `\u26a0\ufe0f You have received a warning.\n\nReason: ${warningReason}\n\nRepeated violations may result in suspension.`
         ).catch(err => log.error('reports', 'Failed to send warning PM', { userId: report.reportedUserId, error: err.message }));
       }
     }
@@ -384,7 +384,7 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
 
         // Send warning PM (fire-and-forget)
         sendSystemPm(req.params.userId,
-          `\u26a0\ufe0f You have received a warning based on multiple reports.\n\nReason: ${warningReason}\n\nYour Good Character Score has been reduced by ${deduction} points (now ${newGcs}/100).`
+          `\u26a0\ufe0f You have received a warning based on multiple reports.\n\nReason: ${warningReason}\n\nRepeated violations may result in suspension.`
         ).catch(err => log.error('reports', 'Failed to send warning PM', { userId: req.params.userId, error: err.message }));
       }
     }

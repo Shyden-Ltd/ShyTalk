@@ -339,7 +339,7 @@ router.post('/user/:uid/warn', async (req, res) => {
 
     // Send system PM to warned user (fire-and-forget)
     sendSystemPm(req.params.uid,
-      `⚠️ You have received a warning from the moderation team.\n\nReason: ${body.reason}\n\nYour Good Character Score has been reduced by ${deduction} points (now ${newGcs}/100). Repeated violations may result in suspension.`
+      `⚠️ You have received a warning from the moderation team.\n\nReason: ${body.reason}\n\nRepeated violations may result in suspension.`
     ).catch(err => log.error('admin-users', 'Failed to send warning PM', { targetUid: req.params.uid, error: err.message }));
 
     res.json({

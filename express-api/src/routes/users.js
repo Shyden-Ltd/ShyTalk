@@ -31,6 +31,14 @@ router.get('/users/:uid', async (req, res) => {
     user.followingIds   = user.followingIds   || [];
     user.followerIds    = user.followerIds     || [];
 
+    // Strip admin-only fields (GCS, warning internals, moderation)
+    delete user.gcsScore;
+    delete user.gcsLastDeductionAt;
+    delete user.gcsDisplayScore;
+    delete user.warningCount;
+    delete user.warningIssuedAt;
+    delete user.hasNewWarning;
+
     res.json(user);
   } catch (err) {
     log.error('users', 'GET /users/:uid failed', { uid: req.params.uid, error: err.message });
