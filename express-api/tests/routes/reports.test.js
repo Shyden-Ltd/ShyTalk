@@ -11,9 +11,6 @@ const mockBatchCommit = jest.fn().mockResolvedValue();
 const mockBatchSet = jest.fn();
 
 const mockCollectionGet = jest.fn();
-const mockCollectionWhere = jest.fn();
-const mockCollectionOrderBy = jest.fn();
-const mockCollectionLimit = jest.fn();
 
 jest.mock('../../src/utils/firebase', () => ({
   db: {
@@ -30,11 +27,6 @@ jest.mock('../../src/utils/firebase', () => ({
         limit: jest.fn().mockImplementation(() => chain),
         get: mockCollectionGet,
       };
-      // Store references for assertions
-      mockCollectionWhere.mockImplementation((...args) => {
-        chain.where(...args);
-        return chain;
-      });
       return chain;
     }),
     batch: jest.fn(() => ({

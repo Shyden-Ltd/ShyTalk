@@ -6130,9 +6130,10 @@
       const isSuperShy = data.isSuperShy === true;
       $("#eco-super-shy-expiry").disabled = !isSuperShy;
       if (isSuperShy && data.superShyExpiry) {
-        // Convert timestamp to datetime-local format
+        // Convert timestamp to datetime-local format (local time, not UTC)
         const d = new Date(data.superShyExpiry);
-        $("#eco-super-shy-expiry").value = d.toISOString().slice(0, 16);
+        const pad = n => String(n).padStart(2, '0');
+        $("#eco-super-shy-expiry").value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
       } else {
         $("#eco-super-shy-expiry").value = "";
       }
@@ -10222,7 +10223,8 @@
         if (data.tempUniqueId && data.tempUniqueIdExpiry && data.tempUniqueIdExpiry > Date.now()) {
             inputEl.value = data.tempUniqueId;
             const d = new Date(data.tempUniqueIdExpiry);
-            expiryEl.value = d.toISOString().slice(0, 16);
+            const pad = n => String(n).padStart(2, '0');
+            expiryEl.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
             currentEl.innerHTML = `Active temp ID: <strong>${data.tempUniqueId}</strong> (expires ${d.toLocaleString()})`;
         } else {
             inputEl.value = "";

@@ -161,6 +161,13 @@ router.patch('/user/:uid', async (req, res) => {
       return res.status(400).json({ error: 'No valid fields to update' });
     }
 
+    // Validate array fields
+    for (const arrayField of ['blockedUserIds', 'followingIds', 'followerIds']) {
+      if (arrayField in updates && !Array.isArray(updates[arrayField])) {
+        return res.status(400).json({ error: `${arrayField} must be an array` });
+      }
+    }
+
     log.info('admin-users', 'Updating user fields', { adminId: req.auth.uid, targetUid: req.params.uid, fields: Object.keys(updates) });
     await db.doc(`users/${req.params.uid}`).update(updates);
 
