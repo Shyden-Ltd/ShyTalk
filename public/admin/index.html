@@ -4614,7 +4614,7 @@
         const original = getOriginalValue(field);
 
         if (TIMESTAMP_FIELDS.includes(field)) {
-          const truncate = (iso) => iso ? iso.slice(0, 16) : null;
+          const truncate = (v) => v ? String(v).slice(0, 16) : null;
           if (truncate(current) !== truncate(original)) modified[field] = current;
         } else if (!valuesEqual(current, original)) {
           modified[field] = current;
@@ -4662,7 +4662,7 @@
       const original = getOriginalValue(field);
 
       if (TIMESTAMP_FIELDS.includes(field)) {
-        const truncate = (iso) => iso ? iso.slice(0, 16) : null;
+        const truncate = (v) => v ? String(v).slice(0, 16) : null;
         el.classList.toggle("modified", truncate(current) !== truncate(original));
       } else {
         el.classList.toggle("modified", !valuesEqual(current, original));
