@@ -6,7 +6,9 @@
  * PATCH  /user/:uid                 → Update user fields (admin)
  * POST   /user/:uid/notify-changes  → Batched change notification PM (admin)
  * GET    /user/:uid/stalkers        → Read stalkers list (admin)
- * POST   /user/:uid/warn            → Issue warning (admin)
+ * POST   /user/:uid/warn            → Issue warning (admin, creates warning doc)
+ * GET    /user/:uid/warnings        → List warning history (admin, paginated)
+ * POST   /user/:uid/warnings/:id/revoke → Revoke a warning (admin)
  * POST   /user/:uid/reset-gcs       → Reset GCS score (admin)
  * GET    /conversations/:id/messages → Admin view conversation messages
  * GET    /search/uniqueId/:id       → Search by unique ID (alias)
@@ -305,6 +307,77 @@ router.get('/user/:uid/stalkers', async (req, res) => {
 // WARNINGS & GCS (admin)
 // ══════════════════════════════════════════════════════════════
 
+// Severity → GCS deduction map
+const SEVERITY_DEDUCTION = { 1: 5, 2: 10, 3: 15, 4: 20, 5: 25 };
+
+/**
+ * Create a warning document in the user's warnings subcollection
+ * and update the user doc's GCS/warning fields.
+ * Returns { warningId, newGcs, deduction, warningCount }.
+ */
+async function createWarning(uid, { reason, severity, adminNote, source, linkedReportId, adminUid }) {
+  const deduction = SEVERITY_DEDUCTION[severity] || 15;
+  const timestamp = now();
+
+  const snap = await db.doc(`users/${uid}`).get();
+  if (!snap.exists) throw new Error('User not found');
+  const user = { id: snap.id, ...snap.data() };
+
+  const gcsScore     = user.gcsScore     ?? user.gcs_score     ?? 100;
+  const warningCount = user.warningCount  ?? user.warning_count ?? 0;
+  const newGcs          = Math.max(0, gcsScore - deduction);
+  const newWarningCount = warningCount + 1;
+
+  // Look up admin display name
+  let adminName = null;
+  if (adminUid) {
+    const adminDoc = await getDoc(`users/${adminUid}`);
+    adminName = adminDoc?.displayName ?? adminDoc?.display_name ?? null;
+  }
+
+  const warningId = generateId();
+
+  await Promise.all([
+    // Write warning doc to subcollection
+    db.doc(`users/${uid}/warnings/${warningId}`).set({
+      reason,
+      severity,
+      gcsDeduction: deduction,
+      gcsBefore:    gcsScore,
+      gcsAfter:     newGcs,
+      adminNote:    adminNote || null,
+      issuedBy:     adminUid,
+      issuedByName: adminName,
+      source:       source || 'direct',
+      linkedReportId: linkedReportId || null,
+      revoked:      false,
+      revokedAt:    null,
+      revokedBy:    null,
+      createdAt:    timestamp,
+    }),
+    // Update user doc
+    db.doc(`users/${uid}`).update({
+      gcsScore:           newGcs,
+      gcsLastDeductionAt: timestamp,
+      warningCount:       newWarningCount,
+      warningReason:      reason,
+      hasActiveWarning:   true,
+      hasNewWarning:      true,
+      warningIssuedAt:    timestamp,
+    }),
+    // Audit log
+    db.doc(`adminAuditLog/${generateId()}`).set({
+      adminId:      adminUid,
+      action:       'WARN',
+      targetUserId: uid,
+      details:      `Severity: ${severity}, GCS: ${gcsScore} → ${newGcs}, Reason: ${reason}, Source: ${source || 'direct'}`,
+      createdAt:    timestamp,
+    }),
+  ]);
+
+  return { warningId, newGcs, deduction, warningCount: newWarningCount };
+}
+
 // ── Issue warning ──
 router.post('/user/:uid/warn', async (req, res) => {
   try {
@@ -313,53 +386,111 @@ router.post('/user/:uid/warn', async (req, res) => {
     const body = req.body;
     if (!body?.reason) return res.status(400).json({ error: 'reason is required' });
 
-    const severity = body.severity || 'standard';
-    const deduction = severity === 'severe' ? 20 : 10;
+    const severity = parseInt(body.severity) || 3;
+    if (severity < 1 || severity > 5) return res.status(400).json({ error: 'severity must be 1-5' });
+
+    log.info('admin-users', 'Issuing warning', { adminId: req.auth.uid, targetUid: req.params.uid, severity });
+
+    const result = await createWarning(req.params.uid, {
+      reason:   body.reason,
+      severity,
+      adminNote: body.adminNote || null,
+      source:   'direct',
+      adminUid: req.auth.uid,
+    });
+
+    // Send system PM to warned user (fire-and-forget)
+    sendSystemPm(req.params.uid,
+      `\u26a0\ufe0f You have received a warning from the moderation team.\n\nReason: ${body.reason}\n\nRepeated violations may result in suspension.`
+    ).catch(err => log.error('admin-users', 'Failed to send warning PM', { targetUid: req.params.uid, error: err.message }));
+
+    res.json({ success: true, ...result });
+  } catch (err) {
+    if (err.message === 'User not found') return res.status(404).json({ error: err.message });
+    log.error('admin-users', 'Warn user failed', { uid: req.params.uid, error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── List warnings ──
+router.get('/user/:uid/warnings', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+    const startAfter = req.query.startAfter ? parseInt(req.query.startAfter) : null;
+
+    let query = db.collection(`users/${req.params.uid}/warnings`)
+      .orderBy('createdAt', 'desc');
+
+    if (startAfter) {
+      query = query.startAfter(startAfter);
+    }
+
+    query = query.limit(limit + 1); // fetch one extra to detect "has more"
+
+    const snapshot = await query.get();
+    const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    const hasMore = docs.length > limit;
+    if (hasMore) docs.pop();
+
+    res.json({ warnings: docs, hasMore });
+  } catch (err) {
+    log.error('admin-users', 'List warnings failed', { uid: req.params.uid, error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── Revoke warning ──
+router.post('/user/:uid/warnings/:warningId/revoke', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+
+    const uid = req.params.uid;
+    const warningId = req.params.warningId;
     const timestamp = now();
 
-    const snap = await db.doc(`users/${req.params.uid}`).get();
-    if (!snap.exists) return res.status(404).json({ error: 'User not found' });
-    const user = { id: snap.id, ...snap.data() };
+    const warningDoc = await getDoc(`users/${uid}/warnings/${warningId}`);
+    if (!warningDoc) return res.status(404).json({ error: 'Warning not found' });
+    if (warningDoc.revoked) return res.status(400).json({ error: 'Warning already revoked' });
 
-    const gcsScore = user.gcsScore ?? user.gcs_score ?? 100;
-    const warningCount = user.warningCount ?? user.warning_count ?? 0;
-    const newGcs = Math.max(0, gcsScore - deduction);
-    const newWarningCount = warningCount + 1;
+    const deduction = warningDoc.gcsDeduction || 0;
 
-    log.info('admin-users', 'Issuing warning', { adminId: req.auth.uid, targetUid: req.params.uid, severity, deduction, gcs: `${gcsScore} -> ${newGcs}` });
+    // Read current user GCS
+    const userSnap = await db.doc(`users/${uid}`).get();
+    if (!userSnap.exists) return res.status(404).json({ error: 'User not found' });
+    const user = userSnap.data();
+    const currentGcs = user.gcsScore ?? user.gcs_score ?? 100;
+    const currentCount = user.warningCount ?? user.warning_count ?? 0;
+    const restoredGcs = Math.min(100, currentGcs + deduction);
+
+    log.info('admin-users', 'Revoking warning', { adminId: req.auth.uid, targetUid: uid, warningId, restored: deduction });
 
     await Promise.all([
-      db.doc(`users/${req.params.uid}`).update({
-        gcsScore:           newGcs,
-        gcsLastDeductionAt: timestamp,
-        warningCount:       newWarningCount,
-        warningReason:      body.reason,
-        hasActiveWarning:   true,
-        hasNewWarning:      true,
-        warningIssuedAt:    timestamp,
+      // Mark warning as revoked
+      db.doc(`users/${uid}/warnings/${warningId}`).update({
+        revoked:   true,
+        revokedAt: timestamp,
+        revokedBy: req.auth.uid,
       }),
+      // Restore GCS points and decrement warning count
+      db.doc(`users/${uid}`).update({
+        gcsScore:     restoredGcs,
+        warningCount: Math.max(0, currentCount - 1),
+      }),
+      // Audit log
       db.doc(`adminAuditLog/${generateId()}`).set({
         adminId:      req.auth.uid,
-        action:       'WARN',
-        targetUserId: req.params.uid,
-        details:      `Severity: ${severity}, GCS: ${gcsScore} → ${newGcs}, Reason: ${body.reason}`,
+        action:       'REVOKE_WARNING',
+        targetUserId: uid,
+        details:      `Revoked warning ${warningId}, restored ${deduction} GCS (${currentGcs} → ${restoredGcs})`,
         createdAt:    timestamp,
       }),
     ]);
 
-    // Send system PM to warned user (fire-and-forget)
-    sendSystemPm(req.params.uid,
-      `⚠️ You have received a warning from the moderation team.\n\nReason: ${body.reason}\n\nRepeated violations may result in suspension.`
-    ).catch(err => log.error('admin-users', 'Failed to send warning PM', { targetUid: req.params.uid, error: err.message }));
-
-    res.json({
-      success: true,
-      newGcs,
-      deduction,
-      warningCount: newWarningCount,
-    });
+    res.json({ success: true, restoredGcs, deduction });
   } catch (err) {
-    log.error('admin-users', 'Warn user failed', { uid: req.params.uid, error: err.message });
+    log.error('admin-users', 'Revoke warning failed', { uid: req.params.uid, warningId: req.params.warningId, error: err.message });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -576,6 +707,34 @@ router.post('/user/:uid/suspend', async (req, res) => {
         createdAt:    timestamp,
       }),
     ]);
+
+    // Create a suspension warning that sets GCS to 0
+    const currentGcs = user.gcsScore ?? user.gcs_score ?? 100;
+    if (currentGcs > 0) {
+      const warningId = generateId();
+      await Promise.all([
+        db.doc(`users/${req.params.uid}/warnings/${warningId}`).set({
+          reason:         `Account suspended: ${body.reason.trim()}`,
+          severity:       5,
+          gcsDeduction:   currentGcs,
+          gcsBefore:      currentGcs,
+          gcsAfter:       0,
+          adminNote:      null,
+          issuedBy:       req.auth.uid,
+          issuedByName:   null,
+          source:         'suspension',
+          linkedReportId: null,
+          revoked:        false,
+          revokedAt:      null,
+          revokedBy:      null,
+          createdAt:      timestamp,
+        }),
+        db.doc(`users/${req.params.uid}`).update({
+          gcsScore:           0,
+          gcsLastDeductionAt: timestamp,
+        }),
+      ]);
+    }
 
     // Send system PM about suspension (non-blocking)
     try { await sendSystemPm(req.params.uid, `Your account has been suspended. Reason: ${body.reason.trim()}`); } catch (e) { log.warn('system-pm', 'Failed to send', { uid: req.params.uid, error: e.message }); }
@@ -811,3 +970,4 @@ async function evictSuspendedUser(uid) {
 }
 
 module.exports = router;
+module.exports.createWarning = createWarning;

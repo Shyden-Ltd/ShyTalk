@@ -19,6 +19,12 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Warnings — admin-only (write via Express API with service account)
+      match /warnings/{warningId} {
+        allow read: if false;
+        allow write: if false;
+      }
+
       // Gift Wall — auth read, write only via Worker API
       match /giftWall/{giftId} {
         allow read: if request.auth != null;

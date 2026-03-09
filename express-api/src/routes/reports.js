@@ -26,6 +26,7 @@ const { computeDisplayScore } = require('../utils/gcs');
 const { getDoc, queryDocs } = require('../utils/firestore-helpers');
 const { sendFcmToTokens } = require('../utils/fcm');
 const log = require('../utils/log');
+const { createWarning } = require('./admin-users');
 
 /**
  * Remove invalid FCM tokens from admin user docs in Firestore.
@@ -271,33 +272,27 @@ router.post('/reports/:id/resolve', async (req, res) => {
       createdAt:    timestamp,
     }, { merge: true });
 
-    // Warning actions: deduct GCS and update user
+    // Warning actions: create warning doc (which deducts GCS)
     if (action === 'warned' || action === 'warned_severe') {
-      const severity  = action === 'warned_severe' ? 'severe' : 'standard';
-      const deduction = severity === 'severe' ? 20 : 10;
+      const severity  = action === 'warned_severe' ? 4 : 2;
+      const warningReason = body?.reason || report.reason;
 
-      const user = await getDoc(`users/${report.reportedUserId}`);
-      if (user) {
-        const gcsScore     = user.gcsScore     ?? user.gcs_score     ?? 100;
-        const warningCount = user.warningCount  ?? user.warning_count ?? 0;
-        const newGcs           = Math.max(0, gcsScore - deduction);
-        const newWarningCount  = warningCount + 1;
-        const warningReason    = body?.reason || report.reason;
-
-        await db.doc(`users/${report.reportedUserId}`).update({
-          gcsScore:           newGcs,
-          gcsLastDeductionAt: timestamp,
-          warningCount:       newWarningCount,
-          warningReason:      warningReason,
-          hasActiveWarning:   true,
-          hasNewWarning:      true,
-          warningIssuedAt:    timestamp,
+      try {
+        await createWarning(report.reportedUserId, {
+          reason:         warningReason,
+          severity,
+          adminNote:      null,
+          source:         'report',
+          linkedReportId: req.params.id,
+          adminUid:       req.auth.uid,
         });
 
         // Send warning PM (fire-and-forget)
         sendSystemPm(report.reportedUserId,
           `\u26a0\ufe0f You have received a warning.\n\nReason: ${warningReason}\n\nRepeated violations may result in suspension.`
         ).catch(err => log.error('reports', 'Failed to send warning PM', { userId: report.reportedUserId, error: err.message }));
+      } catch (warnErr) {
+        log.error('reports', 'Failed to create warning from report', { reportId: req.params.id, error: warnErr.message });
       }
     }
 
@@ -355,42 +350,32 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
       },
     }));
 
-    // Apply warning if applicable
-    let warningWrite = null;
+    // Apply warning if applicable (uses createWarning to write warning doc + update user)
     if (action === 'warned' || action === 'warned_severe') {
-      const severity  = action === 'warned_severe' ? 'severe' : 'standard';
-      const deduction = severity === 'severe' ? 20 : 10;
+      const severity  = action === 'warned_severe' ? 4 : 2;
+      const warningReason = body?.reason || 'Multiple reports';
 
-      const user = await getDoc(`users/${req.params.userId}`);
-      if (user) {
-        const gcsScore     = user.gcsScore     ?? user.gcs_score     ?? 100;
-        const warningCount = user.warningCount  ?? user.warning_count ?? 0;
-        const newGcs          = Math.max(0, gcsScore - deduction);
-        const newWarningCount = warningCount + 1;
-        const warningReason   = body?.reason || 'Multiple reports';
-
-        warningWrite = {
-          path: `users/${req.params.userId}`,
-          data: {
-            gcsScore:           newGcs,
-            gcsLastDeductionAt: timestamp,
-            warningCount:       newWarningCount,
-            warningReason:      warningReason,
-            hasActiveWarning:   true,
-            hasNewWarning:      true,
-            warningIssuedAt:    timestamp,
-          },
-        };
+      try {
+        await createWarning(req.params.userId, {
+          reason:         warningReason,
+          severity,
+          adminNote:      null,
+          source:         'report',
+          linkedReportId: null,
+          adminUid:       req.auth.uid,
+        });
 
         // Send warning PM (fire-and-forget)
         sendSystemPm(req.params.userId,
           `\u26a0\ufe0f You have received a warning based on multiple reports.\n\nReason: ${warningReason}\n\nRepeated violations may result in suspension.`
         ).catch(err => log.error('reports', 'Failed to send warning PM', { userId: req.params.userId, error: err.message }));
+      } catch (warnErr) {
+        log.error('reports', 'Failed to create warning from bulk resolve', { userId: req.params.userId, error: warnErr.message });
       }
     }
 
     // Execute batch writes in chunks of 500
-    const combinedWrites = warningWrite ? [...allWrites, warningWrite] : allWrites;
+    const combinedWrites = allWrites;
     for (let i = 0; i < combinedWrites.length; i += 500) {
       const chunk = combinedWrites.slice(i, i + 500);
       const batch = db.batch();

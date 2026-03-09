@@ -67,7 +67,6 @@ router.post('/admin/bans/device', async (req, res) => {
 
     const { deviceId, reason, duration, linkedUserId } = req.body || {};
     if (!deviceId) return res.status(400).json({ error: 'deviceId is required' });
-    if (!reason) return res.status(400).json({ error: 'reason is required' });
 
     const expiresAt = parseExpiry(duration);
 
@@ -115,7 +114,6 @@ router.post('/admin/bans/network', async (req, res) => {
       return res.status(400).json({ error: 'type must be one of: ip, subnet, asn' });
     }
     if (!value) return res.status(400).json({ error: 'value is required' });
-    if (!reason) return res.status(400).json({ error: 'reason is required' });
 
     const banId = generateId();
     const expiresAt = parseExpiry(duration);

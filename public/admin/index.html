@@ -2190,6 +2190,45 @@
         }
         .btn-reset-gcs:hover { border-color: var(--warning); color: var(--warning); }
 
+        .warning-item {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          padding: 10px 12px;
+          font-size: 13px;
+        }
+        .warning-item.revoked {
+          opacity: 0.5;
+          border-style: dashed;
+        }
+        .warning-item-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 4px;
+        }
+        .warning-source-badge {
+          display: inline-block;
+          font-size: 10px;
+          font-weight: 600;
+          padding: 2px 6px;
+          border-radius: 4px;
+          text-transform: uppercase;
+        }
+        .warning-source-badge.direct { background: var(--warning); color: #1a1a1a; }
+        .warning-source-badge.report { background: var(--accent); color: #fff; }
+        .warning-source-badge.suspension { background: var(--danger); color: #fff; }
+        .btn-revoke-warning {
+          padding: 3px 8px;
+          font-size: 11px;
+          background: transparent;
+          color: var(--text2);
+          border: 1px solid var(--border);
+          border-radius: 4px;
+          cursor: pointer;
+        }
+        .btn-revoke-warning:hover { border-color: var(--danger); color: var(--danger); }
+
         .btn-warn {
           padding: 10px 20px;
           background: var(--warning);
@@ -3100,53 +3139,49 @@
                 </div>
             </div>
 
-            <!-- GCS -->
+            <!-- GCS & Warnings (merged) -->
             <div class="form-section" id="gcs-section" style="display:none;">
-                <h3>Good Character Score</h3>
+                <h3>GCS &amp; Warnings</h3>
+                <!-- GCS Summary -->
                 <div class="gcs-section">
                     <span class="gcs-badge" id="gcs-badge-user"></span>
                     <div class="gcs-details">
-                        <div>Floor: <span id="gcs-floor">100</span> | Warnings: <span
-                                id="gcs-warnings">0</span></div>
+                        <div>Floor: <span id="gcs-floor">100</span> | Warnings: <span id="gcs-warnings">0</span></div>
                         <div>Last deduction: <span id="gcs-last-deduction">Never</span></div>
                         <div style="font-size:11px;color:var(--text2);margin-top:4px;opacity:0.7;">Score recovers +2/month from floor. <span style="color:#2ecc71;">80+</span> Good | <span style="color:#f1c40f;">60-79</span> Okay | <span style="color:#e67e22;">40-59</span> Warning | <span style="color:#e74c3c;">&lt;40</span> Critical</div>
                     </div>
-                    <button type="button" class="btn-reset-gcs" id="reset-gcs-btn">Reset GCS
-                    </button>
+                    <button type="button" class="btn-reset-gcs" id="reset-gcs-btn">Reset GCS</button>
                 </div>
-            </div>
-
-            <!-- Direct Warning -->
-            <div class="form-section" id="direct-warn-section" style="display:none;">
-                <h3>Issue Warning</h3>
-                <div style="display:flex;flex-direction:column;gap:10px;">
-                    <select id="direct-warn-reason" aria-label="Warning Reason"
-                            style="padding:8px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;">
-                        <option value="">Select reason...</option>
-                        <option value="Spam">Spam</option>
-                        <option value="Harassment">Harassment</option>
-                        <option value="Inappropriate Content">Inappropriate Content</option>
-                        <option value="Other">Other</option>
-                    </select>
-                    <div style="display:flex;gap:8px;align-items:center;">
-                        <span style="color:var(--text2);font-size:13px;">Severity:</span>
-                        <label style="color:var(--text2);font-size:13px;cursor:pointer;"><input
-                                type="radio" name="direct-warn-severity" value="1"> 1 (-5)</label>
-                        <label style="color:var(--text2);font-size:13px;cursor:pointer;"><input
-                                type="radio" name="direct-warn-severity" value="2"> 2 (-10)</label>
-                        <label style="color:var(--text2);font-size:13px;cursor:pointer;"><input
-                                type="radio" name="direct-warn-severity" value="3" checked> 3 (-15)</label>
-                        <label style="color:var(--text2);font-size:13px;cursor:pointer;"><input
-                                type="radio" name="direct-warn-severity" value="4"> 4 (-20)</label>
-                        <label style="color:var(--text2);font-size:13px;cursor:pointer;"><input
-                                type="radio" name="direct-warn-severity" value="5"> 5 (-25)</label>
+                <!-- Issue Warning -->
+                <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+                    <strong style="font-size:13px;color:var(--text2);display:block;margin-bottom:8px;">Issue Warning</strong>
+                    <div style="display:flex;flex-direction:column;gap:10px;">
+                        <select id="direct-warn-reason" aria-label="Warning Reason" style="padding:8px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;">
+                            <option value="">Select reason...</option>
+                            <option value="Spam">Spam</option>
+                            <option value="Harassment">Harassment</option>
+                            <option value="Inappropriate Content">Inappropriate Content</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <span style="color:var(--text2);font-size:13px;">Severity:</span>
+                            <label style="color:var(--text2);font-size:13px;cursor:pointer;"><input type="radio" name="direct-warn-severity" value="1"> 1 (-5)</label>
+                            <label style="color:var(--text2);font-size:13px;cursor:pointer;"><input type="radio" name="direct-warn-severity" value="2"> 2 (-10)</label>
+                            <label style="color:var(--text2);font-size:13px;cursor:pointer;"><input type="radio" name="direct-warn-severity" value="3" checked> 3 (-15)</label>
+                            <label style="color:var(--text2);font-size:13px;cursor:pointer;"><input type="radio" name="direct-warn-severity" value="4"> 4 (-20)</label>
+                            <label style="color:var(--text2);font-size:13px;cursor:pointer;"><input type="radio" name="direct-warn-severity" value="5"> 5 (-25)</label>
+                        </div>
+                        <textarea id="direct-warn-note" rows="2" placeholder="Admin note (optional)" aria-label="Warning Note" style="padding:8px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;resize:vertical;font-family:inherit;"></textarea>
+                        <button type="button" id="direct-warn-btn" class="btn-warn" style="align-self:flex-start;">Issue Warning</button>
                     </div>
-                    <textarea id="direct-warn-note" rows="2" placeholder="Admin note (optional)"
-                              aria-label="Warning Note"
-                              style="padding:8px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;resize:vertical;font-family:inherit;"></textarea>
-                    <button type="button" id="direct-warn-btn" class="btn-warn"
-                            style="align-self:flex-start;">Issue Warning
-                    </button>
+                </div>
+                <!-- Warning History -->
+                <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+                    <strong style="font-size:13px;color:var(--text2);display:block;margin-bottom:8px;">Warning History</strong>
+                    <div id="warning-history-list" style="display:flex;flex-direction:column;gap:8px;">
+                        <div style="color:var(--text2);font-size:13px;font-style:italic;">No warnings</div>
+                    </div>
+                    <button type="button" id="warning-load-more-btn" style="display:none;margin-top:8px;padding:6px 16px;background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px;">Load more</button>
                 </div>
             </div>
 
@@ -5619,18 +5654,143 @@
       }
     }
 
-    // --- Direct Warning section ---
-    const directWarnSection = $("#direct-warn-section");
+    // --- Direct Warning + Warning History ---
     const directWarnReason = $("#direct-warn-reason");
     const directWarnNote = $("#direct-warn-note");
     const directWarnBtn = $("#direct-warn-btn");
+    const warningHistoryList = document.getElementById("warning-history-list");
+    const warningLoadMoreBtn = document.getElementById("warning-load-more-btn");
+    let _warningLastTimestamp = null;
 
-    function showDirectWarnSection() {
-      directWarnSection.style.display = "block";
+    function resetWarningForm() {
       directWarnReason.value = "";
       directWarnNote.value = "";
       document.querySelector('input[name="direct-warn-severity"][value="3"]').checked = true;
     }
+
+    async function loadWarningHistory(uid, append) {
+      if (!append) {
+        warningHistoryList.textContent = "";
+        var loadingDiv = document.createElement("div");
+        loadingDiv.style.cssText = "color:var(--text2);font-size:13px;font-style:italic;";
+        loadingDiv.textContent = "Loading...";
+        warningHistoryList.appendChild(loadingDiv);
+        _warningLastTimestamp = null;
+      }
+      try {
+        var url = "/api/user/" + uid + "/warnings?limit=20";
+        if (_warningLastTimestamp) url += "&startAfter=" + _warningLastTimestamp;
+        var data = await apiCall("GET", url);
+        var warnings = data.warnings || [];
+
+        if (!append) warningHistoryList.textContent = "";
+
+        if (warnings.length === 0 && !append) {
+          var emptyDiv = document.createElement("div");
+          emptyDiv.style.cssText = "color:var(--text2);font-size:13px;font-style:italic;";
+          emptyDiv.textContent = "No warnings";
+          warningHistoryList.appendChild(emptyDiv);
+          warningLoadMoreBtn.style.display = "none";
+          return;
+        }
+
+        for (var i = 0; i < warnings.length; i++) {
+          var w = warnings[i];
+          warningHistoryList.appendChild(renderWarningItem(w, uid));
+          _warningLastTimestamp = w.createdAt;
+        }
+
+        warningLoadMoreBtn.style.display = data.hasMore ? "block" : "none";
+      } catch (err) {
+        if (!append) warningHistoryList.textContent = "";
+        var errDiv = document.createElement("div");
+        errDiv.style.cssText = "color:var(--danger);font-size:12px;";
+        errDiv.textContent = err.message;
+        warningHistoryList.appendChild(errDiv);
+        warningLoadMoreBtn.style.display = "none";
+      }
+    }
+
+    function renderWarningItem(w, uid) {
+      var item = document.createElement("div");
+      item.className = "warning-item" + (w.revoked ? " revoked" : "");
+      item.dataset.warningId = w.id;
+
+      var header = document.createElement("div");
+      header.className = "warning-item-header";
+
+      var left = document.createElement("div");
+      var badge = document.createElement("span");
+      badge.className = "warning-source-badge " + (w.source || "direct");
+      badge.textContent = w.source || "direct";
+      left.appendChild(badge);
+      var sev = document.createElement("span");
+      sev.style.cssText = "margin-left:8px;color:var(--text2);font-size:12px;";
+      sev.textContent = "Severity " + w.severity + " (-" + (w.gcsDeduction || 0) + " GCS)";
+      left.appendChild(sev);
+      header.appendChild(left);
+
+      var right = document.createElement("div");
+      right.style.cssText = "display:flex;align-items:center;gap:6px;";
+      var dateSpan = document.createElement("span");
+      dateSpan.style.cssText = "color:var(--text2);font-size:11px;";
+      dateSpan.textContent = w.createdAt ? new Date(w.createdAt).toLocaleString() : "";
+      right.appendChild(dateSpan);
+      if (!w.revoked) {
+        var revokeBtn = document.createElement("button");
+        revokeBtn.className = "btn-revoke-warning";
+        revokeBtn.textContent = "Revoke";
+        revokeBtn.addEventListener("click", function() { revokeWarning(uid, w.id, w.gcsDeduction || 0, revokeBtn); });
+        right.appendChild(revokeBtn);
+      } else {
+        var revokedSpan = document.createElement("span");
+        revokedSpan.style.cssText = "color:var(--text2);font-size:11px;font-style:italic;";
+        revokedSpan.textContent = "Revoked";
+        right.appendChild(revokedSpan);
+      }
+      header.appendChild(right);
+      item.appendChild(header);
+
+      var reason = document.createElement("div");
+      reason.style.marginTop = "4px";
+      reason.textContent = w.reason || "";
+      item.appendChild(reason);
+
+      if (w.adminNote) {
+        var note = document.createElement("div");
+        note.style.cssText = "color:var(--text2);font-size:12px;margin-top:2px;font-style:italic;";
+        note.textContent = "Note: " + w.adminNote;
+        item.appendChild(note);
+      }
+
+      var meta = document.createElement("div");
+      meta.style.cssText = "color:var(--text2);font-size:11px;margin-top:2px;";
+      meta.textContent = "By: " + (w.issuedByName || w.issuedBy || "System") + " | GCS: " + (w.gcsBefore || "?") + " \u2192 " + (w.gcsAfter ?? "?");
+      item.appendChild(meta);
+
+      return item;
+    }
+
+    async function revokeWarning(uid, warningId, deduction, btn) {
+      if (!confirm("Revoke this warning? +" + deduction + " GCS will be restored.")) return;
+      btn.disabled = true;
+      btn.textContent = "...";
+      try {
+        await apiCall("POST", "/api/user/" + uid + "/warnings/" + warningId + "/revoke");
+        showToast("Warning revoked, +" + deduction + " GCS restored");
+        var data = await apiCall("GET", "/api/user/" + uid);
+        populateGcsSection(data);
+        loadWarningHistory(uid, false);
+      } catch (err) {
+        showToast(err.message, "error");
+        btn.disabled = false;
+        btn.textContent = "Revoke";
+      }
+    }
+
+    warningLoadMoreBtn.addEventListener("click", function() {
+      if (currentUid) loadWarningHistory(currentUid, true);
+    });
 
     directWarnBtn.addEventListener("click", async () => {
       if (!currentUid) return;
@@ -5649,9 +5809,10 @@
         if (result.autoEscalateSuggested) {
           showToast("This user has 5+ warnings. Consider suspending.", "error");
         }
-        // Refresh GCS display
+        // Refresh GCS display and warning history
         const data = await apiCall("GET", `/api/user/${currentUid}`);
         populateGcsSection(data);
+        loadWarningHistory(currentUid, false);
         loadReportHistory(currentUid);
         directWarnReason.value = "";
         directWarnNote.value = "";
@@ -5668,7 +5829,8 @@
     async function populateFormFull(data) {
       await _origPopulateWithSuspension(data);
       populateGcsSection(data);
-      showDirectWarnSection();
+      resetWarningForm();
+      loadWarningHistory(data.uid, false);
       loadReportHistory(data.uid);
       // Suspended banner — auto-hide when timed suspension expires
       var banner = document.getElementById("suspended-banner");
@@ -10278,8 +10440,8 @@
 
     async function banDeviceFromDevices(deviceId, userId) {
       if (!deviceId) return;
-      const reason = prompt("Reason for banning this device:");
-      if (!reason) return;
+      if (!confirm("Ban this device?")) return;
+      const reason = prompt("Reason (optional):") || "";
       try {
         await apiCall("POST", "/api/admin/bans/device", { deviceId, reason, linkedUserId: userId || null });
         showToast("Device banned", "success");
@@ -10291,8 +10453,8 @@
 
     async function banNetworkFromDevices(ip, userId) {
       if (!ip) { showToast("No IP address available", "error"); return; }
-      const reason = prompt(`Reason for banning IP ${ip}:`);
-      if (!reason) return;
+      if (!confirm("Ban IP " + ip + "?")) return;
+      const reason = prompt("Reason (optional):") || "";
       try {
         await apiCall("POST", "/api/admin/bans/network", { type: "ip", value: ip, reason, linkedUserId: userId || null });
         showToast("Network banned", "success");
@@ -10551,8 +10713,8 @@
     // Quick action buttons
     $("#bans-ban-all-devices").addEventListener("click", async () => {
       if (!currentUid) return;
-      const reason = prompt("Reason for banning all devices:");
-      if (!reason) return;
+      if (!confirm("Ban all devices for this user?")) return;
+      const reason = prompt("Reason (optional):") || "";
       try {
         const devicesData = await apiCall("GET", `/api/admin/devices/user/${currentUid}`);
         const devices = devicesData.devices || [];
@@ -10572,8 +10734,8 @@
         const devices = devicesData.devices || [];
         const lastDevice = devices.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0))[0];
         if (!lastDevice || !lastDevice.lastIp) { showToast("No IP address found", "error"); return; }
-        const reason = prompt(`Reason for banning IP ${lastDevice.lastIp}:`);
-        if (!reason) return;
+        if (!confirm("Ban IP " + lastDevice.lastIp + "?")) return;
+        const reason = prompt("Reason (optional):") || "";
         await apiCall("POST", "/api/admin/bans/network", { type: "ip", value: lastDevice.lastIp, reason, linkedUserId: currentUid });
         showToast("IP banned", "success");
         populateBansSection(currentUid);
