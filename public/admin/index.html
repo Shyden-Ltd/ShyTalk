@@ -308,7 +308,7 @@
           cursor: pointer;
         }
 
-        .uid-display, .readonly-field {
+        .uid-display {
           padding: 8px 12px;
           background: var(--surface2);
           border: 1px solid var(--border);
@@ -318,9 +318,6 @@
           font-family: monospace;
           cursor: not-allowed;
           opacity: 0.85;
-        }
-        input.readonly-field, select.readonly-field {
-          pointer-events: none;
         }
 
         /* User save bar removed — per-field auto-save handles user fields */
@@ -2952,7 +2949,7 @@
                 </div>
                 <div class="field-group">
                     <label>Unique ID <span class="readonly-badge">READ ONLY</span></label>
-                    <input type="number" data-field="uniqueId" aria-label="Unique ID" readonly class="readonly-field">
+                    <div class="uid-display" id="field-uniqueId"></div>
                 </div>
                 <div class="field-group" id="temp-id-section">
                     <label>Temporary ID</label>
@@ -4560,6 +4557,7 @@
     async function populateForm(data) {
       currentUid = data.uid;
       fieldUid.textContent = data.uid || "";
+      document.getElementById("field-uniqueId").textContent = data.uniqueId ?? "—";
 
       // Collect all Firebase UIDs from list fields to resolve in one batch
       const allUids = new Set();
@@ -4617,8 +4615,6 @@
           el.checked = val === true;
         } else if (TIMESTAMP_FIELDS.includes(field)) {
           el.value = isoToLocal(val);
-        } else if (field === "uniqueId") {
-          el.value = val ?? 0;
         } else if (field === "email") {
           realEmail = val ?? "";
           emailRevealed = false;
@@ -4655,10 +4651,6 @@
         if (!el.value) return null;
         return new Date(el.value).toISOString();
       }
-      if (field === "uniqueId") {
-        const n = Number(el.value);
-        return Number.isFinite(n) ? n : 0;
-      }
       return el.value || null;
     }
 
@@ -4669,7 +4661,6 @@
         return Array.isArray(val) ? val.map((s) => s.replace(/\s*\(.*\)$/, "")) : [];
       }
       if (TIMESTAMP_FIELDS.includes(field)) return val || null;
-      if (field === "uniqueId") return val ?? 0;
       return val ?? null;
     }
 
@@ -4680,7 +4671,7 @@
       return a === b;
     }
 
-    const READONLY_FIELDS = ["uniqueId"];
+    const READONLY_FIELDS = [];
 
     // ══════════════════════════════════════════════════════════════
     // AUTO-SAVE INFRASTRUCTURE
