@@ -2876,6 +2876,8 @@
         </div>
 
         <div id="user-form">
+            <!-- Suspended banner -->
+            <div id="suspended-banner" style="display:none;background:#e74c3c;color:#fff;font-size:20px;font-weight:800;text-align:center;padding:14px 20px;border-radius:8px;margin-bottom:12px;letter-spacing:1px;text-transform:uppercase;">THIS USER IS SUSPENDED</div>
             <!-- Sub-tabs -->
             <div class="user-subtabs" id="user-subtabs" style="display:none">
                 <button class="user-subtab active" data-subtab="profile">Profile</button>
@@ -5668,6 +5670,8 @@
       populateGcsSection(data);
       showDirectWarnSection();
       loadReportHistory(data.uid);
+      // Suspended banner
+      document.getElementById("suspended-banner").style.display = data.isSuspended ? "block" : "none";
       // Show sub-tabs and default to Profile
       document.getElementById("user-subtabs").style.display = "flex";
       switchUserSubtab("profile");
