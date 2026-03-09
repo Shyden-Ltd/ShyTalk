@@ -5,6 +5,7 @@
  * GET    /user/:uid/auth-debug      → Debug endpoint
  * PATCH  /user/:uid                 → Update user fields (admin)
  * POST   /user/:uid/notify-changes  → Batched change notification PM (admin)
+ * GET    /user/:uid/stalkers        → Read stalkers list (admin)
  * POST   /user/:uid/warn            → Issue warning (admin)
  * POST   /user/:uid/reset-gcs       → Reset GCS score (admin)
  * GET    /conversations/:id/messages → Admin view conversation messages
@@ -257,6 +258,24 @@ router.post('/user/:uid/notify-changes', async (req, res) => {
     res.json({ ok: true, notified: true, fields: relevant });
   } catch (err) {
     log.error('admin-users', 'notify-changes failed', {
+      uid: req.params.uid,
+      error: err.message,
+    });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── Read stalkers list (admin) ──
+router.get('/user/:uid/stalkers', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+
+    const snap = await db.collection(`users/${req.params.uid}/stalkers`).get();
+    const stalkerIds = snap.docs.map(doc => doc.id);
+
+    res.json({ stalkers: stalkerIds, count: stalkerIds.length });
+  } catch (err) {
+    log.error('admin-users', 'GET stalkers failed', {
       uid: req.params.uid,
       error: err.message,
     });
