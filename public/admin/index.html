@@ -10622,7 +10622,11 @@
             if (data.available) {
                 resultEl.innerHTML = '<span style="color:#2ecc71;">&#10003; Available</span>';
             } else {
-                resultEl.innerHTML = `<span style="color:var(--danger);">&#10007; In use as ${data.conflictType} ID by user ${data.conflictUser}</span>`;
+                resultEl.textContent = '';
+                const span = document.createElement('span');
+                span.style.color = 'var(--danger)';
+                span.textContent = '\u2717 This ID is already in use';
+                resultEl.appendChild(span);
             }
         } catch (err) {
             resultEl.innerHTML = `<span style="color:var(--danger);">Error: ${err.message}</span>`;
