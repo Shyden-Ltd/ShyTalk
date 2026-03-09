@@ -57,6 +57,8 @@ data class User(
     val isSuperShy: Boolean = false,
     val superShyExpiry: Long? = null,
     val superShyTier: String? = null,
+    val tempUniqueId: Long? = null,
+    val tempUniqueIdExpiry: Long? = null,
     val luckScore: Int = 0,
     val pityCounter: Int = 0,
     val loginStreak: Int = 0,
@@ -77,6 +79,15 @@ data class User(
 
     /** Resolved photo URL: prefers profilePhotoUrl, falls back to avatarUrl. */
     val photoUrl: String? get() = profilePhotoUrl ?: avatarUrl
+
+    /** Returns tempUniqueId if active, otherwise the real uniqueId. */
+    val displayUniqueId: Long
+        get() {
+            if (tempUniqueId != null && tempUniqueIdExpiry != null && tempUniqueIdExpiry > currentTimeMillis()) {
+                return tempUniqueId
+            }
+            return uniqueId
+        }
 
     fun toMap(): Map<String, Any?> = mapOf(
         "uid" to uid,
@@ -128,6 +139,8 @@ data class User(
         "isSuperShy" to isSuperShy,
         "superShyExpiry" to superShyExpiry,
         "superShyTier" to superShyTier,
+        "tempUniqueId" to tempUniqueId,
+        "tempUniqueIdExpiry" to tempUniqueIdExpiry,
         "luckScore" to luckScore,
         "pityCounter" to pityCounter,
         "loginStreak" to loginStreak,
@@ -199,6 +212,8 @@ data class User(
             isSuperShy = map["isSuperShy"].asBool(),
             superShyExpiry = map["superShyExpiry"]?.let { timestampToMillis(it) },
             superShyTier = map["superShyTier"] as? String,
+            tempUniqueId = (map["tempUniqueId"] as? Number)?.toLong(),
+            tempUniqueIdExpiry = map["tempUniqueIdExpiry"]?.let { timestampToMillis(it) },
             luckScore = (map["luckScore"] as? Long)?.toInt() ?: 0,
             pityCounter = (map["pityCounter"] as? Long)?.toInt() ?: 0,
             loginStreak = (map["loginStreak"] as? Long)?.toInt() ?: 0,

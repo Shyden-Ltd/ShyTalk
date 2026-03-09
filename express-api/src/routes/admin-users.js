@@ -333,7 +333,20 @@ router.get('/search/uniqueId/:id', async (req, res) => {
       .limit(1)
       .get();
 
-    if (snapshot.empty) return res.status(404).json({ error: 'User not found' });
+    if (snapshot.empty) {
+      // Fallback: search by tempUniqueId
+      const tempSnap = await db.collection('users')
+        .where('tempUniqueId', '==', uniqueId)
+        .limit(1)
+        .get();
+      if (tempSnap.empty) return res.status(404).json({ error: 'User not found' });
+      const doc = tempSnap.docs[0];
+      const user = { id: doc.id, ...doc.data() };
+      const gcsScore = user.gcsScore ?? user.gcs_score ?? 100;
+      const gcsLastDeductionAt = user.gcsLastDeductionAt ?? user.gcs_last_deduction_at ?? null;
+      user.gcsDisplayScore = computeDisplayScore(gcsScore, gcsLastDeductionAt);
+      return res.json(user);
+    }
 
     const doc = snapshot.docs[0];
     const user = { id: doc.id, ...doc.data() };

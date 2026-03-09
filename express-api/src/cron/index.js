@@ -10,6 +10,7 @@ const closedRooms = require('./closedRooms');
 const orphanedStorage = require('./orphanedStorage');
 const rotateLogs = require('./rotateLogs');
 const expireBans = require('./expireBans');
+const expireTempIds = require('./expireTempIds');
 const serverHealth = require('./serverHealth');
 const alertManager = require('../utils/alertManagerInstance');
 
@@ -20,11 +21,12 @@ function startCronJobs() {
     archiveReports().catch(err => log.error('cron', 'archiveReports failed', { error: err.message }));
   });
 
-  // Check expired subscriptions + clean expired backpack items — daily midnight UTC
+  // Check expired subscriptions + clean expired backpack items + expire temp IDs — daily midnight UTC
   cron.schedule('0 0 * * *', () => {
-    log.info('cron', 'Running subscriptions + backpackCleanup');
+    log.info('cron', 'Running subscriptions + backpackCleanup + expireTempIds');
     subscriptions().catch(err => log.error('cron', 'subscriptions failed', { error: err.message }));
     backpackCleanup().catch(err => log.error('cron', 'backpackCleanup failed', { error: err.message }));
+    expireTempIds().catch(err => log.error('cron', 'expireTempIds failed', { error: err.message }));
   });
 
   // Close stale OWNER_AWAY rooms — every 5 minutes

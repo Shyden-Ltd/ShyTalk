@@ -175,3 +175,49 @@ describe('PATCH /api/user/:uid', () => {
     );
   });
 });
+
+describe('GET /api/search/uniqueId/:id', () => {
+  let app;
+
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+  });
+
+  it('should find user by tempUniqueId when uniqueId not found', async () => {
+    const { db } = require('../../src/utils/firebase');
+
+    // First collection call (uniqueId search) - empty
+    // Second collection call (tempUniqueId fallback) - found
+    let callCount = 0;
+    db.collection.mockImplementation(() => {
+      callCount++;
+      const getResult = callCount === 1
+        ? { empty: true, docs: [] }
+        : {
+            empty: false,
+            docs: [{
+              id: 'user-abc',
+              data: () => ({
+                uniqueId: 99999999,
+                tempUniqueId: 12345678,
+                gcsScore: 100,
+              }),
+            }],
+          };
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get: jest.fn().mockResolvedValue(getResult),
+      };
+      return chain;
+    });
+
+    const res = await request(app).get('/api/search/uniqueId/12345678').expect(200);
+
+    expect(res.body.id).toBe('user-abc');
+    expect(res.body.uniqueId).toBe(99999999);
+    expect(res.body.tempUniqueId).toBe(12345678);
+  });
+});

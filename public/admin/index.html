@@ -2780,6 +2780,20 @@
                     <label>Unique ID</label>
                     <input type="number" data-field="uniqueId" aria-label="Unique ID">
                 </div>
+                <div class="field-group" id="temp-id-section">
+                    <label>Temporary ID</label>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <input type="number" id="temp-id-input" placeholder="Enter temp ID" style="flex:1;" min="10000000">
+                        <button type="button" id="temp-id-check" class="btn-sm" style="white-space:nowrap;">Check</button>
+                    </div>
+                    <div id="temp-id-check-result" style="font-size:12px;margin-top:4px;"></div>
+                    <div style="display:flex;gap:6px;align-items:center;margin-top:8px;">
+                        <input type="datetime-local" id="temp-id-expiry" style="flex:1;">
+                        <button type="button" id="temp-id-apply" class="btn-sm" style="background:var(--accent);color:#fff;">Apply</button>
+                        <button type="button" id="temp-id-clear" class="btn-sm" style="background:var(--danger);color:#fff;">Clear</button>
+                    </div>
+                    <div id="temp-id-current" style="font-size:12px;color:var(--text2);margin-top:4px;"></div>
+                </div>
                 <div class="field-group">
                     <label>User Type</label>
                     <select data-field="userType" aria-label="User Type">
@@ -9975,6 +9989,92 @@
 
     // ══════════════════════════════════════════════════════════════
     // END DEVICE BINDING CARD
+    // ══════════════════════════════════════════════════════════════
+
+    // ══════════════════════════════════════════════════════════════
+    // TEMPORARY UNIQUE ID (Users tab - Identity section)
+    // ══════════════════════════════════════════════════════════════
+
+    function populateTempId(data) {
+        const currentEl = document.getElementById("temp-id-current");
+        const inputEl = document.getElementById("temp-id-input");
+        const expiryEl = document.getElementById("temp-id-expiry");
+        const resultEl = document.getElementById("temp-id-check-result");
+
+        resultEl.textContent = "";
+        if (data.tempUniqueId && data.tempUniqueIdExpiry && data.tempUniqueIdExpiry > Date.now()) {
+            inputEl.value = data.tempUniqueId;
+            const d = new Date(data.tempUniqueIdExpiry);
+            expiryEl.value = d.toISOString().slice(0, 16);
+            currentEl.innerHTML = `Active temp ID: <strong>${data.tempUniqueId}</strong> (expires ${d.toLocaleString()})`;
+        } else {
+            inputEl.value = "";
+            expiryEl.value = "";
+            currentEl.textContent = data.tempUniqueId ? "Temp ID expired" : "No temporary ID set";
+        }
+    }
+
+    document.getElementById("temp-id-check").addEventListener("click", async () => {
+        const id = parseInt(document.getElementById("temp-id-input").value);
+        const resultEl = document.getElementById("temp-id-check-result");
+        if (!id || id < 10000000) {
+            resultEl.innerHTML = '<span style="color:var(--danger);">ID must be at least 10000000</span>';
+            return;
+        }
+        try {
+            const data = await apiCall("GET", `/api/admin/users/check-id/${id}`);
+            if (data.available) {
+                resultEl.innerHTML = '<span style="color:#2ecc71;">&#10003; Available</span>';
+            } else {
+                resultEl.innerHTML = `<span style="color:var(--danger);">&#10007; In use as ${data.conflictType} ID by user ${data.conflictUser}</span>`;
+            }
+        } catch (err) {
+            resultEl.innerHTML = `<span style="color:var(--danger);">Error: ${err.message}</span>`;
+        }
+    });
+
+    document.getElementById("temp-id-apply").addEventListener("click", async () => {
+        if (!currentUid) return;
+        const id = parseInt(document.getElementById("temp-id-input").value);
+        const expiryVal = document.getElementById("temp-id-expiry").value;
+        if (!id || id < 10000000) { showToast("ID must be at least 10000000", "error"); return; }
+        if (!expiryVal) { showToast("Set an expiry date", "error"); return; }
+        const expiryDate = new Date(expiryVal).getTime();
+        if (expiryDate <= Date.now()) { showToast("Expiry must be in the future", "error"); return; }
+        try {
+            await apiCall("POST", `/api/admin/users/${currentUid}/temp-id`, { tempUniqueId: id, expiryDate });
+            showToast("Temporary ID applied", "success");
+            document.getElementById("temp-id-current").innerHTML = `Active temp ID: <strong>${id}</strong> (expires ${new Date(expiryDate).toLocaleString()})`;
+            document.getElementById("temp-id-check-result").textContent = "";
+        } catch (err) {
+            showToast(err.message || "Failed to apply temp ID", "error");
+        }
+    });
+
+    document.getElementById("temp-id-clear").addEventListener("click", async () => {
+        if (!currentUid) return;
+        if (!confirm("Clear the temporary ID? The user will revert to their original ID.")) return;
+        try {
+            await apiCall("DELETE", `/api/admin/users/${currentUid}/temp-id`);
+            showToast("Temporary ID cleared", "success");
+            document.getElementById("temp-id-input").value = "";
+            document.getElementById("temp-id-expiry").value = "";
+            document.getElementById("temp-id-current").textContent = "No temporary ID set";
+            document.getElementById("temp-id-check-result").textContent = "";
+        } catch (err) {
+            showToast(err.message || "Failed to clear temp ID", "error");
+        }
+    });
+
+    // Hook into populateFormFull
+    const _origPopulateFullForTempId = populateFormFull;
+    populateFormFull = async function(data) {
+        await _origPopulateFullForTempId(data);
+        populateTempId(data);
+    };
+
+    // ══════════════════════════════════════════════════════════════
+    // END TEMPORARY UNIQUE ID
     // ══════════════════════════════════════════════════════════════
 
     document.getElementById("backup-recover-photos-btn").addEventListener("click", async () => {
