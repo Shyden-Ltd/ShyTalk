@@ -2706,6 +2706,24 @@
           .gifts-table .gift-order-input { width: 40px; }
           .gift-actions button { padding: 3px 6px; font-size: 11px; }
         }
+
+        /* Profile Preview Panel */
+        .profile-preview { background: var(--surface); border-radius: 12px; overflow: hidden; margin-bottom: 16px; border: 1px solid var(--border); }
+        .profile-preview-toggle { display: flex; gap: 6px; padding: 10px 12px; background: var(--surface2); }
+        .profile-preview-toggle button { padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; background: transparent; color: var(--text2); border: 1px solid var(--border); }
+        .profile-preview-toggle button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .profile-preview-cover { height: 120px; background-size: cover; background-position: center; background-color: var(--surface2); }
+        .profile-preview-avatar { width: 72px; height: 72px; border-radius: 50%; border: 3px solid var(--surface); margin-top: -36px; margin-left: 16px; object-fit: cover; background-color: var(--surface2); display: block; }
+        .profile-preview-info { padding: 8px 16px 16px; }
+        .profile-preview-name { font-size: 18px; font-weight: 600; color: var(--text); }
+        .profile-preview-id { font-size: 13px; color: var(--text2); margin-top: 2px; }
+        .profile-preview-desc { font-size: 13px; color: var(--text2); margin-top: 8px; white-space: pre-wrap; max-height: 60px; overflow: hidden; }
+        .profile-preview-badges { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+        .profile-preview-badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+        .profile-preview-badge.supershy { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; }
+        .profile-preview-badge.usertype { background: var(--accent); color: #fff; }
+        .profile-preview-stats { display: flex; gap: 24px; margin-top: 12px; font-size: 13px; color: var(--text2); }
+        .profile-preview-stats strong { color: var(--text); }
     </style>
 <script src="/js/logger.js"></script>
 </head>
@@ -2769,6 +2787,22 @@
             </div>
 
             <div class="user-subpanel visible" data-subtab="profile">
+            <!-- Profile Preview -->
+            <div class="profile-preview" id="profile-preview" style="display:none;">
+                <div class="profile-preview-toggle">
+                    <button id="preview-current-btn" class="active">Current</button>
+                    <button id="preview-draft-btn">Preview</button>
+                </div>
+                <div id="profile-preview-cover" class="profile-preview-cover"></div>
+                <img id="profile-preview-avatar" class="profile-preview-avatar" alt="Profile photo">
+                <div class="profile-preview-info">
+                    <div class="profile-preview-name" id="preview-name"></div>
+                    <div class="profile-preview-id" id="preview-id"></div>
+                    <div class="profile-preview-badges" id="preview-badges"></div>
+                    <div class="profile-preview-desc" id="preview-desc"></div>
+                    <div class="profile-preview-stats" id="preview-stats"></div>
+                </div>
+            </div>
             <!-- Identity -->
             <div class="form-section">
                 <h3>Identity</h3>
@@ -4273,6 +4307,7 @@
       await signOut(auth);
       userForm.classList.remove("visible");
       document.getElementById("user-subtabs").style.display = "none";
+      document.getElementById("profile-preview").style.display = "none";
       searchUid.value = "";
     });
 
@@ -4686,6 +4721,7 @@
       searchBtn.textContent = "Searching...";
       userForm.classList.remove("visible");
       document.getElementById("user-subtabs").style.display = "none";
+      document.getElementById("profile-preview").style.display = "none";
 
       try {
         const data = await apiCall("GET", `/api/search/uniqueId/${query}`);
@@ -4999,6 +5035,7 @@
       searchBtn.textContent = "Searching...";
       userForm.classList.remove("visible");
       document.getElementById("user-subtabs").style.display = "none";
+      document.getElementById("profile-preview").style.display = "none";
 
       try {
         const data = await apiCall("GET", `/api/search/uniqueId/${query}`);
@@ -5332,6 +5369,7 @@
       searchBtn.textContent = "Searching...";
       userForm.classList.remove("visible");
       document.getElementById("user-subtabs").style.display = "none";
+      document.getElementById("profile-preview").style.display = "none";
       try {
         const data = await apiCall("GET", `/api/search/uniqueId/${q}`);
         await populateFormFull(data);
@@ -10254,6 +10292,124 @@
 
     // ══════════════════════════════════════════════════════════════
     // END TEMPORARY UNIQUE ID
+    // ══════════════════════════════════════════════════════════════
+
+    // ══════════════════════════════════════════════════════════════
+    // PROFILE PREVIEW PANEL (Users tab - Profile sub-tab)
+    // ══════════════════════════════════════════════════════════════
+
+    let _previewMode = "current";
+    let _previewUserData = null;
+
+    function renderProfilePreview(data) {
+        if (!data) return;
+        const coverEl = document.getElementById("profile-preview-cover");
+        const avatarEl = document.getElementById("profile-preview-avatar");
+        const nameEl = document.getElementById("preview-name");
+        const idEl = document.getElementById("preview-id");
+        const badgesEl = document.getElementById("preview-badges");
+        const descEl = document.getElementById("preview-desc");
+        const statsEl = document.getElementById("preview-stats");
+
+        // Cover photo
+        const coverUrl = data.coverPhotoUrl;
+        coverEl.style.backgroundImage = coverUrl ? `url(${coverUrl})` : "none";
+
+        // Avatar
+        const photoUrl = data.profilePhotoUrl || data.avatarUrl || "";
+        if (photoUrl) {
+            avatarEl.src = photoUrl;
+            avatarEl.style.display = "block";
+        } else {
+            avatarEl.src = "";
+            avatarEl.style.display = "block";
+        }
+
+        // Name
+        nameEl.textContent = data.displayName || "(no name)";
+
+        // ID — show temp ID if active, otherwise real ID
+        const tempId = data.tempUniqueId;
+        const tempExpiry = data.tempUniqueIdExpiry;
+        const isActive = tempId && tempExpiry && tempExpiry > Date.now();
+        const displayId = isActive ? tempId : (data.uniqueId || "");
+        idEl.textContent = displayId ? `ID: ${displayId}` : "";
+
+        // Badges
+        let badgesHtml = "";
+        if (data.isSuperShy) badgesHtml += '<span class="profile-preview-badge supershy">Super Shy</span>';
+        if (data.userType && data.userType !== "MEMBER") badgesHtml += `<span class="profile-preview-badge usertype">${escapeHtml(data.userType)}</span>`;
+        if (data.nationality) badgesHtml += `<span class="profile-preview-badge" style="background:var(--surface2);color:var(--text);">${escapeHtml(data.nationality)}</span>`;
+        badgesEl.innerHTML = badgesHtml;
+
+        // Description
+        descEl.textContent = data.description || "";
+
+        // Stats (follower/following counts)
+        const followers = Array.isArray(data.followerIds) ? data.followerIds.length : (data.followerIds?.size || 0);
+        const following = Array.isArray(data.followingIds) ? data.followingIds.length : (data.followingIds?.size || 0);
+        statsEl.innerHTML = `<span><strong>${followers}</strong> Followers</span><span><strong>${following}</strong> Following</span>`;
+    }
+
+    function updateProfilePreview() {
+        if (_previewMode === "current") {
+            renderProfilePreview(_previewUserData);
+        } else {
+            // Read from form fields for draft preview
+            const draft = { ..._previewUserData };
+            const nameEl = document.querySelector('[data-field="displayName"]');
+            if (nameEl) draft.displayName = nameEl.value;
+            const descEl = document.querySelector('[data-field="description"]');
+            if (descEl) draft.description = descEl.value;
+            const nationalityEl = document.querySelector('[data-field="nationality"]');
+            if (nationalityEl) draft.nationality = nationalityEl.value;
+            // SuperShy from economy section
+            const superShyEl = document.getElementById("eco-super-shy");
+            if (superShyEl) draft.isSuperShy = superShyEl.value === "true";
+            // UserType
+            const userTypeEl = document.querySelector('[data-field="userType"]');
+            if (userTypeEl) draft.userType = userTypeEl.value;
+            renderProfilePreview(draft);
+        }
+    }
+
+    // Toggle buttons
+    document.getElementById("preview-current-btn").addEventListener("click", () => {
+        _previewMode = "current";
+        document.getElementById("preview-current-btn").classList.add("active");
+        document.getElementById("preview-draft-btn").classList.remove("active");
+        updateProfilePreview();
+    });
+
+    document.getElementById("preview-draft-btn").addEventListener("click", () => {
+        _previewMode = "draft";
+        document.getElementById("preview-draft-btn").classList.add("active");
+        document.getElementById("preview-current-btn").classList.remove("active");
+        updateProfilePreview();
+    });
+
+    // Live update on form changes when in preview mode
+    document.addEventListener("input", (e) => {
+        if (_previewMode === "draft") updateProfilePreview();
+    });
+    document.addEventListener("change", (e) => {
+        if (_previewMode === "draft") updateProfilePreview();
+    });
+
+    // Hook into populateFormFull to store data and render preview
+    const _origPopulateFullForPreview = populateFormFull;
+    populateFormFull = async function(data) {
+        await _origPopulateFullForPreview(data);
+        _previewUserData = { ...data };
+        _previewMode = "current";
+        document.getElementById("preview-current-btn").classList.add("active");
+        document.getElementById("preview-draft-btn").classList.remove("active");
+        document.getElementById("profile-preview").style.display = "block";
+        updateProfilePreview();
+    };
+
+    // ══════════════════════════════════════════════════════════════
+    // END PROFILE PREVIEW PANEL
     // ══════════════════════════════════════════════════════════════
 
     document.getElementById("backup-recover-photos-btn").addEventListener("click", async () => {
