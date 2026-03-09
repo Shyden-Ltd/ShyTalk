@@ -2743,10 +2743,7 @@
                 <h3>Identity</h3>
                 <div class="field-group">
                     <label>UID <span class="readonly-badge">READ ONLY</span></label>
-                    <div style="display:flex;align-items:center;gap:10px;">
-                        <div class="uid-display" id="field-uid" style="flex:1;"></div>
-                        <button type="button" id="reset-device-binding-btn" style="padding:4px 12px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px;white-space:nowrap;" title="Remove device bindings for this user">Reset Device Binding</button>
-                    </div>
+                    <div class="uid-display" id="field-uid"></div>
                 </div>
                 <div class="field-group">
                     <label>Display Name</label>
@@ -2906,6 +2903,18 @@
                     <button type="button" id="bans-ban-last-ip" style="background:#8e44ad;color:#fff;">Ban Last IP</button>
                     <button type="button" id="bans-unban-all" style="background:#2ecc71;color:#fff;">Unban All</button>
                     <button type="button" id="bans-view-logs" style="background:var(--accent);color:#fff;">View Logs</button>
+                </div>
+            </div>
+
+            <!-- Device Binding -->
+            <div class="form-section" id="device-binding-section" style="display:none;">
+                <h3>Bound Device</h3>
+                <div id="device-binding-content">
+                    <div id="device-binding-empty" style="color:var(--text2);font-size:13px;font-style:italic;text-align:center;padding:16px;">No device bound</div>
+                    <div id="device-binding-cards"></div>
+                </div>
+                <div style="margin-top:12px;text-align:right;">
+                    <button type="button" id="reset-device-binding-btn" style="padding:6px 16px;background:var(--danger);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;">Reset Device Binding</button>
                 </div>
             </div>
 
@@ -4897,6 +4906,7 @@
       try {
         const result = await apiCall("POST", `/api/cleanup/device-binding/${currentUid}`);
         showToast("Removed " + (result.deleted || 0) + " device binding(s)", "success");
+        if (typeof populateDeviceBindingCard === "function") populateDeviceBindingCard(currentUid);
       } catch (err) {
         showToast("Failed: " + err.message, "error");
       } finally {
@@ -9832,6 +9842,75 @@
 
     // ══════════════════════════════════════════════════════════════
     // END BANS & RESTRICTIONS
+    // ══════════════════════════════════════════════════════════════
+
+    // ══════════════════════════════════════════════════════════════
+    // DEVICE BINDING CARD (Users tab)
+    // ══════════════════════════════════════════════════════════════
+
+    async function populateDeviceBindingCard(uid) {
+        const section = $("#device-binding-section");
+        const emptyEl = $("#device-binding-empty");
+        const cardsEl = $("#device-binding-cards");
+        section.style.display = "block";
+        cardsEl.innerHTML = '<div style="color:var(--text2);font-size:12px;">Loading...</div>';
+        emptyEl.style.display = "none";
+
+        try {
+            const data = await apiCall("GET", `/api/admin/devices/user/${uid}`);
+            const devices = data.devices || [];
+
+            if (devices.length === 0) {
+                emptyEl.style.display = "block";
+                cardsEl.innerHTML = "";
+                return;
+            }
+
+            cardsEl.innerHTML = devices.map(d => {
+                const rows = [
+                    ["Manufacturer", d.manufacturer || "Unknown"],
+                    ["Model", d.model || "Unknown"],
+                    ["OS Version", d.osVersion || "N/A"],
+                    ["App Version", (d.appVersion || "N/A") + (d.buildNumber ? ` (${d.buildNumber})` : "")],
+                    ["Screen", d.screenResolution || "N/A"],
+                    ["Density", d.screenDensity || "N/A"],
+                    ["Network Type", d.networkType || "N/A"],
+                    ["Carrier", d.carrier || "N/A"],
+                    ["Last IP", d.lastIp || "N/A"],
+                    ["ISP", d.isp || "N/A"],
+                    ["ASN", d.asn || "N/A"],
+                    ["Country", d.country || "N/A"],
+                    ["Region", d.region || "N/A"],
+                    ["First Seen", d.firstSeen ? new Date(d.firstSeen).toLocaleString() : "N/A"],
+                    ["Last Seen", d.lastSeen ? new Date(d.lastSeen).toLocaleString() : "N/A"],
+                ];
+                return `<div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:8px;">
+                    <div style="font-weight:600;font-size:14px;margin-bottom:8px;color:var(--text);">
+                        ${escapeHtml((d.manufacturer || "") + " " + (d.model || d.id))}
+                    </div>
+                    <div style="display:grid;grid-template-columns:140px 1fr;gap:4px 12px;font-size:12px;">
+                        ${rows.map(([label, val]) => `
+                            <div style="color:var(--text2);font-weight:500;">${label}</div>
+                            <div style="color:var(--text);">${escapeHtml(String(val))}</div>
+                        `).join("")}
+                    </div>
+                    <div style="margin-top:8px;font-size:11px;color:var(--text2);">Device ID: ${escapeHtml(d.id)}</div>
+                </div>`;
+            }).join("");
+        } catch (err) {
+            cardsEl.innerHTML = `<div style="color:var(--danger);font-size:12px;">Failed to load: ${escapeHtml(err.message)}</div>`;
+        }
+    }
+
+    // Hook into populateFormFull
+    const _origPopulateFullForDeviceBinding = populateFormFull;
+    populateFormFull = async function(data) {
+        await _origPopulateFullForDeviceBinding(data);
+        if (data.uid) populateDeviceBindingCard(data.uid);
+    };
+
+    // ══════════════════════════════════════════════════════════════
+    // END DEVICE BINDING CARD
     // ══════════════════════════════════════════════════════════════
 
     document.getElementById("backup-recover-photos-btn").addEventListener("click", async () => {
