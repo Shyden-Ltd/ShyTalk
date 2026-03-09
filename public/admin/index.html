@@ -2271,6 +2271,14 @@
         .bans-quick-actions { display:flex;gap:8px;flex-wrap:wrap;margin-top:10px; }
         .bans-quick-actions button { padding:6px 14px;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600; }
 
+        /* --- User Sub-tabs --- */
+        .user-subtabs { display: flex; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+        .user-subtab { padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; background: var(--surface2); color: var(--text2); border: none; transition: background 0.2s; }
+        .user-subtab:hover { background: var(--surface3, #444); }
+        .user-subtab.active { background: var(--accent); color: #fff; }
+        .user-subpanel { display: none; }
+        .user-subpanel.visible { display: block; }
+
         /* --- Logs Panel --- */
         #logs-panel { display: none; }
         #logs-panel.visible { display: block; }
@@ -2738,6 +2746,14 @@
         </div>
 
         <div id="user-form">
+            <!-- Sub-tabs -->
+            <div class="user-subtabs" id="user-subtabs" style="display:none">
+                <button class="user-subtab active" data-subtab="profile">Profile</button>
+                <button class="user-subtab" data-subtab="moderation">Moderation</button>
+                <button class="user-subtab" data-subtab="economy">Economy</button>
+            </div>
+
+            <div class="user-subpanel visible" data-subtab="profile">
             <!-- Identity -->
             <div class="form-section">
                 <h3>Identity</h3>
@@ -2826,6 +2842,68 @@
                 </div>
             </div>
 
+            <!-- Timestamps -->
+            <div class="form-section">
+                <h3>Timestamps</h3>
+                <div class="field-group">
+                    <label>Date of Birth</label>
+                    <div class="field-row">
+                        <input type="datetime-local" data-field="dateOfBirth"
+                               aria-label="Date of Birth">
+                        <button class="btn-clear" data-clear="dateOfBirth">Clear</button>
+                    </div>
+                </div>
+                <div class="field-group">
+                    <label>Created At <span class="readonly-badge">READ ONLY</span></label>
+                    <div class="uid-display" id="field-createdAt"></div>
+                </div>
+                <div class="field-group">
+                    <label>Last Seen At <span class="readonly-badge">READ ONLY</span></label>
+                    <div class="uid-display" id="field-lastSeenAt"></div>
+                </div>
+            </div>
+
+
+            <!-- Lists -->
+            <div class="form-section">
+                <h3>Lists</h3>
+                <div class="field-group">
+                    <label>Blocked Users</label>
+                    <div class="list-widget" id="list-blockedUserIds">
+                        <div class="list-items"></div>
+                        <div class="list-add">
+                            <input type="number" placeholder="ShyTalk User ID"
+                                   aria-label="Add blocked user ID">
+                            <button type="button">Add</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="field-group">
+                    <label>Following</label>
+                    <div class="list-widget" id="list-followingIds">
+                        <div class="list-items"></div>
+                        <div class="list-add">
+                            <input type="number" placeholder="ShyTalk User ID"
+                                   aria-label="Add following user ID">
+                            <button type="button">Add</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="field-group">
+                    <label>Followers</label>
+                    <div class="list-widget" id="list-followerIds">
+                        <div class="list-items"></div>
+                        <div class="list-add">
+                            <input type="number" placeholder="ShyTalk User ID"
+                                   aria-label="Add follower user ID">
+                            <button type="button">Add</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            </div><!-- end profile subpanel -->
+
+            <div class="user-subpanel" data-subtab="moderation">
             <!-- Suspension -->
             <div class="form-section" id="suspension-section" style="display:none;">
                 <h3>Suspension</h3>
@@ -2973,67 +3051,9 @@
                 <h3>Report History</h3>
                 <div class="report-history" id="report-history-list"></div>
             </div>
+            </div><!-- end moderation subpanel -->
 
-            <!-- Timestamps -->
-            <div class="form-section">
-                <h3>Timestamps</h3>
-                <div class="field-group">
-                    <label>Date of Birth</label>
-                    <div class="field-row">
-                        <input type="datetime-local" data-field="dateOfBirth"
-                               aria-label="Date of Birth">
-                        <button class="btn-clear" data-clear="dateOfBirth">Clear</button>
-                    </div>
-                </div>
-                <div class="field-group">
-                    <label>Created At <span class="readonly-badge">READ ONLY</span></label>
-                    <div class="uid-display" id="field-createdAt"></div>
-                </div>
-                <div class="field-group">
-                    <label>Last Seen At <span class="readonly-badge">READ ONLY</span></label>
-                    <div class="uid-display" id="field-lastSeenAt"></div>
-                </div>
-            </div>
-
-
-            <!-- Lists -->
-            <div class="form-section">
-                <h3>Lists</h3>
-                <div class="field-group">
-                    <label>Blocked Users</label>
-                    <div class="list-widget" id="list-blockedUserIds">
-                        <div class="list-items"></div>
-                        <div class="list-add">
-                            <input type="number" placeholder="ShyTalk User ID"
-                                   aria-label="Add blocked user ID">
-                            <button type="button">Add</button>
-                        </div>
-                    </div>
-                </div>
-                <div class="field-group">
-                    <label>Following</label>
-                    <div class="list-widget" id="list-followingIds">
-                        <div class="list-items"></div>
-                        <div class="list-add">
-                            <input type="number" placeholder="ShyTalk User ID"
-                                   aria-label="Add following user ID">
-                            <button type="button">Add</button>
-                        </div>
-                    </div>
-                </div>
-                <div class="field-group">
-                    <label>Followers</label>
-                    <div class="list-widget" id="list-followerIds">
-                        <div class="list-items"></div>
-                        <div class="list-add">
-                            <input type="number" placeholder="ShyTalk User ID"
-                                   aria-label="Add follower user ID">
-                            <button type="button">Add</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
+            <div class="user-subpanel" data-subtab="economy">
             <!-- Economy -->
             <div class="form-section">
                 <h3>Economy</h3>
@@ -3139,6 +3159,7 @@
                 </div>
                 <div id="tx-list" style="max-height:300px;overflow-y:auto"></div>
             </div>
+            </div><!-- end economy subpanel -->
 
             <!-- Save -->
             <div class="save-bar">
@@ -4224,6 +4245,7 @@
       stopMonitoring();
       await signOut(auth);
       userForm.classList.remove("visible");
+      document.getElementById("user-subtabs").style.display = "none";
       searchUid.value = "";
     });
 
@@ -4619,6 +4641,7 @@
       searchBtn.disabled = true;
       searchBtn.textContent = "Searching...";
       userForm.classList.remove("visible");
+      document.getElementById("user-subtabs").style.display = "none";
 
       try {
         const data = await apiCall("GET", `/api/search/uniqueId/${query}`);
@@ -4931,6 +4954,7 @@
       searchBtn.disabled = true;
       searchBtn.textContent = "Searching...";
       userForm.classList.remove("visible");
+      document.getElementById("user-subtabs").style.display = "none";
 
       try {
         const data = await apiCall("GET", `/api/search/uniqueId/${query}`);
@@ -5239,7 +5263,19 @@
       populateGcsSection(data);
       showDirectWarnSection();
       loadReportHistory(data.uid);
+      // Show sub-tabs and default to Profile
+      document.getElementById("user-subtabs").style.display = "flex";
+      switchUserSubtab("profile");
     }
+
+    // Sub-tab switching
+    function switchUserSubtab(subtab) {
+      document.querySelectorAll(".user-subtab").forEach(b => b.classList.toggle("active", b.dataset.subtab === subtab));
+      document.querySelectorAll(".user-subpanel").forEach(p => p.classList.toggle("visible", p.dataset.subtab === subtab));
+    }
+    document.querySelectorAll(".user-subtab").forEach(btn => {
+      btn.addEventListener("click", () => switchUserSubtab(btn.dataset.subtab));
+    });
 
     // Re-bind search again
     searchBtn.removeEventListener("click", doSearchUpdated);
@@ -5251,6 +5287,7 @@
       searchBtn.disabled = true;
       searchBtn.textContent = "Searching...";
       userForm.classList.remove("visible");
+      document.getElementById("user-subtabs").style.display = "none";
       try {
         const data = await apiCall("GET", `/api/search/uniqueId/${q}`);
         await populateFormFull(data);
