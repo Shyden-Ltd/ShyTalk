@@ -5957,6 +5957,7 @@
         el.dataset.wired = "1";
         el.addEventListener("click", async () => {
           const uid = el.dataset.navigateUid;
+          await flushNotifications();
           switchTab("users");
           try {
             const data = await apiCall("GET", `/api/user/${uid}`);
