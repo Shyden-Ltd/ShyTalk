@@ -6220,7 +6220,14 @@
         pityCounter: parseInt($("#eco-pity").value) || 0,
       };
       for (const [k, v] of Object.entries(ecoFields)) {
-        if (v !== (loadedData[k] ?? (typeof v === "boolean" ? false : typeof v === "number" ? 0 : null))) {
+        const orig = loadedData[k];
+        // Normalize: treat undefined, null, 0, "" as equivalent "empty" for timestamps/nullable fields
+        const normalize = (val, key) => {
+          if (val === undefined || val === null || val === "") return null;
+          if (key === "superShyExpiry" && val === 0) return null;
+          return val;
+        };
+        if (normalize(v, k) !== normalize(orig, k)) {
           modified[k] = v;
         }
       }
