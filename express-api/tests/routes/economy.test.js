@@ -247,12 +247,33 @@ describe('GET /api/users/:uid/backpack', () => {
     expect(res.body[0].id).toBe('gift-1');
   });
 
-  test('rejects access to another user backpack', async () => {
-    const app = createApp('user-A');
+  test('rejects access to another user backpack for non-admin', async () => {
+    const app = createApp('user-A', false);
     const res = await request(app)
       .get('/api/users/user-B/backpack')
       .expect(403);
 
     expect(res.body.error).toMatch(/Cannot access/);
+  });
+
+  test('allows admin to access another user backpack', async () => {
+    const { db } = require('../../src/utils/firebase');
+    db.collection.mockReturnValueOnce({
+      get: jest.fn().mockResolvedValue({
+        docs: [
+          { id: 'gift-rose', data: () => ({ giftId: 'gift-rose', quantity: 5, lastAcquired: 1700000000000 }) },
+          { id: 'gift-crown', data: () => ({ giftId: 'gift-crown', quantity: 2, lastAcquired: 1699900000000 }) },
+        ],
+      }),
+    });
+
+    const app = createApp('admin-1', true);
+    const res = await request(app)
+      .get('/api/users/user-B/backpack')
+      .expect(200);
+
+    expect(res.body).toHaveLength(2);
+    expect(res.body[0].giftId).toBe('gift-rose');
+    expect(res.body[1].giftId).toBe('gift-crown');
   });
 });

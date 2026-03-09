@@ -139,28 +139,30 @@ router.get('/reports', async (req, res) => {
     const userIdFilter = req.query.userId;
     const search = req.query.search?.toLowerCase();
 
-    // Build Firestore query
-    let query = db.collection('reports')
-      .where('status', '==', statusFilter);
-
-    if (userIdFilter) {
-      query = query.where('reportedUserId', '==', userIdFilter);
-    }
-
+    // Build Firestore query — only use status + orderBy to avoid needing a
+    // composite index.  The userId filter is applied client-side afterwards.
     const direction = statusFilter === 'pending' ? 'asc' : 'desc';
-    query = query.orderBy('createdAt', direction).limit(500);
+    const query = db.collection('reports')
+      .where('status', '==', statusFilter)
+      .orderBy('createdAt', direction)
+      .limit(500);
 
     const reports = await queryDocs(query);
 
+    // Client-side userId filter (avoids Firestore composite index requirement)
+    const userFiltered = userIdFilter
+      ? reports.filter(r => r.reportedUserId === userIdFilter)
+      : reports;
+
     // Client-side search filter (Firestore doesn't support full-text search)
     const filtered = search
-      ? reports.filter(r =>
+      ? userFiltered.filter(r =>
           (r.reportedUserName  || '').toLowerCase().includes(search) ||
           (r.reporterName      || '').toLowerCase().includes(search) ||
           (r.reason            || '').toLowerCase().includes(search) ||
           (r.description       || '').toLowerCase().includes(search)
         )
-      : reports;
+      : userFiltered;
 
     // Collect all unique user IDs for enrichment
     const reportedUserIds = [...new Set(filtered.map(r => r.reportedUserId).filter(Boolean))];

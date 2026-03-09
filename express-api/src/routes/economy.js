@@ -1285,7 +1285,8 @@ router.get('/economy/transactions', async (req, res) => {
 // ── Backpack ──
 router.get('/users/:uid/backpack', async (req, res) => {
   try {
-    if (req.auth.uid !== req.params.uid) {
+    const isAdmin = req.auth.token && req.auth.token.admin;
+    if (req.auth.uid !== req.params.uid && !isAdmin) {
       return res.status(403).json({ error: 'Cannot access another user\'s backpack' });
     }
     const snap = await db.collection(`users/${req.params.uid}/backpack`).get();

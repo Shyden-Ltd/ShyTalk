@@ -140,6 +140,10 @@ router.patch('/user/:uid', async (req, res) => {
       'loginStreak', 'gcsScore', 'warningCount', 'warningReason',
       'hasActiveWarning', 'pmPrivacy', 'acceptedLegalVersion',
       'currentRoomId',
+      // Fields editable from admin panel form
+      'email', 'uniqueId',
+      'blockedUserIds', 'followingIds', 'followerIds',
+      'hideFollowing', 'hideOnlineStatus', 'hideAge',
     ];
 
     const updates = {};
@@ -385,7 +389,7 @@ router.post('/resolve/uniqueIds-to-uids', async (req, res) => {
         map[uniqueIds[i]] = data.uid ?? doc.id;
       }
     }
-    res.json(map);
+    res.json({ mapping: map });
   } catch (err) {
     log.error('admin-users', 'UniqueId-to-UID resolve failed', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });
