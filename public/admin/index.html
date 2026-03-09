@@ -2276,6 +2276,9 @@
         .user-subtab { padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; background: var(--surface2); color: var(--text2); border: none; transition: background 0.2s; }
         .user-subtab:hover { background: var(--surface3, #444); }
         .user-subtab.active { background: var(--accent); color: #fff; }
+        .user-subtab.has-changes { position: relative; }
+        .user-subtab.has-changes::after { content: ''; position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; background: var(--warning, #f39c12); border-radius: 50%; }
+        .user-subtab.active.has-changes::after { background: #fff; }
         .user-subpanel { display: none; }
         .user-subpanel.visible { display: block; }
 
@@ -4607,6 +4610,23 @@
     function updateSaveInfo() {
       const count = Object.keys(getModifiedFields()).length;
       saveInfo.textContent = count > 0 ? `${count} field${count > 1 ? "s" : ""} modified` : "";
+      updateSubtabIndicators();
+    }
+
+    const ECONOMY_FIELDS = ["isSuperShy", "superShyExpiry", "loginStreak", "pityCounter"];
+    function updateSubtabIndicators() {
+      const modified = getModifiedFields();
+      const modKeys = Object.keys(modified);
+      document.querySelectorAll(".user-subtab").forEach(btn => {
+        const subtab = btn.dataset.subtab;
+        const panel = document.querySelector(`.user-subpanel[data-subtab="${subtab}"]`);
+        if (!panel) return;
+        let hasChanges = panel.querySelector(".modified") !== null;
+        if (subtab === "economy" && !hasChanges) {
+          hasChanges = modKeys.some(k => ECONOMY_FIELDS.includes(k));
+        }
+        btn.classList.toggle("has-changes", hasChanges);
+      });
     }
 
     // --- Clear buttons ---
@@ -6065,7 +6085,14 @@
       if (!isSuperShy) {
         $("#eco-super-shy-expiry").value = "";
       }
+      updateSaveInfo();
     });
+
+    // Track economy field changes for sub-tab indicators
+    for (const id of ["eco-super-shy-expiry", "eco-streak", "eco-pity"]) {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener("input", updateSaveInfo);
+    }
 
     // Apply coins add/deduct (uses dedicated audit endpoint)
     $("#eco-coins-apply").addEventListener("click", async () => {
