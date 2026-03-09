@@ -6219,15 +6219,22 @@
         loginStreak: parseInt($("#eco-streak").value) || 0,
         pityCounter: parseInt($("#eco-pity").value) || 0,
       };
+      const NUMERIC_ECO = ["loginStreak", "pityCounter"];
+      const NULLABLE_ECO = ["superShyExpiry"];
       for (const [k, v] of Object.entries(ecoFields)) {
         const orig = loadedData[k];
-        // Normalize: treat undefined, null, 0, "" as equivalent "empty" for timestamps/nullable fields
-        const normalize = (val, key) => {
-          if (val === undefined || val === null || val === "") return null;
-          if (key === "superShyExpiry" && val === 0) return null;
-          return val;
-        };
-        if (normalize(v, k) !== normalize(orig, k)) {
+        let normV = v, normO = orig;
+        if (k === "isSuperShy") {
+          normV = !!v;
+          normO = !!orig;
+        } else if (NUMERIC_ECO.includes(k)) {
+          normV = Number(v) || 0;
+          normO = Number(orig) || 0;
+        } else if (NULLABLE_ECO.includes(k)) {
+          normV = v || null;
+          normO = orig || null;
+        }
+        if (normV !== normO) {
           modified[k] = v;
         }
       }
