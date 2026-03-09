@@ -3281,7 +3281,12 @@
                 </div>
                 <div class="field-group">
                     <label>Super Shy Expiry</label>
-                    <input type="datetime-local" id="eco-super-shy-expiry" aria-label="Super Shy Expiry" disabled>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <input type="datetime-local" id="eco-super-shy-expiry" aria-label="Super Shy Expiry" disabled style="flex:1;">
+                        <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text2);white-space:nowrap;cursor:pointer;">
+                            <input type="checkbox" id="eco-super-shy-unlimited"> Unlimited
+                        </label>
+                    </div>
                 </div>
                 <div class="field-group">
                     <label>Login Streak</label>
@@ -5295,9 +5300,10 @@
           canAppeal: suspendCanAppeal.checked,
         });
         showToast("User suspended");
-        // Refresh the user data
+        // Refresh all user data (fields, preview, suspension section)
         const data = await apiCall("GET", `/api/user/${currentUid}`);
-        populateFormWithSuspension(data);
+        await populateFormFull(data);
+        populateSuspensionSection(data);
       } catch (err) {
         showToast(err.message, "error");
       }
@@ -5309,8 +5315,10 @@
       try {
         await apiCall("POST", `/api/user/${currentUid}/unsuspend`);
         showToast("User unsuspended");
+        // Refresh all user data (fields, preview, suspension section)
         const data = await apiCall("GET", `/api/user/${currentUid}`);
-        populateFormWithSuspension(data);
+        await populateFormFull(data);
+        populateSuspensionSection(data);
       } catch (err) {
         showToast(err.message, "error");
       }
@@ -6447,7 +6455,10 @@
       $("#eco-beans-amount").value = "";
       $("#eco-super-shy").value = data.isSuperShy ? "true" : "false";
       const isSuperShy = data.isSuperShy === true;
-      $("#eco-super-shy-expiry").disabled = !isSuperShy;
+      const isUnlimited = isSuperShy && !data.superShyExpiry;
+      $("#eco-super-shy-unlimited").checked = isUnlimited;
+      $("#eco-super-shy-unlimited").disabled = !isSuperShy;
+      $("#eco-super-shy-expiry").disabled = !isSuperShy || isUnlimited;
       if (isSuperShy && data.superShyExpiry) {
         // Convert timestamp to datetime-local format (local time, not UTC)
         const d = new Date(data.superShyExpiry);
@@ -6461,13 +6472,40 @@
     }
 
     // Toggle Super Shy Expiry enabled/disabled based on Super Shy value
+    var _prevExpiryValue = "";
     $("#eco-super-shy").addEventListener("change", () => {
       const isSuperShy = $("#eco-super-shy").value === "true";
-      $("#eco-super-shy-expiry").disabled = !isSuperShy;
+      const unlimitedCb = $("#eco-super-shy-unlimited");
+      unlimitedCb.disabled = !isSuperShy;
       if (!isSuperShy) {
+        unlimitedCb.checked = false;
         $("#eco-super-shy-expiry").value = "";
+        $("#eco-super-shy-expiry").disabled = true;
+      } else {
+        $("#eco-super-shy-expiry").disabled = unlimitedCb.checked;
       }
       // Auto-save handled by attachAutoSaveListeners
+    });
+
+    // Unlimited checkbox: toggle expiry field
+    $("#eco-super-shy-unlimited").addEventListener("change", () => {
+      const unlimited = $("#eco-super-shy-unlimited").checked;
+      const expiryEl = $("#eco-super-shy-expiry");
+      if (unlimited) {
+        _prevExpiryValue = expiryEl.value;
+        expiryEl.value = "";
+        expiryEl.disabled = true;
+        autoSaveEconomyField("superShyExpiry");
+      } else {
+        expiryEl.disabled = false;
+        if (_prevExpiryValue) {
+          expiryEl.value = _prevExpiryValue;
+        } else {
+          // Unix epoch: 1970-01-01T00:00
+          expiryEl.value = "1970-01-01T00:00";
+        }
+        autoSaveEconomyField("superShyExpiry");
+      }
     });
 
     // Economy field change tracking removed — auto-save handles this
@@ -6666,7 +6704,8 @@
 
     async function autoSaveBackpackItem(giftId, newQty, originalQty) {
       try {
-        await apiCall("POST", "/api/users/" + currentUid + "/backpack", { giftId: giftId, quantity: newQty });
+        var gift = _giftCatalog.find(function(g) { return g.id === giftId; });
+        await apiCall("POST", "/api/users/" + currentUid + "/backpack", { giftId: giftId, quantity: newQty, giftName: gift ? gift.name : giftId });
         const item = _backpackItems.find(function(i) { return i.giftId === giftId; });
         if (item) {
           if (newQty <= 0) {
@@ -6737,7 +6776,8 @@
       try {
         const existing = _backpackItems.find(i => i.giftId === giftId);
         const newQty = (existing ? existing.quantity : 0) + qty;
-        await apiCall("POST", `/api/users/${currentUid}/backpack`, { giftId, quantity: newQty });
+        const giftInfo = _giftCatalog.find(g => g.id === giftId);
+        await apiCall("POST", `/api/users/${currentUid}/backpack`, { giftId, quantity: newQty, giftName: giftInfo ? giftInfo.name : giftId });
         showToast(`Added ${qty} (total now ${newQty})`);
         loadBackpack(currentUid);
         $("#backpack-qty").value = "1";
@@ -6825,7 +6865,7 @@
       let errors = 0;
       for (const item of _backpackItems) {
         try {
-          await apiCall("POST", "/api/users/" + currentUid + "/backpack", { giftId: item.giftId, quantity: 0 });
+          await apiCall("POST", "/api/users/" + currentUid + "/backpack", { giftId: item.giftId, quantity: 0, silent: true });
           cleared++;
         } catch (err) {
           errors++;

@@ -145,6 +145,16 @@ router.post('/users/:uid/backpack', async (req, res) => {
       createdAt:    timestamp,
     });
 
+    // Notify user about backpack change (unless silent)
+    if (!body.silent) {
+      const name = body.giftName || body.giftId;
+      const msg = body.quantity === 0
+        ? `🎒 "${name}" has been removed from your backpack by the moderation team.`
+        : `🎒 Your backpack has been updated: "${name}" quantity set to ${body.quantity}.`;
+      sendSystemPm(req.params.uid, msg)
+        .catch(err => log.error('admin-economy', 'Failed to send backpack PM', { uid: req.params.uid, error: err.message }));
+    }
+
     res.json({ success: true });
   } catch (err) {
     log.error('admin-economy', 'Error setting backpack item', { uid: req.params.uid, error: err.message });

@@ -89,7 +89,8 @@ router.post('/admin/users/:uid/temp-id', async (req, res) => {
     });
 
     // System PM (fire-and-forget)
-    sendSystemPm(uid, `Your display ID has been temporarily changed to ${tempUniqueId}.`)
+    const expiryStr = new Date(expiryDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    sendSystemPm(uid, `Your display ID has been temporarily changed to ${tempUniqueId}. It will expire on ${expiryStr} and return to your original ID.`)
       .catch(err => log.warn('system-pm', 'Failed to send', { uid, error: err.message }));
 
     log.info('admin-temp-id', 'Temp ID set', { adminId: req.auth.uid, targetUid: uid, tempUniqueId, expiryDate });
