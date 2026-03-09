@@ -136,7 +136,7 @@ router.patch('/user/:uid', async (req, res) => {
       'displayName', 'description', 'nationality', 'dateOfBirth', 'gender',
       'profilePhotoUrl', 'avatarUrl', 'coverPhotoUrl', 'userType',
       'shyCoins', 'shyBeans', 'luckScore', 'pityCounter',
-      'isSuperShy', 'superShyExpiry', 'superShyTier',
+      'isSuperShy', 'superShyExpiry',
       'loginStreak', 'gcsScore', 'warningCount', 'warningReason',
       'hasActiveWarning', 'pmPrivacy', 'acceptedLegalVersion',
       'currentRoomId',

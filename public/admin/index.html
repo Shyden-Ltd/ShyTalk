@@ -3064,13 +3064,8 @@
                     </select>
                 </div>
                 <div class="field-group">
-                    <label>Super Shy Tier</label>
-                    <select id="eco-super-shy-tier" aria-label="Super Shy Tier" disabled>
-                        <option value="">None</option>
-                        <option value="monthly">Monthly</option>
-                        <option value="yearly">Yearly</option>
-                        <option value="lifetime">Lifetime</option>
-                    </select>
+                    <label>Super Shy Expiry</label>
+                    <input type="datetime-local" id="eco-super-shy-expiry" aria-label="Super Shy Expiry" disabled>
                 </div>
                 <div class="field-group">
                     <label>Login Streak</label>
@@ -6004,18 +5999,24 @@
       $("#eco-beans-amount").value = "";
       $("#eco-super-shy").value = data.isSuperShy ? "true" : "false";
       const isSuperShy = data.isSuperShy === true;
-      $("#eco-super-shy-tier").disabled = !isSuperShy;
-      $("#eco-super-shy-tier").value = isSuperShy ? (data.superShyTier || "") : "";
+      $("#eco-super-shy-expiry").disabled = !isSuperShy;
+      if (isSuperShy && data.superShyExpiry) {
+        // Convert timestamp to datetime-local format
+        const d = new Date(data.superShyExpiry);
+        $("#eco-super-shy-expiry").value = d.toISOString().slice(0, 16);
+      } else {
+        $("#eco-super-shy-expiry").value = "";
+      }
       $("#eco-streak").value = data.loginStreak || 0;
       $("#eco-pity").value = data.pityCounter || 0;
     }
 
-    // Toggle Super Shy Tier enabled/disabled based on Super Shy value
+    // Toggle Super Shy Expiry enabled/disabled based on Super Shy value
     $("#eco-super-shy").addEventListener("change", () => {
       const isSuperShy = $("#eco-super-shy").value === "true";
-      $("#eco-super-shy-tier").disabled = !isSuperShy;
+      $("#eco-super-shy-expiry").disabled = !isSuperShy;
       if (!isSuperShy) {
-        $("#eco-super-shy-tier").value = "";
+        $("#eco-super-shy-expiry").value = "";
       }
     });
 
@@ -6071,9 +6072,10 @@
     getModifiedFields = function() {
       const modified = _origGetModified();
       const isSuperShy = $("#eco-super-shy").value === "true";
+      const expiryVal = $("#eco-super-shy-expiry").value;
       const ecoFields = {
         isSuperShy,
-        superShyTier: isSuperShy ? ($("#eco-super-shy-tier").value || null) : null,
+        superShyExpiry: isSuperShy && expiryVal ? new Date(expiryVal).getTime() : null,
         loginStreak: parseInt($("#eco-streak").value) || 0,
         pityCounter: parseInt($("#eco-pity").value) || 0,
       };
