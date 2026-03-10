@@ -60,6 +60,7 @@ fun GoogleSignInScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val credentialManager = remember { CredentialManager.create(context) }
+    val googleSignInFailed = stringResource(Res.string.google_sign_in_failed)
 
     val isBanned = uiState.isDeviceBanned || uiState.isNetworkBanned
 
@@ -246,7 +247,7 @@ fun GoogleSignInScreen(
                         } catch (e: Exception) {
                             isSigningIn = false
                             snackbarHostState.showSnackbar(
-                                e.message ?: stringResource(Res.string.google_sign_in_failed)
+                                e.message ?: googleSignInFailed
                             )
                         }
                     }

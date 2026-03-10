@@ -1,10 +1,7 @@
-v0.52 — Stability & Performance
+v0.53 — Security & Stability
 
-- Faster, more reliable server (migrated to new infrastructure)
-- Improved connection stability — fewer false disconnects in rooms
-- Automatically reconnects after brief network interruptions
-- Fixed a crash related to profile visitor counts
-- Closed rooms no longer briefly appear on the home screen
-- Seat request approvals now update instantly (no delay)
-- Following/unfollowing is now more reliable
-- Admin panel improvements
+- Improved security across the app
+- Added privacy policy and terms of service
+- Better translation coverage for all supported languages
+- Various bug fixes and performance improvements
+- Behind-the-scenes improvements for a smoother experience

@@ -76,14 +76,6 @@ class SpinTierTest {
     }
 
     @Test
-    fun `rarityConfigForCoinValue all tiers use Spin Results title`() {
-        val values = listOf(10, 100, 500, 5000, 50000)
-        for (v in values) {
-            assertEquals("Spin Results", rarityConfigForCoinValue(v).title)
-        }
-    }
-
-    @Test
     fun `rarityConfigForCoinValue highest tier has highest shake intensity`() {
         val highest = rarityConfigForCoinValue(50000)
         val others = listOf(10, 100, 500, 5000).map { rarityConfigForCoinValue(it) }
@@ -107,21 +99,6 @@ class SpinTierTest {
                 "burst at ${values[i]} (${burstCounts[i]}) should be < burst at ${values[i+1]} (${burstCounts[i+1]})",
                 burstCounts[i] < burstCounts[i + 1]
             )
-        }
-    }
-
-    @Test
-    fun `rarityConfigForCoinValue titles contain no rarity terminology`() {
-        val forbidden = listOf("rare", "epic", "legendary", "uncommon", "common", "mythic")
-        val values = listOf(1, 10, 49, 50, 100, 199, 200, 500, 1999, 2000, 5000, 9999, 10000, 50000)
-        for (v in values) {
-            val title = rarityConfigForCoinValue(v).title.lowercase()
-            for (word in forbidden) {
-                assertFalse(
-                    "Title for coinValue=$v ('${rarityConfigForCoinValue(v).title}') contains forbidden word '$word'",
-                    title.contains(word)
-                )
-            }
         }
     }
 

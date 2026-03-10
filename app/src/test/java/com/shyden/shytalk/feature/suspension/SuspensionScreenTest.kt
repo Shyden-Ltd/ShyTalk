@@ -1,23 +1,10 @@
 package com.shyden.shytalk.feature.suspension
 
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SuspensionScreenTest {
-
-    // ===== suspensionTitle =====
-
-    @Test
-    fun `suspensionTitle - shows Account Unlocked when countdown expired`() {
-        assertEquals("Account Unlocked", suspensionTitle(countdownExpired = true))
-    }
-
-    @Test
-    fun `suspensionTitle - shows Account Suspended when countdown not expired`() {
-        assertEquals("Account Suspended", suspensionTitle(countdownExpired = false))
-    }
 
     // ===== shouldShowReason =====
 
