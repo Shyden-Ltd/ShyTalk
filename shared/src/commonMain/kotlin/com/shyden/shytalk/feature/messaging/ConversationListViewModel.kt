@@ -75,7 +75,8 @@ class ConversationListViewModel(
         viewModelScope.launch {
             when (val result = userRepository.getAliases(currentUserId)) {
                 is Resource.Success -> _uiState.update { it.copy(aliases = result.data) }
-                else -> {}
+                is Resource.Error -> logW(TAG, "Failed to load aliases: ${result.message}")
+                is Resource.Loading -> {}
             }
         }
     }

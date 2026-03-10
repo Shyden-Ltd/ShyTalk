@@ -23,7 +23,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
  *   rooms/{roomId}/presence/{userId} = true   (client-managed, onDisconnect removes)
  *   rooms/{roomId}/events/lastEvent = { type, ts, userId? }  (server-written)
  *
- * Replaces WebSocketPresenceService — no Durable Objects needed.
+ * Replaces WebSocketPresenceService — uses Firebase RTDB for real-time presence.
  */
 class RtdbPresenceService(
     private val httpClient: OkHttpClient,

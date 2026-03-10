@@ -654,4 +654,56 @@
     <string name="who_can_message_description">Control who can send you private messages.</string>
     <string name="who_can_message_me">Who can message me</string>
     <string name="you_were_banned">You were banned from this room.</string>
+    <string name="getting_ready">Mempersiapkan…</string>
+    <string name="send_all_warning_title">⚠️ PERINGATAN ⚠️</string>
+    <string name="send_all_total_value">Total nilai: 🪙 %1$d koin</string>
+    <string name="send_gift_header">Kirim %1$dx %2$s</string>
+    <string name="send_gift_header_multiple">Kirim %1$dx %2$s ke %3$d pengguna</string>
+    <string name="owner_away_banner">Pemilik tidak ada - Ruangan tutup dalam %1$s</string>
+    <string name="messages_title">Pesan</string>
+    <string name="no_conversations_yet">Belum ada percakapan</string>
+    <string name="spin_again_with_cost">%1$s PUTAR LAGI · 🪙%2$d</string>
+    <string name="age_years_old">%1$d tahun</string>
+    <string name="show_less">lebih sedikit</string>
+    <string name="show_more">selengkapnya</string>
+    <string name="video_too_large">Video terlalu besar. Gunakan klip yang lebih pendek.</string>
+    <string name="file_too_large">File terlalu besar. Ukuran maksimum 10 MB.</string>
+    <string name="this_user">pengguna ini</string>
+
+    <!-- Degraded Mode Banner -->
+    <string name="reduced_functionality">Fungsionalitas terbatas — beberapa fitur mungkin tidak tersedia</string>
+
+    <!-- Fullscreen Image Viewer -->
+    <string name="image_number">Gambar %1$d</string>
+    <string name="page_indicator">%1$d / %2$d</string>
+
+    <!-- Broadcast Banner -->
+    <string name="broadcast_gacha_win">%1$s memenangkan %2$s%3$s%4$s dari Lucky Spin!</string>
+    <string name="broadcast_gift_sent">%1$s mengirim %2$s%3$s%4$s ke %5$s!</string>
+
+    <string name="play_effect">Putar efek</string>
+    <string name="account_unlocked">Akun dibuka</string>
+    <string name="account_suspended">Akun ditangguhkan</string>
+    <string name="police_duck_description">Bebek polisi</string>
+    <string name="device_banned_title">Perangkat diblokir</string>
+    <string name="network_banned_title">Jaringan diblokir</string>
+    <string name="device_banned_description">Perangkat ini telah diblokir dari penggunaan ShyTalk.</string>
+    <string name="network_banned_description">Jaringan Anda telah diblokir dari penggunaan ShyTalk. Coba hubungkan dari jaringan lain.</string>
+    <string name="full_screen_photo">Foto layar penuh</string>
+    <string name="cover_photo">Foto sampul</string>
+    <string name="change_cover_photo">Ubah foto sampul</string>
+    <string name="profile_photo">Foto profil</string>
+    <string name="change_profile_photo">Ubah foto profil</string>
+    <string name="edit_profile">Edit profil</string>
+    <string name="app_name_label">ShyTalk</string>
+    <string name="time_unit_day">HARI</string>
+    <string name="time_unit_hour">JAM</string>
+    <string name="time_unit_minute">MNT</string>
+    <string name="time_unit_second">DTK</string>
+    <string name="time_unit_millisecond">MS</string>
+
+    <string name="splash_tagline">Ruang obrolan suara, dirancang ulang.</string>
+    <string name="quantity_all">SEMUA (%1$d)</string>
+    <string name="english_language">Inggris</string>
+    <string name="google_sign_in_failed">Gagal masuk dengan Google</string>
 </resources>

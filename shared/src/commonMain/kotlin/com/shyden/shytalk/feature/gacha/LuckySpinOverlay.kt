@@ -314,8 +314,8 @@ fun LuckySpinOverlay(
                         .coerceAtMost(uniqueWins.size - 1)
                     val revealed = mutableSetOf<String>()
                     for (i in 0..revealIndex) {
-                        val p = uniqueWins[i]
-                        revealed.add("${if (p.first == Ring.OUTER) "outer" else "inner"}-${p.second}")
+                        val prize = uniqueWins[i]
+                        revealed.add("${if (prize.first == Ring.OUTER) "outer" else "inner"}-${prize.second}")
                     }
                     wonSegments = revealed
                     val current = uniqueWins[revealIndex]
@@ -342,17 +342,17 @@ fun LuckySpinOverlay(
                 val startTime2 = currentTimeMillis()
                 var chaseStep = 0
                 while (true) {
-                    val p = ((currentTimeMillis() - startTime2).toFloat() / chaseDuration).coerceIn(0f, 1f)
-                    if (p < 0.75f) {
+                    val progress = ((currentTimeMillis() - startTime2).toFloat() / chaseDuration).coerceIn(0f, 1f)
+                    if (progress < 0.75f) {
                         outerLitIndex = if (outerGifts.isNotEmpty()) chaseStep % outerGifts.size else -1
                         innerLitIndex = if (innerGifts.isNotEmpty()) (innerGifts.size - (chaseStep % innerGifts.size)) % innerGifts.size else -1
                     } else {
                         if (pos.first == Ring.OUTER) { outerLitIndex = pos.second; innerLitIndex = -1 }
                         else { innerLitIndex = pos.second; outerLitIndex = -1 }
                     }
-                    GachaSoundPlayer.playTick(p)
+                    GachaSoundPlayer.playTick(progress)
                     chaseStep++
-                    if (p >= 1f) break
+                    if (progress >= 1f) break
                     delay(25)
                 }
 

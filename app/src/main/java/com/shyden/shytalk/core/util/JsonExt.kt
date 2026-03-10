@@ -4,7 +4,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /** Converts a JSONObject to a Map<String, Any?> compatible with model fromMap() factories.
- *  Converts snake_case keys from D1/Worker API to camelCase expected by model fromMap(). */
+ *  Converts snake_case keys from REST API to camelCase expected by model fromMap(). */
 fun JSONObject.toMap(): Map<String, Any?> {
     val map = mutableMapOf<String, Any?>()
     keys().forEach { key ->

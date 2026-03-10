@@ -654,4 +654,56 @@
     <string name="who_can_message_description">Control who can send you private messages.</string>
     <string name="who_can_message_me">Who can message me</string>
     <string name="you_were_banned">You were banned from this room.</string>
+    <string name="getting_ready">तैयार हो रहा है…</string>
+    <string name="send_all_warning_title">⚠️ चेतावनी ⚠️</string>
+    <string name="send_all_total_value">कुल मूल्य: 🪙 %1$d सिक्के</string>
+    <string name="send_gift_header">%1$dx %2$s भेजें</string>
+    <string name="send_gift_header_multiple">%3$d उपयोगकर्ताओं को %1$dx %2$s भेजें</string>
+    <string name="owner_away_banner">मालिक दूर है - कमरा %1$s में बंद होगा</string>
+    <string name="messages_title">संदेश</string>
+    <string name="no_conversations_yet">अभी कोई बातचीत नहीं</string>
+    <string name="spin_again_with_cost">%1$s फिर से घुमाएं · 🪙%2$d</string>
+    <string name="age_years_old">%1$d साल</string>
+    <string name="show_less">कम</string>
+    <string name="show_more">और</string>
+    <string name="video_too_large">वीडियो बहुत बड़ा है। कृपया छोटी क्लिप का उपयोग करें।</string>
+    <string name="file_too_large">फ़ाइल बहुत बड़ी है। अधिकतम 10 MB।</string>
+    <string name="this_user">यह उपयोगकर्ता</string>
+
+    <!-- Degraded Mode Banner -->
+    <string name="reduced_functionality">सीमित कार्यक्षमता — कुछ सुविधाएं उपलब्ध नहीं हो सकतीं</string>
+
+    <!-- Fullscreen Image Viewer -->
+    <string name="image_number">छवि %1$d</string>
+    <string name="page_indicator">%1$d / %2$d</string>
+
+    <!-- Broadcast Banner -->
+    <string name="broadcast_gacha_win">%1$s ने लकी स्पिन से %2$s%3$s%4$s जीता!</string>
+    <string name="broadcast_gift_sent">%1$s ने %5$s को %2$s%3$s%4$s भेजा!</string>
+
+    <string name="play_effect">इफ़ेक्ट चलाएं</string>
+    <string name="account_unlocked">खाता अनलॉक हुआ</string>
+    <string name="account_suspended">खाता निलंबित</string>
+    <string name="police_duck_description">पुलिस बत्तख</string>
+    <string name="device_banned_title">डिवाइस प्रतिबंधित</string>
+    <string name="network_banned_title">नेटवर्क प्रतिबंधित</string>
+    <string name="device_banned_description">इस डिवाइस को ShyTalk के उपयोग से प्रतिबंधित किया गया है।</string>
+    <string name="network_banned_description">आपके नेटवर्क को ShyTalk के उपयोग से प्रतिबंधित किया गया है। किसी अन्य नेटवर्क से कनेक्ट करने का प्रयास करें।</string>
+    <string name="full_screen_photo">पूर्ण स्क्रीन फ़ोटो</string>
+    <string name="cover_photo">कवर फ़ोटो</string>
+    <string name="change_cover_photo">कवर फ़ोटो बदलें</string>
+    <string name="profile_photo">प्रोफ़ाइल फ़ोटो</string>
+    <string name="change_profile_photo">प्रोफ़ाइल फ़ोटो बदलें</string>
+    <string name="edit_profile">प्रोफ़ाइल संपादित करें</string>
+    <string name="app_name_label">ShyTalk</string>
+    <string name="time_unit_day">दिन</string>
+    <string name="time_unit_hour">घं</string>
+    <string name="time_unit_minute">मि</string>
+    <string name="time_unit_second">से</string>
+    <string name="time_unit_millisecond">मिसे</string>
+
+    <string name="splash_tagline">वॉइस चैट रूम, नए अंदाज़ में।</string>
+    <string name="quantity_all">सभी (%1$d)</string>
+    <string name="english_language">अंग्रेज़ी</string>
+    <string name="google_sign_in_failed">Google साइन-इन विफल</string>
 </resources>

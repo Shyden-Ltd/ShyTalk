@@ -82,6 +82,7 @@ describe('authMiddleware', () => {
   test('sets req.auth and passes through for non-suspended user', async () => {
     mockVerifyIdToken.mockResolvedValueOnce({ uid: 'user-1' });
     mockDocGet.mockResolvedValueOnce({
+      exists: true,
       data: () => ({ isSuspended: false }),
     });
 
@@ -99,6 +100,7 @@ describe('authMiddleware', () => {
     // from the previous test (which cached user-1 as non-suspended)
     mockVerifyIdToken.mockResolvedValueOnce({ uid: 'suspended-user-2' });
     mockDocGet.mockResolvedValueOnce({
+      exists: true,
       data: () => ({ isSuspended: true }),
     });
 
@@ -116,6 +118,7 @@ describe('suspension exemption paths', () => {
     // All tests in this block use a suspended user
     mockVerifyIdToken.mockResolvedValue({ uid: 'suspended-user' });
     mockDocGet.mockResolvedValue({
+      exists: true,
       data: () => ({ isSuspended: true }),
     });
   });

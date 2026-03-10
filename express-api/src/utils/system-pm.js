@@ -45,7 +45,7 @@ async function sendSystemPm(recipientUid, text) {
     lastMessageAt: timestamp,
   };
   if (!convSnap.exists) convData.createdAt = timestamp;
-  await db.doc(`conversations/${convId}`).set(convData);
+  await db.doc(`conversations/${convId}`).set(convData, { merge: true });
 
   await db.doc(`conversations/${convId}/messages/${msgId}`).set({
     id: msgId,

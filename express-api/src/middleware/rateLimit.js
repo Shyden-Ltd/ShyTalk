@@ -6,6 +6,7 @@
  */
 
 const { rateLimit } = require('express-rate-limit');
+const log = require('../utils/log');
 
 // Key by authenticated user ID (falls back to IP for unauthenticated requests)
 const keyGenerator = (req) => req.auth?.uid || req.ip;
@@ -45,6 +46,7 @@ const sensitiveLimiter = rateLimit({
   keyGenerator,
   validate: false,
   handler: (req, res) => {
+    log.warn('rateLimit', 'Sensitive rate limit hit', { uid: req.auth?.uid, ip: req.ip, path: req.originalUrl });
     res.status(429).json({ error: 'Rate limit exceeded for this operation' });
   },
 });

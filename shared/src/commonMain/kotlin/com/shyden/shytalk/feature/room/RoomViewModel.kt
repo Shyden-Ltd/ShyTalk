@@ -1595,13 +1595,13 @@ class RoomViewModel(
             _uiState.update { it.copy(isSubmittingReport = true, reportError = null) }
 
             val currentUser = userCache[_uiState.value.currentUserId]
-                ?: when (val r = userRepository.getUser(_uiState.value.currentUserId)) {
-                    is Resource.Success -> r.data
+                ?: when (val result = userRepository.getUser(_uiState.value.currentUserId)) {
+                    is Resource.Success -> result.data
                     else -> null
                 }
             val targetUser = userCache[targetUserId]
-                ?: when (val r = userRepository.getUser(targetUserId)) {
-                    is Resource.Success -> r.data
+                ?: when (val result = userRepository.getUser(targetUserId)) {
+                    is Resource.Success -> result.data
                     else -> null
                 }
             if (currentUser == null || targetUser == null) {
@@ -1612,10 +1612,10 @@ class RoomViewModel(
             // Upload evidence
             val evidenceUrls = mutableListOf<String>()
             for ((bytes, mimeType) in evidenceImages) {
-                when (val r = storageRepository.uploadImage(
+                when (val result = storageRepository.uploadImage(
                     currentUser.uid, "report_evidence", bytes, mimeType
                 )) {
-                    is Resource.Success -> evidenceUrls.add(r.data)
+                    is Resource.Success -> evidenceUrls.add(result.data)
                     is Resource.Error -> {
                         _uiState.update { it.copy(isSubmittingReport = false, reportError = "Failed to upload evidence") }
                         return@launch
@@ -1839,8 +1839,8 @@ class RoomViewModel(
         val seatIndex = if (seat?.state == SeatState.OCCUPIED || request.seatIndex >= limit) {
             // Original seat taken or beyond limit, find next available within limit
             (1 until limit).firstOrNull { i ->
-                val s = room.seats[i.toString()]
-                s != null && s.state != SeatState.OCCUPIED
+                val seat = room.seats[i.toString()]
+                seat != null && seat.state != SeatState.OCCUPIED
             }
         } else {
             request.seatIndex

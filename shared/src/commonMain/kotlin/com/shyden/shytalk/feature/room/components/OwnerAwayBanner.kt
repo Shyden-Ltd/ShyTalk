@@ -8,6 +8,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun OwnerAwayBanner(
@@ -15,13 +18,14 @@ fun OwnerAwayBanner(
 ) {
     val minutes = (remainingMs / 60_000).toInt()
     val seconds = ((remainingMs % 60_000) / 1_000).toInt()
+    val countdown = "$minutes:${seconds.toString().padStart(2, '0')}"
 
     Surface(
         color = MaterialTheme.colorScheme.errorContainer,
         modifier = Modifier.fillMaxWidth()
     ) {
         Text(
-            text = "Owner away - Room closes in ${minutes}:${seconds.toString().padStart(2, '0')}",
+            text = stringResource(Res.string.owner_away_banner, countdown),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onErrorContainer,
             modifier = Modifier

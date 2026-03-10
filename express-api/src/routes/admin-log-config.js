@@ -37,6 +37,7 @@ const ALLOWED_FIELDS = [
 router.get('/log-config', async (req, res) => {
   try {
     const doc = await db.doc('logConfig/settings').get();
+    res.set('Cache-Control', 'public, max-age=300');
     res.json(doc.exists ? doc.data() : DEFAULT_CONFIG);
   } catch (err) {
     log.error('admin-log-config', 'Error reading log config', { error: err.message });

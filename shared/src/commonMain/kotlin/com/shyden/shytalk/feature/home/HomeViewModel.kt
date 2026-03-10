@@ -48,8 +48,8 @@ class HomeViewModel(
     private fun cacheUser(key: String, user: User) {
         userCache[key] = user
         while (userCache.size > 500) {
-            val it = userCache.keys.iterator()
-            if (it.hasNext()) { it.next(); it.remove() } else break
+            val iter = userCache.keys.iterator()
+            if (iter.hasNext()) { iter.next(); iter.remove() } else break
         }
     }
     private var myBlockedUserIds: Set<String> = emptySet()

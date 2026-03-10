@@ -654,4 +654,56 @@
     <string name="who_can_message_description">Control who can send you private messages.</string>
     <string name="who_can_message_me">Who can message me</string>
     <string name="you_were_banned">You were banned from this room.</string>
+    <string name="getting_ready">준비 중…</string>
+    <string name="send_all_warning_title">⚠️ 경고 ⚠️</string>
+    <string name="send_all_total_value">총 가치: 🪙 %1$d코인</string>
+    <string name="send_gift_header">%2$s %1$d개 보내기</string>
+    <string name="send_gift_header_multiple">%3$d명에게 %2$s %1$d개 보내기</string>
+    <string name="owner_away_banner">방장 부재 - %1$s 후 방이 닫힙니다</string>
+    <string name="messages_title">메시지</string>
+    <string name="no_conversations_yet">아직 대화가 없습니다</string>
+    <string name="spin_again_with_cost">%1$s 다시 돌리기 · 🪙%2$d</string>
+    <string name="age_years_old">%1$d세</string>
+    <string name="show_less">줄이기</string>
+    <string name="show_more">더 보기</string>
+    <string name="video_too_large">동영상이 너무 큽니다. 더 짧은 클립을 사용하세요.</string>
+    <string name="file_too_large">파일이 너무 큽니다. 최대 크기: 10 MB.</string>
+    <string name="this_user">이 사용자</string>
+
+    <!-- Degraded Mode Banner -->
+    <string name="reduced_functionality">기능 제한 — 일부 기능을 사용할 수 없을 수 있습니다</string>
+
+    <!-- Fullscreen Image Viewer -->
+    <string name="image_number">이미지 %1$d</string>
+    <string name="page_indicator">%1$d / %2$d</string>
+
+    <!-- Broadcast Banner -->
+    <string name="broadcast_gacha_win">%1$s님이 럭키 스핀에서 %2$s%3$s%4$s을(를) 획득했습니다!</string>
+    <string name="broadcast_gift_sent">%1$s님이 %5$s님에게 %2$s%3$s%4$s을(를) 보냈습니다!</string>
+
+    <string name="play_effect">효과 재생</string>
+    <string name="account_unlocked">계정 잠금 해제됨</string>
+    <string name="account_suspended">계정 정지됨</string>
+    <string name="police_duck_description">경슰 오리</string>
+    <string name="device_banned_title">기기 차단됨</string>
+    <string name="network_banned_title">네트워크 차단됨</string>
+    <string name="device_banned_description">이 기기는 ShyTalk 사용이 차단되었습니다.</string>
+    <string name="network_banned_description">귀하의 네트워크는 ShyTalk 사용이 차단되었습니다. 다른 네트워크에서 연결해 보세요.</string>
+    <string name="full_screen_photo">전체 화면 사진</string>
+    <string name="cover_photo">커버 사진</string>
+    <string name="change_cover_photo">커버 사진 변경</string>
+    <string name="profile_photo">프로필 사진</string>
+    <string name="change_profile_photo">프로필 사진 변경</string>
+    <string name="edit_profile">프로필 편집</string>
+    <string name="app_name_label">ShyTalk</string>
+    <string name="time_unit_day">일</string>
+    <string name="time_unit_hour">시</string>
+    <string name="time_unit_minute">분</string>
+    <string name="time_unit_second">초</string>
+    <string name="time_unit_millisecond">MS</string>
+
+    <string name="splash_tagline">음성 채팅방, 새롭게.</string>
+    <string name="quantity_all">전체 (%1$d)</string>
+    <string name="english_language">영어</string>
+    <string name="google_sign_in_failed">Google 로그인 실패</string>
 </resources>

@@ -139,7 +139,7 @@ class GiftingViewModel(
 
         if (!isBackpackTab) {
             val gift = state.giftCatalog.find { it.id == giftId } ?: return
-            val totalCost = gift.coinValue.toLong() * quantity * recipients.size
+            val totalCost = gift.coinValue.toLong() * quantity.toLong() * recipients.size
             if (totalCost > state.coinBalance) {
                 _uiState.update { it.copy(showConfirmDialog = false, navigateToWallet = true) }
                 return

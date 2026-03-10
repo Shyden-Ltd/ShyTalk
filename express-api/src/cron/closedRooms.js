@@ -26,34 +26,40 @@ async function closedRooms() {
 
   if (old.length === 0) return;
 
+  let deleted = 0;
   for (const room of old) {
-    // Delete all messages (paginated to handle rooms with 500+ messages)
-    const messagesRef = db.collection(`rooms/${room.id}/messages`);
-    let msgSnap;
-    do {
-      msgSnap = await messagesRef.limit(500).get();
-      if (msgSnap.empty) break;
-      const batch = db.batch();
-      msgSnap.docs.forEach(d => batch.delete(d.ref));
-      await batch.commit();
-    } while (msgSnap.size === 500);
+    try {
+      // Delete all messages (paginated to handle rooms with 500+ messages)
+      const messagesRef = db.collection(`rooms/${room.id}/messages`);
+      let msgSnap;
+      do {
+        msgSnap = await messagesRef.limit(500).get();
+        if (msgSnap.empty) break;
+        const batch = db.batch();
+        msgSnap.docs.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      } while (msgSnap.size === 500);
 
-    // Delete all seat requests (paginated)
-    const seatsRef = db.collection(`rooms/${room.id}/seatRequests`);
-    let seatSnap;
-    do {
-      seatSnap = await seatsRef.limit(500).get();
-      if (seatSnap.empty) break;
-      const batch = db.batch();
-      seatSnap.docs.forEach(d => batch.delete(d.ref));
-      await batch.commit();
-    } while (seatSnap.size === 500);
+      // Delete all seat requests (paginated)
+      const seatsRef = db.collection(`rooms/${room.id}/seatRequests`);
+      let seatSnap;
+      do {
+        seatSnap = await seatsRef.limit(500).get();
+        if (seatSnap.empty) break;
+        const batch = db.batch();
+        seatSnap.docs.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      } while (seatSnap.size === 500);
 
-    // Delete the room doc itself
-    await db.doc(`rooms/${room.id}`).delete();
+      // Delete the room doc itself
+      await db.doc(`rooms/${room.id}`).delete();
+      deleted++;
+    } catch (err) {
+      log.error('cron', 'closedRooms: failed to delete room', { roomId: room.id, error: err.message });
+    }
   }
 
-  log.info('cron', 'closedRooms: cleaned up old closed rooms', { count: old.length });
+  log.info('cron', 'closedRooms: cleaned up old closed rooms', { deleted, total: old.length });
 }
 
 module.exports = closedRooms;

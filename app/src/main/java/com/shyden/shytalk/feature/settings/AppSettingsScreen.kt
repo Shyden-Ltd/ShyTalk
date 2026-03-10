@@ -384,7 +384,7 @@ private fun SettingsMainPage(
             SettingsMenuItem(
                 icon = Icons.Default.Language,
                 title = stringResource(Res.string.language),
-                subtitle = SUPPORTED_LANGUAGES.firstOrNull { it.first == uiState.language }?.second ?: "English",
+                subtitle = SUPPORTED_LANGUAGES.firstOrNull { it.first == uiState.language }?.second ?: stringResource(Res.string.english_language),
                 onClick = { showLanguageDialog = true }
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -1158,7 +1158,7 @@ private fun AboutPage(
                 if (appIcon != null) {
                     androidx.compose.foundation.Image(
                         painter = BitmapPainter(appIcon),
-                        contentDescription = "ShyTalk",
+                        contentDescription = stringResource(Res.string.app_name_label),
                         modifier = Modifier
                             .size(48.dp)
                             .clip(CircleShape)

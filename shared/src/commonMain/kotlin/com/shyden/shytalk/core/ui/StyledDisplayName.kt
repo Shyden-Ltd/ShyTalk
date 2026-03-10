@@ -17,6 +17,9 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.super_shy
+import org.jetbrains.compose.resources.stringResource
 
 val SuperShyGold = Color(0xFFFFD700)
 
@@ -36,7 +39,7 @@ fun StyledDisplayName(
         ) {
             Icon(
                 imageVector = Icons.Filled.Star,
-                contentDescription = "Super Shy",
+                contentDescription = stringResource(Res.string.super_shy),
                 tint = SuperShyGold,
                 modifier = Modifier.size(style.fontSize.value.dp * 1.1f)
             )

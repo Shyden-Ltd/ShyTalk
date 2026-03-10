@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
  *   conversations/{convId}/typing/{userId} = true  (client-managed, onDisconnect removes)
  *   conversations/{convId}/events/lastEvent = { type, ts }  (server-written)
  *
- * Replaces WebSocketConversationService — no Durable Objects needed.
+ * Replaces WebSocketConversationService — uses Firebase RTDB for real-time events.
  */
 class RtdbConversationService : ConversationWebSocketService {
 
@@ -68,15 +68,12 @@ class RtdbConversationService : ConversationWebSocketService {
                     val isTyping = child.getValue(Boolean::class.java) ?: false
                     _events.tryEmit(ConversationEvent.Typing(typingUserId, isTyping))
                 }
-                // Emit typing=false for users who disappeared from the node
-                // (handled implicitly — RTDB snapshot is authoritative)
             }
 
             override fun onCancelled(error: DatabaseError) {
                 Log.w(TAG, "Typing listener cancelled: ${error.message}")
             }
-        }
-        allTypingRef.addValueEventListener(typingListener!!)
+        }.also { allTypingRef.addValueEventListener(it) }
 
         // Listen to conversation events
         val eventsRef = db.getReference("conversations/$conversationId/events/lastEvent")
@@ -96,8 +93,7 @@ class RtdbConversationService : ConversationWebSocketService {
             override fun onCancelled(error: DatabaseError) {
                 Log.w(TAG, "Events listener cancelled: ${error.message}")
             }
-        }
-        eventsRef.addValueEventListener(eventsListener!!)
+        }.also { eventsRef.addValueEventListener(it) }
 
         Log.d(TAG, "Connected to conversation=$conversationId user=$userId")
     }

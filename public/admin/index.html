@@ -2902,7 +2902,7 @@
             <button class="tab-btn" id="tab-devices">Devices</button>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
-            <button class="alert-bell" id="alert-bell" title="Alerts">&#128276;<span class="alert-bell-badge" id="alert-bell-badge" style="display:none;">0</span></button>
+            <button class="alert-bell" id="alert-bell" title="Alerts" aria-label="Alerts">&#128276;<span class="alert-bell-badge" id="alert-bell-badge" style="display:none;">0</span></button>
             <button id="signout-btn" data-log="sign-out">Sign Out</button>
         </div>
     </div>
@@ -3018,12 +3018,12 @@
                 <div class="field-group" id="temp-id-section">
                     <label>Temporary ID</label>
                     <div style="display:flex;gap:6px;align-items:center;">
-                        <input type="number" id="temp-id-input" placeholder="Enter temp ID" style="flex:1;" min="10000000">
+                        <input type="number" id="temp-id-input" placeholder="Enter temp ID" style="flex:1;" min="10000000" aria-label="Temporary ID">
                         <button type="button" id="temp-id-check" class="btn-sm" style="white-space:nowrap;">Check</button>
                     </div>
                     <div id="temp-id-check-result" style="font-size:12px;margin-top:4px;"></div>
                     <div style="display:flex;gap:6px;align-items:center;margin-top:8px;">
-                        <input type="datetime-local" id="temp-id-expiry" style="flex:1;">
+                        <input type="datetime-local" id="temp-id-expiry" style="flex:1;" aria-label="Temp ID expiry date">
                         <button type="button" id="temp-id-apply" class="btn-sm" style="background:var(--accent);color:#fff;">Apply</button>
                         <button type="button" id="temp-id-clear" class="btn-sm" style="background:var(--danger);color:#fff;">Clear</button>
                     </div>
@@ -3424,7 +3424,7 @@
             <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
                 <div class="report-search" style="flex:1;margin-bottom:0;">
                     <input type="number" id="report-search-input"
-                           placeholder="Search by unique ID...">
+                           placeholder="Search by unique ID..." aria-label="Search reports by user ID">
                     <button id="report-search-btn">Search</button>
                 </div>
                 <div class="export-controls" style="margin-bottom:0;">
@@ -4372,12 +4372,12 @@
       const content = type === "video"
         ? `<video src="${escapeHtml(url)}" controls autoplay style="max-width:90vw;max-height:90vh;border-radius:8px;"></video>`
         : `<img src="${escapeHtml(url)}" style="max-width:90vw;max-height:90vh;border-radius:8px;" alt="Evidence">`;
-      overlay.innerHTML = `<button class="evidence-lightbox-close">&times;</button>${content}`;
+      overlay.innerHTML = `<button class="evidence-lightbox-close" aria-label="Close">&times;</button>${content}`;
       document.body.appendChild(overlay);
-      const close = () => overlay.remove();
+      const onKey = (e) => { if (e.key === "Escape") close(); };
+      const close = () => { overlay.remove(); document.removeEventListener("keydown", onKey); };
       overlay.querySelector(".evidence-lightbox-close").addEventListener("click", close);
       overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
-      const onKey = (e) => { if (e.key === "Escape") { close(); document.removeEventListener("keydown", onKey); } };
       document.addEventListener("keydown", onKey);
       // Video error fallback — show message + open-in-new-tab link for broken uploads
       if (type === "video") {
@@ -4429,27 +4429,29 @@
         // Eagerly load economy config so cachedPityHardLimit is available everywhere
         loadEconomyConfig();
         // Restore saved tab and report filter
-        const savedTab = localStorage.getItem("admin_tab");
-        if (savedTab && ["users", "appeals", "reports", "gifts", "economy", "maintenance", "monitor", "banners", "funfacts", "backups", "logs"].includes(savedTab)) {
-          switchTab(savedTab);
-        }
-        const savedUserSearch = localStorage.getItem("admin_user_search");
-        if (savedUserSearch) {
-          searchUid.value = savedUserSearch;
-          if (!savedTab || savedTab === "users") doSearchFinal();
-        }
-        const savedReportFilter = localStorage.getItem("admin_report_filter");
-        if (savedReportFilter && ["pending", "resolved", "archived"].includes(savedReportFilter)) {
-          currentReportFilter = savedReportFilter;
-          for (const btn of $$("[data-report-filter]")) {
-            btn.classList.toggle("active", btn.dataset.reportFilter === savedReportFilter);
+        try {
+          const savedTab = sessionStorage.getItem("admin_tab");
+          if (savedTab && ["users", "appeals", "reports", "gifts", "economy", "maintenance", "monitor", "banners", "funfacts", "backups", "logs"].includes(savedTab)) {
+            switchTab(savedTab);
           }
-        }
-        const savedSearch = localStorage.getItem("admin_report_search");
-        if (savedSearch) {
-          reportSearchInput.value = savedSearch;
-          reportSearchQuery = savedSearch;
-        }
+          const savedUserSearch = sessionStorage.getItem("admin_user_search");
+          if (savedUserSearch) {
+            searchUid.value = savedUserSearch;
+            if (!savedTab || savedTab === "users") doSearchFinal();
+          }
+          const savedReportFilter = sessionStorage.getItem("admin_report_filter");
+          if (savedReportFilter && ["pending", "resolved", "archived"].includes(savedReportFilter)) {
+            currentReportFilter = savedReportFilter;
+            for (const btn of $$("[data-report-filter]")) {
+              btn.classList.toggle("active", btn.dataset.reportFilter === savedReportFilter);
+            }
+          }
+          const savedSearch = sessionStorage.getItem("admin_report_search");
+          if (savedSearch) {
+            reportSearchInput.value = savedSearch;
+            reportSearchQuery = savedSearch;
+          }
+        } catch (e) { /* sessionStorage unavailable */ }
       } else {
         currentUser = null;
         showScreen("login");
@@ -4486,6 +4488,8 @@
 
     signoutBtn.addEventListener("click", async () => {
       stopMonitoring();
+      if (logsQuotaInterval) { clearInterval(logsQuotaInterval); logsQuotaInterval = null; }
+      if (alertBellInterval) { clearInterval(alertBellInterval); alertBellInterval = null; }
       await signOut(auth);
       userForm.classList.remove("visible");
       document.getElementById("user-subtabs").style.display = "none";
@@ -5190,7 +5194,7 @@
 
     function switchTab(tab) {
       currentTab = tab;
-      localStorage.setItem("admin_tab", tab);
+      sessionStorage.setItem("admin_tab", tab);
       tabUsers.classList.toggle("active", tab === "users");
       tabAppeals.classList.toggle("active", tab === "appeals");
       tabReports.classList.toggle("active", tab === "reports");
@@ -5226,7 +5230,7 @@
       if (tab === "logs") { loadAlerts(); loadQuotaStats(); loadLogs(); loadLogConfig(); }
       if (tab !== "logs" && logsLiveUnsub) { stopLiveMode(); }
       if (tab === "monitor") {
-        const savedMonitorUid = localStorage.getItem("admin_monitor_uid");
+        const savedMonitorUid = sessionStorage.getItem("admin_monitor_uid");
         if (savedMonitorUid && !monitorUid) {
           monitorUidInput.value = savedMonitorUid;
           startMonitoring(savedMonitorUid);
@@ -5617,6 +5621,7 @@
     resetGcsBtn.addEventListener("click", async () => {
       if (!currentUid) return;
       if (!confirm("Reset this user's GCS to 100 and clear all warnings?")) return;
+      resetGcsBtn.disabled = true;
       try {
         await apiCall("POST", `/api/user/${currentUid}/reset-gcs`);
         showToast("GCS reset to 100");
@@ -5624,6 +5629,8 @@
         populateGcsSection(data);
       } catch (err) {
         showToast(err.message, "error");
+      } finally {
+        resetGcsBtn.disabled = false;
       }
     });
 
@@ -5881,10 +5888,10 @@
       try {
         const data = await apiCall("GET", `/api/search/uniqueId/${q}`);
         await populateFormFull(data);
-        localStorage.setItem("admin_user_search", q);
+        sessionStorage.setItem("admin_user_search", q);
       } catch (err) {
         showToast(err.message, "error");
-        localStorage.removeItem("admin_user_search");
+        sessionStorage.removeItem("admin_user_search");
       }
       searchBtn.disabled = false;
       searchBtn.textContent = "Search";
@@ -5911,7 +5918,7 @@
         for (const b of $$("#report-filter-bar .tab-btn")) b.classList.remove("active");
         btn.classList.add("active");
         currentReportFilter = btn.dataset.reportFilter;
-        localStorage.setItem("admin_report_filter", currentReportFilter);
+        sessionStorage.setItem("admin_report_filter", currentReportFilter);
         loadReports();
       });
     }
@@ -5921,11 +5928,11 @@
     const reportSearchBtn = $("#report-search-btn");
     reportSearchBtn.addEventListener("click", () => {
       reportSearchQuery = reportSearchInput.value.trim();
-      localStorage.setItem("admin_report_search", reportSearchQuery);
+      sessionStorage.setItem("admin_report_search", reportSearchQuery);
       loadReports();
     });
     reportSearchInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { reportSearchQuery = reportSearchInput.value.trim(); localStorage.setItem("admin_report_search", reportSearchQuery); loadReports(); }
+      if (e.key === "Enter") { reportSearchQuery = reportSearchInput.value.trim(); sessionStorage.setItem("admin_report_search", reportSearchQuery); loadReports(); }
     });
 
     // Stats
@@ -6422,6 +6429,7 @@
         showToast("Select a date range", "error");
         return;
       }
+      exportCsvBtn.disabled = true;
       try {
         const token = await currentUser.getIdToken();
         const url = `${API_BASE}/api/reports/export?from=${exportFrom.value}&to=${exportTo.value}`;
@@ -6429,8 +6437,9 @@
           headers: { "Authorization": `Bearer ${token}` },
         });
         if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || `HTTP ${res.status}`);
+          let errMsg = `HTTP ${res.status}`;
+          try { const data = await res.json(); errMsg = data.error || errMsg; } catch (_) {}
+          throw new Error(errMsg);
         }
         const blob = await res.blob();
         const a = document.createElement("a");
@@ -6441,6 +6450,8 @@
         showToast("CSV downloaded");
       } catch (err) {
         showToast(err.message, "error");
+      } finally {
+        exportCsvBtn.disabled = false;
       }
     });
 
@@ -6818,6 +6829,7 @@
         removeBtn.className = "backpack-remove-btn";
         removeBtn.textContent = "\u00D7";
         removeBtn.title = "Remove";
+        removeBtn.setAttribute("aria-label", "Remove item");
         removeBtn.addEventListener("click", function(e) {
           e.stopPropagation();
           autoSaveBackpackItem(item.giftId, 0, item.quantity);
@@ -8482,7 +8494,7 @@
           for (const action of actions) {
             const stepEl = $(`#${action.id}`);
             stepEl.className = "step running";
-            stepEl.innerHTML = "&#9679; " + action.label + "...";
+            stepEl.innerHTML = "&#9679; " + escapeHtml(action.label) + "...";
             stepLabel.textContent = `${completed + 1}/${actions.length}: ${action.label}...`;
             try {
               const resp = await fetch(`${API_BASE}/api/cleanup/${action.endpoint}`, {
@@ -8493,7 +8505,7 @@
               const data = await resp.json();
               if (!resp.ok) throw new Error(data.error || "Failed");
               stepEl.className = "step done";
-              stepEl.innerHTML = "&#10003; " + action.label + " — done";
+              stepEl.innerHTML = "&#10003; " + escapeHtml(action.label) + " — done";
               results.push(`${action.label}: OK`);
             } catch (err) {
               stepEl.className = "step failed";
@@ -8878,7 +8890,7 @@
       if (monitorUserUnsub) { monitorUserUnsub(); monitorUserUnsub = null; }
       if (monitorTxUnsub) { monitorTxUnsub(); monitorTxUnsub = null; }
       monitorUid = null;
-      localStorage.removeItem("admin_monitor_uid");
+      sessionStorage.removeItem("admin_monitor_uid");
 
       // Update status
       monitorDot.classList.remove("live");
@@ -8894,7 +8906,7 @@
     // Wire up monitor buttons
     monitorStartBtn.addEventListener("click", () => {
       const uid = monitorUidInput.value.trim();
-      if (uid) localStorage.setItem("admin_monitor_uid", uid);
+      if (uid) sessionStorage.setItem("admin_monitor_uid", uid);
       startMonitoring(uid);
     });
 
@@ -10904,7 +10916,7 @@
             const d = new Date(data.tempUniqueIdExpiry);
             const pad = n => String(n).padStart(2, '0');
             expiryEl.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-            currentEl.innerHTML = `Active temp ID: <strong>${data.tempUniqueId}</strong> (expires ${d.toLocaleString()})`;
+            currentEl.innerHTML = `Active temp ID: <strong>${escapeHtml(String(data.tempUniqueId))}</strong> (expires ${escapeHtml(d.toLocaleString())})`;
         } else {
             inputEl.value = "";
             expiryEl.value = "";
@@ -10931,7 +10943,7 @@
                 resultEl.appendChild(span);
             }
         } catch (err) {
-            resultEl.innerHTML = `<span style="color:var(--danger);">Error: ${err.message}</span>`;
+            resultEl.innerHTML = `<span style="color:var(--danger);">Error: ${escapeHtml(err.message)}</span>`;
         }
     });
 
@@ -10946,7 +10958,7 @@
         try {
             await apiCall("POST", `/api/admin/users/${currentUid}/temp-id`, { tempUniqueId: id, expiryDate });
             showToast("Temporary ID applied", "success");
-            document.getElementById("temp-id-current").innerHTML = `Active temp ID: <strong>${id}</strong> (expires ${new Date(expiryDate).toLocaleString()})`;
+            document.getElementById("temp-id-current").innerHTML = `Active temp ID: <strong>${escapeHtml(String(id))}</strong> (expires ${escapeHtml(new Date(expiryDate).toLocaleString())})`;
             document.getElementById("temp-id-check-result").textContent = "";
         } catch (err) {
             showToast(err.message || "Failed to apply temp ID", "error");

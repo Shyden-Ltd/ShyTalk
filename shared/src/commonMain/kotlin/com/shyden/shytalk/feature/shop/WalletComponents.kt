@@ -96,10 +96,10 @@ internal fun transactionLabel(transaction: Transaction): String {
 }
 
 internal fun formatNumber(value: Long): String {
-    val s = value.toString()
+    val str = value.toString()
     val result = StringBuilder()
-    val startIndex = if (s.startsWith('-')) 1 else 0
-    val digits = s.substring(startIndex)
+    val startIndex = if (str.startsWith('-')) 1 else 0
+    val digits = str.substring(startIndex)
     for (i in digits.indices) {
         if (i > 0 && (digits.length - i) % 3 == 0) result.append(',')
         result.append(digits[i])

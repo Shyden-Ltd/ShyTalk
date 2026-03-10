@@ -654,4 +654,56 @@
     <string name="who_can_message_description">Control who can send you private messages.</string>
     <string name="who_can_message_me">Who can message me</string>
     <string name="you_were_banned">You were banned from this room.</string>
+    <string name="getting_ready">Förbereder…</string>
+    <string name="send_all_warning_title">⚠️ VARNING ⚠️</string>
+    <string name="send_all_total_value">Totalt värde: 🪙 %1$d mynt</string>
+    <string name="send_gift_header">Skicka %1$dx %2$s</string>
+    <string name="send_gift_header_multiple">Skicka %1$dx %2$s till %3$d användare</string>
+    <string name="owner_away_banner">Ägaren borta – Rummet stängs om %1$s</string>
+    <string name="messages_title">Meddelanden</string>
+    <string name="no_conversations_yet">Inga konversationer ännu</string>
+    <string name="spin_again_with_cost">%1$s SNURRA IGEN · 🪙%2$d</string>
+    <string name="age_years_old">%1$d år gammal</string>
+    <string name="show_less">mindre</string>
+    <string name="show_more">mer</string>
+    <string name="video_too_large">Videon är för stor. Använd ett kortare klipp.</string>
+    <string name="file_too_large">Filen är för stor. Maxstorlek är 10 MB.</string>
+    <string name="this_user">denna användare</string>
+
+    <!-- Degraded Mode Banner -->
+    <string name="reduced_functionality">Begränsad funktionalitet — vissa funktioner kanske inte är tillgängliga</string>
+
+    <!-- Fullscreen Image Viewer -->
+    <string name="image_number">Bild %1$d</string>
+    <string name="page_indicator">%1$d / %2$d</string>
+
+    <!-- Broadcast Banner -->
+    <string name="broadcast_gacha_win">%1$s vann %2$s%3$s%4$s på Lyckohjulet!</string>
+    <string name="broadcast_gift_sent">%1$s skickade %2$s%3$s%4$s till %5$s!</string>
+
+    <string name="play_effect">Spela effekt</string>
+    <string name="account_unlocked">Kontot är upplåst</string>
+    <string name="account_suspended">Kontot är avstängt</string>
+    <string name="police_duck_description">Polisanka</string>
+    <string name="device_banned_title">Enhet blockerad</string>
+    <string name="network_banned_title">Nätverk blockerat</string>
+    <string name="device_banned_description">Denna enhet har blockerats från att använda ShyTalk.</string>
+    <string name="network_banned_description">Ditt nätverk har blockerats från att använda ShyTalk. Försök ansluta från ett annat nätverk.</string>
+    <string name="full_screen_photo">Foto i helskärm</string>
+    <string name="cover_photo">Omslagsbild</string>
+    <string name="change_cover_photo">Ändra omslagsbild</string>
+    <string name="profile_photo">Profilbild</string>
+    <string name="change_profile_photo">Ändra profilbild</string>
+    <string name="edit_profile">Redigera profil</string>
+    <string name="app_name_label">ShyTalk</string>
+    <string name="time_unit_day">DAG</string>
+    <string name="time_unit_hour">TIM</string>
+    <string name="time_unit_minute">MIN</string>
+    <string name="time_unit_second">SEK</string>
+    <string name="time_unit_millisecond">MS</string>
+
+    <string name="splash_tagline">Röstchattrum, nytänkta.</string>
+    <string name="quantity_all">ALLA (%1$d)</string>
+    <string name="english_language">Engelska</string>
+    <string name="google_sign_in_failed">Google-inloggning misslyckades</string>
 </resources>

@@ -40,10 +40,10 @@ async function rotateLogs() {
   if (!snapshot.empty) {
     const docs = snapshot.docs;
 
-    // 5. Build NDJSON
+    // 3a. Build NDJSON
     const ndjson = docs.map(d => JSON.stringify({ id: d.id, ...d.data() })).join('\n');
 
-    // 6. Write to R2
+    // 3b. Write to R2
     const now = new Date();
     const yyyy = now.getUTCFullYear();
     const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
@@ -53,7 +53,7 @@ async function rotateLogs() {
 
     await r2.putObject(key, ndjson, 'application/x-ndjson');
 
-    // 7. Batch delete from Firestore (max 500 per batch)
+    // 4. Batch delete from Firestore (max 500 per batch)
     const batch = db.batch();
     for (const doc of docs) {
       batch.delete(doc.ref);
@@ -63,7 +63,7 @@ async function rotateLogs() {
     log.info('cron', 'rotateLogs: archived logs', { count: docs.length, key });
   }
 
-  // 9. Prune R2 logs older than 90 days
+  // 5. Prune R2 logs older than 90 days
   await pruneOldLogs();
 }
 

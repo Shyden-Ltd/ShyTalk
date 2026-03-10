@@ -263,8 +263,8 @@ class RoomService : Service() {
 
         return NotificationCompat.Builder(this, Constants.ROOM_NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("You are in a LIVE room")
-            .setContentText("Tap to return")
+            .setContentTitle(getString(R.string.notification_in_live_room))
+            .setContentText(getString(R.string.notification_tap_to_return))
             .setContentIntent(contentIntent)
             .setOngoing(true)
             .setSilent(true)
@@ -274,7 +274,7 @@ class RoomService : Service() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
         android.util.Log.d("RoomService", "onTaskRemoved: app swiped from recents, calling leaveRoom")
-        // Run cleanup on a background thread to avoid blocking the main thread (ANR)
+        // Run cleanup on a background thread, then stop the service
         Thread {
             runBlocking {
                 try {
@@ -285,8 +285,8 @@ class RoomService : Service() {
                     android.util.Log.w("RoomService", "onTaskRemoved: leaveRoom timed out or failed", e)
                 }
             }
+            stopSelf()
         }.start()
-        stopSelf()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

@@ -54,7 +54,7 @@ fun WarningScreen(
         ) {
             Image(
                 painter = painterResource(R.drawable.police_duck),
-                contentDescription = "Warning",
+                contentDescription = stringResource(Res.string.police_duck_description),
                 modifier = Modifier
                     .size(160.dp)
                     .clip(CircleShape)

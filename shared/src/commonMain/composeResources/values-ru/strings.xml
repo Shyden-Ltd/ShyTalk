@@ -654,4 +654,56 @@
     <string name="who_can_message_description">Control who can send you private messages.</string>
     <string name="who_can_message_me">Who can message me</string>
     <string name="you_were_banned">You were banned from this room.</string>
+    <string name="getting_ready">Подготовка…</string>
+    <string name="send_all_warning_title">⚠️ ВНИМАНИЕ ⚠️</string>
+    <string name="send_all_total_value">Общая стоимость: 🪙 %1$d монет</string>
+    <string name="send_gift_header">Отправить %1$dx %2$s</string>
+    <string name="send_gift_header_multiple">Отправить %1$dx %2$s %3$d пользователям</string>
+    <string name="owner_away_banner">Владелец отсутствует – Комната закроется через %1$s</string>
+    <string name="messages_title">Сообщения</string>
+    <string name="no_conversations_yet">Нет бесед</string>
+    <string name="spin_again_with_cost">%1$s КРУТИТЬ СНОВА · 🪙%2$d</string>
+    <string name="age_years_old">%1$d лет</string>
+    <string name="show_less">меньше</string>
+    <string name="show_more">больше</string>
+    <string name="video_too_large">Видео слишком большое. Используйте более короткий клип.</string>
+    <string name="file_too_large">Файл слишком большой. Максимум 10 МБ.</string>
+    <string name="this_user">этот пользователь</string>
+
+    <!-- Degraded Mode Banner -->
+    <string name="reduced_functionality">Ограниченная функциональность — некоторые функции могут быть недоступны</string>
+
+    <!-- Fullscreen Image Viewer -->
+    <string name="image_number">Изображение %1$d</string>
+    <string name="page_indicator">%1$d / %2$d</string>
+
+    <!-- Broadcast Banner -->
+    <string name="broadcast_gacha_win">%1$s выиграл(а) %2$s%3$s%4$s в Колесе Удачи!</string>
+    <string name="broadcast_gift_sent">%1$s отправил(а) %2$s%3$s%4$s для %5$s!</string>
+
+    <string name="play_effect">Воспроизвести эффект</string>
+    <string name="account_unlocked">Аккаунт разблокирован</string>
+    <string name="account_suspended">Аккаунт заблокирован</string>
+    <string name="police_duck_description">Полицейская утка</string>
+    <string name="device_banned_title">Устройство заблокировано</string>
+    <string name="network_banned_title">Сеть заблокирована</string>
+    <string name="device_banned_description">Это устройство заблокировано для использования ShyTalk.</string>
+    <string name="network_banned_description">Ваша сеть заблокирована для использования ShyTalk. Попробуйте подключиться из другой сети.</string>
+    <string name="full_screen_photo">Фото на весь экран</string>
+    <string name="cover_photo">Фото обложки</string>
+    <string name="change_cover_photo">Изменить фото обложки</string>
+    <string name="profile_photo">Фото профиля</string>
+    <string name="change_profile_photo">Изменить фото профиля</string>
+    <string name="edit_profile">Редактировать профиль</string>
+    <string name="app_name_label">ShyTalk</string>
+    <string name="time_unit_day">ДЕНЬ</string>
+    <string name="time_unit_hour">ЧАС</string>
+    <string name="time_unit_minute">МИН</string>
+    <string name="time_unit_second">СЕК</string>
+    <string name="time_unit_millisecond">МС</string>
+
+    <string name="splash_tagline">Голосовые чат-комнаты, переосмысленные.</string>
+    <string name="quantity_all">ВСЕ (%1$d)</string>
+    <string name="english_language">Английский</string>
+    <string name="google_sign_in_failed">Не удалось войти через Google</string>
 </resources>

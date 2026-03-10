@@ -96,7 +96,7 @@ val appModule = module {
             .build()
     }
 
-    // Worker API client (Cloudflare)
+    // API client (Express.js on Oracle Cloud)
     single { WorkerApiClient(get(), BuildConfig.API_BASE_URL, get()) }
 
     // Device ID

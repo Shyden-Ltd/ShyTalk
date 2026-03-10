@@ -654,4 +654,56 @@
     <string name="who_can_message_description">Control who can send you private messages.</string>
     <string name="who_can_message_me">Who can message me</string>
     <string name="you_were_banned">You were banned from this room.</string>
+    <string name="getting_ready">Preparazione…</string>
+    <string name="send_all_warning_title">⚠️ ATTENZIONE ⚠️</string>
+    <string name="send_all_total_value">Valore totale: 🪙 %1$d monete</string>
+    <string name="send_gift_header">Invia %1$dx %2$s</string>
+    <string name="send_gift_header_multiple">Invia %1$dx %2$s a %3$d utenti</string>
+    <string name="owner_away_banner">Proprietario assente – La stanza chiude tra %1$s</string>
+    <string name="messages_title">Messaggi</string>
+    <string name="no_conversations_yet">Nessuna conversazione ancora</string>
+    <string name="spin_again_with_cost">%1$s GIRA ANCORA · 🪙%2$d</string>
+    <string name="age_years_old">%1$d anni</string>
+    <string name="show_less">meno</string>
+    <string name="show_more">altro</string>
+    <string name="video_too_large">Il video è troppo grande. Usa una clip più corta.</string>
+    <string name="file_too_large">Il file è troppo grande. Dimensione massima: 10 MB.</string>
+    <string name="this_user">questo utente</string>
+
+    <!-- Degraded Mode Banner -->
+    <string name="reduced_functionality">Funzionalità ridotta — alcune funzionalità potrebbero non essere disponibili</string>
+
+    <!-- Fullscreen Image Viewer -->
+    <string name="image_number">Immagine %1$d</string>
+    <string name="page_indicator">%1$d / %2$d</string>
+
+    <!-- Broadcast Banner -->
+    <string name="broadcast_gacha_win">%1$s ha vinto %2$s%3$s%4$s dalla Ruota della Fortuna!</string>
+    <string name="broadcast_gift_sent">%1$s ha inviato %2$s%3$s%4$s a %5$s!</string>
+
+    <string name="play_effect">Riproduci effetto</string>
+    <string name="account_unlocked">Account sbloccato</string>
+    <string name="account_suspended">Account sospeso</string>
+    <string name="police_duck_description">Papera poliziotto</string>
+    <string name="device_banned_title">Dispositivo bannato</string>
+    <string name="network_banned_title">Rete bannata</string>
+    <string name="device_banned_description">Questo dispositivo è stato bannato dall’uso di ShyTalk.</string>
+    <string name="network_banned_description">La tua rete è stata bannata dall’uso di ShyTalk. Prova a connetterti da un’altra rete.</string>
+    <string name="full_screen_photo">Foto a schermo intero</string>
+    <string name="cover_photo">Foto di copertina</string>
+    <string name="change_cover_photo">Cambia foto di copertina</string>
+    <string name="profile_photo">Foto profilo</string>
+    <string name="change_profile_photo">Cambia foto profilo</string>
+    <string name="edit_profile">Modifica profilo</string>
+    <string name="app_name_label">ShyTalk</string>
+    <string name="time_unit_day">GIO</string>
+    <string name="time_unit_hour">ORA</string>
+    <string name="time_unit_minute">MIN</string>
+    <string name="time_unit_second">SEC</string>
+    <string name="time_unit_millisecond">MS</string>
+
+    <string name="splash_tagline">Chat vocali, reinventate.</string>
+    <string name="quantity_all">TUTTO (%1$d)</string>
+    <string name="english_language">Inglese</string>
+    <string name="google_sign_in_failed">Accesso con Google non riuscito</string>
 </resources>

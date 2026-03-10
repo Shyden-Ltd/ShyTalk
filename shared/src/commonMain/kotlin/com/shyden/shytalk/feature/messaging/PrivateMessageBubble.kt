@@ -340,7 +340,7 @@ fun PrivateMessageBubble(
                                     verticalArrangement = Arrangement.Bottom
                                 ) {
                                     Text(
-                                        text = message.roomInviteName ?: "Room",
+                                        text = message.roomInviteName ?: stringResource(Res.string.room),
                                         style = MaterialTheme.typography.titleMedium,
                                         color = Color.White,
                                         maxLines = 1,
@@ -415,7 +415,7 @@ fun PrivateMessageBubble(
                     // Edited indicator
                     if (!message.isRecalled && message.editCount > 0) {
                         Text(
-                            text = "Edited (${message.editCount})",
+                            text = stringResource(Res.string.edited_count, message.editCount),
                             style = MaterialTheme.typography.labelSmall,
                             color = metaColor,
                             modifier = Modifier.clickable { onViewEditHistory() }
@@ -576,7 +576,7 @@ private fun LocalImageGrid(
         1 -> {
             AsyncImage(
                 model = localImageData[0],
-                contentDescription = "Image",
+                contentDescription = stringResource(Res.string.image),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(200.dp)
@@ -596,7 +596,7 @@ private fun LocalImageGrid(
                 localImageData.forEach { data ->
                     AsyncImage(
                         model = data,
-                        contentDescription = "Image",
+                        contentDescription = stringResource(Res.string.image),
                         modifier = Modifier
                             .weight(1f)
                             .height(150.dp)
@@ -620,7 +620,7 @@ private fun LocalImageGrid(
                         row.forEach { data ->
                             AsyncImage(
                                 model = data,
-                                contentDescription = "Image",
+                                contentDescription = stringResource(Res.string.image),
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(120.dp)
@@ -653,7 +653,7 @@ private fun ImageGrid(
         1 -> {
             AsyncImage(
                 model = imageUrls[0],
-                contentDescription = "Image",
+                contentDescription = stringResource(Res.string.image),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(200.dp)
@@ -673,7 +673,7 @@ private fun ImageGrid(
                 imageUrls.forEachIndexed { index, url ->
                     AsyncImage(
                         model = url,
-                        contentDescription = "Image",
+                        contentDescription = stringResource(Res.string.image),
                         modifier = Modifier
                             .weight(1f)
                             .height(150.dp)
@@ -699,7 +699,7 @@ private fun ImageGrid(
                             val globalIndex = rowIndex * 2 + colIndex
                             AsyncImage(
                                 model = url,
-                                contentDescription = "Image",
+                                contentDescription = stringResource(Res.string.image),
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(120.dp)

@@ -76,34 +76,42 @@ async function backups() {
   // Back up top-level collections (retain users JSON for backwards-compat copy)
   let usersJsonStr = null;
   for (const collName of TOP_LEVEL_COLLECTIONS) {
-    const { name, docs, count } = await backupCollection(collName);
-    const key = `${prefix}/${name}.json`;
-    const jsonStr = JSON.stringify(docs, null, 2);
+    try {
+      const { name, docs, count } = await backupCollection(collName);
+      const key = `${prefix}/${name}.json`;
+      const jsonStr = JSON.stringify(docs, null, 2);
 
-    if (name === 'users') usersJsonStr = jsonStr;
+      if (name === 'users') usersJsonStr = jsonStr;
 
-    await r2.putObject(key, Buffer.from(jsonStr), 'application/json', {
-      docCount: String(count),
-      createdAt: new Date().toISOString(),
-    });
+      await r2.putObject(key, Buffer.from(jsonStr), 'application/json', {
+        docCount: String(count),
+        createdAt: new Date().toISOString(),
+      });
 
-    manifest.collections[name] = count;
-    log.info('cron', 'backup: collection saved', { collection: name, docs: count, bytes: jsonStr.length });
+      manifest.collections[name] = count;
+      log.info('cron', 'backup: collection saved', { collection: name, docs: count, bytes: jsonStr.length });
+    } catch (err) {
+      log.error('cron', 'backup: collection failed', { collection: collName, error: err.message });
+    }
   }
 
   // Back up subcollections
   for (const [parent, sub] of SUBCOLLECTIONS) {
-    const { name, docs, count } = await backupSubcollection(parent, sub);
-    const key = `${prefix}/${name}.json`;
-    const jsonStr = JSON.stringify(docs, null, 2);
+    try {
+      const { name, docs, count } = await backupSubcollection(parent, sub);
+      const key = `${prefix}/${name}.json`;
+      const jsonStr = JSON.stringify(docs, null, 2);
 
-    await r2.putObject(key, Buffer.from(jsonStr), 'application/json', {
-      docCount: String(count),
-      createdAt: new Date().toISOString(),
-    });
+      await r2.putObject(key, Buffer.from(jsonStr), 'application/json', {
+        docCount: String(count),
+        createdAt: new Date().toISOString(),
+      });
 
-    manifest.collections[name] = count;
-    log.info('cron', 'backup: subcollection saved', { collection: name, docs: count, bytes: jsonStr.length });
+      manifest.collections[name] = count;
+      log.info('cron', 'backup: subcollection saved', { collection: name, docs: count, bytes: jsonStr.length });
+    } catch (err) {
+      log.error('cron', 'backup: subcollection failed', { collection: `${parent}_${sub}`, error: err.message });
+    }
   }
 
   // Write manifest

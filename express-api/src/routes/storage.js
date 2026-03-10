@@ -36,7 +36,12 @@ router.post('/storage/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'Invalid upload path' });
     }
 
+    const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     const contentType = file.mimetype || 'image/jpeg';
+    if (!ALLOWED_MIME_TYPES.includes(contentType)) {
+      log.warn('storage', 'Upload rejected: disallowed MIME type', { uid, contentType });
+      return res.status(400).json({ error: 'Only image uploads are allowed (jpeg, png, webp, gif)' });
+    }
     const extension = getExtension(contentType);
     const key = `${path}/${uid}/${Date.now()}.${extension}`;
 

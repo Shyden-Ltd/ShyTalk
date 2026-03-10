@@ -103,7 +103,7 @@ router.post('/device-info', async (req, res) => {
     await docRef.set(deviceDoc, { merge: true });
 
     // Check bans
-    const banStatus = await checkBans(deviceId, ip, geo.asn);
+    const banStatus = await checkBans(deviceId, ip, geo.asn || null);
 
     res.json({ success: true, banStatus });
   } catch (err) {

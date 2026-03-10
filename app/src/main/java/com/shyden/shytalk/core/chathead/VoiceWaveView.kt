@@ -77,8 +77,8 @@ class VoiceWaveView @JvmOverloads constructor(
         val barBottom = h * 0.85f
 
         for (i in 0 until barCount) {
-            val t = sin((progress * frequencies[i] + phases[i]).toDouble()).toFloat()
-            val normalized = (t + 1f) / 2f // 0..1
+            val waveValue = sin((progress * frequencies[i] + phases[i]).toDouble()).toFloat()
+            val normalized = (waveValue + 1f) / 2f // 0..1
             val barHeight = minBarHeight + normalized * (maxBarHeight - minBarHeight)
             val x = startX + i * barWidth * 1.8f
             canvas.drawLine(x, barBottom, x, barBottom - barHeight, barPaint)

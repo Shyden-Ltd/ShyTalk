@@ -183,7 +183,7 @@ fun LuckySpinSummaryPopup(
                         .height(40.dp)
                 ) {
                     Text(
-                        text = "${spinTier.label} SPIN AGAIN \u00B7 \uD83E\uDE99${spinTier.cost}",
+                        text = stringResource(Res.string.spin_again_with_cost, spinTier.label, spinTier.cost),
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 13.sp,
                         letterSpacing = 2.sp,
@@ -298,9 +298,9 @@ private fun WinCard(win: GroupedWin, index: Int) {
 }
 
 private fun Int.formatWithCommas(): String {
-    val s = this.toString()
+    val numStr = this.toString()
     val result = StringBuilder()
-    for ((i, c) in s.reversed().withIndex()) {
+    for ((i, c) in numStr.reversed().withIndex()) {
         if (i > 0 && i % 3 == 0) result.append(',')
         result.append(c)
     }

@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -126,7 +127,7 @@ class ProfileViewModel(
     /** Returns the roomId only if the user is online AND the room is still active. */
     private suspend fun resolveActiveRoomId(currentRoomId: String?, isOnline: Boolean): String? {
         if (!isOnline || currentRoomId.isNullOrEmpty()) return null
-        val room = roomRepository.getRoomFlow(currentRoomId).first()
+        val room = roomRepository.getRoomFlow(currentRoomId).firstOrNull()
         return if (room != null && room.state in listOf(RoomState.ACTIVE, RoomState.OWNER_AWAY)) {
             currentRoomId
         } else {
@@ -472,8 +473,8 @@ class ProfileViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isSubmittingReport = true, reportError = null) }
 
-            val currentUser = when (val r = userRepository.getUser(currentUid)) {
-                is Resource.Success -> r.data
+            val currentUser = when (val result = userRepository.getUser(currentUid)) {
+                is Resource.Success -> result.data
                 else -> {
                     _uiState.update { it.copy(isSubmittingReport = false, reportError = UiText.res(Res.string.error_could_not_submit_report)) }
                     return@launch
@@ -483,10 +484,10 @@ class ProfileViewModel(
             // Upload evidence
             val evidenceUrls = mutableListOf<String>()
             for ((bytes, mimeType) in evidenceImages) {
-                when (val r = storageRepository.uploadImage(
+                when (val result = storageRepository.uploadImage(
                     currentUser.uid, "report_evidence", bytes, mimeType
                 )) {
-                    is Resource.Success -> evidenceUrls.add(r.data)
+                    is Resource.Success -> evidenceUrls.add(result.data)
                     is Resource.Error -> {
                         _uiState.update { it.copy(isSubmittingReport = false, reportError = UiText.res(Res.string.error_upload_evidence)) }
                         return@launch

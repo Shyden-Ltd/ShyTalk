@@ -277,7 +277,7 @@ fun BackpackSheet(
             if (state.showSendAllConfirm) {
                 val recipientId = state.sendAllRecipientId ?: ""
                 val recipientUser = (seatedUsers + additionalUsers).find { it.uid == recipientId }
-                val recipientName = recipientUser?.displayName ?: "this user"
+                val recipientName = recipientUser?.displayName ?: stringResource(Res.string.this_user)
                 val totalItems = state.backpackItems.sumOf { it.quantity }
                 val uniqueGifts = state.backpackItems.size
                 val totalValue = state.backpackItems.sumOf { bp ->
@@ -552,7 +552,7 @@ private fun ShopGiftCell(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
-    val accentCol = giftAccentColor(item.gift)
+    val borderColor = if (isSelected) CyanAccent else MaterialTheme.colorScheme.outlineVariant
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -561,10 +561,10 @@ private fun ShopGiftCell(
             .clip(RoundedCornerShape(8.dp))
             .border(
                 width = if (isSelected) 3.dp else 1.dp,
-                color = if (isSelected) CyanAccent else accentCol.copy(alpha = 0.5f),
+                color = borderColor,
                 shape = RoundedCornerShape(8.dp)
             )
-            .background(accentCol.copy(alpha = 0.1f))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(2.dp)
     ) {
@@ -598,7 +598,7 @@ private fun BackpackGiftCell(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
-    val accentCol = giftAccentColor(item.gift)
+    val borderColor = if (isSelected) CyanAccent else MaterialTheme.colorScheme.outlineVariant
     val bp = item.backpackItem
 
     Column(
@@ -609,10 +609,10 @@ private fun BackpackGiftCell(
             .clip(RoundedCornerShape(8.dp))
             .border(
                 width = if (isSelected) 3.dp else 1.dp,
-                color = if (isSelected) CyanAccent else accentCol.copy(alpha = 0.5f),
+                color = borderColor,
                 shape = RoundedCornerShape(8.dp)
             )
-            .background(accentCol.copy(alpha = 0.1f))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(2.dp)
     ) {
@@ -848,7 +848,7 @@ private fun QuantityPickerPopup(
             presets.forEach { preset ->
                 val isAll = preset == -1
                 val qty = if (isAll) ownedQty else preset
-                val label = if (isAll) "ALL ($ownedQty)" else "$preset"
+                val label = if (isAll) stringResource(Res.string.quantity_all, ownedQty) else "$preset"
                 val isSelected = qty == selectedQuantity
 
                 val enabled = if (isBackpackTab) {
@@ -887,7 +887,7 @@ private fun ConfirmSendDialog(
     val gift = state.selectedGiftId?.let { id -> giftCatalog.find { it.id == id } } ?: return
     val recipientCount = state.selectedRecipientIds.size
     val quantity = state.selectedQuantity
-    val totalItems = quantity * recipientCount
+    val totalItems = quantity.toLong() * recipientCount
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -895,9 +895,9 @@ private fun ConfirmSendDialog(
         text = {
             Column {
                 val headerText = if (recipientCount > 1)
-                    "Send ${quantity}x ${gift.name} to $recipientCount users"
+                    stringResource(Res.string.send_gift_header_multiple, quantity, gift.name, recipientCount)
                 else
-                    "Send ${quantity}x ${gift.name}"
+                    stringResource(Res.string.send_gift_header, quantity, gift.name)
                 Text(
                     headerText,
                     style = MaterialTheme.typography.bodyLarge,
@@ -940,18 +940,17 @@ fun GiftIcon(gift: Gift, size: Int) {
             contentScale = ContentScale.Crop
         )
     } else {
-        val accentCol = giftAccentColor(gift)
         Box(
             modifier = Modifier
                 .size(size.dp)
                 .clip(CircleShape)
-                .background(accentCol.copy(alpha = 0.2f)),
+                .background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 gift.name.take(2),
                 fontWeight = FontWeight.Bold,
-                color = accentCol,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
                 fontSize = (size / 3).sp
             )
         }
@@ -973,7 +972,7 @@ private fun SendAllConfirmDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                "\u26A0\uFE0F WARNING \u26A0\uFE0F",
+                stringResource(Res.string.send_all_warning_title),
                 color = Color(0xFFD32F2F),
                 fontWeight = FontWeight.Black,
                 fontSize = 20.sp
@@ -994,7 +993,7 @@ private fun SendAllConfirmDialog(
                 if (totalValue > 0) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "Total value: \uD83E\uDE99 $totalValue coins",
+                        stringResource(Res.string.send_all_total_value, totalValue),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFFFFD700)
@@ -1043,11 +1042,3 @@ private fun formatLargeNumber(value: Long): String {
     }
 }
 
-/** Accent color based on gift coin value (rarity tier). */
-private fun giftAccentColor(gift: Gift): Color = when {
-    gift.coinValue >= 5000 -> Color(0xFFFF9800) // Legendary — orange
-    gift.coinValue >= 2000 -> Color(0xFF9C27B0) // Epic — purple
-    gift.coinValue >= 500  -> Color(0xFF2196F3) // Rare — blue
-    gift.coinValue >= 100  -> Color(0xFF4CAF50) // Uncommon — green
-    else                   -> Color(0xFF9E9E9E) // Common — grey
-}

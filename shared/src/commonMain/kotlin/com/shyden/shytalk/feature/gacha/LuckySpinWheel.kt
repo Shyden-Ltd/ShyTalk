@@ -19,6 +19,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.sp
 import com.shyden.shytalk.core.model.Gift
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.min
@@ -106,6 +109,7 @@ fun LuckySpinWheel(
     modifier: Modifier = Modifier
 ) {
     val textMeasurer = rememberTextMeasurer()
+    val spinText = stringResource(Res.string.spin)
     val outerAngle = remember(outerGifts.size) {
         if (outerGifts.isNotEmpty()) 360f / outerGifts.size else 0f
     }
@@ -166,7 +170,7 @@ fun LuckySpinWheel(
 
         // Center "SPIN" text
         val spinLabel = textMeasurer.measure(
-            text = "SPIN",
+            text = spinText,
             style = TextStyle(
                 color = Color(0xFFFFD700).copy(alpha = 0.3f),
                 fontSize = (innerRingInner * 0.21f / density / fontScale).sp,

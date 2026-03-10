@@ -19,7 +19,7 @@ async function checkSuspension(uid) {
   }
 
   const snap = await db.doc(`users/${uid}`).get();
-  const user = snap.data();
+  const user = snap.exists ? snap.data() : null;
   const isSuspended = !!(user?.isSuspended || user?.is_suspended);
 
   suspensionCache.set(uid, { isSuspended, expiresAt: Date.now() + SUSPENSION_CACHE_TTL });

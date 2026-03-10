@@ -129,6 +129,39 @@ describe('PUT /api/config/:key', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
   });
+
+  test('rejects unknown config keys', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .put('/api/config/unknown')
+      .send({ foo: 'bar' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/Unknown config key/);
+  });
+
+  test('filters to only allowed fields for app config', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .put('/api/config/app')
+      .send({ minVersionCode: 2, hackerField: 'pwned' });
+
+    expect(res.status).toBe(200);
+    // Only allowed fields should be written
+    const setCall = mockDocSet.mock.calls[0];
+    expect(setCall[0]).toHaveProperty('minVersionCode', 2);
+    expect(setCall[0]).not.toHaveProperty('hackerField');
+  });
+
+  test('returns 400 when no valid fields provided', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .put('/api/config/app')
+      .send({ hackerField: 'pwned' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/No valid fields/);
+  });
 });
 
 describe('GET /api/gifts', () => {

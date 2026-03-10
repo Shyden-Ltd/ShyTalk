@@ -31,12 +31,12 @@ data class GachaResult(
 
             return GachaResult(
                 gifts = (map["gifts"] as? List<*>)?.mapNotNull { item ->
-                    val m = item as? Map<*, *> ?: return@mapNotNull null
+                    val giftMap = item as? Map<*, *> ?: return@mapNotNull null
                     GachaGift(
-                        giftId = m["giftId"] as? String ?: "",
-                        giftName = m["giftName"] as? String ?: "",
-                        coinValue = (m["coinValue"] as? Number)?.toInt() ?: 0,
-                        iconUrl = m["iconUrl"] as? String ?: ""
+                        giftId = giftMap["giftId"] as? String ?: "",
+                        giftName = giftMap["giftName"] as? String ?: "",
+                        coinValue = (giftMap["coinValue"] as? Number)?.toInt() ?: 0,
+                        iconUrl = giftMap["iconUrl"] as? String ?: ""
                     )
                 } ?: emptyList(),
                 coinsSpent = (map["coinsSpent"] as? Number)?.toInt() ?: 0,

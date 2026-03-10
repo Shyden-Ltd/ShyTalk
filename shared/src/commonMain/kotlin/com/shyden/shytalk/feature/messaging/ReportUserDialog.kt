@@ -38,11 +38,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
 import org.jetbrains.compose.resources.stringResource
 
-private val reportReasons = listOf("Spam", "Harassment", "Inappropriate Content", "Other")
+private val reportReasonKeys = listOf("Spam", "Harassment", "Inappropriate Content", "Other")
+
+@Composable
+private fun reportReasonLabel(key: String): String = when (key) {
+    "Spam" -> stringResource(Res.string.report_reason_spam)
+    "Harassment" -> stringResource(Res.string.report_reason_harassment)
+    "Inappropriate Content" -> stringResource(Res.string.report_reason_inappropriate)
+    "Other" -> stringResource(Res.string.report_reason_other)
+    else -> key
+}
 
 @Composable
 fun ReportUserDialog(
@@ -56,7 +64,7 @@ fun ReportUserDialog(
     isCompressing: Boolean = false,
     errorMessage: String? = null
 ) {
-    var selectedReason by remember { mutableStateOf(reportReasons[0]) }
+    var selectedReason by remember { mutableStateOf(reportReasonKeys[0]) }
     var description by remember { mutableStateOf("") }
 
     val requiresEvidence = onAddEvidence != null
@@ -71,7 +79,7 @@ fun ReportUserDialog(
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                reportReasons.forEach { reason ->
+                reportReasonKeys.forEach { reason ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -85,7 +93,7 @@ fun ReportUserDialog(
                             enabled = !isSubmitting
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = reason, style = MaterialTheme.typography.bodyMedium)
+                        Text(text = reportReasonLabel(reason), style = MaterialTheme.typography.bodyMedium)
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))

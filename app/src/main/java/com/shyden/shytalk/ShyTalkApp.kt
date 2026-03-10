@@ -51,10 +51,6 @@ class ShyTalkApp : Application(), SingletonImageLoader.Factory {
             modules(appModule)
         }
 
-        // Clean up old cache directory (migrated to filesDir/image_cache)
-        val oldCache = cacheDir.resolve("image_cache")
-        if (oldCache.exists()) oldCache.deleteRecursively()
-
         val notificationManager = getSystemService(NotificationManager::class.java)
 
         val channel = NotificationChannel(

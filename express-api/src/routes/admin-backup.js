@@ -143,11 +143,27 @@ router.post('/admin/backups/trigger', async (req, res) => {
 });
 
 // ── Download a specific collection's backup ──
+const BACKUP_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+// Derived from backups.js TOP_LEVEL_COLLECTIONS + subcollection backup names
+const { TOP_LEVEL_COLLECTIONS, SUBCOLLECTIONS } = require('../cron/backups');
+const ALLOWED_BACKUP_COLLECTIONS = new Set([
+  ...TOP_LEVEL_COLLECTIONS,
+  ...SUBCOLLECTIONS.map(([parent, sub]) => `${parent}_${sub}`),
+]);
+
 router.get('/admin/backups/:date/:collection', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
     const { date, collection } = req.params;
+    if (!BACKUP_DATE_REGEX.test(date)) {
+      log.warn('admin-backup', 'Invalid date format in backup download', { date, uid: req.auth?.uid });
+      return res.status(400).json({ error: 'Invalid date format (expected YYYY-MM-DD)' });
+    }
+    if (!ALLOWED_BACKUP_COLLECTIONS.has(collection)) {
+      log.warn('admin-backup', 'Invalid collection name in backup download', { collection, uid: req.auth?.uid });
+      return res.status(400).json({ error: 'Invalid collection name' });
+    }
     const key = `backups/full/${date}/${collection}.json`;
 
     let obj;
@@ -173,6 +189,10 @@ router.get('/admin/backups/:date', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
+    if (!BACKUP_DATE_REGEX.test(req.params.date)) {
+      log.warn('admin-backup', 'Invalid date format in legacy backup download', { date: req.params.date, uid: req.auth?.uid });
+      return res.status(400).json({ error: 'Invalid date format (expected YYYY-MM-DD)' });
+    }
     const key = `backups/users/${req.params.date}.json`;
     let obj;
     try {
@@ -297,7 +317,7 @@ router.post('/admin/backups/recover-photos', async (req, res) => {
 
       const objects = await listObjectsWithMeta(folder);
       for (const obj of objects) {
-        // Keys are like: profile_photos/{uid}/{filename}
+        // Keys are like: profiles/{uid}/{filename} or covers/{uid}/{filename}
         const parts = obj.key.split('/');
         if (parts.length >= 3) {
           const uid = parts[1];

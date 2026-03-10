@@ -20,28 +20,28 @@ router.get('/admin/devices', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
-    const q = (req.query.q || '').toLowerCase().trim();
+    const searchQuery = (req.query.q || '').toLowerCase().trim();
     const limit = Math.min(Math.max(parseInt(req.query.limit) || 50, 1), 200);
     const offset = Math.max(parseInt(req.query.offset) || 0, 0);
 
     const snap = await db.collection('deviceBindings').get();
-    let devices = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    let devices = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
     // In-memory search (Firestore doesn't support full-text search)
-    if (q) {
-      devices = devices.filter(d => {
+    if (searchQuery) {
+      devices = devices.filter(device => {
         const searchable = [
-          d.id,
-          d.userId,
-          d.manufacturer,
-          d.model,
-          d.lastIp,
-          d.isp,
+          device.id,
+          device.userId,
+          device.manufacturer,
+          device.model,
+          device.lastIp,
+          device.isp,
         ]
           .filter(Boolean)
           .map(v => String(v).toLowerCase())
           .join(' ');
-        return searchable.includes(q);
+        return searchable.includes(searchQuery);
       });
     }
 

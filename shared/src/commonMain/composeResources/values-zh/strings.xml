@@ -654,4 +654,56 @@
     <string name="who_can_message_description">Control who can send you private messages.</string>
     <string name="who_can_message_me">Who can message me</string>
     <string name="you_were_banned">You were banned from this room.</string>
+    <string name="getting_ready">准备中…</string>
+    <string name="send_all_warning_title">⚠️ 警告 ⚠️</string>
+    <string name="send_all_total_value">总价值：🪙 %1$d金币</string>
+    <string name="send_gift_header">发送 %1$dx %2$s</string>
+    <string name="send_gift_header_multiple">向 %3$d 位用户发送 %1$dx %2$s</string>
+    <string name="owner_away_banner">房主不在 - 房间将在 %1$s 后关闭</string>
+    <string name="messages_title">消息</string>
+    <string name="no_conversations_yet">暂无会话</string>
+    <string name="spin_again_with_cost">%1$s 再次转动 · 🪙%2$d</string>
+    <string name="age_years_old">%1$d岁</string>
+    <string name="show_less">收起</string>
+    <string name="show_more">展开</string>
+    <string name="video_too_large">视频太大。请使用更短的片段。</string>
+    <string name="file_too_large">文件太大。最大大小为10 MB。</string>
+    <string name="this_user">该用户</string>
+
+    <!-- Degraded Mode Banner -->
+    <string name="reduced_functionality">功能受限 — 部分功能可能不可用</string>
+
+    <!-- Fullscreen Image Viewer -->
+    <string name="image_number">图片 %1$d</string>
+    <string name="page_indicator">%1$d / %2$d</string>
+
+    <!-- Broadcast Banner -->
+    <string name="broadcast_gacha_win">%1$s 从幸运转盘赢得了 %2$s%3$s%4$s！</string>
+    <string name="broadcast_gift_sent">%1$s 向 %5$s 发送了 %2$s%3$s%4$s！</string>
+
+    <string name="play_effect">播放效果</string>
+    <string name="account_unlocked">账户已解锁</string>
+    <string name="account_suspended">账户已被暂停</string>
+    <string name="police_duck_description">警察鸭</string>
+    <string name="device_banned_title">设备已被禁止</string>
+    <string name="network_banned_title">网络已被禁止</string>
+    <string name="device_banned_description">此设备已被禁止使用 ShyTalk。</string>
+    <string name="network_banned_description">您的网络已被禁止使用 ShyTalk。请尝试从其他网络连接。</string>
+    <string name="full_screen_photo">全屏照片</string>
+    <string name="cover_photo">封面照片</string>
+    <string name="change_cover_photo">更改封面照片</string>
+    <string name="profile_photo">个人照片</string>
+    <string name="change_profile_photo">更改个人照片</string>
+    <string name="edit_profile">编辑个人资料</string>
+    <string name="app_name_label">ShyTalk</string>
+    <string name="time_unit_day">天</string>
+    <string name="time_unit_hour">时</string>
+    <string name="time_unit_minute">分</string>
+    <string name="time_unit_second">秒</string>
+    <string name="time_unit_millisecond">毫秒</string>
+
+    <string name="splash_tagline">语音聊天室，重新定义。</string>
+    <string name="quantity_all">全部 (%1$d)</string>
+    <string name="english_language">英语</string>
+    <string name="google_sign_in_failed">Google 登录失败</string>
 </resources>

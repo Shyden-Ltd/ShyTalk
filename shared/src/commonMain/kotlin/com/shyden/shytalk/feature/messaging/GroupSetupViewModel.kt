@@ -128,15 +128,15 @@ class GroupSetupViewModel(
 
     fun updatePermission(field: String, level: GroupPermissions.PermissionLevel) {
         _uiState.update { state ->
-            val p = state.permissions
+            val permissions = state.permissions
             val updated = when (field) {
-                "whoCanSend" -> p.copy(whoCanSend = level)
-                "whoCanAddMembers" -> p.copy(whoCanAddMembers = level)
-                "whoCanEditInfo" -> p.copy(whoCanEditInfo = level)
-                "whoCanDeleteMessages" -> p.copy(whoCanDeleteMessages = level)
-                "whoCanMuteMembers" -> p.copy(whoCanMuteMembers = level)
-                "whoCanRemoveMembers" -> p.copy(whoCanRemoveMembers = level)
-                else -> p
+                "whoCanSend" -> permissions.copy(whoCanSend = level)
+                "whoCanAddMembers" -> permissions.copy(whoCanAddMembers = level)
+                "whoCanEditInfo" -> permissions.copy(whoCanEditInfo = level)
+                "whoCanDeleteMessages" -> permissions.copy(whoCanDeleteMessages = level)
+                "whoCanMuteMembers" -> permissions.copy(whoCanMuteMembers = level)
+                "whoCanRemoveMembers" -> permissions.copy(whoCanRemoveMembers = level)
+                else -> permissions
             }
             state.copy(permissions = updated)
         }
@@ -144,13 +144,13 @@ class GroupSetupViewModel(
 
     fun toggleSystemMessage(field: String) {
         _uiState.update { state ->
-            val c = state.systemMessageConfig
+            val config = state.systemMessageConfig
             val updated = when (field) {
-                "showJoins" -> c.copy(showJoins = !c.showJoins)
-                "showLeaves" -> c.copy(showLeaves = !c.showLeaves)
-                "showRoleChanges" -> c.copy(showRoleChanges = !c.showRoleChanges)
-                "showPermissionChanges" -> c.copy(showPermissionChanges = !c.showPermissionChanges)
-                else -> c
+                "showJoins" -> config.copy(showJoins = !config.showJoins)
+                "showLeaves" -> config.copy(showLeaves = !config.showLeaves)
+                "showRoleChanges" -> config.copy(showRoleChanges = !config.showRoleChanges)
+                "showPermissionChanges" -> config.copy(showPermissionChanges = !config.showPermissionChanges)
+                else -> config
             }
             state.copy(systemMessageConfig = updated)
         }

@@ -821,6 +821,7 @@ router.post('/economy/gift-batch', async (req, res) => {
       const recipientSnap = await db.doc(`users/${recipientId}`).get();
       if (!recipientSnap.exists) continue;
       const recipient = recipientSnap.data();
+      const recipientBeans = userField(recipient, 'shyBeans', 'shy_beans') || 0;
 
       const beanReward = Math.floor(coinValue * config.beanConversionRate * quantity);
 
@@ -946,6 +947,7 @@ router.post('/economy/backpack-send', async (req, res) => {
 
     // Transactions
     const senderCoins = userField(sender, 'shyCoins', 'shy_coins') || 0;
+    const recipientBeans = userField(recipient, 'shyBeans', 'shy_beans') || 0;
     const bpSentTxId = generateId();
     const bpReceivedTxId = generateId();
     const senderName = userField(sender, 'displayName', 'display_name') || 'user';
@@ -1025,9 +1027,9 @@ router.post('/economy/redeem-beans', async (req, res) => {
 });
 
 // ── Validate purchase ──
-// TODO: Add server-side Google Play purchase verification via googleapis.
+// TODO(SECURITY/HIGH): Add server-side Google Play purchase verification via googleapis.
 // Without it, a crafted request with a fake purchaseToken can credit coins.
-// For now, log all purchase attempts for manual audit.
+// Currently unverified — relies on manual audit logging as a stopgap.
 router.post('/economy/purchase', async (req, res) => {
   try {
     const uid = req.auth.uid;

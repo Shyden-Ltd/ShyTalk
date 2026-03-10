@@ -654,4 +654,56 @@
     <string name="who_can_message_description">Control who can send you private messages.</string>
     <string name="who_can_message_me">Who can message me</string>
     <string name="you_were_banned">You were banned from this room.</string>
+    <string name="getting_ready">Hazırlanıyor…</string>
+    <string name="send_all_warning_title">⚠️ UYARI ⚠️</string>
+    <string name="send_all_total_value">Toplam değer: 🪙 %1$d jeton</string>
+    <string name="send_gift_header">%1$dx %2$s gönder</string>
+    <string name="send_gift_header_multiple">%3$d kullanıcıya %1$dx %2$s gönder</string>
+    <string name="owner_away_banner">Sahip uzakta – Oda %1$s içinde kapanacak</string>
+    <string name="messages_title">Mesajlar</string>
+    <string name="no_conversations_yet">Henüz sohbet yok</string>
+    <string name="spin_again_with_cost">%1$s TEKRAR ÇEVİR · 🪙%2$d</string>
+    <string name="age_years_old">%1$d yaşında</string>
+    <string name="show_less">daha az</string>
+    <string name="show_more">daha fazla</string>
+    <string name="video_too_large">Video çok büyük. Lütfen daha kısa bir klip kullanın.</string>
+    <string name="file_too_large">Dosya çok büyük. Maksimum boyut 10 MB.</string>
+    <string name="this_user">bu kullanıcı</string>
+
+    <!-- Degraded Mode Banner -->
+    <string name="reduced_functionality">Sınırlı işlevsellik — bazı özellikler kullanılamayabilir</string>
+
+    <!-- Fullscreen Image Viewer -->
+    <string name="image_number">Görsel %1$d</string>
+    <string name="page_indicator">%1$d / %2$d</string>
+
+    <!-- Broadcast Banner -->
+    <string name="broadcast_gacha_win">%1$s Şans Çarkı’ndan %2$s%3$s%4$s kazandı!</string>
+    <string name="broadcast_gift_sent">%1$s, %5$s kişisine %2$s%3$s%4$s gönderdi!</string>
+
+    <string name="play_effect">Efekti oynat</string>
+    <string name="account_unlocked">Hesap kilidi açıldı</string>
+    <string name="account_suspended">Hesap askıya alındı</string>
+    <string name="police_duck_description">Polis ördek</string>
+    <string name="device_banned_title">Cihaz yasaklandı</string>
+    <string name="network_banned_title">Ağ yasaklandı</string>
+    <string name="device_banned_description">Bu cihaz ShyTalk kullanımından yasaklanmıştır.</string>
+    <string name="network_banned_description">Ağınız ShyTalk kullanımından yasaklanmıştır. Farklı bir ağdan bağlanmayı deneyin.</string>
+    <string name="full_screen_photo">Tam ekran fotoğraf</string>
+    <string name="cover_photo">Kapak fotoğrafı</string>
+    <string name="change_cover_photo">Kapak fotoğrafını değiştir</string>
+    <string name="profile_photo">Profil fotoğrafı</string>
+    <string name="change_profile_photo">Profil fotoğrafını değiştir</string>
+    <string name="edit_profile">Profili düzenle</string>
+    <string name="app_name_label">ShyTalk</string>
+    <string name="time_unit_day">GÜN</string>
+    <string name="time_unit_hour">SA</string>
+    <string name="time_unit_minute">DK</string>
+    <string name="time_unit_second">SN</string>
+    <string name="time_unit_millisecond">MS</string>
+
+    <string name="splash_tagline">Sesli sohbet odaları, yeniden tasarlandı.</string>
+    <string name="quantity_all">TÜMÜ (%1$d)</string>
+    <string name="english_language">İngilizce</string>
+    <string name="google_sign_in_failed">Google ile giriş başarısız</string>
 </resources>

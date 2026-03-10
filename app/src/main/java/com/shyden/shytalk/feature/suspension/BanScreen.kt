@@ -47,7 +47,7 @@ fun BanScreen(
         ) {
             Image(
                 painter = painterResource(R.drawable.police_duck),
-                contentDescription = "Police duck",
+                contentDescription = stringResource(Res.string.police_duck_description),
                 modifier = Modifier
                     .size(160.dp)
                     .clip(CircleShape)
@@ -56,7 +56,8 @@ fun BanScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = banTitle(banType),
+                text = if (banType == "device") stringResource(Res.string.device_banned_title)
+                       else stringResource(Res.string.network_banned_title),
                 style = MaterialTheme.typography.headlineMedium,
                 textAlign = TextAlign.Center
             )
@@ -64,7 +65,8 @@ fun BanScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                text = banDescription(banType),
+                text = if (banType == "device") stringResource(Res.string.device_banned_description)
+                       else stringResource(Res.string.network_banned_description),
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -122,13 +124,3 @@ fun BanScreen(
     }
 }
 
-internal fun banTitle(banType: String): String = when (banType) {
-    "device" -> "Device Banned"
-    else -> "Network Banned"
-}
-
-internal fun banDescription(banType: String): String = when (banType) {
-    "device" -> "This device has been banned from using ShyTalk."
-    else -> "Your network has been banned from using ShyTalk. " +
-        "Try connecting from a different network."
-}

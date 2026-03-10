@@ -654,4 +654,56 @@
     <string name="who_can_message_description">Control who can send you private messages.</string>
     <string name="who_can_message_me">Who can message me</string>
     <string name="you_were_banned">You were banned from this room.</string>
+    <string name="getting_ready">Voorbereiden…</string>
+    <string name="send_all_warning_title">⚠️ WAARSCHUWING ⚠️</string>
+    <string name="send_all_total_value">Totale waarde: 🪙 %1$d munten</string>
+    <string name="send_gift_header">Stuur %1$dx %2$s</string>
+    <string name="send_gift_header_multiple">Stuur %1$dx %2$s naar %3$d gebruikers</string>
+    <string name="owner_away_banner">Eigenaar afwezig – Kamer sluit over %1$s</string>
+    <string name="messages_title">Berichten</string>
+    <string name="no_conversations_yet">Nog geen gesprekken</string>
+    <string name="spin_again_with_cost">%1$s OPNIEUW DRAAIEN · 🪙%2$d</string>
+    <string name="age_years_old">%1$d jaar oud</string>
+    <string name="show_less">minder</string>
+    <string name="show_more">meer</string>
+    <string name="video_too_large">Video is te groot. Gebruik een kortere clip.</string>
+    <string name="file_too_large">Bestand is te groot. Maximale grootte is 10 MB.</string>
+    <string name="this_user">deze gebruiker</string>
+
+    <!-- Degraded Mode Banner -->
+    <string name="reduced_functionality">Beperkte functionaliteit — sommige functies zijn mogelijk niet beschikbaar</string>
+
+    <!-- Fullscreen Image Viewer -->
+    <string name="image_number">Afbeelding %1$d</string>
+    <string name="page_indicator">%1$d / %2$d</string>
+
+    <!-- Broadcast Banner -->
+    <string name="broadcast_gacha_win">%1$s won %2$s%3$s%4$s van het Geluksrad!</string>
+    <string name="broadcast_gift_sent">%1$s stuurde %2$s%3$s%4$s naar %5$s!</string>
+
+    <string name="play_effect">Effect afspelen</string>
+    <string name="account_unlocked">Account ontgrendeld</string>
+    <string name="account_suspended">Account opgeschort</string>
+    <string name="police_duck_description">Politie-eend</string>
+    <string name="device_banned_title">Apparaat verbannen</string>
+    <string name="network_banned_title">Netwerk verbannen</string>
+    <string name="device_banned_description">Dit apparaat is verbannen van het gebruik van ShyTalk.</string>
+    <string name="network_banned_description">Uw netwerk is verbannen van het gebruik van ShyTalk. Probeer verbinding te maken via een ander netwerk.</string>
+    <string name="full_screen_photo">Foto op volledig scherm</string>
+    <string name="cover_photo">Omslagfoto</string>
+    <string name="change_cover_photo">Omslagfoto wijzigen</string>
+    <string name="profile_photo">Profielfoto</string>
+    <string name="change_profile_photo">Profielfoto wijzigen</string>
+    <string name="edit_profile">Profiel bewerken</string>
+    <string name="app_name_label">ShyTalk</string>
+    <string name="time_unit_day">DAG</string>
+    <string name="time_unit_hour">UUR</string>
+    <string name="time_unit_minute">MIN</string>
+    <string name="time_unit_second">SEC</string>
+    <string name="time_unit_millisecond">MS</string>
+
+    <string name="splash_tagline">Spraakchatrooms, opnieuw uitgevonden.</string>
+    <string name="quantity_all">ALLES (%1$d)</string>
+    <string name="english_language">Engels</string>
+    <string name="google_sign_in_failed">Google-aanmelding mislukt</string>
 </resources>

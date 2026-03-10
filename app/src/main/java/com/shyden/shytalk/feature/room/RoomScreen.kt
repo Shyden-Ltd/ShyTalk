@@ -208,6 +208,8 @@ fun RoomScreen(
 
     val context = LocalContext.current
     val evidenceScope = rememberCoroutineScope()
+    val videoTooLargeMsg = stringResource(Res.string.video_too_large)
+    val fileTooLargeMsg = stringResource(Res.string.file_too_large)
 
     val reportEvidencePickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
@@ -225,7 +227,7 @@ fun RoomScreen(
                         reportEvidenceList.add(result)
                         reportEvidenceVersion++
                     } else {
-                        snackbarHostState.showSnackbar("Video is too large to upload. Please use a shorter clip.")
+                        snackbarHostState.showSnackbar(videoTooLargeMsg)
                     }
                 }
             } else {
@@ -236,7 +238,7 @@ fun RoomScreen(
                         reportEvidenceVersion++
                     } else {
                         evidenceScope.launch {
-                            snackbarHostState.showSnackbar("File is too large. Maximum size is 10 MB.")
+                            snackbarHostState.showSnackbar(fileTooLargeMsg)
                         }
                     }
                 }
@@ -536,11 +538,11 @@ fun RoomScreen(
 
     val voiceUsers by remember(room, participantUsers, seatedUserIds) {
         derivedStateOf {
-            val r = room ?: return@derivedStateOf emptyList<ParticipantInfo>()
+            val currentRoom = room ?: return@derivedStateOf emptyList<ParticipantInfo>()
             seatedUserIds.mapNotNull { uid ->
                 participantUsers[uid]?.let { user ->
-                    val seat = r.findUserSeat(uid)?.value
-                    ParticipantInfo(user, r.resolveRole(uid), isMuted = seat?.isMuted ?: false)
+                    val seat = currentRoom.findUserSeat(uid)?.value
+                    ParticipantInfo(user, currentRoom.resolveRole(uid), isMuted = seat?.isMuted ?: false)
                 }
             }.sortedWith(
                 compareBy<ParticipantInfo> { it.role.ordinal }
@@ -551,12 +553,12 @@ fun RoomScreen(
 
     val audienceUsers by remember(room, participantUsers, seatedUserIds) {
         derivedStateOf {
-            val r = room ?: return@derivedStateOf emptyList<ParticipantInfo>()
-            r.participantIds
+            val currentRoom = room ?: return@derivedStateOf emptyList<ParticipantInfo>()
+            currentRoom.participantIds
                 .filter { it !in seatedUserIds }
                 .mapNotNull { uid ->
                     participantUsers[uid]?.let { user ->
-                        ParticipantInfo(user, r.resolveRole(uid))
+                        ParticipantInfo(user, currentRoom.resolveRole(uid))
                     }
                 }
                 .sortedWith(
@@ -607,7 +609,7 @@ fun RoomScreen(
             topBar = {
                 if (!uiState.roomClosed) {
                     RoomToolbar(
-                        roomName = uiState.room?.name ?: "Room",
+                        roomName = uiState.room?.name ?: stringResource(Res.string.room),
                         participantCount = uiState.room?.participantIds?.size ?: 0,
                         roomExpiryRemainingMs = uiState.roomExpiryRemainingMs,
                         onBack = { onNavigateBack() },
@@ -668,7 +670,7 @@ fun RoomScreen(
                     verticalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        text = uiState.room?.name ?: "Room",
+                        text = uiState.room?.name ?: stringResource(Res.string.room),
                         style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.onBackground
                     )
@@ -1038,12 +1040,15 @@ fun RoomScreen(
                         { toIndex -> viewModel.moveSeat(targetSeatIndex, toIndex) }
                     } else null,
                     emptySeats = movableSeats,
-                    seatOccupantNames = remember(uiState.room?.seats, uiState.seatUsers) {
-                        uiState.room?.seats?.entries
-                            ?.filter { it.value.state == SeatState.OCCUPIED && it.value.userId != null }
-                            ?.associate { (key, seat) ->
-                                key.toInt() to (uiState.seatUsers[seat.userId]?.displayName ?: "User")
-                            } ?: emptyMap()
+                    seatOccupantNames = run {
+                        val fallbackName = stringResource(Res.string.user)
+                        remember(uiState.room?.seats, uiState.seatUsers, fallbackName) {
+                            uiState.room?.seats?.entries
+                                ?.filter { it.value.state == SeatState.OCCUPIED && it.value.userId != null }
+                                ?.associate { (key, seat) ->
+                                    key.toInt() to (uiState.seatUsers[seat.userId]?.displayName ?: fallbackName)
+                                } ?: emptyMap()
+                        }
                     },
                     onMakeHost = if (isOwner && isNotSelf && isTargetSeated
                         && targetRole == RoomRole.ATTENDEE) {

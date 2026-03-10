@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">ShyTalk</string>
+    <string name="notification_in_live_room">You are in a LIVE room</string>
+    <string name="notification_tap_to_return">Tap to return</string>
 </resources>

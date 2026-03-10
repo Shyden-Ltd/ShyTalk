@@ -62,11 +62,11 @@ router.get('/admin/logs', async (req, res) => {
       logs = logs.filter((log) => log.context?.route === route || log.route === route);
     }
     if (keyword) {
-      const kw = keyword.toLowerCase();
+      const lowerKeyword = keyword.toLowerCase();
       logs = logs.filter(
         (log) =>
-          (log.message && log.message.toLowerCase().includes(kw)) ||
-          (log.context && JSON.stringify(log.context).toLowerCase().includes(kw))
+          (log.message && log.message.toLowerCase().includes(lowerKeyword)) ||
+          (log.context && JSON.stringify(log.context).toLowerCase().includes(lowerKeyword))
       );
     }
 

@@ -69,20 +69,20 @@ fun LuckySpinConfetti(
         while (true) {
             withFrameMillis { frameTime ->
                 if (lastFrame == 0L) lastFrame = frameTime
-                val dt = ((frameTime - lastFrame).coerceIn(0, 32)).toFloat()
+                val deltaTime = ((frameTime - lastFrame).coerceIn(0, 32)).toFloat()
                 lastFrame = frameTime
 
                 var anyAlive = false
-                particles = particles.map { p ->
-                    if (p.opacity <= 0f) return@map p
+                particles = particles.map { particle ->
+                    if (particle.opacity <= 0f) return@map particle
                     anyAlive = true
-                    p.copy(
-                        x = p.x + p.vx * dt * 0.06f,
-                        y = p.y + p.vy * dt * 0.06f,
-                        vx = p.vx * 0.995f,
-                        vy = p.vy + p.gravity * dt * 0.06f,
-                        rotation = p.rotation + p.rotationSpeed * dt * 0.06f,
-                        opacity = if (p.y > 1f) (p.opacity - 0.02f).coerceAtLeast(0f) else p.opacity
+                    particle.copy(
+                        x = particle.x + particle.vx * deltaTime * 0.06f,
+                        y = particle.y + particle.vy * deltaTime * 0.06f,
+                        vx = particle.vx * 0.995f,
+                        vy = particle.vy + particle.gravity * deltaTime * 0.06f,
+                        rotation = particle.rotation + particle.rotationSpeed * deltaTime * 0.06f,
+                        opacity = if (particle.y > 1f) (particle.opacity - 0.02f).coerceAtLeast(0f) else particle.opacity
                     )
                 }
                 if (!anyAlive) {
@@ -96,26 +96,26 @@ fun LuckySpinConfetti(
     Canvas(modifier = modifier) {
         val w = size.width
         val h = size.height
-        for (p in particles) {
-            if (p.opacity <= 0f) continue
-            val px = p.x * w
-            val py = p.y * h
-            val s = p.particleSize
-            when (p.shape) {
+        for (particle in particles) {
+            if (particle.opacity <= 0f) continue
+            val px = particle.x * w
+            val py = particle.y * h
+            val pSize = particle.particleSize
+            when (particle.shape) {
                 0 -> drawRect(
-                    color = p.color.copy(alpha = p.opacity.coerceIn(0f, 1f)),
-                    topLeft = Offset(px - s / 2, py - s * 0.3f),
-                    size = Size(s, s * 0.6f)
+                    color = particle.color.copy(alpha = particle.opacity.coerceIn(0f, 1f)),
+                    topLeft = Offset(px - pSize / 2, py - pSize * 0.3f),
+                    size = Size(pSize, pSize * 0.6f)
                 )
                 1 -> drawCircle(
-                    color = p.color.copy(alpha = p.opacity.coerceIn(0f, 1f)),
-                    radius = s / 2,
+                    color = particle.color.copy(alpha = particle.opacity.coerceIn(0f, 1f)),
+                    radius = pSize / 2,
                     center = Offset(px, py)
                 )
                 else -> drawRect(
-                    color = p.color.copy(alpha = p.opacity.coerceIn(0f, 1f)),
-                    topLeft = Offset(px - s / 2, py - 1f),
-                    size = Size(s, 2.5f)
+                    color = particle.color.copy(alpha = particle.opacity.coerceIn(0f, 1f)),
+                    topLeft = Offset(px - pSize / 2, py - 1f),
+                    size = Size(pSize, 2.5f)
                 )
             }
         }

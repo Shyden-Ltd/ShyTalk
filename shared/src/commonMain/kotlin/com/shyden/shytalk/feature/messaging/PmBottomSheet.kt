@@ -28,6 +28,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
@@ -114,7 +117,7 @@ private fun PmSheetListView(
             Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Messages",
+                text = stringResource(Res.string.messages_title),
                 style = MaterialTheme.typography.titleMedium
             )
         }
@@ -130,7 +133,7 @@ private fun PmSheetListView(
             }
         } else if (conversations.isEmpty()) {
             Text(
-                text = "No conversations yet",
+                text = stringResource(Res.string.no_conversations_yet),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(16.dp)

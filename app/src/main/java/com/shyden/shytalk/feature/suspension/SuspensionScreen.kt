@@ -101,7 +101,7 @@ fun SuspensionScreen(
     ) {
         Image(
             painter = painterResource(R.drawable.police_duck),
-            contentDescription = "Police duck",
+            contentDescription = stringResource(Res.string.police_duck_description),
             modifier = Modifier
                 .size(160.dp)
                 .clip(CircleShape)
@@ -110,7 +110,8 @@ fun SuspensionScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = suspensionTitle(countdownExpired),
+            text = if (countdownExpired) stringResource(Res.string.account_unlocked)
+                   else stringResource(Res.string.account_suspended),
             style = MaterialTheme.typography.headlineMedium,
             textAlign = TextAlign.Center
         )
@@ -310,7 +311,7 @@ fun SuspensionScreen(
                 contentColor = MaterialTheme.colorScheme.onSurfaceVariant
             )
         ) {
-            Text(if (countdownExpired) "Sign In" else "Sign Out")
+            Text(if (countdownExpired) stringResource(Res.string.sign_in) else stringResource(Res.string.sign_out))
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -344,16 +345,16 @@ private fun CountdownClock(
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (days > 0) {
-            ClockSegment(days.toString(), "DAY", segmentBg, digitColor, labelColor)
+            ClockSegment(days.toString(), stringResource(Res.string.time_unit_day), segmentBg, digitColor, labelColor)
             ClockSeparator(separatorColor)
         }
-        ClockSegment(hours.toString().padStart(2, '0'), "HR", segmentBg, digitColor, labelColor)
+        ClockSegment(hours.toString().padStart(2, '0'), stringResource(Res.string.time_unit_hour), segmentBg, digitColor, labelColor)
         ClockSeparator(separatorColor)
-        ClockSegment(minutes.toString().padStart(2, '0'), "MIN", segmentBg, digitColor, labelColor)
+        ClockSegment(minutes.toString().padStart(2, '0'), stringResource(Res.string.time_unit_minute), segmentBg, digitColor, labelColor)
         ClockSeparator(separatorColor)
-        ClockSegment(seconds.toString().padStart(2, '0'), "SEC", segmentBg, digitColor, labelColor)
+        ClockSegment(seconds.toString().padStart(2, '0'), stringResource(Res.string.time_unit_second), segmentBg, digitColor, labelColor)
         ClockSeparator(separatorColor)
-        ClockSegment(millis.toString().padStart(3, '0'), "MS", segmentBg, digitColor, labelColor, animate = false)
+        ClockSegment(millis.toString().padStart(3, '0'), stringResource(Res.string.time_unit_millisecond), segmentBg, digitColor, labelColor, animate = false)
     }
 }
 
@@ -419,9 +420,6 @@ private fun ClockSeparator(color: androidx.compose.ui.graphics.Color) {
         modifier = Modifier.padding(horizontal = 2.dp, vertical = 0.dp)
     )
 }
-
-internal fun suspensionTitle(countdownExpired: Boolean): String =
-    if (countdownExpired) "Account Unlocked" else "Account Suspended"
 
 internal fun shouldShowReason(countdownExpired: Boolean, reason: String?): Boolean =
     !countdownExpired && !reason.isNullOrBlank()

@@ -185,6 +185,7 @@ router.post('/conversations/:id/messages', async (req, res) => {
     const convSnap = await db.doc(`conversations/${conversationId}`).get();
     if (!convSnap.exists) return res.status(404).json({ error: 'Conversation not found' });
     const convDoc = convSnap.data();
+    if (!convDoc) return res.status(500).json({ error: 'Corrupted conversation data' });
 
     const participantIds = convDoc.participantIds || [];
     if (!participantIds.includes(senderId)) {

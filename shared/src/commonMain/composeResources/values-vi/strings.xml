@@ -654,4 +654,56 @@
     <string name="who_can_message_description">Control who can send you private messages.</string>
     <string name="who_can_message_me">Who can message me</string>
     <string name="you_were_banned">You were banned from this room.</string>
+    <string name="getting_ready">Đang chuẩn bị…</string>
+    <string name="send_all_warning_title">⚠️ CẢNH BÁO ⚠️</string>
+    <string name="send_all_total_value">Tổng giá trị: 🪙 %1$d xu</string>
+    <string name="send_gift_header">Gửi %1$dx %2$s</string>
+    <string name="send_gift_header_multiple">Gửi %1$dx %2$s cho %3$d người dùng</string>
+    <string name="owner_away_banner">Chủ phòng vắng - Phòng đóng sau %1$s</string>
+    <string name="messages_title">Tin nhắn</string>
+    <string name="no_conversations_yet">Chưa có cuộc trò chuyện nào</string>
+    <string name="spin_again_with_cost">%1$s QUAY LẠI · 🪙%2$d</string>
+    <string name="age_years_old">%1$d tuổi</string>
+    <string name="show_less">ít hơn</string>
+    <string name="show_more">thêm</string>
+    <string name="video_too_large">Video quá lớn. Vui lòng dùng clip ngắn hơn.</string>
+    <string name="file_too_large">Tệp quá lớn. Kích thước tối đa 10 MB.</string>
+    <string name="this_user">người dùng này</string>
+
+    <!-- Degraded Mode Banner -->
+    <string name="reduced_functionality">Chức năng hạn chế — một số tính năng có thể không khả dụng</string>
+
+    <!-- Fullscreen Image Viewer -->
+    <string name="image_number">Hình ảnh %1$d</string>
+    <string name="page_indicator">%1$d / %2$d</string>
+
+    <!-- Broadcast Banner -->
+    <string name="broadcast_gacha_win">%1$s đã thắng %2$s%3$s%4$s từ Vòng Quay May Mắn!</string>
+    <string name="broadcast_gift_sent">%1$s đã gửi %2$s%3$s%4$s cho %5$s!</string>
+
+    <string name="play_effect">Phát hiệu ứng</string>
+    <string name="account_unlocked">Tài khoản đã mở khóa</string>
+    <string name="account_suspended">Tài khoản bị đình chỉ</string>
+    <string name="police_duck_description">Vịt cảnh sát</string>
+    <string name="device_banned_title">Thiết bị bị cấm</string>
+    <string name="network_banned_title">Mạng bị cấm</string>
+    <string name="device_banned_description">Thiết bị này đã bị cấm sử dụng ShyTalk.</string>
+    <string name="network_banned_description">Mạng của bạn đã bị cấm sử dụng ShyTalk. Hãy thử kết nối từ mạng khác.</string>
+    <string name="full_screen_photo">Ảnh toàn màn hình</string>
+    <string name="cover_photo">Ảnh bìa</string>
+    <string name="change_cover_photo">Thay đổi ảnh bìa</string>
+    <string name="profile_photo">Ảnh hồ sơ</string>
+    <string name="change_profile_photo">Thay đổi ảnh hồ sơ</string>
+    <string name="edit_profile">Chỉnh sửa hồ sơ</string>
+    <string name="app_name_label">ShyTalk</string>
+    <string name="time_unit_day">NGÀY</string>
+    <string name="time_unit_hour">GIỞ</string>
+    <string name="time_unit_minute">PHÚT</string>
+    <string name="time_unit_second">GIÂY</string>
+    <string name="time_unit_millisecond">MS</string>
+
+    <string name="splash_tagline">Phòng trò chuyện thoại, được tái thiết kế.</string>
+    <string name="quantity_all">TẤT CẢ (%1$d)</string>
+    <string name="english_language">Tiếng Anh</string>
+    <string name="google_sign_in_failed">Đăng nhập Google thất bại</string>
 </resources>

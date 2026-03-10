@@ -21,26 +21,30 @@ async function orphanedStorage() {
   referencedKeys.add('system/shytalk_icon.webp');
 
   // Users -> profilePhotoUrl, coverPhotoUrl, preSuspension*
-  const usersSnap = await db.collection('users').limit(2000).get();
+  const usersSnap = await db.collection('users').select(
+    'profilePhotoUrl', 'profile_photo_url', 'coverPhotoUrl', 'cover_photo_url',
+    'preSuspensionProfilePhotoUrl', 'pre_suspension_profile_photo_url',
+    'preSuspensionCoverPhotoUrl', 'pre_suspension_cover_photo_url'
+  ).limit(2000).get();
   for (const doc of usersSnap.docs) {
-    const u = doc.data();
+    const userData = doc.data();
     for (const url of [
-      u.profilePhotoUrl || u.profile_photo_url,
-      u.coverPhotoUrl || u.cover_photo_url,
-      u.preSuspensionProfilePhotoUrl || u.pre_suspension_profile_photo_url,
-      u.preSuspensionCoverPhotoUrl || u.pre_suspension_cover_photo_url,
+      userData.profilePhotoUrl || userData.profile_photo_url,
+      userData.coverPhotoUrl || userData.cover_photo_url,
+      userData.preSuspensionProfilePhotoUrl || userData.pre_suspension_profile_photo_url,
+      userData.preSuspensionCoverPhotoUrl || userData.pre_suspension_cover_photo_url,
     ]) {
-      const k = extractKey(url);
-      if (k) referencedKeys.add(k);
+      const key = extractKey(url);
+      if (key) referencedKeys.add(key);
     }
   }
 
-  // Conversations -> groupPhotoUrl
-  const convsSnap = await db.collection('conversations').limit(2000).get();
+  // Conversations -> groupPhotoUrl (select only needed fields to save bandwidth)
+  const convsSnap = await db.collection('conversations').select('groupPhotoUrl', 'group_photo_url').limit(2000).get();
   for (const doc of convsSnap.docs) {
-    const c = doc.data();
-    const k = extractKey(c.groupPhotoUrl || c.group_photo_url);
-    if (k) referencedKeys.add(k);
+    const convData = doc.data();
+    const key = extractKey(convData.groupPhotoUrl || convData.group_photo_url);
+    if (key) referencedKeys.add(key);
   }
 
   // Conversation messages -> imageUrls (array), stickerUrl
@@ -58,8 +62,8 @@ async function orphanedStorage() {
       const urls = msg.imageUrls || msg.image_urls || [];
       const urlArray = Array.isArray(urls) ? urls : [];
       for (const url of urlArray) {
-        const k = extractKey(url);
-        if (k) referencedKeys.add(k);
+        const storageKey = extractKey(url);
+        if (storageKey) referencedKeys.add(storageKey);
       }
     }
 
@@ -69,31 +73,31 @@ async function orphanedStorage() {
       .get();
     for (const msgDoc of stickerMessagesSnap.docs) {
       const msg = msgDoc.data();
-      const k = extractKey(msg.stickerUrl || msg.sticker_url);
-      if (k) referencedKeys.add(k);
+      const storageKey = extractKey(msg.stickerUrl || msg.sticker_url);
+      if (storageKey) referencedKeys.add(storageKey);
     }
   }
 
   // Reports + archive -> evidenceUrls (array)
   for (const collection of ['reports', 'reportsArchive']) {
-    const snap = await db.collection(collection).limit(1000).get();
+    const snap = await db.collection(collection).select('evidenceUrls', 'evidence_urls').limit(1000).get();
     for (const doc of snap.docs) {
       const row = doc.data();
       const urls = row.evidenceUrls || row.evidence_urls || [];
       const urlArray = Array.isArray(urls) ? urls : [];
       for (const url of urlArray) {
-        const k = extractKey(url);
-        if (k) referencedKeys.add(k);
+        const evidenceKey = extractKey(url);
+        if (evidenceKey) referencedKeys.add(evidenceKey);
       }
     }
   }
 
   // Banners -> imageUrl
-  const bannersSnap = await db.collection('banners').limit(500).get();
+  const bannersSnap = await db.collection('banners').select('imageUrl', 'image_url').limit(500).get();
   for (const doc of bannersSnap.docs) {
-    const b = doc.data();
-    const k = extractKey(b.imageUrl || b.image_url);
-    if (k) referencedKeys.add(k);
+    const bannerData = doc.data();
+    const bannerKey = extractKey(bannerData.imageUrl || bannerData.image_url);
+    if (bannerKey) referencedKeys.add(bannerKey);
   }
 
   // List and delete orphaned R2 objects
@@ -105,16 +109,20 @@ async function orphanedStorage() {
   let totalDeleted = 0;
 
   for (const folder of folders) {
-    const allKeys = await r2.listObjects(folder);
-    const toDelete = allKeys.filter(k => !referencedKeys.has(k));
+    try {
+      const allKeys = await r2.listObjects(folder);
+      const toDelete = allKeys.filter(objKey => !referencedKeys.has(objKey));
 
-    if (toDelete.length > 0) {
-      await r2.deleteObjects(toDelete);
+      if (toDelete.length > 0) {
+        await r2.deleteObjects(toDelete);
+      }
+
+      const folderName = folder.replace('/', '');
+      log.info('cron', 'orphanedStorage: folder cleanup', { folder: folderName, deleted: toDelete.length, total: allKeys.length });
+      totalDeleted += toDelete.length;
+    } catch (err) {
+      log.error('cron', 'orphanedStorage: folder cleanup failed', { folder, error: err.message });
     }
-
-    const folderName = folder.replace('/', '');
-    log.info('cron', 'orphanedStorage: folder cleanup', { folder: folderName, deleted: toDelete.length, total: allKeys.length });
-    totalDeleted += toDelete.length;
   }
 
   log.info('cron', 'orphanedStorage: cleanup complete', { totalDeleted });

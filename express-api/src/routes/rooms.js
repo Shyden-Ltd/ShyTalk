@@ -101,7 +101,7 @@ router.post('/rooms/:roomId/seat-requests', async (req, res) => {
     const body = req.body;
     const seatIndex = body?.seatIndex;
     const userName = (body?.userName || '').slice(0, MAX_USER_NAME_LENGTH);
-    if (seatIndex == null || typeof seatIndex !== 'number' || seatIndex < 0 || seatIndex > MAX_SEAT_INDEX) {
+    if (seatIndex == null || typeof seatIndex !== 'number' || !Number.isInteger(seatIndex) || seatIndex < 0 || seatIndex > MAX_SEAT_INDEX) {
       return res.status(400).json({ error: 'Valid seatIndex required (0-20)' });
     }
     const roomId = req.params.roomId;

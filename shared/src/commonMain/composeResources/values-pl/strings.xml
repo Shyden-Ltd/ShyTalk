@@ -654,4 +654,56 @@
     <string name="who_can_message_description">Control who can send you private messages.</string>
     <string name="who_can_message_me">Who can message me</string>
     <string name="you_were_banned">You were banned from this room.</string>
+    <string name="getting_ready">Przygotowywanie…</string>
+    <string name="send_all_warning_title">⚠️ OSTRZEŻENIE ⚠️</string>
+    <string name="send_all_total_value">Łączna wartość: 🪙 %1$d monet</string>
+    <string name="send_gift_header">Wyślij %1$dx %2$s</string>
+    <string name="send_gift_header_multiple">Wyślij %1$dx %2$s do %3$d użytkowników</string>
+    <string name="owner_away_banner">Właściciel nieobecny – Pokój zamknie się za %1$s</string>
+    <string name="messages_title">Wiadomości</string>
+    <string name="no_conversations_yet">Brak rozmów</string>
+    <string name="spin_again_with_cost">%1$s ZAKRĘĆ PONOWNIE · 🪙%2$d</string>
+    <string name="age_years_old">%1$d lat</string>
+    <string name="show_less">mniej</string>
+    <string name="show_more">więcej</string>
+    <string name="video_too_large">Film jest za duży. Użyj krótszego klipu.</string>
+    <string name="file_too_large">Plik jest za duży. Maksymalny rozmiar to 10 MB.</string>
+    <string name="this_user">ten użytkownik</string>
+
+    <!-- Degraded Mode Banner -->
+    <string name="reduced_functionality">Ograniczona funkcjonalność — niektóre funkcje mogą być niedostępne</string>
+
+    <!-- Fullscreen Image Viewer -->
+    <string name="image_number">Obraz %1$d</string>
+    <string name="page_indicator">%1$d / %2$d</string>
+
+    <!-- Broadcast Banner -->
+    <string name="broadcast_gacha_win">%1$s wygrał(a) %2$s%3$s%4$s w Kole Szczęścia!</string>
+    <string name="broadcast_gift_sent">%1$s wysłał(a) %2$s%3$s%4$s do %5$s!</string>
+
+    <string name="play_effect">Odtwórz efekt</string>
+    <string name="account_unlocked">Konto odblokowane</string>
+    <string name="account_suspended">Konto zawieszone</string>
+    <string name="police_duck_description">Policyjny kaczor</string>
+    <string name="device_banned_title">Urządzenie zablokowane</string>
+    <string name="network_banned_title">Sieć zablokowana</string>
+    <string name="device_banned_description">To urządzenie zostało zablokowane w ShyTalk.</string>
+    <string name="network_banned_description">Twoja sieć została zablokowana w ShyTalk. Spróbuj połączyć się z innej sieci.</string>
+    <string name="full_screen_photo">Zdjęcie na pełnym ekranie</string>
+    <string name="cover_photo">Zdjęcie w tle</string>
+    <string name="change_cover_photo">Zmień zdjęcie w tle</string>
+    <string name="profile_photo">Zdjęcie profilowe</string>
+    <string name="change_profile_photo">Zmień zdjęcie profilowe</string>
+    <string name="edit_profile">Edytuj profil</string>
+    <string name="app_name_label">ShyTalk</string>
+    <string name="time_unit_day">DZI</string>
+    <string name="time_unit_hour">GODZ</string>
+    <string name="time_unit_minute">MIN</string>
+    <string name="time_unit_second">SEK</string>
+    <string name="time_unit_millisecond">MS</string>
+
+    <string name="splash_tagline">Pokoje czatu głosowego, na nowo.</string>
+    <string name="quantity_all">WSZYSTKO (%1$d)</string>
+    <string name="english_language">Angielski</string>
+    <string name="google_sign_in_failed">Logowanie przez Google nie powiodło się</string>
 </resources>

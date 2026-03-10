@@ -602,7 +602,7 @@ router.post('/cleanup/all-private-messages', async (req, res) => {
         const urls = msg.imageUrls || [];
         for (const url of urls) {
           if (url && url.startsWith(CDN_PREFIX)) {
-            try { await r2.deleteObject(url.slice(CDN_PREFIX.length)); mediaDeleted++; } catch (_) {}
+            try { await r2.deleteObject(url.slice(CDN_PREFIX.length)); mediaDeleted++; } catch (err) { log.warn('admin-cleanup', 'R2 delete failed', { key: url.slice(CDN_PREFIX.length), error: err.message }); }
           }
         }
       }
@@ -640,7 +640,7 @@ router.post('/cleanup/all-group-chats', async (req, res) => {
       // Delete group photo from R2
       const photoUrl = conv.groupPhotoUrl || conv.group_photo_url;
       if (photoUrl && photoUrl.startsWith(CDN_PREFIX)) {
-        try { await r2.deleteObject(photoUrl.slice(CDN_PREFIX.length)); mediaDeleted++; } catch (_) {}
+        try { await r2.deleteObject(photoUrl.slice(CDN_PREFIX.length)); mediaDeleted++; } catch (err) { log.warn('admin-cleanup', 'R2 delete failed', { key: photoUrl.slice(CDN_PREFIX.length), error: err.message }); }
       }
       // Delete message images
       const msgsSnap = await db.collection(`conversations/${conv.id}/messages`).get();
@@ -649,7 +649,7 @@ router.post('/cleanup/all-group-chats', async (req, res) => {
         const urls = msg.imageUrls || [];
         for (const url of urls) {
           if (url && url.startsWith(CDN_PREFIX)) {
-            try { await r2.deleteObject(url.slice(CDN_PREFIX.length)); mediaDeleted++; } catch (_) {}
+            try { await r2.deleteObject(url.slice(CDN_PREFIX.length)); mediaDeleted++; } catch (err) { log.warn('admin-cleanup', 'R2 delete failed', { key: url.slice(CDN_PREFIX.length), error: err.message }); }
           }
         }
       }
@@ -684,7 +684,7 @@ router.post('/cleanup/all-rooms', async (req, res) => {
     for (let i = 0; i < closedRooms.length; i += 20) {
       const batch = closedRooms.slice(i, i + 20);
       for (const room of batch) {
-        try { await deleteRoom(room.id); deleted++; } catch (_) {}
+        try { await deleteRoom(room.id); deleted++; } catch (err) { log.warn('admin-cleanup', 'Room delete failed', { roomId: room.id, error: err.message }); }
       }
     }
 
@@ -906,24 +906,24 @@ router.post('/cleanup/orphaned-storage', async (req, res) => {
     // ── Users ──
     const usersSnap = await db.collection('users').orderBy('uid').get();
     for (const doc of usersSnap.docs) {
-      const u = doc.data();
+      const userData = doc.data();
       for (const field of [
         'profilePhotoUrl', 'coverPhotoUrl',
         'preSuspensionProfilePhotoUrl', 'preSuspensionCoverPhotoUrl',
         'profile_photo_url', 'cover_photo_url',
         'pre_suspension_profile_photo_url', 'pre_suspension_cover_photo_url',
       ]) {
-        const k = extractKey(u[field]);
-        if (k) referencedKeys.add(k);
+        const storageKey = extractKey(userData[field]);
+        if (storageKey) referencedKeys.add(storageKey);
       }
     }
 
     // ── Conversations (group photo + message images) ──
     const convsSnap = await db.collection('conversations').limit(2000).get();
-    const convs = convsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    for (const c of convs) {
-      const k = extractKey(c.groupPhotoUrl ?? c.group_photo_url);
-      if (k) referencedKeys.add(k);
+    const convs = convsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    for (const conv of convs) {
+      const storageKey = extractKey(conv.groupPhotoUrl ?? conv.group_photo_url);
+      if (storageKey) referencedKeys.add(storageKey);
     }
 
     // ── Conversation messages (IMAGE type) — cap at 30 convs ──
@@ -938,8 +938,8 @@ router.post('/cleanup/orphaned-storage', async (req, res) => {
         const urls = msg.imageUrls ?? msg.image_urls;
         if (Array.isArray(urls)) {
           for (const url of urls) {
-            const k = extractKey(url);
-            if (k) referencedKeys.add(k);
+            const imageKey = extractKey(url);
+            if (imageKey) referencedKeys.add(imageKey);
           }
         }
       }
@@ -947,7 +947,7 @@ router.post('/cleanup/orphaned-storage', async (req, res) => {
 
     // ── Room messages (IMAGE type) — cap at 30 rooms ──
     const roomsSnap = await db.collection('rooms').limit(200).get();
-    const rooms = roomsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const rooms = roomsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     const roomsToScan = rooms.slice(0, 30);
     for (const room of roomsToScan) {
       const msgsSnap = await db.collection(`rooms/${room.id}/messages`)
@@ -959,8 +959,8 @@ router.post('/cleanup/orphaned-storage', async (req, res) => {
         const urls = msg.imageUrls ?? msg.image_urls;
         if (Array.isArray(urls)) {
           for (const url of urls) {
-            const k = extractKey(url);
-            if (k) referencedKeys.add(k);
+            const imageKey = extractKey(url);
+            if (imageKey) referencedKeys.add(imageKey);
           }
         }
       }
@@ -976,8 +976,8 @@ router.post('/cleanup/orphaned-storage', async (req, res) => {
       const urls = row.evidenceUrls ?? row.evidence_urls;
       if (Array.isArray(urls)) {
         for (const url of urls) {
-          const k = extractKey(url);
-          if (k) referencedKeys.add(k);
+          const evidenceKey = extractKey(url);
+          if (evidenceKey) referencedKeys.add(evidenceKey);
         }
       }
     }
@@ -985,9 +985,9 @@ router.post('/cleanup/orphaned-storage', async (req, res) => {
     // ── Banners ──
     const bannersSnap = await db.collection('banners').get();
     for (const doc of bannersSnap.docs) {
-      const b = doc.data();
-      const k = extractKey(b.imageUrl ?? b.image_url);
-      if (k) referencedKeys.add(k);
+      const bannerData = doc.data();
+      const storageKey = extractKey(bannerData.imageUrl ?? bannerData.image_url);
+      if (storageKey) referencedKeys.add(storageKey);
     }
 
     // ── List and delete orphans ──
@@ -1013,7 +1013,7 @@ router.post('/cleanup/orphaned-storage', async (req, res) => {
     res.json({ success: true, summary, totalDeleted });
   } catch (err) {
     log.error('admin-cleanup', 'Orphaned storage cleanup failed', { error: err.message });
-    res.status(500).json({ error: `Cleanup failed: ${err.message}` });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

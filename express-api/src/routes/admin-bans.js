@@ -113,7 +113,20 @@ router.post('/admin/bans/network', async (req, res) => {
     if (!type || !validTypes.includes(type)) {
       return res.status(400).json({ error: 'type must be one of: ip, subnet, asn' });
     }
-    if (!value) return res.status(400).json({ error: 'value is required' });
+    if (!value || typeof value !== 'string') return res.status(400).json({ error: 'value is required' });
+
+    // Validate format based on type
+    const IP_REGEX = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
+    const CIDR_REGEX = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/;
+    if (type === 'ip' && !IP_REGEX.test(value)) {
+      return res.status(400).json({ error: 'Invalid IP address format' });
+    }
+    if (type === 'subnet' && !CIDR_REGEX.test(value)) {
+      return res.status(400).json({ error: 'Invalid CIDR subnet format (e.g. 192.168.0.0/24)' });
+    }
+    if (type === 'asn' && !/^\d+$/.test(value)) {
+      return res.status(400).json({ error: 'ASN must be numeric' });
+    }
 
     const banId = generateId();
     const expiresAt = parseExpiry(duration);

@@ -28,6 +28,7 @@ router.get('/fun-facts', async (req, res) => {
       [results[i], results[j]] = [results[j], results[i]];
     }
 
+    res.set('Cache-Control', 'public, max-age=3600');
     return res.json(results);
   } catch (err) {
     log.error('fun-facts', 'Failed to fetch active fun facts', { error: err.message });

@@ -49,6 +49,7 @@ router.get('/config/:key', async (req, res) => {
     }
     // Remove the Firestore doc id field, return plain config object
     const { id, ...config } = { id: snap.id, ...snap.data() };
+    res.set('Cache-Control', 'public, max-age=300');
     return res.json(config);
   } catch (err) {
     log.error('config', 'Error fetching config', { key: req.params.key, error: err.message });
@@ -95,15 +96,35 @@ router.put('/config/economy', async (req, res) => {
   }
 });
 
+// Allowed fields per config key to prevent mass assignment
+const CONFIG_ALLOWED_FIELDS = {
+  app: ['minVersionCode', 'latestVersionCode', 'latestVersionName', 'maintenanceMode', 'maintenanceMessage'],
+  moderation: ['maxWarnings', 'suspensionDays', 'autoModEnabled', 'bannedWords', 'reportThreshold'],
+};
+
 // -- Update config value (admin) --
 router.put('/config/:key', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
     const body = req.body;
-    if (!body) return res.status(400).json({ error: 'Invalid JSON body' });
+    if (!body || typeof body !== 'object') return res.status(400).json({ error: 'Invalid JSON body' });
 
-    await db.doc(`config/${req.params.key}`).set(body, { merge: true });
+    const allowedFields = CONFIG_ALLOWED_FIELDS[req.params.key];
+    if (!allowedFields) {
+      return res.status(400).json({ error: `Unknown config key: ${req.params.key}. Use a dedicated endpoint for economy config.` });
+    }
+
+    // Filter to only allowed fields
+    const filtered = {};
+    for (const field of allowedFields) {
+      if (field in body) filtered[field] = body[field];
+    }
+    if (Object.keys(filtered).length === 0) {
+      return res.status(400).json({ error: 'No valid fields provided' });
+    }
+
+    await db.doc(`config/${req.params.key}`).set(filtered, { merge: true });
 
     return res.json({ success: true });
   } catch (err) {

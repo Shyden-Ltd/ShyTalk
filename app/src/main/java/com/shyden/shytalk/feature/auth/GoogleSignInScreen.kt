@@ -246,7 +246,7 @@ fun GoogleSignInScreen(
                         } catch (e: Exception) {
                             isSigningIn = false
                             snackbarHostState.showSnackbar(
-                                e.message ?: "Google sign-in failed"
+                                e.message ?: stringResource(Res.string.google_sign_in_failed)
                             )
                         }
                     }

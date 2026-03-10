@@ -89,9 +89,9 @@ class DailyRewardViewModel(
                 now.date.minus(DatePeriod(days = 1))
             }
             for (i in 0 until streak) {
-                val d = lastClaimedDate.minus(DatePeriod(days = i))
-                if (d.year == currentYear && d.monthNumber == currentMonth) {
-                    claimedDays.add(d.dayOfMonth)
+                val claimedDate = lastClaimedDate.minus(DatePeriod(days = i))
+                if (claimedDate.year == currentYear && claimedDate.monthNumber == currentMonth) {
+                    claimedDays.add(claimedDate.dayOfMonth)
                 }
             }
         }

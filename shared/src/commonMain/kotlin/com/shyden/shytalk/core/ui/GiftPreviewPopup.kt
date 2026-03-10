@@ -35,15 +35,9 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.model.GiftEvent
-
-/** Derive an accent color from coin value tier. */
-private fun accentColorForValue(coinValue: Int): Color = when {
-    coinValue < 50 -> Color(0xFF9E9E9E)
-    coinValue < 200 -> Color(0xFF4CAF50)
-    coinValue < 2000 -> Color(0xFF2196F3)
-    coinValue < 10000 -> Color(0xFF9C27B0)
-    else -> Color(0xFFFF9800)
-}
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.play_effect
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Full-screen popup showing a gift preview with large icon, name, value,
@@ -57,8 +51,6 @@ fun GiftPreviewPopup(
     modifier: Modifier = Modifier
 ) {
     var showEffect by remember { mutableStateOf(false) }
-
-    val accentColor = accentColorForValue(gift.coinValue)
 
     Box(
         modifier = modifier
@@ -99,14 +91,14 @@ fun GiftPreviewPopup(
                     Surface(
                         modifier = Modifier.size(96.dp),
                         shape = CircleShape,
-                        color = accentColor.copy(alpha = 0.15f)
+                        color = MaterialTheme.colorScheme.primaryContainer
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Text(
                                 text = gift.name.take(2).uppercase(),
                                 fontSize = 28.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = accentColor
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
                     }
@@ -138,13 +130,13 @@ fun GiftPreviewPopup(
                 Button(
                     onClick = { showEffect = true },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = accentColor.copy(alpha = 0.15f),
-                        contentColor = accentColor
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     ),
                     shape = RoundedCornerShape(50)
                 ) {
                     Text(
-                        text = "Play Effect",
+                        text = stringResource(Res.string.play_effect),
                         fontWeight = FontWeight.Bold
                     )
                 }

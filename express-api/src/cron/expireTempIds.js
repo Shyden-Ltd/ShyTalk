@@ -15,7 +15,7 @@ async function expireTempIds() {
     batch.update(doc.ref, { tempUniqueId: null, tempUniqueIdExpiry: null });
   }
   await batch.commit();
-  log.info('cron', `Expired ${snap.size} temp IDs`);
+  log.info('cron', 'expireTempIds: expired temp IDs', { count: snap.size });
 }
 
 module.exports = expireTempIds;

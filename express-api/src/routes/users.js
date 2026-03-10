@@ -108,6 +108,17 @@ router.patch('/users/:uid', async (req, res) => {
         return res.status(400).json({ error: `${key} must be an integer` });
       }
     }
+    // Bounds validation for DND time fields
+    for (const key of ['dndStartHour', 'dndEndHour']) {
+      if (key in updates && (updates[key] < 0 || updates[key] > 23)) {
+        return res.status(400).json({ error: `${key} must be between 0 and 23` });
+      }
+    }
+    for (const key of ['dndStartMinute', 'dndEndMinute']) {
+      if (key in updates && (updates[key] < 0 || updates[key] > 59)) {
+        return res.status(400).json({ error: `${key} must be between 0 and 59` });
+      }
+    }
 
     log.info('users', 'Updating profile', { userId: req.params.uid, fields: Object.keys(updates) });
     await db.doc(`users/${req.params.uid}`).update(updates);
@@ -193,16 +204,16 @@ router.post('/users/:uid/unique-id', async (req, res) => {
     // Atomic increment of the global counter via Firestore transaction
     // Floor guard is inside the transaction to avoid race conditions
     const counterRef = db.doc('counters/uniqueId');
+    const userRef = db.doc(`users/${req.params.uid}`);
     let newId = await db.runTransaction(async (t) => {
       const snap = await t.get(counterRef);
       let current = snap.exists ? (snap.data().value || 0) : 0;
       if (current < MIN_UNIQUE_ID) current = MIN_UNIQUE_ID - 1;
       const next = current + 1;
       t.set(counterRef, { value: next }, { merge: true });
+      t.update(userRef, { uniqueId: next });
       return next;
     });
-
-    await db.doc(`users/${req.params.uid}`).update({ uniqueId: newId });
 
     res.json({ uniqueId: newId });
   } catch (err) {
@@ -296,6 +307,7 @@ router.post('/users/:uid/follow', async (req, res) => {
       followerIds: FieldValue.arrayUnion(req.params.uid),
     });
     await batch.commit();
+    log.info('users', 'User followed', { userId: req.params.uid, targetUserId: targetUid });
 
     res.json({ success: true });
   } catch (err) {
@@ -320,6 +332,7 @@ router.post('/users/:uid/unfollow', async (req, res) => {
       followerIds: FieldValue.arrayRemove(req.params.uid),
     });
     await batch.commit();
+    log.info('users', 'User unfollowed', { userId: req.params.uid, targetUserId: targetUid });
 
     res.json({ success: true });
   } catch (err) {
@@ -344,6 +357,7 @@ router.post('/users/:uid/remove-follower', async (req, res) => {
       followingIds: FieldValue.arrayRemove(req.params.uid),
     });
     await batch.commit();
+    log.info('users', 'Follower removed', { userId: req.params.uid, followerUserId: followerUid });
 
     res.json({ success: true });
   } catch (err) {

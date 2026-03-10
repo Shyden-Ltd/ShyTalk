@@ -5,6 +5,7 @@
  */
 
 const { execFile } = require('child_process');
+const log = require('../utils/log');
 
 // Track last-known restart counts to only alert on NEW restarts
 const lastRestartCounts = {};
@@ -55,21 +56,23 @@ async function serverHealth(alertManager) {
                   `PM2 process restarted: ${name}`,
                   `${restarts - lastKnown} new restart(s) (total: ${restarts})`,
                   { processName: name, restartCount: restarts, newRestarts: restarts - lastKnown }
-                ).catch(err => console.error('serverHealth: Failed to create PM2 restart alert', err.message));
+                ).catch(err => log.error('server-health', 'Failed to create PM2 restart alert', { error: err.message }));
               }
 
               lastRestartCounts[name] = restarts;
             }
           } catch (_parseErr) {
-            // Skip if can't parse
+            log.warn('cron', 'serverHealth: failed to parse PM2 output');
           }
           resolve();
         });
       });
     } catch (_pm2Err) {
-      // Skip PM2 check on failure
+      log.warn('cron', 'serverHealth: PM2 check failed', { error: _pm2Err.message });
     }
   }
+
+  log.debug('cron', 'serverHealth: check completed', { heapPercent: Math.round(heapPercent * 10) / 10 });
 }
 
 module.exports = serverHealth;

@@ -20,6 +20,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.close
+import com.shyden.shytalk.resources.image_number
+import com.shyden.shytalk.resources.page_indicator
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun FullscreenImageViewer(
@@ -43,7 +48,7 @@ fun FullscreenImageViewer(
         ) { page ->
             AsyncImage(
                 model = imageUrls[page],
-                contentDescription = "Image ${page + 1}",
+                contentDescription = stringResource(Res.string.image_number, page + 1),
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit
             )
@@ -58,7 +63,7 @@ fun FullscreenImageViewer(
         ) {
             Icon(
                 Icons.Default.Close,
-                contentDescription = "Close",
+                contentDescription = stringResource(Res.string.close),
                 tint = Color.White
             )
         }
@@ -66,7 +71,7 @@ fun FullscreenImageViewer(
         // Page indicator
         if (imageUrls.size > 1) {
             Text(
-                text = "${pagerState.currentPage + 1} / ${imageUrls.size}",
+                text = stringResource(Res.string.page_indicator, pagerState.currentPage + 1, imageUrls.size),
                 color = Color.White,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier

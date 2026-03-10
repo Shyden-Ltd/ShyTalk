@@ -654,4 +654,56 @@
     <string name="who_can_message_description">Control who can send you private messages.</string>
     <string name="who_can_message_me">Who can message me</string>
     <string name="you_were_banned">You were banned from this room.</string>
+    <string name="getting_ready">準備中…</string>
+    <string name="send_all_warning_title">⚠️ 警告 ⚠️</string>
+    <string name="send_all_total_value">合計値: 🪙 %1$dコイン</string>
+    <string name="send_gift_header">%2$sを%1$d個送る</string>
+    <string name="send_gift_header_multiple">%3$d人のユーザーに%2$sを%1$d個送る</string>
+    <string name="owner_away_banner">オーナー不在 - %1$s 後にルームが閉じます</string>
+    <string name="messages_title">メッセージ</string>
+    <string name="no_conversations_yet">まだ会話はありません</string>
+    <string name="spin_again_with_cost">%1$s もう一度回す · 🪙%2$d</string>
+    <string name="age_years_old">%1$d歳</string>
+    <string name="show_less">少なく</string>
+    <string name="show_more">もっと</string>
+    <string name="video_too_large">動画が大きすぎます。短いクリップを使用してください。</string>
+    <string name="file_too_large">ファイルが大きすぎます。最大サイズは10 MBです。</string>
+    <string name="this_user">このユーザー</string>
+
+    <!-- Degraded Mode Banner -->
+    <string name="reduced_functionality">機能制限中 — 一部の機能が利用できない場合があります</string>
+
+    <!-- Fullscreen Image Viewer -->
+    <string name="image_number">画像 %1$d</string>
+    <string name="page_indicator">%1$d / %2$d</string>
+
+    <!-- Broadcast Banner -->
+    <string name="broadcast_gacha_win">%1$sがラッキースピンで%2$s%3$s%4$sを獲得！</string>
+    <string name="broadcast_gift_sent">%1$sが%5$sに%2$s%3$s%4$sを送りました！</string>
+
+    <string name="play_effect">エフェクトを再生</string>
+    <string name="account_unlocked">アカウントがロック解除されました</string>
+    <string name="account_suspended">アカウントが停止されました</string>
+    <string name="police_duck_description">警察アヒル</string>
+    <string name="device_banned_title">デバイスが禁止されました</string>
+    <string name="network_banned_title">ネットワークが禁止されました</string>
+    <string name="device_banned_description">このデバイスはShyTalkの使用が禁止されています。</string>
+    <string name="network_banned_description">お使いのネットワークはShyTalkの使用が禁止されています。別のネットワークから接続してください。</string>
+    <string name="full_screen_photo">フルスクリーン写真</string>
+    <string name="cover_photo">カバー写真</string>
+    <string name="change_cover_photo">カバー写真を変更</string>
+    <string name="profile_photo">プロフィール写真</string>
+    <string name="change_profile_photo">プロフィール写真を変更</string>
+    <string name="edit_profile">プロフィールを編集</string>
+    <string name="app_name_label">ShyTalk</string>
+    <string name="time_unit_day">日</string>
+    <string name="time_unit_hour">時</string>
+    <string name="time_unit_minute">分</string>
+    <string name="time_unit_second">秒</string>
+    <string name="time_unit_millisecond">MS</string>
+
+    <string name="splash_tagline">ボイスチャットルーム、新しいカタチ。</string>
+    <string name="quantity_all">全て (%1$d)</string>
+    <string name="english_language">英語</string>
+    <string name="google_sign_in_failed">Googleログインに失敗しました</string>
 </resources>

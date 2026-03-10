@@ -142,7 +142,7 @@ router.get('/user/:uid/auth-debug', async (req, res) => {
     });
   } catch (err) {
     log.error('admin-users', 'Auth debug lookup failed', { uid: req.params.uid, error: err.message });
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -232,8 +232,8 @@ router.patch('/user/:uid', async (req, res) => {
 
     res.json({ success: true, updatedFields: Object.keys(updates) });
   } catch (err) {
-    log.error('admin-users', 'PATCH /user/:uid failed', { uid: req.params.uid, error: err.message, stack: err.stack });
-    res.status(500).json({ error: err.message || 'Internal server error' });
+    log.error('admin-users', 'PATCH /user/:uid failed', { uid: req.params.uid, error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -636,6 +636,7 @@ router.post('/resolve/uniqueIds-to-uids', async (req, res) => {
       uniqueIds.map(id =>
         db.collection('users')
           .where('uniqueId', '==', id)
+          .select('uid')
           .limit(1)
           .get()
       )
@@ -668,10 +669,10 @@ router.post('/user/:uid/suspend', async (req, res) => {
 
     let endTimestamp = null;
     if (body.endDate) {
-      const d = new Date(body.endDate);
-      if (isNaN(d.getTime())) return res.status(400).json({ error: 'endDate must be a valid ISO-8601 date' });
-      if (d.getTime() <= Date.now()) return res.status(400).json({ error: 'endDate must be in the future' });
-      endTimestamp = d.getTime();
+      const endDate = new Date(body.endDate);
+      if (isNaN(endDate.getTime())) return res.status(400).json({ error: 'endDate must be a valid ISO-8601 date' });
+      if (endDate.getTime() <= Date.now()) return res.status(400).json({ error: 'endDate must be in the future' });
+      endTimestamp = endDate.getTime();
     }
 
     const snap = await db.doc(`users/${req.params.uid}`).get();

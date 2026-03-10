@@ -41,6 +41,10 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.shyden.shytalk.core.model.Broadcast
 import com.shyden.shytalk.core.model.BroadcastType
 import com.shyden.shytalk.core.util.currentTimeMillis
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.broadcast_gacha_win
+import com.shyden.shytalk.resources.broadcast_gift_sent
+import org.jetbrains.compose.resources.stringResource
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
@@ -110,9 +114,9 @@ fun BroadcastBanner(
         " (${broadcast.giftCoinValue.formatWithCommas()})"
     } else ""
     val text = if (isGachaWin) {
-        "${broadcast.senderName} won $qtyPrefix${broadcast.giftName}$coinText from Lucky Spin!"
+        stringResource(Res.string.broadcast_gacha_win, broadcast.senderName, qtyPrefix, broadcast.giftName, coinText)
     } else {
-        "${broadcast.senderName} sent $qtyPrefix${broadcast.giftName}$coinText to ${broadcast.recipientName}!"
+        stringResource(Res.string.broadcast_gift_sent, broadcast.senderName, qtyPrefix, broadcast.giftName, coinText, broadcast.recipientName)
     }
 
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
@@ -164,9 +168,9 @@ fun BroadcastBanner(
 }
 
 private fun Int.formatWithCommas(): String {
-    val s = this.toString()
+    val str = this.toString()
     val result = StringBuilder()
-    for ((i, c) in s.reversed().withIndex()) {
+    for ((i, c) in str.reversed().withIndex()) {
         if (i > 0 && i % 3 == 0) result.append(',')
         result.append(c)
     }

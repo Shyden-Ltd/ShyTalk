@@ -160,6 +160,9 @@ fun ProfileScreen(
     var reportEvidenceVersion by remember { mutableStateOf(0) }
     var isCompressingEvidence by remember { mutableStateOf(false) }
     val evidenceScope = rememberCoroutineScope()
+    val videoTooLargeMsg = stringResource(Res.string.video_too_large)
+    val fileTooLargeMsg = stringResource(Res.string.file_too_large)
+    val reportThankYouMsg = stringResource(Res.string.report_thank_you)
 
     // Photo picking + cropping
     var pendingCropType by remember { mutableStateOf<String?>(null) }
@@ -206,7 +209,7 @@ fun ProfileScreen(
                         reportEvidenceList.add(result)
                         reportEvidenceVersion++
                     } else {
-                        snackbarHostState.showSnackbar("Video is too large to upload. Please use a shorter clip.")
+                        snackbarHostState.showSnackbar(videoTooLargeMsg)
                     }
                 }
             } else {
@@ -217,7 +220,7 @@ fun ProfileScreen(
                         reportEvidenceVersion++
                     } else {
                         evidenceScope.launch {
-                            snackbarHostState.showSnackbar("File is too large. Maximum size is 10 MB.")
+                            snackbarHostState.showSnackbar(fileTooLargeMsg)
                         }
                     }
                 }
@@ -242,7 +245,7 @@ fun ProfileScreen(
             showReportDialog = false
             reportEvidenceList.clear()
             reportEvidenceVersion++
-            snackbarHostState.showSnackbar("Thank you for your report. We will review it shortly.")
+            snackbarHostState.showSnackbar(reportThankYouMsg)
             viewModel.clearReportSubmitted()
         }
     }
@@ -310,7 +313,7 @@ fun ProfileScreen(
                     title = { Text(stringResource(Res.string.profile)) },
                     navigationIcon = {
                         IconButton(onClick = onNavigateBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.back))
                         }
                     },
                     actions = {}
@@ -448,7 +451,7 @@ fun ProfileScreen(
             ) {
                 AsyncImage(
                     model = url,
-                    contentDescription = "Full screen photo",
+                    contentDescription = stringResource(Res.string.full_screen_photo),
                     modifier = Modifier.fillMaxWidth(),
                     contentScale = ContentScale.Fit
                 )
@@ -460,7 +463,7 @@ fun ProfileScreen(
                 ) {
                     Icon(
                         Icons.Default.Close,
-                        contentDescription = "Close",
+                        contentDescription = stringResource(Res.string.close),
                         tint = Color.White
                     )
                 }
@@ -530,7 +533,7 @@ private fun ProfileContent(
                     if (user.uniqueId != 0L) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "ID: ${user.uniqueId}",
+                            text = stringResource(Res.string.user_id, user.uniqueId),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -640,7 +643,7 @@ private fun ProfileContent(
             if (coverUrl != null) {
                 AsyncImage(
                     model = coverUrl,
-                    contentDescription = "Cover photo",
+                    contentDescription = stringResource(Res.string.cover_photo),
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
@@ -673,7 +676,7 @@ private fun ProfileContent(
                     ) {
                         Icon(
                             Icons.Default.CameraAlt,
-                            contentDescription = "Change cover photo",
+                            contentDescription = stringResource(Res.string.change_cover_photo),
                             modifier = Modifier.padding(8.dp)
                         )
                     }
@@ -798,7 +801,7 @@ private fun ProfileContent(
                 if (photoUrl != null) {
                     AsyncImage(
                         model = photoUrl,
-                        contentDescription = "Profile photo",
+                        contentDescription = stringResource(Res.string.profile_photo),
                         modifier = Modifier
                             .size(100.dp)
                             .clip(CircleShape)
@@ -817,7 +820,7 @@ private fun ProfileContent(
                     ) {
                         Icon(
                             Icons.Default.Person,
-                            contentDescription = "Profile photo",
+                            contentDescription = stringResource(Res.string.profile_photo),
                             modifier = Modifier.padding(24.dp),
                             tint = MaterialTheme.colorScheme.onPrimaryContainer
                         )
@@ -845,7 +848,7 @@ private fun ProfileContent(
                         ) {
                             Icon(
                                 Icons.Default.CameraAlt,
-                                contentDescription = "Change profile photo",
+                                contentDescription = stringResource(Res.string.change_profile_photo),
                                 modifier = Modifier
                                     .padding(4.dp)
                                     .size(20.dp)
@@ -900,7 +903,7 @@ private fun ProfileContent(
                 // Unique ID (read-only even in edit mode)
                 if (user.uniqueId != 0L) {
                     Text(
-                        text = "ID: ${user.uniqueId}",
+                        text = stringResource(Res.string.user_id, user.uniqueId),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1015,7 +1018,7 @@ private fun ProfileContent(
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     Icons.Default.Edit,
-                                    contentDescription = "Edit profile",
+                                    contentDescription = stringResource(Res.string.edit_profile),
                                     modifier = Modifier.size(18.dp),
                                     tint = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
@@ -1027,7 +1030,7 @@ private fun ProfileContent(
                 if (user.uniqueId != 0L) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "ID: ${user.uniqueId}",
+                        text = stringResource(Res.string.user_id, user.uniqueId),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1038,7 +1041,7 @@ private fun ProfileContent(
                 if (shouldShowAge) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "$age years old",
+                        text = stringResource(Res.string.age_years_old, age),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1062,7 +1065,7 @@ private fun ProfileContent(
                         )
                         if (desc.length > 80) {
                             Text(
-                                text = if (expanded) "less" else "more",
+                                text = if (expanded) stringResource(Res.string.show_less) else stringResource(Res.string.show_more),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Bold,

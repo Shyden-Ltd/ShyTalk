@@ -101,6 +101,7 @@
     <string name="following_count">Following (%1$d)</string>
     <string name="following_list_private">This user's following list is private</string>
     <string name="get_super_shy">Get Super Shy</string>
+    <string name="getting_ready">Getting ready…</string>
     <string name="gift_wall">Gift Wall</string>
     <string name="gift_value_coins">Value: %1$d coins</string>
     <string name="no_followers_yet">No followers yet</string>
@@ -240,7 +241,11 @@
     <string name="send_all">Send All</string>
     <string name="send_all_includes">This includes ALL %1$d items across %2$d different gifts.</string>
     <string name="send_all_warning">You are about to send your ENTIRE backpack to %1$s.</string>
+    <string name="send_all_warning_title">⚠️ WARNING ⚠️</string>
+    <string name="send_all_total_value">Total value: 🪙 %1$d coins</string>
     <string name="send_everything_confirm">I understand, send everything</string>
+    <string name="send_gift_header">Send %1$dx %2$s</string>
+    <string name="send_gift_header_multiple">Send %1$dx %2$s to %3$d users</string>
     <string name="to_label">To</string>
     <string name="total_cost_coins">Total cost: %1$d coins</string>
     <string name="use_button">Use</string>
@@ -710,4 +715,72 @@
     <string name="active_hours_ago">Active %1$dh ago</string>
     <string name="active_days_ago">Active %1$dd ago</string>
     <string name="active_long_ago">Active 30+ days ago</string>
+
+    <!-- Room owner away banner -->
+    <string name="owner_away_banner">Owner away - Room closes in %1$s</string>
+
+    <!-- Messaging -->
+    <string name="messages_title">Messages</string>
+    <string name="no_conversations_yet">No conversations yet</string>
+
+    <!-- Gacha / Lucky Spin -->
+    <string name="spin_again_with_cost">%1$s SPIN AGAIN · 🪙%2$d</string>
+
+    <!-- Profile -->
+    <string name="age_years_old">%1$d years old</string>
+    <string name="show_less">less</string>
+    <string name="show_more">more</string>
+
+    <!-- Evidence / Upload errors -->
+    <string name="video_too_large">Video is too large to upload. Please use a shorter clip.</string>
+    <string name="file_too_large">File is too large. Maximum size is 10 MB.</string>
+
+    <!-- Fallback -->
+    <string name="this_user">this user</string>
+
+    <!-- Degraded Mode Banner -->
+    <string name="reduced_functionality">Reduced functionality — some features may be unavailable</string>
+
+    <!-- Fullscreen Image Viewer -->
+    <string name="image_number">Image %1$d</string>
+    <string name="page_indicator">%1$d / %2$d</string>
+
+    <!-- Broadcast Banner -->
+    <string name="broadcast_gacha_win">%1$s won %2$s%3$s%4$s from Lucky Spin!</string>
+    <string name="broadcast_gift_sent">%1$s sent %2$s%3$s%4$s to %5$s!</string>
+
+    <!-- Gift Preview -->
+    <string name="play_effect">Play Effect</string>
+
+    <!-- Suspension / Ban -->
+    <string name="account_unlocked">Account Unlocked</string>
+    <string name="account_suspended">Account Suspended</string>
+    <string name="police_duck_description">Police duck</string>
+    <string name="device_banned_title">Device Banned</string>
+    <string name="network_banned_title">Network Banned</string>
+    <string name="device_banned_description">This device has been banned from using ShyTalk.</string>
+    <string name="network_banned_description">Your network has been banned from using ShyTalk. Try connecting from a different network.</string>
+
+    <!-- Profile accessibility -->
+    <string name="full_screen_photo">Full screen photo</string>
+    <string name="cover_photo">Cover photo</string>
+    <string name="change_cover_photo">Change cover photo</string>
+    <string name="profile_photo">Profile photo</string>
+    <string name="change_profile_photo">Change profile photo</string>
+    <string name="edit_profile">Edit profile</string>
+    <string name="app_name_label">ShyTalk</string>
+
+    <!-- Countdown time units -->
+    <string name="time_unit_day">DAY</string>
+    <string name="time_unit_hour">HR</string>
+    <string name="time_unit_minute">MIN</string>
+    <string name="time_unit_second">SEC</string>
+    <string name="time_unit_millisecond">MS</string>
+
+    <!-- Run 5 strings -->
+    <string name="splash_tagline">Voice chat rooms, reimagined.</string>
+    <string name="quantity_all">ALL (%1$d)</string>
+    <string name="english_language">English</string>
+    <string name="google_sign_in_failed">Google sign-in failed</string>
+
 </resources>

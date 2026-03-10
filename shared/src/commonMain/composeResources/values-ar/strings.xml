@@ -654,4 +654,56 @@
     <string name="who_can_message_description">Control who can send you private messages.</string>
     <string name="who_can_message_me">Who can message me</string>
     <string name="you_were_banned">You were banned from this room.</string>
+    <string name="getting_ready">جارٍ التحضير…</string>
+    <string name="send_all_warning_title">⚠️ تحذير ⚠️</string>
+    <string name="send_all_total_value">القيمة الإجمالية: 🪙 %1$d عملة</string>
+    <string name="send_gift_header">إرسال %1$dx %2$s</string>
+    <string name="send_gift_header_multiple">إرسال %1$dx %2$s إلى %3$d مستخدمين</string>
+    <string name="owner_away_banner">المالك غائب - الغرفة تُغلق خلال %1$s</string>
+    <string name="messages_title">الرسائل</string>
+    <string name="no_conversations_yet">لا توجد محادثات بعد</string>
+    <string name="spin_again_with_cost">%1$s أدر مرة أخرى · 🪙%2$d</string>
+    <string name="age_years_old">%1$d سنة</string>
+    <string name="show_less">أقل</string>
+    <string name="show_more">المزيد</string>
+    <string name="video_too_large">الفيديو كبير جدًا. يرجى استخدام مقطع أقصر.</string>
+    <string name="file_too_large">الملف كبير جدًا. الحد الأقصى 10 ميغابايت.</string>
+    <string name="this_user">هذا المستخدم</string>
+
+    <!-- Degraded Mode Banner -->
+    <string name="reduced_functionality">وظائف محدودة — قد تكون بعض الميزات غير متاحة</string>
+
+    <!-- Fullscreen Image Viewer -->
+    <string name="image_number">صورة %1$d</string>
+    <string name="page_indicator">%1$d / %2$d</string>
+
+    <!-- Broadcast Banner -->
+    <string name="broadcast_gacha_win">%1$s فاز بـ %2$s%3$s%4$s من عجلة الحظ!</string>
+    <string name="broadcast_gift_sent">%1$s أرسل %2$s%3$s%4$s إلى %5$s!</string>
+
+    <string name="play_effect">تشغيل التأثير</string>
+    <string name="account_unlocked">تم فتح الحساب</string>
+    <string name="account_suspended">تم تعليق الحساب</string>
+    <string name="police_duck_description">بطة الشرطة</string>
+    <string name="device_banned_title">تم حظر الجهاز</string>
+    <string name="network_banned_title">تم حظر الشبكة</string>
+    <string name="device_banned_description">تم حظر هذا الجهاز من استخدام ShyTalk.</string>
+    <string name="network_banned_description">تم حظر شبكتك من استخدام ShyTalk. حاول الاتصال من شبكة مختلفة.</string>
+    <string name="full_screen_photo">صورة بملء الشاشة</string>
+    <string name="cover_photo">صورة الغلاف</string>
+    <string name="change_cover_photo">تغيير صورة الغلاف</string>
+    <string name="profile_photo">صورة الملف الشخصي</string>
+    <string name="change_profile_photo">تغيير صورة الملف الشخصي</string>
+    <string name="edit_profile">تعديل الملف الشخصي</string>
+    <string name="app_name_label">ShyTalk</string>
+    <string name="time_unit_day">يوم</string>
+    <string name="time_unit_hour">سا</string>
+    <string name="time_unit_minute">دق</string>
+    <string name="time_unit_second">ثا</string>
+    <string name="time_unit_millisecond">مللي</string>
+
+    <string name="splash_tagline">غرف الدردشة الصوتية، بتجربة جديدة.</string>
+    <string name="quantity_all">الكل (%1$d)</string>
+    <string name="english_language">الإنجليزية</string>
+    <string name="google_sign_in_failed">فشل تسجيل الدخول بحساب جوجل</string>
 </resources>

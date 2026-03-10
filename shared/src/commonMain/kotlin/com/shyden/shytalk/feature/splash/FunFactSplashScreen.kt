@@ -18,6 +18,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.model.FunFact
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun FunFactSplashScreen(
@@ -26,10 +29,11 @@ fun FunFactSplashScreen(
     onContinue: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val subtitle = remember(funFacts) {
+    val fallbackTagline = stringResource(Res.string.splash_tagline)
+    val subtitle = remember(funFacts, fallbackTagline) {
         funFacts.randomOrNull()?.let { fact ->
             if (fact.emoji.isNotBlank()) "${fact.emoji} ${fact.text}" else fact.text
-        } ?: "Voice chat rooms, reimagined."
+        } ?: fallbackTagline
     }
 
     Surface(
@@ -65,7 +69,7 @@ fun FunFactSplashScreen(
                 enabled = warmUpComplete,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(if (warmUpComplete) "Continue" else "Getting ready...")
+                Text(if (warmUpComplete) stringResource(Res.string.continue_button) else stringResource(Res.string.getting_ready))
             }
         }
     }

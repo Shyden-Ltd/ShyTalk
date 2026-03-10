@@ -147,7 +147,8 @@ class PrivateChatViewModel(
         viewModelScope.launch {
             when (val result = userRepository.getAliases(currentUserId)) {
                 is Resource.Success -> _uiState.update { it.copy(aliases = result.data) }
-                else -> {}
+                is Resource.Error -> logW(TAG, "Failed to load aliases: ${result.message}")
+                is Resource.Loading -> {}
             }
         }
     }
@@ -712,8 +713,8 @@ class PrivateChatViewModel(
                 val urls = mutableListOf<String>()
                 for (bytes in imageDataList) {
                     val compressed = compressImage(bytes)
-                    when (val r = storageRepository.uploadImage(currentUserId, "pm_images", compressed)) {
-                        is Resource.Success -> urls.add(r.data)
+                    when (val result = storageRepository.uploadImage(currentUserId, "pm_images", compressed)) {
+                        is Resource.Success -> urls.add(result.data)
                         is Resource.Error -> {
                             pendingMessages[tempId] = pendingMsg.copy(sendStatus = SendStatus.FAILED)
                             updateMessagesWithPending()
@@ -856,11 +857,11 @@ class PrivateChatViewModel(
                     bytes[8] == 0x57.toByte() && bytes[9] == 0x45.toByte() &&
                     bytes[10] == 0x42.toByte() && bytes[11] == 0x50.toByte()
                 val uploadBytes = if (isGif || isWebp) bytes else compressImage(bytes)
-                when (val r = storageRepository.uploadImage(currentUserId, "stickers", uploadBytes)) {
+                when (val result = storageRepository.uploadImage(currentUserId, "stickers", uploadBytes)) {
                     is Resource.Success -> {
                         pendingMessages.remove(tempId)
                         updateMessagesWithPending()
-                        sendStickerMessage(r.data)
+                        sendStickerMessage(result.data)
                     }
                     is Resource.Error -> {
                         pendingMessages[tempId] = pendingMsg.copy(sendStatus = SendStatus.FAILED)
@@ -928,9 +929,9 @@ class PrivateChatViewModel(
                     imageData[8] == 0x57.toByte() && imageData[9] == 0x45.toByte() &&
                     imageData[10] == 0x42.toByte() && imageData[11] == 0x50.toByte()
                 val uploadBytes = if (isGif || isWebp) imageData else compressImage(imageData)
-                when (val r = storageRepository.uploadImage(currentUserId, "stickers", uploadBytes)) {
+                when (val result = storageRepository.uploadImage(currentUserId, "stickers", uploadBytes)) {
                     is Resource.Success -> {
-                        stickerStorage.updateStickerUrl(id, r.data)
+                        stickerStorage.updateStickerUrl(id, result.data)
                         _uiState.update { it.copy(stickers = stickerStorage.getStickers()) }
                     }
                     else -> { /* Silently ignore — first send will upload as fallback */ }

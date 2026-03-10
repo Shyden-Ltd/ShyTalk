@@ -337,8 +337,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleRoomIntent(intent: Intent?) {
+        intent ?: return
         // Handle PM notification tap (navigateTo=chat)
-        val navigateTo = intent?.getStringExtra("navigateTo")
+        val navigateTo = intent.getStringExtra("navigateTo")
         if (navigateTo == "chat") {
             val isGroup = intent.getBooleanExtra("isGroup", false)
             val inRoom = activeRoomManager.activeRoomId.value != null
@@ -369,7 +370,7 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        when (intent?.action) {
+        when (intent.action) {
             "OPEN_ROOM" -> {
                 val roomId = intent.getStringExtra("roomId")
                 if (roomId != null) {

@@ -179,19 +179,19 @@ router.get('/reports', async (req, res) => {
     // Build lookup maps
     const userMap = {};
     for (let i = 0; i < reportedUserIds.length; i++) {
-      const u = reportedUserDocs[i];
-      if (u) {
-        const gcsScore         = u.gcsScore         ?? u.gcs_score          ?? 100;
-        const gcsLastDeduction = u.gcsLastDeductionAt ?? u.gcs_last_deduction_at ?? null;
-        u.gcsDisplayScore = computeDisplayScore(gcsScore, gcsLastDeduction);
-        userMap[reportedUserIds[i]] = u;
+      const reportedUser = reportedUserDocs[i];
+      if (reportedUser) {
+        const gcsScore         = reportedUser.gcsScore         ?? reportedUser.gcs_score          ?? 100;
+        const gcsLastDeduction = reportedUser.gcsLastDeductionAt ?? reportedUser.gcs_last_deduction_at ?? null;
+        reportedUser.gcsDisplayScore = computeDisplayScore(gcsScore, gcsLastDeduction);
+        userMap[reportedUserIds[i]] = reportedUser;
       }
     }
 
     const reporterMap = {};
     for (let i = 0; i < reporterIds.length; i++) {
-      const u = reporterDocs[i];
-      if (u) reporterMap[reporterIds[i]] = u;
+      const reporter = reporterDocs[i];
+      if (reporter) reporterMap[reporterIds[i]] = reporter;
     }
 
     const lockMap = {};
@@ -526,7 +526,6 @@ router.get('/reports/export', async (req, res) => {
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="reports-export.csv"');
-    res.setHeader('Access-Control-Allow-Origin', '*');
     res.send(csvRows.join('\n'));
   } catch (err) {
     log.error('reports', 'GET /api/reports/export failed', { error: err.message });
@@ -585,10 +584,10 @@ router.post('/admin/users/:uid/suspend', async (req, res) => {
 
     let endTimestamp = null;
     if (body.endDate) {
-      const d = new Date(body.endDate);
-      if (isNaN(d.getTime())) return res.status(400).json({ error: 'endDate must be a valid ISO-8601 date' });
-      if (d.getTime() <= Date.now()) return res.status(400).json({ error: 'endDate must be in the future' });
-      endTimestamp = d.getTime();
+      const endDate = new Date(body.endDate);
+      if (isNaN(endDate.getTime())) return res.status(400).json({ error: 'endDate must be a valid ISO-8601 date' });
+      if (endDate.getTime() <= Date.now()) return res.status(400).json({ error: 'endDate must be in the future' });
+      endTimestamp = endDate.getTime();
     }
 
     const user = await getDoc(`users/${req.params.uid}`);
