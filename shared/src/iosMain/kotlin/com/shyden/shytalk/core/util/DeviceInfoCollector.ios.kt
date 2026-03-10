@@ -1,5 +1,6 @@
 package com.shyden.shytalk.core.util
 
+import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSBundle
 import platform.Foundation.NSLocale
 import platform.Foundation.NSProcessInfo
@@ -9,6 +10,7 @@ import platform.UIKit.UIDevice
 import platform.UIKit.UIScreen
 
 actual class DeviceInfoCollector {
+    @OptIn(ExperimentalForeignApi::class)
     actual fun collect(): DeviceInfo {
         val device = UIDevice.currentDevice
         val screen = UIScreen.mainScreen

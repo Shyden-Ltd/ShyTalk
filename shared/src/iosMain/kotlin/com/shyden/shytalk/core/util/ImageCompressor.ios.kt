@@ -6,13 +6,15 @@ import kotlinx.cinterop.usePinned
 import platform.CoreGraphics.CGBitmapContextCreate
 import platform.CoreGraphics.CGBitmapContextCreateImage
 import platform.CoreGraphics.CGColorSpaceCreateDeviceRGB
+import platform.CoreGraphics.CGContextDrawImage
 import platform.CoreGraphics.CGImageGetHeight
 import platform.CoreGraphics.CGImageGetWidth
-import platform.CoreGraphics.kCGImageAlphaPremultipliedLast
+import platform.CoreGraphics.CGRectMake
 import platform.Foundation.NSData
 import platform.Foundation.create
 import platform.UIKit.UIImage
 import platform.UIKit.UIImageJPEGRepresentation
+import platform.posix.memcpy
 
 @OptIn(ExperimentalForeignApi::class)
 actual suspend fun compressImage(
@@ -36,6 +38,7 @@ actual suspend fun compressImage(
         val newW = (origW * scale).toInt()
         val newH = (origH * scale).toInt()
         val colorSpace = CGColorSpaceCreateDeviceRGB()
+        // CGImageAlphaInfo.premultipliedLast = 1u
         val context = CGBitmapContextCreate(
             data = null,
             width = newW.toULong(),
@@ -43,12 +46,12 @@ actual suspend fun compressImage(
             bitsPerComponent = 8u,
             bytesPerRow = (newW * 4).toULong(),
             space = colorSpace,
-            bitmapInfo = kCGImageAlphaPremultipliedLast
+            bitmapInfo = 1u
         )
         if (context != null) {
-            platform.CoreGraphics.CGContextDrawImage(
+            CGContextDrawImage(
                 context,
-                platform.CoreGraphics.CGRectMake(0.0, 0.0, newW.toDouble(), newH.toDouble()),
+                CGRectMake(0.0, 0.0, newW.toDouble(), newH.toDouble()),
                 cgImage
             )
             val scaledCgImage = CGBitmapContextCreateImage(context)
@@ -59,9 +62,10 @@ actual suspend fun compressImage(
     val compressionQuality = (quality.coerceIn(1, 100) / 100.0)
     val compressed = UIImageJPEGRepresentation(finalImage, compressionQuality) ?: return imageData
 
-    return ByteArray(compressed.length.toInt()).also { result ->
-        result.usePinned { pinned ->
-            compressed.getBytes(pinned.addressOf(0), compressed.length)
-        }
+    val length = compressed.length.toInt()
+    val result = ByteArray(length)
+    result.usePinned { pinned ->
+        memcpy(pinned.addressOf(0), compressed.bytes, compressed.length)
     }
+    return result
 }
