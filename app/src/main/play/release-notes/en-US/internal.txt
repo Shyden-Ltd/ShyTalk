@@ -1,4 +1,4 @@
-v0.53 — Security & Stability
+v0.54 — Security & Stability
 
 - Improved security across the app
 - Added privacy policy and terms of service
