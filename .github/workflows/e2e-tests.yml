@@ -332,7 +332,43 @@ jobs:
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
-        run: ./gradlew connectedDevDebugAndroidTest --no-parallel
+        run: |
+          # Run tests with --info for verbose test names
+          ./gradlew connectedDevDebugAndroidTest --no-parallel --info 2>&1 | tee test-output.log &
+          GRADLE_PID=$!
+
+          # Progress counter — counts JUnit XML result files as they appear
+          (
+            PREV_COUNT=0
+            while kill -0 $GRADLE_PID 2>/dev/null; do
+              COUNT=$(find app/build/outputs/androidTest-results -name 'TEST-*.xml' 2>/dev/null | wc -l)
+              if [ "$COUNT" -gt "$PREV_COUNT" ]; then
+                PREV_COUNT=$COUNT
+                echo "::notice::$COUNT test classes complete"
+              fi
+              sleep 5
+            done
+          ) &
+
+          wait $GRADLE_PID
+
+      - name: Pull Allure results from device
+        if: always()
+        run: |
+          PACKAGE="com.shyden.shytalk.dev"
+          mkdir -p app/build/allure-results
+          adb exec-out run-as $PACKAGE sh -c 'cd files/allure-results && tar cf - .' 2>/dev/null | \
+            tar xf - -C app/build/allure-results/ 2>/dev/null || \
+            echo "::warning::No Allure results found on device"
+          ls -la app/build/allure-results/ 2>/dev/null || echo "Empty results"
+
+      - name: Upload Allure results
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        if: always()
+        with:
+          name: allure-results-api${{ matrix.api-level }}-${{ matrix.form-factor }}
+          path: app/build/allure-results/
+          retention-days: 14
 
       - name: Stop emulator
         if: always()
@@ -551,3 +587,57 @@ jobs:
             echo "iOS E2E tests failed"
             exit 1
           fi
+
+  # ── Generate Allure Report ──────────────────────────────────
+  allure-report:
+    name: Generate Allure Report
+    needs: [resolve-inputs, test-android]
+    if: always() && needs.resolve-inputs.result == 'success' && needs.resolve-inputs.outputs.run_android == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Download all Allure results
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: allure-results-*
+          path: allure-results-all/
+          merge-multiple: true
+
+      - name: Install Allure CLI
+        run: |
+          curl -sL https://github.com/allure-framework/allure2/releases/download/2.32.0/allure-2.32.0.tgz | tar xz
+          echo "$PWD/allure-2.32.0/bin" >> "$GITHUB_PATH"
+
+      - name: Restore Allure history from gh-pages
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: gh-pages
+          path: gh-pages
+        continue-on-error: true
+
+      - name: Copy history for trend tracking
+        run: |
+          mkdir -p allure-results-all/history
+          cp -r gh-pages/history/* allure-results-all/history/ 2>/dev/null || echo "No previous history (first run)"
+
+      - name: Generate Allure report
+        run: allure generate allure-results-all -o allure-report --clean
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: allure-report
+          keep_files: false
+
+      - name: Post report URL in summary
+        run: |
+          REPO="${{ github.repository }}"
+          OWNER="${REPO%%/*}"
+          echo "## Allure Report" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "[View Report](https://${OWNER}.github.io/${REPO##*/}/)" >> "$GITHUB_STEP_SUMMARY"
