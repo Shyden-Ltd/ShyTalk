@@ -619,6 +619,7 @@
     <string name="device_locked_description">This device is already linked to another account.\nOnly one account is allowed per device.\n\nFor support, contact shytalk.help@gmail.com</string>
     <string name="contact_support_hint">If the problem persists, contact shytalk.help@gmail.com</string>
     <string name="sign_in_with_google">Sign in with Google</string>
+    <string name="sign_in_with_apple">Sign in with Apple</string>
     <string name="sign_in_with_email">Sign in with Email</string>
     <string name="email_hint">Email address</string>
     <string name="email_link_sent">Check your email</string>

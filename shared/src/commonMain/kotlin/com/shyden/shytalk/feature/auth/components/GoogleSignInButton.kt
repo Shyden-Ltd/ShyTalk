@@ -1,0 +1,66 @@
+package com.shyden.shytalk.feature.auth.components
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.sign_in_with_google
+import org.jetbrains.compose.resources.stringResource
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
+
+@Composable
+fun GoogleSignInButton(
+    onClick: () -> Unit,
+    isLoading: Boolean,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled && !isLoading,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .testTag("signIn_googleButton"),
+        shape = RoundedCornerShape(24.dp),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = Color(0xFF131314),
+            contentColor = Color(0xFFE3E3E3)
+        ),
+        border = BorderStroke(1.dp, Color(0xFF8E918F))
+    ) {
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                strokeWidth = 2.dp,
+                color = Color(0xFFE3E3E3)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Signing in…")
+        } else {
+            // TODO: Replace with official Google "G" logo vector drawable
+            Icon(
+                imageVector = Icons.Default.AccountCircle,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(stringResource(Res.string.sign_in_with_google))
+        }
+    }
+}
