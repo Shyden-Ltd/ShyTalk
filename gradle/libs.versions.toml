@@ -27,6 +27,7 @@ espressoCore = "3.5.1"
 lottieCompose = "6.7.1"
 billing = "7.1.1"
 allureKotlin = "2.4.0"
+cucumberAndroid = "7.20.1"
 
 [libraries]
 # AndroidX Core
@@ -107,6 +108,7 @@ androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "j
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 allure-kotlin-android = { group = "io.qameta.allure", name = "allure-kotlin-android", version.ref = "allureKotlin" }
 allure-kotlin-junit4 = { group = "io.qameta.allure", name = "allure-kotlin-junit4", version.ref = "allureKotlin" }
+cucumber-android = { group = "io.cucumber", name = "cucumber-android", version.ref = "cucumberAndroid" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

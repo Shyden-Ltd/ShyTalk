@@ -93,6 +93,12 @@ android {
         compose = true
         buildConfig = true
     }
+    sourceSets {
+        getByName("androidTest") {
+            assets.srcDirs("src/androidTest/assets")
+        }
+    }
+
     // Workaround: KMP android library plugin doesn't auto-package Compose resources as assets
     @Suppress("DEPRECATION")
     sourceSets.getByName("main").assets.srcDir(
@@ -242,6 +248,7 @@ dependencies {
     androidTestImplementation("androidx.navigation:navigation-testing:2.9.7")
     androidTestImplementation(libs.allure.kotlin.android)
     androidTestImplementation(libs.allure.kotlin.junit4)
+    androidTestImplementation(libs.cucumber.android)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
