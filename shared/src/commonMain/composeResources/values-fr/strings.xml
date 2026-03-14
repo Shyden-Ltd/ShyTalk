@@ -728,4 +728,11 @@
     <string name="quantity_all">TOUT (%1$d)</string>
     <string name="english_language">Anglais</string>
     <string name="google_sign_in_failed">Échec de la connexion Google</string>
+    <string name="sign_in_with_apple">Se connecter avec Apple</string>
+    <string name="send_link">Envoyer le lien</string>
+    <string name="paste_link">Coller le lien</string>
+    <string name="resend_link">Renvoyer</string>
+    <string name="use_different_email">Utiliser un autre e-mail</string>
+    <string name="email_link_paste_hint">Si le lien ne s\'est pas ouvert automatiquement, copiez-le depuis votre e-mail et appuyez sur Coller le lien</string>
+    <string name="error_invalid_email_link">Ce lien ne semble pas être un lien de connexion valide. Veuillez copier le lien complet depuis votre e-mail.</string>
 </resources>

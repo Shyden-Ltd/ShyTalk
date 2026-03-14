@@ -728,4 +728,11 @@
     <string name="quantity_all">الكل (%1$d)</string>
     <string name="english_language">الإنجليزية</string>
     <string name="google_sign_in_failed">فشل تسجيل الدخول بحساب جوجل</string>
+    <string name="sign_in_with_apple">تسجيل الدخول بحساب Apple</string>
+    <string name="send_link">إرسال الرابط</string>
+    <string name="paste_link">لصق الرابط</string>
+    <string name="resend_link">إعادة الإرسال</string>
+    <string name="use_different_email">استخدم بريدًا مختلفًا</string>
+    <string name="email_link_paste_hint">إذا لم يُفتح الرابط تلقائيًا، انسخه من بريدك واضغط لصق الرابط</string>
+    <string name="error_invalid_email_link">لا يبدو أن هذا رابط تسجيل دخول صالح. يرجى نسخ الرابط الكامل من بريدك.</string>
 </resources>

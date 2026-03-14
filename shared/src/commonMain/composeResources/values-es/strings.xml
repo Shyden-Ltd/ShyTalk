@@ -728,4 +728,11 @@
     <string name="quantity_all">TODO (%1$d)</string>
     <string name="english_language">Inglés</string>
     <string name="google_sign_in_failed">Error al iniciar sesión con Google</string>
+    <string name="sign_in_with_apple">Iniciar sesión con Apple</string>
+    <string name="send_link">Enviar enlace</string>
+    <string name="paste_link">Pegar enlace</string>
+    <string name="resend_link">Reenviar</string>
+    <string name="use_different_email">Usar otro correo</string>
+    <string name="email_link_paste_hint">Si el enlace no se abrió automáticamente, cópialo de tu correo y toca Pegar enlace</string>
+    <string name="error_invalid_email_link">Eso no parece un enlace de inicio de sesión válido. Por favor, copia el enlace completo de tu correo.</string>
 </resources>

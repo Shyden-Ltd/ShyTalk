@@ -728,4 +728,11 @@
     <string name="quantity_all">全部 (%1$d)</string>
     <string name="english_language">英语</string>
     <string name="google_sign_in_failed">Google 登录失败</string>
+    <string name="sign_in_with_apple">使用 Apple 登录</string>
+    <string name="send_link">发送链接</string>
+    <string name="paste_link">粘贴链接</string>
+    <string name="resend_link">重新发送</string>
+    <string name="use_different_email">使用其他邮箱</string>
+    <string name="email_link_paste_hint">如果链接没有自动打开，请从邮件中复制并点击粘贴链接</string>
+    <string name="error_invalid_email_link">这看起来不是有效的登录链接。请从邮件中复制完整链接。</string>
 </resources>

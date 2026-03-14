@@ -728,4 +728,11 @@
     <string name="quantity_all">ALLA (%1$d)</string>
     <string name="english_language">Engelska</string>
     <string name="google_sign_in_failed">Google-inloggning misslyckades</string>
+    <string name="sign_in_with_apple">Logga in med Apple</string>
+    <string name="send_link">Skicka länk</string>
+    <string name="paste_link">Klistra in länk</string>
+    <string name="resend_link">Skicka igen</string>
+    <string name="use_different_email">Använd en annan e-post</string>
+    <string name="email_link_paste_hint">Om länken inte öppnades automatiskt, kopiera den från ditt e-postmeddelande och tryck på Klistra in länk</string>
+    <string name="error_invalid_email_link">Det verkar inte vara en giltig inloggningslänk. Kopiera hela länken från ditt e-postmeddelande.</string>
 </resources>

@@ -728,4 +728,11 @@
     <string name="quantity_all">TUTTO (%1$d)</string>
     <string name="english_language">Inglese</string>
     <string name="google_sign_in_failed">Accesso con Google non riuscito</string>
+    <string name="sign_in_with_apple">Accedi con Apple</string>
+    <string name="send_link">Invia link</string>
+    <string name="paste_link">Incolla link</string>
+    <string name="resend_link">Reinvia</string>
+    <string name="use_different_email">Usa un\'altra email</string>
+    <string name="email_link_paste_hint">Se il link non si è aperto automaticamente, copialo dalla tua email e tocca Incolla link</string>
+    <string name="error_invalid_email_link">Questo non sembra un link di accesso valido. Copia il link completo dalla tua email.</string>
 </resources>

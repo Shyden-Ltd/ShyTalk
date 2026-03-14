@@ -728,4 +728,11 @@
     <string name="quantity_all">सभी (%1$d)</string>
     <string name="english_language">अंग्रेज़ी</string>
     <string name="google_sign_in_failed">Google साइन-इन विफल</string>
+    <string name="sign_in_with_apple">Apple से साइन इन करें</string>
+    <string name="send_link">लिंक भेजें</string>
+    <string name="paste_link">लिंक पेस्ट करें</string>
+    <string name="resend_link">पुनः भेजें</string>
+    <string name="use_different_email">दूसरा ईमेल उपयोग करें</string>
+    <string name="email_link_paste_hint">अगर लिंक अपने आप नहीं खुला, तो इसे अपने ईमेल से कॉपी करें और लिंक पेस्ट करें पर टैप करें</string>
+    <string name="error_invalid_email_link">यह एक मान्य साइन-इन लिंक नहीं लगता। कृपया अपने ईमेल से पूरा लिंक कॉपी करें।</string>
 </resources>

@@ -728,4 +728,11 @@
     <string name="quantity_all">TẤT CẢ (%1$d)</string>
     <string name="english_language">Tiếng Anh</string>
     <string name="google_sign_in_failed">Đăng nhập Google thất bại</string>
+    <string name="sign_in_with_apple">Đăng nhập bằng Apple</string>
+    <string name="send_link">Gửi liên kết</string>
+    <string name="paste_link">Dán liên kết</string>
+    <string name="resend_link">Gửi lại</string>
+    <string name="use_different_email">Dùng email khác</string>
+    <string name="email_link_paste_hint">Nếu liên kết không mở tự động, hãy sao chép từ email và nhấn Dán liên kết</string>
+    <string name="error_invalid_email_link">Đó không giống liên kết đăng nhập hợp lệ. Vui lòng sao chép toàn bộ liên kết từ email.</string>
 </resources>

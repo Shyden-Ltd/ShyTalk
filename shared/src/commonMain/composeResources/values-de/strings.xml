@@ -728,4 +728,11 @@
     <string name="quantity_all">ALLE (%1$d)</string>
     <string name="english_language">Englisch</string>
     <string name="google_sign_in_failed">Google-Anmeldung fehlgeschlagen</string>
+    <string name="sign_in_with_apple">Mit Apple anmelden</string>
+    <string name="send_link">Link senden</string>
+    <string name="paste_link">Link einfügen</string>
+    <string name="resend_link">Erneut senden</string>
+    <string name="use_different_email">Andere E-Mail verwenden</string>
+    <string name="email_link_paste_hint">Wenn der Link nicht automatisch geöffnet wurde, kopiere ihn aus deiner E-Mail und tippe auf Link einfügen</string>
+    <string name="error_invalid_email_link">Das sieht nicht wie ein gültiger Anmeldelink aus. Bitte kopiere den vollständigen Link aus deiner E-Mail.</string>
 </resources>

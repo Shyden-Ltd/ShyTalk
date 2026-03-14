@@ -728,4 +728,11 @@
     <string name="quantity_all">ВСЕ (%1$d)</string>
     <string name="english_language">Англійська</string>
     <string name="google_sign_in_failed">Не вдалося увійти через Google</string>
+    <string name="sign_in_with_apple">Увійти через Apple</string>
+    <string name="send_link">Надіслати посилання</string>
+    <string name="paste_link">Вставити посилання</string>
+    <string name="resend_link">Надіслати повторно</string>
+    <string name="use_different_email">Використати інший e-mail</string>
+    <string name="email_link_paste_hint">Якщо посилання не відкрилося автоматично, скопіюйте його з листа і натисніть Вставити посилання</string>
+    <string name="error_invalid_email_link">Це не схоже на дійсне посилання для входу. Будь ласка, скопіюйте повне посилання з листа.</string>
 </resources>

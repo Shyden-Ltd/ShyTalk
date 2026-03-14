@@ -728,4 +728,11 @@
     <string name="quantity_all">ทั้งหมด (%1$d)</string>
     <string name="english_language">อังกฤษ</string>
     <string name="google_sign_in_failed">เข้าสู่ระบบด้วย Google ล้มเหลว</string>
+    <string name="sign_in_with_apple">ลงชื่อเข้าใช้ด้วย Apple</string>
+    <string name="send_link">ส่งลิงก์</string>
+    <string name="paste_link">วางลิงก์</string>
+    <string name="resend_link">ส่งอีกครั้ง</string>
+    <string name="use_different_email">ใช้อีเมลอื่น</string>
+    <string name="email_link_paste_hint">หากลิงก์ไม่เปิดโดยอัตโนมัติ ให้คัดลอกจากอีเมลแล้วแตะวางลิงก์</string>
+    <string name="error_invalid_email_link">ดูเหมือนจะไม่ใช่ลิงก์ลงชื่อเข้าใช้ที่ถูกต้อง กรุณาคัดลอกลิงก์ทั้งหมดจากอีเมลของคุณ</string>
 </resources>

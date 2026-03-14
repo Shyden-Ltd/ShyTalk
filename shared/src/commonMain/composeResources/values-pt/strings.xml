@@ -728,4 +728,11 @@
     <string name="quantity_all">TUDO (%1$d)</string>
     <string name="english_language">Inglês</string>
     <string name="google_sign_in_failed">Falha no login do Google</string>
+    <string name="sign_in_with_apple">Entrar com a Apple</string>
+    <string name="send_link">Enviar link</string>
+    <string name="paste_link">Colar link</string>
+    <string name="resend_link">Reenviar</string>
+    <string name="use_different_email">Usar outro e-mail</string>
+    <string name="email_link_paste_hint">Se o link não abriu automaticamente, copie-o do seu e-mail e toque em Colar link</string>
+    <string name="error_invalid_email_link">Isso não parece ser um link de login válido. Copie o link completo do seu e-mail.</string>
 </resources>

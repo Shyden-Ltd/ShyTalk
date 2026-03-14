@@ -728,4 +728,11 @@
     <string name="quantity_all">TÜMÜ (%1$d)</string>
     <string name="english_language">İngilizce</string>
     <string name="google_sign_in_failed">Google ile giriş başarısız</string>
+    <string name="sign_in_with_apple">Apple ile giriş yap</string>
+    <string name="send_link">Bağlantı gönder</string>
+    <string name="paste_link">Bağlantıyı yapıştır</string>
+    <string name="resend_link">Tekrar gönder</string>
+    <string name="use_different_email">Farklı e-posta kullan</string>
+    <string name="email_link_paste_hint">Bağlantı otomatik olarak açılmadıysa, e-postanızdan kopyalayın ve Bağlantıyı yapıştır\'a dokunun</string>
+    <string name="error_invalid_email_link">Bu geçerli bir giriş bağlantısı gibi görünmüyor. Lütfen e-postanızdan tam bağlantıyı kopyalayın.</string>
 </resources>

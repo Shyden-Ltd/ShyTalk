@@ -728,4 +728,11 @@
     <string name="quantity_all">全て (%1$d)</string>
     <string name="english_language">英語</string>
     <string name="google_sign_in_failed">Googleログインに失敗しました</string>
+    <string name="sign_in_with_apple">Appleでサインイン</string>
+    <string name="send_link">リンクを送信</string>
+    <string name="paste_link">リンクを貼り付け</string>
+    <string name="resend_link">再送信</string>
+    <string name="use_different_email">別のメールを使用</string>
+    <string name="email_link_paste_hint">リンクが自動的に開かない場合は、メールからコピーしてリンクを貼り付けをタップしてください</string>
+    <string name="error_invalid_email_link">有効なサインインリンクではないようです。メールから完全なリンクをコピーしてください。</string>
 </resources>

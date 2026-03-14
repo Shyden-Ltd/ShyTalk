@@ -728,4 +728,11 @@
     <string name="quantity_all">ALLES (%1$d)</string>
     <string name="english_language">Engels</string>
     <string name="google_sign_in_failed">Google-aanmelding mislukt</string>
+    <string name="sign_in_with_apple">Inloggen met Apple</string>
+    <string name="send_link">Link verzenden</string>
+    <string name="paste_link">Link plakken</string>
+    <string name="resend_link">Opnieuw verzenden</string>
+    <string name="use_different_email">Ander e-mailadres gebruiken</string>
+    <string name="email_link_paste_hint">Als de link niet automatisch is geopend, kopieer deze uit je e-mail en tik op Link plakken</string>
+    <string name="error_invalid_email_link">Dit lijkt geen geldige aanmeldlink. Kopieer de volledige link uit je e-mail.</string>
 </resources>
