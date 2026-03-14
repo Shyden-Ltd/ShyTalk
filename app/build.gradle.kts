@@ -240,6 +240,8 @@ dependencies {
     androidTestImplementation("io.insert-koin:koin-test-junit4:4.1.1")
     androidTestImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation("androidx.navigation:navigation-testing:2.9.7")
+    androidTestImplementation(libs.allure.kotlin.android)
+    androidTestImplementation(libs.allure.kotlin.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
