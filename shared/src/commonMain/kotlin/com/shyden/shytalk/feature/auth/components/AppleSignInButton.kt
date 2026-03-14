@@ -18,10 +18,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.ic_apple_logo
 import com.shyden.shytalk.resources.sign_in_with_apple
+import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Phone
 
 @Composable
 fun AppleSignInButton(
@@ -53,8 +53,12 @@ fun AppleSignInButton(
             Spacer(modifier = Modifier.width(8.dp))
             Text("Signing in…")
         } else {
-            // TODO: Replace with official Apple logo vector drawable
-            Text("", modifier = Modifier.size(20.dp)) // Apple logo placeholder
+            Icon(
+                painter = painterResource(Res.drawable.ic_apple_logo),
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = Color.Unspecified
+            )
             Spacer(modifier = Modifier.width(8.dp))
             Text(stringResource(Res.string.sign_in_with_apple))
         }

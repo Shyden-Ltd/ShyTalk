@@ -18,10 +18,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.ic_google_logo
 import com.shyden.shytalk.resources.sign_in_with_google
+import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
 
 @Composable
 fun GoogleSignInButton(
@@ -53,11 +53,11 @@ fun GoogleSignInButton(
             Spacer(modifier = Modifier.width(8.dp))
             Text("Signing in…")
         } else {
-            // TODO: Replace with official Google "G" logo vector drawable
             Icon(
-                imageVector = Icons.Default.AccountCircle,
+                painter = painterResource(Res.drawable.ic_google_logo),
                 contentDescription = null,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(20.dp),
+                tint = Color.Unspecified
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(stringResource(Res.string.sign_in_with_google))
