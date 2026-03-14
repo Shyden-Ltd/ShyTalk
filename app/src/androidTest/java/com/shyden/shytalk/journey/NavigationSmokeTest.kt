@@ -9,6 +9,7 @@ import com.shyden.shytalk.util.launchMainScreen
 import com.shyden.shytalk.util.waitForTag
 import com.shyden.shytalk.util.waitForText
 import com.shyden.shytalk.util.ResetFakesRule
+import com.shyden.shytalk.util.ScreenshotRule
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -21,6 +22,9 @@ class NavigationSmokeTest {
 
     @get:Rule(order = 1)
     val composeTestRule = createComposeRule()
+
+    @get:Rule(order = 2)
+    val screenshotRule = ScreenshotRule(composeTestRule)
 
     @Test
     fun allBottomTabs_navigable() {

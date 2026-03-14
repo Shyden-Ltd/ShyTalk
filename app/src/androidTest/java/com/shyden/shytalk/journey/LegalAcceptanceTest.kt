@@ -11,6 +11,7 @@ import com.shyden.shytalk.navigation.Screen
 import com.shyden.shytalk.util.launchNavGraph
 import com.shyden.shytalk.util.waitForTag
 import com.shyden.shytalk.util.ResetFakesRule
+import com.shyden.shytalk.util.ScreenshotRule
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -23,6 +24,9 @@ class LegalAcceptanceTest {
 
     @get:Rule(order = 1)
     val composeTestRule = createComposeRule()
+
+    @get:Rule(order = 2)
+    val screenshotRule = ScreenshotRule(composeTestRule)
 
     @Test
     fun legalScreen_showsAcceptanceForm() {

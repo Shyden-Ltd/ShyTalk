@@ -18,6 +18,7 @@ import com.shyden.shytalk.navigation.Screen
 import com.shyden.shytalk.util.launchNavGraph
 import com.shyden.shytalk.util.waitForText
 import com.shyden.shytalk.util.ResetFakesRule
+import com.shyden.shytalk.util.ScreenshotRule
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -33,6 +34,9 @@ class LinkedAccountsTest : KoinTest {
 
     @get:Rule(order = 1)
     val composeTestRule = createComposeRule()
+
+    @get:Rule(order = 2)
+    val screenshotRule = ScreenshotRule(composeTestRule)
 
     private val authRepository: AuthRepository by inject()
     private val userRepository: UserRepository by inject()

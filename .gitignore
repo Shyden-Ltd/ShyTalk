@@ -65,6 +65,8 @@ iosApp/Pods/
 
 # Test results
 test-results/
+allure-results/
+allure-report/
 
 # IDE artifacts
 /.idea/artifacts/

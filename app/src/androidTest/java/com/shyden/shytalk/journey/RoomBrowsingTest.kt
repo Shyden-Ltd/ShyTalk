@@ -14,6 +14,7 @@ import com.shyden.shytalk.util.waitForTag
 import com.shyden.shytalk.util.waitForText
 import com.shyden.shytalk.testdata.TestData
 import com.shyden.shytalk.util.ResetFakesRule
+import com.shyden.shytalk.util.ScreenshotRule
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -30,6 +31,9 @@ class RoomBrowsingTest : KoinTest {
 
     @get:Rule(order = 1)
     val composeTestRule = createComposeRule()
+
+    @get:Rule(order = 2)
+    val screenshotRule = ScreenshotRule(composeTestRule)
 
     @Before
     fun grantAudioPermission() {
