@@ -25,3 +25,16 @@ Feature: Authentication Flow
     Then I should see the element with tag "profileSetup_displayNameField"
     And I should see the element with tag "profileSetup_dobButton"
     And I should see the element with tag "profileSetup_continueButton"
+
+  Scenario: Sign-in screen shows all three branded buttons
+    Given I am not authenticated
+    And I am on the sign-in screen
+    Then I should see the element with tag "signIn_googleButton"
+    And I should see the element with tag "signIn_appleButton"
+    And I should see the element with tag "signIn_emailButton"
+
+  Scenario: Email button navigates to email sign-in screen
+    Given I am not authenticated
+    And I am on the sign-in screen
+    When I tap the element with tag "signIn_emailButton"
+    Then I should see the element with tag "emailSignIn_emailField"
