@@ -52,6 +52,7 @@ import com.shyden.shytalk.data.repository.NotificationRepository
 import com.shyden.shytalk.data.repository.UserRepository
 import com.shyden.shytalk.data.remote.PmSyncService
 import com.shyden.shytalk.data.remote.VoiceService
+import com.shyden.shytalk.feature.auth.EmailSignInScreen
 import com.shyden.shytalk.feature.auth.GoogleSignInScreen
 import com.shyden.shytalk.feature.legal.CURRENT_LEGAL_VERSION
 import com.shyden.shytalk.feature.legal.CommunityStandardsScreen
@@ -177,6 +178,9 @@ fun NavGraph(
             GoogleSignInScreen(
                 pendingEmailLink = pendingEmailLink,
                 onEmailLinkConsumed = onEmailLinkConsumed,
+                onNavigateToEmail = {
+                    navController.navigate(Screen.EmailSignIn.route)
+                },
                 onAuthSuccess = { hasProfile, hasDOB, needsLegalAcceptance ->
                     when {
                         !hasProfile -> navController.navigate(Screen.ProfileSetup.route) {
@@ -195,6 +199,17 @@ fun NavGraph(
                             popUpTo(Screen.SignIn.route) { inclusive = true }
                         }
                     }
+                }
+            )
+        }
+
+        composable(Screen.EmailSignIn.route) {
+            val context = LocalContext.current
+            EmailSignInScreen(
+                onNavigateBack = { navController.safePopBackStack() },
+                onStoreEmail = { email ->
+                    context.getSharedPreferences("shytalk_prefs", android.content.Context.MODE_PRIVATE)
+                        .edit().putString("email_for_sign_in_link", email).apply()
                 }
             )
         }

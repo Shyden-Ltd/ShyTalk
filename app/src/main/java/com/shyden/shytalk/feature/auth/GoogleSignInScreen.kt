@@ -1,6 +1,5 @@
 package com.shyden.shytalk.feature.auth
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -10,21 +9,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CloudOff
-import androidx.compose.material.icons.filled.Email
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -41,9 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
@@ -52,6 +41,9 @@ import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.shyden.shytalk.feature.auth.components.AppleSignInButton
+import com.shyden.shytalk.feature.auth.components.EmailSignInButton
+import com.shyden.shytalk.feature.auth.components.GoogleSignInButton
 import com.shyden.shytalk.feature.suspension.BanScreen
 import com.shyden.shytalk.feature.suspension.SuspensionScreen
 import org.jetbrains.compose.resources.stringResource
@@ -67,6 +59,7 @@ private const val KEY_EMAIL_FOR_LINK = "email_for_sign_in_link"
 fun GoogleSignInScreen(
     pendingEmailLink: String? = null,
     onEmailLinkConsumed: () -> Unit = {},
+    onNavigateToEmail: () -> Unit = {},
     onAuthSuccess: (hasProfile: Boolean, hasDOB: Boolean, needsLegalAcceptance: Boolean) -> Unit,
     viewModel: AuthViewModel = koinViewModel()
 ) {
@@ -245,10 +238,10 @@ fun GoogleSignInScreen(
             var isSigningIn by remember { mutableStateOf(false) }
             val isBusy = uiState.isLoading || isSigningIn
 
-            // Google Sign-In button (Google-branded: white/surface background with outline)
-            OutlinedButton(
+            // Google Sign-In button (branded)
+            GoogleSignInButton(
                 onClick = {
-                    if (isBusy) return@OutlinedButton
+                    if (isBusy) return@GoogleSignInButton
                     isSigningIn = true
                     scope.launch {
                         try {
@@ -281,106 +274,27 @@ fun GoogleSignInScreen(
                         }
                     }
                 },
-                enabled = !isBusy,
-                modifier = Modifier.fillMaxWidth().testTag("signIn_googleButton"),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    contentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-            ) {
-                if (isBusy) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp).testTag("signIn_loadingIndicator"),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(stringResource(Res.string.signing_in))
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.AccountCircle,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(stringResource(Res.string.sign_in_with_google))
-                }
-            }
+                isLoading = isBusy,
+                enabled = !isBusy
+            )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Divider
-            HorizontalDivider(modifier = Modifier.fillMaxWidth())
+            // Apple Sign-In button (branded)
+            AppleSignInButton(
+                onClick = {
+                    viewModel.signInWithAppleViaProvider(context as android.app.Activity)
+                },
+                isLoading = isBusy,
+                enabled = !isBusy
+            )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            if (uiState.awaitingEmailLink) {
-                // Email link sent confirmation
-                Icon(
-                    imageVector = Icons.Default.Email,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = stringResource(Res.string.email_link_sent),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = stringResource(Res.string.check_your_email_description),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            } else {
-                // Email input + sign-in button
-                var emailInput by remember { mutableStateOf("") }
-                val isValidEmail = emailInput.contains("@") && emailInput.contains(".")
-
-                OutlinedTextField(
-                    value = emailInput,
-                    onValueChange = { emailInput = it },
-                    label = { Text(stringResource(Res.string.email_hint)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Email,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onDone = {
-                            if (isValidEmail && !isBusy) {
-                                val email = emailInput.trim()
-                                context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
-                                    .edit().putString(KEY_EMAIL_FOR_LINK, email).apply()
-                                viewModel.signInWithEmail(email)
-                            }
-                        }
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("signIn_emailInput")
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Button(
-                    onClick = {
-                        val email = emailInput.trim()
-                        context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
-                            .edit().putString(KEY_EMAIL_FOR_LINK, email).apply()
-                        viewModel.signInWithEmail(email)
-                    },
-                    enabled = isValidEmail && !isBusy,
-                    modifier = Modifier.fillMaxWidth().testTag("signIn_emailButton")
-                ) {
-                    Text(stringResource(Res.string.sign_in_with_email))
-                }
-            }
+            // Email Sign-In button — navigates to EmailSignInScreen
+            EmailSignInButton(
+                onClick = onNavigateToEmail
+            )
         }
     }
 }
