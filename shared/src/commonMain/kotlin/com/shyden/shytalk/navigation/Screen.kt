@@ -41,4 +41,5 @@ sealed class Screen(val route: String) {
     data object Browser : Screen("browser/{url}") {
         fun createRoute(encodedUrl: String) = "browser/$encodedUrl"
     }
+    data object EmailSignIn : Screen("email_sign_in")
 }

@@ -626,6 +626,12 @@
     <string name="check_your_email_description">We sent a sign-in link to your email. Tap the link to continue.</string>
     <string name="signing_in">Signing in…</string>
     <string name="error_disposable_email">Disposable email addresses are not allowed. Please use a permanent email address.</string>
+    <string name="send_link">Send Link</string>
+    <string name="paste_link">Paste Link</string>
+    <string name="resend_link">Resend</string>
+    <string name="use_different_email">Use a different email</string>
+    <string name="email_link_paste_hint">Open the link in your email, then come back and tap Paste Link.</string>
+    <string name="error_invalid_email_link">That doesn\'t look like a valid sign-in link. Please paste the full link from your email.</string>
 
     <!-- Suspension / Ban -->
     <string name="appeal">Appeal</string>
