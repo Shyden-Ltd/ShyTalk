@@ -117,6 +117,28 @@ class AuthViewModel(
         }
     }
 
+    fun signInWithAppleViaProvider(activity: Any) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null) }
+            when (val result = authRepository.signInWithAppleViaProvider(activity)) {
+                is Resource.Success -> {
+                    val providerInfo = authRepository.getProviderInfo()
+                    if (providerInfo == null) {
+                        _uiState.update {
+                            it.copy(isLoading = false, error = UiText.plain("Could not retrieve provider info"))
+                        }
+                        return@launch
+                    }
+                    resolveIdentityAndProceed(providerInfo.first, providerInfo.second)
+                }
+                is Resource.Error -> {
+                    _uiState.update { it.copy(isLoading = false, error = UiText.plain(result.message)) }
+                }
+                is Resource.Loading -> {}
+            }
+        }
+    }
+
     /**
      * Core identity resolution flow. Resolves the provider+identifier against
      * the Express API identity map, handles device binding, ban checks, and

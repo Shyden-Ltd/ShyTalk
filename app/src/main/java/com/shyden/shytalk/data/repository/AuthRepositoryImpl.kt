@@ -52,7 +52,32 @@ class AuthRepositoryImpl(
     }
 
     override suspend fun signInWithAppleIdToken(idToken: String, rawNonce: String): Resource<String> {
-        return Resource.Error("Apple Sign-In is not supported on Android")
+        return try {
+            val credential = com.google.firebase.auth.OAuthProvider.newCredentialBuilder("apple.com")
+                .setIdToken(idToken)
+                .setAccessToken(rawNonce)
+                .build()
+            val authResult = auth.signInWithCredential(credential).await()
+            val uid = authResult.user?.uid ?: return Resource.Error("Apple sign-in returned no user")
+            Resource.Success(uid)
+        } catch (e: Exception) {
+            Resource.Error(e.message ?: "Apple sign-in failed")
+        }
+    }
+
+    override suspend fun signInWithAppleViaProvider(activity: Any): Resource<String> {
+        return try {
+            val provider = com.google.firebase.auth.OAuthProvider.newBuilder("apple.com")
+                .setScopes(listOf("email", "name"))
+                .build()
+            val authResult = auth
+                .startActivityForSignInWithProvider(activity as android.app.Activity, provider)
+                .await()
+            val uid = authResult.user?.uid ?: return Resource.Error("Apple sign-in returned no user")
+            Resource.Success(uid)
+        } catch (e: Exception) {
+            Resource.Error(e.message ?: "Apple sign-in failed")
+        }
     }
 
     override suspend fun sendSignInLink(email: String): Resource<Unit> = firebaseCall("Failed to send sign-in link") {

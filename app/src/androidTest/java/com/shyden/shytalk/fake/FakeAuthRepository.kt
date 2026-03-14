@@ -38,6 +38,12 @@ class FakeAuthRepository : AuthRepository {
         return Resource.Success("test-user-1")
     }
 
+    override suspend fun signInWithAppleViaProvider(activity: Any): Resource<String> {
+        _isAuthenticated = true
+        _currentUserId = "test-user-1"
+        return Resource.Success("test-user-1")
+    }
+
     override suspend fun sendSignInLink(email: String): Resource<Unit> = Resource.Success(Unit)
 
     override suspend fun signInWithEmailLink(email: String, link: String): Resource<String> {

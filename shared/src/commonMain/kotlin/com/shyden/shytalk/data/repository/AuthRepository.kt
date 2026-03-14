@@ -34,6 +34,7 @@ interface AuthRepository {
 
     suspend fun signInWithGoogleIdToken(idToken: String): Resource<String>
     suspend fun signInWithAppleIdToken(idToken: String, rawNonce: String): Resource<String>
+    suspend fun signInWithAppleViaProvider(activity: Any): Resource<String>
     suspend fun sendSignInLink(email: String): Resource<Unit>
     suspend fun signInWithEmailLink(email: String, link: String): Resource<String>
     fun signOut()
