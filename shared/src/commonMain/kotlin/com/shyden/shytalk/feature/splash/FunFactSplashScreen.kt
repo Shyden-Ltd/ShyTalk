@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.model.FunFact
@@ -50,7 +51,8 @@ fun FunFactSplashScreen(
             Text(
                 text = "ShyTalk",
                 style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.testTag("splash_title")
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -59,7 +61,8 @@ fun FunFactSplashScreen(
                 text = subtitle,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                modifier = Modifier.testTag("splash_subtitle")
             )
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -67,7 +70,7 @@ fun FunFactSplashScreen(
             Button(
                 onClick = onContinue,
                 enabled = warmUpComplete,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().testTag("splash_continueButton")
             ) {
                 Text(if (warmUpComplete) stringResource(Res.string.continue_button) else stringResource(Res.string.getting_ready))
             }

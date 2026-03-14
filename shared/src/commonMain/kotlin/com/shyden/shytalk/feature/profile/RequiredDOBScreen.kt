@@ -24,6 +24,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.compose.runtime.collectAsState
@@ -67,7 +68,8 @@ fun RequiredDOBScreen(
         ) {
             Text(
                 text = stringResource(Res.string.one_more_step),
-                style = MaterialTheme.typography.headlineMedium
+                style = MaterialTheme.typography.headlineMedium,
+                modifier = Modifier.testTag("requiredDob_title")
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -82,7 +84,7 @@ fun RequiredDOBScreen(
 
             OutlinedButton(
                 onClick = { showDatePicker = true },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().testTag("requiredDob_dateButton")
             ) {
                 Text(
                     text = selectedDateMillis?.let { formatDateForDisplay(it) }
@@ -118,7 +120,7 @@ fun RequiredDOBScreen(
                     }
                 },
                 enabled = canContinue,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().testTag("requiredDob_continueButton")
             ) {
                 if (uiState.isLoading) {
                     CircularProgressIndicator(

@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import org.jetbrains.compose.resources.stringResource
@@ -53,7 +54,8 @@ fun ForceUpdateScreen() {
         Text(
             text = stringResource(Res.string.update_required),
             style = MaterialTheme.typography.headlineMedium,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            modifier = Modifier.testTag("forceUpdate_title")
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -67,13 +69,16 @@ fun ForceUpdateScreen() {
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        Button(onClick = {
-            val intent = Intent(
-                Intent.ACTION_VIEW,
-                Uri.parse("https://play.google.com/store/apps/details?id=com.shyden.shytalk")
-            )
-            context.startActivity(intent)
-        }) {
+        Button(
+            onClick = {
+                val intent = Intent(
+                    Intent.ACTION_VIEW,
+                    Uri.parse("https://play.google.com/store/apps/details?id=com.shyden.shytalk")
+                )
+                context.startActivity(intent)
+            },
+            modifier = Modifier.testTag("forceUpdate_updateButton")
+        ) {
             Text(stringResource(Res.string.update_now))
         }
     }

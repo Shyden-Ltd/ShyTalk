@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import com.shyden.shytalk.core.ui.PlatformWebView
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.resources.Res
@@ -28,7 +29,10 @@ fun CommunityStandardsScreen(
             TopAppBar(
                 title = { Text(stringResource(Res.string.community_standards)) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.testTag("communityStandards_backButton")
+                    ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.back))
                     }
                 }

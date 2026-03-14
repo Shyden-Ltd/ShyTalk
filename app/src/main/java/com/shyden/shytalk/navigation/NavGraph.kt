@@ -36,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -839,7 +840,10 @@ fun NavGraph(
                     TopAppBar(
                         title = { Text("") },
                         navigationIcon = {
-                            IconButton(onClick = { navController.safePopBackStack() }) {
+                            IconButton(
+                                onClick = { navController.safePopBackStack() },
+                                modifier = Modifier.testTag("browser_backButton")
+                            ) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.back))
                             }
                         }

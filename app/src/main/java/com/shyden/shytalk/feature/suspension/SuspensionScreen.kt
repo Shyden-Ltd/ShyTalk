@@ -48,6 +48,7 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -113,7 +114,8 @@ fun SuspensionScreen(
             text = if (countdownExpired) stringResource(Res.string.account_unlocked)
                    else stringResource(Res.string.account_suspended),
             style = MaterialTheme.typography.headlineMedium,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            modifier = Modifier.testTag("suspension_title")
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -197,7 +199,7 @@ fun SuspensionScreen(
                     onValueChange = { if (it.length <= 500) appealText = it },
                     label = { Text(stringResource(Res.string.appeal)) },
                     placeholder = { Text(stringResource(Res.string.appeal_placeholder)) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().testTag("suspension_appealField"),
                     minLines = 3,
                     maxLines = 6,
                     supportingText = { Text("${appealText.length}/500") }
@@ -213,7 +215,7 @@ fun SuspensionScreen(
                         }
                     },
                     enabled = appealText.isNotBlank() && !isLoading,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().testTag("suspension_submitAppealButton")
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(
@@ -306,7 +308,7 @@ fun SuspensionScreen(
 
         OutlinedButton(
             onClick = onSignOut,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().testTag("suspension_signOutButton"),
             colors = ButtonDefaults.outlinedButtonColors(
                 contentColor = MaterialTheme.colorScheme.onSurfaceVariant
             )

@@ -42,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shyden.shytalk.core.util.formatRelativeTime
@@ -74,7 +75,10 @@ fun ReportReviewScreen(
             TopAppBar(
                 title = { Text(stringResource(Res.string.report_review)) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.testTag("reportReview_backButton")
+                    ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.back))
                     }
                 }
@@ -96,12 +100,13 @@ fun ReportReviewScreen(
                 Text(
                     text = stringResource(Res.string.no_pending_reports),
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag("reportReview_emptyState")
                 )
             }
         } else {
             LazyColumn(
-                modifier = modifier.fillMaxSize().padding(padding)
+                modifier = modifier.fillMaxSize().padding(padding).testTag("reportReview_list")
             ) {
                 items(uiState.reports, key = { it.reportId }) { report ->
                     ReportCard(

@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import org.jetbrains.compose.resources.stringResource
@@ -49,7 +50,8 @@ fun DegradedModeScreen(onAcknowledge: () -> Unit) {
             Text(
                 text = stringResource(Res.string.technical_difficulties),
                 style = MaterialTheme.typography.headlineSmall,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                modifier = Modifier.testTag("degraded_title")
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -73,7 +75,7 @@ fun DegradedModeScreen(onAcknowledge: () -> Unit) {
 
             Button(
                 onClick = onAcknowledge,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().testTag("degraded_acknowledgeButton")
             ) {
                 Text(stringResource(Res.string.i_understand))
             }

@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import org.jetbrains.compose.resources.stringResource
@@ -47,7 +48,8 @@ fun UnsafeDeviceScreen() {
             Text(
                 text = stringResource(Res.string.device_not_supported),
                 style = MaterialTheme.typography.headlineMedium,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                modifier = Modifier.testTag("unsafeDevice_title")
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -56,7 +58,8 @@ fun UnsafeDeviceScreen() {
                 text = stringResource(Res.string.device_not_supported_description),
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag("unsafeDevice_description")
             )
         }
     }

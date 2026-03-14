@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -59,7 +60,8 @@ fun BanScreen(
                 text = if (banType == "device") stringResource(Res.string.device_banned_title)
                        else stringResource(Res.string.network_banned_title),
                 style = MaterialTheme.typography.headlineMedium,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                modifier = Modifier.testTag("ban_title")
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -78,7 +80,8 @@ fun BanScreen(
                     text = stringResource(Res.string.ban_reason, reason),
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag("ban_reason")
                 )
             }
 
@@ -88,7 +91,8 @@ fun BanScreen(
                     text = stringResource(Res.string.ban_expires, expiresAt),
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag("ban_expires")
                 )
             } else {
                 Spacer(modifier = Modifier.height(12.dp))
@@ -96,7 +100,8 @@ fun BanScreen(
                     text = stringResource(Res.string.ban_permanent),
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.error
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag("ban_permanent")
                 )
             }
 
@@ -104,7 +109,7 @@ fun BanScreen(
 
             OutlinedButton(
                 onClick = onSignOut,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().testTag("ban_signOutButton"),
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
