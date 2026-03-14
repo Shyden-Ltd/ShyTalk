@@ -631,11 +631,11 @@
     <string name="resend_link">Resend</string>
     <string name="use_different_email">Use a different email</string>
     <string name="email_link_paste_hint">Open the link in your email, then come back and tap Paste Link.</string>
-    <string name="error_invalid_email_link">That doesn\'t look like a valid sign-in link. Please paste the full link from your email.</string>
-    <string name="email_sign_in_description">We\'ll send you a sign-in link. No password needed.</string>
+    <string name="error_invalid_email_link">That doesn't look like a valid sign-in link. Please paste the full link from your email.</string>
+    <string name="email_sign_in_description">We'll send you a sign-in link. No password needed.</string>
     <string name="email_link_sent_to">We sent a sign-in link to %1$s</string>
     <string name="email_link_step1">Step 1: Open your email and tap the sign-in link</string>
-    <string name="email_link_step2">Link didn\'t work? Paste it here instead:</string>
+    <string name="email_link_step2">Link didn't work? Paste it here instead:</string>
     <string name="verify">Verify</string>
 
     <!-- Suspension / Ban -->

@@ -38,7 +38,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Email sign-in deep link -->
+            <!-- Email sign-in deep link (prod) -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -47,6 +47,39 @@
                     android:scheme="https"
                     android:host="shytalk.shyden.co.uk"
                     android:pathPrefix="/auth/email-link" />
+            </intent-filter>
+
+            <!-- Email sign-in deep link (dev) -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="dev.shytalk.shyden.co.uk"
+                    android:pathPrefix="/auth/email-link" />
+            </intent-filter>
+
+            <!-- Firebase Auth OAuth redirect handler (dev) -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="shytalk-dev.firebaseapp.com"
+                    android:pathPrefix="/__/auth/handler" />
+            </intent-filter>
+
+            <!-- Firebase Auth OAuth redirect handler (prod) -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="shytalk-7ba69.firebaseapp.com"
+                    android:pathPrefix="/__/auth/handler" />
             </intent-filter>
 
         </activity>
