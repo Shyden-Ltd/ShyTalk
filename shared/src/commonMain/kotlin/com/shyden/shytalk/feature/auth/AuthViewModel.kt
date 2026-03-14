@@ -422,6 +422,10 @@ class AuthViewModel(
         _uiState.update { it.copy(isDeviceLocked = false) }
     }
 
+    fun clearAwaitingEmailLink() {
+        _uiState.update { it.copy(awaitingEmailLink = false, emailForLink = null) }
+    }
+
     fun signOut() {
         logI(TAG, "User signed out")
         resolvedUniqueId = null

@@ -19,6 +19,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -43,7 +44,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shyden.shytalk.core.util.DisposableEmailDomains
-import com.shyden.shytalk.core.util.getClipboardText
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
 import kotlinx.coroutines.delay
@@ -66,7 +66,6 @@ fun EmailSignInScreen(
     val scope = rememberCoroutineScope()
 
     val errorDisposableEmail = stringResource(Res.string.error_disposable_email)
-    val errorInvalidEmailLink = stringResource(Res.string.error_invalid_email_link)
 
     // Show ViewModel errors in snackbar
     LaunchedEffect(uiState.error) {
@@ -100,21 +99,18 @@ fun EmailSignInScreen(
             AwaitingLinkContent(
                 email = uiState.emailForLink ?: "",
                 isLoading = uiState.isLoading,
-                onPasteLink = { email ->
-                    val link = getClipboardText()
-                    if (link == null || !link.contains("firebase") || !link.contains("sign_in")) {
-                        scope.launch {
-                            snackbarHostState.showSnackbar(errorInvalidEmailLink)
-                        }
-                    } else {
-                        viewModel.handleEmailLink(email, link)
-                    }
+                onSubmitLink = { link ->
+                    val email = uiState.emailForLink ?: ""
+                    viewModel.handleEmailLink(email, link)
                 },
                 onResend = { email ->
                     onStoreEmail(email)
                     viewModel.signInWithEmail(email)
                 },
-                onChangeEmail = onNavigateBack,
+                onChangeEmail = {
+                    // Reset the awaiting state so the email input shows again
+                    viewModel.clearAwaitingEmailLink()
+                },
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
@@ -156,10 +152,29 @@ private fun EmailInputContent(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Icon(
+            imageVector = Icons.Default.Email,
+            contentDescription = null,
+            modifier = Modifier.size(48.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         Text(
             text = stringResource(Res.string.sign_in_with_email),
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onSurface
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = stringResource(Res.string.email_sign_in_description),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -209,12 +224,13 @@ private fun EmailInputContent(
 private fun AwaitingLinkContent(
     email: String,
     isLoading: Boolean,
-    onPasteLink: (String) -> Unit,
+    onSubmitLink: (String) -> Unit,
     onResend: (String) -> Unit,
     onChangeEmail: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var resendCooldown by remember { mutableIntStateOf(0) }
+    var linkInput by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
     // Start the resend cooldown timer when this content first appears
@@ -249,18 +265,8 @@ private fun AwaitingLinkContent(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = stringResource(Res.string.check_your_email_description),
+            text = stringResource(Res.string.email_link_sent_to, email),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = stringResource(Res.string.email_link_paste_hint),
-            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
@@ -268,19 +274,61 @@ private fun AwaitingLinkContent(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Button(
-            onClick = { onPasteLink(email) },
-            enabled = !isLoading,
+        // Step 1: Tap the link in your email (primary path via deep link)
+        Text(
+            text = stringResource(Res.string.email_link_step1),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Step 2: Or paste the link here (fallback)
+        Text(
+            text = stringResource(Res.string.email_link_step2),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = linkInput,
+            onValueChange = { linkInput = it },
+            label = { Text(stringResource(Res.string.paste_link)) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(
+                onDone = {
+                    if (linkInput.isNotBlank()) {
+                        onSubmitLink(linkInput.trim())
+                    }
+                }
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("emailSignIn_linkField")
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedButton(
+            onClick = { onSubmitLink(linkInput.trim()) },
+            enabled = linkInput.isNotBlank() && !isLoading,
             modifier = Modifier.fillMaxWidth().testTag("emailSignIn_pasteButton")
         ) {
             if (isLoading) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(20.dp),
                     strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary
+                    color = MaterialTheme.colorScheme.primary
                 )
             } else {
-                Text(stringResource(Res.string.paste_link))
+                Text(stringResource(Res.string.verify))
             }
         }
 

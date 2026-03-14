@@ -8,7 +8,8 @@ import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.tasks.await
 
 class AuthRepositoryImpl(
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    private val applicationId: String = "com.shyden.shytalk"
 ) : AuthRepository {
 
     override var resolvedUniqueId: String? = null
@@ -89,7 +90,7 @@ class AuthRepositoryImpl(
         val actionCodeSettings = ActionCodeSettings.newBuilder()
             .setUrl("https://shytalk.shyden.co.uk/auth/email-link")
             .setHandleCodeInApp(true)
-            .setAndroidPackageName("com.shyden.shytalk", true, null)
+            .setAndroidPackageName(applicationId, true, null)
             .build()
         auth.sendSignInLinkToEmail(email, actionCodeSettings).await()
     }

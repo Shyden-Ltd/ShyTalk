@@ -234,14 +234,23 @@ fun GoogleSignInScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            var isSigningIn by remember { mutableStateOf(false) }
-            val isBusy = uiState.isLoading || isSigningIn
+            // Track which provider is actively signing in (null = none)
+            var signingInProvider by remember { mutableStateOf<String?>(null) }
+
+            // Clear local signing-in state when ViewModel finishes loading (success, error, or cancel)
+            LaunchedEffect(uiState.isLoading, uiState.error) {
+                if (!uiState.isLoading && signingInProvider != null) {
+                    signingInProvider = null
+                }
+            }
+
+            val isBusy = uiState.isLoading || signingInProvider != null
 
             // Google Sign-In button (branded)
             GoogleSignInButton(
                 onClick = {
                     if (isBusy) return@GoogleSignInButton
-                    isSigningIn = true
+                    signingInProvider = "google"
                     scope.launch {
                         try {
                             val googleIdOption = GetGoogleIdOption.Builder()
@@ -264,16 +273,16 @@ fun GoogleSignInScreen(
 
                             viewModel.signInWithGoogle(googleIdToken)
                         } catch (_: GetCredentialCancellationException) {
-                            isSigningIn = false
+                            signingInProvider = null
                         } catch (e: Exception) {
-                            isSigningIn = false
+                            signingInProvider = null
                             snackbarHostState.showSnackbar(
                                 e.message ?: googleSignInFailed
                             )
                         }
                     }
                 },
-                isLoading = isBusy,
+                isLoading = signingInProvider == "google" || (uiState.isLoading && signingInProvider == "google"),
                 enabled = !isBusy
             )
 
@@ -282,9 +291,11 @@ fun GoogleSignInScreen(
             // Apple Sign-In button (branded)
             AppleSignInButton(
                 onClick = {
+                    if (isBusy) return@AppleSignInButton
+                    signingInProvider = "apple"
                     viewModel.signInWithAppleViaProvider(context as android.app.Activity)
                 },
-                isLoading = isBusy,
+                isLoading = signingInProvider == "apple" || (uiState.isLoading && signingInProvider == "apple"),
                 enabled = !isBusy
             )
 
