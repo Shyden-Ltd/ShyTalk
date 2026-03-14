@@ -231,6 +231,9 @@ dependencies {
     // Google Play Billing
     implementation(libs.billing)
 
+    // Chrome Custom Tabs (required for Firebase OAuthProvider to use in-app browser)
+    implementation("androidx.browser:browser:1.8.0")
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.mockk)

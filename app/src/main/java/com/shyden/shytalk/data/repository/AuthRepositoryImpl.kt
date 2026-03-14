@@ -67,12 +67,17 @@ class AuthRepositoryImpl(
 
     override suspend fun signInWithAppleViaProvider(activity: Any): Resource<String> {
         return try {
-            val provider = com.google.firebase.auth.OAuthProvider.newBuilder("apple.com")
-                .setScopes(listOf("email", "name"))
-                .build()
-            val authResult = auth
-                .startActivityForSignInWithProvider(activity as android.app.Activity, provider)
-                .await()
+            val act = activity as android.app.Activity
+            // Check for a pending result first (handles returning from Custom Tab after config change)
+            val pending = auth.pendingAuthResult
+            val authResult = if (pending != null) {
+                pending.await()
+            } else {
+                val provider = com.google.firebase.auth.OAuthProvider.newBuilder("apple.com")
+                    .setScopes(listOf("email", "name"))
+                    .build()
+                auth.startActivityForSignInWithProvider(act, provider).await()
+            }
             val uid = authResult.user?.uid ?: return Resource.Error("Apple sign-in returned no user")
             Resource.Success(uid)
         } catch (e: Exception) {
