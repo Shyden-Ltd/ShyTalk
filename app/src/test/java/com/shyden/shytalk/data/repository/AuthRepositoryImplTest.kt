@@ -106,11 +106,14 @@ class AuthRepositoryImplTest {
     }
 
     @Test
-    fun `signInWithAppleIdToken returns Error on Android`() = runTest {
+    fun `signInWithAppleIdToken returns Error on failure`() = runTest {
+        // Mock signInWithCredential for any credential to return a failure,
+        // since OAuthProvider.newCredentialBuilder is a static Firebase call.
+        every { auth.signInWithCredential(any()) } returns Tasks.forException(RuntimeException("Apple sign-in failed"))
+
         val result = repo.signInWithAppleIdToken("token", "nonce")
 
         assertTrue(result is Resource.Error)
-        assertEquals("Apple Sign-In is not supported on Android", (result as Resource.Error).message)
     }
 
     @Test
