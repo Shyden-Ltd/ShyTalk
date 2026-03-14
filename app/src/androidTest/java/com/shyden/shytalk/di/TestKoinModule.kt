@@ -11,6 +11,7 @@ import com.shyden.shytalk.data.remote.VoiceService
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.BannerRepository
 import com.shyden.shytalk.data.repository.DeviceRepository
+import com.shyden.shytalk.data.repository.FunFactRepository
 import com.shyden.shytalk.data.repository.EconomyRepository
 import com.shyden.shytalk.data.repository.IdentityRepository
 import com.shyden.shytalk.data.repository.GiftRepository
@@ -29,6 +30,7 @@ import com.shyden.shytalk.fake.FakeAppConfigService
 import com.shyden.shytalk.fake.FakeAuthRepository
 import com.shyden.shytalk.fake.FakeBannerRepository
 import com.shyden.shytalk.fake.FakeDeviceRepository
+import com.shyden.shytalk.fake.FakeFunFactRepository
 import com.shyden.shytalk.fake.FakeEconomyRepository
 import com.shyden.shytalk.fake.FakeIdentityRepository
 import com.shyden.shytalk.fake.FakeGiftRepository
@@ -47,6 +49,7 @@ import com.shyden.shytalk.fake.FakeUserRepository
 import com.shyden.shytalk.fake.FakeVoiceService
 import com.shyden.shytalk.feature.auth.AuthViewModel
 import com.shyden.shytalk.feature.daily.DailyRewardViewModel
+import com.shyden.shytalk.feature.splash.FunFactSplashViewModel
 import com.shyden.shytalk.feature.gacha.GachaViewModel
 import com.shyden.shytalk.feature.gifting.GiftingViewModel
 import com.shyden.shytalk.feature.home.HomeViewModel
@@ -97,6 +100,7 @@ val testModule = module {
     single { FakeEconomyRepository() } bind EconomyRepository::class
     single { FakeTranslationRepository() } bind TranslationRepository::class
     single { FakeBannerRepository() } bind BannerRepository::class
+    single { FakeFunFactRepository() } bind FunFactRepository::class
 
     // Fake managers
     single { FakeActiveRoomManager() } bind RoomLifecycleManager::class
@@ -141,4 +145,5 @@ val testModule = module {
     viewModel { GiftingViewModel(get(), get(), get()) }
     viewModel { params -> GiftWallViewModel(params[0], get()) }
     viewModel { DailyRewardViewModel(get(), get()) }
+    viewModel { FunFactSplashViewModel(get(), get(), null, null, get(), get(), get(), get()) }
 }
