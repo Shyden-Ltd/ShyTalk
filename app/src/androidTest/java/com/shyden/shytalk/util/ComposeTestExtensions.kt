@@ -2,6 +2,7 @@ package com.shyden.shytalk.util
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.ComposeTestRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -56,6 +57,9 @@ fun ComposeTestRule.assertTagDoesNotExist(tag: String) {
 /**
  * Waits for a node with the given [text] to appear.
  * Uses the same strategy as [waitForTag].
+ *
+ * Uses [onAllNodesWithText] internally so that the wait succeeds even when
+ * multiple nodes share the same text (e.g. two "Unlink" buttons for two providers).
  */
 fun ComposeTestRule.waitForText(text: String, timeoutMs: Long = 10_000) {
     val deadline = System.nanoTime() + timeoutMs * 1_000_000L
@@ -63,7 +67,7 @@ fun ComposeTestRule.waitForText(text: String, timeoutMs: Long = 10_000) {
         Thread.sleep(250)
         mainClock.advanceTimeBy(500)
         try {
-            onNodeWithText(text).assertExists()
+            onAllNodesWithText(text)[0].assertExists()
             return
         } catch (e: AssertionError) {
             if (System.nanoTime() >= deadline) throw e
