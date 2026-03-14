@@ -27,7 +27,7 @@ espressoCore = "3.5.1"
 lottieCompose = "6.7.1"
 billing = "7.1.1"
 allureKotlin = "2.4.0"
-cucumberAndroid = "7.20.1"
+cucumberAndroid = "7.18.1"
 
 [libraries]
 # AndroidX Core
