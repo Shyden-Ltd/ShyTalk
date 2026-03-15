@@ -69,6 +69,7 @@ fun EmailSignInScreen(
     val scope = rememberCoroutineScope()
 
     val errorDisposableEmail = stringResource(Res.string.error_disposable_email)
+    val errorInvalidLink = stringResource(Res.string.error_invalid_email_link)
 
     // Show ViewModel errors in snackbar
     LaunchedEffect(uiState.error) {
@@ -103,8 +104,14 @@ fun EmailSignInScreen(
                 email = uiState.emailForLink ?: "",
                 isLoading = uiState.isLoading,
                 onSubmitLink = { link ->
-                    val email = uiState.emailForLink ?: ""
-                    viewModel.handleEmailLink(email, link)
+                    if (!link.startsWith("https://")) {
+                        scope.launch {
+                            snackbarHostState.showSnackbar(errorInvalidLink)
+                        }
+                    } else {
+                        val email = uiState.emailForLink ?: ""
+                        viewModel.handleEmailLink(email, link)
+                    }
                 },
                 onResend = { email ->
                     onStoreEmail(email)

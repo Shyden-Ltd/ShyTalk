@@ -9,7 +9,8 @@ import kotlinx.coroutines.tasks.await
 
 class AuthRepositoryImpl(
     private val auth: FirebaseAuth,
-    private val applicationId: String = "com.shyden.shytalk"
+    private val applicationId: String = "com.shyden.shytalk",
+    private val emailLinkDomain: String = "shytalk.shyden.co.uk"
 ) : AuthRepository {
 
     override var resolvedUniqueId: String? = null
@@ -59,17 +60,18 @@ class AuthRepositoryImpl(
                 .setAccessToken(rawNonce)
                 .build()
             val authResult = auth.signInWithCredential(credential).await()
-            val uid = authResult.user?.uid ?: return Resource.Error("Apple sign-in returned no user")
+            val uid = authResult.user?.uid ?: return Resource.Error("Apple sign-in failed")
             Resource.Success(uid)
+        } catch (e: com.google.firebase.auth.FirebaseAuthUserCollisionException) {
+            Resource.Error("An account already exists with this email using a different sign-in method")
         } catch (e: Exception) {
-            Resource.Error(e.message ?: "Apple sign-in failed")
+            Resource.Error("Apple sign-in failed")
         }
     }
 
     override suspend fun signInWithAppleViaProvider(activity: Any): Resource<String> {
         return try {
             val act = activity as android.app.Activity
-            // Check for a pending result first (handles returning from Custom Tab after config change)
             val pending = auth.pendingAuthResult
             val authResult = if (pending != null) {
                 pending.await()
@@ -79,16 +81,20 @@ class AuthRepositoryImpl(
                     .build()
                 auth.startActivityForSignInWithProvider(act, provider).await()
             }
-            val uid = authResult.user?.uid ?: return Resource.Error("Apple sign-in returned no user")
+            val uid = authResult.user?.uid ?: return Resource.Error("Apple sign-in failed")
             Resource.Success(uid)
+        } catch (e: com.google.firebase.auth.FirebaseAuthUserCollisionException) {
+            Resource.Error("An account already exists with this email using a different sign-in method")
+        } catch (e: com.google.firebase.auth.FirebaseAuthWebException) {
+            Resource.Error("Sign-in was cancelled")
         } catch (e: Exception) {
-            Resource.Error(e.message ?: "Apple sign-in failed")
+            Resource.Error("Apple sign-in failed. Please try again.")
         }
     }
 
     override suspend fun sendSignInLink(email: String): Resource<Unit> = firebaseCall("Failed to send sign-in link") {
         val actionCodeSettings = ActionCodeSettings.newBuilder()
-            .setUrl("https://shytalk.shyden.co.uk/auth/email-link")
+            .setUrl("https://$emailLinkDomain/auth/email-link")
             .setHandleCodeInApp(true)
             .setAndroidPackageName(applicationId, true, null)
             .build()

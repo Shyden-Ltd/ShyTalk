@@ -210,7 +210,7 @@ class AuthViewModel(
                     }
 
                     is SignInResult.Deactivated -> {
-                        logW(TAG, "Deactivated identity: $provider:$identifier")
+                        logW(TAG, "Deactivated identity: $provider:***")
                         authRepository.signOut()
                         _uiState.update {
                             it.copy(
@@ -345,7 +345,7 @@ class AuthViewModel(
             _uiState.update { it.copy(isLoading = true, error = null) }
             when (val result = authRepository.sendSignInLink(email)) {
                 is Resource.Success -> {
-                    logI(TAG, "Sign-in link sent to $email")
+                    logI(TAG, "Sign-in link sent to ***@${email.substringAfter("@")}")
                     _uiState.update {
                         it.copy(
                             isLoading = false,
