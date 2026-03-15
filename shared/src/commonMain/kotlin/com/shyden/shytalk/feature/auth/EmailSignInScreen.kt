@@ -27,6 +27,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -81,17 +82,7 @@ fun EmailSignInScreen(
 
     Scaffold(
         modifier = modifier,
-        snackbarHost = {
-            SnackbarHost(snackbarHostState) { data ->
-                androidx.compose.material3.Snackbar(
-                    snackbarData = data,
-                    containerColor = androidx.compose.material3.MaterialTheme.colorScheme.errorContainer,
-                    contentColor = androidx.compose.material3.MaterialTheme.colorScheme.onErrorContainer,
-                    actionColor = androidx.compose.material3.MaterialTheme.colorScheme.error,
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
-                )
-            }
-        },
+        snackbarHost = { StyledSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {},
