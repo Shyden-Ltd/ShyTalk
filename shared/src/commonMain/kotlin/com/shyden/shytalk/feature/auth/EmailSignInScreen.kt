@@ -81,7 +81,17 @@ fun EmailSignInScreen(
 
     Scaffold(
         modifier = modifier,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = {
+            SnackbarHost(snackbarHostState) { data ->
+                androidx.compose.material3.Snackbar(
+                    snackbarData = data,
+                    containerColor = androidx.compose.material3.MaterialTheme.colorScheme.errorContainer,
+                    contentColor = androidx.compose.material3.MaterialTheme.colorScheme.onErrorContainer,
+                    actionColor = androidx.compose.material3.MaterialTheme.colorScheme.error,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                )
+            }
+        },
         topBar = {
             TopAppBar(
                 title = {},

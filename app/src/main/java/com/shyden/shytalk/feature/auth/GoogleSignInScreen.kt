@@ -208,7 +208,17 @@ fun GoogleSignInScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = {
+            SnackbarHost(snackbarHostState) { data ->
+                androidx.compose.material3.Snackbar(
+                    snackbarData = data,
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    actionColor = MaterialTheme.colorScheme.error,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                )
+            }
+        }
     ) { padding ->
         Column(
             modifier = Modifier

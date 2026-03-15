@@ -10,6 +10,8 @@ import coil3.disk.DiskCache
 import coil3.gif.AnimatedImageDecoder
 import coil3.memory.MemoryCache
 import coil3.request.crossfade
+import android.util.Log
+import androidx.browser.customtabs.CustomTabsClient
 import com.shyden.shytalk.core.di.appModule
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.LanguagePreference
@@ -59,6 +61,18 @@ class ShyTalkApp : Application(), SingletonImageLoader.Factory {
             NotificationManager.IMPORTANCE_LOW
         ).apply { description = "Active voice room notification" }
         notificationManager?.createNotificationChannel(channel)
+
+        // Warm up Chrome Custom Tabs at app startup so Firebase OAuthProvider
+        // uses an in-app Custom Tab instead of an external browser.
+        try {
+            val ctPackage = CustomTabsClient.getPackageName(this, listOf("com.android.chrome"))
+            if (ctPackage != null) {
+                CustomTabsClient.connectAndInitialize(this, ctPackage)
+                Log.d("ShyTalkApp", "Custom Tabs warmed up with package: $ctPackage")
+            }
+        } catch (e: Exception) {
+            Log.w("ShyTalkApp", "Custom Tabs warmup failed", e)
+        }
 
         val pmChannel = NotificationChannel(
             Constants.PM_NOTIFICATION_CHANNEL_ID,
