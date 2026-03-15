@@ -29,6 +29,16 @@
             "prompt": "If this file is in shared/src/commonMain/, check the content being written for JVM-only APIs that break iOS: System.currentTimeMillis(), System.nanoTime(), Math.PI, Math.sin(), Math.cos(), String.format(), synchronized {}, @Volatile (without kotlin.concurrent prefix). If any are found, DENY and explain the KMP-compatible alternative. If the file is NOT in commonMain, or no JVM APIs are found, approve silently."
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/block-main-commits.sh",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [
