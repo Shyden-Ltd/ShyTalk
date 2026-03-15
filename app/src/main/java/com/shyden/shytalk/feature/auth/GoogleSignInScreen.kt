@@ -299,12 +299,9 @@ fun GoogleSignInScreen(
                 enabled = !isBusy
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Email Sign-In button — navigates to EmailSignInScreen
-            EmailSignInButton(
-                onClick = onNavigateToEmail
-            )
+            // Email Sign-In hidden — pending self-hosted mail server implementation
+            // Spacer(modifier = Modifier.height(12.dp))
+            // EmailSignInButton(onClick = onNavigateToEmail)
         }
     }
 }
