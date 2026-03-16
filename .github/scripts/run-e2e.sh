@@ -23,9 +23,10 @@ adb install -t "$TEST_APK"
 # Verify installation
 adb shell pm list packages | grep shytalk || echo "::warning::ShyTalk package not found"
 
-# Run Cucumber instrumentation tests
+# Run Cucumber instrumentation tests with Allure listener
 echo "Running E2E tests..."
 adb shell am instrument -w \
+  -e listener io.qameta.allure.kotlin.junit4.AllureJunit4 \
   com.shyden.shytalk.dev.test/com.shyden.shytalk.ShyTalkTestRunner \
   2>&1 | tee "$GITHUB_WORKSPACE/test-output.log"
 
