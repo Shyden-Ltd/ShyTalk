@@ -8,8 +8,8 @@
   },
   "lint-staged": {
     "express-api/**/*.js": [
-      "eslint",
-      "prettier --check"
+      "npx --prefix express-api eslint",
+      "npx --prefix express-api prettier --check"
     ],
     "*.feature": [
       "bash .claude/hooks/check-gherkin.sh"

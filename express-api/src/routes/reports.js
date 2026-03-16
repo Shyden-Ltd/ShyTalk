@@ -18,7 +18,7 @@
  */
 
 const router = require('express').Router();
-const { db, rtdb, FieldValue: _FieldValue } = require('../utils/firebase');
+const { db, rtdb } = require('../utils/firebase');
 const { generateId, now } = require('../utils/helpers');
 const { requireAdmin, clearSuspensionCache } = require('../middleware/auth');
 const { sendSystemPm } = require('../utils/system-pm');
