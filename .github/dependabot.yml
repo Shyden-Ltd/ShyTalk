@@ -1,0 +1,86 @@
+version: 2
+updates:
+  # Gradle dependencies (libs.versions.toml)
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    labels:
+      - "dependencies"
+      - "gradle"
+    open-pull-requests-limit: 5
+    groups:
+      patch-updates:
+        update-types:
+          - "patch"
+    ignore:
+      - dependency-name: "com.google.firebase:firebase-bom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "com.android.application"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "org.jetbrains.kotlin.multiplatform"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "org.jetbrains.kotlin.plugin.compose"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "org.jetbrains.compose"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "androidx.compose:compose-bom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "io.livekit:livekit-android"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "androidx.credentials:credentials"
+        update-types: ["version-update:semver-major"]
+
+  # Express API npm dependencies
+  - package-ecosystem: "npm"
+    directory: "/express-api"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    labels:
+      - "dependencies"
+      - "npm"
+    open-pull-requests-limit: 5
+    groups:
+      patch-updates:
+        update-types:
+          - "patch"
+
+  # Root npm dependencies (Playwright, sharp)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    labels:
+      - "dependencies"
+      - "npm"
+    open-pull-requests-limit: 5
+    groups:
+      patch-updates:
+        update-types:
+          - "patch"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    open-pull-requests-limit: 5
+    groups:
+      patch-updates:
+        update-types:
+          - "patch"
