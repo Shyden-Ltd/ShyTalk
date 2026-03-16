@@ -1,12 +1,12 @@
 [versions]
 agp = "9.1.0"
-kotlin = "2.3.10"
+kotlin = "2.3.20"
 composeMultiplatform = "1.10.2"
 composeBom = "2026.02.01"
 coreKtx = "1.18.0"
 lifecycleRuntimeKtx = "2.10.0"
 activityCompose = "1.13.0"
-appcompat = "1.7.0"
+appcompat = "1.7.1"
 navigationCompose = "2.9.7"
 firebaseBom = "34.10.0"
 googleServices = "4.4.4"
@@ -31,7 +31,7 @@ cucumberAndroid = "7.18.1"
 securityCrypto = "1.1.0-alpha06"
 biometric = "1.4.0-alpha02"
 ktlint = "12.3.0"
-detekt = "1.23.7"
+detekt = "1.23.8"
 
 [libraries]
 # AndroidX Core
