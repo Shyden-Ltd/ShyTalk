@@ -3,10 +3,26 @@
   "private": true,
   "scripts": {
     "test:web": "playwright test",
-    "seed:dev": "node scripts/seed-dev-fixtures.mjs"
+    "seed:dev": "node scripts/seed-dev-fixtures.mjs",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.kt": [
+      "ktlint --relative"
+    ],
+    "express-api/**/*.js": [
+      "eslint",
+      "prettier --check"
+    ],
+    "*.feature": [
+      "bash .claude/hooks/check-gherkin.sh"
+    ]
   },
   "devDependencies": {
+    "@naturalcycles/ktlint": "^1.16.1",
     "@playwright/test": "^1.50.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "sharp": "^0.34.5"
   }
 }
