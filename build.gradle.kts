@@ -75,5 +75,8 @@ sonar {
             "**/*.json",
             "**/composeResources/**",
         ).joinToString(","))
+
+        // Coverage reports
+        property("sonar.javascript.lcov.reportPaths", "express-api/coverage/lcov.info")
     }
 }
