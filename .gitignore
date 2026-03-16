@@ -1,12 +1,7 @@
 *.iml
 .gradle
 /local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+.idea/
 .DS_Store
 **/build
 /captures
@@ -68,10 +63,16 @@ test-results/
 allure-results/
 allure-report/
 
-# IDE artifacts
-/.idea/artifacts/
+# Internal project docs (plans, specs)
+.project/
+
+# Husky git hooks (auto-generated on npm install)
+.husky/
 
 # Claude Code agents (auto-generated)
 .claude/agents/
 .superpowers/
 tests/web/.auth/
+
+# Express API coverage
+express-api/coverage/
