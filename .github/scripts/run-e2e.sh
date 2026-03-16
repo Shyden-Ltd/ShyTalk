@@ -23,10 +23,13 @@ adb install -t "$TEST_APK"
 # Verify installation
 adb shell pm list packages | grep shytalk || echo "::warning::ShyTalk package not found"
 
-# Run Cucumber instrumentation tests with Allure listener
+# Run Cucumber instrumentation tests
+# Note: am instrument does not trigger Allure result generation with Cucumber-Android.
+# Allure results require running via Gradle (connectedDevDebugAndroidTest) which
+# properly wires up the Allure JUnit4 listener. For now, run via am instrument
+# for speed and address Allure in the unified report initiative.
 echo "Running E2E tests..."
 adb shell am instrument -w \
-  -e listener io.qameta.allure.kotlin.junit4.AllureJunit4 \
   com.shyden.shytalk.dev.test/com.shyden.shytalk.ShyTalkTestRunner \
   2>&1 | tee "$GITHUB_WORKSPACE/test-output.log"
 
