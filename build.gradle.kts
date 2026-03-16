@@ -7,7 +7,31 @@ plugins {
     alias(libs.plugins.compose.multiplatform) apply false
     alias(libs.plugins.google.services) apply false
     alias(libs.plugins.play.publisher) apply false
+    alias(libs.plugins.ktlint) apply false
+    alias(libs.plugins.detekt)
     id("org.sonarqube") version "7.2.3.7755"
+}
+
+subprojects {
+    apply(plugin = "org.jlleitschuh.gradle.ktlint")
+
+    configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
+        version.set("1.5.0")
+        android.set(true)
+        outputToConsole.set(true)
+        ignoreFailures.set(false)
+    }
+}
+
+detekt {
+    buildUponDefaultConfig = true
+    config.setFrom(files("detekt.yml"))
+    parallel = true
+    source.setFrom(files(
+        "shared/src/commonMain/kotlin",
+        "shared/src/androidMain/kotlin",
+        "app/src/main/java",
+    ))
 }
 
 sonar {
