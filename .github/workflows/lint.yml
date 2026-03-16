@@ -1,0 +1,121 @@
+name: Lint
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      kotlin_changed: ${{ steps.changes.outputs.kotlin_changed }}
+      express_changed: ${{ steps.changes.outputs.express_changed }}
+      gherkin_changed: ${{ steps.changes.outputs.gherkin_changed }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed paths
+        id: changes
+        run: |
+          CHANGED=$(git diff --name-only "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}")
+          KOTLIN=false EXPRESS=false GHERKIN=false
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            case "$file" in
+              *.kt|*.kts) KOTLIN=true ;;
+              express-api/*) EXPRESS=true ;;
+              *.feature) GHERKIN=true ;;
+            esac
+          done <<< "$CHANGED"
+          echo "kotlin_changed=$KOTLIN" >> "$GITHUB_OUTPUT"
+          echo "express_changed=$EXPRESS" >> "$GITHUB_OUTPUT"
+          echo "gherkin_changed=$GHERKIN" >> "$GITHUB_OUTPUT"
+          echo "Detection: kotlin=$KOTLIN express=$EXPRESS gherkin=$GHERKIN"
+
+  kotlin-lint:
+    name: Kotlin Lint
+    needs: detect-changes
+    if: needs.detect-changes.outputs.kotlin_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
+
+      - name: Run ktlint
+        run: ./gradlew ktlintCheck
+
+      - name: Run detekt
+        run: ./gradlew detekt
+
+  express-lint:
+    name: Express Lint
+    needs: detect-changes
+    if: needs.detect-changes.outputs.express_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: express-api/package-lock.json
+
+      - name: Install dependencies
+        run: cd express-api && npm ci
+
+      - name: Run ESLint
+        run: cd express-api && npm run lint
+
+      - name: Check Prettier formatting
+        run: cd express-api && npm run format:check
+
+  gherkin-lint:
+    name: Gherkin Lint
+    needs: detect-changes
+    if: needs.detect-changes.outputs.gherkin_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Check Gherkin quality
+        run: bash .claude/hooks/check-gherkin.sh
+
+  lint-gate:
+    name: Lint Gate
+    needs: [kotlin-lint, express-lint, gherkin-lint]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check lint results
+        run: |
+          echo "Kotlin lint: ${{ needs.kotlin-lint.result }}"
+          echo "Express lint: ${{ needs.express-lint.result }}"
+          echo "Gherkin lint: ${{ needs.gherkin-lint.result }}"
+          if [ "${{ needs.kotlin-lint.result }}" = "failure" ] || \
+             [ "${{ needs.express-lint.result }}" = "failure" ] || \
+             [ "${{ needs.gherkin-lint.result }}" = "failure" ]; then
+            echo "One or more lint checks failed."
+            exit 1
+          fi
+          echo "All lint checks passed (or were skipped)."
