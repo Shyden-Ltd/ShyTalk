@@ -245,15 +245,26 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
           script: |
-            # Find and install pre-built APKs
-            APP_APK=$(find apks/ -name "*.apk" ! -name "*androidTest*" | head -1)
-            TEST_APK=$(find apks/ -name "*androidTest*.apk" | head -1)
+            # Find pre-built APKs (artifact preserves directory structure)
+            echo "Looking for APKs..."
+            find apks/ -name "*.apk" -type f
+            APP_APK=$(find apks/ -name "*.apk" -type f ! -name "*androidTest*" | head -1)
+            TEST_APK=$(find apks/ -name "*androidTest*.apk" -type f | head -1)
+
+            if [ -z "$APP_APK" ] || [ -z "$TEST_APK" ]; then
+              echo "::error::APKs not found. Contents of apks/:"
+              find apks/ -type f
+              exit 1
+            fi
 
             echo "Installing app APK: $APP_APK"
             adb install -t "$APP_APK"
 
             echo "Installing test APK: $TEST_APK"
             adb install -t "$TEST_APK"
+
+            # List installed packages to verify
+            adb shell pm list packages | grep shytalk || echo "::warning::Package not found after install"
 
             # Run Cucumber instrumentation tests via am instrument
             echo "Running E2E tests..."
