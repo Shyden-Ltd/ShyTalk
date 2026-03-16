@@ -8,6 +8,7 @@
     "dev": "node --watch src/index.js",
     "test": "jest --verbose",
     "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage --verbose",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
     "format": "prettier --write .",
