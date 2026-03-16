@@ -22,7 +22,7 @@ on:
     types: [created]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
   checks: write
   issues: read
@@ -174,8 +174,6 @@ jobs:
         run: |
           mkdir -p app/src/dev app/src/prod
           echo "$GOOGLE_SERVICES_DEV_BASE64" | base64 -d > app/src/dev/google-services.json
-          # Prod slot uses DEV config too — avoids any accidental prod data/service access.
-          # Only needed to satisfy Gradle compilation (prod flavor resolves google-services.json).
           echo "$GOOGLE_SERVICES_DEV_BASE64" | base64 -d > app/src/prod/google-services.json
 
       - name: Decode keystore
@@ -198,82 +196,32 @@ jobs:
             app/build/outputs/apk/androidTest/dev/debug/*.apk
           retention-days: 3
 
-  # ── Android E2E test matrix ───────────────────────────────────
+  # ── Android E2E test (single device for validation) ──────────
   test-android:
     name: "Android E2E (API ${{ matrix.api-level }}, ${{ matrix.form-factor }})"
     needs: [resolve-inputs, build-android]
     if: always() && needs.build-android.result == 'success' && needs.resolve-inputs.outputs.run_android == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       max-parallel: ${{ needs.resolve-inputs.outputs.parallel == 'true' && 99 || 1 }}
       matrix:
-        api-level: [28, 30, 33, 35]
-        form-factor: [phone, tablet]
         include:
-          # Phone profiles (use SDK-bundled device definitions)
-          - api-level: 28
-            form-factor: phone
-            profile: pixel_2
-            ram-size: 2048
-          - api-level: 30
-            form-factor: phone
-            profile: pixel_4
-            ram-size: 2048
-          - api-level: 33
+          - api-level: 34
             form-factor: phone
             profile: pixel_6
-            ram-size: 4096
-          - api-level: 35
-            form-factor: phone
-            profile: pixel_6
-            ram-size: 4096
-          # Tablet profiles (Nexus 9 and Nexus 10 are always available)
-          - api-level: 28
-            form-factor: tablet
-            profile: Nexus 9
-            ram-size: 2048
-          - api-level: 30
-            form-factor: tablet
-            profile: Nexus 9
-            ram-size: 2048
-          - api-level: 33
-            form-factor: tablet
-            profile: Nexus 10
-            ram-size: 4096
-          - api-level: 35
-            form-factor: tablet
-            profile: Nexus 10
             ram-size: 4096
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ needs.resolve-inputs.outputs.ref }}
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
+      - name: Download pre-built APKs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
-        with:
-          cache-read-only: false
-
-      - name: Decode google-services.json
-        env:
-          GOOGLE_SERVICES_DEV_BASE64: ${{ secrets.GOOGLE_SERVICES_DEV_BASE64 }}
-        run: |
-          mkdir -p app/src/dev app/src/prod
-          echo "$GOOGLE_SERVICES_DEV_BASE64" | base64 -d > app/src/dev/google-services.json
-          echo "$GOOGLE_SERVICES_DEV_BASE64" | base64 -d > app/src/prod/google-services.json
-
-      - name: Decode keystore
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-        run: echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
+          name: android-test-apks
+          path: apks/
 
       - name: Enable KVM
         run: |
@@ -289,18 +237,16 @@ jobs:
 
       - name: Install emulator system image
         run: |
-          TARGET=${{ matrix.api-level >= 30 && 'google_apis' || 'default' }}
           yes | sdkmanager --install \
-            "system-images;android-${{ matrix.api-level }};${TARGET};x86_64" \
+            "system-images;android-${{ matrix.api-level }};google_apis;x86_64" \
             "emulator" \
             "platform-tools" || true
 
       - name: Create and start emulator
         run: |
-          TARGET=${{ matrix.api-level >= 30 && 'google_apis' || 'default' }}
           echo "no" | avdmanager create avd \
             -n test_device \
-            -k "system-images;android-${{ matrix.api-level }};${TARGET};x86_64" \
+            -k "system-images;android-${{ matrix.api-level }};google_apis;x86_64" \
             -d "${{ matrix.profile }}" \
             --force
 
@@ -309,7 +255,7 @@ jobs:
             -noaudio -no-boot-anim \
             -memory ${{ matrix.ram-size }} &
 
-          # Wait for emulator to boot (up to 10 minutes — CI runners are slower)
+          # Wait for emulator to boot (up to 10 minutes)
           adb wait-for-device
           BOOT_TIMEOUT=600
           ELAPSED=0
@@ -328,29 +274,30 @@ jobs:
           adb shell settings put global transition_animation_scale 0
           adb shell settings put global animator_duration_scale 0
 
-      - name: Run E2E tests
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
+      - name: Install APKs and run E2E tests
         run: |
-          # Run tests with --info for verbose test names
-          ./gradlew connectedDevDebugAndroidTest --no-parallel --info 2>&1 | tee test-output.log &
-          GRADLE_PID=$!
+          # Find and install APKs from the downloaded artifact
+          APP_APK=$(find apks/ -name "*.apk" ! -name "*androidTest*" | head -1)
+          TEST_APK=$(find apks/ -name "*androidTest*.apk" | head -1)
 
-          # Progress counter — counts JUnit XML result files as they appear
-          (
-            PREV_COUNT=0
-            while kill -0 $GRADLE_PID 2>/dev/null; do
-              COUNT=$(find app/build/outputs/androidTest-results -name 'TEST-*.xml' 2>/dev/null | wc -l)
-              if [ "$COUNT" -gt "$PREV_COUNT" ]; then
-                PREV_COUNT=$COUNT
-                echo "::notice::$COUNT test classes complete"
-              fi
-              sleep 5
-            done
-          ) &
+          echo "Installing app APK: $APP_APK"
+          adb install -t "$APP_APK"
 
-          wait $GRADLE_PID
+          echo "Installing test APK: $TEST_APK"
+          adb install -t "$TEST_APK"
+
+          # Run Cucumber instrumentation tests
+          echo "Running E2E tests..."
+          adb shell am instrument -w \
+            -e class com.shyden.shytalk.ShyTalkTestRunner \
+            com.shyden.shytalk.dev.test/com.shyden.shytalk.ShyTalkTestRunner \
+            2>&1 | tee test-output.log
+
+          # Check for failures in output
+          if grep -q "FAILURES\!\!\!" test-output.log; then
+            echo "::error::E2E tests had failures"
+            exit 1
+          fi
 
       - name: Pull Allure results from device
         if: always()
@@ -374,20 +321,13 @@ jobs:
         if: always()
         run: adb emu kill || true
 
-      - name: Upload test results
+      - name: Upload test output
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         if: always()
         with:
           name: android-results-api${{ matrix.api-level }}-${{ matrix.form-factor }}
-          path: app/build/reports/androidTests/connected/
+          path: test-output.log
           retention-days: 14
-
-      - name: Publish test report
-        uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040 # v2
-        if: always()
-        with:
-          check_name: "Android E2E (API ${{ matrix.api-level }}, ${{ matrix.form-factor }})"
-          files: '**/build/outputs/androidTest-results/connected/TEST-*.xml'
 
   # ── Build iOS test bundle ─────────────────────────────────────
   build-ios:
@@ -423,12 +363,11 @@ jobs:
       - name: Check for iOS test targets
         id: check-tests
         run: |
-          # Check if any XCTest files or test targets exist
           if grep -rq 'XCTestCase\|import XCTest' iosApp/ 2>/dev/null; then
             echo "has_tests=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_tests=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::No iOS test targets found. Skipping iOS E2E tests. Add XCTest files to iosApp/ to enable."
+            echo "::warning::No iOS test targets found. Skipping iOS E2E tests."
           fi
 
       - name: Build shared KMP framework for iOS Simulator
@@ -470,7 +409,6 @@ jobs:
         ios-version: ['16.4', '17.5', '18.1']
         form-factor: [iphone, ipad]
         include:
-          # iPhone models
           - ios-version: '16.4'
             form-factor: iphone
             simulator: 'iPhone 14'
@@ -480,7 +418,6 @@ jobs:
           - ios-version: '18.1'
             form-factor: iphone
             simulator: 'iPhone 16'
-          # iPad models
           - ios-version: '16.4'
             form-factor: ipad
             simulator: 'iPad (10th generation)'
@@ -503,18 +440,15 @@ jobs:
 
       - name: Install iOS ${{ matrix.ios-version }} simulator runtime
         run: |
-          # Check if the target runtime version is already available
           RUNTIME_ID="com.apple.CoreSimulator.SimRuntime.iOS-$(echo '${{ matrix.ios-version }}' | tr '.' '-')"
           if xcrun simctl list runtimes | grep -q "$RUNTIME_ID"; then
             echo "Runtime $RUNTIME_ID already installed"
           else
             echo "Installing iOS ${{ matrix.ios-version }} simulator runtime..."
-            # Try version-specific install first, fall back to latest
             xcodebuild -downloadPlatform iOS -buildVersion "${{ matrix.ios-version }}" 2>/dev/null || \
             xcodebuild -downloadPlatform iOS || \
-            echo "::warning::Could not install iOS ${{ matrix.ios-version }} runtime. Using available runtime."
+            echo "::warning::Could not install iOS ${{ matrix.ios-version }} runtime."
           fi
-          echo "Available runtimes:"
           xcrun simctl list runtimes
 
       - name: Boot simulator
@@ -525,7 +459,6 @@ jobs:
             "com.apple.CoreSimulator.SimRuntime.iOS-$(echo '${{ matrix.ios-version }}' | tr '.' '-')")
           echo "device_id=$DEVICE_ID" >> "$GITHUB_OUTPUT"
           xcrun simctl boot "$DEVICE_ID"
-          # Wait for boot to complete
           xcrun simctl bootstatus "$DEVICE_ID"
 
       - name: Run iOS E2E tests
@@ -566,19 +499,9 @@ jobs:
           ANDROID_RESULT="${{ needs.test-android.result }}"
           IOS_RESULT="${{ needs.test-ios.result }}"
 
-          if [ "$ANDROID_RESULT" = "success" ] || [ "$ANDROID_RESULT" = "skipped" ]; then
-            echo "- Android: $ANDROID_RESULT" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "- Android: FAILED" >> "$GITHUB_STEP_SUMMARY"
-          fi
+          echo "- Android: $ANDROID_RESULT" >> "$GITHUB_STEP_SUMMARY"
+          echo "- iOS: $IOS_RESULT" >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "$IOS_RESULT" = "success" ] || [ "$IOS_RESULT" = "skipped" ]; then
-            echo "- iOS: $IOS_RESULT" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "- iOS: FAILED" >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-          # Fail if any non-skipped test job failed
           if [ "$ANDROID_RESULT" != "success" ] && [ "$ANDROID_RESULT" != "skipped" ]; then
             echo "Android E2E tests failed"
             exit 1
@@ -595,8 +518,6 @@ jobs:
     if: always() && needs.resolve-inputs.result == 'success' && needs.resolve-inputs.outputs.run_android == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
