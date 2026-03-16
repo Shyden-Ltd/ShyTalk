@@ -62,16 +62,20 @@ fun BannerCarousel(
             PageIndicator(
                 pageCount = banners.size,
                 currentPage = pagerState.currentPage,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 8.dp),
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 8.dp),
             )
         }
     }
 }
 
 @Composable
-private fun AutoScrollEffect(pagerState: PagerState, pageCount: Int) {
+private fun AutoScrollEffect(
+    pagerState: PagerState,
+    pageCount: Int,
+) {
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.isScrollInProgress }
             .collectLatest { isScrolling ->
@@ -98,15 +102,17 @@ private fun PageIndicator(
     ) {
         repeat(pageCount) { index ->
             Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (index == currentPage)
-                            MaterialTheme.colorScheme.primary
-                        else
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                    ),
+                modifier =
+                    Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (index == currentPage) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                            },
+                        ),
             )
         }
     }

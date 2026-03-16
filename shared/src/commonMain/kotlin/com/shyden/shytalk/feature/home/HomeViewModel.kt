@@ -31,23 +31,25 @@ data class HomeUiState(
     val isRefreshing: Boolean = false,
     val error: String? = null,
     val createdRoomId: String? = null,
-    val lastRoomName: String = ""
+    val lastRoomName: String = "",
 )
 
 class HomeViewModel(
     private val roomRepository: RoomRepository,
     private val authRepository: AuthRepository,
     private val userRepository: UserRepository,
-    private val bannerRepository: BannerRepository
+    private val bannerRepository: BannerRepository,
 ) : ViewModel() {
-
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     private val userCache = linkedMapOf<String, User>()
     private val userCacheTimestamps = mutableMapOf<String, Long>()
 
-    private fun cacheUser(key: String, user: User) {
+    private fun cacheUser(
+        key: String,
+        user: User,
+    ) {
         userCache[key] = user
         userCacheTimestamps[key] = currentTimeMillis()
         while (userCache.size > 500) {
@@ -56,9 +58,12 @@ class HomeViewModel(
                 val oldest = iter.next()
                 iter.remove()
                 userCacheTimestamps.remove(oldest)
-            } else break
+            } else {
+                break
+            }
         }
     }
+
     private var myBlockedUserIds: Set<String> = emptySet()
     private var allRooms: List<ChatRoom> = emptyList()
     private var periodicRefreshJob: Job? = null
@@ -117,12 +122,12 @@ class HomeViewModel(
 
     private fun observeRooms() {
         viewModelScope.launch {
-            roomRepository.getActiveRooms()
+            roomRepository
+                .getActiveRooms()
                 .catch { e ->
                     logE(TAG, "Room observation failed: ${e.message}")
                     _uiState.update { it.copy(isLoading = false, error = e.message) }
-                }
-                .collect { rooms ->
+                }.collect { rooms ->
                     logI(TAG, "Received ${rooms.size} active rooms")
                     allRooms = rooms
                     filterAndEmitRooms()
@@ -137,9 +142,10 @@ class HomeViewModel(
                     cacheUser(updatedUser.uid, updatedUser)
                     _uiState.update { state ->
                         state.copy(
-                            seatUsers = state.seatUsers.let { map ->
-                                if (updatedUser.uid in map) map + (updatedUser.uid to updatedUser) else map
-                            }
+                            seatUsers =
+                                state.seatUsers.let { map ->
+                                    if (updatedUser.uid in map) map + (updatedUser.uid to updatedUser) else map
+                                },
                         )
                     }
                 }
@@ -152,7 +158,9 @@ class HomeViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true) }
             when (val result = userRepository.getBlockedUserIds(userId)) {
-                is Resource.Success -> { myBlockedUserIds = result.data }
+                is Resource.Success -> {
+                    myBlockedUserIds = result.data
+                }
                 else -> {}
             }
             userCache.clear()
@@ -173,18 +181,21 @@ class HomeViewModel(
 
     private fun startPeriodicRefresh() {
         periodicRefreshJob?.cancel()
-        periodicRefreshJob = viewModelScope.launch {
-            while (true) {
-                delay(REFRESH_INTERVAL_MS)
-                refreshRoomsInternal()
+        periodicRefreshJob =
+            viewModelScope.launch {
+                while (true) {
+                    delay(REFRESH_INTERVAL_MS)
+                    refreshRoomsInternal()
+                }
             }
-        }
     }
 
     private suspend fun refreshRoomsInternal() {
         val userId = currentUserId ?: return
         when (val result = userRepository.getBlockedUserIds(userId)) {
-            is Resource.Success -> { myBlockedUserIds = result.data }
+            is Resource.Success -> {
+                myBlockedUserIds = result.data
+            }
             else -> {}
         }
         // Evict stale cache entries instead of clearing everything
@@ -203,11 +214,15 @@ class HomeViewModel(
 
         // Collect all user IDs we need: owners + seated users (lazy sequences)
         val ownerIds = allRooms.asSequence().map { it.ownerId }.toSet()
-        val seatedUserIds = allRooms.asSequence().flatMap { room ->
-            room.seats.values.asSequence()
-                .filter { it.state == SeatState.OCCUPIED && it.userId != null }
-                .mapNotNull { it.userId }
-        }.toSet()
+        val seatedUserIds =
+            allRooms
+                .asSequence()
+                .flatMap { room ->
+                    room.seats.values
+                        .asSequence()
+                        .filter { it.state == SeatState.OCCUPIED && it.userId != null }
+                        .mapNotNull { it.userId }
+                }.toSet()
         val allNeededIds = ownerIds + seatedUserIds
 
         // Single batch load for all uncached users
@@ -221,32 +236,36 @@ class HomeViewModel(
             }
         }
 
-        val filtered = allRooms.filter { room ->
-            // Exclude closed rooms (safety net — query should already filter these)
-            if (room.state == com.shyden.shytalk.core.model.RoomState.CLOSED) return@filter false
-            if (room.ownerId in myBlockedUserIds) return@filter false
-            val ownerUser = userCache[room.ownerId]
-            if (ownerUser != null && userId in ownerUser.blockedUserIds) return@filter false
-            true
-        }.sortedByDescending { it.participantIds.contains(userId) || it.ownerId == userId }
+        val filtered =
+            allRooms
+                .filter { room ->
+                    // Exclude closed rooms (safety net — query should already filter these)
+                    if (room.state == com.shyden.shytalk.core.model.RoomState.CLOSED) return@filter false
+                    if (room.ownerId in myBlockedUserIds) return@filter false
+                    val ownerUser = userCache[room.ownerId]
+                    if (ownerUser != null && userId in ownerUser.blockedUserIds) return@filter false
+                    true
+                }.sortedByDescending { it.participantIds.contains(userId) || it.ownerId == userId }
 
         // Reuse seated user IDs, narrowing to filtered rooms only
         val filteredRoomIds = filtered.map { it.roomId }.toSet()
-        val filteredSeatedUserIds = if (filteredRoomIds.size == allRooms.size) {
-            seatedUserIds // No rooms were filtered out, reuse the set
-        } else {
-            filtered.flatMap { room ->
-                room.seats.values
-                    .filter { it.state == SeatState.OCCUPIED && it.userId != null }
-                    .mapNotNull { it.userId }
-            }.toSet()
-        }
+        val filteredSeatedUserIds =
+            if (filteredRoomIds.size == allRooms.size) {
+                seatedUserIds // No rooms were filtered out, reuse the set
+            } else {
+                filtered
+                    .flatMap { room ->
+                        room.seats.values
+                            .filter { it.state == SeatState.OCCUPIED && it.userId != null }
+                            .mapNotNull { it.userId }
+                    }.toSet()
+            }
 
         _uiState.update {
             it.copy(
                 rooms = filtered,
                 isLoading = false,
-                seatUsers = userCache.filterKeys { key -> key in filteredSeatedUserIds }
+                seatUsers = userCache.filterKeys { key -> key in filteredSeatedUserIds },
             )
         }
     }

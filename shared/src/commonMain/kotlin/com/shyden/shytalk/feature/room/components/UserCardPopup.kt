@@ -51,9 +51,9 @@ import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.feature.messaging.ReportUserDialog
-import com.shyden.shytalk.ui.components.FlagBadge
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.ui.components.FlagBadge
 import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -89,7 +89,7 @@ fun UserCardPopup(
     reportError: String? = null,
     currentAlias: String? = null,
     onSetAlias: ((String) -> Unit)? = null,
-    onRemoveAlias: (() -> Unit)? = null
+    onRemoveAlias: (() -> Unit)? = null,
 ) {
     var showBlockConfirm by remember { mutableStateOf(false) }
     var showKickConfirm by remember { mutableStateOf(false) }
@@ -103,14 +103,15 @@ fun UserCardPopup(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState
+        sheetState = sheetState,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(bottom = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // --- Avatar ---
             Box {
@@ -119,27 +120,28 @@ fun UserCardPopup(
                     AsyncImage(
                         model = photoUrl,
                         contentDescription = user.displayName,
-                        modifier = Modifier
-                            .size(100.dp)
-                            .clip(CircleShape)
-                            .border(
-                                3.dp,
-                                MaterialTheme.colorScheme.primary,
-                                CircleShape
-                            ),
-                        contentScale = ContentScale.Crop
+                        modifier =
+                            Modifier
+                                .size(100.dp)
+                                .clip(CircleShape)
+                                .border(
+                                    3.dp,
+                                    MaterialTheme.colorScheme.primary,
+                                    CircleShape,
+                                ),
+                        contentScale = ContentScale.Crop,
                     )
                 } else {
                     Surface(
                         modifier = Modifier.size(100.dp),
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer
+                        color = MaterialTheme.colorScheme.primaryContainer,
                     ) {
                         Icon(
                             Icons.Default.Person,
                             contentDescription = user.displayName,
                             modifier = Modifier.padding(20.dp),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                     }
                 }
@@ -148,7 +150,7 @@ fun UserCardPopup(
                     FlagBadge(
                         countryCode = user.nationality,
                         badgeSize = 28.dp,
-                        modifier = Modifier.align(Alignment.BottomEnd)
+                        modifier = Modifier.align(Alignment.BottomEnd),
                     )
                 }
             }
@@ -157,29 +159,30 @@ fun UserCardPopup(
 
             // --- Name + Host badge + View Profile ---
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 val resolvedName = currentAlias ?: user.displayName
                 StyledDisplayName(
                     displayName = resolvedName,
                     isSuperShy = user.isSuperShy,
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleMedium,
                 )
                 if (isHost) {
                     Spacer(modifier = Modifier.width(6.dp))
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
                     ) {
                         Text(
                             text = stringResource(Res.string.host),
                             style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         )
                     }
                 }
@@ -188,13 +191,13 @@ fun UserCardPopup(
                     shape = RoundedCornerShape(16.dp),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                     color = Color.Transparent,
-                    modifier = Modifier.clickable { onViewProfile() }
+                    modifier = Modifier.clickable { onViewProfile() },
                 ) {
                     Text(
                         text = stringResource(Res.string.view_profile),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                     )
                 }
             }
@@ -203,7 +206,7 @@ fun UserCardPopup(
                 Text(
                     text = "(${user.displayName})",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
@@ -212,44 +215,48 @@ fun UserCardPopup(
                 Text(
                     text = stringResource(Res.string.user_id, user.uniqueId),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
             // --- Icon action buttons (non-self only) ---
             if (!isSelf) {
-                val iconActions = buildList {
-                    if (onMessage != null) {
-                        add(IconAction(Icons.AutoMirrored.Filled.Chat, stringResource(Res.string.message), null, onMessage))
+                val iconActions =
+                    buildList {
+                        if (onMessage != null) {
+                            add(IconAction(Icons.AutoMirrored.Filled.Chat, stringResource(Res.string.message), null, onMessage))
+                        }
+                        if (onSendGift != null) {
+                            add(IconAction(Icons.Default.CardGiftcard, stringResource(Res.string.gift), null, onSendGift))
+                        }
+                        if (onSetAlias != null) {
+                            add(IconAction(Icons.Default.Badge, stringResource(Res.string.alias), null) { showAliasDialog = true })
+                        }
+                        if (onMuteToggle != null && !isTargetMuted) {
+                            add(
+                                IconAction(Icons.Default.MicOff, stringResource(Res.string.mute), null) {
+                                    onMuteToggle()
+                                    onDismiss()
+                                },
+                            )
+                        }
                     }
-                    if (onSendGift != null) {
-                        add(IconAction(Icons.Default.CardGiftcard, stringResource(Res.string.gift), null, onSendGift))
-                    }
-                    if (onSetAlias != null) {
-                        add(IconAction(Icons.Default.Badge, stringResource(Res.string.alias), null) { showAliasDialog = true })
-                    }
-                    if (onMuteToggle != null && !isTargetMuted) {
-                        add(IconAction(Icons.Default.MicOff, stringResource(Res.string.mute), null) {
-                            onMuteToggle()
-                            onDismiss()
-                        })
-                    }
-                }
 
                 if (iconActions.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(16.dp))
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
                     ) {
                         iconActions.forEach { action ->
                             UserCardIconButton(
                                 icon = action.icon,
                                 label = action.label,
                                 tint = action.tint ?: MaterialTheme.colorScheme.onSurface,
-                                onClick = action.onClick
+                                onClick = action.onClick,
                             )
                         }
                     }
@@ -290,7 +297,7 @@ fun UserCardPopup(
 
                 UserCardTextRow(
                     text = if (isBlocked) stringResource(Res.string.unblock) else stringResource(Res.string.block),
-                    color = if (isBlocked) null else MaterialTheme.colorScheme.error
+                    color = if (isBlocked) null else MaterialTheme.colorScheme.error,
                 ) {
                     if (isBlocked) onUnblock() else showBlockConfirm = true
                 }
@@ -298,14 +305,14 @@ fun UserCardPopup(
                 if (onReportUser != null) {
                     UserCardTextRow(
                         text = stringResource(Res.string.report),
-                        color = MaterialTheme.colorScheme.error
+                        color = MaterialTheme.colorScheme.error,
                     ) { showReportDialog = true }
                 }
 
                 if (onKickFromRoom != null) {
                     UserCardTextRow(
                         text = stringResource(Res.string.remove_from_room),
-                        color = MaterialTheme.colorScheme.error
+                        color = MaterialTheme.colorScheme.error,
                     ) { showKickConfirm = true }
                 }
             }
@@ -331,7 +338,7 @@ fun UserCardPopup(
                 TextButton(onClick = { showBlockConfirm = false }) {
                     Text(stringResource(Res.string.cancel))
                 }
-            }
+            },
         )
     }
 
@@ -352,7 +359,7 @@ fun UserCardPopup(
                         label = { Text(stringResource(Res.string.reason_optional)) },
                         placeholder = { Text(stringResource(Res.string.no_reason_given)) },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             },
@@ -374,7 +381,7 @@ fun UserCardPopup(
                 }) {
                     Text(stringResource(Res.string.cancel))
                 }
-            }
+            },
         )
     }
 
@@ -394,7 +401,7 @@ fun UserCardPopup(
             onRemoveEvidence = onRemoveEvidence,
             isSubmitting = isSubmittingReport,
             isCompressing = isCompressingEvidence,
-            errorMessage = reportError
+            errorMessage = reportError,
         )
     }
 
@@ -406,11 +413,12 @@ fun UserCardPopup(
                 Column {
                     emptySeats.forEach { targetIndex ->
                         val occupantName = seatOccupantNames[targetIndex]
-                        val label = if (occupantName != null) {
-                            stringResource(Res.string.seat_swap_with, targetIndex + 1, occupantName)
-                        } else {
-                            stringResource(Res.string.seat_number, targetIndex + 1)
-                        }
+                        val label =
+                            if (occupantName != null) {
+                                stringResource(Res.string.seat_swap_with, targetIndex + 1, occupantName)
+                            } else {
+                                stringResource(Res.string.seat_number, targetIndex + 1)
+                            }
                         TextButton(onClick = {
                             showMoveDialog = false
                             onMoveSeat?.invoke(targetIndex)
@@ -426,7 +434,7 @@ fun UserCardPopup(
                 TextButton(onClick = { showMoveDialog = false }) {
                     Text(stringResource(Res.string.cancel))
                 }
-            }
+            },
         )
     }
 
@@ -439,7 +447,7 @@ fun UserCardPopup(
                     Text(
                         text = stringResource(Res.string.set_alias_description, user.displayName),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
@@ -448,7 +456,7 @@ fun UserCardPopup(
                         label = { Text(stringResource(Res.string.alias)) },
                         placeholder = { Text(user.displayName) },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             },
@@ -460,7 +468,7 @@ fun UserCardPopup(
                             onSetAlias(trimmed)
                         }
                         showAliasDialog = false
-                    }
+                    },
                 ) {
                     Text(stringResource(Res.string.save))
                 }
@@ -480,7 +488,7 @@ fun UserCardPopup(
                         Text(stringResource(Res.string.cancel))
                     }
                 }
-            }
+            },
         )
     }
 }
@@ -491,7 +499,7 @@ private data class IconAction(
     val icon: ImageVector,
     val label: String,
     val tint: Color?,
-    val onClick: () -> Unit
+    val onClick: () -> Unit,
 )
 
 @Composable
@@ -499,30 +507,30 @@ private fun UserCardIconButton(
     icon: ImageVector,
     label: String,
     tint: Color,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable(onClick = onClick)
+        modifier = Modifier.clickable(onClick = onClick),
     ) {
         Surface(
             modifier = Modifier.size(56.dp),
             shape = CircleShape,
             color = Color.Transparent,
-            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outlineVariant)
+            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outlineVariant),
         ) {
             Icon(
                 icon,
                 contentDescription = label,
                 modifier = Modifier.padding(14.dp),
-                tint = tint
+                tint = tint,
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -531,17 +539,18 @@ private fun UserCardIconButton(
 private fun UserCardTextRow(
     text: String,
     color: Color? = null,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodyLarge,
         color = color ?: MaterialTheme.colorScheme.onSurface,
         textAlign = TextAlign.Center,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 14.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(vertical = 14.dp),
     )
     HorizontalDivider()
 }

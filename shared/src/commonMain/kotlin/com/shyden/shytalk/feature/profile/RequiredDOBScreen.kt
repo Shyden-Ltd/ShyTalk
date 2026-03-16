@@ -12,12 +12,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,17 +26,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import org.koin.compose.viewmodel.koinViewModel
-import androidx.compose.runtime.collectAsState
+import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.core.util.formatDateForDisplay
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
 fun RequiredDOBScreen(
     onComplete: () -> Unit,
-    viewModel: RequiredDOBViewModel = koinViewModel()
+    viewModel: RequiredDOBViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -60,17 +59,18 @@ fun RequiredDOBScreen(
 
     Scaffold(snackbarHost = { StyledSnackbarHost(snackbarHostState) }) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 32.dp),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 32.dp),
             verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
                 text = stringResource(Res.string.one_more_step),
                 style = MaterialTheme.typography.headlineMedium,
-                modifier = Modifier.testTag("requiredDob_title")
+                modifier = Modifier.testTag("requiredDob_title"),
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -78,18 +78,19 @@ fun RequiredDOBScreen(
             Text(
                 text = stringResource(Res.string.dob_required_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             Spacer(modifier = Modifier.height(32.dp))
 
             OutlinedButton(
                 onClick = { showDatePicker = true },
-                modifier = Modifier.fillMaxWidth().testTag("requiredDob_dateButton")
+                modifier = Modifier.fillMaxWidth().testTag("requiredDob_dateButton"),
             ) {
                 Text(
-                    text = selectedDateMillis?.let { formatDateForDisplay(it) }
-                        ?: stringResource(Res.string.select_date_of_birth)
+                    text =
+                        selectedDateMillis?.let { formatDateForDisplay(it) }
+                            ?: stringResource(Res.string.select_date_of_birth),
                 )
             }
 
@@ -98,7 +99,7 @@ fun RequiredDOBScreen(
                 Text(
                     text = error,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
+                    color = MaterialTheme.colorScheme.error,
                 )
             }
 
@@ -107,7 +108,7 @@ fun RequiredDOBScreen(
             Text(
                 text = stringResource(Res.string.dob_privacy_note),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -121,11 +122,11 @@ fun RequiredDOBScreen(
                     }
                 },
                 enabled = canContinue,
-                modifier = Modifier.fillMaxWidth().testTag("requiredDob_continueButton")
+                modifier = Modifier.fillMaxWidth().testTag("requiredDob_continueButton"),
             ) {
                 if (uiState.isLoading) {
                     CircularProgressIndicator(
-                        color = MaterialTheme.colorScheme.onPrimary
+                        color = MaterialTheme.colorScheme.onPrimary,
                     )
                 } else {
                     Text(stringResource(Res.string.continue_button))
@@ -140,7 +141,7 @@ fun RequiredDOBScreen(
             onDateSelected = { millis, error ->
                 selectedDateMillis = millis
                 dateError = error
-            }
+            },
         )
     }
 }

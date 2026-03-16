@@ -8,10 +8,8 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -45,11 +43,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.shyden.shytalk.resources.Res
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -57,7 +55,7 @@ fun ConversationListScreen(
     onNavigateToChat: (String) -> Unit,
     onNavigateToGroupChat: (String) -> Unit = {},
     modifier: Modifier = Modifier,
-    viewModel: ConversationListViewModel = koinViewModel()
+    viewModel: ConversationListViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showSearch by remember { mutableStateOf(false) }
@@ -69,15 +67,16 @@ fun ConversationListScreen(
         AnimatedVisibility(
             visible = showSearch,
             enter = fadeIn(),
-            exit = fadeOut()
+            exit = fadeOut(),
         ) {
             OutlinedTextField(
                 value = uiState.searchQuery,
                 onValueChange = { viewModel.onSearchQueryChanged(it) },
                 placeholder = { Text(stringResource(Res.string.search_conversations)) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                 singleLine = true,
                 leadingIcon = {
                     Icon(Icons.Default.Search, contentDescription = null)
@@ -89,14 +88,14 @@ fun ConversationListScreen(
                     }) {
                         Icon(Icons.Default.Close, contentDescription = stringResource(Res.string.close))
                     }
-                }
+                },
             )
         }
 
         if (uiState.isLoading) {
             Box(
                 modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator()
             }
@@ -106,38 +105,46 @@ fun ConversationListScreen(
             PullToRefreshBox(
                 isRefreshing = uiState.isRefreshing,
                 onRefresh = { viewModel.refreshConversations() },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             ) {
                 if (conversations.isEmpty()) {
                     // Empty state
                     Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .testTag("conversationList_emptyState"),
-                        contentAlignment = Alignment.Center
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .testTag("conversationList_emptyState"),
+                        contentAlignment = Alignment.Center,
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.Chat,
                                 contentDescription = null,
                                 modifier = Modifier.size(64.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                             )
                             Text(
-                                text = if (uiState.searchQuery.isNotBlank()) stringResource(Res.string.no_matches_found) else stringResource(Res.string.no_messages),
+                                text =
+                                    if (uiState.searchQuery.isNotBlank()) {
+                                        stringResource(
+                                            Res.string.no_matches_found,
+                                        )
+                                    } else {
+                                        stringResource(Res.string.no_messages)
+                                    },
                                 style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             if (uiState.searchQuery.isBlank()) {
                                 Text(
                                     text = stringResource(Res.string.conversation_start_hint),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                    textAlign = TextAlign.Center
+                                    textAlign = TextAlign.Center,
                                 )
                             }
                         }
@@ -146,7 +153,7 @@ fun ConversationListScreen(
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
                         items(
                             items = conversations,
-                            key = { it.conversation.conversationId }
+                            key = { it.conversation.conversationId },
                         ) { conversationWithUser ->
                             val cId = conversationWithUser.conversation.conversationId
                             Box {
@@ -172,25 +179,26 @@ fun ConversationListScreen(
                                     isGroup = conversationWithUser.isGroup,
                                     groupName = conversationWithUser.groupName,
                                     groupPhotoUrl = conversationWithUser.groupPhotoUrl,
-                                    currentUserRole = if (conversationWithUser.isGroup) {
-                                        conversationWithUser.conversation.roleOf(viewModel.currentUserId)
-                                    } else {
-                                        com.shyden.shytalk.core.model.GroupRole.MEMBER
-                                    },
+                                    currentUserRole =
+                                        if (conversationWithUser.isGroup) {
+                                            conversationWithUser.conversation.roleOf(viewModel.currentUserId)
+                                        } else {
+                                            com.shyden.shytalk.core.model.GroupRole.MEMBER
+                                        },
                                     aliases = uiState.aliases,
-                                    modifier = Modifier.combinedClickable(
-                                        onClick = { navigateAction() },
-                                        onLongClick = {
-                                            contextMenuConversationId = cId
-                                        }
-                                    )
+                                    modifier =
+                                        Modifier.combinedClickable(
+                                            onClick = { navigateAction() },
+                                            onLongClick = {
+                                                contextMenuConversationId = cId
+                                            },
+                                        ),
                                 )
 
                                 // Context menu
                                 DropdownMenu(
                                     expanded = contextMenuConversationId == cId,
                                     onDismissRequest = { contextMenuConversationId = null },
-
                                 ) {
                                     val isPinned = conversationWithUser.settings?.isPinned == true
                                     DropdownMenuItem(
@@ -198,7 +206,7 @@ fun ConversationListScreen(
                                         onClick = {
                                             contextMenuConversationId = null
                                             viewModel.pinConversation(cId)
-                                        }
+                                        },
                                     )
                                     if (!conversationWithUser.isGroup) {
                                         DropdownMenuItem(
@@ -206,7 +214,7 @@ fun ConversationListScreen(
                                             onClick = {
                                                 contextMenuConversationId = null
                                                 showDeleteConfirm = cId
-                                            }
+                                            },
                                         )
                                     }
                                 }
@@ -237,7 +245,7 @@ fun ConversationListScreen(
                 TextButton(onClick = { showDeleteConfirm = null }) {
                     Text(stringResource(Res.string.cancel))
                 }
-            }
+            },
         )
     }
 }

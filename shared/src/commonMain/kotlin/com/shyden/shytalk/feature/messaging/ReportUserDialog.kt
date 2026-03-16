@@ -2,15 +2,15 @@ package com.shyden.shytalk.feature.messaging
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -44,13 +44,14 @@ import org.jetbrains.compose.resources.stringResource
 private val reportReasonKeys = listOf("Spam", "Harassment", "Inappropriate Content", "Other")
 
 @Composable
-private fun reportReasonLabel(key: String): String = when (key) {
-    "Spam" -> stringResource(Res.string.report_reason_spam)
-    "Harassment" -> stringResource(Res.string.report_reason_harassment)
-    "Inappropriate Content" -> stringResource(Res.string.report_reason_inappropriate)
-    "Other" -> stringResource(Res.string.report_reason_other)
-    else -> key
-}
+private fun reportReasonLabel(key: String): String =
+    when (key) {
+        "Spam" -> stringResource(Res.string.report_reason_spam)
+        "Harassment" -> stringResource(Res.string.report_reason_harassment)
+        "Inappropriate Content" -> stringResource(Res.string.report_reason_inappropriate)
+        "Other" -> stringResource(Res.string.report_reason_other)
+        else -> key
+    }
 
 @Composable
 fun ReportUserDialog(
@@ -62,7 +63,7 @@ fun ReportUserDialog(
     onRemoveEvidence: ((Int) -> Unit)? = null,
     isSubmitting: Boolean = false,
     isCompressing: Boolean = false,
-    errorMessage: String? = null
+    errorMessage: String? = null,
 ) {
     var selectedReason by remember { mutableStateOf(reportReasonKeys[0]) }
     var description by remember { mutableStateOf("") }
@@ -76,21 +77,22 @@ fun ReportUserDialog(
             Column {
                 Text(
                     text = stringResource(Res.string.report_user_prompt),
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 reportReasonKeys.forEach { reason ->
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(enabled = !isSubmitting) { selectedReason = reason }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = !isSubmitting) { selectedReason = reason }
+                                .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(
                             selected = selectedReason == reason,
                             onClick = { selectedReason = reason },
-                            enabled = !isSubmitting
+                            enabled = !isSubmitting,
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(text = reportReasonLabel(reason), style = MaterialTheme.typography.bodyMedium)
@@ -103,7 +105,7 @@ fun ReportUserDialog(
                     placeholder = { Text(stringResource(Res.string.additional_details_optional)) },
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 3,
-                    enabled = !isSubmitting
+                    enabled = !isSubmitting,
                 )
 
                 // Evidence section
@@ -112,43 +114,45 @@ fun ReportUserDialog(
                     Text(
                         text = stringResource(Res.string.evidence),
                         style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = stringResource(Res.string.evidence_required),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
                     // Evidence thumbnails
                     if (evidenceItems.isNotEmpty()) {
                         LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             itemsIndexed(evidenceItems) { index, bytes ->
                                 Box(modifier = Modifier.size(72.dp)) {
                                     AsyncImage(
                                         model = bytes,
                                         contentDescription = null,
-                                        modifier = Modifier
-                                            .size(72.dp)
-                                            .clip(RoundedCornerShape(8.dp)),
-                                        contentScale = ContentScale.Crop
+                                        modifier =
+                                            Modifier
+                                                .size(72.dp)
+                                                .clip(RoundedCornerShape(8.dp)),
+                                        contentScale = ContentScale.Crop,
                                     )
                                     if (onRemoveEvidence != null && !isSubmitting) {
                                         IconButton(
                                             onClick = { onRemoveEvidence(index) },
-                                            modifier = Modifier
-                                                .size(24.dp)
-                                                .align(Alignment.TopEnd)
+                                            modifier =
+                                                Modifier
+                                                    .size(24.dp)
+                                                    .align(Alignment.TopEnd),
                                         ) {
                                             Icon(
                                                 Icons.Default.Close,
                                                 contentDescription = stringResource(Res.string.delete),
                                                 modifier = Modifier.size(16.dp),
-                                                tint = MaterialTheme.colorScheme.error
+                                                tint = MaterialTheme.colorScheme.error,
                                             )
                                         }
                                     }
@@ -161,12 +165,12 @@ fun ReportUserDialog(
                     OutlinedButton(
                         onClick = { onAddEvidence() },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !isSubmitting && !isCompressing
+                        enabled = !isSubmitting && !isCompressing,
                     ) {
                         if (isCompressing) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp
+                                strokeWidth = 2.dp,
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(stringResource(Res.string.compressing))
@@ -174,7 +178,7 @@ fun ReportUserDialog(
                             Icon(
                                 Icons.Default.AddPhotoAlternate,
                                 contentDescription = null,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(18.dp),
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(stringResource(Res.string.attach_evidence))
@@ -188,7 +192,7 @@ fun ReportUserDialog(
                     Text(
                         text = errorMessage,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
+                        color = MaterialTheme.colorScheme.error,
                     )
                 }
             }
@@ -196,12 +200,12 @@ fun ReportUserDialog(
         confirmButton = {
             TextButton(
                 onClick = { onSubmit(selectedReason, description) },
-                enabled = !isSubmitting && !isCompressing && (!requiresEvidence || evidenceItems.isNotEmpty())
+                enabled = !isSubmitting && !isCompressing && (!requiresEvidence || evidenceItems.isNotEmpty()),
             ) {
                 if (isSubmitting) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp
+                        strokeWidth = 2.dp,
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(stringResource(Res.string.submitting))
@@ -213,10 +217,10 @@ fun ReportUserDialog(
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
-                enabled = !isSubmitting
+                enabled = !isSubmitting,
             ) {
                 Text(stringResource(Res.string.cancel))
             }
-        }
+        },
     )
 }

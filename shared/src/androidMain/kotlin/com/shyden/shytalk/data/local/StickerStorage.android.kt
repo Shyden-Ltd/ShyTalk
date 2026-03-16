@@ -4,8 +4,9 @@ import android.content.Context
 import com.shyden.shytalk.feature.messaging.Sticker
 import java.io.File
 
-actual class StickerStorage(private val context: Context) {
-
+actual class StickerStorage(
+    private val context: Context,
+) {
     private val stickersDir: File
         get() = File(context.filesDir, "stickers").also { it.mkdirs() }
 
@@ -24,7 +25,9 @@ actual class StickerStorage(private val context: Context) {
                 val parts = line.split("|", limit = 3)
                 if (parts.size >= 2 && parts[0].isNotBlank() && parts[1].isNotBlank()) {
                     Triple(parts[0], parts[1], parts.getOrElse(2) { "" })
-                } else null
+                } else {
+                    null
+                }
             }
         } catch (_: Exception) {
             emptyList()
@@ -48,14 +51,19 @@ actual class StickerStorage(private val context: Context) {
         recentsFile.writeText(ids.joinToString("\n"))
     }
 
-    actual fun getStickers(): List<Sticker> {
-        return readIndex().mapNotNull { (id, localPath, url) ->
-            if (File(localPath).exists()) Sticker(id = id, url = url, localPath = localPath)
-            else null
+    actual fun getStickers(): List<Sticker> =
+        readIndex().mapNotNull { (id, localPath, url) ->
+            if (File(localPath).exists()) {
+                Sticker(id = id, url = url, localPath = localPath)
+            } else {
+                null
+            }
         }
-    }
 
-    actual fun addSticker(id: String, imageData: ByteArray): Sticker {
+    actual fun addSticker(
+        id: String,
+        imageData: ByteArray,
+    ): Sticker {
         val ext = detectImageExtension(imageData)
         val file = File(stickersDir, "$id.$ext")
         file.writeBytes(imageData)
@@ -80,7 +88,10 @@ actual class StickerStorage(private val context: Context) {
         writeRecents(recents)
     }
 
-    actual fun updateStickerUrl(id: String, url: String) {
+    actual fun updateStickerUrl(
+        id: String,
+        url: String,
+    ) {
         val entries = readIndex().toMutableList()
         val idx = entries.indexOfFirst { it.first == id }
         if (idx < 0) return
@@ -89,7 +100,10 @@ actual class StickerStorage(private val context: Context) {
         writeIndex(entries)
     }
 
-    actual fun moveSticker(id: String, toIndex: Int) {
+    actual fun moveSticker(
+        id: String,
+        toIndex: Int,
+    ) {
         val entries = readIndex().toMutableList()
         val fromIndex = entries.indexOfFirst { it.first == id }
         if (fromIndex < 0 || fromIndex == toIndex) return
@@ -108,21 +122,32 @@ actual class StickerStorage(private val context: Context) {
     private fun detectImageExtension(data: ByteArray): String {
         if (data.size >= 4) {
             // GIF: starts with "GIF8"
-            if (data[0] == 0x47.toByte() && data[1] == 0x49.toByte() &&
-                data[2] == 0x46.toByte() && data[3] == 0x38.toByte()) {
+            if (data[0] == 0x47.toByte() &&
+                data[1] == 0x49.toByte() &&
+                data[2] == 0x46.toByte() &&
+                data[3] == 0x38.toByte()
+            ) {
                 return "gif"
             }
             // WebP: starts with "RIFF" and has "WEBP" at offset 8
             if (data.size >= 12 &&
-                data[0] == 0x52.toByte() && data[1] == 0x49.toByte() &&
-                data[2] == 0x46.toByte() && data[3] == 0x46.toByte() &&
-                data[8] == 0x57.toByte() && data[9] == 0x45.toByte() &&
-                data[10] == 0x42.toByte() && data[11] == 0x50.toByte()) {
+                data[0] == 0x52.toByte() &&
+                data[1] == 0x49.toByte() &&
+                data[2] == 0x46.toByte() &&
+                data[3] == 0x46.toByte() &&
+                data[8] == 0x57.toByte() &&
+                data[9] == 0x45.toByte() &&
+                data[10] == 0x42.toByte() &&
+                data[11] == 0x50.toByte()
+            ) {
                 return "webp"
             }
             // PNG: starts with 0x89 PNG
-            if (data[0] == 0x89.toByte() && data[1] == 0x50.toByte() &&
-                data[2] == 0x4E.toByte() && data[3] == 0x47.toByte()) {
+            if (data[0] == 0x89.toByte() &&
+                data[1] == 0x50.toByte() &&
+                data[2] == 0x4E.toByte() &&
+                data[3] == 0x47.toByte()
+            ) {
                 return "png"
             }
         }

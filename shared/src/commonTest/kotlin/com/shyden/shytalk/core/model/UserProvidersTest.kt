@@ -9,22 +9,23 @@ import kotlin.test.assertTrue
  * added for the multi-provider identity system.
  */
 class UserProvidersTest {
-
     @Test
     fun fromMap_parsesProvidersField() {
-        val map = mapOf<String, Any?>(
-            "displayName" to "Alice",
-            "uniqueId" to 10000001L,
-            "firebaseUid" to "firebase-uid-123",
-            "providers" to listOf(
-                mapOf(
-                    "type" to "google",
-                    "identifier" to "alice@gmail.com",
-                    "active" to true,
-                    "linkedAt" to 1709913600000L
-                )
+        val map =
+            mapOf<String, Any?>(
+                "displayName" to "Alice",
+                "uniqueId" to 10000001L,
+                "firebaseUid" to "firebase-uid-123",
+                "providers" to
+                    listOf(
+                        mapOf(
+                            "type" to "google",
+                            "identifier" to "alice@gmail.com",
+                            "active" to true,
+                            "linkedAt" to 1709913600000L,
+                        ),
+                    ),
             )
-        )
 
         val user = User.fromMap(map, "10000001")
 
@@ -36,26 +37,28 @@ class UserProvidersTest {
 
     @Test
     fun fromMap_parsesMultipleProviders() {
-        val map = mapOf<String, Any?>(
-            "displayName" to "Alice",
-            "uniqueId" to 10000001L,
-            "firebaseUid" to "firebase-uid-123",
-            "providers" to listOf(
-                mapOf(
-                    "type" to "google",
-                    "identifier" to "alice@gmail.com",
-                    "active" to true,
-                    "linkedAt" to 1709913600000L
-                ),
-                mapOf(
-                    "type" to "email",
-                    "identifier" to "alice@work.com",
-                    "active" to false,
-                    "linkedAt" to 1709913600000L,
-                    "unlinkedAt" to 1709917200000L
-                )
+        val map =
+            mapOf<String, Any?>(
+                "displayName" to "Alice",
+                "uniqueId" to 10000001L,
+                "firebaseUid" to "firebase-uid-123",
+                "providers" to
+                    listOf(
+                        mapOf(
+                            "type" to "google",
+                            "identifier" to "alice@gmail.com",
+                            "active" to true,
+                            "linkedAt" to 1709913600000L,
+                        ),
+                        mapOf(
+                            "type" to "email",
+                            "identifier" to "alice@work.com",
+                            "active" to false,
+                            "linkedAt" to 1709913600000L,
+                            "unlinkedAt" to 1709917200000L,
+                        ),
+                    ),
             )
-        )
 
         val user = User.fromMap(map, "10000001")
 
@@ -67,10 +70,11 @@ class UserProvidersTest {
 
     @Test
     fun fromMap_defaultsToEmptyProvidersWhenMissing() {
-        val map = mapOf<String, Any?>(
-            "displayName" to "Alice",
-            "uniqueId" to 10000001L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "displayName" to "Alice",
+                "uniqueId" to 10000001L,
+            )
 
         val user = User.fromMap(map, "10000001")
 
@@ -79,11 +83,12 @@ class UserProvidersTest {
 
     @Test
     fun fromMap_parsesFirebaseUid() {
-        val map = mapOf<String, Any?>(
-            "displayName" to "Alice",
-            "uniqueId" to 10000001L,
-            "firebaseUid" to "firebase-uid-abc123"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "displayName" to "Alice",
+                "uniqueId" to 10000001L,
+                "firebaseUid" to "firebase-uid-abc123",
+            )
 
         val user = User.fromMap(map, "10000001")
 
@@ -92,10 +97,11 @@ class UserProvidersTest {
 
     @Test
     fun fromMap_defaultsFirebaseUidToEmptyString() {
-        val map = mapOf<String, Any?>(
-            "displayName" to "Alice",
-            "uniqueId" to 10000001L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "displayName" to "Alice",
+                "uniqueId" to 10000001L,
+            )
 
         val user = User.fromMap(map, "10000001")
 
@@ -104,22 +110,25 @@ class UserProvidersTest {
 
     @Test
     fun toMap_includesProviders() {
-        val user = User(
-            uid = "10000001",
-            displayName = "Alice",
-            uniqueId = 10000001L,
-            firebaseUid = "firebase-uid-123",
-            providers = listOf(
-                LinkedProvider(
-                    type = ProviderType.GOOGLE,
-                    identifier = "alice@gmail.com",
-                    active = true,
-                    linkedAt = 1709913600000L
-                )
+        val user =
+            User(
+                uid = "10000001",
+                displayName = "Alice",
+                uniqueId = 10000001L,
+                firebaseUid = "firebase-uid-123",
+                providers =
+                    listOf(
+                        LinkedProvider(
+                            type = ProviderType.GOOGLE,
+                            identifier = "alice@gmail.com",
+                            active = true,
+                            linkedAt = 1709913600000L,
+                        ),
+                    ),
             )
-        )
 
         val map = user.toMap()
+
         @Suppress("UNCHECKED_CAST")
         val providersList = map["providers"] as List<Map<String, Any?>>
 
@@ -130,12 +139,13 @@ class UserProvidersTest {
 
     @Test
     fun toMap_includesFirebaseUid() {
-        val user = User(
-            uid = "10000001",
-            displayName = "Alice",
-            uniqueId = 10000001L,
-            firebaseUid = "firebase-uid-123"
-        )
+        val user =
+            User(
+                uid = "10000001",
+                displayName = "Alice",
+                uniqueId = 10000001L,
+                firebaseUid = "firebase-uid-123",
+            )
 
         val map = user.toMap()
 
@@ -144,16 +154,18 @@ class UserProvidersTest {
 
     @Test
     fun activeProviders_filtersInactiveOnes() {
-        val user = User(
-            uid = "10000001",
-            displayName = "Alice",
-            uniqueId = 10000001L,
-            providers = listOf(
-                LinkedProvider(ProviderType.GOOGLE, "alice@gmail.com", active = true, linkedAt = 1709913600000L),
-                LinkedProvider(ProviderType.EMAIL, "old@work.com", active = false, linkedAt = 1709913600000L),
-                LinkedProvider(ProviderType.APPLE, "001234.abcdef", active = true, linkedAt = 1709913600000L)
+        val user =
+            User(
+                uid = "10000001",
+                displayName = "Alice",
+                uniqueId = 10000001L,
+                providers =
+                    listOf(
+                        LinkedProvider(ProviderType.GOOGLE, "alice@gmail.com", active = true, linkedAt = 1709913600000L),
+                        LinkedProvider(ProviderType.EMAIL, "old@work.com", active = false, linkedAt = 1709913600000L),
+                        LinkedProvider(ProviderType.APPLE, "001234.abcdef", active = true, linkedAt = 1709913600000L),
+                    ),
             )
-        )
 
         val active = user.activeProviders
 
@@ -164,14 +176,16 @@ class UserProvidersTest {
 
     @Test
     fun hasProvider_returnsTrueForLinkedType() {
-        val user = User(
-            uid = "10000001",
-            displayName = "Alice",
-            uniqueId = 10000001L,
-            providers = listOf(
-                LinkedProvider(ProviderType.GOOGLE, "alice@gmail.com", active = true, linkedAt = 1709913600000L)
+        val user =
+            User(
+                uid = "10000001",
+                displayName = "Alice",
+                uniqueId = 10000001L,
+                providers =
+                    listOf(
+                        LinkedProvider(ProviderType.GOOGLE, "alice@gmail.com", active = true, linkedAt = 1709913600000L),
+                    ),
             )
-        )
 
         assertTrue(user.hasProvider(ProviderType.GOOGLE))
         assertEquals(false, user.hasProvider(ProviderType.APPLE))
@@ -179,14 +193,16 @@ class UserProvidersTest {
 
     @Test
     fun hasProvider_ignoresInactiveProviders() {
-        val user = User(
-            uid = "10000001",
-            displayName = "Alice",
-            uniqueId = 10000001L,
-            providers = listOf(
-                LinkedProvider(ProviderType.EMAIL, "old@work.com", active = false, linkedAt = 1709913600000L)
+        val user =
+            User(
+                uid = "10000001",
+                displayName = "Alice",
+                uniqueId = 10000001L,
+                providers =
+                    listOf(
+                        LinkedProvider(ProviderType.EMAIL, "old@work.com", active = false, linkedAt = 1709913600000L),
+                    ),
             )
-        )
 
         assertEquals(false, user.hasProvider(ProviderType.EMAIL))
     }

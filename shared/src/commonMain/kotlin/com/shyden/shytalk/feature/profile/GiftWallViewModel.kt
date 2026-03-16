@@ -24,14 +24,13 @@ data class GiftWallUiState(
     val senders: List<GiftSender> = emptyList(),
     val ranking: List<GiftRankEntry> = emptyList(),
     val isLoadingDetails: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
 )
 
 class GiftWallViewModel(
     private val userId: String,
-    private val giftRepository: GiftRepository
+    private val giftRepository: GiftRepository,
 ) : ViewModel() {
-
     companion object {
         private const val TAG = "GiftWallViewModel"
     }
@@ -48,7 +47,7 @@ class GiftWallViewModel(
         viewModelScope.launch {
             combine(
                 giftRepository.observeAllGifts(),
-                giftRepository.observeGiftWall(userId)
+                giftRepository.observeGiftWall(userId),
             ) { catalog, wall ->
                 catalog to wall
             }.catch { e ->

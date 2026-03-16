@@ -4,14 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.model.CoinPackage
 import com.shyden.shytalk.core.util.Resource
-import com.shyden.shytalk.core.util.logE
-import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.core.util.UiText
-import com.shyden.shytalk.resources.Res
-import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.EconomyRepository
 import com.shyden.shytalk.data.repository.UserRepository
+import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,15 +27,14 @@ data class WalletUiState(
     val isLoading: Boolean = true,
     val isPurchasing: Boolean = false,
     val error: UiText? = null,
-    val successMessage: UiText? = null
+    val successMessage: UiText? = null,
 )
 
 class WalletViewModel(
     private val economyRepository: EconomyRepository,
     private val userRepository: UserRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
 ) : ViewModel() {
-
     companion object {
         private const val TAG = "WalletViewModel"
     }
@@ -77,7 +75,7 @@ class WalletViewModel(
                         isSuperShy = user.isSuperShy,
                         superShyTier = user.superShyTier,
                         superShyExpiry = user.superShyExpiry,
-                        isLoading = false
+                        isLoading = false,
                     )
                 }
             }
@@ -86,14 +84,19 @@ class WalletViewModel(
         }
     }
 
-    fun onPurchaseCompleted(productId: String, purchaseToken: String, isSubscription: Boolean) {
+    fun onPurchaseCompleted(
+        productId: String,
+        purchaseToken: String,
+        isSubscription: Boolean,
+    ) {
         viewModelScope.launch {
             _uiState.update { it.copy(isPurchasing = true) }
-            val result = if (isSubscription) {
-                economyRepository.purchaseSubscription(productId, purchaseToken)
-            } else {
-                economyRepository.purchaseCoins(productId, purchaseToken)
-            }
+            val result =
+                if (isSubscription) {
+                    economyRepository.purchaseSubscription(productId, purchaseToken)
+                } else {
+                    economyRepository.purchaseCoins(productId, purchaseToken)
+                }
             when (result) {
                 is Resource.Success -> {
                     _uiState.update { it.copy(isPurchasing = false, successMessage = UiText.res(Res.string.success_purchase)) }
@@ -117,12 +120,16 @@ class WalletViewModel(
             _uiState.update { it.copy(isPurchasing = true) }
             when (val result = economyRepository.redeemBeans(amount)) {
                 is Resource.Success -> {
-                    val res = if (amount >= 2000) Res.string.success_redeemed_beans_bonus
-                        else Res.string.success_redeemed_beans
+                    val res =
+                        if (amount >= 2000) {
+                            Res.string.success_redeemed_beans_bonus
+                        } else {
+                            Res.string.success_redeemed_beans
+                        }
                     _uiState.update {
                         it.copy(
                             isPurchasing = false,
-                            successMessage = UiText.res(res, formatNumber(amount))
+                            successMessage = UiText.res(res, formatNumber(amount)),
                         )
                     }
                     refreshBalance()
@@ -141,7 +148,10 @@ class WalletViewModel(
             when (val result = economyRepository.addTestCoins(coins)) {
                 is Resource.Success -> {
                     _uiState.update {
-                        it.copy(isPurchasing = false, successMessage = UiText.res(Res.string.success_coins_added, formatNumber(coins.toLong())))
+                        it.copy(
+                            isPurchasing = false,
+                            successMessage = UiText.res(Res.string.success_coins_added, formatNumber(coins.toLong())),
+                        )
                     }
                     refreshBalance()
                 }
@@ -153,6 +163,11 @@ class WalletViewModel(
         }
     }
 
-    fun clearError() { _uiState.update { it.copy(error = null) } }
-    fun clearSuccess() { _uiState.update { it.copy(successMessage = null) } }
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
+    }
+
+    fun clearSuccess() {
+        _uiState.update { it.copy(successMessage = null) }
+    }
 }

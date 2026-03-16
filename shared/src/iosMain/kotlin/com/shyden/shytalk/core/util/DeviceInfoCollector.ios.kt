@@ -11,6 +11,7 @@ import platform.UIKit.UIDevice
 import platform.UIKit.UIScreen
 
 actual class DeviceInfoCollector {
+
     @OptIn(ExperimentalForeignApi::class)
     actual fun collect(): DeviceInfo {
         val device = UIDevice.currentDevice
@@ -22,16 +23,17 @@ actual class DeviceInfoCollector {
         val totalRamMb = (totalRamBytes / (1024uL * 1024uL)).toLong()
 
         val scale = screen.scale
-        val (width, height) = screen.bounds.useContents {
-            Pair((size.width * scale).toInt(), (size.height * scale).toInt())
-        }
+        val (width, height) =
+            screen.bounds.useContents {
+                Pair((size.width * scale).toInt(), (size.height * scale).toInt())
+            }
 
         return DeviceInfo(
             deviceId = device.identifierForVendor?.UUIDString ?: "unknown",
             manufacturer = "Apple",
             model = device.model,
             osVersion = "iOS ${device.systemVersion}",
-            screenResolution = "${width}x${height}",
+            screenResolution = "${width}x$height",
             screenDensity = scale.toFloat(),
             totalRamMb = totalRamMb,
             appVersion = bundle.objectForInfoDictionaryKey("CFBundleShortVersionString") as? String,
@@ -39,7 +41,7 @@ actual class DeviceInfoCollector {
             locale = NSLocale.currentLocale.languageCode,
             networkType = null,
             carrierName = null,
-            firebaseInstallationId = null
+            firebaseInstallationId = null,
         )
     }
 }

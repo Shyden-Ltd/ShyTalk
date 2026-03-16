@@ -31,13 +31,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.GroupRole
-import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.formatRelativeTime
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.ui.theme.SpeakingGreen
 import org.jetbrains.compose.resources.stringResource
 
@@ -56,14 +56,15 @@ fun ConversationListItem(
     groupPhotoUrl: String? = null,
     currentUserRole: GroupRole = GroupRole.MEMBER,
     aliases: Map<String, String> = emptyMap(),
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         // Avatar
         if (isGroup) {
@@ -72,22 +73,23 @@ fun ConversationListItem(
                 AsyncImage(
                     model = groupPhoto,
                     contentDescription = groupName,
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
+                    modifier =
+                        Modifier
+                            .size(52.dp)
+                            .clip(CircleShape),
+                    contentScale = ContentScale.Crop,
                 )
             } else {
                 Surface(
                     modifier = Modifier.size(52.dp),
                     shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer
+                    color = MaterialTheme.colorScheme.primaryContainer,
                 ) {
                     Icon(
                         Icons.Default.Group,
                         contentDescription = null,
                         modifier = Modifier.padding(14.dp),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
             }
@@ -97,22 +99,23 @@ fun ConversationListItem(
                 AsyncImage(
                     model = photoUrl,
                     contentDescription = otherUser.displayName,
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
+                    modifier =
+                        Modifier
+                            .size(52.dp)
+                            .clip(CircleShape),
+                    contentScale = ContentScale.Crop,
                 )
             } else {
                 Surface(
                     modifier = Modifier.size(52.dp),
                     shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer
+                    color = MaterialTheme.colorScheme.primaryContainer,
                 ) {
                     Icon(
                         Icons.Default.Person,
                         contentDescription = null,
                         modifier = Modifier.padding(14.dp),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
             }
@@ -123,35 +126,52 @@ fun ConversationListItem(
         // Name + message preview
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                val resolvedName = if (isGroup) {
-                    groupName ?: stringResource(Res.string.group)
-                } else {
-                    otherUser?.uid?.let { aliases[it] } ?: otherUser?.displayName ?: stringResource(Res.string.unknown)
-                }
+                val resolvedName =
+                    if (isGroup) {
+                        groupName ?: stringResource(Res.string.group)
+                    } else {
+                        otherUser?.uid?.let { aliases[it] } ?: otherUser?.displayName ?: stringResource(Res.string.unknown)
+                    }
                 StyledDisplayName(
                     displayName = resolvedName,
                     isSuperShy = !isGroup && otherUser?.isSuperShy == true,
                     style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.weight(1f, fill = false)
+                    modifier = Modifier.weight(1f, fill = false),
                 )
                 if (isGroup && currentUserRole != GroupRole.MEMBER) {
-                    val (badgeColor, badgeLabel) = when (currentUserRole) {
-                        GroupRole.OWNER -> Pair(androidx.compose.ui.graphics.Color(0xFFFFD700), stringResource(Res.string.role_owner))
-                        GroupRole.ADMIN -> Pair(androidx.compose.ui.graphics.Color(0xFFFFC107), stringResource(Res.string.role_admin))
-                        GroupRole.MOD -> Pair(androidx.compose.ui.graphics.Color(0xFF009688), stringResource(Res.string.role_mod))
-                        GroupRole.MEMBER -> Pair(MaterialTheme.colorScheme.outline, "")
-                    }
+                    val (badgeColor, badgeLabel) =
+                        when (currentUserRole) {
+                            GroupRole.OWNER ->
+                                Pair(
+                                    androidx.compose.ui.graphics
+                                        .Color(0xFFFFD700),
+                                    stringResource(Res.string.role_owner),
+                                )
+                            GroupRole.ADMIN ->
+                                Pair(
+                                    androidx.compose.ui.graphics
+                                        .Color(0xFFFFC107),
+                                    stringResource(Res.string.role_admin),
+                                )
+                            GroupRole.MOD ->
+                                Pair(
+                                    androidx.compose.ui.graphics
+                                        .Color(0xFF009688),
+                                    stringResource(Res.string.role_mod),
+                                )
+                            GroupRole.MEMBER -> Pair(MaterialTheme.colorScheme.outline, "")
+                        }
                     if (badgeLabel.isNotEmpty()) {
                         Text(
                             text = badgeLabel,
                             style = MaterialTheme.typography.labelSmall,
-                            color = badgeColor
+                            color = badgeColor,
                         )
                     }
                 }
@@ -160,7 +180,7 @@ fun ConversationListItem(
                         Icons.Default.PushPin,
                         contentDescription = stringResource(Res.string.pin),
                         modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.primary,
                     )
                 }
                 if (isMuted) {
@@ -168,7 +188,7 @@ fun ConversationListItem(
                         Icons.Default.NotificationsOff,
                         contentDescription = stringResource(Res.string.muted),
                         modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -176,24 +196,29 @@ fun ConversationListItem(
             // Online status or last message preview
             val onlineThreshold = currentTimeMillis() - Constants.ONLINE_THRESHOLD_MS
             val isSystemUser = otherUser?.uid == Constants.SYSTEM_USER_ID
-            val isOnline = !isGroup && !isSystemUser && otherUser?.hideOnlineStatus != true &&
-                (otherUser?.lastSeenAt ?: 0) > onlineThreshold
+            val isOnline =
+                !isGroup &&
+                    !isSystemUser &&
+                    otherUser?.hideOnlineStatus != true &&
+                    (otherUser?.lastSeenAt ?: 0) > onlineThreshold
 
-            val previewText = when {
-                lastMessageText == "[Message recalled]" -> stringResource(Res.string.message_preview_recalled)
-                lastMessageType == "IMAGE" -> stringResource(Res.string.message_preview_image)
-                lastMessageType == "STICKER" -> stringResource(Res.string.message_preview_sticker)
-                lastMessageType == "ROOM_INVITE" -> stringResource(Res.string.message_preview_room_invite)
-                !lastMessageText.isNullOrBlank() -> lastMessageText
-                else -> stringResource(Res.string.start_conversation)
-            }
+            val previewText =
+                when {
+                    lastMessageText == "[Message recalled]" -> stringResource(Res.string.message_preview_recalled)
+                    lastMessageType == "IMAGE" -> stringResource(Res.string.message_preview_image)
+                    lastMessageType == "STICKER" -> stringResource(Res.string.message_preview_sticker)
+                    lastMessageType == "ROOM_INVITE" -> stringResource(Res.string.message_preview_room_invite)
+                    !lastMessageText.isNullOrBlank() -> lastMessageText
+                    else -> stringResource(Res.string.start_conversation)
+                }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (isOnline) {
                     Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(SpeakingGreen)
+                        modifier =
+                            Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(SpeakingGreen),
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                 }
@@ -202,7 +227,7 @@ fun ConversationListItem(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -212,20 +237,20 @@ fun ConversationListItem(
         // Timestamp + unread badge
         Column(
             horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
                 text = formatRelativeTime(lastMessageAt),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (unreadCount > 0 && !isMuted) {
                 Badge(
-                    containerColor = MaterialTheme.colorScheme.primary
+                    containerColor = MaterialTheme.colorScheme.primary,
                 ) {
                     Text(
                         text = if (unreadCount > 99) "99+" else "$unreadCount",
-                        style = MaterialTheme.typography.labelSmall
+                        style = MaterialTheme.typography.labelSmall,
                     )
                 }
             }

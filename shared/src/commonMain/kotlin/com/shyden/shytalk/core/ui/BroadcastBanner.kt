@@ -21,9 +21,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -44,26 +44,28 @@ import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.broadcast_gacha_win
 import com.shyden.shytalk.resources.broadcast_gift_sent
-import org.jetbrains.compose.resources.stringResource
 import kotlinx.coroutines.delay
+import org.jetbrains.compose.resources.stringResource
 import kotlin.math.roundToInt
 
-private val giftSendGradient = listOf(
-    Color(0xFFFF6B35),
-    Color(0xFFFFD700),
-    Color(0xFFFF6B35)
-)
+private val giftSendGradient =
+    listOf(
+        Color(0xFFFF6B35),
+        Color(0xFFFFD700),
+        Color(0xFFFF6B35),
+    )
 
-private val gachaWinGradient = listOf(
-    Color(0xFF7B2FBE),
-    Color(0xFF4A90D9),
-    Color(0xFF7B2FBE)
-)
+private val gachaWinGradient =
+    listOf(
+        Color(0xFF7B2FBE),
+        Color(0xFF4A90D9),
+        Color(0xFF7B2FBE),
+    )
 
 @Composable
 fun BroadcastBanner(
     broadcasts: List<Broadcast>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val queue = remember { mutableStateListOf<Broadcast>() }
     val seenIds = remember { mutableSetOf<String>() }
@@ -110,14 +112,25 @@ fun BroadcastBanner(
     val gradient = if (isGachaWin) gachaWinGradient else giftSendGradient
     val icon = if (isGachaWin) Icons.Filled.Stars else Icons.Filled.CardGiftcard
     val qtyPrefix = if (broadcast.quantity > 1) "${broadcast.quantity}x " else ""
-    val coinText = if (broadcast.giftCoinValue > 0) {
-        " (${broadcast.giftCoinValue.formatWithCommas()})"
-    } else ""
-    val text = if (isGachaWin) {
-        stringResource(Res.string.broadcast_gacha_win, broadcast.senderName, qtyPrefix, broadcast.giftName, coinText)
-    } else {
-        stringResource(Res.string.broadcast_gift_sent, broadcast.senderName, qtyPrefix, broadcast.giftName, coinText, broadcast.recipientName)
-    }
+    val coinText =
+        if (broadcast.giftCoinValue > 0) {
+            " (${broadcast.giftCoinValue.formatWithCommas()})"
+        } else {
+            ""
+        }
+    val text =
+        if (isGachaWin) {
+            stringResource(Res.string.broadcast_gacha_win, broadcast.senderName, qtyPrefix, broadcast.giftName, coinText)
+        } else {
+            stringResource(
+                Res.string.broadcast_gift_sent,
+                broadcast.senderName,
+                qtyPrefix,
+                broadcast.giftName,
+                coinText,
+                broadcast.recipientName,
+            )
+        }
 
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val containerWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
@@ -135,32 +148,33 @@ fun BroadcastBanner(
         }
 
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .background(
-                    brush = Brush.horizontalGradient(gradient),
-                    shape = RoundedCornerShape(12.dp)
-                )
-                .padding(horizontal = 16.dp, vertical = 10.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .background(
+                        brush = Brush.horizontalGradient(gradient),
+                        shape = RoundedCornerShape(12.dp),
+                    ).padding(horizontal = 16.dp, vertical = 10.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(20.dp),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = text,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    ),
+                    style =
+                        MaterialTheme.typography.bodyMedium.copy(
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                        ),
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }

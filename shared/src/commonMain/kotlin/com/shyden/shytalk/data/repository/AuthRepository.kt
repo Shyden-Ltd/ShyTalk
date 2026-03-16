@@ -33,10 +33,22 @@ interface AuthRepository {
     fun getProviderInfo(): Pair<String, String>?
 
     suspend fun signInWithGoogleIdToken(idToken: String): Resource<String>
-    suspend fun signInWithAppleIdToken(idToken: String, rawNonce: String): Resource<String>
+
+    suspend fun signInWithAppleIdToken(
+        idToken: String,
+        rawNonce: String,
+    ): Resource<String>
+
     suspend fun signInWithAppleViaProvider(activity: Any): Resource<String>
+
     suspend fun sendSignInLink(email: String): Resource<Unit>
-    suspend fun signInWithEmailLink(email: String, link: String): Resource<String>
+
+    suspend fun signInWithEmailLink(
+        email: String,
+        link: String,
+    ): Resource<String>
+
     suspend fun signInWithCustomToken(token: String): Resource<String>
+
     fun signOut()
 }

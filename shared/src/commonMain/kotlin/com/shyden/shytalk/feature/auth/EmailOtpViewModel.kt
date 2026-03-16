@@ -29,7 +29,6 @@ private val EMAIL_REGEX = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
 class EmailOtpViewModel(
     private val otpRepository: OtpRepository,
 ) : ViewModel() {
-
     private val _state = MutableStateFlow(EmailOtpState())
     val state: StateFlow<EmailOtpState> = _state.asStateFlow()
 
@@ -46,7 +45,10 @@ class EmailOtpViewModel(
     }
 
     fun sendOtp() {
-        val email = _state.value.email.trim().lowercase()
+        val email =
+            _state.value.email
+                .trim()
+                .lowercase()
 
         if (!EMAIL_REGEX.matches(email)) {
             _state.update { it.copy(error = "Enter a valid email address") }
@@ -62,13 +64,15 @@ class EmailOtpViewModel(
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
 
-            otpRepository.sendOtp(email).onSuccess {
-                _state.update { it.copy(isLoading = false, step = EmailOtpStep.EnterCode, email = email) }
-                startCooldown()
-            }.onFailure { e ->
-                val message = e.message ?: "Failed to send code"
-                _state.update { it.copy(isLoading = false, error = message) }
-            }
+            otpRepository
+                .sendOtp(email)
+                .onSuccess {
+                    _state.update { it.copy(isLoading = false, step = EmailOtpStep.EnterCode, email = email) }
+                    startCooldown()
+                }.onFailure { e ->
+                    val message = e.message ?: "Failed to send code"
+                    _state.update { it.copy(isLoading = false, error = message) }
+                }
         }
     }
 
@@ -84,11 +88,13 @@ class EmailOtpViewModel(
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
 
-            otpRepository.verifyOtp(email, code).onSuccess { token ->
-                _state.update { it.copy(isLoading = false, customToken = token) }
-            }.onFailure { e ->
-                _state.update { it.copy(isLoading = false, error = e.message ?: "Invalid code", code = "") }
-            }
+            otpRepository
+                .verifyOtp(email, code)
+                .onSuccess { token ->
+                    _state.update { it.copy(isLoading = false, customToken = token) }
+                }.onFailure { e ->
+                    _state.update { it.copy(isLoading = false, error = e.message ?: "Invalid code", code = "") }
+                }
         }
     }
 
@@ -106,24 +112,27 @@ class EmailOtpViewModel(
         val email = _state.value.email
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
-            otpRepository.sendOtp(email).onSuccess {
-                _state.update { it.copy(isLoading = false) }
-                startCooldown()
-            }.onFailure { e ->
-                _state.update { it.copy(isLoading = false, error = e.message ?: "Failed to resend") }
-            }
+            otpRepository
+                .sendOtp(email)
+                .onSuccess {
+                    _state.update { it.copy(isLoading = false) }
+                    startCooldown()
+                }.onFailure { e ->
+                    _state.update { it.copy(isLoading = false, error = e.message ?: "Failed to resend") }
+                }
         }
     }
 
     private fun startCooldown() {
         cooldownJob?.cancel()
-        cooldownJob = viewModelScope.launch {
-            for (i in RESEND_COOLDOWN_SECONDS downTo 1) {
-                _state.update { it.copy(resendCooldown = i) }
-                delay(1000)
+        cooldownJob =
+            viewModelScope.launch {
+                for (i in RESEND_COOLDOWN_SECONDS downTo 1) {
+                    _state.update { it.copy(resendCooldown = i) }
+                    delay(1000)
+                }
+                _state.update { it.copy(resendCooldown = 0) }
             }
-            _state.update { it.copy(resendCooldown = 0) }
-        }
     }
 
     companion object {

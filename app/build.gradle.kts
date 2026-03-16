@@ -37,9 +37,13 @@ android {
         create("dev") {
             dimension = "env"
             applicationIdSuffix = ".dev"
-            val buildNum = System.getenv("GITHUB_RUN_NUMBER")
-                ?: providers.exec { commandLine("git", "rev-parse", "--short", "HEAD") }
-                    .standardOutput.asText.get().trim()
+            val buildNum =
+                System.getenv("GITHUB_RUN_NUMBER")
+                    ?: providers
+                        .exec { commandLine("git", "rev-parse", "--short", "HEAD") }
+                        .standardOutput.asText
+                        .get()
+                        .trim()
             versionNameSuffix = "-b$buildNum"
             buildConfigField("String", "API_BASE_URL", "\"https://dev-api.shytalk.shyden.co.uk\"")
             buildConfigField("String", "WORKER_URL", "\"https://dev-api.shytalk.shyden.co.uk\"")
@@ -64,9 +68,10 @@ android {
     signingConfigs {
         create("release") {
             storeFile = rootProject.file("keystore.jks")
-            val keystorePassword = project.findProperty("KEYSTORE_PASSWORD")?.toString()
-                ?: System.getenv("KEYSTORE_PASSWORD")
-                ?: ""
+            val keystorePassword =
+                project.findProperty("KEYSTORE_PASSWORD")?.toString()
+                    ?: System.getenv("KEYSTORE_PASSWORD")
+                    ?: ""
             storePassword = keystorePassword
             keyAlias = "shytalk"
             keyPassword = keystorePassword
@@ -82,7 +87,7 @@ android {
             isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
             signingConfig = signingConfigs.getByName("release")
         }
@@ -104,8 +109,13 @@ android {
     // Workaround: KMP android library plugin doesn't auto-package Compose resources as assets
     @Suppress("DEPRECATION")
     sourceSets.getByName("main").assets.srcDir(
-        File(project(":shared").layout.buildDirectory.get().asFile,
-            "generated/compose/resourceGenerator/androidAssetsForApp")
+        File(
+            project(":shared")
+                .layout.buildDirectory
+                .get()
+                .asFile,
+            "generated/compose/resourceGenerator/androidAssetsForApp",
+        ),
     )
     testOptions {
         unitTests.isReturnDefaultValues = true
@@ -147,11 +157,16 @@ android {
 }
 
 // Workaround: Copy compose resources with the correct package-prefixed path for Android assets
-val copyComposeResources = tasks.register<Copy>("copySharedComposeResourcesToAssets") {
-    val sharedBuildDir = project(":shared").layout.buildDirectory.get().asFile
-    from(File(sharedBuildDir, "generated/compose/resourceGenerator/preparedResources/commonMain/composeResources"))
-    into(File(sharedBuildDir, "generated/compose/resourceGenerator/androidAssetsForApp/composeResources/com.shyden.shytalk.resources"))
-}
+val copyComposeResources =
+    tasks.register<Copy>("copySharedComposeResourcesToAssets") {
+        val sharedBuildDir =
+            project(":shared")
+                .layout.buildDirectory
+                .get()
+                .asFile
+        from(File(sharedBuildDir, "generated/compose/resourceGenerator/preparedResources/commonMain/composeResources"))
+        into(File(sharedBuildDir, "generated/compose/resourceGenerator/androidAssetsForApp/composeResources/com.shyden.shytalk.resources"))
+    }
 
 project(":shared").afterEvaluate {
     val sharedProject = this
@@ -167,7 +182,8 @@ afterEvaluate {
         tasks.findByName(taskName)?.dependsOn(copyComposeResources)
     }
     // Lint vital tasks also read the Compose resources assets directory
-    tasks.matching { it.name.contains("lintVital", ignoreCase = true) }
+    tasks
+        .matching { it.name.contains("lintVital", ignoreCase = true) }
         .configureEach { dependsOn(copyComposeResources) }
 }
 

@@ -25,7 +25,7 @@ import com.shyden.shytalk.core.ui.effects.GiftEffectRegistry
 fun GiftEffectOverlay(
     event: GiftEvent,
     onFinished: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val coinValue = GiftEffectRegistry.coinValueForGiftId(event.giftId)
     val durationMs = GiftEffectRegistry.durationForValue(coinValue)
@@ -40,20 +40,21 @@ fun GiftEffectOverlay(
     }
 
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.3f))
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() }
-            ) { dismiss() }
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.3f))
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                ) { dismiss() },
     ) {
         GiftAnimation(
             giftId = event.giftId,
             durationMs = durationMs,
             onFinished = dismiss,
             modifier = Modifier.fillMaxSize(),
-            eventId = event.eventId
+            eventId = event.eventId,
         )
     }
 }
@@ -69,7 +70,7 @@ fun GiftEffectOverlay(
     isVisible: Boolean,
     onFinished: () -> Unit,
     modifier: Modifier = Modifier,
-    giftId: String = ""
+    giftId: String = "",
 ) {
     if (!isVisible) return
     val event = GiftEvent(giftId = giftId)

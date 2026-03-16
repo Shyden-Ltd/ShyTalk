@@ -7,7 +7,6 @@ package com.shyden.shytalk.core.util
  * Accessed from main thread (UI/ViewModel scope) so no synchronization needed.
  */
 object ModerationFilter {
-
     @kotlin.concurrent.Volatile
     private var prohibitedWords: Set<String> = emptySet()
     private val recentMessages: MutableList<Pair<Long, String>> = mutableListOf()

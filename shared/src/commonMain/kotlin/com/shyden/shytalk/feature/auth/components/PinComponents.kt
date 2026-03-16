@@ -34,13 +34,17 @@ fun PinDots(
     ) {
         repeat(maxLength.coerceAtMost(8)) { i ->
             Box(
-                modifier = Modifier
-                    .size(16.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (i < length) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.outlineVariant
-                    )
+                modifier =
+                    Modifier
+                        .size(16.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (i < length) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.outlineVariant
+                            },
+                        ),
             )
         }
     }
@@ -53,11 +57,12 @@ fun PinKeypad(
     onBiometric: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    val rows = listOf(
-        listOf('1', '2', '3'),
-        listOf('4', '5', '6'),
-        listOf('7', '8', '9'),
-    )
+    val rows =
+        listOf(
+            listOf('1', '2', '3'),
+            listOf('4', '5', '6'),
+            listOf('7', '8', '9'),
+        )
 
     Column(
         modifier = modifier,
@@ -114,11 +119,12 @@ private fun KeypadButton(
     modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = modifier
-            .size(64.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(onClick = onClick),
+        modifier =
+            modifier
+                .size(64.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(

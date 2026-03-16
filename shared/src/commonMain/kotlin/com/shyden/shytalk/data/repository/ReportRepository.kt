@@ -14,7 +14,7 @@ interface ReportRepository {
         messageId: String,
         messageText: String,
         reason: String,
-        description: String
+        description: String,
     ): Resource<Unit>
 
     suspend fun reportUser(
@@ -27,10 +27,13 @@ interface ReportRepository {
         conversationId: String,
         reason: String,
         description: String,
-        evidenceUrls: List<String> = emptyList()
+        evidenceUrls: List<String> = emptyList(),
     ): Resource<Unit>
 
     suspend fun getPendingReports(): Resource<List<com.shyden.shytalk.feature.messaging.Report>>
 
-    suspend fun resolveReport(reportId: String, action: String): Resource<Unit>
+    suspend fun resolveReport(
+        reportId: String,
+        action: String,
+    ): Resource<Unit>
 }

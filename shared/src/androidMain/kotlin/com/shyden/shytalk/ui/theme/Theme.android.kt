@@ -7,7 +7,7 @@ import androidx.compose.runtime.Composable
 actual fun ShyTalkTheme(
     darkTheme: Boolean,
     dynamicColor: Boolean,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
     // CNY 2026: Always use our festive red/gold palette (skip dynamic colors)
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
@@ -15,6 +15,6 @@ actual fun ShyTalkTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
-        content = content
+        content = content,
     )
 }

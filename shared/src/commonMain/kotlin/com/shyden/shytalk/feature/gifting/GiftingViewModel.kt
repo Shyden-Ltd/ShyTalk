@@ -7,13 +7,13 @@ import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.UiText
-import com.shyden.shytalk.resources.Res
-import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.EconomyRepository
 import com.shyden.shytalk.data.repository.GiftRepository
+import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,15 +39,14 @@ data class GiftingUiState(
     val showSendAllConfirm: Boolean = false,
     val sendAllRecipientId: String? = null,
     val activeTab: Int = 0,
-    val navigateToWallet: Boolean = false
+    val navigateToWallet: Boolean = false,
 )
 
 class GiftingViewModel(
     private val giftRepository: GiftRepository,
     private val economyRepository: EconomyRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
 ) : ViewModel() {
-
     companion object {
         private const val TAG = "GiftingViewModel"
     }
@@ -65,7 +64,7 @@ class GiftingViewModel(
             combine(
                 giftRepository.observeAllGifts(),
                 giftRepository.observeBackpack(userId),
-                economyRepository.observeBalance()
+                economyRepository.observeBalance(),
             ) { catalog, backpack, balance ->
                 Triple(catalog, backpack, balance)
             }.catch { e ->
@@ -74,11 +73,12 @@ class GiftingViewModel(
                 val validBackpack = backpack.filter { !it.isExpired }
                 // Inject trial gift into catalog if user has it in backpack
                 val hasTrial = validBackpack.any { it.giftId == Constants.SUPER_SHY_TRIAL_ID }
-                val effectiveCatalog = if (hasTrial && catalog.none { it.id == Constants.SUPER_SHY_TRIAL_ID }) {
-                    catalog + Gift.SUPER_SHY_TRIAL
-                } else {
-                    catalog
-                }
+                val effectiveCatalog =
+                    if (hasTrial && catalog.none { it.id == Constants.SUPER_SHY_TRIAL_ID }) {
+                        catalog + Gift.SUPER_SHY_TRIAL
+                    } else {
+                        catalog
+                    }
                 _uiState.update {
                     it.copy(giftCatalog = effectiveCatalog, backpackItems = validBackpack, coinBalance = balance)
                 }
@@ -150,16 +150,17 @@ class GiftingViewModel(
 
         viewModelScope.launch {
             logI(TAG, "Sending gift: giftId=$giftId to ${recipients.size} recipient(s)")
-            val result = if (recipients.size == 1) {
-                val recipientId = recipients.first()
-                if (isBackpackTab) {
-                    economyRepository.sendGift(recipientId, giftId, quantity)
+            val result =
+                if (recipients.size == 1) {
+                    val recipientId = recipients.first()
+                    if (isBackpackTab) {
+                        economyRepository.sendGift(recipientId, giftId, quantity)
+                    } else {
+                        economyRepository.sendGiftDirect(recipientId, giftId, quantity)
+                    }
                 } else {
-                    economyRepository.sendGiftDirect(recipientId, giftId, quantity)
+                    economyRepository.sendGiftBatch(recipients, giftId, quantity, fromBackpack = isBackpackTab)
                 }
-            } else {
-                economyRepository.sendGiftBatch(recipients, giftId, quantity, fromBackpack = isBackpackTab)
-            }
 
             when (result) {
                 is Resource.Success -> {
@@ -170,7 +171,7 @@ class GiftingViewModel(
                             selectedGiftId = null,
                             selectedQuantity = 1,
                             sentGiftName = UiText.plain(giftName),
-                            sentGiftId = giftId
+                            sentGiftId = giftId,
                         )
                     }
                 }
@@ -184,15 +185,19 @@ class GiftingViewModel(
     }
 
     /** Legacy single-recipient send (kept for backward compat) */
-    fun sendGift(recipientId: String, giftId: String) {
+    fun sendGift(
+        recipientId: String,
+        giftId: String,
+    ) {
         val ownsGift = _uiState.value.backpackItems.any { it.giftId == giftId && it.quantity > 0 }
         viewModelScope.launch {
             _uiState.update { it.copy(isSending = true, error = null) }
-            val result = if (ownsGift) {
-                economyRepository.sendGift(recipientId, giftId)
-            } else {
-                economyRepository.sendGiftDirect(recipientId, giftId)
-            }
+            val result =
+                if (ownsGift) {
+                    economyRepository.sendGift(recipientId, giftId)
+                } else {
+                    economyRepository.sendGiftDirect(recipientId, giftId)
+                }
             when (result) {
                 is Resource.Success -> {
                     val giftName = result.data["giftName"] as? String ?: ""
@@ -201,7 +206,7 @@ class GiftingViewModel(
                             isSending = false,
                             selectedGiftId = null,
                             sentGiftName = UiText.plain(giftName),
-                            sentGiftId = giftId
+                            sentGiftId = giftId,
                         )
                     }
                 }
@@ -234,7 +239,7 @@ class GiftingViewModel(
                         it.copy(
                             isSending = false,
                             sendAllRecipientId = null,
-                            sentGiftName = UiText.res(Res.string.success_sent_backpack, totalSent)
+                            sentGiftName = UiText.res(Res.string.success_sent_backpack, totalSent),
                         )
                     }
                 }
@@ -255,7 +260,7 @@ class GiftingViewModel(
                         it.copy(
                             isSending = false,
                             selectedGiftId = null,
-                            sentGiftName = UiText.res(Res.string.success_super_shy_activated)
+                            sentGiftName = UiText.res(Res.string.success_super_shy_activated),
                         )
                     }
                 }

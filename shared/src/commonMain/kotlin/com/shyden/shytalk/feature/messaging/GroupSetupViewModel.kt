@@ -8,16 +8,15 @@ import com.shyden.shytalk.core.model.SystemMessageConfig
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
-import com.shyden.shytalk.core.util.logE
-import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.core.util.UiText
-import com.shyden.shytalk.resources.Res
-import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.core.util.compressImage
+import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.PrivateMessageRepository
 import com.shyden.shytalk.data.repository.StorageRepository
 import com.shyden.shytalk.data.repository.UserRepository
+import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,7 +36,7 @@ data class GroupSetupUiState(
     val error: UiText? = null,
     val createdConversationId: String? = null,
     val ownedGroupCount: Int = 0,
-    val isLoading: Boolean = true
+    val isLoading: Boolean = true,
 )
 
 class GroupSetupViewModel(
@@ -45,9 +44,8 @@ class GroupSetupViewModel(
     private val pmRepository: PrivateMessageRepository,
     private val userRepository: UserRepository,
     private val authRepository: AuthRepository,
-    private val storageRepository: StorageRepository
+    private val storageRepository: StorageRepository,
 ) : ViewModel() {
-
     companion object {
         private const val TAG = "GroupSetupViewModel"
     }
@@ -77,7 +75,7 @@ class GroupSetupViewModel(
                         it.copy(
                             isLoading = false,
                             selectedUsers = result.data,
-                            roles = initialRoles
+                            roles = initialRoles,
                         )
                     }
                 }
@@ -116,28 +114,33 @@ class GroupSetupViewModel(
     fun cycleRole(userId: String) {
         _uiState.update { state ->
             val currentRole = state.roles[userId] ?: GroupRole.MEMBER
-            val nextRole = when (currentRole) {
-                GroupRole.MEMBER -> GroupRole.MOD
-                GroupRole.MOD -> GroupRole.ADMIN
-                GroupRole.ADMIN -> GroupRole.MEMBER
-                GroupRole.OWNER -> GroupRole.OWNER // Can't cycle owner
-            }
+            val nextRole =
+                when (currentRole) {
+                    GroupRole.MEMBER -> GroupRole.MOD
+                    GroupRole.MOD -> GroupRole.ADMIN
+                    GroupRole.ADMIN -> GroupRole.MEMBER
+                    GroupRole.OWNER -> GroupRole.OWNER // Can't cycle owner
+                }
             state.copy(roles = state.roles + (userId to nextRole))
         }
     }
 
-    fun updatePermission(field: String, level: GroupPermissions.PermissionLevel) {
+    fun updatePermission(
+        field: String,
+        level: GroupPermissions.PermissionLevel,
+    ) {
         _uiState.update { state ->
             val permissions = state.permissions
-            val updated = when (field) {
-                "whoCanSend" -> permissions.copy(whoCanSend = level)
-                "whoCanAddMembers" -> permissions.copy(whoCanAddMembers = level)
-                "whoCanEditInfo" -> permissions.copy(whoCanEditInfo = level)
-                "whoCanDeleteMessages" -> permissions.copy(whoCanDeleteMessages = level)
-                "whoCanMuteMembers" -> permissions.copy(whoCanMuteMembers = level)
-                "whoCanRemoveMembers" -> permissions.copy(whoCanRemoveMembers = level)
-                else -> permissions
-            }
+            val updated =
+                when (field) {
+                    "whoCanSend" -> permissions.copy(whoCanSend = level)
+                    "whoCanAddMembers" -> permissions.copy(whoCanAddMembers = level)
+                    "whoCanEditInfo" -> permissions.copy(whoCanEditInfo = level)
+                    "whoCanDeleteMessages" -> permissions.copy(whoCanDeleteMessages = level)
+                    "whoCanMuteMembers" -> permissions.copy(whoCanMuteMembers = level)
+                    "whoCanRemoveMembers" -> permissions.copy(whoCanRemoveMembers = level)
+                    else -> permissions
+                }
             state.copy(permissions = updated)
         }
     }
@@ -145,13 +148,14 @@ class GroupSetupViewModel(
     fun toggleSystemMessage(field: String) {
         _uiState.update { state ->
             val config = state.systemMessageConfig
-            val updated = when (field) {
-                "showJoins" -> config.copy(showJoins = !config.showJoins)
-                "showLeaves" -> config.copy(showLeaves = !config.showLeaves)
-                "showRoleChanges" -> config.copy(showRoleChanges = !config.showRoleChanges)
-                "showPermissionChanges" -> config.copy(showPermissionChanges = !config.showPermissionChanges)
-                else -> config
-            }
+            val updated =
+                when (field) {
+                    "showJoins" -> config.copy(showJoins = !config.showJoins)
+                    "showLeaves" -> config.copy(showLeaves = !config.showLeaves)
+                    "showRoleChanges" -> config.copy(showRoleChanges = !config.showRoleChanges)
+                    "showPermissionChanges" -> config.copy(showPermissionChanges = !config.showPermissionChanges)
+                    else -> config
+                }
             state.copy(systemMessageConfig = updated)
         }
     }
@@ -173,9 +177,14 @@ class GroupSetupViewModel(
             val photoBytes = state.groupPhotoBytes
             if (photoBytes != null) {
                 val compressed = compressImage(photoBytes)
-                when (val uploadResult = storageRepository.uploadImage(
-                    currentUserId, "group_photos", compressed
-                )) {
+                when (
+                    val uploadResult =
+                        storageRepository.uploadImage(
+                            currentUserId,
+                            "group_photos",
+                            compressed,
+                        )
+                ) {
                     is Resource.Success -> photoUrl = uploadResult.data
                     is Resource.Error -> {
                         _uiState.update { it.copy(isCreating = false, error = UiText.res(Res.string.error_upload_group_photo)) }
@@ -185,20 +194,31 @@ class GroupSetupViewModel(
                 }
             }
 
-            val adminIds = state.roles.filter { it.value == GroupRole.ADMIN }.keys.toList()
-            val modIds = state.roles.filter { it.value == GroupRole.MOD }.keys.toList()
+            val adminIds =
+                state.roles
+                    .filter { it.value == GroupRole.ADMIN }
+                    .keys
+                    .toList()
+            val modIds =
+                state.roles
+                    .filter { it.value == GroupRole.MOD }
+                    .keys
+                    .toList()
 
-            when (val result = pmRepository.createGroupConversation(
-                creatorId = currentUserId,
-                participantIds = (listOf(currentUserId) + state.selectedUsers.map { it.uid }).distinct(),
-                groupName = state.groupName.trim(),
-                groupDescription = state.groupDescription.trim().ifBlank { null },
-                groupPhotoUrl = photoUrl,
-                adminIds = adminIds,
-                modIds = modIds,
-                permissions = state.permissions,
-                systemMessageConfig = state.systemMessageConfig
-            )) {
+            when (
+                val result =
+                    pmRepository.createGroupConversation(
+                        creatorId = currentUserId,
+                        participantIds = (listOf(currentUserId) + state.selectedUsers.map { it.uid }).distinct(),
+                        groupName = state.groupName.trim(),
+                        groupDescription = state.groupDescription.trim().ifBlank { null },
+                        groupPhotoUrl = photoUrl,
+                        adminIds = adminIds,
+                        modIds = modIds,
+                        permissions = state.permissions,
+                        systemMessageConfig = state.systemMessageConfig,
+                    )
+            ) {
                 is Resource.Success -> {
                     _uiState.update {
                         it.copy(isCreating = false, createdConversationId = result.data.conversationId)

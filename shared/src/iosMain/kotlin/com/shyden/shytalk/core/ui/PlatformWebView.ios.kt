@@ -12,7 +12,10 @@ import platform.WebKit.WKWebView
 
 @OptIn(ExperimentalForeignApi::class)
 @Composable
-actual fun PlatformWebView(url: String, modifier: Modifier) {
+actual fun PlatformWebView(
+    url: String,
+    modifier: Modifier,
+) {
     UIKitView(
         factory = {
             WKWebView().apply {
@@ -21,9 +24,10 @@ actual fun PlatformWebView(url: String, modifier: Modifier) {
             }
         },
         modifier = modifier,
-        properties = UIKitInteropProperties(
-            interactionMode = UIKitInteropInteractionMode.NonCooperative,
-            isNativeAccessibilityEnabled = true
-        )
+        properties =
+            UIKitInteropProperties(
+                interactionMode = UIKitInteropInteractionMode.NonCooperative,
+                isNativeAccessibilityEnabled = true,
+            ),
     )
 }

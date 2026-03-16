@@ -3,21 +3,19 @@ package com.shyden.shytalk.feature.gacha
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.model.CoinPackage
-import com.shyden.shytalk.core.model.EconomyConfig
 import com.shyden.shytalk.core.model.GachaGift
-import com.shyden.shytalk.core.model.GachaResult
 import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.model.Transaction
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.UiText
 import com.shyden.shytalk.core.util.currentTimeMillis
-import com.shyden.shytalk.resources.Res
-import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.repository.EconomyRepository
 import com.shyden.shytalk.data.repository.GiftRepository
+import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,14 +40,13 @@ data class GachaUiState(
     val spinHistory: List<Transaction> = emptyList(),
     val pullCosts: Map<Int, Int> = emptyMap(),
     val configLoaded: Boolean = false,
-    val wheelInnerThreshold: Int = 18888
+    val wheelInnerThreshold: Int = 18888,
 )
 
 class GachaViewModel(
     private val economyRepository: EconomyRepository,
-    private val giftRepository: GiftRepository
+    private val giftRepository: GiftRepository,
 ) : ViewModel() {
-
     private val _uiState = MutableStateFlow(GachaUiState())
     val uiState: StateFlow<GachaUiState> = _uiState.asStateFlow()
 
@@ -66,14 +63,15 @@ class GachaViewModel(
 
     private fun observeGiftCatalog() {
         viewModelScope.launch {
-            giftRepository.observeAllGifts()
+            giftRepository
+                .observeAllGifts()
                 .catch { e -> _uiState.update { it.copy(error = e.message?.let { msg -> UiText.plain(msg) }) } }
                 .collect { gifts ->
                     val wheelGifts = gifts.filter { g -> g.showOnWheel && g.coinValue > 0 }
                     _uiState.update {
                         it.copy(
                             giftCatalog = gifts,
-                            winnableGifts = padToWheelSize(wheelGifts)
+                            winnableGifts = padToWheelSize(wheelGifts),
                         )
                     }
                 }
@@ -98,14 +96,15 @@ class GachaViewModel(
 
     private fun observeConfig() {
         viewModelScope.launch {
-            economyRepository.observeEconomyConfig()
+            economyRepository
+                .observeEconomyConfig()
                 .catch { e -> logW(TAG, "observeEconomyConfig error", e) }
                 .collect { config ->
                     _uiState.update {
                         it.copy(
                             pullCosts = config.pullCosts,
                             configLoaded = config.pullCosts.isNotEmpty(),
-                            wheelInnerThreshold = config.wheelInnerThreshold
+                            wheelInnerThreshold = config.wheelInnerThreshold,
                         )
                     }
                 }
@@ -114,7 +113,8 @@ class GachaViewModel(
 
     private fun observeBalance() {
         viewModelScope.launch {
-            economyRepository.observeBalance()
+            economyRepository
+                .observeBalance()
                 .catch { e -> logW(TAG, "observeBalance error", e) }
                 .collect { coins ->
                     // Ignore stale Firestore snapshots for 3s after a pull set the balance
@@ -150,12 +150,17 @@ class GachaViewModel(
         }
     }
 
-    fun updateBalance(coins: Long, pity: Int) {
+    fun updateBalance(
+        coins: Long,
+        pity: Int,
+    ) {
         _uiState.update { it.copy(coinBalance = coins, pityCounter = pity) }
     }
 
     fun pullSingle() = pull(1)
+
     fun pullTen() = pull(10)
+
     fun pullHundred() = pull(100)
 
     private fun pull(count: Int) {
@@ -176,7 +181,7 @@ class GachaViewModel(
                             it.copy(
                                 isPulling = false,
                                 pullCosts = newCosts ?: it.pullCosts,
-                                error = UiText.res(Res.string.error_prices_changed)
+                                error = UiText.res(Res.string.error_prices_changed),
                             )
                         }
                         return@launch
@@ -196,7 +201,7 @@ class GachaViewModel(
                                 currentWin = result.data.gifts.firstOrNull(),
                                 isMultiSpin = false,
                                 showResults = false,
-                                pullCosts = latestCosts ?: it.pullCosts
+                                pullCosts = latestCosts ?: it.pullCosts,
                             )
                         }
                     } else {
@@ -210,7 +215,7 @@ class GachaViewModel(
                                 multiSpinResults = result.data.gifts,
                                 multiSpinIndex = 0,
                                 showResults = true,
-                                pullCosts = latestCosts ?: it.pullCosts
+                                pullCosts = latestCosts ?: it.pullCosts,
                             )
                         }
                     }
@@ -236,7 +241,7 @@ class GachaViewModel(
         _uiState.update {
             it.copy(
                 multiSpinIndex = it.multiSpinResults.size,
-                showResults = true
+                showResults = true,
             )
         }
     }
@@ -249,7 +254,7 @@ class GachaViewModel(
                 currentWin = null,
                 isMultiSpin = false,
                 multiSpinResults = emptyList(),
-                multiSpinIndex = 0
+                multiSpinIndex = 0,
             )
         }
     }

@@ -2,8 +2,12 @@ package com.shyden.shytalk.core.util
 
 sealed class BiometricResult {
     data object Success : BiometricResult()
+
     data object Fallback : BiometricResult()
-    data class Error(val message: String) : BiometricResult()
+
+    data class Error(
+        val message: String,
+    ) : BiometricResult()
 }
 
 /**
@@ -13,5 +17,9 @@ sealed class BiometricResult {
  */
 expect class BiometricAuth {
     fun isAvailable(): Boolean
-    suspend fun authenticate(title: String, subtitle: String): BiometricResult
+
+    suspend fun authenticate(
+        title: String,
+        subtitle: String,
+    ): BiometricResult
 }

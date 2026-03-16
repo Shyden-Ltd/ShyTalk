@@ -27,7 +27,6 @@ class PinSetupViewModel(
     private val pinRepository: PinRepository,
     private val appLockRepository: AppLockRepository,
 ) : ViewModel() {
-
     private val _state = MutableStateFlow(PinSetupState())
     val state: StateFlow<PinSetupState> = _state.asStateFlow()
 
@@ -44,8 +43,11 @@ class PinSetupViewModel(
 
     fun onBackspace() {
         _state.update {
-            if (it.pinInput.isNotEmpty()) it.copy(pinInput = it.pinInput.dropLast(1))
-            else it
+            if (it.pinInput.isNotEmpty()) {
+                it.copy(pinInput = it.pinInput.dropLast(1))
+            } else {
+                it
+            }
         }
     }
 
@@ -84,19 +86,21 @@ class PinSetupViewModel(
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
 
-            pinRepository.setupPin(pin).onSuccess { pinHash ->
-                // Store bcrypt hash locally for offline PIN verification
-                val uniqueId = appLockRepository.storedUniqueId
-                val deviceId = appLockRepository.storedDeviceId
-                if (uniqueId.isNullOrEmpty() || deviceId.isNullOrEmpty()) {
-                    _state.update { it.copy(isLoading = false, error = "Device not registered. Please sign in again.") }
-                    return@onSuccess
+            pinRepository
+                .setupPin(pin)
+                .onSuccess { pinHash ->
+                    // Store bcrypt hash locally for offline PIN verification
+                    val uniqueId = appLockRepository.storedUniqueId
+                    val deviceId = appLockRepository.storedDeviceId
+                    if (uniqueId.isNullOrEmpty() || deviceId.isNullOrEmpty()) {
+                        _state.update { it.copy(isLoading = false, error = "Device not registered. Please sign in again.") }
+                        return@onSuccess
+                    }
+                    appLockRepository.setCredential(uniqueId, deviceId, pinHash)
+                    _state.update { it.copy(isLoading = false, showBiometricOffer = true) }
+                }.onFailure { e ->
+                    _state.update { it.copy(isLoading = false, error = e.message ?: "Failed to set PIN") }
                 }
-                appLockRepository.setCredential(uniqueId, deviceId, pinHash)
-                _state.update { it.copy(isLoading = false, showBiometricOffer = true) }
-            }.onFailure { e ->
-                _state.update { it.copy(isLoading = false, error = e.message ?: "Failed to set PIN") }
-            }
         }
     }
 

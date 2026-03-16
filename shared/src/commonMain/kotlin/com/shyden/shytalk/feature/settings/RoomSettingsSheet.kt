@@ -9,17 +9,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,11 +29,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import org.koin.compose.viewmodel.koinViewModel
-import androidx.compose.runtime.collectAsState
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,7 +40,7 @@ fun RoomSettingsSheet(
     roomId: String,
     onDismiss: () -> Unit,
     onCloseRoom: () -> Unit,
-    viewModel: RoomSettingsViewModel = koinViewModel()
+    viewModel: RoomSettingsViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -51,17 +51,18 @@ fun RoomSettingsSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState
+        sheetState = sheetState,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
         ) {
             Text(
                 text = stringResource(Res.string.room_settings),
                 style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(bottom = 16.dp)
+                modifier = Modifier.padding(bottom = 16.dp),
             )
 
             val room = uiState.room
@@ -72,22 +73,22 @@ fun RoomSettingsSheet(
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = stringResource(Res.string.lock_seating),
-                            style = MaterialTheme.typography.bodyLarge
+                            style = MaterialTheme.typography.bodyLarge,
                         )
                         Text(
                             text = stringResource(Res.string.lock_seating_description),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     Switch(
                         checked = uiState.room?.requireApproval ?: false,
-                        onCheckedChange = { viewModel.toggleRequireApproval() }
+                        onCheckedChange = { viewModel.toggleRequireApproval() },
                     )
                 }
 
@@ -105,7 +106,7 @@ fun RoomSettingsSheet(
                             viewModel.leaveSeat()
                             onDismiss()
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(Res.string.move_to_audience))
                     }
@@ -117,7 +118,7 @@ fun RoomSettingsSheet(
                                 viewModel.requestSeat()
                                 onDismiss()
                             },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(if (isHost) stringResource(Res.string.take_a_seat) else stringResource(Res.string.request_a_seat))
                         }
@@ -134,22 +135,22 @@ fun RoomSettingsSheet(
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = stringResource(Res.string.auto_translate),
-                            style = MaterialTheme.typography.bodyLarge
+                            style = MaterialTheme.typography.bodyLarge,
                         )
                         Text(
                             text = stringResource(Res.string.auto_translate_description),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     Switch(
                         checked = uiState.autoTranslate,
-                        onCheckedChange = { viewModel.toggleAutoTranslate() }
+                        onCheckedChange = { viewModel.toggleAutoTranslate() },
                     )
                 }
 
@@ -165,21 +166,25 @@ fun RoomSettingsSheet(
             Text(
                 text = stringResource(Res.string.gift_animations),
                 style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = if (sliderValue.toInt() == 0) stringResource(Res.string.showing_all_gift_animations)
-                       else stringResource(Res.string.showing_animations_worth, sliderValue.toInt()),
+                text =
+                    if (sliderValue.toInt() == 0) {
+                        stringResource(Res.string.showing_all_gift_animations)
+                    } else {
+                        stringResource(Res.string.showing_animations_worth, sliderValue.toInt())
+                    },
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = stringResource(Res.string.filter_gift_animations_description),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(8.dp))
             Slider(
@@ -187,7 +192,7 @@ fun RoomSettingsSheet(
                 onValueChange = { sliderValue = it },
                 onValueChangeFinished = { viewModel.setMinGiftAnimationValue(sliderValue.toInt()) },
                 valueRange = 0f..10000f,
-                modifier = Modifier.padding(horizontal = 24.dp)
+                modifier = Modifier.padding(horizontal = 24.dp),
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -198,10 +203,11 @@ fun RoomSettingsSheet(
             if (isOwner) {
                 Button(
                     onClick = onCloseRoom,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error
-                    ),
-                    modifier = Modifier.fillMaxWidth()
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                        ),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(stringResource(Res.string.close_room))
                 }

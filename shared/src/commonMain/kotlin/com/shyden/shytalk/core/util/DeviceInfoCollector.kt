@@ -13,7 +13,7 @@ data class DeviceInfo(
     val locale: String?,
     val networkType: String?,
     val carrierName: String?,
-    val firebaseInstallationId: String?
+    val firebaseInstallationId: String?,
 )
 
 expect class DeviceInfoCollector {

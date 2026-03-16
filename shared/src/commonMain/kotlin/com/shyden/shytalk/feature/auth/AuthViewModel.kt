@@ -9,8 +9,6 @@ import com.shyden.shytalk.core.util.UiText
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.core.util.logW
-import com.shyden.shytalk.resources.Res
-import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.data.repository.AppLockRepository
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.BiometricRepository
@@ -19,6 +17,8 @@ import com.shyden.shytalk.data.repository.IdentityRepository
 import com.shyden.shytalk.data.repository.SignInResult
 import com.shyden.shytalk.data.repository.UserRepository
 import com.shyden.shytalk.feature.legal.CURRENT_LEGAL_VERSION
+import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -60,7 +60,6 @@ class AuthViewModel(
     private val appLockRepository: AppLockRepository? = null,
     private val biometricRepository: BiometricRepository? = null,
 ) : ViewModel() {
-
     companion object {
         private const val TAG = "AuthViewModel"
     }
@@ -130,7 +129,10 @@ class AuthViewModel(
         }
     }
 
-    fun signInWithApple(idToken: String, rawNonce: String) {
+    fun signInWithApple(
+        idToken: String,
+        rawNonce: String,
+    ) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             when (val result = authRepository.signInWithAppleIdToken(idToken, rawNonce)) {
@@ -179,7 +181,10 @@ class AuthViewModel(
      * the Express API identity map, handles device binding, ban checks, and
      * profile resolution.
      */
-    private suspend fun resolveIdentityAndProceed(provider: String, identifier: String) {
+    private suspend fun resolveIdentityAndProceed(
+        provider: String,
+        identifier: String,
+    ) {
         when (val result = identityRepository.resolveIdentity(provider, identifier)) {
             is Resource.Success -> {
                 when (val signInResult = result.data) {
@@ -239,7 +244,7 @@ class AuthViewModel(
                                 isLoading = false,
                                 isAuthenticated = true,
                                 hasProfile = false,
-                                hasDOB = false
+                                hasDOB = false,
                             )
                         }
                     }
@@ -251,7 +256,10 @@ class AuthViewModel(
                             it.copy(
                                 isLoading = false,
                                 isAuthenticated = false,
-                                error = UiText.plain("This sign-in method has been deactivated. Please use a different linked account or contact support.")
+                                error =
+                                    UiText.plain(
+                                        "This sign-in method has been deactivated. Please use a different linked account or contact support.",
+                                    ),
                             )
                         }
                     }
@@ -283,7 +291,7 @@ class AuthViewModel(
                             isDeviceBanned = isDevice,
                             isNetworkBanned = !isDevice,
                             banReason = ban.reason,
-                            banExpiresAt = ban.expiresAt
+                            banExpiresAt = ban.expiresAt,
                         )
                     }
                 }
@@ -312,7 +320,7 @@ class AuthViewModel(
                                         suspensionReason = user.suspensionReason,
                                         suspensionEndDate = user.suspensionEndDate,
                                         suspensionCanAppeal = user.suspensionCanAppeal,
-                                        suspensionAppealStatus = user.suspensionAppealStatus
+                                        suspensionAppealStatus = user.suspensionAppealStatus,
                                     )
                                 }
                                 return
@@ -327,7 +335,7 @@ class AuthViewModel(
                             if (needsLegal && LanguagePreference.getAcceptedLegalVersion() >= CURRENT_LEGAL_VERSION) {
                                 userRepository.updateProfile(
                                     userId,
-                                    mapOf("acceptedLegalVersion" to CURRENT_LEGAL_VERSION)
+                                    mapOf("acceptedLegalVersion" to CURRENT_LEGAL_VERSION),
                                 )
                                 needsLegal = false
                             }
@@ -359,7 +367,7 @@ class AuthViewModel(
                             isLoading = false,
                             isAuthenticated = true,
                             hasProfile = false,
-                            hasDOB = false
+                            hasDOB = false,
                         )
                     }
                 }
@@ -388,7 +396,7 @@ class AuthViewModel(
                         it.copy(
                             isLoading = false,
                             awaitingEmailLink = true,
-                            emailForLink = email
+                            emailForLink = email,
                         )
                     }
                 }
@@ -401,7 +409,10 @@ class AuthViewModel(
         }
     }
 
-    fun handleEmailLink(email: String, link: String) {
+    fun handleEmailLink(
+        email: String,
+        link: String,
+    ) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null, awaitingEmailLink = false) }
             when (val result = authRepository.signInWithEmailLink(email, link)) {

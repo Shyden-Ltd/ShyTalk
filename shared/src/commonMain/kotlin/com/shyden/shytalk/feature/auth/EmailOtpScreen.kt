@@ -68,8 +68,11 @@ fun EmailOtpScreen(
                 title = { Text("Sign in with email") },
                 navigationIcon = {
                     IconButton(onClick = {
-                        if (state.step == EmailOtpStep.EnterCode) viewModel.goBack()
-                        else onNavigateBack()
+                        if (state.step == EmailOtpStep.EnterCode) {
+                            viewModel.goBack()
+                        } else {
+                            onNavigateBack()
+                        }
                     }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
@@ -79,33 +82,36 @@ fun EmailOtpScreen(
         snackbarHost = { StyledSnackbarHost(snackbarHostState) },
     ) { padding ->
         Column(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 24.dp)
-                .verticalScroll(rememberScrollState())
-                .imePadding()
-                .testTag("emailOtpScreen"),
+            modifier =
+                modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 24.dp)
+                    .verticalScroll(rememberScrollState())
+                    .imePadding()
+                    .testTag("emailOtpScreen"),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
             when (state.step) {
-                EmailOtpStep.EnterEmail -> EmailStep(
-                    email = state.email,
-                    isLoading = state.isLoading,
-                    onEmailChange = { viewModel.updateEmail(it) },
-                    onSubmit = { viewModel.sendOtp() },
-                )
+                EmailOtpStep.EnterEmail ->
+                    EmailStep(
+                        email = state.email,
+                        isLoading = state.isLoading,
+                        onEmailChange = { viewModel.updateEmail(it) },
+                        onSubmit = { viewModel.sendOtp() },
+                    )
 
-                EmailOtpStep.EnterCode -> CodeStep(
-                    email = state.email,
-                    code = state.code,
-                    isLoading = state.isLoading,
-                    resendCooldown = state.resendCooldown,
-                    onCodeChange = { viewModel.updateCode(it) },
-                    onSubmit = { viewModel.verifyOtp() },
-                    onResend = { viewModel.resendOtp() },
-                )
+                EmailOtpStep.EnterCode ->
+                    CodeStep(
+                        email = state.email,
+                        code = state.code,
+                        isLoading = state.isLoading,
+                        resendCooldown = state.resendCooldown,
+                        onCodeChange = { viewModel.updateCode(it) },
+                        onSubmit = { viewModel.verifyOtp() },
+                        onResend = { viewModel.resendOtp() },
+                    )
             }
         }
     }
@@ -144,14 +150,16 @@ private fun EmailStep(
             onValueChange = onEmailChange,
             label = { Text("Email") },
             singleLine = true,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Email,
-                imeAction = ImeAction.Done,
-            ),
+            keyboardOptions =
+                KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    imeAction = ImeAction.Done,
+                ),
             keyboardActions = KeyboardActions(onDone = { onSubmit() }),
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("emailInput"),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .testTag("emailInput"),
         )
 
         Spacer(Modifier.height(24.dp))
@@ -206,14 +214,16 @@ private fun CodeStep(
             onValueChange = onCodeChange,
             label = { Text("6-digit code") },
             singleLine = true,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Number,
-                imeAction = ImeAction.Done,
-            ),
+            keyboardOptions =
+                KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Done,
+                ),
             keyboardActions = KeyboardActions(onDone = { onSubmit() }),
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("codeInput"),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .testTag("codeInput"),
         )
 
         Spacer(Modifier.height(24.dp))
@@ -241,8 +251,11 @@ private fun CodeStep(
             enabled = resendCooldown == 0 && !isLoading,
         ) {
             Text(
-                if (resendCooldown > 0) "Resend in ${resendCooldown}s"
-                else "Resend code"
+                if (resendCooldown > 0) {
+                    "Resend in ${resendCooldown}s"
+                } else {
+                    "Resend code"
+                },
             )
         }
 

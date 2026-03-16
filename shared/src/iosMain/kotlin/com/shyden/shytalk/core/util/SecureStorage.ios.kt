@@ -15,9 +15,7 @@ import platform.Foundation.dataUsingEncoding
 import platform.Security.SecItemAdd
 import platform.Security.SecItemCopyMatching
 import platform.Security.SecItemDelete
-import platform.Security.SecItemUpdate
 import platform.Security.errSecSuccess
-import platform.Security.errSecItemNotFound
 import platform.Security.kSecAttrAccount
 import platform.Security.kSecAttrService
 import platform.Security.kSecClass
@@ -26,26 +24,33 @@ import platform.Security.kSecMatchLimit
 import platform.Security.kSecMatchLimitOne
 import platform.Security.kSecReturnData
 import platform.Security.kSecValueData
-import platform.darwin.OSStatus
 
 private const val SERVICE_NAME = "com.shyden.shytalk.secure"
 
-private val ALL_KEYS = listOf(
-    "credentialVersion", "uniqueId", "deviceId", "appLockEnabled",
-    "biometricEnabled", "lockTimeoutMinutes", "lastActiveTimestamp", "localPinHash"
-)
+private val ALL_KEYS =
+    listOf(
+        "credentialVersion",
+        "uniqueId",
+        "deviceId",
+        "appLockEnabled",
+        "biometricEnabled",
+        "lockTimeoutMinutes",
+        "lastActiveTimestamp",
+        "localPinHash",
+    )
 
 @Suppress("UNCHECKED_CAST")
 actual class SecureStorage {
 
     actual fun getString(key: String): String? {
-        val query = mapOf<Any?, Any?>(
-            kSecClass to kSecClassGenericPassword,
-            kSecAttrService to SERVICE_NAME,
-            kSecAttrAccount to key,
-            kSecReturnData to true,
-            kSecMatchLimit to kSecMatchLimitOne,
-        )
+        val query =
+            mapOf<Any?, Any?>(
+                kSecClass to kSecClassGenericPassword,
+                kSecAttrService to SERVICE_NAME,
+                kSecAttrAccount to key,
+                kSecReturnData to true,
+                kSecMatchLimit to kSecMatchLimitOne,
+            )
         memScoped {
             val result = alloc<kotlinx.cinterop.ObjCObjectVar<Any?>>()
             val status = SecItemCopyMatching(query as CFDictionaryRef, result.ptr)
@@ -55,32 +60,51 @@ actual class SecureStorage {
         }
     }
 
-    actual fun putString(key: String, value: String) {
+    actual fun putString(
+        key: String,
+        value: String,
+    ) {
         delete(key) // remove existing before adding
         val data = (value as NSString).dataUsingEncoding(NSUTF8StringEncoding) ?: return
-        val query = mapOf<Any?, Any?>(
-            kSecClass to kSecClassGenericPassword,
-            kSecAttrService to SERVICE_NAME,
-            kSecAttrAccount to key,
-            kSecValueData to data,
-        )
+        val query =
+            mapOf<Any?, Any?>(
+                kSecClass to kSecClassGenericPassword,
+                kSecAttrService to SERVICE_NAME,
+                kSecAttrAccount to key,
+                kSecValueData to data,
+            )
         SecItemAdd(query as CFDictionaryRef, null)
     }
 
-    actual fun getInt(key: String, default: Int): Int =
-        getString(key)?.toIntOrNull() ?: default
+    actual fun getInt(
+        key: String,
+        default: Int,
+    ): Int = getString(key)?.toIntOrNull() ?: default
 
-    actual fun putInt(key: String, value: Int) = putString(key, value.toString())
+    actual fun putInt(
+        key: String,
+        value: Int,
+    ) = putString(key, value.toString())
 
-    actual fun getBoolean(key: String, default: Boolean): Boolean =
-        getString(key)?.toBooleanStrictOrNull() ?: default
+    actual fun getBoolean(
+        key: String,
+        default: Boolean,
+    ): Boolean = getString(key)?.toBooleanStrictOrNull() ?: default
 
-    actual fun putBoolean(key: String, value: Boolean) = putString(key, value.toString())
+    actual fun putBoolean(
+        key: String,
+        value: Boolean,
+    ) = putString(key, value.toString())
 
-    actual fun getLong(key: String, default: Long): Long =
-        getString(key)?.toLongOrNull() ?: default
+    actual fun getLong(
+        key: String,
+        default: Long,
+    ): Long = getString(key)?.toLongOrNull() ?: default
 
-    actual fun putLong(key: String, value: Long) = putString(key, value.toString())
+    actual fun putLong(
+        key: String,
+        value: Long,
+    ) = putString(key, value.toString())
 
     actual fun remove(key: String) = delete(key)
 
@@ -89,11 +113,12 @@ actual class SecureStorage {
     }
 
     private fun delete(key: String) {
-        val query = mapOf<Any?, Any?>(
-            kSecClass to kSecClassGenericPassword,
-            kSecAttrService to SERVICE_NAME,
-            kSecAttrAccount to key,
-        )
+        val query =
+            mapOf<Any?, Any?>(
+                kSecClass to kSecClassGenericPassword,
+                kSecAttrService to SERVICE_NAME,
+                kSecAttrAccount to key,
+            )
         SecItemDelete(query as CFDictionaryRef)
     }
 }

@@ -2,15 +2,14 @@ package com.shyden.shytalk.feature.messaging
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EmojiEmotions
@@ -31,16 +31,11 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,13 +43,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -63,35 +57,36 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
-import com.shyden.shytalk.core.model.GroupPermissions
-import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.model.MessageEdit
 import com.shyden.shytalk.core.model.PrivateMessage
+import com.shyden.shytalk.core.ui.StyledDisplayName
+import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.formatRelativeTime
 import com.shyden.shytalk.core.util.isKeyboardVisible
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.ui.theme.SpeakingGreen
-import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.time.Instant
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -106,7 +101,7 @@ fun PrivateChatScreen(
     activeRoomName: String? = null,
     conversationId: String? = null,
     modifier: Modifier = Modifier,
-    viewModel: PrivateChatViewModel = koinViewModel(key = conversationId ?: otherUserId) { parametersOf(otherUserId) }
+    viewModel: PrivateChatViewModel = koinViewModel(key = conversationId ?: otherUserId) { parametersOf(otherUserId) },
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -195,8 +190,10 @@ fun PrivateChatScreen(
     }
 
     val otherUser = uiState.otherUser
-    val isOnline = !uiState.isSystemConversation && otherUser?.hideOnlineStatus != true &&
-        (otherUser?.lastSeenAt ?: 0) > currentTimeMillis() - Constants.ONLINE_THRESHOLD_MS
+    val isOnline =
+        !uiState.isSystemConversation &&
+            otherUser?.hideOnlineStatus != true &&
+            (otherUser?.lastSeenAt ?: 0) > currentTimeMillis() - Constants.ONLINE_THRESHOLD_MS
 
     Scaffold(
         snackbarHost = { StyledSnackbarHost(snackbarHostState) },
@@ -205,7 +202,7 @@ fun PrivateChatScreen(
                 navigationIcon = {
                     IconButton(
                         onClick = onNavigateBack,
-                        modifier = Modifier.testTag("privateChat_backButton")
+                        modifier = Modifier.testTag("privateChat_backButton"),
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.back))
                     }
@@ -216,13 +213,13 @@ fun PrivateChatScreen(
                             Surface(
                                 modifier = Modifier.size(36.dp),
                                 shape = CircleShape,
-                                color = MaterialTheme.colorScheme.primaryContainer
+                                color = MaterialTheme.colorScheme.primaryContainer,
                             ) {
                                 Icon(
                                     Icons.Default.Group,
                                     contentDescription = null,
                                     modifier = Modifier.padding(8.dp),
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
                                 )
                             }
                             Spacer(modifier = Modifier.width(12.dp))
@@ -231,21 +228,24 @@ fun PrivateChatScreen(
                                     text = uiState.conversationName,
                                     style = MaterialTheme.typography.titleMedium,
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
                                     text = stringResource(Res.string.members_count, uiState.groupParticipants.size),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
                     } else {
                         Row(
-                            modifier = if (!uiState.isSystemConversation) {
-                                Modifier.clickable { otherUser?.uid?.let { onNavigateToUserProfile(it) } }
-                            } else Modifier,
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier =
+                                if (!uiState.isSystemConversation) {
+                                    Modifier.clickable { otherUser?.uid?.let { onNavigateToUserProfile(it) } }
+                                } else {
+                                    Modifier
+                                },
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             // Avatar
                             val photoUrl = otherUser?.photoUrl
@@ -253,45 +253,53 @@ fun PrivateChatScreen(
                                 AsyncImage(
                                     model = photoUrl,
                                     contentDescription = otherUser.displayName,
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape),
-                                    contentScale = ContentScale.Crop
+                                    modifier =
+                                        Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape),
+                                    contentScale = ContentScale.Crop,
                                 )
                             } else {
                                 Surface(
                                     modifier = Modifier.size(36.dp),
                                     shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.primaryContainer
+                                    color = MaterialTheme.colorScheme.primaryContainer,
                                 ) {
                                     Icon(
                                         Icons.Default.Person,
                                         contentDescription = null,
                                         modifier = Modifier.padding(8.dp),
-                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
                                     )
                                 }
                             }
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
-                                val resolvedName = otherUser?.uid?.let { uiState.aliases[it] }
-                                    ?: otherUser?.displayName ?: stringResource(Res.string.chat)
+                                val resolvedName =
+                                    otherUser?.uid?.let { uiState.aliases[it] }
+                                        ?: otherUser?.displayName ?: stringResource(Res.string.chat)
                                 StyledDisplayName(
                                     displayName = resolvedName,
                                     isSuperShy = otherUser?.isSuperShy == true,
-                                    style = MaterialTheme.typography.titleMedium
+                                    style = MaterialTheme.typography.titleMedium,
                                 )
                                 if (uiState.isOtherUserTyping) {
                                     Text(
                                         text = stringResource(Res.string.typing),
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = SpeakingGreen
+                                        color = SpeakingGreen,
                                     )
                                 } else if (otherUser?.hideOnlineStatus != true && !uiState.isSystemConversation) {
                                     Text(
-                                        text = if (isOnline) stringResource(Res.string.online) else otherUser?.lastSeenAt?.let { stringResource(Res.string.last_seen, formatRelativeTime(it)) } ?: "",
+                                        text =
+                                            if (isOnline) {
+                                                stringResource(Res.string.online)
+                                            } else {
+                                                otherUser?.lastSeenAt?.let { stringResource(Res.string.last_seen, formatRelativeTime(it)) }
+                                                    ?: ""
+                                            },
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = if (isOnline) SpeakingGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (isOnline) SpeakingGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
                             }
@@ -309,21 +317,35 @@ fun PrivateChatScreen(
                             }
                             DropdownMenu(
                                 expanded = showOverflowMenu,
-                                onDismissRequest = { showOverflowMenu = false }
+                                onDismissRequest = { showOverflowMenu = false },
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text(if (uiState.isMuted) stringResource(Res.string.unmute_notifications) else stringResource(Res.string.mute_notifications)) },
+                                    text = {
+                                        Text(
+                                            if (uiState.isMuted) {
+                                                stringResource(
+                                                    Res.string.unmute_notifications,
+                                                )
+                                            } else {
+                                                stringResource(Res.string.mute_notifications)
+                                            },
+                                        )
+                                    },
                                     onClick = {
                                         showOverflowMenu = false
                                         viewModel.toggleMute()
-                                    }
+                                    },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text(if (uiState.isPinned) stringResource(Res.string.unpin) else stringResource(Res.string.pin)) },
+                                    text = {
+                                        Text(
+                                            if (uiState.isPinned) stringResource(Res.string.unpin) else stringResource(Res.string.pin),
+                                        )
+                                    },
                                     onClick = {
                                         showOverflowMenu = false
                                         viewModel.togglePin()
-                                    }
+                                    },
                                 )
                                 if (uiState.isGroup) {
                                     DropdownMenuItem(
@@ -331,7 +353,7 @@ fun PrivateChatScreen(
                                         onClick = {
                                             showOverflowMenu = false
                                             showGroupSettings = true
-                                        }
+                                        },
                                     )
                                 }
                                 if (!uiState.isGroup) {
@@ -340,7 +362,7 @@ fun PrivateChatScreen(
                                         onClick = {
                                             showOverflowMenu = false
                                             otherUser?.uid?.let { onNavigateToUserProfile(it) }
-                                        }
+                                        },
                                     )
                                 }
                                 if (activeRoomId != null) {
@@ -350,7 +372,7 @@ fun PrivateChatScreen(
                                         onClick = {
                                             showOverflowMenu = false
                                             viewModel.sendRoomInvite(activeRoomId, activeRoomName ?: roomFallback)
-                                        }
+                                        },
                                     )
                                 }
                                 if (!uiState.isGroup) {
@@ -359,41 +381,42 @@ fun PrivateChatScreen(
                                         text = {
                                             Text(
                                                 stringResource(Res.string.delete_conversation),
-                                                color = MaterialTheme.colorScheme.error
+                                                color = MaterialTheme.colorScheme.error,
                                             )
                                         },
                                         onClick = {
                                             showOverflowMenu = false
                                             viewModel.hideConversation()
                                             onNavigateBack()
-                                        }
+                                        },
                                     )
                                 }
                             }
                         }
                     }
-                }
+                },
             )
-        }
+        },
     ) { padding ->
         Column(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(padding)
-                .consumeWindowInsets(padding)
-                .imePadding()
+            modifier =
+                modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .consumeWindowInsets(padding)
+                    .imePadding(),
         ) {
             // Blocked banner
             if (uiState.isBlocked) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.errorContainer
+                    color = MaterialTheme.colorScheme.errorContainer,
                 ) {
                     Text(
                         text = uiState.blockReason ?: stringResource(Res.string.cant_message_user),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                 }
             }
@@ -402,13 +425,14 @@ fun PrivateChatScreen(
             if (uiState.isSearching) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    tonalElevation = 2.dp
+                    tonalElevation = 2.dp,
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         OutlinedTextField(
                             value = uiState.searchQuery,
@@ -417,7 +441,7 @@ fun PrivateChatScreen(
                             modifier = Modifier.weight(1f),
                             singleLine = true,
                             shape = RoundedCornerShape(24.dp),
-                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
+                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                         )
                         IconButton(onClick = { viewModel.toggleSearch() }) {
                             Icon(Icons.Default.Close, contentDescription = stringResource(Res.string.close))
@@ -429,17 +453,18 @@ fun PrivateChatScreen(
                         text = stringResource(Res.string.result_count, uiState.searchResults.size),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     )
                 }
             }
 
             if (uiState.isLoading) {
                 Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
                 ) {
                     CircularProgressIndicator()
                 }
@@ -448,127 +473,159 @@ fun PrivateChatScreen(
                 PullToRefreshBox(
                     isRefreshing = uiState.isRefreshing,
                     onRefresh = { viewModel.refreshMessages() },
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
                 ) {
-                // Empty state when no messages and not loading
-                val displayMessages = if (uiState.isSearching && uiState.searchQuery.length >= 2) uiState.searchResults else uiState.messages
-                if (displayMessages.isEmpty() && !uiState.isSearching) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = stringResource(Res.string.no_messages),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = stringResource(Res.string.start_conversation),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                    // Empty state when no messages and not loading
+                    val displayMessages =
+                        if (uiState.isSearching &&
+                            uiState.searchQuery.length >= 2
+                        ) {
+                            uiState.searchResults
+                        } else {
+                            uiState.messages
                         }
-                    }
-                }
-
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    reverseLayout = false
-                ) {
-                    // Load more indicator
-                    if (uiState.isLoadingOlder) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(8.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                    if (displayMessages.isEmpty() && !uiState.isSearching) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = stringResource(Res.string.no_messages),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = stringResource(Res.string.start_conversation),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
                     }
 
-                    // Date separator logic
-                    val messages = if (uiState.isSearching && uiState.searchQuery.length >= 2) uiState.searchResults else uiState.messages
-                    val showDateSeparators = uiState.currentUser?.pmShowDateSeparators != false
-                    val showTimestamps = uiState.currentUser?.pmShowTimestamps != false
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        reverseLayout = false,
+                    ) {
+                        // Load more indicator
+                        if (uiState.isLoadingOlder) {
+                            item {
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .padding(8.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                }
+                            }
+                        }
 
-                    items(
-                        items = messages,
-                        key = { it.messageId }
-                    ) { message ->
-                        val index = messages.indexOf(message)
+                        // Date separator logic
+                        val messages =
+                            if (uiState.isSearching &&
+                                uiState.searchQuery.length >= 2
+                            ) {
+                                uiState.searchResults
+                            } else {
+                                uiState.messages
+                            }
+                        val showDateSeparators = uiState.currentUser?.pmShowDateSeparators != false
+                        val showTimestamps = uiState.currentUser?.pmShowTimestamps != false
 
-                        // Date separator
-                        if (showDateSeparators && index > 0) {
-                            val prevDate = Instant.fromEpochMilliseconds(messages[index - 1].createdAt)
-                                .toLocalDateTime(TimeZone.currentSystemDefault()).date
-                            val currDate = Instant.fromEpochMilliseconds(message.createdAt)
-                                .toLocalDateTime(TimeZone.currentSystemDefault()).date
-                            if (prevDate != currDate) {
+                        items(
+                            items = messages,
+                            key = { it.messageId },
+                        ) { message ->
+                            val index = messages.indexOf(message)
+
+                            // Date separator
+                            if (showDateSeparators && index > 0) {
+                                val prevDate =
+                                    Instant
+                                        .fromEpochMilliseconds(messages[index - 1].createdAt)
+                                        .toLocalDateTime(TimeZone.currentSystemDefault())
+                                        .date
+                                val currDate =
+                                    Instant
+                                        .fromEpochMilliseconds(message.createdAt)
+                                        .toLocalDateTime(TimeZone.currentSystemDefault())
+                                        .date
+                                if (prevDate != currDate) {
+                                    DateSeparator(message.createdAt)
+                                }
+                            } else if (showDateSeparators && index == 0) {
                                 DateSeparator(message.createdAt)
                             }
-                        } else if (showDateSeparators && index == 0) {
-                            DateSeparator(message.createdAt)
-                        }
 
-                        val isSent = message.senderId == uiState.currentUserId
-                        val isRead = message.readBy.contains(
-                            uiState.otherUser?.uid ?: ""
-                        )
+                            val isSent = message.senderId == uiState.currentUserId
+                            val isRead =
+                                message.readBy.contains(
+                                    uiState.otherUser?.uid ?: "",
+                                )
 
-                        // Show sender name for group messages (received only)
-                        if (uiState.isGroup && !isSent) {
-                            Text(
-                                text = message.senderName,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                            // Show sender name for group messages (received only)
+                            if (uiState.isGroup && !isSent) {
+                                Text(
+                                    text = message.senderName,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(start = 16.dp, top = 4.dp),
+                                )
+                            }
+
+                            PrivateMessageBubble(
+                                message = message,
+                                isSent = isSent,
+                                isRead = isRead,
+                                showTimestamp = showTimestamps,
+                                otherUserId = otherUserId,
+                                currentUserId = uiState.currentUserId,
+                                onEdit = { viewModel.startEditing(message) },
+                                onReply = { viewModel.startReply(message) },
+                                onViewEditHistory = {
+                                    showEditHistory = message.messageId to message.text
+                                },
+                                onRetry = { /* Failed message retry handled in future phase */ },
+                                onReportMessage = { reportingMessage = message },
+                                onToggleReaction = { emoji -> viewModel.toggleReaction(message.messageId, emoji) },
+                                onImageClick = { urls, index -> showImageViewer = urls to index },
+                                onRoomInviteTap = onNavigateToRoom?.let { nav -> { roomId: String -> nav(roomId) } },
+                                roomInvitePreview = message.roomInviteId?.let { uiState.roomInvites[it] },
+                                onRecall = { viewModel.recallMessage(message.messageId) },
+                                onSaveSticker = { url -> viewModel.saveStickerFromUrl(url) },
+                                onHideMessage =
+                                    if (uiState.isGroup &&
+                                        uiState.conversation
+                                            ?.permissions
+                                            ?.whoCanDeleteMessages
+                                            ?.isAllowed(uiState.currentUserRole) == true
+                                    ) {
+                                        { viewModel.hideMessage(message.messageId) }
+                                    } else if (!uiState.isGroup && uiState.isModOrAbove) {
+                                        { viewModel.hideMessage(message.messageId) }
+                                    } else {
+                                        null
+                                    },
+                                onTranslate =
+                                    if (!isSent && message.text.isNotBlank()) {
+                                        { viewModel.translateMessage(message.messageId) }
+                                    } else {
+                                        null
+                                    },
+                                translatedText = uiState.translations[message.messageId],
+                                isModOrAbove = uiState.isModOrAbove,
+                                isGroupChat = uiState.isGroup,
                             )
                         }
-
-                        PrivateMessageBubble(
-                            message = message,
-                            isSent = isSent,
-                            isRead = isRead,
-                            showTimestamp = showTimestamps,
-                            otherUserId = otherUserId,
-                            currentUserId = uiState.currentUserId,
-                            onEdit = { viewModel.startEditing(message) },
-                            onReply = { viewModel.startReply(message) },
-                            onViewEditHistory = {
-                                showEditHistory = message.messageId to message.text
-                            },
-                            onRetry = { /* Failed message retry handled in future phase */ },
-                            onReportMessage = { reportingMessage = message },
-                            onToggleReaction = { emoji -> viewModel.toggleReaction(message.messageId, emoji) },
-                            onImageClick = { urls, index -> showImageViewer = urls to index },
-                            onRoomInviteTap = onNavigateToRoom?.let { nav -> { roomId: String -> nav(roomId) } },
-                            roomInvitePreview = message.roomInviteId?.let { uiState.roomInvites[it] },
-                            onRecall = { viewModel.recallMessage(message.messageId) },
-                            onSaveSticker = { url -> viewModel.saveStickerFromUrl(url) },
-                            onHideMessage = if (uiState.isGroup &&
-                                uiState.conversation?.permissions?.whoCanDeleteMessages?.isAllowed(uiState.currentUserRole) == true
-                            ) {
-                                { viewModel.hideMessage(message.messageId) }
-                            } else if (!uiState.isGroup && uiState.isModOrAbove) {
-                                { viewModel.hideMessage(message.messageId) }
-                            } else null,
-                            onTranslate = if (!isSent && message.text.isNotBlank()) {
-                                { viewModel.translateMessage(message.messageId) }
-                            } else null,
-                            translatedText = uiState.translations[message.messageId],
-                            isModOrAbove = uiState.isModOrAbove,
-                            isGroupChat = uiState.isGroup
-                        )
                     }
-                }
                 } // PullToRefreshBox
             }
 
@@ -576,37 +633,50 @@ fun PrivateChatScreen(
             uiState.replyingToMessage?.let { replyMsg ->
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    tonalElevation = 2.dp
+                    tonalElevation = 2.dp,
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Box(
-                            modifier = Modifier
-                                .width(3.dp)
-                                .height(32.dp)
-                                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp))
+                            modifier =
+                                Modifier
+                                    .width(3.dp)
+                                    .height(32.dp)
+                                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)),
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = stringResource(Res.string.replying_to, replyMsg.senderName),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary
+                                color = MaterialTheme.colorScheme.primary,
                             )
                             Text(
-                                text = if (replyMsg.imageUrls.isNotEmpty()) stringResource(Res.string.message_preview_image) else replyMsg.text,
+                                text =
+                                    if (replyMsg.imageUrls.isNotEmpty()) {
+                                        stringResource(
+                                            Res.string.message_preview_image,
+                                        )
+                                    } else {
+                                        replyMsg.text
+                                    },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                         IconButton(onClick = { viewModel.cancelReply() }) {
-                            Icon(Icons.Default.Close, contentDescription = stringResource(Res.string.cancel), modifier = Modifier.size(18.dp))
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = stringResource(Res.string.cancel),
+                                modifier = Modifier.size(18.dp),
+                            )
                         }
                     }
                 }
@@ -616,32 +686,37 @@ fun PrivateChatScreen(
             if (uiState.editingMessageId != null) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    tonalElevation = 2.dp
+                    tonalElevation = 2.dp,
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(
                             Icons.Default.Edit,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(18.dp),
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = stringResource(Res.string.editing_message),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
                         )
                         IconButton(onClick = {
                             viewModel.cancelEditing()
                             messageText = ""
                         }) {
-                            Icon(Icons.Default.Close, contentDescription = stringResource(Res.string.cancel), modifier = Modifier.size(18.dp))
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = stringResource(Res.string.cancel),
+                                modifier = Modifier.size(18.dp),
+                            )
                         }
                     }
                 }
@@ -656,7 +731,7 @@ fun PrivateChatScreen(
                     },
                     onAddSticker = onPickStickerImage,
                     onDeleteSticker = { id -> viewModel.deleteSticker(id) },
-                    onMoveToFront = { id -> viewModel.moveStickerToFront(id) }
+                    onMoveToFront = { id -> viewModel.moveStickerToFront(id) },
                 )
             }
 
@@ -665,62 +740,69 @@ fun PrivateChatScreen(
             if (uiState.isGroup && muteInfo != null) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.errorContainer
+                    color = MaterialTheme.colorScheme.errorContainer,
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.VolumeOff,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(20.dp),
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        val muteText = buildString {
-                            if (muteInfo.expiresAt != null) {
-                                val remaining = muteInfo.expiresAt - currentTimeMillis()
-                                if (remaining > 0) {
-                                    val mins = remaining / 60000
-                                    val hrs = mins / 60
-                                    if (hrs > 0) {
-                                        append(stringResource(Res.string.muted_for_hours_minutes, hrs.toInt(), (mins % 60).toInt()))
+                        val muteText =
+                            buildString {
+                                if (muteInfo.expiresAt != null) {
+                                    val remaining = muteInfo.expiresAt - currentTimeMillis()
+                                    if (remaining > 0) {
+                                        val mins = remaining / 60000
+                                        val hrs = mins / 60
+                                        if (hrs > 0) {
+                                            append(stringResource(Res.string.muted_for_hours_minutes, hrs.toInt(), (mins % 60).toInt()))
+                                        } else {
+                                            append(stringResource(Res.string.muted_for_minutes, mins.toInt()))
+                                        }
                                     } else {
-                                        append(stringResource(Res.string.muted_for_minutes, mins.toInt()))
+                                        append(stringResource(Res.string.muted_indefinitely))
                                     }
                                 } else {
                                     append(stringResource(Res.string.muted_indefinitely))
                                 }
-                            } else {
-                                append(stringResource(Res.string.muted_indefinitely))
+                                muteInfo.reason?.let { append(stringResource(Res.string.mute_reason, it)) }
                             }
-                            muteInfo.reason?.let { append(stringResource(Res.string.mute_reason, it)) }
-                        }
                         Text(
                             text = muteText,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer
+                            color = MaterialTheme.colorScheme.onErrorContainer,
                         )
                     }
                 }
             }
 
             // Send permission check for groups
-            val canSend = !uiState.isGroup ||
-                (uiState.conversation?.permissions?.whoCanSend?.isAllowed(uiState.currentUserRole) ?: true)
+            val canSend =
+                !uiState.isGroup ||
+                    (
+                        uiState.conversation
+                            ?.permissions
+                            ?.whoCanSend
+                            ?.isAllowed(uiState.currentUserRole) ?: true
+                    )
 
             // Permission-restricted banner
             if (uiState.isGroup && !canSend && uiState.currentUserMuteInfo == null) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.surfaceVariant
+                    color = MaterialTheme.colorScheme.surfaceVariant,
                 ) {
                     Text(
                         text = stringResource(Res.string.only_admins_can_send),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                     )
                 }
             }
@@ -729,18 +811,19 @@ fun PrivateChatScreen(
             if (!uiState.isBlocked && !uiState.isSystemConversation && uiState.currentUserMuteInfo == null && canSend) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    tonalElevation = 3.dp
+                    tonalElevation = 3.dp,
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.Bottom
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.Bottom,
                     ) {
                         if (onPickImages != null) {
                             IconButton(
                                 onClick = onPickImages,
-                                enabled = !uiState.isUploadingImages
+                                enabled = !uiState.isUploadingImages,
                             ) {
                                 if (uiState.isUploadingImages) {
                                     CircularProgressIndicator(modifier = Modifier.size(20.dp))
@@ -750,7 +833,7 @@ fun PrivateChatScreen(
                             }
                         }
                         IconButton(
-                            onClick = { viewModel.toggleStickerPicker() }
+                            onClick = { viewModel.toggleStickerPicker() },
                         ) {
                             Icon(Icons.Default.EmojiEmotions, contentDescription = stringResource(Res.string.sticker))
                         }
@@ -765,7 +848,7 @@ fun PrivateChatScreen(
                             placeholder = { Text(stringResource(Res.string.message_ellipsis)) },
                             modifier = Modifier.weight(1f).testTag("privateChat_messageInput"),
                             maxLines = 4,
-                            shape = RoundedCornerShape(24.dp)
+                            shape = RoundedCornerShape(24.dp),
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         IconButton(
@@ -781,13 +864,17 @@ fun PrivateChatScreen(
                                 }
                             },
                             enabled = messageText.isNotBlank(),
-                            modifier = Modifier.testTag("privateChat_sendButton")
+                            modifier = Modifier.testTag("privateChat_sendButton"),
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.Send,
                                 contentDescription = stringResource(Res.string.send),
-                                tint = if (messageText.isNotBlank()) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant
+                                tint =
+                                    if (messageText.isNotBlank()) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
                             )
                         }
                     }
@@ -804,7 +891,7 @@ fun PrivateChatScreen(
             onDismiss = {
                 showEditHistory = null
                 editHistoryData = emptyList()
-            }
+            },
         )
     }
 
@@ -815,7 +902,7 @@ fun PrivateChatScreen(
             onSubmit = { reason, description ->
                 viewModel.reportMessage(msg, reason, description)
                 reportingMessage = null
-            }
+            },
         )
     }
 
@@ -823,12 +910,12 @@ fun PrivateChatScreen(
     showImageViewer?.let { (urls, idx) ->
         Dialog(
             onDismissRequest = { showImageViewer = null },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+            properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
             FullscreenImageViewer(
                 imageUrls = urls,
                 initialIndex = idx,
-                onDismiss = { showImageViewer = null }
+                onDismiss = { showImageViewer = null },
             )
         }
     }
@@ -859,7 +946,7 @@ fun PrivateChatScreen(
             onUpdateModNotifyMode = { viewModel.updateModNotifyMode(it) },
             onTransferOwnership = { viewModel.transferOwnership(it) },
             onUnmuteMember = { viewModel.unmuteGroupMember(it) },
-            onAddParticipant = { viewModel.addGroupParticipant(it) }
+            onAddParticipant = { viewModel.addGroupParticipant(it) },
         )
     }
 }
@@ -869,7 +956,7 @@ private val reportReasons = listOf("Spam", "Harassment", "Inappropriate Content"
 @Composable
 private fun ReportMessageDialog(
     onDismiss: () -> Unit,
-    onSubmit: (reason: String, description: String) -> Unit
+    onSubmit: (reason: String, description: String) -> Unit,
 ) {
     var selectedReason by remember { mutableStateOf(reportReasons[0]) }
     var description by remember { mutableStateOf("") }
@@ -881,20 +968,21 @@ private fun ReportMessageDialog(
             Column {
                 Text(
                     text = stringResource(Res.string.report_message_prompt),
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 reportReasons.forEach { reason ->
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { selectedReason = reason }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedReason = reason }
+                                .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(
                             selected = selectedReason == reason,
-                            onClick = { selectedReason = reason }
+                            onClick = { selectedReason = reason },
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(text = reason, style = MaterialTheme.typography.bodyMedium)
@@ -906,7 +994,7 @@ private fun ReportMessageDialog(
                     onValueChange = { description = it },
                     placeholder = { Text(stringResource(Res.string.additional_details_optional)) },
                     modifier = Modifier.fillMaxWidth(),
-                    maxLines = 3
+                    maxLines = 3,
                 )
             }
         },
@@ -919,7 +1007,7 @@ private fun ReportMessageDialog(
             TextButton(onClick = onDismiss) {
                 Text(stringResource(Res.string.cancel))
             }
-        }
+        },
     )
 }
 
@@ -929,30 +1017,36 @@ private fun DateSeparator(timestampMs: Long) {
     val date = Instant.fromEpochMilliseconds(timestampMs).toLocalDateTime(tz).date
     val today = Instant.fromEpochMilliseconds(currentTimeMillis()).toLocalDateTime(tz).date
 
-    val label = when {
-        date == today -> stringResource(Res.string.today)
-        date.toEpochDays() == today.toEpochDays() - 1 -> stringResource(Res.string.yesterday)
-        else -> {
-            val month = date.month.name.lowercase().replaceFirstChar { it.uppercase() }.take(3)
-            "$month ${date.day}, ${date.year}"
+    val label =
+        when {
+            date == today -> stringResource(Res.string.today)
+            date.toEpochDays() == today.toEpochDays() - 1 -> stringResource(Res.string.yesterday)
+            else -> {
+                val month =
+                    date.month.name
+                        .lowercase()
+                        .replaceFirstChar { it.uppercase() }
+                        .take(3)
+                "$month ${date.day}, ${date.year}"
+            }
         }
-    }
 
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Surface(
             shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
         ) {
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
             )
         }
     }

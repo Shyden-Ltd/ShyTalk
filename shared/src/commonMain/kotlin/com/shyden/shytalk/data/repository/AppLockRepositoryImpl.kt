@@ -4,9 +4,8 @@ import com.shyden.shytalk.core.util.SecureStorage
 import com.shyden.shytalk.core.util.currentTimeMillis
 
 class AppLockRepositoryImpl(
-    private val storage: SecureStorage
+    private val storage: SecureStorage,
 ) : AppLockRepository {
-
     override val hasCredential: Boolean
         get() = storage.getString(KEY_UNIQUE_ID) != null
 
@@ -31,7 +30,11 @@ class AppLockRepositoryImpl(
     override val credentialVersion: Int
         get() = storage.getInt(KEY_CREDENTIAL_VERSION, 0)
 
-    override fun setCredential(uniqueId: String, deviceId: String, localPinHash: String) {
+    override fun setCredential(
+        uniqueId: String,
+        deviceId: String,
+        localPinHash: String,
+    ) {
         storage.putString(KEY_UNIQUE_ID, uniqueId)
         storage.putString(KEY_DEVICE_ID, deviceId)
         storage.putString(KEY_LOCAL_PIN_HASH, localPinHash)

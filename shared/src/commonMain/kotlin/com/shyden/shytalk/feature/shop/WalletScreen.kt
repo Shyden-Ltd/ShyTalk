@@ -27,9 +27,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -50,8 +48,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shyden.shytalk.core.model.CoinPackage
-import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,7 +61,7 @@ fun WalletScreen(
     onNavigateToTransactions: () -> Unit,
     onPurchasePackage: (CoinPackage) -> Unit,
     onPurchaseSubscription: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -95,53 +94,56 @@ fun WalletScreen(
                 actions = {
                     IconButton(
                         onClick = onNavigateToTransactions,
-                        modifier = Modifier.testTag("wallet_transactionsButton")
+                        modifier = Modifier.testTag("wallet_transactionsButton"),
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ReceiptLong, contentDescription = stringResource(Res.string.transaction_history))
                     }
-                }
+                },
             )
         },
-        modifier = modifier
+        modifier = modifier,
     ) { padding ->
         if (state.isLoading) {
             Box(
                 modifier = Modifier.fillMaxSize().padding(padding),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator()
             }
         } else {
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(padding),
             ) {
                 PrimaryTabRow(selectedTabIndex = selectedTab) {
                     Tab(
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
-                        text = { Text(stringResource(Res.string.shy_coins)) }
+                        text = { Text(stringResource(Res.string.shy_coins)) },
                     )
                     Tab(
                         selected = selectedTab == 1,
                         onClick = { selectedTab = 1 },
-                        text = { Text(stringResource(Res.string.shy_beans)) }
+                        text = { Text(stringResource(Res.string.shy_beans)) },
                     )
                 }
 
                 when (selectedTab) {
-                    0 -> CoinsTab(
-                        coinBalance = state.coinBalance,
-                        coinPackages = state.coinPackages,
-                        isPurchasing = state.isPurchasing,
-                        onTestPurchase = { coins -> viewModel.testPurchaseCoins(coins) }
-                    )
-                    1 -> BeansTab(
-                        beanBalance = state.beanBalance,
-                        isPurchasing = state.isPurchasing,
-                        onRedeem = { amount -> viewModel.redeemBeans(amount) }
-                    )
+                    0 ->
+                        CoinsTab(
+                            coinBalance = state.coinBalance,
+                            coinPackages = state.coinPackages,
+                            isPurchasing = state.isPurchasing,
+                            onTestPurchase = { coins -> viewModel.testPurchaseCoins(coins) },
+                        )
+                    1 ->
+                        BeansTab(
+                            beanBalance = state.beanBalance,
+                            isPurchasing = state.isPurchasing,
+                            onRedeem = { amount -> viewModel.redeemBeans(amount) },
+                        )
                 }
             }
         }
@@ -153,35 +155,37 @@ private fun CoinsTab(
     coinBalance: Long,
     coinPackages: List<CoinPackage>,
     isPurchasing: Boolean,
-    onTestPurchase: (Int) -> Unit
+    onTestPurchase: (Int) -> Unit,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
     ) {
         BalanceCard(
             label = stringResource(Res.string.shy_coins),
             amount = coinBalance,
             icon = "\uD83E\uDE99",
             containerColor = MaterialTheme.colorScheme.primaryContainer,
-            modifier = Modifier.fillMaxWidth().testTag("wallet_balance")
+            modifier = Modifier.fillMaxWidth().testTag("wallet_balance"),
         )
 
         Spacer(modifier = Modifier.height(12.dp))
 
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.tertiaryContainer
-            )
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                ),
         ) {
             Text(
                 text = stringResource(Res.string.testing_mode_coins),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onTertiaryContainer,
-                modifier = Modifier.padding(12.dp)
+                modifier = Modifier.padding(12.dp),
             )
         }
 
@@ -195,7 +199,7 @@ private fun CoinsTab(
         rows.forEach { row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 row.forEach { pkg ->
                     val totalCoins = pkg.coins + pkg.bonusCoins
@@ -203,7 +207,7 @@ private fun CoinsTab(
                         CoinPackageCard(
                             pkg = pkg,
                             enabled = !isPurchasing,
-                            onClick = { onTestPurchase(totalCoins) }
+                            onClick = { onTestPurchase(totalCoins) },
                         )
                     }
                 }
@@ -220,23 +224,24 @@ private fun CoinsTab(
 private fun BeansTab(
     beanBalance: Long,
     isPurchasing: Boolean,
-    onRedeem: (Long) -> Unit
+    onRedeem: (Long) -> Unit,
 ) {
     val presets = listOf(100L, 500L, 1_000L, 2_000L, 5_000L)
     var confirmAmount by remember { mutableStateOf<Long?>(null) }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
     ) {
         BalanceCard(
             label = stringResource(Res.string.shy_beans),
             amount = beanBalance,
             icon = "\uD83E\uDED8",
             containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         )
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -245,7 +250,7 @@ private fun BeansTab(
         Text(
             stringResource(Res.string.bean_redeem_description),
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -254,7 +259,7 @@ private fun BeansTab(
         rows.forEach { row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 row.forEach { preset ->
                     val isRedeemAll = preset == -1L
@@ -268,10 +273,15 @@ private fun BeansTab(
                         enabled = enabled,
                         modifier = Modifier.weight(1f).height(56.dp),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (hasBonus && enabled) Color(0xFF4CAF50)
-                            else MaterialTheme.colorScheme.primary
-                        )
+                        colors =
+                            ButtonDefaults.buttonColors(
+                                containerColor =
+                                    if (hasBonus && enabled) {
+                                        Color(0xFF4CAF50)
+                                    } else {
+                                        MaterialTheme.colorScheme.primary
+                                    },
+                            ),
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(label, fontWeight = FontWeight.Bold)
@@ -279,7 +289,7 @@ private fun BeansTab(
                                 Text(
                                     "+10%",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (enabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (enabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
@@ -317,7 +327,7 @@ private fun BeansTab(
                 TextButton(onClick = { confirmAmount = null }) {
                     Text(stringResource(Res.string.cancel))
                 }
-            }
+            },
         )
     }
 }
@@ -328,48 +338,56 @@ private fun BalanceCard(
     amount: Long,
     icon: String,
     containerColor: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Card(
         modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = containerColor)
+        colors = CardDefaults.cardColors(containerColor = containerColor),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(icon, style = MaterialTheme.typography.headlineMedium)
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = formatNumber(amount),
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
             Text(
                 label,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
 }
 
 @Composable
-internal fun CoinPackageCard(pkg: CoinPackage, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun CoinPackageCard(
+    pkg: CoinPackage,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
     Card(
         onClick = onClick,
         enabled = enabled,
         shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth().height(80.dp)
+        modifier = Modifier.fillMaxWidth().height(80.dp),
     ) {
         Column(
             modifier = Modifier.fillMaxSize().padding(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Center,
         ) {
             Text("${pkg.coins}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
             if (pkg.bonusCoins > 0) {
-                Text(stringResource(Res.string.bonus_coins, pkg.bonusCoins), color = Color(0xFF4CAF50), style = MaterialTheme.typography.bodySmall)
+                Text(
+                    stringResource(Res.string.bonus_coins, pkg.bonusCoins),
+                    color = Color(0xFF4CAF50),
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
             Spacer(modifier = Modifier.height(4.dp))
             Text(pkg.displayPrice, style = MaterialTheme.typography.bodyMedium)
@@ -387,19 +405,20 @@ fun CoinPurchaseSheetContent(
     coinPackages: List<CoinPackage>,
     isPurchasing: Boolean,
     onTestPurchase: (Int) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
     ) {
         BalanceCard(
             label = stringResource(Res.string.shy_coins),
             amount = coinBalance,
             icon = "\uD83E\uDE99",
             containerColor = MaterialTheme.colorScheme.primaryContainer,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -411,7 +430,7 @@ fun CoinPurchaseSheetContent(
         sheetRows.forEach { row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 row.forEach { pkg ->
                     val totalCoins = pkg.coins + pkg.bonusCoins
@@ -419,7 +438,7 @@ fun CoinPurchaseSheetContent(
                         CoinPackageCard(
                             pkg = pkg,
                             enabled = !isPurchasing,
-                            onClick = { onTestPurchase(totalCoins) }
+                            onClick = { onTestPurchase(totalCoins) },
                         )
                     }
                 }

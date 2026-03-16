@@ -1,7 +1,6 @@
 package com.shyden.shytalk.feature.messaging
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -30,41 +29,44 @@ import org.jetbrains.compose.resources.stringResource
 fun FullscreenImageViewer(
     imageUrls: List<String>,
     initialIndex: Int = 0,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
-    val pagerState = rememberPagerState(
-        initialPage = initialIndex,
-        pageCount = { imageUrls.size }
-    )
+    val pagerState =
+        rememberPagerState(
+            initialPage = initialIndex,
+            pageCount = { imageUrls.size },
+        )
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black),
     ) {
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
         ) { page ->
             AsyncImage(
                 model = imageUrls[page],
                 contentDescription = stringResource(Res.string.image_number, page + 1),
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit
+                contentScale = ContentScale.Fit,
             )
         }
 
         // Close button
         IconButton(
             onClick = onDismiss,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(16.dp)
+            modifier =
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp),
         ) {
             Icon(
                 Icons.Default.Close,
                 contentDescription = stringResource(Res.string.close),
-                tint = Color.White
+                tint = Color.White,
             )
         }
 
@@ -74,9 +76,10 @@ fun FullscreenImageViewer(
                 text = stringResource(Res.string.page_indicator, pagerState.currentPage + 1, imageUrls.size),
                 color = Color.White,
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(16.dp)
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(16.dp),
             )
         }
     }

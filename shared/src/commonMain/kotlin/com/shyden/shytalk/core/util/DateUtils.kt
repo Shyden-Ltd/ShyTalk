@@ -1,8 +1,8 @@
 package com.shyden.shytalk.core.util
 
-import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Instant
 
 fun calculateAge(dateOfBirthMillis: Long): Int {
     val tz = TimeZone.currentSystemDefault()
@@ -17,9 +17,7 @@ fun calculateAge(dateOfBirthMillis: Long): Int {
     return age
 }
 
-fun isAtLeast13(dateOfBirthMillis: Long): Boolean {
-    return calculateAge(dateOfBirthMillis) >= 13
-}
+fun isAtLeast13(dateOfBirthMillis: Long): Boolean = calculateAge(dateOfBirthMillis) >= 13
 
 fun formatRelativeTime(timestampMs: Long): String {
     val diffMs = currentTimeMillis() - timestampMs
@@ -51,7 +49,11 @@ fun formatSuspensionEnd(endDateMillis: Long): String {
 fun formatSuspensionEndDateTime(endDateMillis: Long): String {
     val tz = TimeZone.currentSystemDefault()
     val dt = Instant.fromEpochMilliseconds(endDateMillis).toLocalDateTime(tz)
-    val month = dt.month.name.lowercase().replaceFirstChar { it.uppercase() }.take(3)
+    val month =
+        dt.month.name
+            .lowercase()
+            .replaceFirstChar { it.uppercase() }
+            .take(3)
     val day = dt.day
     val year = dt.year
     val hour = dt.hour.toString().padStart(2, '0')
@@ -62,6 +64,10 @@ fun formatSuspensionEndDateTime(endDateMillis: Long): String {
 fun formatDateForDisplay(millis: Long): String {
     val tz = TimeZone.currentSystemDefault()
     val date = Instant.fromEpochMilliseconds(millis).toLocalDateTime(tz).date
-    val month = date.month.name.lowercase().replaceFirstChar { it.uppercase() }.take(3)
+    val month =
+        date.month.name
+            .lowercase()
+            .replaceFirstChar { it.uppercase() }
+            .take(3)
     return "$month ${date.day.toString().padStart(2, '0')}, ${date.year}"
 }

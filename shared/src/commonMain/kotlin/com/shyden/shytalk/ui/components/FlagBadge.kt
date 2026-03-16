@@ -26,7 +26,7 @@ import com.shyden.shytalk.core.util.flagEmojiForCode
 fun FlagBadge(
     countryCode: String,
     badgeSize: Dp = 24.dp,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     var showTooltip by remember { mutableStateOf(false) }
     val flag = flagEmojiForCode(countryCode)
@@ -34,34 +34,36 @@ fun FlagBadge(
 
     Box(modifier = modifier) {
         Box(
-            modifier = Modifier
-                .size(badgeSize)
-                .clickable { showTooltip = !showTooltip },
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .size(badgeSize)
+                    .clickable { showTooltip = !showTooltip },
+            contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = flag,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = (badgeSize.value * 0.65f).sp
-                )
+                style =
+                    MaterialTheme.typography.labelSmall.copy(
+                        fontSize = (badgeSize.value * 0.65f).sp,
+                    ),
             )
         }
 
         if (showTooltip && countryName != null) {
             Popup(
                 alignment = Alignment.TopCenter,
-                onDismissRequest = { showTooltip = false }
+                onDismissRequest = { showTooltip = false },
             ) {
                 Surface(
                     shape = RoundedCornerShape(6.dp),
                     color = MaterialTheme.colorScheme.inverseSurface,
-                    shadowElevation = 4.dp
+                    shadowElevation = 4.dp,
                 ) {
                     Text(
                         text = countryName,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.inverseOnSurface,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     )
                 }
             }

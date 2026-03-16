@@ -11,31 +11,36 @@ data class ConversationSettings(
     val isPinned: Boolean = false,
     val lastReadMessageId: String = "",
     val lastReadAt: Long = 0,
-    val unreadCount: Long = 0
+    val unreadCount: Long = 0,
 ) {
-    fun toMap(): Map<String, Any?> = mapOf(
-        "userId" to userId,
-        "isMuted" to isMuted,
-        "isHidden" to isHidden,
-        "hiddenAt" to hiddenAt,
-        "isPinned" to isPinned,
-        "lastReadMessageId" to lastReadMessageId,
-        "lastReadAt" to lastReadAt,
-        "unreadCount" to unreadCount
-    )
+    fun toMap(): Map<String, Any?> =
+        mapOf(
+            "userId" to userId,
+            "isMuted" to isMuted,
+            "isHidden" to isHidden,
+            "hiddenAt" to hiddenAt,
+            "isPinned" to isPinned,
+            "lastReadMessageId" to lastReadMessageId,
+            "lastReadAt" to lastReadAt,
+            "unreadCount" to unreadCount,
+        )
 
     companion object {
         fun default(userId: String) = ConversationSettings(userId = userId)
 
-        fun fromMap(map: Map<String, Any?>, userId: String): ConversationSettings = ConversationSettings(
-            userId = userId,
-            isMuted = map["isMuted"].asBool(),
-            isHidden = map["isHidden"].asBool(),
-            hiddenAt = map["hiddenAt"]?.let { timestampToMillis(it) },
-            isPinned = map["isPinned"].asBool(),
-            lastReadMessageId = map["lastReadMessageId"] as? String ?: "",
-            lastReadAt = map["lastReadAt"]?.let { timestampToMillis(it) } ?: 0,
-            unreadCount = (map["unreadCount"] as? Long) ?: 0
-        )
+        fun fromMap(
+            map: Map<String, Any?>,
+            userId: String,
+        ): ConversationSettings =
+            ConversationSettings(
+                userId = userId,
+                isMuted = map["isMuted"].asBool(),
+                isHidden = map["isHidden"].asBool(),
+                hiddenAt = map["hiddenAt"]?.let { timestampToMillis(it) },
+                isPinned = map["isPinned"].asBool(),
+                lastReadMessageId = map["lastReadMessageId"] as? String ?: "",
+                lastReadAt = map["lastReadAt"]?.let { timestampToMillis(it) } ?: 0,
+                unreadCount = (map["unreadCount"] as? Long) ?: 0,
+            )
     }
 }

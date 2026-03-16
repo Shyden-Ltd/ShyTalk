@@ -38,14 +38,14 @@ import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 
 data class Sticker(
     val id: String,
     val url: String,
-    val localPath: String? = null
+    val localPath: String? = null,
 )
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -56,77 +56,83 @@ fun StickerPicker(
     onAddSticker: (() -> Unit)? = null,
     onDeleteSticker: ((String) -> Unit)? = null,
     onMoveToFront: ((String) -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     var longPressedSticker by remember { mutableStateOf<Sticker?>(null) }
 
     Column(modifier = modifier.fillMaxWidth()) {
         if (stickers.isEmpty() && onAddSticker == null) {
             Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                    verticalArrangement = Arrangement.Center,
                 ) {
                     Text(
                         text = stringResource(Res.string.no_stickers_yet),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
         } else {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(4),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(250.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(250.dp),
                 contentPadding = PaddingValues(8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (onAddSticker != null) {
                     item {
                         Box(
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
-                                .clickable { onAddSticker() },
-                            contentAlignment = Alignment.Center
+                            modifier =
+                                Modifier
+                                    .size(72.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+                                    .clickable { onAddSticker() },
+                            contentAlignment = Alignment.Center,
                         ) {
                             Icon(
                                 Icons.Default.Add,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = MaterialTheme.colorScheme.primary,
                             )
                         }
                     }
                 }
                 items(stickers, key = { it.id }) { sticker ->
                     AsyncImage(
-                        model = ImageRequest.Builder(LocalPlatformContext.current)
-                            .data(sticker.localPath ?: sticker.url)
-                            .crossfade(false)
-                            .build(),
+                        model =
+                            ImageRequest
+                                .Builder(LocalPlatformContext.current)
+                                .data(sticker.localPath ?: sticker.url)
+                                .crossfade(false)
+                                .build(),
                         contentDescription = stringResource(Res.string.sticker),
-                        modifier = Modifier
-                            .size(72.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .combinedClickable(
-                                onClick = { onStickerSelected(sticker) },
-                                onLongClick = {
-                                    if (onDeleteSticker != null || onMoveToFront != null) {
-                                        longPressedSticker = sticker
-                                    }
-                                }
-                            ),
-                        contentScale = ContentScale.Fit
+                        modifier =
+                            Modifier
+                                .size(72.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .combinedClickable(
+                                    onClick = { onStickerSelected(sticker) },
+                                    onLongClick = {
+                                        if (onDeleteSticker != null || onMoveToFront != null) {
+                                            longPressedSticker = sticker
+                                        }
+                                    },
+                                ),
+                        contentScale = ContentScale.Fit,
                     )
                 }
             }
@@ -162,7 +168,7 @@ fun StickerPicker(
                 TextButton(onClick = { longPressedSticker = null }) {
                     Text(stringResource(Res.string.cancel))
                 }
-            }
+            },
         )
     }
 }

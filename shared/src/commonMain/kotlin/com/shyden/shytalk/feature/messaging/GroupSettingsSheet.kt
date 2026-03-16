@@ -29,10 +29,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
-import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -56,8 +56,8 @@ import com.shyden.shytalk.core.model.MuteInfo
 import com.shyden.shytalk.core.model.SystemMessageConfig
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Constants
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -82,33 +82,35 @@ fun GroupSettingsSheet(
     onUpdateModNotifyMode: (String) -> Unit,
     onTransferOwnership: (String) -> Unit,
     onUnmuteMember: (String) -> Unit,
-    onAddParticipant: (String) -> Unit
+    onAddParticipant: (String) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf(
-        stringResource(Res.string.general),
-        stringResource(Res.string.members),
-        stringResource(Res.string.permissions)
-    )
+    val tabs =
+        listOf(
+            stringResource(Res.string.general),
+            stringResource(Res.string.members),
+            stringResource(Res.string.permissions),
+        )
     val isOwner = currentUserRole == GroupRole.OWNER
     val permissions = conversation?.permissions ?: GroupPermissions()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState
+        sheetState = sheetState,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
         ) {
             PrimaryTabRow(selectedTabIndex = selectedTab) {
                 tabs.forEachIndexed { index, title ->
                     Tab(
                         selected = selectedTab == index,
                         onClick = { selectedTab = index },
-                        text = { Text(title) }
+                        text = { Text(title) },
                     )
                 }
             }
@@ -116,39 +118,42 @@ fun GroupSettingsSheet(
             Spacer(modifier = Modifier.height(16.dp))
 
             when (selectedTab) {
-                0 -> GeneralTab(
-                    conversation = conversation,
-                    conversationName = conversationName,
-                    currentUserRole = currentUserRole,
-                    isAdmin = isAdmin,
-                    isModOrAbove = isModOrAbove,
-                    isOwner = isOwner,
-                    onUpdateGroupName = onUpdateGroupName,
-                    onUpdateGroupDescription = onUpdateGroupDescription,
-                    onLeaveGroup = onLeaveGroup,
-                    onDismiss = onDismiss
-                )
-                1 -> MembersTab(
-                    conversation = conversation,
-                    participants = participants,
-                    currentUserRole = currentUserRole,
-                    isOwner = isOwner,
-                    currentUserId = currentUserId,
-                    groupMutes = groupMutes,
-                    onRemoveParticipant = onRemoveParticipant,
-                    onUpdateGroupRoles = onUpdateGroupRoles,
-                    onUnmuteMember = onUnmuteMember
-                )
-                2 -> PermissionsTab(
-                    conversation = conversation,
-                    isOwner = isOwner,
-                    participants = participants,
-                    currentUserId = currentUserId,
-                    onUpdatePermissions = onUpdatePermissions,
-                    onUpdateSystemMessageConfig = onUpdateSystemMessageConfig,
-                    onUpdateModNotifyMode = onUpdateModNotifyMode,
-                    onTransferOwnership = onTransferOwnership
-                )
+                0 ->
+                    GeneralTab(
+                        conversation = conversation,
+                        conversationName = conversationName,
+                        currentUserRole = currentUserRole,
+                        isAdmin = isAdmin,
+                        isModOrAbove = isModOrAbove,
+                        isOwner = isOwner,
+                        onUpdateGroupName = onUpdateGroupName,
+                        onUpdateGroupDescription = onUpdateGroupDescription,
+                        onLeaveGroup = onLeaveGroup,
+                        onDismiss = onDismiss,
+                    )
+                1 ->
+                    MembersTab(
+                        conversation = conversation,
+                        participants = participants,
+                        currentUserRole = currentUserRole,
+                        isOwner = isOwner,
+                        currentUserId = currentUserId,
+                        groupMutes = groupMutes,
+                        onRemoveParticipant = onRemoveParticipant,
+                        onUpdateGroupRoles = onUpdateGroupRoles,
+                        onUnmuteMember = onUnmuteMember,
+                    )
+                2 ->
+                    PermissionsTab(
+                        conversation = conversation,
+                        isOwner = isOwner,
+                        participants = participants,
+                        currentUserId = currentUserId,
+                        onUpdatePermissions = onUpdatePermissions,
+                        onUpdateSystemMessageConfig = onUpdateSystemMessageConfig,
+                        onUpdateModNotifyMode = onUpdateModNotifyMode,
+                        onTransferOwnership = onTransferOwnership,
+                    )
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -167,7 +172,7 @@ private fun GeneralTab(
     onUpdateGroupName: (String) -> Unit,
     onUpdateGroupDescription: (String) -> Unit,
     onLeaveGroup: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     var editingName by remember { mutableStateOf(conversationName) }
     var editingDescription by remember { mutableStateOf(conversation?.groupDescription ?: "") }
@@ -176,22 +181,23 @@ private fun GeneralTab(
     val canEdit = permissions.whoCanEditInfo.isAllowed(currentUserRole)
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
     ) {
         // Group name
         if (canEdit) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 OutlinedTextField(
                     value = editingName,
                     onValueChange = { editingName = it },
                     label = { Text(stringResource(Res.string.group_name_label)) },
                     modifier = Modifier.weight(1f),
-                    singleLine = true
+                    singleLine = true,
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 OutlinedButton(
@@ -200,7 +206,7 @@ private fun GeneralTab(
                             onUpdateGroupName(editingName.trim())
                         }
                     },
-                    enabled = editingName.isNotBlank() && editingName != conversationName
+                    enabled = editingName.isNotBlank() && editingName != conversationName,
                 ) {
                     Text(stringResource(Res.string.save))
                 }
@@ -225,23 +231,25 @@ private fun GeneralTab(
                 maxLines = 4,
                 supportingText = {
                     Text("${editingDescription.length}/${Constants.MAX_GROUP_DESCRIPTION_LENGTH}")
-                }
+                },
             )
             if (editingDescription != (conversation?.groupDescription ?: "")) {
                 OutlinedButton(
                     onClick = { onUpdateGroupDescription(editingDescription.trim()) },
-                    modifier = Modifier.align(Alignment.End)
+                    modifier = Modifier.align(Alignment.End),
                 ) {
                     Text(stringResource(Res.string.save_description))
                 }
             }
         } else {
             val desc = conversation?.groupDescription
-            if (!desc.isNullOrBlank()) Text(
-                text = desc,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (!desc.isNullOrBlank()) {
+                Text(
+                    text = desc,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -253,7 +261,7 @@ private fun GeneralTab(
             Button(
                 onClick = onLeaveGroup,
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
             ) {
                 Text(stringResource(Res.string.close_group), color = MaterialTheme.colorScheme.onError)
             }
@@ -261,13 +269,13 @@ private fun GeneralTab(
                 text = stringResource(Res.string.close_group_warning),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = 4.dp),
             )
         } else {
             Button(
                 onClick = onLeaveGroup,
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
             ) {
                 Text(stringResource(Res.string.leave_group), color = MaterialTheme.colorScheme.onError)
             }
@@ -285,7 +293,7 @@ private fun MembersTab(
     groupMutes: List<MuteInfo>,
     onRemoveParticipant: (String) -> Unit,
     onUpdateGroupRoles: (List<String>, List<String>) -> Unit,
-    onUnmuteMember: (String) -> Unit
+    onUnmuteMember: (String) -> Unit,
 ) {
     val permissions = conversation?.permissions ?: GroupPermissions()
 
@@ -293,47 +301,50 @@ private fun MembersTab(
         Text(
             text = stringResource(Res.string.participants_count, participants.size),
             style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.primary,
         )
 
         Spacer(modifier = Modifier.height(8.dp))
 
         LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 300.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 300.dp),
         ) {
             items(participants, key = { it.uid }) { user ->
                 val role = conversation?.roleOf(user.uid) ?: GroupRole.MEMBER
                 val isMuted = groupMutes.any { it.odId == user.uid && it.isActive }
 
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     val photoUrl = user.photoUrl
                     if (photoUrl != null) {
                         AsyncImage(
                             model = photoUrl,
                             contentDescription = user.displayName,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
+                            modifier =
+                                Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape),
+                            contentScale = ContentScale.Crop,
                         )
                     } else {
                         Surface(
                             modifier = Modifier.size(40.dp),
                             shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primaryContainer
+                            color = MaterialTheme.colorScheme.primaryContainer,
                         ) {
                             Icon(
                                 Icons.Default.Person,
                                 contentDescription = null,
                                 modifier = Modifier.padding(8.dp),
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
                         }
                     }
@@ -343,13 +354,13 @@ private fun MembersTab(
                             text = user.displayName,
                             style = MaterialTheme.typography.bodyLarge,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
                         )
                         if (isMuted) {
                             Text(
                                 text = stringResource(Res.string.muted),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.error
+                                color = MaterialTheme.colorScheme.error,
                             )
                         }
                     }
@@ -375,7 +386,7 @@ private fun MembersTab(
                                     GroupRole.OWNER -> {}
                                 }
                                 onUpdateGroupRoles(currentAdmins, currentMods)
-                            }
+                            },
                         )
                     } else {
                         RoleBadge(role = role)
@@ -389,14 +400,15 @@ private fun MembersTab(
                     }
 
                     // Remove button — check whoCanRemoveMembers permission
-                    if (permissions.whoCanRemoveMembers.isAllowed(currentUserRole)
-                        && user.uid != currentUserId && role != GroupRole.OWNER
+                    if (permissions.whoCanRemoveMembers.isAllowed(currentUserRole) &&
+                        user.uid != currentUserId &&
+                        role != GroupRole.OWNER
                     ) {
                         IconButton(onClick = { onRemoveParticipant(user.uid) }) {
                             Icon(
                                 Icons.Default.RemoveCircle,
                                 contentDescription = stringResource(Res.string.delete),
-                                tint = MaterialTheme.colorScheme.error
+                                tint = MaterialTheme.colorScheme.error,
                             )
                         }
                     }
@@ -415,7 +427,7 @@ private fun PermissionsTab(
     onUpdatePermissions: (GroupPermissions) -> Unit,
     onUpdateSystemMessageConfig: (SystemMessageConfig) -> Unit,
     onUpdateModNotifyMode: (String) -> Unit,
-    onTransferOwnership: (String) -> Unit
+    onTransferOwnership: (String) -> Unit,
 ) {
     val permissions = conversation?.permissions ?: GroupPermissions()
     val sysConfig = conversation?.systemMessageConfig ?: SystemMessageConfig()
@@ -427,17 +439,22 @@ private fun PermissionsTab(
         Text(
             text = stringResource(Res.string.only_owner_can_change_permissions),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         return
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
     ) {
-        Text(stringResource(Res.string.message_permissions), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        Text(
+            stringResource(Res.string.message_permissions),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
         Spacer(modifier = Modifier.height(8.dp))
 
         PermissionLevelSelector(stringResource(Res.string.perm_who_can_send), permissions.whoCanSend) {
@@ -463,7 +480,11 @@ private fun PermissionsTab(
         HorizontalDivider()
         Spacer(modifier = Modifier.height(8.dp))
 
-        Text(stringResource(Res.string.system_messages), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        Text(
+            stringResource(Res.string.system_messages),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
         Spacer(modifier = Modifier.height(8.dp))
 
         SysMessageRow(stringResource(Res.string.sys_member_joins), sysConfig.showJoins) {
@@ -483,7 +504,11 @@ private fun PermissionsTab(
         HorizontalDivider()
         Spacer(modifier = Modifier.height(8.dp))
 
-        Text(stringResource(Res.string.mod_notifications), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        Text(
+            stringResource(Res.string.mod_notifications),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
         Spacer(modifier = Modifier.height(8.dp))
 
         ModNotifyRow(stringResource(Res.string.notify_owner_only), modNotifyMode == "OWNER_ONLY") {
@@ -498,7 +523,7 @@ private fun PermissionsTab(
         // Transfer Ownership
         OutlinedButton(
             onClick = { showTransferDialog = true },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             Text(stringResource(Res.string.transfer_ownership))
         }
@@ -511,7 +536,7 @@ private fun PermissionsTab(
                 onUpdateSystemMessageConfig(SystemMessageConfig())
                 onUpdateModNotifyMode("ALL_ADMINS")
             },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             Text(stringResource(Res.string.reset_to_default))
         }
@@ -528,12 +553,16 @@ private fun PermissionsTab(
                     participants.filter { it.uid != currentUserId }.forEach { user ->
                         TextButton(
                             onClick = { transferTarget = user },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(
                                 text = user.displayName,
-                                color = if (transferTarget?.uid == user.uid) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface
+                                color =
+                                    if (transferTarget?.uid == user.uid) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    },
                             )
                         }
                     }
@@ -548,7 +577,7 @@ private fun PermissionsTab(
                             transferTarget = null
                         }
                     },
-                    enabled = transferTarget != null
+                    enabled = transferTarget != null,
                 ) {
                     Text(stringResource(Res.string.transfer), color = MaterialTheme.colorScheme.error)
                 }
@@ -560,7 +589,7 @@ private fun PermissionsTab(
                 }) {
                     Text(stringResource(Res.string.cancel))
                 }
-            }
+            },
         )
     }
 }
@@ -569,21 +598,22 @@ private fun PermissionsTab(
 private fun ModNotifyRow(
     label: String,
     isEnabled: Boolean,
-    onToggle: () -> Unit
+    onToggle: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(text = label, style = MaterialTheme.typography.bodyMedium)
             Text(
                 text = if (isEnabled) stringResource(Res.string.owner_only) else stringResource(Res.string.all_admins_and_mods),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Switch(checked = isEnabled, onCheckedChange = { onToggle() })
@@ -594,14 +624,15 @@ private fun ModNotifyRow(
 private fun SysMessageRow(
     label: String,
     isEnabled: Boolean,
-    onToggle: () -> Unit
+    onToggle: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(text = label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
         Switch(checked = isEnabled, onCheckedChange = { onToggle() })

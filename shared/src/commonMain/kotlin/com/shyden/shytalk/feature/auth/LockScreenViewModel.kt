@@ -36,16 +36,19 @@ class LockScreenViewModel(
     private val cryptoKeyPair: CryptoKeyPair,
     private val appLockRepository: AppLockRepository,
 ) : ViewModel() {
-
-    private val _state = MutableStateFlow(LockScreenState(
-        biometricAvailable = biometricAuth.isAvailable() && appLockRepository.isBiometricEnabled,
-    ))
+    private val _state =
+        MutableStateFlow(
+            LockScreenState(
+                biometricAvailable = biometricAuth.isAvailable() && appLockRepository.isBiometricEnabled,
+            ),
+        )
     val state: StateFlow<LockScreenState> = _state.asStateFlow()
 
     private var lockoutTimestamp: Long? = null
 
     /** Set by the screen/activity to handle lockout consequences (voice disconnect, notification suppression). */
     var onLockout: (() -> Unit)? = null
+
     /** Set by the screen/activity to undo lockout consequences (biometric grace period). */
     var onLockoutRecovered: (() -> Unit)? = null
 
@@ -55,8 +58,11 @@ class LockScreenViewModel(
 
     fun onPinBackspace() {
         _state.update {
-            if (it.pinInput.isNotEmpty()) it.copy(pinInput = it.pinInput.dropLast(1))
-            else it
+            if (it.pinInput.isNotEmpty()) {
+                it.copy(pinInput = it.pinInput.dropLast(1))
+            } else {
+                it
+            }
         }
     }
 
@@ -82,11 +88,12 @@ class LockScreenViewModel(
             _state.update { it.copy(isLoading = true, error = null) }
 
             val result = pinRepository.verifyPin(uniqueId, deviceId, pin)
-            result.onSuccess { verifyResult ->
-                handlePinResult(verifyResult)
-            }.onFailure { e ->
-                _state.update { it.copy(isLoading = false, error = e.message ?: "Verification failed") }
-            }
+            result
+                .onSuccess { verifyResult ->
+                    handlePinResult(verifyResult)
+                }.onFailure { e ->
+                    _state.update { it.copy(isLoading = false, error = e.message ?: "Verification failed") }
+                }
         }
     }
 
@@ -130,28 +137,36 @@ class LockScreenViewModel(
                     val uniqueId = appLockRepository.storedUniqueId
                     val deviceId = appLockRepository.storedDeviceId
                     if (uniqueId == null || deviceId == null) {
-                        _state.update { it.copy(isLoading = false, error = "Session expired. Please sign in again.", requiresReauth = true) }
+                        _state.update {
+                            it.copy(
+                                isLoading = false,
+                                error = "Session expired. Please sign in again.",
+                                requiresReauth = true,
+                            )
+                        }
                         return@launch
                     }
 
                     val challengeResult = biometricRepository.getChallenge(uniqueId, deviceId)
-                    challengeResult.onSuccess { nonce ->
-                        val signatureBytes = cryptoKeyPair.sign(nonce.encodeToByteArray())
-                        if (signatureBytes == null) {
-                            _state.update { it.copy(isLoading = false, error = "Signing failed") }
-                            return@launch
-                        }
-                        val signatureBase64 = Base64.encode(signatureBytes)
-                        val verifyResult = biometricRepository.verify(uniqueId, deviceId, signatureBase64)
-                        verifyResult.onSuccess {
-                            checkBiometricGracePeriod()
-                            _state.update { it.copy(isLoading = false, unlocked = true) }
+                    challengeResult
+                        .onSuccess { nonce ->
+                            val signatureBytes = cryptoKeyPair.sign(nonce.encodeToByteArray())
+                            if (signatureBytes == null) {
+                                _state.update { it.copy(isLoading = false, error = "Signing failed") }
+                                return@launch
+                            }
+                            val signatureBase64 = Base64.encode(signatureBytes)
+                            val verifyResult = biometricRepository.verify(uniqueId, deviceId, signatureBase64)
+                            verifyResult
+                                .onSuccess {
+                                    checkBiometricGracePeriod()
+                                    _state.update { it.copy(isLoading = false, unlocked = true) }
+                                }.onFailure { e ->
+                                    _state.update { it.copy(isLoading = false, error = e.message ?: "Biometric verification failed") }
+                                }
                         }.onFailure { e ->
-                            _state.update { it.copy(isLoading = false, error = e.message ?: "Biometric verification failed") }
+                            _state.update { it.copy(isLoading = false, error = e.message ?: "Could not start biometric verification") }
                         }
-                    }.onFailure { e ->
-                        _state.update { it.copy(isLoading = false, error = e.message ?: "Could not start biometric verification") }
-                    }
                 }
                 is BiometricResult.Fallback -> {
                     _state.update { it.copy(isLoading = false) }
@@ -171,7 +186,9 @@ class LockScreenViewModel(
     }
 
     /** KMP-safe epoch millis using the platform expect/actual function. */
-    private fun epochMillis(): Long = com.shyden.shytalk.core.util.currentTimeMillis()
+    private fun epochMillis(): Long =
+        com.shyden.shytalk.core.util
+            .currentTimeMillis()
 
     companion object {
         private const val BIOMETRIC_GRACE_PERIOD_MS = 10_000L

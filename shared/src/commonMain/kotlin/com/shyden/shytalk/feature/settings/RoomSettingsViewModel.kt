@@ -5,9 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.model.ChatRoom
 import com.shyden.shytalk.core.model.SeatRequest
 import com.shyden.shytalk.core.util.Constants.SEAT_REQUEST_IMMEDIATE_THRESHOLD_MS
+import com.shyden.shytalk.core.util.LanguagePreference
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
-import com.shyden.shytalk.core.util.LanguagePreference
 import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.RoomRepository
@@ -32,16 +32,15 @@ data class RoomSettingsUiState(
     val isSuperShy: Boolean = false,
     val autoTranslate: Boolean = false,
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
 )
 
 class RoomSettingsViewModel(
     private val roomRepository: RoomRepository,
     private val seatRequestRepository: SeatRequestRepository,
     private val authRepository: AuthRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
 ) : ViewModel() {
-
     companion object {
         private const val TAG = "RoomSettingsViewModel"
     }
@@ -67,7 +66,7 @@ class RoomSettingsViewModel(
                             it.copy(
                                 minGiftAnimationValue = result.data.minGiftAnimationValue,
                                 isSuperShy = result.data.isSuperShy,
-                                autoTranslate = LanguagePreference.getAutoTranslate()
+                                autoTranslate = LanguagePreference.getAutoTranslate(),
                             )
                         }
                     }
@@ -78,19 +77,17 @@ class RoomSettingsViewModel(
         viewModelScope.launch {
             combine(
                 roomRepository.getRoomFlow(roomId),
-                seatRequestRepository.getPendingRequests(roomId)
+                seatRequestRepository.getPendingRequests(roomId),
             ) { room, requests ->
                 room to requests
+            }.catch { e ->
+                _uiState.update { it.copy(error = e.message) }
+            }.collect { (room, requests) ->
+                _uiState.update { it.copy(room = room, pendingRequests = requests) }
+                if (room != null) {
+                    resolveUserNames(room)
+                }
             }
-                .catch { e ->
-                    _uiState.update { it.copy(error = e.message) }
-                }
-                .collect { (room, requests) ->
-                    _uiState.update { it.copy(room = room, pendingRequests = requests) }
-                    if (room != null) {
-                        resolveUserNames(room)
-                    }
-                }
         }
     }
 
@@ -101,16 +98,19 @@ class RoomSettingsViewModel(
         val newIds = allIds.filter { it !in resolvedIds }
         if (newIds.isEmpty()) return
 
-        val resolved = coroutineScope {
-            newIds.map { id ->
-                async {
-                    when (val result = userRepository.getUser(id)) {
-                        is Resource.Success -> id to result.data.displayName.ifEmpty { id.take(8) }
-                        else -> null
-                    }
-                }
-            }.awaitAll().filterNotNull()
-        }
+        val resolved =
+            coroutineScope {
+                newIds
+                    .map { id ->
+                        async {
+                            when (val result = userRepository.getUser(id)) {
+                                is Resource.Success -> id to result.data.displayName.ifEmpty { id.take(8) }
+                                else -> null
+                            }
+                        }
+                    }.awaitAll()
+                    .filterNotNull()
+            }
 
         if (resolved.isNotEmpty()) {
             val names = _uiState.value.userNames.toMutableMap()
@@ -146,7 +146,10 @@ class RoomSettingsViewModel(
         }
     }
 
-    fun inviteUser(userId: String, userName: String) {
+    fun inviteUser(
+        userId: String,
+        userName: String,
+    ) {
         val room = _uiState.value.room ?: return
         // Owner can always invite; hosts only when requireApproval is OFF
         if (currentUserId != room.ownerId && (currentUserId !in room.hostIds || room.requireApproval)) return
@@ -168,9 +171,14 @@ class RoomSettingsViewModel(
             val nowMs = currentTimeMillis()
             val delayMs = nowMs - request.createdAt
 
-            when (val result = seatRequestRepository.approveRequest(
-                currentRoomId, request.requestId, currentUserId
-            )) {
+            when (
+                val result =
+                    seatRequestRepository.approveRequest(
+                        currentRoomId,
+                        request.requestId,
+                        currentUserId,
+                    )
+            ) {
                 is Resource.Success -> {
                     val approved = result.data
                     if (delayMs <= SEAT_REQUEST_IMMEDIATE_THRESHOLD_MS) {
@@ -207,10 +215,11 @@ class RoomSettingsViewModel(
         val isHost = currentUserId in room.hostIds
         if (!isHost && room.requireApproval) return
         viewModelScope.launch {
-            val emptySeat = (1 until com.shyden.shytalk.core.util.Constants.MAX_SEATS).firstOrNull { i ->
-                val seat = room.seats[i.toString()]
-                seat != null && seat.state != com.shyden.shytalk.core.model.SeatState.OCCUPIED
-            } ?: return@launch
+            val emptySeat =
+                (1 until com.shyden.shytalk.core.util.Constants.MAX_SEATS).firstOrNull { i ->
+                    val seat = room.seats[i.toString()]
+                    seat != null && seat.state != com.shyden.shytalk.core.model.SeatState.OCCUPIED
+                } ?: return@launch
             if (isHost) {
                 // Hosts sit directly without a request
                 roomRepository.takeSeat(currentRoomId, emptySeat, currentUserId)
@@ -220,7 +229,7 @@ class RoomSettingsViewModel(
                     roomId = currentRoomId,
                     userId = currentUserId,
                     userName = userName,
-                    seatIndex = emptySeat
+                    seatIndex = emptySeat,
                 )
             }
         }

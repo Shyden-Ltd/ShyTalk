@@ -17,13 +17,12 @@ data class TransactionHistoryUiState(
     val transactions: List<Transaction> = emptyList(),
     val isLoading: Boolean = true,
     val selectedFilter: String? = null, // null = "All"
-    val error: String? = null
+    val error: String? = null,
 )
 
 class TransactionHistoryViewModel(
-    private val economyRepository: EconomyRepository
+    private val economyRepository: EconomyRepository,
 ) : ViewModel() {
-
     companion object {
         private const val TAG = "TransactionHistoryVM"
     }
@@ -48,24 +47,26 @@ class TransactionHistoryViewModel(
             val filter = _uiState.value.selectedFilter
 
             // "Gifts" is a client-side composite filter for GIFT_SENT + GIFT_RECEIVED
-            val serverFilter = when (filter) {
-                "Gifts" -> null // load all, filter client-side
-                "Purchases" -> TransactionType.PURCHASE.name
-                "Gacha" -> TransactionType.GACHA_PULL.name
-                "Rewards" -> TransactionType.DAILY_REWARD.name
-                "Redemptions" -> TransactionType.BEAN_REDEEM.name
-                else -> null // "All"
-            }
+            val serverFilter =
+                when (filter) {
+                    "Gifts" -> null // load all, filter client-side
+                    "Purchases" -> TransactionType.PURCHASE.name
+                    "Gacha" -> TransactionType.GACHA_PULL.name
+                    "Rewards" -> TransactionType.DAILY_REWARD.name
+                    "Redemptions" -> TransactionType.BEAN_REDEEM.name
+                    else -> null // "All"
+                }
 
             when (val result = economyRepository.getAllTransactions(serverFilter)) {
                 is Resource.Success -> {
-                    val transactions = if (filter == "Gifts") {
-                        result.data.filter {
-                            it.type == TransactionType.GIFT_SENT || it.type == TransactionType.GIFT_RECEIVED
+                    val transactions =
+                        if (filter == "Gifts") {
+                            result.data.filter {
+                                it.type == TransactionType.GIFT_SENT || it.type == TransactionType.GIFT_RECEIVED
+                            }
+                        } else {
+                            result.data
                         }
-                    } else {
-                        result.data
-                    }
                     _uiState.update { it.copy(transactions = transactions, isLoading = false) }
                 }
                 is Resource.Error -> {

@@ -8,7 +8,9 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import java.lang.ref.WeakReference
 import kotlin.coroutines.resume
 
-actual class BiometricAuth(private val appContext: Context) {
+actual class BiometricAuth(
+    private val appContext: Context,
+) {
     private var activityRef: WeakReference<FragmentActivity>? = null
 
     /** Must be called from the Activity before authenticate() works. */
@@ -22,7 +24,10 @@ actual class BiometricAuth(private val appContext: Context) {
             BiometricManager.BIOMETRIC_SUCCESS
     }
 
-    actual suspend fun authenticate(title: String, subtitle: String): BiometricResult =
+    actual suspend fun authenticate(
+        title: String,
+        subtitle: String,
+    ): BiometricResult =
         suspendCancellableCoroutine { continuation ->
             val activity = activityRef?.get()
             if (activity == null) {
@@ -30,33 +35,39 @@ actual class BiometricAuth(private val appContext: Context) {
                 return@suspendCancellableCoroutine
             }
 
-            val promptInfo = BiometricPrompt.PromptInfo.Builder()
-                .setTitle(title)
-                .setSubtitle(subtitle)
-                .setNegativeButtonText("Use PIN")
-                .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-                .build()
+            val promptInfo =
+                BiometricPrompt.PromptInfo
+                    .Builder()
+                    .setTitle(title)
+                    .setSubtitle(subtitle)
+                    .setNegativeButtonText("Use PIN")
+                    .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                    .build()
 
-            val callback = object : BiometricPrompt.AuthenticationCallback() {
-                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    if (continuation.isActive) continuation.resume(BiometricResult.Success)
-                }
+            val callback =
+                object : BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                        if (continuation.isActive) continuation.resume(BiometricResult.Success)
+                    }
 
-                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    if (!continuation.isActive) return
-                    if (errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON ||
-                        errorCode == BiometricPrompt.ERROR_USER_CANCELED
+                    override fun onAuthenticationError(
+                        errorCode: Int,
+                        errString: CharSequence,
                     ) {
-                        continuation.resume(BiometricResult.Fallback)
-                    } else {
-                        continuation.resume(BiometricResult.Error(errString.toString()))
+                        if (!continuation.isActive) return
+                        if (errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON ||
+                            errorCode == BiometricPrompt.ERROR_USER_CANCELED
+                        ) {
+                            continuation.resume(BiometricResult.Fallback)
+                        } else {
+                            continuation.resume(BiometricResult.Error(errString.toString()))
+                        }
+                    }
+
+                    override fun onAuthenticationFailed() {
+                        // Individual attempt failed but prompt stays open
                     }
                 }
-
-                override fun onAuthenticationFailed() {
-                    // Individual attempt failed but prompt stays open
-                }
-            }
 
             val executor = activity.mainExecutor
             val prompt = BiometricPrompt(activity, executor, callback)

@@ -48,57 +48,60 @@ import org.jetbrains.compose.resources.stringResource
 fun GiftPreviewPopup(
     gift: Gift,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     var showEffect by remember { mutableStateOf(false) }
 
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.6f))
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() }
-            ) { onDismiss() },
-        contentAlignment = Alignment.Center
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.6f))
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                ) { onDismiss() },
+        contentAlignment = Alignment.Center,
     ) {
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
             shadowElevation = 8.dp,
-            modifier = Modifier
-                .fillMaxWidth(0.75f)
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() }
-                ) { /* consume tap on card */ }
+            modifier =
+                Modifier
+                    .fillMaxWidth(0.75f)
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                    ) { /* consume tap on card */ },
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(24.dp)
+                modifier = Modifier.padding(24.dp),
             ) {
                 // Large gift icon
                 if (gift.iconUrl.isNotBlank()) {
                     AsyncImage(
                         model = gift.iconUrl,
                         contentDescription = gift.name,
-                        modifier = Modifier
-                            .size(96.dp)
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
+                        modifier =
+                            Modifier
+                                .size(96.dp)
+                                .clip(CircleShape),
+                        contentScale = ContentScale.Crop,
                     )
                 } else {
                     Surface(
                         modifier = Modifier.size(96.dp),
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer
+                        color = MaterialTheme.colorScheme.primaryContainer,
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Text(
                                 text = gift.name.take(2).uppercase(),
                                 fontSize = 28.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
                         }
                     }
@@ -111,7 +114,7 @@ fun GiftPreviewPopup(
                     text = gift.name,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -121,7 +124,7 @@ fun GiftPreviewPopup(
                     text = "\uD83E\uDE99 ${gift.coinValue}",
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
-                    color = Color(0xFFFFD700)
+                    color = Color(0xFFFFD700),
                 )
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -129,15 +132,16 @@ fun GiftPreviewPopup(
                 // Play Effect button
                 Button(
                     onClick = { showEffect = true },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    ),
-                    shape = RoundedCornerShape(50)
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
+                    shape = RoundedCornerShape(50),
                 ) {
                     Text(
                         text = stringResource(Res.string.play_effect),
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
                     )
                 }
             }
@@ -146,13 +150,14 @@ fun GiftPreviewPopup(
 
     // Full-screen animation preview
     if (showEffect) {
-        val previewEvent = remember(gift.id) {
-            GiftEvent(giftId = gift.id, giftName = gift.name)
-        }
+        val previewEvent =
+            remember(gift.id) {
+                GiftEvent(giftId = gift.id, giftName = gift.name)
+            }
         GiftEffectOverlay(
             event = previewEvent,
             onFinished = { showEffect = false },
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
         )
     }
 }

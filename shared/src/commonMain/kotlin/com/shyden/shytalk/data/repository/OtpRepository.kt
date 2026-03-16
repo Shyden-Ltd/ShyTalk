@@ -5,5 +5,8 @@ interface OtpRepository {
     suspend fun sendOtp(email: String): Result<Unit>
 
     /** Verify OTP code. Returns Firebase custom token on success. */
-    suspend fun verifyOtp(email: String, code: String): Result<String>
+    suspend fun verifyOtp(
+        email: String,
+        code: String,
+    ): Result<String>
 }

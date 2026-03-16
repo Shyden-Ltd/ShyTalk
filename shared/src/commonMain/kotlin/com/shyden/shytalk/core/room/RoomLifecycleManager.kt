@@ -12,15 +12,25 @@ interface RoomLifecycleManager {
     val currentUserId: String
     var isAppInForeground: Boolean
     val disconnectedUserIds: StateFlow<Set<String>>
+
     /** Shared user cache that survives ViewModel destruction. */
     val sharedUserCache: Map<String, User>
+
     fun isInRoom(roomId: String): Boolean
+
     fun trackRoom(roomId: String)
+
     fun updateTrackedRoom(room: ChatRoom)
+
     fun updateSharedUserCache(users: Map<String, User>)
+
     fun untrackRoom()
+
     fun setRoomScreenVisible(visible: Boolean)
+
     fun markLeaveStarted(roomId: String)
+
     fun markLeaveCompleted(roomId: String)
+
     suspend fun awaitLeaveCompletion(roomId: String)
 }

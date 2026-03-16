@@ -32,8 +32,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 
 // Filter keys (non-localized, used as identifiers)
@@ -44,7 +44,7 @@ private val FILTER_KEYS = listOf("All", "Purchases", "Gifts", "Gacha", "Rewards"
 fun TransactionHistoryScreen(
     viewModel: TransactionHistoryViewModel,
     onNavigateBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -56,39 +56,46 @@ fun TransactionHistoryScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.go_back))
                     }
-                }
+                },
             )
         },
-        modifier = modifier
+        modifier = modifier,
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding),
         ) {
             // Filter chips
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                val filterLabels = mapOf(
-                    "All" to stringResource(Res.string.filter_all),
-                    "Purchases" to stringResource(Res.string.filter_purchases),
-                    "Gifts" to stringResource(Res.string.filter_gifts),
-                    "Gacha" to stringResource(Res.string.filter_gacha),
-                    "Rewards" to stringResource(Res.string.filter_rewards),
-                    "Redemptions" to stringResource(Res.string.filter_redemptions)
-                )
+                val filterLabels =
+                    mapOf(
+                        "All" to stringResource(Res.string.filter_all),
+                        "Purchases" to stringResource(Res.string.filter_purchases),
+                        "Gifts" to stringResource(Res.string.filter_gifts),
+                        "Gacha" to stringResource(Res.string.filter_gacha),
+                        "Rewards" to stringResource(Res.string.filter_rewards),
+                        "Redemptions" to stringResource(Res.string.filter_redemptions),
+                    )
                 FILTER_KEYS.forEach { filter ->
-                    val selected = if (filter == "All") state.selectedFilter == null
-                    else state.selectedFilter == filter
+                    val selected =
+                        if (filter == "All") {
+                            state.selectedFilter == null
+                        } else {
+                            state.selectedFilter == filter
+                        }
                     FilterChip(
                         selected = selected,
                         onClick = { viewModel.setFilter(if (filter == "All") null else filter) },
-                        label = { Text(filterLabels[filter] ?: filter) }
+                        label = { Text(filterLabels[filter] ?: filter) },
                     )
                 }
             }
@@ -97,7 +104,7 @@ fun TransactionHistoryScreen(
                 state.isLoading -> {
                     Box(
                         modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.Center,
                     ) {
                         CircularProgressIndicator()
                     }
@@ -105,22 +112,29 @@ fun TransactionHistoryScreen(
                 state.transactions.isEmpty() -> {
                     Box(
                         modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            text = if (state.selectedFilter != null) stringResource(Res.string.no_filtered_transactions, state.selectedFilter?.lowercase() ?: "")
-                            else stringResource(Res.string.no_transactions_yet),
+                            text =
+                                if (state.selectedFilter !=
+                                    null
+                                ) {
+                                    stringResource(Res.string.no_filtered_transactions, state.selectedFilter?.lowercase() ?: "")
+                                } else {
+                                    stringResource(Res.string.no_transactions_yet)
+                                },
                             style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
                 else -> {
                     LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp)
-                            .testTag("transactions_list")
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp)
+                                .testTag("transactions_list"),
                     ) {
                         items(state.transactions, key = { it.id }) { transaction ->
                             TransactionRow(transaction)

@@ -5,15 +5,13 @@ import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.model.RoomState
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Constants
+import com.shyden.shytalk.core.util.LanguagePreference
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.UiText
-import com.shyden.shytalk.core.util.logE
-import com.shyden.shytalk.core.util.logI
-import com.shyden.shytalk.resources.Res
-import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.core.util.compressImage
 import com.shyden.shytalk.core.util.currentTimeMillis
-import com.shyden.shytalk.core.util.LanguagePreference
+import com.shyden.shytalk.core.util.logE
+import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.EconomyRepository
 import com.shyden.shytalk.data.repository.IdentityRepository
@@ -21,12 +19,13 @@ import com.shyden.shytalk.data.repository.ReportRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.StorageRepository
 import com.shyden.shytalk.data.repository.UserRepository
+import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -56,7 +55,7 @@ data class ProfileUiState(
     val reportSubmitted: Boolean = false,
     val reportError: UiText? = null,
     val isPurchasingSuperShy: Boolean = false,
-    val isRefreshing: Boolean = false
+    val isRefreshing: Boolean = false,
 )
 
 class ProfileViewModel(
@@ -66,9 +65,8 @@ class ProfileViewModel(
     private val roomRepository: RoomRepository,
     private val reportRepository: ReportRepository,
     private val economyRepository: EconomyRepository,
-    private val identityRepository: IdentityRepository
+    private val identityRepository: IdentityRepository,
 ) : ViewModel() {
-
     companion object {
         private const val TAG = "ProfileViewModel"
     }
@@ -107,8 +105,9 @@ class ProfileViewModel(
             userRepository.userUpdates.collect { updatedUser ->
                 val currentUser = _uiState.value.user ?: return@collect
                 if (updatedUser.uid == currentUser.uid) {
-                    val isOnline = !updatedUser.hideOnlineStatus &&
-                        (currentTimeMillis() - updatedUser.lastSeenAt) < Constants.ONLINE_THRESHOLD_MS
+                    val isOnline =
+                        !updatedUser.hideOnlineStatus &&
+                            (currentTimeMillis() - updatedUser.lastSeenAt) < Constants.ONLINE_THRESHOLD_MS
                     val activeRoomId = resolveActiveRoomId(updatedUser.currentRoomId, isOnline)
                     _uiState.update { state ->
                         state.copy(
@@ -119,7 +118,7 @@ class ProfileViewModel(
                             lastActiveText = computeLastActiveText(updatedUser),
                             activeRoomId = activeRoomId,
                             stalkerCount = if (state.isOwnProfile) updatedUser.stalkerCount.toInt() else state.stalkerCount,
-                            newStalkerCount = if (state.isOwnProfile) updatedUser.newStalkerCount.toInt() else state.newStalkerCount
+                            newStalkerCount = if (state.isOwnProfile) updatedUser.newStalkerCount.toInt() else state.newStalkerCount,
                         )
                     }
                 }
@@ -128,7 +127,10 @@ class ProfileViewModel(
     }
 
     /** Returns the roomId only if the user is online AND the room is still active. */
-    private suspend fun resolveActiveRoomId(currentRoomId: String?, isOnline: Boolean): String? {
+    private suspend fun resolveActiveRoomId(
+        currentRoomId: String?,
+        isOnline: Boolean,
+    ): String? {
         if (!isOnline || currentRoomId.isNullOrEmpty()) return null
         val room = roomRepository.getRoomFlow(currentRoomId).firstOrNull()
         return if (room != null && room.state in listOf(RoomState.ACTIVE, RoomState.OWNER_AWAY)) {
@@ -153,8 +155,9 @@ class ProfileViewModel(
                     val user = result.data
                     val followerCount = user.followerIds.size
                     val followingCount = user.followingIds.size
-                    val isOnline = !user.hideOnlineStatus &&
-                        (currentTimeMillis() - user.lastSeenAt) < Constants.ONLINE_THRESHOLD_MS
+                    val isOnline =
+                        !user.hideOnlineStatus &&
+                            (currentTimeMillis() - user.lastSeenAt) < Constants.ONLINE_THRESHOLD_MS
 
                     val activeRoomId = resolveActiveRoomId(user.currentRoomId, isOnline)
 
@@ -165,7 +168,7 @@ class ProfileViewModel(
                                 it.copy(
                                     isLoading = false,
                                     user = user,
-                                    isTargetSuspended = true
+                                    isTargetSuspended = true,
                                 )
                             }
                             return@launch
@@ -173,13 +176,14 @@ class ProfileViewModel(
 
                         // Fetch viewer's blocked list in parallel with profile load
                         val blockedByTarget = user.blockedUserIds.contains(currentUid)
-                        val viewerBlockedTarget = coroutineScope {
-                            val blockedDeferred = async { userRepository.getBlockedUserIds(currentUid) }
-                            when (val blockedResult = blockedDeferred.await()) {
-                                is Resource.Success -> blockedResult.data.contains(profileUserId)
-                                else -> false
+                        val viewerBlockedTarget =
+                            coroutineScope {
+                                val blockedDeferred = async { userRepository.getBlockedUserIds(currentUid) }
+                                when (val blockedResult = blockedDeferred.await()) {
+                                    is Resource.Success -> blockedResult.data.contains(profileUserId)
+                                    else -> false
+                                }
                             }
-                        }
                         val isFollowing = user.followerIds.contains(currentUid)
                         _uiState.update {
                             it.copy(
@@ -193,7 +197,7 @@ class ProfileViewModel(
                                 isOnline = isOnline,
                                 lastActiveText = computeLastActiveText(user),
                                 hideFollowing = user.hideFollowing,
-                                activeRoomId = activeRoomId
+                                activeRoomId = activeRoomId,
                             )
                         }
                         // Record profile visit (fire-and-forget)
@@ -214,7 +218,7 @@ class ProfileViewModel(
                                 hideFollowing = user.hideFollowing,
                                 activeRoomId = activeRoomId,
                                 stalkerCount = user.stalkerCount.toInt(),
-                                newStalkerCount = user.newStalkerCount.toInt()
+                                newStalkerCount = user.newStalkerCount.toInt(),
                             )
                         }
                         if (user.uniqueId == 0L) {
@@ -240,7 +244,10 @@ class ProfileViewModel(
         }
     }
 
-    fun saveProfile(displayName: String, dateOfBirth: Long) {
+    fun saveProfile(
+        displayName: String,
+        dateOfBirth: Long,
+    ) {
         logI(TAG, "Creating new user profile")
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
@@ -252,15 +259,18 @@ class ProfileViewModel(
             }
             val (provider, identifier) = providerInfo
 
-            when (val result = identityRepository.createUser(
-                provider = provider,
-                identifier = identifier,
-                displayName = displayName,
-                email = authRepository.currentUserEmail,
-                profilePhotoUrl = null,
-                dateOfBirth = dateOfBirth,
-                language = LanguagePreference.get()
-            )) {
+            when (
+                val result =
+                    identityRepository.createUser(
+                        provider = provider,
+                        identifier = identifier,
+                        displayName = displayName,
+                        email = authRepository.currentUserEmail,
+                        profilePhotoUrl = null,
+                        dateOfBirth = dateOfBirth,
+                        language = LanguagePreference.get(),
+                    )
+            ) {
                 is Resource.Success -> {
                     val uniqueId = result.data.uniqueId
                     logI(TAG, "User created with uniqueId=$uniqueId")
@@ -268,13 +278,14 @@ class ProfileViewModel(
                     authRepository.resolvedUniqueId = uniqueId.toString()
                     // Refresh token to pick up custom claims (uniqueId)
                     identityRepository.forceRefreshToken()
-                    val user = User(
-                        uid = uniqueId.toString(),
-                        uniqueId = uniqueId,
-                        displayName = displayName,
-                        dateOfBirth = dateOfBirth,
-                        email = authRepository.currentUserEmail
-                    )
+                    val user =
+                        User(
+                            uid = uniqueId.toString(),
+                            uniqueId = uniqueId,
+                            displayName = displayName,
+                            dateOfBirth = dateOfBirth,
+                            email = authRepository.currentUserEmail,
+                        )
                     _uiState.update { it.copy(isLoading = false, profileSaved = true, user = user) }
                 }
                 is Resource.Error -> {
@@ -317,15 +328,20 @@ class ProfileViewModel(
         }
     }
 
-    fun saveProfileEdits(displayName: String, description: String, nationality: String?) {
+    fun saveProfileEdits(
+        displayName: String,
+        description: String,
+        nationality: String?,
+    ) {
         val userId = authRepository.currentUserId ?: return
         logI(TAG, "Updating profile for userId=$userId")
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            val fields = mutableMapOf<String, Any?>(
-                "displayName" to displayName,
-                "description" to description
-            )
+            val fields =
+                mutableMapOf<String, Any?>(
+                    "displayName" to displayName,
+                    "description" to description,
+                )
             if (nationality != null) {
                 fields["nationality"] = nationality
             }
@@ -335,11 +351,12 @@ class ProfileViewModel(
                         it.copy(
                             isLoading = false,
                             isEditing = false,
-                            user = it.user?.copy(
-                                displayName = displayName,
-                                description = description,
-                                nationality = nationality ?: it.user.nationality
-                            )
+                            user =
+                                it.user?.copy(
+                                    displayName = displayName,
+                                    description = description,
+                                    nationality = nationality ?: it.user.nationality,
+                                ),
                         )
                     }
                 }
@@ -370,7 +387,7 @@ class ProfileViewModel(
         folder: String,
         profileField: String,
         oldUrl: String?,
-        updateUser: (String) -> User?
+        updateUser: (String) -> User?,
     ) {
         val userId = authRepository.currentUserId ?: return
         viewModelScope.launch {
@@ -416,7 +433,7 @@ class ProfileViewModel(
                         it.copy(
                             isBlockedByViewer = true,
                             isFollowingTarget = false,
-                            followerCount = if (it.isFollowingTarget) it.followerCount - 1 else it.followerCount
+                            followerCount = if (it.isFollowingTarget) it.followerCount - 1 else it.followerCount,
                         )
                     }
                 }
@@ -455,7 +472,7 @@ class ProfileViewModel(
                         it.copy(
                             isFollowingTarget = false,
                             followerCount = it.followerCount - 1,
-                            error = UiText.res(Res.string.error_follow_user)
+                            error = UiText.res(Res.string.error_follow_user),
                         )
                     }
                 }
@@ -475,7 +492,7 @@ class ProfileViewModel(
                         it.copy(
                             isFollowingTarget = true,
                             followerCount = it.followerCount + 1,
-                            error = UiText.res(Res.string.error_unfollow_user)
+                            error = UiText.res(Res.string.error_unfollow_user),
                         )
                     }
                 }
@@ -491,27 +508,39 @@ class ProfileViewModel(
     fun reportUser(
         reason: String,
         description: String,
-        evidenceImages: List<Pair<ByteArray, String>> = emptyList()
+        evidenceImages: List<Pair<ByteArray, String>> = emptyList(),
     ) {
         val currentUid = authRepository.currentUserId ?: return
         val targetUser = _uiState.value.user ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(isSubmittingReport = true, reportError = null) }
 
-            val currentUser = when (val result = userRepository.getUser(currentUid)) {
-                is Resource.Success -> result.data
-                else -> {
-                    _uiState.update { it.copy(isSubmittingReport = false, reportError = UiText.res(Res.string.error_could_not_submit_report)) }
-                    return@launch
+            val currentUser =
+                when (val result = userRepository.getUser(currentUid)) {
+                    is Resource.Success -> result.data
+                    else -> {
+                        _uiState.update {
+                            it.copy(
+                                isSubmittingReport = false,
+                                reportError = UiText.res(Res.string.error_could_not_submit_report),
+                            )
+                        }
+                        return@launch
+                    }
                 }
-            }
 
             // Upload evidence
             val evidenceUrls = mutableListOf<String>()
             for ((bytes, mimeType) in evidenceImages) {
-                when (val result = storageRepository.uploadImage(
-                    currentUser.uid, "report_evidence", bytes, mimeType
-                )) {
+                when (
+                    val result =
+                        storageRepository.uploadImage(
+                            currentUser.uid,
+                            "report_evidence",
+                            bytes,
+                            mimeType,
+                        )
+                ) {
                     is Resource.Success -> evidenceUrls.add(result.data)
                     is Resource.Error -> {
                         _uiState.update { it.copy(isSubmittingReport = false, reportError = UiText.res(Res.string.error_upload_evidence)) }
@@ -521,18 +550,20 @@ class ProfileViewModel(
                 }
             }
 
-            when (reportRepository.reportUser(
-                reporterId = currentUser.uid,
-                reporterName = currentUser.displayName,
-                reporterUniqueId = currentUser.uniqueId,
-                reportedUserId = targetUser.uid,
-                reportedUserName = targetUser.displayName,
-                reportedUserUniqueId = targetUser.uniqueId,
-                conversationId = "",
-                reason = reason,
-                description = description,
-                evidenceUrls = evidenceUrls
-            )) {
+            when (
+                reportRepository.reportUser(
+                    reporterId = currentUser.uid,
+                    reporterName = currentUser.displayName,
+                    reporterUniqueId = currentUser.uniqueId,
+                    reportedUserId = targetUser.uid,
+                    reportedUserName = targetUser.displayName,
+                    reportedUserUniqueId = targetUser.uniqueId,
+                    conversationId = "",
+                    reason = reason,
+                    description = description,
+                    evidenceUrls = evidenceUrls,
+                )
+            ) {
                 is Resource.Success -> {
                     _uiState.update { it.copy(isSubmittingReport = false, reportSubmitted = true) }
                 }
@@ -548,7 +579,10 @@ class ProfileViewModel(
         _uiState.update { it.copy(reportSubmitted = false, reportError = null) }
     }
 
-    fun validateSuperShyPurchase(productId: String, purchaseToken: String) {
+    fun validateSuperShyPurchase(
+        productId: String,
+        purchaseToken: String,
+    ) {
         viewModelScope.launch {
             when (val result = economyRepository.purchaseSubscription(productId, purchaseToken)) {
                 is Resource.Success -> {

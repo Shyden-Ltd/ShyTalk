@@ -7,13 +7,16 @@ import android.os.Build
 import android.provider.Settings
 import android.telephony.TelephonyManager
 
-actual class DeviceInfoCollector(private val context: Context) {
+actual class DeviceInfoCollector(
+    private val context: Context,
+) {
     @SuppressLint("HardwareIds")
     actual fun collect(): DeviceInfo {
-        val deviceId = Settings.Secure.getString(
-            context.contentResolver,
-            Settings.Secure.ANDROID_ID
-        ) ?: "unknown"
+        val deviceId =
+            Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ANDROID_ID,
+            ) ?: "unknown"
 
         val activityManager =
             context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
@@ -29,19 +32,21 @@ actual class DeviceInfoCollector(private val context: Context) {
             context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
         val carrier = telephonyManager?.networkOperatorName
 
-        val packageInfo = try {
-            context.packageManager.getPackageInfo(context.packageName, 0)
-        } catch (_: Exception) {
-            null
-        }
+        val packageInfo =
+            try {
+                context.packageManager.getPackageInfo(context.packageName, 0)
+            } catch (_: Exception) {
+                null
+            }
 
         val appVersion = packageInfo?.versionName
-        val buildNumber = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            packageInfo?.longVersionCode?.toInt()
-        } else {
-            @Suppress("DEPRECATION")
-            packageInfo?.versionCode
-        }
+        val buildNumber =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                packageInfo?.longVersionCode?.toInt()
+            } else {
+                @Suppress("DEPRECATION")
+                packageInfo?.versionCode
+            }
 
         return DeviceInfo(
             deviceId = deviceId,
@@ -53,10 +58,13 @@ actual class DeviceInfoCollector(private val context: Context) {
             totalRamMb = totalRamMb,
             appVersion = appVersion,
             buildNumber = buildNumber,
-            locale = java.util.Locale.getDefault().toLanguageTag(),
+            locale =
+                java.util.Locale
+                    .getDefault()
+                    .toLanguageTag(),
             networkType = null, // Would need ConnectivityManager with permission
             carrierName = carrier,
-            firebaseInstallationId = null // Set later by the caller if needed
+            firebaseInstallationId = null, // Set later by the caller if needed
         )
     }
 }

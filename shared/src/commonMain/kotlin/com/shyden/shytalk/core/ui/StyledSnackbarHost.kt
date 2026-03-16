@@ -16,7 +16,7 @@ fun StyledSnackbarHost(hostState: SnackbarHostState) {
             containerColor = MaterialTheme.colorScheme.errorContainer,
             contentColor = MaterialTheme.colorScheme.onErrorContainer,
             actionColor = MaterialTheme.colorScheme.error,
-            shape = RoundedCornerShape(12.dp)
+            shape = RoundedCornerShape(12.dp),
         )
     }
 }

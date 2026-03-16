@@ -70,7 +70,7 @@ data class User(
     val minGiftAnimationValue: Int = 0,
     val selfDestructAlertEnabled: Boolean = false,
     val hasClaimedSuperShyTrial: Boolean = false,
-    val language: String = "en"
+    val language: String = "en",
 ) {
     val isActivelySuspended: Boolean
         get() {
@@ -97,151 +97,178 @@ data class User(
             return uniqueId
         }
 
-    fun toMap(): Map<String, Any?> = mapOf(
-        "uid" to uid,
-        "displayName" to displayName,
-        "avatarUrl" to avatarUrl,
-        "profilePhotoUrl" to profilePhotoUrl,
-        "coverPhotoUrl" to coverPhotoUrl,
-        "description" to description,
-        "nationality" to nationality,
-        "uniqueId" to uniqueId,
-        "firebaseUid" to firebaseUid,
-        "providers" to providers.map { it.toMap() },
-        "blockedUserIds" to blockedUserIds.toList(),
-        "followingIds" to followingIds.toList(),
-        "followerIds" to followerIds.toList(),
-        "dateOfBirth" to dateOfBirth,
-        "hideFollowing" to hideFollowing,
-        "hideOnlineStatus" to hideOnlineStatus,
-        "hideAge" to hideAge,
-        "email" to email,
-        "currentRoomId" to currentRoomId,
-        "lastRoomName" to lastRoomName,
-        "userType" to userType.name,
-        "createdAt" to createdAt,
-        "lastSeenAt" to lastSeenAt,
-        "stalkerCount" to stalkerCount,
-        "newStalkerCount" to newStalkerCount,
-        "stalkersLastViewedAt" to stalkersLastViewedAt,
-        "isSuspended" to isSuspended,
-        "suspensionReason" to suspensionReason,
-        "suspensionStartDate" to suspensionStartDate,
-        "suspensionEndDate" to suspensionEndDate,
-        "suspensionCanAppeal" to suspensionCanAppeal,
-        "suspendedBy" to suspendedBy,
-        "suspensionAppealStatus" to suspensionAppealStatus,
-        "fcmTokens" to fcmTokens,
-        "pmNotificationsEnabled" to pmNotificationsEnabled,
-        "pmPrivacy" to pmPrivacy.name,
-        "pmSoundEnabled" to pmSoundEnabled,
-        "pmShowTimestamps" to pmShowTimestamps,
-        "pmShowDateSeparators" to pmShowDateSeparators,
-        "pmNotificationPreview" to pmNotificationPreview,
-        "acceptedLegalVersion" to acceptedLegalVersion,
-        "dndEnabled" to dndEnabled,
-        "dndStartHour" to dndStartHour,
-        "dndStartMinute" to dndStartMinute,
-        "dndEndHour" to dndEndHour,
-        "dndEndMinute" to dndEndMinute,
-        "shyCoins" to shyCoins,
-        "shyBeans" to shyBeans,
-        "isSuperShy" to isSuperShy,
-        "superShyExpiry" to superShyExpiry,
-        "superShyTier" to superShyTier,
-        "tempUniqueId" to tempUniqueId,
-        "tempUniqueIdExpiry" to tempUniqueIdExpiry,
-        "luckScore" to luckScore,
-        "pityCounter" to pityCounter,
-        "loginStreak" to loginStreak,
-        "lastLoginDate" to lastLoginDate,
-        "lastLoginRewardDate" to lastLoginRewardDate,
-        "aliases" to aliases,
-        "minGiftAnimationValue" to minGiftAnimationValue,
-        "selfDestructAlertEnabled" to selfDestructAlertEnabled,
-        "hasClaimedSuperShyTrial" to hasClaimedSuperShyTrial,
-        "language" to language
-    )
+    fun toMap(): Map<String, Any?> =
+        mapOf(
+            "uid" to uid,
+            "displayName" to displayName,
+            "avatarUrl" to avatarUrl,
+            "profilePhotoUrl" to profilePhotoUrl,
+            "coverPhotoUrl" to coverPhotoUrl,
+            "description" to description,
+            "nationality" to nationality,
+            "uniqueId" to uniqueId,
+            "firebaseUid" to firebaseUid,
+            "providers" to providers.map { it.toMap() },
+            "blockedUserIds" to blockedUserIds.toList(),
+            "followingIds" to followingIds.toList(),
+            "followerIds" to followerIds.toList(),
+            "dateOfBirth" to dateOfBirth,
+            "hideFollowing" to hideFollowing,
+            "hideOnlineStatus" to hideOnlineStatus,
+            "hideAge" to hideAge,
+            "email" to email,
+            "currentRoomId" to currentRoomId,
+            "lastRoomName" to lastRoomName,
+            "userType" to userType.name,
+            "createdAt" to createdAt,
+            "lastSeenAt" to lastSeenAt,
+            "stalkerCount" to stalkerCount,
+            "newStalkerCount" to newStalkerCount,
+            "stalkersLastViewedAt" to stalkersLastViewedAt,
+            "isSuspended" to isSuspended,
+            "suspensionReason" to suspensionReason,
+            "suspensionStartDate" to suspensionStartDate,
+            "suspensionEndDate" to suspensionEndDate,
+            "suspensionCanAppeal" to suspensionCanAppeal,
+            "suspendedBy" to suspendedBy,
+            "suspensionAppealStatus" to suspensionAppealStatus,
+            "fcmTokens" to fcmTokens,
+            "pmNotificationsEnabled" to pmNotificationsEnabled,
+            "pmPrivacy" to pmPrivacy.name,
+            "pmSoundEnabled" to pmSoundEnabled,
+            "pmShowTimestamps" to pmShowTimestamps,
+            "pmShowDateSeparators" to pmShowDateSeparators,
+            "pmNotificationPreview" to pmNotificationPreview,
+            "acceptedLegalVersion" to acceptedLegalVersion,
+            "dndEnabled" to dndEnabled,
+            "dndStartHour" to dndStartHour,
+            "dndStartMinute" to dndStartMinute,
+            "dndEndHour" to dndEndHour,
+            "dndEndMinute" to dndEndMinute,
+            "shyCoins" to shyCoins,
+            "shyBeans" to shyBeans,
+            "isSuperShy" to isSuperShy,
+            "superShyExpiry" to superShyExpiry,
+            "superShyTier" to superShyTier,
+            "tempUniqueId" to tempUniqueId,
+            "tempUniqueIdExpiry" to tempUniqueIdExpiry,
+            "luckScore" to luckScore,
+            "pityCounter" to pityCounter,
+            "loginStreak" to loginStreak,
+            "lastLoginDate" to lastLoginDate,
+            "lastLoginRewardDate" to lastLoginRewardDate,
+            "aliases" to aliases,
+            "minGiftAnimationValue" to minGiftAnimationValue,
+            "selfDestructAlertEnabled" to selfDestructAlertEnabled,
+            "hasClaimedSuperShyTrial" to hasClaimedSuperShyTrial,
+            "language" to language,
+        )
 
     companion object {
-        fun fromMap(map: Map<String, Any?>, uid: String): User = User(
-            uid = uid,
-            displayName = map["displayName"] as? String ?: "",
-            avatarUrl = map["avatarUrl"] as? String,
-            profilePhotoUrl = map["profilePhotoUrl"] as? String,
-            coverPhotoUrl = map["coverPhotoUrl"] as? String,
-            description = map["description"] as? String,
-            nationality = map["nationality"] as? String,
-            uniqueId = (map["uniqueId"] as? Long) ?: 0L,
-            firebaseUid = map["firebaseUid"] as? String ?: "",
-            providers = (map["providers"] as? List<*>)
-                ?.filterIsInstance<Map<*, *>>()
-                ?.map { @Suppress("UNCHECKED_CAST") LinkedProvider.fromMap(it as Map<String, Any?>) }
-                ?: emptyList(),
-            blockedUserIds = (map["blockedUserIds"] as? List<*>)
-                ?.filterIsInstance<String>()?.toSet() ?: emptySet(),
-            followingIds = (map["followingIds"] as? List<*>)
-                ?.filterIsInstance<String>()?.toSet() ?: emptySet(),
-            followerIds = (map["followerIds"] as? List<*>)
-                ?.filterIsInstance<String>()?.toSet() ?: emptySet(),
-            dateOfBirth = (map["dateOfBirth"] ?: map["date_of_birth"])?.let { timestampToMillis(it) },
-            hideFollowing = map["hideFollowing"].asBool(),
-            hideOnlineStatus = map["hideOnlineStatus"].asBool(),
-            hideAge = map["hideAge"].asBool(),
-            email = map["email"] as? String,
-            currentRoomId = map["currentRoomId"] as? String,
-            lastRoomName = map["lastRoomName"] as? String,
-            userType = (map["userType"] as? String)?.let {
-                try { UserType.valueOf(it) } catch (_: Exception) { UserType.MEMBER }
-            } ?: UserType.MEMBER,
-            createdAt = timestampToMillis(map["createdAt"]),
-            lastSeenAt = timestampToMillis(map["lastSeenAt"]),
-            stalkerCount = (map["stalkerCount"] as? Number)?.toLong() ?: 0,
-            newStalkerCount = (map["newStalkerCount"] as? Number)?.toLong() ?: 0,
-            stalkersLastViewedAt = map["stalkersLastViewedAt"]?.let { timestampToMillis(it) } ?: 0,
-            isSuspended = map["isSuspended"].asBool(),
-            suspensionReason = map["suspensionReason"] as? String,
-            suspensionStartDate = map["suspensionStartDate"]?.let { timestampToMillis(it) },
-            suspensionEndDate = map["suspensionEndDate"]?.let { timestampToMillis(it) },
-            suspensionCanAppeal = map["suspensionCanAppeal"].asBool(),
-            suspendedBy = map["suspendedBy"] as? String,
-            suspensionAppealStatus = map["suspensionAppealStatus"] as? String,
-            fcmTokens = (map["fcmTokens"] as? List<*>)
-                ?.filterIsInstance<String>() ?: emptyList(),
-            pmNotificationsEnabled = map["pmNotificationsEnabled"].asBool(true),
-            pmPrivacy = (map["pmPrivacy"] as? String)?.let {
-                try { PmPrivacy.valueOf(it) } catch (_: Exception) { PmPrivacy.EVERYONE }
-            } ?: PmPrivacy.EVERYONE,
-            pmSoundEnabled = map["pmSoundEnabled"].asBool(true),
-            pmShowTimestamps = map["pmShowTimestamps"].asBool(true),
-            pmShowDateSeparators = map["pmShowDateSeparators"].asBool(true),
-            pmNotificationPreview = map["pmNotificationPreview"].asBool(true),
-            acceptedLegalVersion = (map["acceptedLegalVersion"] as? Long)?.toInt() ?: 0,
-            dndEnabled = map["dndEnabled"].asBool(),
-            dndStartHour = (map["dndStartHour"] as? Long)?.toInt() ?: 22,
-            dndStartMinute = (map["dndStartMinute"] as? Long)?.toInt() ?: 0,
-            dndEndHour = (map["dndEndHour"] as? Long)?.toInt() ?: 8,
-            dndEndMinute = (map["dndEndMinute"] as? Long)?.toInt() ?: 0,
-            shyCoins = (map["shyCoins"] as? Number)?.toLong() ?: 0,
-            shyBeans = (map["shyBeans"] as? Number)?.toLong() ?: 0,
-            isSuperShy = map["isSuperShy"].asBool(),
-            superShyExpiry = map["superShyExpiry"]?.let { timestampToMillis(it) },
-            superShyTier = map["superShyTier"] as? String,
-            tempUniqueId = (map["tempUniqueId"] as? Number)?.toLong(),
-            tempUniqueIdExpiry = map["tempUniqueIdExpiry"]?.let { timestampToMillis(it) },
-            luckScore = (map["luckScore"] as? Long)?.toInt() ?: 0,
-            pityCounter = (map["pityCounter"] as? Long)?.toInt() ?: 0,
-            loginStreak = (map["loginStreak"] as? Long)?.toInt() ?: 0,
-            lastLoginDate = map["lastLoginDate"] as? String,
-            lastLoginRewardDate = map["lastLoginRewardDate"] as? String,
-            aliases = (map["aliases"] as? Map<*, *>)
-                ?.entries
-                ?.mapNotNull { (k, v) -> (k as? String)?.let { key -> (v as? String)?.let { value -> key to value } } }
-                ?.toMap() ?: emptyMap(),
-            minGiftAnimationValue = (map["minGiftAnimationValue"] as? Long)?.toInt() ?: 0,
-            selfDestructAlertEnabled = map["selfDestructAlertEnabled"].asBool(),
-            hasClaimedSuperShyTrial = map["hasClaimedSuperShyTrial"].asBool(),
-            language = map["language"] as? String ?: "en"
-        )
+        fun fromMap(
+            map: Map<String, Any?>,
+            uid: String,
+        ): User =
+            User(
+                uid = uid,
+                displayName = map["displayName"] as? String ?: "",
+                avatarUrl = map["avatarUrl"] as? String,
+                profilePhotoUrl = map["profilePhotoUrl"] as? String,
+                coverPhotoUrl = map["coverPhotoUrl"] as? String,
+                description = map["description"] as? String,
+                nationality = map["nationality"] as? String,
+                uniqueId = (map["uniqueId"] as? Long) ?: 0L,
+                firebaseUid = map["firebaseUid"] as? String ?: "",
+                providers =
+                    (map["providers"] as? List<*>)
+                        ?.filterIsInstance<Map<*, *>>()
+                        ?.map {
+                            @Suppress("UNCHECKED_CAST")
+                            LinkedProvider.fromMap(it as Map<String, Any?>)
+                        }
+                        ?: emptyList(),
+                blockedUserIds =
+                    (map["blockedUserIds"] as? List<*>)
+                        ?.filterIsInstance<String>()
+                        ?.toSet() ?: emptySet(),
+                followingIds =
+                    (map["followingIds"] as? List<*>)
+                        ?.filterIsInstance<String>()
+                        ?.toSet() ?: emptySet(),
+                followerIds =
+                    (map["followerIds"] as? List<*>)
+                        ?.filterIsInstance<String>()
+                        ?.toSet() ?: emptySet(),
+                dateOfBirth = (map["dateOfBirth"] ?: map["date_of_birth"])?.let { timestampToMillis(it) },
+                hideFollowing = map["hideFollowing"].asBool(),
+                hideOnlineStatus = map["hideOnlineStatus"].asBool(),
+                hideAge = map["hideAge"].asBool(),
+                email = map["email"] as? String,
+                currentRoomId = map["currentRoomId"] as? String,
+                lastRoomName = map["lastRoomName"] as? String,
+                userType =
+                    (map["userType"] as? String)?.let {
+                        try {
+                            UserType.valueOf(it)
+                        } catch (_: Exception) {
+                            UserType.MEMBER
+                        }
+                    } ?: UserType.MEMBER,
+                createdAt = timestampToMillis(map["createdAt"]),
+                lastSeenAt = timestampToMillis(map["lastSeenAt"]),
+                stalkerCount = (map["stalkerCount"] as? Number)?.toLong() ?: 0,
+                newStalkerCount = (map["newStalkerCount"] as? Number)?.toLong() ?: 0,
+                stalkersLastViewedAt = map["stalkersLastViewedAt"]?.let { timestampToMillis(it) } ?: 0,
+                isSuspended = map["isSuspended"].asBool(),
+                suspensionReason = map["suspensionReason"] as? String,
+                suspensionStartDate = map["suspensionStartDate"]?.let { timestampToMillis(it) },
+                suspensionEndDate = map["suspensionEndDate"]?.let { timestampToMillis(it) },
+                suspensionCanAppeal = map["suspensionCanAppeal"].asBool(),
+                suspendedBy = map["suspendedBy"] as? String,
+                suspensionAppealStatus = map["suspensionAppealStatus"] as? String,
+                fcmTokens =
+                    (map["fcmTokens"] as? List<*>)
+                        ?.filterIsInstance<String>() ?: emptyList(),
+                pmNotificationsEnabled = map["pmNotificationsEnabled"].asBool(true),
+                pmPrivacy =
+                    (map["pmPrivacy"] as? String)?.let {
+                        try {
+                            PmPrivacy.valueOf(it)
+                        } catch (_: Exception) {
+                            PmPrivacy.EVERYONE
+                        }
+                    } ?: PmPrivacy.EVERYONE,
+                pmSoundEnabled = map["pmSoundEnabled"].asBool(true),
+                pmShowTimestamps = map["pmShowTimestamps"].asBool(true),
+                pmShowDateSeparators = map["pmShowDateSeparators"].asBool(true),
+                pmNotificationPreview = map["pmNotificationPreview"].asBool(true),
+                acceptedLegalVersion = (map["acceptedLegalVersion"] as? Long)?.toInt() ?: 0,
+                dndEnabled = map["dndEnabled"].asBool(),
+                dndStartHour = (map["dndStartHour"] as? Long)?.toInt() ?: 22,
+                dndStartMinute = (map["dndStartMinute"] as? Long)?.toInt() ?: 0,
+                dndEndHour = (map["dndEndHour"] as? Long)?.toInt() ?: 8,
+                dndEndMinute = (map["dndEndMinute"] as? Long)?.toInt() ?: 0,
+                shyCoins = (map["shyCoins"] as? Number)?.toLong() ?: 0,
+                shyBeans = (map["shyBeans"] as? Number)?.toLong() ?: 0,
+                isSuperShy = map["isSuperShy"].asBool(),
+                superShyExpiry = map["superShyExpiry"]?.let { timestampToMillis(it) },
+                superShyTier = map["superShyTier"] as? String,
+                tempUniqueId = (map["tempUniqueId"] as? Number)?.toLong(),
+                tempUniqueIdExpiry = map["tempUniqueIdExpiry"]?.let { timestampToMillis(it) },
+                luckScore = (map["luckScore"] as? Long)?.toInt() ?: 0,
+                pityCounter = (map["pityCounter"] as? Long)?.toInt() ?: 0,
+                loginStreak = (map["loginStreak"] as? Long)?.toInt() ?: 0,
+                lastLoginDate = map["lastLoginDate"] as? String,
+                lastLoginRewardDate = map["lastLoginRewardDate"] as? String,
+                aliases =
+                    (map["aliases"] as? Map<*, *>)
+                        ?.entries
+                        ?.mapNotNull { (k, v) -> (k as? String)?.let { key -> (v as? String)?.let { value -> key to value } } }
+                        ?.toMap() ?: emptyMap(),
+                minGiftAnimationValue = (map["minGiftAnimationValue"] as? Long)?.toInt() ?: 0,
+                selfDestructAlertEnabled = map["selfDestructAlertEnabled"].asBool(),
+                hasClaimedSuperShyTrial = map["hasClaimedSuperShyTrial"].asBool(),
+                language = map["language"] as? String ?: "en",
+            )
     }
 }

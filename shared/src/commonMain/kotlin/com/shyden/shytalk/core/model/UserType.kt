@@ -5,5 +5,5 @@ enum class UserType {
     SHYTALK_OFFICIAL,
     MC_SINGER,
     MC_EVENT_HOST,
-    TEACHER
+    TEACHER,
 }

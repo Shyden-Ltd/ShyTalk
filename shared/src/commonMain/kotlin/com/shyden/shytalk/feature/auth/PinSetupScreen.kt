@@ -43,40 +43,44 @@ fun PinSetupScreen(
     }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp)
-            .testTag("pinSetupScreen"),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(24.dp)
+                .testTag("pinSetupScreen"),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         when (state.step) {
-            PinSetupStep.ChooseLength -> PinLengthChooser(
-                selected = state.pinLength,
-                onSelect = { viewModel.selectPinLength(it) },
-            )
+            PinSetupStep.ChooseLength ->
+                PinLengthChooser(
+                    selected = state.pinLength,
+                    onSelect = { viewModel.selectPinLength(it) },
+                )
 
-            PinSetupStep.Enter -> PinEntryStep(
-                title = "Create a PIN",
-                pinInput = state.pinInput,
-                pinLength = state.pinLength,
-                error = state.error,
-                isLoading = state.isLoading,
-                onDigit = { viewModel.onDigit(it) },
-                onBackspace = { viewModel.onBackspace() },
-                onSubmit = { viewModel.submit() },
-            )
+            PinSetupStep.Enter ->
+                PinEntryStep(
+                    title = "Create a PIN",
+                    pinInput = state.pinInput,
+                    pinLength = state.pinLength,
+                    error = state.error,
+                    isLoading = state.isLoading,
+                    onDigit = { viewModel.onDigit(it) },
+                    onBackspace = { viewModel.onBackspace() },
+                    onSubmit = { viewModel.submit() },
+                )
 
-            PinSetupStep.Confirm -> PinEntryStep(
-                title = "Confirm your PIN",
-                pinInput = state.pinInput,
-                pinLength = state.pinLength,
-                error = state.error,
-                isLoading = state.isLoading,
-                onDigit = { viewModel.onDigit(it) },
-                onBackspace = { viewModel.onBackspace() },
-                onSubmit = { viewModel.submit() },
-            )
+            PinSetupStep.Confirm ->
+                PinEntryStep(
+                    title = "Confirm your PIN",
+                    pinInput = state.pinInput,
+                    pinLength = state.pinLength,
+                    error = state.error,
+                    isLoading = state.isLoading,
+                    onDigit = { viewModel.onDigit(it) },
+                    onBackspace = { viewModel.onBackspace() },
+                    onSubmit = { viewModel.submit() },
+                )
         }
 
         // Biometric offer dialog

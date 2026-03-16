@@ -3,12 +3,20 @@ package com.shyden.shytalk.data.remote
 import kotlinx.coroutines.flow.Flow
 
 interface PresenceService {
-    fun setPresence(roomId: String, userId: String)
+    fun setPresence(
+        roomId: String,
+        userId: String,
+    )
+
     fun removePresence()
+
     fun observeRoomPresence(roomId: String): Flow<Set<String>>
 
     /** One-shot check if a user is currently present in a room. */
-    suspend fun isUserPresent(roomId: String, userId: String): Boolean
+    suspend fun isUserPresent(
+        roomId: String,
+        userId: String,
+    ): Boolean
 
     /** Room events observed via Firebase RTDB listeners. */
     val roomEvents: Flow<RoomEvent>

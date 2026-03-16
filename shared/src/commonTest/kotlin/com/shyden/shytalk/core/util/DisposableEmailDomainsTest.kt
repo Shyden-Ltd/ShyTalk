@@ -5,7 +5,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class DisposableEmailDomainsTest {
-
     @Test
     fun detects_disposable_email_domains() {
         assertTrue(DisposableEmailDomains.isDisposable("user@mailinator.com"))

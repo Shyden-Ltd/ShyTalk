@@ -16,15 +16,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun CreateRoomDialog(
     onDismiss: () -> Unit,
     onCreate: (String) -> Unit,
-    initialRoomName: String = ""
+    initialRoomName: String = "",
 ) {
     var roomName by remember { mutableStateOf(initialRoomName) }
 
@@ -40,7 +40,7 @@ fun CreateRoomDialog(
                     onValueChange = { if (it.length <= 50) roomName = it },
                     label = { Text(stringResource(Res.string.room_name_label)) },
                     modifier = Modifier.fillMaxWidth().testTag("createRoom_nameField"),
-                    singleLine = true
+                    singleLine = true,
                 )
             }
         },
@@ -48,7 +48,7 @@ fun CreateRoomDialog(
             TextButton(
                 onClick = { onCreate(roomName) },
                 enabled = roomName.isNotBlank(),
-                modifier = Modifier.testTag("createRoom_createButton")
+                modifier = Modifier.testTag("createRoom_createButton"),
             ) {
                 Text(stringResource(Res.string.create))
             }
@@ -57,6 +57,6 @@ fun CreateRoomDialog(
             TextButton(onClick = onDismiss) {
                 Text(stringResource(Res.string.cancel))
             }
-        }
+        },
     )
 }

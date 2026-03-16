@@ -10,11 +10,21 @@ interface AppLockRepository {
     val localPinHash: String?
     val credentialVersion: Int
 
-    fun setCredential(uniqueId: String, deviceId: String, localPinHash: String)
+    fun setCredential(
+        uniqueId: String,
+        deviceId: String,
+        localPinHash: String,
+    )
+
     fun setAppLockEnabled(enabled: Boolean)
+
     fun setBiometricEnabled(enabled: Boolean)
+
     fun setLockTimeoutMinutes(minutes: Int)
+
     fun updateLastActiveTimestamp()
+
     fun isLockRequired(): Boolean
+
     fun clearCredential()
 }

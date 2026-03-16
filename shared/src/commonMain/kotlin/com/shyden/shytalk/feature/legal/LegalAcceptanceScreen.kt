@@ -25,8 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 
 const val CURRENT_LEGAL_VERSION = 6
@@ -37,7 +37,7 @@ fun LegalAcceptanceScreen(
     onViewPrivacyPolicy: () -> Unit,
     onViewCommunityStandards: () -> Unit,
     onViewTerms: () -> Unit,
-    onViewCyberBullyingPolicy: () -> Unit
+    onViewCyberBullyingPolicy: () -> Unit,
 ) {
     var privacyChecked by remember { mutableStateOf(false) }
     var communityChecked by remember { mutableStateOf(false) }
@@ -48,25 +48,26 @@ fun LegalAcceptanceScreen(
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+        color = MaterialTheme.colorScheme.background,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp)
-                .verticalScroll(rememberScrollState())
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(24.dp)
+                    .verticalScroll(rememberScrollState()),
         ) {
             Spacer(modifier = Modifier.height(32.dp))
 
             Text(
                 text = stringResource(Res.string.welcome_to_shytalk),
-                style = MaterialTheme.typography.headlineMedium
+                style = MaterialTheme.typography.headlineMedium,
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = stringResource(Res.string.review_and_accept_policies),
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -76,7 +77,7 @@ fun LegalAcceptanceScreen(
                 title = stringResource(Res.string.privacy_policy),
                 checked = privacyChecked,
                 onCheckedChange = { privacyChecked = it },
-                onViewDocument = onViewPrivacyPolicy
+                onViewDocument = onViewPrivacyPolicy,
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -86,7 +87,7 @@ fun LegalAcceptanceScreen(
                 title = stringResource(Res.string.community_standards),
                 checked = communityChecked,
                 onCheckedChange = { communityChecked = it },
-                onViewDocument = onViewCommunityStandards
+                onViewDocument = onViewCommunityStandards,
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -96,7 +97,7 @@ fun LegalAcceptanceScreen(
                 title = stringResource(Res.string.terms_and_conditions),
                 checked = termsChecked,
                 onCheckedChange = { termsChecked = it },
-                onViewDocument = onViewTerms
+                onViewDocument = onViewTerms,
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -106,7 +107,7 @@ fun LegalAcceptanceScreen(
                 title = stringResource(Res.string.cyber_bullying_policy),
                 checked = cyberBullyingChecked,
                 onCheckedChange = { cyberBullyingChecked = it },
-                onViewDocument = onViewCyberBullyingPolicy
+                onViewDocument = onViewCyberBullyingPolicy,
             )
 
             Spacer(modifier = Modifier.weight(1f))
@@ -114,7 +115,7 @@ fun LegalAcceptanceScreen(
             Button(
                 onClick = onAccept,
                 enabled = allChecked,
-                modifier = Modifier.fillMaxWidth().testTag("legal_acceptButton")
+                modifier = Modifier.fillMaxWidth().testTag("legal_acceptButton"),
             ) {
                 Text(stringResource(Res.string.accept_all_and_continue))
             }
@@ -129,22 +130,22 @@ private fun LegalCheckRow(
     title: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    onViewDocument: () -> Unit
+    onViewDocument: () -> Unit,
 ) {
     val tag = title.replace("\\s+".toRegex(), "").replace("&", "And")
     Row(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Checkbox(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            modifier = Modifier.testTag("legal_checkbox_$tag")
+            modifier = Modifier.testTag("legal_checkbox_$tag"),
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = stringResource(Res.string.i_have_read_and_agree),
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium,
         )
         TextButton(onClick = onViewDocument) {
             Text(title)

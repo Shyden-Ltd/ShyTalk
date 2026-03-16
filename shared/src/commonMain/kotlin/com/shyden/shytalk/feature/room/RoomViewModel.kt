@@ -3,7 +3,6 @@ package com.shyden.shytalk.feature.room
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.model.ChatRoom
-import com.shyden.shytalk.core.model.GiftEvent
 import com.shyden.shytalk.core.model.Message
 import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.RoomState
@@ -11,6 +10,7 @@ import com.shyden.shytalk.core.model.SeatRequest
 import com.shyden.shytalk.core.model.SeatRequestStatus
 import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.core.ui.effects.AnimationQueue
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.LanguagePreference
@@ -20,23 +20,21 @@ import com.shyden.shytalk.core.util.logD
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.core.util.logW
-import com.shyden.shytalk.core.room.RoomLifecycleManager
+import com.shyden.shytalk.data.remote.PresenceService
 import com.shyden.shytalk.data.remote.VoiceConnectionState
 import com.shyden.shytalk.data.remote.VoiceService
-import com.shyden.shytalk.data.remote.PresenceService
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.EconomyRepository
 import com.shyden.shytalk.data.repository.MessageRepository
 import com.shyden.shytalk.data.repository.ReportRepository
-import com.shyden.shytalk.data.repository.StorageRepository
-import com.shyden.shytalk.data.repository.TranslationRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.SeatRequestRepository
+import com.shyden.shytalk.data.repository.StorageRepository
+import com.shyden.shytalk.data.repository.TranslationRepository
 import com.shyden.shytalk.data.repository.UserRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,12 +43,19 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 sealed class BlockWarning {
     data object BlockedByRoomOwner : BlockWarning()
+
     data object BlockedUserInRoom : BlockWarning()
+
     data object BlockedByUserInRoom : BlockWarning()
-    data class Banned(val reason: String?, val kickerName: String?) : BlockWarning()
+
+    data class Banned(
+        val reason: String?,
+        val kickerName: String?,
+    ) : BlockWarning()
 }
 
 data class RoomClosedSummary(
@@ -59,13 +64,19 @@ data class RoomClosedSummary(
     val hostUsers: List<User>,
     val speakerUsers: List<User>,
     val ownerId: String,
-    val totalVisitors: Int
+    val totalVisitors: Int,
 )
 
 sealed class SeatActionStatus {
     data object Idle : SeatActionStatus()
-    data class Loading(val message: String) : SeatActionStatus()
-    data class Success(val message: String) : SeatActionStatus()
+
+    data class Loading(
+        val message: String,
+    ) : SeatActionStatus()
+
+    data class Success(
+        val message: String,
+    ) : SeatActionStatus()
 }
 
 data class RoomUiState(
@@ -109,7 +120,7 @@ data class RoomUiState(
     val maxRoomDurationMs: Long = Constants.MAX_ROOM_DURATION_MS,
     val showExpiryUpsellDialog: Boolean = false,
     val effectiveSeatCount: Int = Constants.MAX_SEATS,
-    val translations: Map<String, String> = emptyMap()
+    val translations: Map<String, String> = emptyMap(),
 )
 
 class RoomViewModel(
@@ -125,9 +136,8 @@ class RoomViewModel(
     private val reportRepository: ReportRepository,
     private val storageRepository: StorageRepository,
     private val economyRepository: EconomyRepository,
-    private val translationRepository: TranslationRepository? = null
+    private val translationRepository: TranslationRepository? = null,
 ) : ViewModel() {
-
     companion object {
         private const val TAG = "RoomViewModel"
         private const val VOICE_CONNECT_TIMEOUT_MS = 10_000L
@@ -139,9 +149,11 @@ class RoomViewModel(
     private var ownerAwayCountdownJob: Job? = null
     private var roomExpiryCountdownJob: Job? = null
     private var isSeated = false
+
     // All accesses are on Dispatchers.Main via viewModelScope — safe without synchronization
     private val userCache: MutableMap<String, User> = mutableMapOf()
     private var isBlockCheckDone = false
+
     @kotlin.concurrent.Volatile private var firstJoinTimestamp: Long? = null
     private var allMessages: List<Message> = emptyList()
     private var lastKnownRoom: ChatRoom? = null
@@ -178,10 +190,11 @@ class RoomViewModel(
 
     init {
         val userId = authRepository.currentUserId ?: ""
-        _uiState.value = _uiState.value.copy(
-            currentUserId = userId,
-            isVoiceReady = voiceService.connectionState.value == VoiceConnectionState.CONNECTED
-        )
+        _uiState.value =
+            _uiState.value.copy(
+                currentUserId = userId,
+                isVoiceReady = voiceService.connectionState.value == VoiceConnectionState.CONNECTED,
+            )
         loadUserName()
         loadBlockedUsers()
         loadAliases()
@@ -206,7 +219,7 @@ class RoomViewModel(
                             seatUsers = state.seatUsers.replaceUser(updatedUser),
                             participantUsers = state.participantUsers.replaceUser(updatedUser),
                             allKnownUsers = state.allKnownUsers.replaceUser(updatedUser),
-                            currentUserName = if (uid == state.currentUserId) updatedUser.displayName else state.currentUserName
+                            currentUserName = if (uid == state.currentUserId) updatedUser.displayName else state.currentUserName,
                         )
                     }
                     // Re-resolve room duration/seat limit if the room owner's Super Shy status changed
@@ -224,7 +237,8 @@ class RoomViewModel(
 
     private fun observeEconomyConfig() {
         viewModelScope.launch {
-            economyRepository.observeEconomyConfig()
+            economyRepository
+                .observeEconomyConfig()
                 .catch { e -> logE(TAG, "observeEconomyConfig error", e) }
                 .collect { config ->
                     lastEconomyConfig = config
@@ -239,8 +253,12 @@ class RoomViewModel(
         val room = _uiState.value.room ?: return
         val ownerUser = _uiState.value.allKnownUsers[room.ownerId]
         val isSuperShy = ownerUser?.isSuperShy == true
-        val durationMinutes = if (isSuperShy) config.superShyRoomDurationMinutes
-                              else config.maxRoomDurationMinutes
+        val durationMinutes =
+            if (isSuperShy) {
+                config.superShyRoomDurationMinutes
+            } else {
+                config.maxRoomDurationMinutes
+            }
         val durationMs = durationMinutes.toLong() * 60 * 1000
         _uiState.update { it.copy(maxRoomDurationMs = durationMs) }
 
@@ -261,51 +279,61 @@ class RoomViewModel(
         val room = _uiState.value.room ?: return
         val ownerUser = _uiState.value.allKnownUsers[room.ownerId]
         val isSuperShy = ownerUser?.isSuperShy == true
-        val count = if (isSuperShy) Constants.MAX_SEATS
-                    else config.normalSeatCount.coerceIn(1, Constants.MAX_SEATS)
+        val count =
+            if (isSuperShy) {
+                Constants.MAX_SEATS
+            } else {
+                config.normalSeatCount.coerceIn(1, Constants.MAX_SEATS)
+            }
         _uiState.update { it.copy(effectiveSeatCount = count) }
     }
 
-    private fun Map<String, User>.replaceUser(user: User): Map<String, User> =
-        if (user.uid in this) this + (user.uid to user) else this
+    private fun Map<String, User>.replaceUser(user: User): Map<String, User> = if (user.uid in this) this + (user.uid to user) else this
 
     private fun observeRemoteUserChanges(userIds: Set<String>) {
         if (userIds == observedUserIds) return
         observedUserIds = userIds
         userObserverJob?.cancel()
         if (userIds.isEmpty()) return
-        userObserverJob = viewModelScope.launch {
-            userRepository.observeUsers(userIds)
-                .catch { e -> logE(TAG, "observeRemoteUserChanges error", e) }
-                .collect { updatedUser ->
-                    val uid = updatedUser.uid
-                    val cached = userCache[uid]
-                    if (cached != null && cached != updatedUser) {
-                        userCache[uid] = updatedUser
-                        _uiState.update { state ->
-                            state.copy(
-                                seatUsers = state.seatUsers.replaceUser(updatedUser),
-                                participantUsers = state.participantUsers.replaceUser(updatedUser),
-                                allKnownUsers = state.allKnownUsers.replaceUser(updatedUser),
-                                currentUserName = if (uid == state.currentUserId) updatedUser.displayName else state.currentUserName
-                            )
-                        }
-                        // Re-resolve room limits if the owner's SuperShy status changed
-                        val room = _uiState.value.room
-                        if (room != null && uid == room.ownerId && cached.isSuperShy != updatedUser.isSuperShy) {
-                            resolveRoomDuration()
-                            resolveSeatLimit()
+        userObserverJob =
+            viewModelScope.launch {
+                userRepository
+                    .observeUsers(userIds)
+                    .catch { e -> logE(TAG, "observeRemoteUserChanges error", e) }
+                    .collect { updatedUser ->
+                        val uid = updatedUser.uid
+                        val cached = userCache[uid]
+                        if (cached != null && cached != updatedUser) {
+                            userCache[uid] = updatedUser
+                            _uiState.update { state ->
+                                state.copy(
+                                    seatUsers = state.seatUsers.replaceUser(updatedUser),
+                                    participantUsers = state.participantUsers.replaceUser(updatedUser),
+                                    allKnownUsers = state.allKnownUsers.replaceUser(updatedUser),
+                                    currentUserName = if (uid == state.currentUserId) updatedUser.displayName else state.currentUserName,
+                                )
+                            }
+                            // Re-resolve room limits if the owner's SuperShy status changed
+                            val room = _uiState.value.room
+                            if (room != null && uid == room.ownerId && cached.isSuperShy != updatedUser.isSuperShy) {
+                                resolveRoomDuration()
+                                resolveSeatLimit()
+                            }
                         }
                     }
-                }
-        }
+            }
     }
 
-    private fun collectRoomUserIds(room: ChatRoom, currentUserId: String): Set<String> {
-        val seatUserIds = room.seats.values.asSequence()
-            .filter { it.state == SeatState.OCCUPIED && it.userId != null }
-            .mapNotNull { it.userId }
-            .toSet()
+    private fun collectRoomUserIds(
+        room: ChatRoom,
+        currentUserId: String,
+    ): Set<String> {
+        val seatUserIds =
+            room.seats.values
+                .asSequence()
+                .filter { it.state == SeatState.OCCUPIED && it.userId != null }
+                .mapNotNull { it.userId }
+                .toSet()
         return (seatUserIds + room.participantIds).filter { it != currentUserId }.toSet()
     }
 
@@ -341,11 +369,11 @@ class RoomViewModel(
         }
 
         viewModelScope.launch {
-            roomRepository.getRoomFlow(roomId)
+            roomRepository
+                .getRoomFlow(roomId)
                 .catch { e ->
                     _uiState.update { it.copy(isLoading = false, error = e.message) }
-                }
-                .collect { room -> processRoomEmission(room) }
+                }.collect { room -> processRoomEmission(room) }
         }
     }
 
@@ -404,7 +432,10 @@ class RoomViewModel(
     }
 
     /** Returns true if user was kicked/removed and collection should stop. */
-    private fun handleKickedOrRemoved(room: ChatRoom, userId: String): Boolean {
+    private fun handleKickedOrRemoved(
+        room: ChatRoom,
+        userId: String,
+    ): Boolean {
         if (userId in room.bannedUserIds) {
             disconnectFromRoom()
             val info = room.kickInfo[userId]
@@ -413,7 +444,7 @@ class RoomViewModel(
                     isLoading = false,
                     wasKicked = true,
                     kickedByName = info?.get("kickerName"),
-                    kickReason = info?.get("reason") ?: "No reason given"
+                    kickReason = info?.get("reason") ?: "No reason given",
                 )
             }
             return true
@@ -450,7 +481,11 @@ class RoomViewModel(
         return false
     }
 
-    private fun handleFirstJoin(room: ChatRoom, userId: String, role: RoomRole) {
+    private fun handleFirstJoin(
+        room: ChatRoom,
+        userId: String,
+        role: RoomRole,
+    ) {
         isBlockCheckDone = true
 
         // Detect "already joined" state (ViewModel recreated after back navigation)
@@ -537,7 +572,10 @@ class RoomViewModel(
         }
     }
 
-    private fun handleOwnerReturnDetection(room: ChatRoom, userId: String) {
+    private fun handleOwnerReturnDetection(
+        room: ChatRoom,
+        userId: String,
+    ) {
         if (room.ownerId != userId || !_uiState.value.hasJoined) return
 
         // Self-heal: if owner is online but somehow not in seat 0, restore immediately
@@ -549,9 +587,9 @@ class RoomViewModel(
             return
         }
 
-        if (room.state == RoomState.OWNER_AWAY
-            && !isOwnerReturnTriggered
-            && roomLifecycleManager.isInRoom(roomId)
+        if (room.state == RoomState.OWNER_AWAY &&
+            !isOwnerReturnTriggered &&
+            roomLifecycleManager.isInRoom(roomId)
         ) {
             isOwnerReturnTriggered = true
             ownerReturn()
@@ -561,7 +599,11 @@ class RoomViewModel(
         }
     }
 
-    private fun handleNormalUpdate(room: ChatRoom, userId: String, role: RoomRole) {
+    private fun handleNormalUpdate(
+        room: ChatRoom,
+        userId: String,
+        role: RoomRole,
+    ) {
         val mySeat = room.findUserSeat(userId)?.value
         val currentlySeated = mySeat != null
         val hasAudio = _uiState.value.hasAudioPermission
@@ -609,7 +651,7 @@ class RoomViewModel(
                 room = room,
                 currentRole = role,
                 isLoading = false,
-                pendingInvite = pendingInvite
+                pendingInvite = pendingInvite,
             )
         }
 
@@ -628,7 +670,9 @@ class RoomViewModel(
         if (lastGiftEventTimestamp == 0L) {
             // First observation — skip only if event is old (>10s), otherwise play it
             lastGiftEventTimestamp = event.timestamp
-            val now = com.shyden.shytalk.core.util.currentTimeMillis()
+            val now =
+                com.shyden.shytalk.core.util
+                    .currentTimeMillis()
             if (now - event.timestamp > 10_000) return
         } else {
             if (event.timestamp <= lastGiftEventTimestamp) return
@@ -649,22 +693,26 @@ class RoomViewModel(
             if (userId in room.bannedUserIds) {
                 val kickInfo = room.kickInfo[userId]
                 _uiState.update {
-                    it.copy(blockWarning = BlockWarning.Banned(
-                        reason = kickInfo?.get("reason"),
-                        kickerName = kickInfo?.get("kickerName")
-                    ))
+                    it.copy(
+                        blockWarning =
+                            BlockWarning.Banned(
+                                reason = kickInfo?.get("reason"),
+                                kickerName = kickInfo?.get("kickerName"),
+                            ),
+                    )
                 }
                 return@launch
             }
 
             // Always check room owner's block list (even if owner is away)
-            val ownerUser = userCache[room.ownerId] ?: when (val result = userRepository.getUser(room.ownerId)) {
-                is Resource.Success -> {
-                    userCache[room.ownerId] = result.data
-                    result.data
+            val ownerUser =
+                userCache[room.ownerId] ?: when (val result = userRepository.getUser(room.ownerId)) {
+                    is Resource.Success -> {
+                        userCache[room.ownerId] = result.data
+                        result.data
+                    }
+                    else -> null
                 }
-                else -> null
-            }
             if (ownerUser != null && userId in ownerUser.blockedUserIds) {
                 _uiState.update { it.copy(blockWarning = BlockWarning.BlockedByRoomOwner) }
                 return@launch
@@ -703,7 +751,8 @@ class RoomViewModel(
 
     private fun observeMessages() {
         viewModelScope.launch {
-            messageRepository.getMessages(roomId)
+            messageRepository
+                .getMessages(roomId)
                 .catch { e -> logW(TAG, "observeMessages error", e) }
                 .collect { messages ->
                     allMessages = messages
@@ -714,11 +763,12 @@ class RoomViewModel(
 
     private fun updateFilteredMessages() {
         val ts = firstJoinTimestamp
-        val filtered = if (ts != null) {
-            allMessages.filter { it.createdAt >= ts }
-        } else {
-            allMessages
-        }
+        val filtered =
+            if (ts != null) {
+                allMessages.filter { it.createdAt >= ts }
+            } else {
+                allMessages
+            }
         if (filtered !== lastFilteredMessages) {
             lastFilteredMessages = filtered
             _uiState.update { it.copy(messages = filtered) }
@@ -741,27 +791,27 @@ class RoomViewModel(
             combine(
                 voiceService.speakingUsers,
                 voiceService.isJoined,
-                voiceService.error
+                voiceService.error,
             ) { speaking, joined, errorMsg ->
                 Triple(speaking, joined, errorMsg)
             }.distinctUntilChanged()
-            .collect { (speaking, joined, errorMsg) ->
-                val isUnavailable = _uiState.value.isVoiceUnavailable
-                _uiState.update {
-                    it.copy(
-                        speakingUserIds = if (isUnavailable) emptySet() else speaking,
-                        isVoiceJoined = joined,
-                        error = errorMsg ?: it.error
-                    )
-                }
-                // Voice error before ready — unblock the room immediately
-                if (errorMsg != null) {
-                    if (!_uiState.value.isVoiceReady) {
-                        _uiState.update { it.copy(isVoiceReady = true, isVoiceUnavailable = true, speakingUserIds = emptySet()) }
+                .collect { (speaking, joined, errorMsg) ->
+                    val isUnavailable = _uiState.value.isVoiceUnavailable
+                    _uiState.update {
+                        it.copy(
+                            speakingUserIds = if (isUnavailable) emptySet() else speaking,
+                            isVoiceJoined = joined,
+                            error = errorMsg ?: it.error,
+                        )
                     }
-                    voiceService.clearError()
+                    // Voice error before ready — unblock the room immediately
+                    if (errorMsg != null) {
+                        if (!_uiState.value.isVoiceReady) {
+                            _uiState.update { it.copy(isVoiceReady = true, isVoiceUnavailable = true, speakingUserIds = emptySet()) }
+                        }
+                        voiceService.clearError()
+                    }
                 }
-            }
         }
         // Latch isVoiceReady — once connected, never hide the room again
         viewModelScope.launch {
@@ -868,12 +918,13 @@ class RoomViewModel(
             // Join message (independent)
             if (userName.isNotEmpty()) {
                 launch {
-                    val result = messageRepository.sendJoinMessage(
-                        roomId,
-                        userId,
-                        userName,
-                        "$userName joined the room"
-                    )
+                    val result =
+                        messageRepository.sendJoinMessage(
+                            roomId,
+                            userId,
+                            userName,
+                            "$userName joined the room",
+                        )
                     if (result is Resource.Error) {
                         logE(TAG, "sendJoinMessage failed: ${result.message}")
                     }
@@ -904,19 +955,20 @@ class RoomViewModel(
         val leftAt = room.ownerLeftAt
         if (room.state == RoomState.OWNER_AWAY && leftAt != null) {
             ownerAwayCountdownJob?.cancel()
-            ownerAwayCountdownJob = viewModelScope.launch {
-                while (true) {
-                    val elapsed = currentTimeMillis() - leftAt
-                    val remaining = Constants.OWNER_LEAVE_TIMEOUT_MS - elapsed
-                    if (remaining <= 0) {
-                        // Any remaining participant can close an expired OWNER_AWAY room
-                        roomRepository.closeRoom(roomId)
-                        break
+            ownerAwayCountdownJob =
+                viewModelScope.launch {
+                    while (true) {
+                        val elapsed = currentTimeMillis() - leftAt
+                        val remaining = Constants.OWNER_LEAVE_TIMEOUT_MS - elapsed
+                        if (remaining <= 0) {
+                            // Any remaining participant can close an expired OWNER_AWAY room
+                            roomRepository.closeRoom(roomId)
+                            break
+                        }
+                        _uiState.update { it.copy(ownerAwayRemainingMs = remaining) }
+                        delay(1000L)
                     }
-                    _uiState.update { it.copy(ownerAwayRemainingMs = remaining) }
-                    delay(1000L)
                 }
-            }
         } else {
             ownerAwayCountdownJob?.cancel()
             _uiState.update { it.copy(ownerAwayRemainingMs = 0L) }
@@ -942,28 +994,29 @@ class RoomViewModel(
                     _uiState.update { it.copy(showExpiryUpsellDialog = true) }
                 }
             }
-            roomExpiryCountdownJob = viewModelScope.launch {
-                while (true) {
-                    val currentMax = _uiState.value.maxRoomDurationMs
-                    val now = currentTimeMillis() - room.createdAt
-                    val left = currentMax - now
-                    if (left <= 0) {
-                        if (_uiState.value.currentRole == RoomRole.OWNER) {
-                            roomRepository.closeRoom(roomId)
+            roomExpiryCountdownJob =
+                viewModelScope.launch {
+                    while (true) {
+                        val currentMax = _uiState.value.maxRoomDurationMs
+                        val now = currentTimeMillis() - room.createdAt
+                        val left = currentMax - now
+                        if (left <= 0) {
+                            if (_uiState.value.currentRole == RoomRole.OWNER) {
+                                roomRepository.closeRoom(roomId)
+                            }
+                            break
                         }
-                        break
+                        _uiState.update { it.copy(roomExpiryRemainingMs = left) }
+                        delay(1000L)
                     }
-                    _uiState.update { it.copy(roomExpiryRemainingMs = left) }
-                    delay(1000L)
                 }
-            }
         }
     }
 
     private fun withSeatAction(
         loadingMessage: String,
         successMessage: String,
-        action: suspend () -> Resource<Unit>
+        action: suspend () -> Resource<Unit>,
     ) {
         viewModelScope.launch {
             _uiState.update { it.copy(seatActionStatus = SeatActionStatus.Loading(loadingMessage)) }
@@ -972,10 +1025,11 @@ class RoomViewModel(
                     is Resource.Success -> {
                         seatActionResetJob?.cancel()
                         _uiState.update { it.copy(seatActionStatus = SeatActionStatus.Success(successMessage)) }
-                        seatActionResetJob = viewModelScope.launch {
-                            delay(1500L)
-                            _uiState.update { it.copy(seatActionStatus = SeatActionStatus.Idle) }
-                        }
+                        seatActionResetJob =
+                            viewModelScope.launch {
+                                delay(1500L)
+                                _uiState.update { it.copy(seatActionStatus = SeatActionStatus.Idle) }
+                            }
                     }
                     is Resource.Error -> {
                         _uiState.update { it.copy(seatActionStatus = SeatActionStatus.Idle, error = result.message) }
@@ -1019,7 +1073,7 @@ class RoomViewModel(
                     roomId = roomId,
                     userId = userId,
                     userName = _uiState.value.currentUserName,
-                    seatIndex = seatIndex
+                    seatIndex = seatIndex,
                 )
             }
             return
@@ -1080,8 +1134,12 @@ class RoomViewModel(
         }
         // Block unmute when voice is not connected — muting is always allowed
         if (!newMuteState && voiceService.connectionState.value != VoiceConnectionState.CONNECTED) {
-            val msg = if (_uiState.value.isVoiceUnavailable) "Voice is currently unavailable"
-                      else "Voice not connected yet"
+            val msg =
+                if (_uiState.value.isVoiceUnavailable) {
+                    "Voice is currently unavailable"
+                } else {
+                    "Voice not connected yet"
+                }
             _uiState.update { it.copy(error = msg) }
             return
         }
@@ -1117,7 +1175,10 @@ class RoomViewModel(
         }
     }
 
-    fun moveSeat(fromIndex: Int, toIndex: Int) {
+    fun moveSeat(
+        fromIndex: Int,
+        toIndex: Int,
+    ) {
         viewModelScope.launch {
             val room = _uiState.value.room ?: return@launch
             val role = _uiState.value.currentRole
@@ -1139,7 +1200,11 @@ class RoomViewModel(
         }
     }
 
-    fun kickUser(targetUserId: String, seatIndex: Int?, reason: String = "") {
+    fun kickUser(
+        targetUserId: String,
+        seatIndex: Int?,
+        reason: String = "",
+    ) {
         viewModelScope.launch {
             val room = _uiState.value.room ?: return@launch
             val role = _uiState.value.currentRole
@@ -1175,7 +1240,10 @@ class RoomViewModel(
         }
     }
 
-    fun inviteUser(userId: String, userName: String) {
+    fun inviteUser(
+        userId: String,
+        userName: String,
+    ) {
         viewModelScope.launch {
             val room = _uiState.value.room ?: return@launch
             val role = _uiState.value.currentRole
@@ -1198,7 +1266,10 @@ class RoomViewModel(
         }
     }
 
-    fun inviteFromMessage(senderId: String, senderName: String) {
+    fun inviteFromMessage(
+        senderId: String,
+        senderName: String,
+    ) {
         inviteUser(senderId, senderName)
     }
 
@@ -1211,10 +1282,11 @@ class RoomViewModel(
 
         // Find first empty seat within effective limit (skip owner seat)
         val limit = _uiState.value.effectiveSeatCount
-        val emptySeatIndex = (1 until limit).firstOrNull { i ->
-            val seat = room.seats[i.toString()]
-            seat != null && seat.state != SeatState.OCCUPIED
-        } ?: return
+        val emptySeatIndex =
+            (1 until limit).firstOrNull { i ->
+                val seat = room.seats[i.toString()]
+                seat != null && seat.state != SeatState.OCCUPIED
+            } ?: return
 
         withSeatAction("Accepting invite...", "Seated") {
             roomRepository.acceptInvite(roomId, userId, emptySeatIndex)
@@ -1236,7 +1308,8 @@ class RoomViewModel(
 
         // Remove timestamps older than the flood window
         while (recentMessageTimestamps.isNotEmpty() &&
-            now - recentMessageTimestamps.first() > Constants.FLOOD_WINDOW_MS) {
+            now - recentMessageTimestamps.first() > Constants.FLOOD_WINDOW_MS
+        ) {
             recentMessageTimestamps.removeFirst()
         }
 
@@ -1276,9 +1349,10 @@ class RoomViewModel(
                 try {
                     if (room.ownerId == userId) {
                         // Check if anyone else is still on mic
-                        val anyoneOnMic = room.seats.any { (_, seat) ->
-                            seat.userId != null && seat.userId != userId && seat.state == SeatState.OCCUPIED
-                        }
+                        val anyoneOnMic =
+                            room.seats.any { (_, seat) ->
+                                seat.userId != null && seat.userId != userId && seat.state == SeatState.OCCUPIED
+                            }
                         if (anyoneOnMic) {
                             // Owner keeps seat 0 — stays visible during OWNER_AWAY
                             logD(TAG, "leaveRoom (VM): owner with others on mic → setOwnerAway")
@@ -1303,11 +1377,13 @@ class RoomViewModel(
                         // If no non-owner seats remain in an OWNER_AWAY room, close it —
                         // don't count unseated visitors, only seated users matter.
                         if (room.state == RoomState.OWNER_AWAY) {
-                            val othersStillSeated = room.seats.any { (_, seat) ->
-                                seat.userId != null && seat.userId != userId
-                                    && seat.userId != room.ownerId
-                                    && seat.state == SeatState.OCCUPIED
-                            }
+                            val othersStillSeated =
+                                room.seats.any { (_, seat) ->
+                                    seat.userId != null &&
+                                        seat.userId != userId &&
+                                        seat.userId != room.ownerId &&
+                                        seat.state == SeatState.OCCUPIED
+                                }
                             if (!othersStillSeated) {
                                 logD(TAG, "leaveRoom: no seated non-owners left in OWNER_AWAY room → closeRoom")
                                 roomRepository.closeRoom(roomId)
@@ -1391,10 +1467,12 @@ class RoomViewModel(
     }
 
     private fun loadSeatUsers(room: ChatRoom) {
-        val seatedUserIds = room.seats.values.asSequence()
-            .filter { it.state == SeatState.OCCUPIED && it.userId != null }
-            .mapNotNull { it.userId }
-            .toSet()
+        val seatedUserIds =
+            room.seats.values
+                .asSequence()
+                .filter { it.state == SeatState.OCCUPIED && it.userId != null }
+                .mapNotNull { it.userId }
+                .toSet()
 
         if (seatedUserIds == lastSeatedUserIds && seatedUserIds.all { it in userCache }) return
         lastSeatedUserIds = seatedUserIds
@@ -1413,7 +1491,10 @@ class RoomViewModel(
         }
     }
 
-    private fun loadUsersForIds(userIds: Set<String>, onLoaded: (Map<String, User>) -> Unit) {
+    private fun loadUsersForIds(
+        userIds: Set<String>,
+        onLoaded: (Map<String, User>) -> Unit,
+    ) {
         val newUserIds = userIds.filter { it !in userCache }
         if (newUserIds.isEmpty()) {
             val filtered = userCache.filterKeys { it in userIds }
@@ -1516,17 +1597,20 @@ class RoomViewModel(
 
         // Host users: owner + anyone who was ever a host, owner always first
         val hostIds = room.allTimeHostIds + room.ownerId
-        val hostUsers = hostIds.mapNotNull { userCache[it] }
-            .sortedByDescending { it.uid == room.ownerId }
+        val hostUsers =
+            hostIds
+                .mapNotNull { userCache[it] }
+                .sortedByDescending { it.uid == room.ownerId }
 
         // Speaker users: anyone who sat on a seat but was never a host and isn't the owner
         val speakerIds = room.allTimeSeatUserIds - hostIds
         val speakerUsers = speakerIds.mapNotNull { userCache[it] }
 
         // Total unique visitors from firstJoinTimestamps, fall back to lastKnownRoom
-        val visitors = room.firstJoinTimestamps.size.coerceAtLeast(
-            lastKnownRoom?.participantIds?.size ?: 0
-        )
+        val visitors =
+            room.firstJoinTimestamps.size.coerceAtLeast(
+                lastKnownRoom?.participantIds?.size ?: 0,
+            )
 
         return RoomClosedSummary(
             roomName = room.name,
@@ -1534,11 +1618,14 @@ class RoomViewModel(
             hostUsers = hostUsers,
             speakerUsers = speakerUsers,
             ownerId = room.ownerId,
-            totalVisitors = visitors
+            totalVisitors = visitors,
         )
     }
 
-    fun startEditMessage(messageId: String, text: String) {
+    fun startEditMessage(
+        messageId: String,
+        text: String,
+    ) {
         _uiState.update { it.copy(editingMessageId = messageId, editingMessageText = text) }
     }
 
@@ -1555,7 +1642,10 @@ class RoomViewModel(
         }
     }
 
-    fun setAlias(targetUserId: String, alias: String) {
+    fun setAlias(
+        targetUserId: String,
+        alias: String,
+    ) {
         val userId = _uiState.value.currentUserId
         viewModelScope.launch {
             when (userRepository.setAlias(userId, targetUserId, alias)) {
@@ -1600,21 +1690,23 @@ class RoomViewModel(
         targetUserId: String,
         reason: String,
         description: String,
-        evidenceImages: List<Pair<ByteArray, String>> = emptyList()
+        evidenceImages: List<Pair<ByteArray, String>> = emptyList(),
     ) {
         viewModelScope.launch {
             _uiState.update { it.copy(isSubmittingReport = true, reportError = null) }
 
-            val currentUser = userCache[_uiState.value.currentUserId]
-                ?: when (val result = userRepository.getUser(_uiState.value.currentUserId)) {
-                    is Resource.Success -> result.data
-                    else -> null
-                }
-            val targetUser = userCache[targetUserId]
-                ?: when (val result = userRepository.getUser(targetUserId)) {
-                    is Resource.Success -> result.data
-                    else -> null
-                }
+            val currentUser =
+                userCache[_uiState.value.currentUserId]
+                    ?: when (val result = userRepository.getUser(_uiState.value.currentUserId)) {
+                        is Resource.Success -> result.data
+                        else -> null
+                    }
+            val targetUser =
+                userCache[targetUserId]
+                    ?: when (val result = userRepository.getUser(targetUserId)) {
+                        is Resource.Success -> result.data
+                        else -> null
+                    }
             if (currentUser == null || targetUser == null) {
                 _uiState.update { it.copy(isSubmittingReport = false, reportError = "Could not submit report") }
                 return@launch
@@ -1623,9 +1715,15 @@ class RoomViewModel(
             // Upload evidence
             val evidenceUrls = mutableListOf<String>()
             for ((bytes, mimeType) in evidenceImages) {
-                when (val result = storageRepository.uploadImage(
-                    currentUser.uid, "report_evidence", bytes, mimeType
-                )) {
+                when (
+                    val result =
+                        storageRepository.uploadImage(
+                            currentUser.uid,
+                            "report_evidence",
+                            bytes,
+                            mimeType,
+                        )
+                ) {
                     is Resource.Success -> evidenceUrls.add(result.data)
                     is Resource.Error -> {
                         _uiState.update { it.copy(isSubmittingReport = false, reportError = "Failed to upload evidence") }
@@ -1635,18 +1733,20 @@ class RoomViewModel(
                 }
             }
 
-            when (reportRepository.reportUser(
-                reporterId = currentUser.uid,
-                reporterName = currentUser.displayName,
-                reporterUniqueId = currentUser.uniqueId,
-                reportedUserId = targetUser.uid,
-                reportedUserName = targetUser.displayName,
-                reportedUserUniqueId = targetUser.uniqueId,
-                conversationId = "",
-                reason = reason,
-                description = description,
-                evidenceUrls = evidenceUrls
-            )) {
+            when (
+                reportRepository.reportUser(
+                    reporterId = currentUser.uid,
+                    reporterName = currentUser.displayName,
+                    reporterUniqueId = currentUser.uniqueId,
+                    reportedUserId = targetUser.uid,
+                    reportedUserName = targetUser.displayName,
+                    reportedUserUniqueId = targetUser.uniqueId,
+                    conversationId = "",
+                    reason = reason,
+                    description = description,
+                    evidenceUrls = evidenceUrls,
+                )
+            ) {
                 is Resource.Success -> {
                     _uiState.update { it.copy(isSubmittingReport = false, reportSubmitted = true) }
                 }
@@ -1695,10 +1795,11 @@ class RoomViewModel(
         _uiState.update { it.copy(activeNotification = notification) }
         if (notification is RoomNotification.SeatRequestReceived) {
             autoDismissJob?.cancel()
-            autoDismissJob = viewModelScope.launch {
-                delay(Constants.SEAT_REQUEST_AUTO_DISMISS_MS)
-                dismissCurrentNotification()
-            }
+            autoDismissJob =
+                viewModelScope.launch {
+                    delay(Constants.SEAT_REQUEST_AUTO_DISMISS_MS)
+                    dismissCurrentNotification()
+                }
         }
     }
 
@@ -1725,12 +1826,13 @@ class RoomViewModel(
     /** Re-filter raw requests against latest room state and enqueue new notifications. */
     private fun refilterPendingRequests() {
         val room = _uiState.value.room
-        val validRequests = rawPendingRequests.filter { req ->
-            val alreadySeated = room?.findUserSeat(req.userId) != null
-            val leftRoom = room != null && req.userId !in room.participantIds
-            val locallyApproved = req.requestId in locallyApprovedRequestIds
-            !alreadySeated && !leftRoom && !locallyApproved
-        }
+        val validRequests =
+            rawPendingRequests.filter { req ->
+                val alreadySeated = room?.findUserSeat(req.userId) != null
+                val leftRoom = room != null && req.userId !in room.participantIds
+                val locallyApproved = req.requestId in locallyApprovedRequestIds
+                !alreadySeated && !leftRoom && !locallyApproved
+            }
         val current = _uiState.value.pendingRequestsForPanel
         if (validRequests.map { it.requestId } == current.map { it.requestId }) return
         _uiState.update { it.copy(pendingRequestsForPanel = validRequests) }
@@ -1748,7 +1850,8 @@ class RoomViewModel(
 
     private fun observePendingRequests() {
         viewModelScope.launch {
-            seatRequestRepository.getPendingRequests(roomId)
+            seatRequestRepository
+                .getPendingRequests(roomId)
                 .catch { e -> logW(TAG, "observePendingRequests error", e) }
                 .collect { requests ->
                     rawPendingRequests = requests
@@ -1762,7 +1865,8 @@ class RoomViewModel(
     private fun observeMyRequest() {
         viewModelScope.launch {
             val userId = _uiState.value.currentUserId
-            seatRequestRepository.getRequestsByUser(roomId, userId)
+            seatRequestRepository
+                .getRequestsByUser(roomId, userId)
                 .catch { e -> logW(TAG, "observeMyRequest error", e) }
                 .collect { requests ->
                     // On the first emission, suppress all existing approved requests.
@@ -1770,14 +1874,16 @@ class RoomViewModel(
                     // during this session) will trigger notifications.
                     if (!areInitialApprovalsSuppressed) {
                         areInitialApprovalsSuppressed = true
-                        requests.filter { it.status == SeatRequestStatus.APPROVED }
+                        requests
+                            .filter { it.status == SeatRequestStatus.APPROVED }
                             .forEach { processedApprovalIds.add(it.requestId) }
                         return@collect
                     }
 
-                    val approvedRequest = requests.firstOrNull {
-                        it.status == SeatRequestStatus.APPROVED
-                    } ?: return@collect
+                    val approvedRequest =
+                        requests.firstOrNull {
+                            it.status == SeatRequestStatus.APPROVED
+                        } ?: return@collect
 
                     if (approvedRequest.requestId in processedApprovalIds) return@collect
 
@@ -1809,9 +1915,14 @@ class RoomViewModel(
             locallyApprovedRequestIds.add(request.requestId)
             refilterPendingRequests()
 
-            when (val result = seatRequestRepository.approveRequest(
-                roomId, request.requestId, _uiState.value.currentUserId
-            )) {
+            when (
+                val result =
+                    seatRequestRepository.approveRequest(
+                        roomId,
+                        request.requestId,
+                        _uiState.value.currentUserId,
+                    )
+            ) {
                 is Resource.Success -> {
                     val approved = result.data
                     if (delayMs <= Constants.SEAT_REQUEST_IMMEDIATE_THRESHOLD_MS) {
@@ -1847,15 +1958,16 @@ class RoomViewModel(
 
         val limit = _uiState.value.effectiveSeatCount
         val seat = room.seats[request.seatIndex.toString()]
-        val seatIndex = if (seat?.state == SeatState.OCCUPIED || request.seatIndex >= limit) {
-            // Original seat taken or beyond limit, find next available within limit
-            (1 until limit).firstOrNull { i ->
-                val seat = room.seats[i.toString()]
-                seat != null && seat.state != SeatState.OCCUPIED
+        val seatIndex =
+            if (seat?.state == SeatState.OCCUPIED || request.seatIndex >= limit) {
+                // Original seat taken or beyond limit, find next available within limit
+                (1 until limit).firstOrNull { i ->
+                    val seat = room.seats[i.toString()]
+                    seat != null && seat.state != SeatState.OCCUPIED
+                }
+            } else {
+                request.seatIndex
             }
-        } else {
-            request.seatIndex
-        }
         dismissCurrentNotification()
         if (seatIndex != null) {
             withSeatAction("Taking seat...", "Seated") {
@@ -1888,21 +2000,23 @@ class RoomViewModel(
         val repo = translationRepository ?: return
         val uid = _uiState.value.currentUserId
         val targetLang = LanguagePreference.get()
-        val toTranslate = messages.filter { msg ->
-            msg.senderId != uid &&
-            msg.senderId != "system" &&
-            msg.type == com.shyden.shytalk.core.model.MessageType.TEXT &&
-            msg.text.isNotBlank() &&
-            msg.messageId !in autoTranslatedMessageIds &&
-            !_uiState.value.translations.containsKey(msg.messageId)
-        }
+        val toTranslate =
+            messages.filter { msg ->
+                msg.senderId != uid &&
+                    msg.senderId != "system" &&
+                    msg.type == com.shyden.shytalk.core.model.MessageType.TEXT &&
+                    msg.text.isNotBlank() &&
+                    msg.messageId !in autoTranslatedMessageIds &&
+                    !_uiState.value.translations.containsKey(msg.messageId)
+            }
         for (msg in toTranslate) {
             autoTranslatedMessageIds.add(msg.messageId)
             viewModelScope.launch {
                 when (val result = repo.translate(msg.text, targetLang, "rooms/$roomId/messages/${msg.messageId}")) {
-                    is Resource.Success -> _uiState.update {
-                        it.copy(translations = it.translations + (msg.messageId to result.data.translatedText))
-                    }
+                    is Resource.Success ->
+                        _uiState.update {
+                            it.copy(translations = it.translations + (msg.messageId to result.data.translatedText))
+                        }
                     else -> { /* ignore errors for auto-translate */ }
                 }
             }
@@ -1913,12 +2027,15 @@ class RoomViewModel(
         val repo = translationRepository ?: return
         val message = _uiState.value.messages.find { it.messageId == messageId } ?: return
         if (_uiState.value.translations.containsKey(messageId)) return
-        val targetLang = com.shyden.shytalk.core.util.LanguagePreference.get()
+        val targetLang =
+            com.shyden.shytalk.core.util.LanguagePreference
+                .get()
         viewModelScope.launch {
             when (val result = repo.translate(message.text, targetLang, "rooms/$roomId/messages/$messageId")) {
-                is Resource.Success -> _uiState.update {
-                    it.copy(translations = it.translations + (messageId to result.data.translatedText))
-                }
+                is Resource.Success ->
+                    _uiState.update {
+                        it.copy(translations = it.translations + (messageId to result.data.translatedText))
+                    }
                 else -> { /* Loading or Error */ }
             }
         }

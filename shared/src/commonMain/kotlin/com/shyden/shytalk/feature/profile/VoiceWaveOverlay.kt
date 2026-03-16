@@ -13,9 +13,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.graphics.Path
 import kotlin.math.sin
 
 /**
@@ -28,11 +28,12 @@ fun VoiceWaveOverlay(modifier: Modifier = Modifier) {
     val progress by transition.animateFloat(
         initialValue = 0f,
         targetValue = (2 * kotlin.math.PI).toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "waveProgress"
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(durationMillis = 2000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+        label = "waveProgress",
     )
 
     val barCount = 5
@@ -44,9 +45,13 @@ fun VoiceWaveOverlay(modifier: Modifier = Modifier) {
         val h = size.height
         if (w == 0f || h == 0f) return@Canvas
 
-        val clipCircle = Path().apply {
-            addOval(androidx.compose.ui.geometry.Rect(0f, 0f, w, h))
-        }
+        val clipCircle =
+            Path().apply {
+                addOval(
+                    androidx.compose.ui.geometry
+                        .Rect(0f, 0f, w, h),
+                )
+            }
 
         clipPath(clipCircle) {
             val barWidth = w * 0.08f
@@ -67,7 +72,7 @@ fun VoiceWaveOverlay(modifier: Modifier = Modifier) {
                     start = Offset(x, barBottom),
                     end = Offset(x, barBottom - barHeight),
                     strokeWidth = barWidth,
-                    cap = StrokeCap.Round
+                    cap = StrokeCap.Round,
                 )
             }
         }

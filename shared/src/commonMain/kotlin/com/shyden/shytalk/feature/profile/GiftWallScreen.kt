@@ -34,18 +34,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.Gift
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,7 +53,7 @@ import org.jetbrains.compose.resources.stringResource
 fun GiftWallScreen(
     viewModel: GiftWallViewModel,
     onNavigateBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -65,16 +65,16 @@ fun GiftWallScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.back))
                     }
-                }
+                },
             )
         },
-        modifier = modifier
+        modifier = modifier,
     ) { padding ->
         GiftWallContent(
             state = state,
             onSelectGift = { viewModel.selectGift(it) },
             onDismissDetails = { viewModel.dismissDetails() },
-            modifier = Modifier.fillMaxSize().padding(padding)
+            modifier = Modifier.fillMaxSize().padding(padding),
         )
     }
 }
@@ -89,26 +89,27 @@ fun GiftWallContent(
     state: GiftWallUiState,
     onSelectGift: (String) -> Unit,
     onDismissDetails: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val items = state.giftCatalog
 
     Box(
         modifier = modifier,
-        contentAlignment = Alignment.TopCenter
+        contentAlignment = Alignment.TopCenter,
     ) {
         Column(
-            modifier = Modifier
-                .widthIn(max = 400.dp)
-                .testTag("giftWall_grid")
-                .padding(4.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            modifier =
+                Modifier
+                    .widthIn(max = 400.dp)
+                    .testTag("giftWall_grid")
+                    .padding(4.dp)
+                    .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             items.chunked(4).forEach { row ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     row.forEach { gift ->
                         val wallEntry = state.wallEntries.find { it.giftId == gift.id }
@@ -118,7 +119,7 @@ fun GiftWallContent(
                                 gift = gift,
                                 receivedCount = wallEntry?.receivedCount ?: 0,
                                 isLit = hasReceived,
-                                onClick = { if (hasReceived) onSelectGift(gift.id) }
+                                onClick = { if (hasReceived) onSelectGift(gift.id) },
                             )
                         }
                     }
@@ -139,26 +140,32 @@ fun GiftWallContent(
             ModalBottomSheet(onDismissRequest = onDismissDetails) {
                 Column(
                     modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(gift.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         stringResource(Res.string.received_times, wallEntry?.receivedCount ?: 0),
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
                         stringResource(Res.string.gift_value_coins, gift.coinValue),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
 
                     if (state.senders.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text(stringResource(Res.string.top_senders), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Text(
+                            stringResource(Res.string.top_senders),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                        )
                         state.senders.take(5).forEach { sender ->
-                            Text("${sender.userId.take(8)}... - ${sender.count}x",
-                                style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                "${sender.userId.take(8)}... - ${sender.count}x",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
                         }
                     }
 
@@ -174,56 +181,63 @@ private fun GiftWallItem(
     gift: Gift,
     receivedCount: Int,
     isLit: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     val bracketColor = Color.Gray
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
-        modifier = Modifier
-            .aspectRatio(1f)
-            .clip(RoundedCornerShape(8.dp))
-            .background(
-                if (isLit) bracketColor.copy(alpha = 0.1f)
-                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-            )
-            .border(
-                width = if (isLit) 2.dp else 1.dp,
-                color = if (isLit) bracketColor else Color.Gray.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(8.dp)
-            )
-            .clickable(enabled = isLit) { onClick() }
-            .padding(4.dp)
+        modifier =
+            Modifier
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(
+                    if (isLit) {
+                        bracketColor.copy(alpha = 0.1f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    },
+                ).border(
+                    width = if (isLit) 2.dp else 1.dp,
+                    color = if (isLit) bracketColor else Color.Gray.copy(alpha = 0.3f),
+                    shape = RoundedCornerShape(8.dp),
+                ).clickable(enabled = isLit) { onClick() }
+                .padding(4.dp),
     ) {
         Box(contentAlignment = Alignment.Center) {
             if (gift.iconUrl.isNotBlank()) {
                 AsyncImage(
                     model = gift.iconUrl,
                     contentDescription = gift.name,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .then(if (!isLit) Modifier.background(Color.Gray.copy(alpha = 0.3f)) else Modifier),
+                    modifier =
+                        Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .then(if (!isLit) Modifier.background(Color.Gray.copy(alpha = 0.3f)) else Modifier),
                     contentScale = ContentScale.Crop,
-                    alpha = if (isLit) 1f else 0.4f
+                    alpha = if (isLit) 1f else 0.4f,
                 )
             } else {
                 Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (isLit) bracketColor.copy(alpha = 0.2f)
-                            else Color.Gray.copy(alpha = 0.1f)
-                        ),
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isLit) {
+                                    bracketColor.copy(alpha = 0.2f)
+                                } else {
+                                    Color.Gray.copy(alpha = 0.1f)
+                                },
+                            ),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = gift.name.take(2),
                         fontWeight = FontWeight.Bold,
                         color = if (isLit) bracketColor else Color.Gray,
-                        fontSize = 14.sp
+                        fontSize = 14.sp,
                     )
                 }
             }
@@ -232,7 +246,7 @@ private fun GiftWallItem(
                 Text(
                     text = "\uD83D\uDEAB",
                     fontSize = 16.sp,
-                    modifier = Modifier.align(Alignment.Center)
+                    modifier = Modifier.align(Alignment.Center),
                 )
             }
         }
@@ -243,14 +257,14 @@ private fun GiftWallItem(
             maxLines = 1,
             textAlign = TextAlign.Center,
             fontSize = 9.sp,
-            color = if (isLit) MaterialTheme.colorScheme.onSurface else Color.Gray
+            color = if (isLit) MaterialTheme.colorScheme.onSurface else Color.Gray,
         )
         if (receivedCount > 0) {
             Text(
                 text = "x$receivedCount",
                 style = MaterialTheme.typography.labelSmall,
                 color = bracketColor,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
         }
     }

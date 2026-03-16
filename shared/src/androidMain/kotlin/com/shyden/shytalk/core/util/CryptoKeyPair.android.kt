@@ -19,16 +19,19 @@ actual class CryptoKeyPair {
             if (keyStore.containsAlias(alias)) {
                 true
             } else {
-                val spec = KeyGenParameterSpec.Builder(
-                    alias,
-                    KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY
-                )
-                    .setDigests(KeyProperties.DIGEST_SHA256)
-                    .setAlgorithmParameterSpec(java.security.spec.ECGenParameterSpec("secp256r1"))
-                    .build()
-                val generator = KeyPairGenerator.getInstance(
-                    KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore"
-                )
+                val spec =
+                    KeyGenParameterSpec
+                        .Builder(
+                            alias,
+                            KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY,
+                        ).setDigests(KeyProperties.DIGEST_SHA256)
+                        .setAlgorithmParameterSpec(java.security.spec.ECGenParameterSpec("secp256r1"))
+                        .build()
+                val generator =
+                    KeyPairGenerator.getInstance(
+                        KeyProperties.KEY_ALGORITHM_EC,
+                        "AndroidKeyStore",
+                    )
                 generator.initialize(spec)
                 generator.generateKeyPair()
                 true

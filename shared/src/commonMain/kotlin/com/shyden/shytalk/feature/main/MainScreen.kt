@@ -21,9 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -37,15 +35,18 @@ import androidx.compose.ui.platform.testTag
 import com.shyden.shytalk.core.model.BannerActionType
 import com.shyden.shytalk.core.model.ChatRoom
 import com.shyden.shytalk.core.ui.DegradedModeBanner
+import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.feature.home.RoomListContent
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 
-enum class BottomNavTab(val label: String) {
+enum class BottomNavTab(
+    val label: String,
+) {
     Rooms("Rooms"),
     Messages("Messages"),
-    Profile("Profile")
+    Profile("Profile"),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,7 +63,7 @@ fun MainScreen(
     onNavigateToUrl: (String) -> Unit = {},
     messagesContent: @Composable (Modifier) -> Unit = {},
     totalUnreadCount: Long = 0,
-    profileContent: @Composable (Modifier) -> Unit
+    profileContent: @Composable (Modifier) -> Unit,
 ) {
     var selectedTabName by rememberSaveable { mutableStateOf(BottomNavTab.Rooms.name) }
     val selectedTab = BottomNavTab.valueOf(selectedTabName)
@@ -78,7 +79,7 @@ fun MainScreen(
                             BottomNavTab.Rooms -> stringResource(Res.string.rooms)
                             BottomNavTab.Messages -> stringResource(Res.string.messages)
                             BottomNavTab.Profile -> stringResource(Res.string.profile)
-                        }
+                        },
                     )
                 },
                 actions = {
@@ -87,7 +88,7 @@ fun MainScreen(
                             Icon(Icons.Default.Settings, contentDescription = stringResource(Res.string.settings))
                         }
                     }
-                }
+                },
             )
         },
         bottomBar = {
@@ -97,7 +98,7 @@ fun MainScreen(
                     onClick = { selectedTabName = BottomNavTab.Rooms.name },
                     icon = { Icon(Icons.Default.MeetingRoom, contentDescription = null) },
                     label = { Text(stringResource(Res.string.rooms)) },
-                    modifier = Modifier.testTag("main_roomsTab")
+                    modifier = Modifier.testTag("main_roomsTab"),
                 )
                 NavigationBarItem(
                     selected = selectedTab == BottomNavTab.Messages,
@@ -108,25 +109,28 @@ fun MainScreen(
                                 if (totalUnreadCount > 0) {
                                     Badge {
                                         Text(
-                                            if (totalUnreadCount > 99) "99+"
-                                            else "$totalUnreadCount"
+                                            if (totalUnreadCount > 99) {
+                                                "99+"
+                                            } else {
+                                                "$totalUnreadCount"
+                                            },
                                         )
                                     }
                                 }
-                            }
+                            },
                         ) {
                             Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null)
                         }
                     },
                     label = { Text(stringResource(Res.string.messages)) },
-                    modifier = Modifier.testTag("main_messagesTab")
+                    modifier = Modifier.testTag("main_messagesTab"),
                 )
                 NavigationBarItem(
                     selected = selectedTab == BottomNavTab.Profile,
                     onClick = { selectedTabName = BottomNavTab.Profile.name },
                     icon = { Icon(Icons.Default.Person, contentDescription = null) },
                     label = { Text(stringResource(Res.string.profile)) },
-                    modifier = Modifier.testTag("main_profileTab")
+                    modifier = Modifier.testTag("main_profileTab"),
                 )
             }
         },
@@ -136,7 +140,7 @@ fun MainScreen(
                     FloatingActionButton(
                         onClick = { showCreateDialog = true },
                         containerColor = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.testTag("main_createRoomFab")
+                        modifier = Modifier.testTag("main_createRoomFab"),
                     ) {
                         Icon(Icons.Default.Add, contentDescription = stringResource(Res.string.create_room))
                     }
@@ -145,14 +149,14 @@ fun MainScreen(
                     FloatingActionButton(
                         onClick = onNavigateToNewMessage,
                         containerColor = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.testTag("main_newMessageFab")
+                        modifier = Modifier.testTag("main_newMessageFab"),
                     ) {
                         Icon(Icons.Default.Edit, contentDescription = stringResource(Res.string.new_message))
                     }
                 }
                 else -> {}
             }
-        }
+        },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (isBackendDegraded) {
@@ -169,18 +173,19 @@ fun MainScreen(
                                 when (banner.actionType) {
                                     BannerActionType.URL -> onNavigateToUrl(value)
                                     BannerActionType.ROOM -> onNavigateToRoom(value)
-                                    BannerActionType.SCREEN -> when (value) {
-                                        "wallet" -> onNavigateToWallet()
-                                        "settings" -> onNavigateToSettings()
-                                        else -> {}
-                                    }
+                                    BannerActionType.SCREEN ->
+                                        when (value) {
+                                            "wallet" -> onNavigateToWallet()
+                                            "settings" -> onNavigateToSettings()
+                                            else -> {}
+                                        }
                                     BannerActionType.NONE -> {}
                                 }
                             },
                             snackbarHostState = snackbarHostState,
                             showCreateDialog = showCreateDialog,
                             onDismissCreateDialog = { showCreateDialog = false },
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
                         )
                     }
                     BottomNavTab.Messages -> {

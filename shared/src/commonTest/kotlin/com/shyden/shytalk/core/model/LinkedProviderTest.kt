@@ -6,15 +6,15 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class LinkedProviderTest {
-
     @Test
     fun fromMap_parsesGoogleProvider() {
-        val map = mapOf<String, Any?>(
-            "type" to "google",
-            "identifier" to "alice@gmail.com",
-            "active" to true,
-            "linkedAt" to 1709913600000L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "type" to "google",
+                "identifier" to "alice@gmail.com",
+                "active" to true,
+                "linkedAt" to 1709913600000L,
+            )
 
         val provider = LinkedProvider.fromMap(map)
 
@@ -27,12 +27,13 @@ class LinkedProviderTest {
 
     @Test
     fun fromMap_parsesAppleProvider() {
-        val map = mapOf<String, Any?>(
-            "type" to "apple",
-            "identifier" to "001234.abcdef",
-            "active" to true,
-            "linkedAt" to 1709913600000L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "type" to "apple",
+                "identifier" to "001234.abcdef",
+                "active" to true,
+                "linkedAt" to 1709913600000L,
+            )
 
         val provider = LinkedProvider.fromMap(map)
 
@@ -42,13 +43,14 @@ class LinkedProviderTest {
 
     @Test
     fun fromMap_parsesInactiveProviderWithUnlinkedAt() {
-        val map = mapOf<String, Any?>(
-            "type" to "email",
-            "identifier" to "old@work.com",
-            "active" to false,
-            "linkedAt" to 1709913600000L,
-            "unlinkedAt" to 1709917200000L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "type" to "email",
+                "identifier" to "old@work.com",
+                "active" to false,
+                "linkedAt" to 1709913600000L,
+                "unlinkedAt" to 1709917200000L,
+            )
 
         val provider = LinkedProvider.fromMap(map)
 
@@ -59,11 +61,12 @@ class LinkedProviderTest {
 
     @Test
     fun fromMap_defaultsToActiveWhenMissing() {
-        val map = mapOf<String, Any?>(
-            "type" to "google",
-            "identifier" to "user@gmail.com",
-            "linkedAt" to 1709913600000L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "type" to "google",
+                "identifier" to "user@gmail.com",
+                "linkedAt" to 1709913600000L,
+            )
 
         val provider = LinkedProvider.fromMap(map)
 
@@ -72,12 +75,13 @@ class LinkedProviderTest {
 
     @Test
     fun fromMap_unknownTypeBecomesUNKNOWN() {
-        val map = mapOf<String, Any?>(
-            "type" to "facebook",
-            "identifier" to "12345",
-            "active" to true,
-            "linkedAt" to 1709913600000L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "type" to "facebook",
+                "identifier" to "12345",
+                "active" to true,
+                "linkedAt" to 1709913600000L,
+            )
 
         val provider = LinkedProvider.fromMap(map)
 
@@ -86,13 +90,14 @@ class LinkedProviderTest {
 
     @Test
     fun toMap_roundTrips() {
-        val original = LinkedProvider(
-            type = ProviderType.GOOGLE,
-            identifier = "alice@gmail.com",
-            active = true,
-            linkedAt = 1709913600000L,
-            unlinkedAt = null
-        )
+        val original =
+            LinkedProvider(
+                type = ProviderType.GOOGLE,
+                identifier = "alice@gmail.com",
+                active = true,
+                linkedAt = 1709913600000L,
+                unlinkedAt = null,
+            )
 
         val map = original.toMap()
         val restored = LinkedProvider.fromMap(map)
@@ -106,13 +111,14 @@ class LinkedProviderTest {
 
     @Test
     fun toMap_includesCorrectKeys() {
-        val provider = LinkedProvider(
-            type = ProviderType.EMAIL,
-            identifier = "test@example.com",
-            active = false,
-            linkedAt = 1709913600000L,
-            unlinkedAt = 1709917200000L
-        )
+        val provider =
+            LinkedProvider(
+                type = ProviderType.EMAIL,
+                identifier = "test@example.com",
+                active = false,
+                linkedAt = 1709913600000L,
+                unlinkedAt = 1709917200000L,
+            )
 
         val map = provider.toMap()
 
@@ -125,7 +131,6 @@ class LinkedProviderTest {
 }
 
 class ProviderTypeTest {
-
     @Test
     fun fromKey_resolveAllKnownTypes() {
         assertEquals(ProviderType.GOOGLE, ProviderType.fromKey("google"))

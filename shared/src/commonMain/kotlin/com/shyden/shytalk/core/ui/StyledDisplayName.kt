@@ -30,28 +30,29 @@ fun StyledDisplayName(
     modifier: Modifier = Modifier,
     style: TextStyle = LocalTextStyle.current,
     maxLines: Int = 1,
-    overflow: TextOverflow = TextOverflow.Ellipsis
+    overflow: TextOverflow = TextOverflow.Ellipsis,
 ) {
     if (isSuperShy) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = modifier
+            modifier = modifier,
         ) {
             Icon(
                 imageVector = Icons.Filled.Star,
                 contentDescription = stringResource(Res.string.super_shy),
                 tint = SuperShyGold,
-                modifier = Modifier.size(style.fontSize.value.dp * 1.1f)
+                modifier = Modifier.size(style.fontSize.value.dp * 1.1f),
             )
             Spacer(modifier = Modifier.width(3.dp))
             Text(
                 text = displayName,
-                style = style.copy(
-                    color = SuperShyGold,
-                    fontWeight = FontWeight.Bold
-                ),
+                style =
+                    style.copy(
+                        color = SuperShyGold,
+                        fontWeight = FontWeight.Bold,
+                    ),
                 maxLines = maxLines,
-                overflow = overflow
+                overflow = overflow,
             )
         }
     } else {
@@ -60,7 +61,7 @@ fun StyledDisplayName(
             style = style,
             maxLines = maxLines,
             overflow = overflow,
-            modifier = modifier
+            modifier = modifier,
         )
     }
 }

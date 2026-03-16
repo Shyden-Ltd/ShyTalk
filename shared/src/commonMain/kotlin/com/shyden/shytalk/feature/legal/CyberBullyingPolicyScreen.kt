@@ -15,15 +15,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import com.shyden.shytalk.core.ui.PlatformWebView
 import com.shyden.shytalk.core.util.Constants
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CyberBullyingPolicyScreen(
-    onNavigateBack: () -> Unit
-) {
+fun CyberBullyingPolicyScreen(onNavigateBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -31,19 +29,20 @@ fun CyberBullyingPolicyScreen(
                 navigationIcon = {
                     IconButton(
                         onClick = onNavigateBack,
-                        modifier = Modifier.testTag("cyberBullyingPolicy_backButton")
+                        modifier = Modifier.testTag("cyberBullyingPolicy_backButton"),
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.back))
                     }
-                }
+                },
             )
-        }
+        },
     ) { padding ->
         PlatformWebView(
             url = Constants.CYBER_BULLYING_URL,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding),
         )
     }
 }

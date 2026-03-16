@@ -13,19 +13,20 @@ data class GiftEvent(
     val coinValue: Int = 0,
     val quantity: Int = 1,
     val timestamp: Long = 0,
-    val eventId: Long = Random.nextLong()
+    val eventId: Long = Random.nextLong(),
 ) {
     companion object {
-        fun fromMap(map: Map<String, Any?>): GiftEvent = GiftEvent(
-            senderId = map["senderId"] as? String ?: "",
-            senderName = map["senderName"] as? String ?: "",
-            recipientId = map["recipientId"] as? String ?: "",
-            recipientName = map["recipientName"] as? String ?: "",
-            giftId = map["giftId"] as? String ?: "",
-            giftName = map["giftName"] as? String ?: "",
-            coinValue = (map["coinValue"] as? Long)?.toInt() ?: 0,
-            quantity = (map["quantity"] as? Long)?.toInt() ?: 1,
-            timestamp = map["timestamp"]?.let { timestampToMillis(it) } ?: 0
-        )
+        fun fromMap(map: Map<String, Any?>): GiftEvent =
+            GiftEvent(
+                senderId = map["senderId"] as? String ?: "",
+                senderName = map["senderName"] as? String ?: "",
+                recipientId = map["recipientId"] as? String ?: "",
+                recipientName = map["recipientName"] as? String ?: "",
+                giftId = map["giftId"] as? String ?: "",
+                giftName = map["giftName"] as? String ?: "",
+                coinValue = (map["coinValue"] as? Long)?.toInt() ?: 0,
+                quantity = (map["quantity"] as? Long)?.toInt() ?: 1,
+                timestamp = map["timestamp"]?.let { timestampToMillis(it) } ?: 0,
+            )
     }
 }

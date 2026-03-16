@@ -13,7 +13,11 @@ interface PinRepository {
     suspend fun setupPin(pin: String): Result<String>
 
     /** Verify PIN. Returns PinVerifyResult with custom token or lockout info. */
-    suspend fun verifyPin(uniqueId: String, deviceId: String, pin: String): Result<PinVerifyResult>
+    suspend fun verifyPin(
+        uniqueId: String,
+        deviceId: String,
+        pin: String,
+    ): Result<PinVerifyResult>
 
     /** Reset PIN after re-authentication. Clears lockout state. */
     suspend fun resetPin(newPin: String): Result<Unit>

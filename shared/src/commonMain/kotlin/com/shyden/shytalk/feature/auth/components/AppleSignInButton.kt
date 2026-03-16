@@ -28,27 +28,29 @@ fun AppleSignInButton(
     onClick: () -> Unit,
     isLoading: Boolean,
     enabled: Boolean = true,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     OutlinedButton(
         onClick = onClick,
         enabled = enabled && !isLoading,
-        modifier = modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .testTag("signIn_appleButton"),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .testTag("signIn_appleButton"),
         shape = RoundedCornerShape(24.dp),
-        colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = Color.Black,
-            contentColor = Color.White
-        ),
-        border = BorderStroke(1.dp, Color(0xFF333333))
+        colors =
+            ButtonDefaults.outlinedButtonColors(
+                containerColor = Color.Black,
+                contentColor = Color.White,
+            ),
+        border = BorderStroke(1.dp, Color(0xFF333333)),
     ) {
         if (isLoading) {
             CircularProgressIndicator(
                 modifier = Modifier.size(20.dp),
                 strokeWidth = 2.dp,
-                color = Color.White
+                color = Color.White,
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text("Signing in…")
@@ -57,7 +59,7 @@ fun AppleSignInButton(
                 painter = painterResource(Res.drawable.ic_apple_logo),
                 contentDescription = null,
                 modifier = Modifier.size(20.dp),
-                tint = Color.Unspecified
+                tint = Color.Unspecified,
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(stringResource(Res.string.sign_in_with_apple))

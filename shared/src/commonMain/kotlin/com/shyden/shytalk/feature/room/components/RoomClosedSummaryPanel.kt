@@ -40,43 +40,46 @@ import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.flagEmojiForCode
 import com.shyden.shytalk.feature.room.RoomClosedSummary
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun RoomClosedSummaryPanel(
     summary: RoomClosedSummary,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val hours = (summary.durationMs / 3_600_000).toInt()
     val minutes = ((summary.durationMs % 3_600_000) / 60_000).toInt()
-    val durationText = when {
-        hours > 0 -> "${hours}h ${minutes}m"
-        minutes > 0 -> "${minutes}m"
-        else -> "< 1m"
-    }
+    val durationText =
+        when {
+            hours > 0 -> "${hours}h ${minutes}m"
+            minutes > 0 -> "${minutes}m"
+            else -> "< 1m"
+        }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(vertical = 32.dp),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.Center,
     ) {
-        val textShadow = Shadow(
-            color = MaterialTheme.colorScheme.background,
-            offset = Offset.Zero,
-            blurRadius = 8f
-        )
+        val textShadow =
+            Shadow(
+                color = MaterialTheme.colorScheme.background,
+                offset = Offset.Zero,
+                blurRadius = 8f,
+            )
 
         Text(
             text = stringResource(Res.string.room_closed),
             style = MaterialTheme.typography.headlineMedium.copy(shadow = textShadow),
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -85,7 +88,7 @@ fun RoomClosedSummaryPanel(
             text = summary.roomName,
             style = MaterialTheme.typography.titleLarge.copy(shadow = textShadow),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -97,19 +100,19 @@ fun RoomClosedSummaryPanel(
         // Duration
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+            horizontalArrangement = Arrangement.Center,
         ) {
             Icon(
                 imageVector = Icons.Default.Schedule,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(24.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = stringResource(Res.string.open_for_duration, durationText),
                 style = MaterialTheme.typography.bodyLarge.copy(shadow = textShadow),
-                color = MaterialTheme.colorScheme.onBackground
+                color = MaterialTheme.colorScheme.onBackground,
             )
         }
 
@@ -118,19 +121,19 @@ fun RoomClosedSummaryPanel(
         // Total visitors
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+            horizontalArrangement = Arrangement.Center,
         ) {
             Icon(
                 imageVector = Icons.Default.Groups,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(24.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = stringResource(Res.string.visitor_count, summary.totalVisitors),
                 style = MaterialTheme.typography.bodyLarge.copy(shadow = textShadow),
-                color = MaterialTheme.colorScheme.onBackground
+                color = MaterialTheme.colorScheme.onBackground,
             )
         }
 
@@ -147,9 +150,10 @@ fun RoomClosedSummaryPanel(
                 style = MaterialTheme.typography.titleMedium.copy(shadow = textShadow),
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 32.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = 32.dp),
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -157,12 +161,12 @@ fun RoomClosedSummaryPanel(
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(horizontal = 32.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 items(summary.hostUsers, key = { it.uid }) { host ->
                     UserChip(
                         user = host,
-                        borderColor = MaterialTheme.colorScheme.primary
+                        borderColor = MaterialTheme.colorScheme.primary,
                     )
                 }
             }
@@ -177,9 +181,10 @@ fun RoomClosedSummaryPanel(
                 style = MaterialTheme.typography.titleMedium.copy(shadow = textShadow),
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 32.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = 32.dp),
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -187,12 +192,12 @@ fun RoomClosedSummaryPanel(
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(horizontal = 32.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 items(summary.speakerUsers, key = { it.uid }) { speaker ->
                     UserChip(
                         user = speaker,
-                        borderColor = MaterialTheme.colorScheme.tertiary
+                        borderColor = MaterialTheme.colorScheme.tertiary,
                     )
                 }
             }
@@ -207,28 +212,33 @@ fun RoomClosedSummaryPanel(
 }
 
 @Composable
-private fun UserChip(user: User, borderColor: Color) {
+private fun UserChip(
+    user: User,
+    borderColor: Color,
+) {
     Box(contentAlignment = Alignment.Center) {
         AsyncImage(
             model = user.photoUrl,
             contentDescription = user.displayName,
-            modifier = Modifier
-                .size(56.dp)
-                .clip(CircleShape)
-                .border(2.dp, borderColor, CircleShape),
-            contentScale = ContentScale.Crop
+            modifier =
+                Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .border(2.dp, borderColor, CircleShape),
+            contentScale = ContentScale.Crop,
         )
         val nationality = user.nationality
         if (nationality != null) {
             Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .size(22.dp),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .size(22.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = flagEmojiForCode(nationality),
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 14.sp)
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 14.sp),
                 )
             }
         }

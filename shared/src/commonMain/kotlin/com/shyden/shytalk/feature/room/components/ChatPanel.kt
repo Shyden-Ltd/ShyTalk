@@ -5,6 +5,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,10 +15,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -41,27 +42,26 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.gestures.detectTapGestures
-import kotlinx.coroutines.launch
-import com.shyden.shytalk.ui.theme.SpeakingGreen
 import com.shyden.shytalk.core.model.Message
 import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.Seat
 import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.model.User
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.ui.theme.SpeakingGreen
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -88,7 +88,7 @@ fun ChatPanel(
     aliases: Map<String, String> = emptyMap(),
     translations: Map<String, String> = emptyMap(),
     onTranslateMessage: (String) -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
     val isEditing = editingMessageId != null
@@ -101,18 +101,21 @@ fun ChatPanel(
         }
     }
 
-    val seatedUserIds = remember(seats) {
-        seats.values.asSequence()
-            .filter { it.state == SeatState.OCCUPIED && it.userId != null }
-            .mapNotNull { it.userId }
-            .toSet()
-    }
-
-    val currentSeatEntry = remember(seats, currentUserId) {
-        seats.entries.find {
-            it.value.isOccupiedBy(currentUserId)
+    val seatedUserIds =
+        remember(seats) {
+            seats.values
+                .asSequence()
+                .filter { it.state == SeatState.OCCUPIED && it.userId != null }
+                .mapNotNull { it.userId }
+                .toSet()
         }
-    }
+
+    val currentSeatEntry =
+        remember(seats, currentUserId) {
+            seats.entries.find {
+                it.value.isOccupiedBy(currentUserId)
+            }
+        }
     val isSeated = currentSeatEntry != null
     val isSelfMuted = currentSeatEntry?.value?.isMuted ?: false
 
@@ -150,17 +153,21 @@ fun ChatPanel(
 
     Column(modifier = modifier) {
         Box(
-            modifier = Modifier.fillMaxWidth().weight(1f)
-                .pointerInput(Unit) { detectTapGestures { focusManager.clearFocus() } }
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .pointerInput(Unit) { detectTapGestures { focusManager.clearFocus() } },
         ) {
             LazyColumn(
                 state = listState,
                 reverseLayout = true,
                 verticalArrangement = Arrangement.Bottom,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .matchParentSize()
-                    .padding(start = 8.dp, end = 80.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .matchParentSize()
+                        .padding(start = 8.dp, end = 80.dp),
             ) {
                 items(reversedMessages, key = { it.messageId }) { message ->
                     val senderUser = userMap[message.senderId]
@@ -174,14 +181,20 @@ fun ChatPanel(
                         isSelf = isSelf,
                         onTapUser = { onTapUser(message.senderId) },
                         onInvite = { onInviteUser(message.senderId, message.senderName) },
-                        onEditMessage = if (isSelf && message.type == com.shyden.shytalk.core.model.MessageType.TEXT) {
-                            { onStartEditMessage(message.messageId, message.text) }
-                        } else null,
-                        onTranslate = if (!isSelf && message.type == com.shyden.shytalk.core.model.MessageType.TEXT) {
-                            { onTranslateMessage(message.messageId) }
-                        } else null,
+                        onEditMessage =
+                            if (isSelf && message.type == com.shyden.shytalk.core.model.MessageType.TEXT) {
+                                { onStartEditMessage(message.messageId, message.text) }
+                            } else {
+                                null
+                            },
+                        onTranslate =
+                            if (!isSelf && message.type == com.shyden.shytalk.core.model.MessageType.TEXT) {
+                                { onTranslateMessage(message.messageId) }
+                            } else {
+                                null
+                            },
                         translatedText = translations[message.messageId],
-                        aliases = aliases
+                        aliases = aliases,
                     )
                 }
             }
@@ -192,19 +205,20 @@ fun ChatPanel(
                     shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.primaryContainer,
                     shadowElevation = 4.dp,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 8.dp)
-                        .clickable {
-                            hasNewMessages = false
-                            coroutineScope.launch { listState.animateScrollToItem(0) }
-                        }
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 8.dp)
+                            .clickable {
+                                hasNewMessages = false
+                                coroutineScope.launch { listState.animateScrollToItem(0) }
+                            },
                 ) {
                     Text(
                         text = stringResource(Res.string.new_messages),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                     )
                 }
             }
@@ -212,10 +226,11 @@ fun ChatPanel(
 
         // Message input
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             if (isEditing) {
                 IconButton(onClick = {
@@ -225,7 +240,7 @@ fun ChatPanel(
                     Icon(
                         Icons.Default.Close,
                         contentDescription = stringResource(Res.string.cancel_edit),
-                        tint = MaterialTheme.colorScheme.error
+                        tint = MaterialTheme.colorScheme.error,
                     )
                 }
             }
@@ -233,14 +248,30 @@ fun ChatPanel(
             OutlinedTextField(
                 value = messageText,
                 onValueChange = { if (it.length <= 200) messageText = it },
-                placeholder = { Text(if (isEditing) stringResource(Res.string.edit_message_placeholder) else stringResource(Res.string.message_placeholder)) },
-                modifier = Modifier.weight(1f).testTag("room_chatInput")
-                    .onFocusChanged { isInputFocused = it.isFocused },
+                placeholder = {
+                    Text(
+                        if (isEditing) {
+                            stringResource(
+                                Res.string.edit_message_placeholder,
+                            )
+                        } else {
+                            stringResource(Res.string.message_placeholder)
+                        },
+                    )
+                },
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .testTag("room_chatInput")
+                        .onFocusChanged { isInputFocused = it.isFocused },
                 maxLines = 4,
                 shape = RoundedCornerShape(24.dp),
-                leadingIcon = if (isEditing) {
-                    { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                } else null
+                leadingIcon =
+                    if (isEditing) {
+                        { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                    } else {
+                        null
+                    },
             )
             if (isInputFocused || isEditing) {
                 Spacer(modifier = Modifier.width(4.dp))
@@ -255,13 +286,17 @@ fun ChatPanel(
                             messageText = ""
                         }
                     },
-                    enabled = messageText.isNotBlank()
+                    enabled = messageText.isNotBlank(),
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.Send,
                         contentDescription = stringResource(Res.string.send),
-                        tint = if (messageText.isNotBlank()) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
+                        tint =
+                            if (messageText.isNotBlank()) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
                     )
                 }
             }
@@ -272,36 +307,54 @@ fun ChatPanel(
                         focusManager.clearFocus()
                         currentSeatEntry.key.toIntOrNull()?.let { onToggleMic(it) }
                     },
-                    enabled = !isVoiceUnavailable
+                    enabled = !isVoiceUnavailable,
                 ) {
                     Icon(
                         imageVector = if (isVoiceUnavailable || isSelfMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                        contentDescription = if (isVoiceUnavailable) stringResource(Res.string.voice_unavailable) else if (isSelfMuted) stringResource(Res.string.unmute) else stringResource(Res.string.mute),
-                        tint = if (isVoiceUnavailable) MaterialTheme.colorScheme.onSurfaceVariant
-                              else if (isSelfMuted) MaterialTheme.colorScheme.error
-                              else SpeakingGreen
+                        contentDescription =
+                            if (isVoiceUnavailable) {
+                                stringResource(Res.string.voice_unavailable)
+                            } else if (isSelfMuted) {
+                                stringResource(Res.string.unmute)
+                            } else {
+                                stringResource(Res.string.mute)
+                            },
+                        tint =
+                            if (isVoiceUnavailable) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else if (isSelfMuted) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                SpeakingGreen
+                            },
                     )
                 }
             }
 
             if (onToggleMessages != null) {
-                IconButton(onClick = { focusManager.clearFocus(); onToggleMessages() }) {
+                IconButton(onClick = {
+                    focusManager.clearFocus()
+                    onToggleMessages()
+                }) {
                     BadgedBox(
                         badge = {
                             if (unreadCount > 0) {
                                 Badge {
                                     Text(
-                                        if (unreadCount > 99) "99+"
-                                        else "$unreadCount"
+                                        if (unreadCount > 99) {
+                                            "99+"
+                                        } else {
+                                            "$unreadCount"
+                                        },
                                     )
                                 }
                             }
-                        }
+                        },
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.Chat,
                             contentDescription = stringResource(Res.string.messages),
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = MaterialTheme.colorScheme.primary,
                         )
                     }
                 }
@@ -314,22 +367,27 @@ fun ChatPanel(
                 val scale by pulseTransition.animateFloat(
                     initialValue = 1f,
                     targetValue = 1.15f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(750)
-                    ),
-                    label = "backpackScale"
+                    animationSpec =
+                        infiniteRepeatable(
+                            animation = tween(750),
+                        ),
+                    label = "backpackScale",
                 )
                 IconButton(
-                    onClick = { focusManager.clearFocus(); onOpenBackpack() },
-                    modifier = Modifier.graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                    }
+                    onClick = {
+                        focusManager.clearFocus()
+                        onOpenBackpack()
+                    },
+                    modifier =
+                        Modifier.graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                        },
                 ) {
                     Icon(
                         Icons.Default.Backpack,
                         contentDescription = stringResource(Res.string.backpack),
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.primary,
                     )
                 }
             }

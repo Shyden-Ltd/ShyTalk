@@ -22,7 +22,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.shyden.shytalk.core.util.Constants
 
 @Composable
-actual fun PlatformWebView(url: String, modifier: Modifier) {
+actual fun PlatformWebView(
+    url: String,
+    modifier: Modifier,
+) {
     var isLoading by remember { mutableStateOf(true) }
 
     Surface(color = MaterialTheme.colorScheme.background, modifier = modifier) {
@@ -42,33 +45,41 @@ actual fun PlatformWebView(url: String, modifier: Modifier) {
 
                         setBackgroundColor(Color.TRANSPARENT)
 
-                        webViewClient = object : WebViewClient() {
-                            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                                isLoading = true
-                            }
+                        webViewClient =
+                            object : WebViewClient() {
+                                override fun onPageStarted(
+                                    view: WebView?,
+                                    url: String?,
+                                    favicon: Bitmap?,
+                                ) {
+                                    isLoading = true
+                                }
 
-                            override fun onPageFinished(view: WebView?, url: String?) {
-                                isLoading = false
-                            }
+                                override fun onPageFinished(
+                                    view: WebView?,
+                                    url: String?,
+                                ) {
+                                    isLoading = false
+                                }
 
-                            override fun shouldOverrideUrlLoading(
-                                view: WebView?,
-                                request: WebResourceRequest?
-                            ): Boolean {
-                                val requestUrl = request?.url?.toString() ?: return true
-                                return !requestUrl.startsWith(Constants.LEGAL_BASE_URL)
+                                override fun shouldOverrideUrlLoading(
+                                    view: WebView?,
+                                    request: WebResourceRequest?,
+                                ): Boolean {
+                                    val requestUrl = request?.url?.toString() ?: return true
+                                    return !requestUrl.startsWith(Constants.LEGAL_BASE_URL)
+                                }
                             }
-                        }
                         loadUrl(url)
                     }
                 },
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
             )
 
             if (isLoading) {
                 CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.Center),
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
         }

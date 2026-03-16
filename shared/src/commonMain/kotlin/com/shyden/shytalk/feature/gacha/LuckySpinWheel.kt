@@ -19,8 +19,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.sp
 import com.shyden.shytalk.core.model.Gift
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 import kotlin.math.PI
 import kotlin.math.cos
@@ -37,13 +37,18 @@ enum class Ring { OUTER, INNER }
  * Splits winnable gifts into outer (below [innerThreshold]) and inner (at or above)
  * rings, sorted by [Gift.order].
  */
-fun buildRingLayout(gifts: List<Gift>, innerThreshold: Int = 18888): Pair<List<Gift>, List<Gift>> {
-    val outer = gifts
-        .filter { it.coinValue < innerThreshold }
-        .sortedBy { it.order }
-    val inner = gifts
-        .filter { it.coinValue >= innerThreshold }
-        .sortedBy { it.order }
+fun buildRingLayout(
+    gifts: List<Gift>,
+    innerThreshold: Int = 18888,
+): Pair<List<Gift>, List<Gift>> {
+    val outer =
+        gifts
+            .filter { it.coinValue < innerThreshold }
+            .sortedBy { it.order }
+    val inner =
+        gifts
+            .filter { it.coinValue >= innerThreshold }
+            .sortedBy { it.order }
     return outer to inner
 }
 
@@ -53,7 +58,7 @@ fun buildRingLayout(gifts: List<Gift>, innerThreshold: Int = 18888): Pair<List<G
 fun resolveWinPosition(
     giftId: String,
     outerGifts: List<Gift>,
-    innerGifts: List<Gift>
+    innerGifts: List<Gift>,
 ): Pair<Ring, Int>? {
     val outerIndex = outerGifts.indexOfFirst { it.id == giftId }
     if (outerIndex >= 0) return Ring.OUTER to outerIndex
@@ -62,42 +67,44 @@ fun resolveWinPosition(
     return null
 }
 
-private val GiftEmojiMap = mapOf(
-    "Rose" to "\uD83C\uDF39",
-    "Candy" to "\uD83C\uDF6C",
-    "Heart" to "\u2764\uFE0F",
-    "Star" to "\u2B50",
-    "Clover" to "\uD83C\uDF40",
-    "Fire" to "\uD83D\uDD25",
-    "Moon" to "\uD83C\uDF19",
-    "Bolt" to "\u26A1",
-    "Gift Box" to "\uD83C\uDF81",
-    "Potion" to "\uD83E\uDDEA",
-    "Crown" to "\uD83D\uDC51",
-    "Treasure" to "\uD83D\uDCB0",
-    "Mystery" to "\uD83D\uDD2E",
-    "Jackpot" to "\uD83C\uDFB0",
-    "Multiplier" to "\u2716\uFE0F",
-    "Bonus" to "\uD83C\uDFAF",
-    "Ruby" to "\uD83D\uDC8E",
-    "Sunflower" to "\uD83C\uDF3B",
-    "Coffee" to "\u2615",
-    "Music Note" to "\uD83C\uDFB5",
-    "Balloon" to "\uD83C\uDF88",
-    "Cake" to "\uD83C\uDF82",
-    "Diamond" to "\uD83D\uDC8E",
-    "Rocket" to "\uD83D\uDE80",
-    "Trophy" to "\uD83C\uDFC6",
-    "Rainbow" to "\uD83C\uDF08",
-    "Unicorn" to "\uD83E\uDD84"
-)
+private val GiftEmojiMap =
+    mapOf(
+        "Rose" to "\uD83C\uDF39",
+        "Candy" to "\uD83C\uDF6C",
+        "Heart" to "\u2764\uFE0F",
+        "Star" to "\u2B50",
+        "Clover" to "\uD83C\uDF40",
+        "Fire" to "\uD83D\uDD25",
+        "Moon" to "\uD83C\uDF19",
+        "Bolt" to "\u26A1",
+        "Gift Box" to "\uD83C\uDF81",
+        "Potion" to "\uD83E\uDDEA",
+        "Crown" to "\uD83D\uDC51",
+        "Treasure" to "\uD83D\uDCB0",
+        "Mystery" to "\uD83D\uDD2E",
+        "Jackpot" to "\uD83C\uDFB0",
+        "Multiplier" to "\u2716\uFE0F",
+        "Bonus" to "\uD83C\uDFAF",
+        "Ruby" to "\uD83D\uDC8E",
+        "Sunflower" to "\uD83C\uDF3B",
+        "Coffee" to "\u2615",
+        "Music Note" to "\uD83C\uDFB5",
+        "Balloon" to "\uD83C\uDF88",
+        "Cake" to "\uD83C\uDF82",
+        "Diamond" to "\uD83D\uDC8E",
+        "Rocket" to "\uD83D\uDE80",
+        "Trophy" to "\uD83C\uDFC6",
+        "Rainbow" to "\uD83C\uDF08",
+        "Unicorn" to "\uD83E\uDD84",
+    )
 
 fun giftEmoji(name: String): String = GiftEmojiMap[name] ?: name.take(2)
 
-private fun formatCoins(n: Int): String = when {
-    n >= 1000 -> "${n / 1000}${if (n % 1000 != 0) ".${(n % 1000) / 100}" else ""}K"
-    else -> "$n"
-}
+private fun formatCoins(n: Int): String =
+    when {
+        n >= 1000 -> "${n / 1000}${if (n % 1000 != 0) ".${(n % 1000) / 100}" else ""}K"
+        else -> "$n"
+    }
 
 @Composable
 fun LuckySpinWheel(
@@ -106,21 +113,24 @@ fun LuckySpinWheel(
     outerLitIndex: Int,
     innerLitIndex: Int,
     wonSegments: Set<String>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val textMeasurer = rememberTextMeasurer()
     val spinText = stringResource(Res.string.spin)
-    val outerAngle = remember(outerGifts.size) {
-        if (outerGifts.isNotEmpty()) 360f / outerGifts.size else 0f
-    }
-    val innerAngle = remember(innerGifts.size) {
-        if (innerGifts.isNotEmpty()) 360f / innerGifts.size else 0f
-    }
+    val outerAngle =
+        remember(outerGifts.size) {
+            if (outerGifts.isNotEmpty()) 360f / outerGifts.size else 0f
+        }
+    val innerAngle =
+        remember(innerGifts.size) {
+            if (innerGifts.isNotEmpty()) 360f / innerGifts.size else 0f
+        }
 
     Canvas(
-        modifier = modifier
-            .fillMaxSize()
-            .aspectRatio(1f)
+        modifier =
+            modifier
+                .fillMaxSize()
+                .aspectRatio(1f),
     ) {
         val diameter = min(size.width, size.height)
         val radius = diameter / 2f
@@ -142,7 +152,7 @@ fun LuckySpinWheel(
             ringName = "outer",
             wonSegments = wonSegments,
             center = center,
-            textMeasurer = textMeasurer
+            textMeasurer = textMeasurer,
         )
 
         // Divider between rings
@@ -161,7 +171,7 @@ fun LuckySpinWheel(
             ringName = "inner",
             wonSegments = wonSegments,
             center = center,
-            textMeasurer = textMeasurer
+            textMeasurer = textMeasurer,
         )
 
         // Center hub
@@ -169,35 +179,40 @@ fun LuckySpinWheel(
         drawCircle(Color(0xFFFFD700).copy(alpha = 0.1f), radius = innerRingInner, center = center, style = Stroke(1.5f))
 
         // Center "SPIN" text
-        val spinLabel = textMeasurer.measure(
-            text = spinText,
-            style = TextStyle(
-                color = Color(0xFFFFD700).copy(alpha = 0.3f),
-                fontSize = (innerRingInner * 0.21f / density / fontScale).sp,
-                letterSpacing = (innerRingInner * 0.04f / density / fontScale).sp
-            ),
-            constraints = Constraints(maxWidth = (innerRingInner * 2).toInt().coerceAtLeast(1))
-        )
+        val spinLabel =
+            textMeasurer.measure(
+                text = spinText,
+                style =
+                    TextStyle(
+                        color = Color(0xFFFFD700).copy(alpha = 0.3f),
+                        fontSize = (innerRingInner * 0.21f / density / fontScale).sp,
+                        letterSpacing = (innerRingInner * 0.04f / density / fontScale).sp,
+                    ),
+                constraints = Constraints(maxWidth = (innerRingInner * 2).toInt().coerceAtLeast(1)),
+            )
         drawText(
             textLayoutResult = spinLabel,
-            topLeft = Offset(
-                center.x - spinLabel.size.width / 2f,
-                center.y - spinLabel.size.height / 2f + innerRingInner * 0.09f
-            )
+            topLeft =
+                Offset(
+                    center.x - spinLabel.size.width / 2f,
+                    center.y - spinLabel.size.height / 2f + innerRingInner * 0.09f,
+                ),
         )
 
         // Center emoji
-        val centerEmoji = textMeasurer.measure(
-            text = "\uD83C\uDFB0",
-            style = TextStyle(fontSize = (innerRingInner * 0.45f / density / fontScale).sp),
-            constraints = Constraints(maxWidth = (innerRingInner * 2).toInt().coerceAtLeast(1))
-        )
+        val centerEmoji =
+            textMeasurer.measure(
+                text = "\uD83C\uDFB0",
+                style = TextStyle(fontSize = (innerRingInner * 0.45f / density / fontScale).sp),
+                constraints = Constraints(maxWidth = (innerRingInner * 2).toInt().coerceAtLeast(1)),
+            )
         drawText(
             textLayoutResult = centerEmoji,
-            topLeft = Offset(
-                center.x - centerEmoji.size.width / 2f,
-                center.y - centerEmoji.size.height / 2f - innerRingInner * 0.03f
-            )
+            topLeft =
+                Offset(
+                    center.x - centerEmoji.size.width / 2f,
+                    center.y - centerEmoji.size.height / 2f - innerRingInner * 0.03f,
+                ),
         )
     }
 }
@@ -211,7 +226,7 @@ private fun DrawScope.drawRing(
     ringName: String,
     wonSegments: Set<String>,
     center: Offset,
-    textMeasurer: TextMeasurer
+    textMeasurer: TextMeasurer,
 ) {
     if (gifts.isEmpty() || segmentAngle <= 0f) return
 
@@ -232,11 +247,12 @@ private fun DrawScope.drawRing(
         val midAngleRad = (startAngleDeg + segmentAngle / 2f) * (PI.toFloat() / 180f)
 
         // Draw filled arc segment
-        val fillColor = when {
-            isLit -> baseColor
-            isPrevWon -> baseColor.copy(alpha = 0.7f)
-            else -> baseColor.copy(alpha = 0.3f)
-        }
+        val fillColor =
+            when {
+                isLit -> baseColor
+                isPrevWon -> baseColor.copy(alpha = 0.7f)
+                else -> baseColor.copy(alpha = 0.3f)
+            }
 
         drawArc(
             color = fillColor,
@@ -244,7 +260,7 @@ private fun DrawScope.drawRing(
             sweepAngle = segmentAngle,
             useCenter = true,
             topLeft = Offset(center.x - rOuter, center.y - rOuter),
-            size = Size(rOuter * 2, rOuter * 2)
+            size = Size(rOuter * 2, rOuter * 2),
         )
 
         // Cut out inner portion to make a ring (draw over with background)
@@ -254,20 +270,22 @@ private fun DrawScope.drawRing(
             sweepAngle = segmentAngle,
             useCenter = true,
             topLeft = Offset(center.x - rInner, center.y - rInner),
-            size = Size(rInner * 2, rInner * 2)
+            size = Size(rInner * 2, rInner * 2),
         )
 
         // Segment border stroke
-        val strokeColor = when {
-            isLit -> Color.White
-            isPrevWon -> baseColor
-            else -> Color(0xFF0D0D1A)
-        }
-        val strokeWidth = when {
-            isLit -> 3f
-            isPrevWon -> 2f
-            else -> 1.5f
-        }
+        val strokeColor =
+            when {
+                isLit -> Color.White
+                isPrevWon -> baseColor
+                else -> Color(0xFF0D0D1A)
+            }
+        val strokeWidth =
+            when {
+                isLit -> 3f
+                isPrevWon -> 2f
+                else -> 1.5f
+            }
         drawArc(
             color = strokeColor,
             startAngle = startAngleDeg,
@@ -275,7 +293,7 @@ private fun DrawScope.drawRing(
             useCenter = true,
             topLeft = Offset(center.x - rOuter, center.y - rOuter),
             size = Size(rOuter * 2, rOuter * 2),
-            style = Stroke(strokeWidth)
+            style = Stroke(strokeWidth),
         )
 
         // Lit glow overlay
@@ -286,7 +304,7 @@ private fun DrawScope.drawRing(
                 sweepAngle = segmentAngle,
                 useCenter = true,
                 topLeft = Offset(center.x - rOuter, center.y - rOuter),
-                size = Size(rOuter * 2, rOuter * 2)
+                size = Size(rOuter * 2, rOuter * 2),
             )
             drawArc(
                 color = Color(0xFF0D0D1A),
@@ -294,7 +312,7 @@ private fun DrawScope.drawRing(
                 sweepAngle = segmentAngle,
                 useCenter = true,
                 topLeft = Offset(center.x - rInner, center.y - rInner),
-                size = Size(rInner * 2, rInner * 2)
+                size = Size(rInner * 2, rInner * 2),
             )
         }
 
@@ -306,8 +324,10 @@ private fun DrawScope.drawRing(
             val dotSize = ringThickness * 0.03f
             drawCircle(Color(0xFF00E676), radius = dotSize, center = Offset(dotX, dotY))
             drawCircle(
-                Color(0xFF0D0D1A), radius = dotSize, center = Offset(dotX, dotY),
-                style = Stroke(1f)
+                Color(0xFF0D0D1A),
+                radius = dotSize,
+                center = Offset(dotX, dotY),
+                style = Stroke(1f),
             )
         }
 
@@ -324,39 +344,44 @@ private fun DrawScope.drawRing(
         val emojiPx = ringThickness * (if (isLit) 0.31f else 0.25f)
         val emojiSize = (emojiPx / density / fontScale).sp
         val emojiText = giftEmoji(gift.name)
-        val emojiMeasured = textMeasurer.measure(
-            text = emojiText,
-            style = TextStyle(fontSize = emojiSize),
-            maxLines = 1,
-            overflow = TextOverflow.Clip,
-            constraints = Constraints(maxWidth = ((rOuter - rInner) * 0.8f).toInt().coerceAtLeast(1))
-        )
+        val emojiMeasured =
+            textMeasurer.measure(
+                text = emojiText,
+                style = TextStyle(fontSize = emojiSize),
+                maxLines = 1,
+                overflow = TextOverflow.Clip,
+                constraints = Constraints(maxWidth = ((rOuter - rInner) * 0.8f).toInt().coerceAtLeast(1)),
+            )
         drawText(
             textLayoutResult = emojiMeasured,
-            topLeft = Offset(
-                emojiX - emojiMeasured.size.width / 2f,
-                emojiY - emojiMeasured.size.height / 2f
-            ),
-            alpha = if (isActive) 1f else 0.35f
+            topLeft =
+                Offset(
+                    emojiX - emojiMeasured.size.width / 2f,
+                    emojiY - emojiMeasured.size.height / 2f,
+                ),
+            alpha = if (isActive) 1f else 0.35f,
         )
 
         val coinText = "\uD83E\uDE99${formatCoins(gift.coinValue)}"
-        val coinMeasured = textMeasurer.measure(
-            text = coinText,
-            style = TextStyle(
-                color = if (isActive) Color.White else Color.White.copy(alpha = 0.2f),
-                fontSize = (ringThickness * 0.14f / density / fontScale).sp
-            ),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            constraints = Constraints(maxWidth = ((rOuter - rInner) * 0.9f).toInt().coerceAtLeast(1))
-        )
+        val coinMeasured =
+            textMeasurer.measure(
+                text = coinText,
+                style =
+                    TextStyle(
+                        color = if (isActive) Color.White else Color.White.copy(alpha = 0.2f),
+                        fontSize = (ringThickness * 0.14f / density / fontScale).sp,
+                    ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                constraints = Constraints(maxWidth = ((rOuter - rInner) * 0.9f).toInt().coerceAtLeast(1)),
+            )
         drawText(
             textLayoutResult = coinMeasured,
-            topLeft = Offset(
-                coinX - coinMeasured.size.width / 2f,
-                coinY - coinMeasured.size.height / 2f
-            )
+            topLeft =
+                Offset(
+                    coinX - coinMeasured.size.width / 2f,
+                    coinY - coinMeasured.size.height / 2f,
+                ),
         )
     }
 }

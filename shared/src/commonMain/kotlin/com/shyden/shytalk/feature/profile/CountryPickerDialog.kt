@@ -30,28 +30,29 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.util.countries
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun CountryPickerDialog(
     selectedCode: String?,
     onSelect: (String) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     var searchQuery by remember { mutableStateOf("") }
 
-    val filteredCountries = remember(searchQuery) {
-        if (searchQuery.isBlank()) {
-            countries
-        } else {
-            countries.filter {
-                it.name.contains(searchQuery, ignoreCase = true) ||
-                    it.code.contains(searchQuery, ignoreCase = true)
+    val filteredCountries =
+        remember(searchQuery) {
+            if (searchQuery.isBlank()) {
+                countries
+            } else {
+                countries.filter {
+                    it.name.contains(searchQuery, ignoreCase = true) ||
+                        it.code.contains(searchQuery, ignoreCase = true)
+                }
             }
         }
-    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -64,37 +65,38 @@ fun CountryPickerDialog(
                     placeholder = { Text(stringResource(Res.string.search_countries)) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 LazyColumn(
-                    modifier = Modifier.heightIn(max = 400.dp)
+                    modifier = Modifier.heightIn(max = 400.dp),
                 ) {
                     items(filteredCountries, key = { it.code }) { country ->
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onSelect(country.code) }
-                                .padding(vertical = 12.dp, horizontal = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onSelect(country.code) }
+                                    .padding(vertical = 12.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
                                 text = country.flagEmoji,
-                                style = MaterialTheme.typography.titleLarge
+                                style = MaterialTheme.typography.titleLarge,
                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             Text(
                                 text = country.name,
                                 style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
                             )
                             if (country.code == selectedCode) {
                                 Icon(
                                     Icons.Default.Check,
                                     contentDescription = stringResource(Res.string.selected),
-                                    tint = MaterialTheme.colorScheme.primary
+                                    tint = MaterialTheme.colorScheme.primary,
                                 )
                             }
                         }
@@ -108,6 +110,6 @@ fun CountryPickerDialog(
             TextButton(onClick = onDismiss) {
                 Text(stringResource(Res.string.cancel))
             }
-        }
+        },
     )
 }

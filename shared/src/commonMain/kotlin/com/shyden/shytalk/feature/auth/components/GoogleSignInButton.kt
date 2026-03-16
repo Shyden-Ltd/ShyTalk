@@ -28,27 +28,29 @@ fun GoogleSignInButton(
     onClick: () -> Unit,
     isLoading: Boolean,
     enabled: Boolean = true,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     OutlinedButton(
         onClick = onClick,
         enabled = enabled && !isLoading,
-        modifier = modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .testTag("signIn_googleButton"),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .testTag("signIn_googleButton"),
         shape = RoundedCornerShape(24.dp),
-        colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = Color(0xFF131314),
-            contentColor = Color(0xFFE3E3E3)
-        ),
-        border = BorderStroke(1.dp, Color(0xFF8E918F))
+        colors =
+            ButtonDefaults.outlinedButtonColors(
+                containerColor = Color(0xFF131314),
+                contentColor = Color(0xFFE3E3E3),
+            ),
+        border = BorderStroke(1.dp, Color(0xFF8E918F)),
     ) {
         if (isLoading) {
             CircularProgressIndicator(
                 modifier = Modifier.size(20.dp),
                 strokeWidth = 2.dp,
-                color = Color(0xFFE3E3E3)
+                color = Color(0xFFE3E3E3),
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text("Signing in…")
@@ -57,7 +59,7 @@ fun GoogleSignInButton(
                 painter = painterResource(Res.drawable.ic_google_logo),
                 contentDescription = null,
                 modifier = Modifier.size(20.dp),
-                tint = Color.Unspecified
+                tint = Color.Unspecified,
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(stringResource(Res.string.sign_in_with_google))

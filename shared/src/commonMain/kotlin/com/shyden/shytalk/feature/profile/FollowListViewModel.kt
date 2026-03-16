@@ -35,7 +35,7 @@ data class FollowListUiState(
     val stalkers: List<ProfileVisitor> = emptyList(),
     val stalkerUsers: Map<String, User> = emptyMap(),
     val stalkersLastViewedAt: Long = 0,
-    val aliases: Map<String, String> = emptyMap()
+    val aliases: Map<String, String> = emptyMap(),
 )
 
 enum class FollowTab { FOLLOWING, FOLLOWERS, STALKERS }
@@ -44,25 +44,26 @@ class FollowListViewModel(
     private val profileUserId: String,
     initialTab: String,
     private val authRepository: AuthRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
 ) : ViewModel() {
-
     private val _uiState = MutableStateFlow(FollowListUiState())
     val uiState: StateFlow<FollowListUiState> = _uiState.asStateFlow()
 
     init {
         val currentUid = authRepository.currentUserId ?: ""
-        val tab = when (initialTab) {
-            "following" -> FollowTab.FOLLOWING
-            "stalkers" -> FollowTab.STALKERS
-            else -> FollowTab.FOLLOWERS
-        }
-        _uiState.value = FollowListUiState(
-            profileUserId = profileUserId,
-            currentUserId = currentUid,
-            isOwnList = profileUserId == currentUid,
-            selectedTab = tab
-        )
+        val tab =
+            when (initialTab) {
+                "following" -> FollowTab.FOLLOWING
+                "stalkers" -> FollowTab.STALKERS
+                else -> FollowTab.FOLLOWERS
+            }
+        _uiState.value =
+            FollowListUiState(
+                profileUserId = profileUserId,
+                currentUserId = currentUid,
+                isOwnList = profileUserId == currentUid,
+                selectedTab = tab,
+            )
         logI(TAG, "Initializing for profile=$profileUserId, tab=$tab, isOwn=${profileUserId == currentUid}")
         loadData()
         observeUserUpdates()
@@ -84,7 +85,7 @@ class FollowListViewModel(
                 _uiState.update { state ->
                     state.copy(
                         followers = state.followers.map { if (it.uid == updatedUser.uid) updatedUser else it },
-                        following = state.following.map { if (it.uid == updatedUser.uid) updatedUser else it }
+                        following = state.following.map { if (it.uid == updatedUser.uid) updatedUser else it },
                     )
                 }
             }
@@ -137,12 +138,15 @@ class FollowListViewModel(
 
             // Batch-fetch all user objects
             val allIds = (followerIdsList + followingIdsList).distinct()
-            val allUsers = if (allIds.isNotEmpty()) {
-                when (val result = userRepository.getUsers(allIds)) {
-                    is Resource.Success -> result.data.associateBy { it.uid }
-                    else -> emptyMap()
+            val allUsers =
+                if (allIds.isNotEmpty()) {
+                    when (val result = userRepository.getUsers(allIds)) {
+                        is Resource.Success -> result.data.associateBy { it.uid }
+                        else -> emptyMap()
+                    }
+                } else {
+                    emptyMap()
                 }
-            } else emptyMap()
 
             logI(TAG, "Loaded ${followerIdsList.size} followers, ${followingIdsList.size} following")
 
@@ -181,7 +185,7 @@ class FollowListViewModel(
                     followingHidden = isFollowingHidden,
                     stalkers = stalkerList,
                     stalkerUsers = stalkerUserMap,
-                    stalkersLastViewedAt = stalkersLastViewed
+                    stalkersLastViewedAt = stalkersLastViewed,
                 )
             }
 
@@ -201,27 +205,30 @@ class FollowListViewModel(
         logI(TAG, "${if (isCurrentlyFollowing) "Unfollowing" else "Following"} user=$targetUserId")
 
         // Optimistic update
-        val newFollowingIds = if (isCurrentlyFollowing) {
-            _uiState.value.currentUserFollowingIds - targetUserId
-        } else {
-            _uiState.value.currentUserFollowingIds + targetUserId
-        }
+        val newFollowingIds =
+            if (isCurrentlyFollowing) {
+                _uiState.value.currentUserFollowingIds - targetUserId
+            } else {
+                _uiState.value.currentUserFollowingIds + targetUserId
+            }
         _uiState.update { it.copy(currentUserFollowingIds = newFollowingIds) }
 
         viewModelScope.launch {
-            val result = if (isCurrentlyFollowing) {
-                userRepository.unfollowUser(currentUid, targetUserId)
-            } else {
-                userRepository.followUser(currentUid, targetUserId)
-            }
+            val result =
+                if (isCurrentlyFollowing) {
+                    userRepository.unfollowUser(currentUid, targetUserId)
+                } else {
+                    userRepository.followUser(currentUid, targetUserId)
+                }
             if (result is Resource.Error) {
                 logE(TAG, "Follow/unfollow failed for user=$targetUserId: ${result.message}")
                 _uiState.update {
-                    val revertedIds = if (isCurrentlyFollowing) {
-                        it.currentUserFollowingIds + targetUserId
-                    } else {
-                        it.currentUserFollowingIds - targetUserId
-                    }
+                    val revertedIds =
+                        if (isCurrentlyFollowing) {
+                            it.currentUserFollowingIds + targetUserId
+                        } else {
+                            it.currentUserFollowingIds - targetUserId
+                        }
                     it.copy(currentUserFollowingIds = revertedIds, error = result.message)
                 }
             }
@@ -242,10 +249,11 @@ class FollowListViewModel(
 
         // Auto-confirm after delay
         removeFollowerJob?.cancel()
-        removeFollowerJob = viewModelScope.launch {
-            delay(UNDO_TIMEOUT_MS)
-            confirmRemoveFollower(followerId, currentUid)
-        }
+        removeFollowerJob =
+            viewModelScope.launch {
+                delay(UNDO_TIMEOUT_MS)
+                confirmRemoveFollower(followerId, currentUid)
+            }
     }
 
     fun undoRemoveFollower() {
@@ -254,12 +262,15 @@ class FollowListViewModel(
         _uiState.update { it.copy(pendingRemoveFollowerId = null) }
     }
 
-    private fun confirmRemoveFollower(followerId: String, userId: String) {
+    private fun confirmRemoveFollower(
+        followerId: String,
+        userId: String,
+    ) {
         pendingRemoveUser = null
         _uiState.update {
             it.copy(
                 followers = it.followers.filter { u -> u.uid != followerId },
-                pendingRemoveFollowerId = null
+                pendingRemoveFollowerId = null,
             )
         }
         viewModelScope.launch {

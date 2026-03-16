@@ -24,8 +24,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.model.SeatRequest
 import com.shyden.shytalk.feature.room.RoomNotification
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -37,46 +37,52 @@ fun RoomNotificationOverlay(
     onDeclineApprovedRequest: (SeatRequest) -> Unit,
     onAcceptInvite: () -> Unit,
     onDeclineInvite: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     AnimatedVisibility(
         visible = notification != null,
-        enter = fadeIn(tween(200)) + scaleIn(
-            initialScale = 0.8f,
-            animationSpec = tween(200)
-        ),
-        exit = fadeOut(tween(150)) + scaleOut(
-            targetScale = 0.8f,
-            animationSpec = tween(150)
-        ),
-        modifier = modifier
+        enter =
+            fadeIn(tween(200)) +
+                scaleIn(
+                    initialScale = 0.8f,
+                    animationSpec = tween(200),
+                ),
+        exit =
+            fadeOut(tween(150)) +
+                scaleOut(
+                    targetScale = 0.8f,
+                    animationSpec = tween(150),
+                ),
+        modifier = modifier,
     ) {
         notification?.let { notif ->
             Card(
-                modifier = Modifier
-                    .widthIn(max = 320.dp)
-                    .padding(24.dp),
+                modifier =
+                    Modifier
+                        .widthIn(max = 320.dp)
+                        .padding(24.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                )
+                colors =
+                    CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    ),
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     when (notif) {
                         is RoomNotification.SeatRequestReceived -> {
                             Text(
                                 text = stringResource(Res.string.user_wants_to_sit, notif.request.userName),
                                 style = MaterialTheme.typography.bodyLarge,
-                                textAlign = TextAlign.Center
+                                textAlign = TextAlign.Center,
                             )
                             Text(
                                 text = stringResource(Res.string.seat_number, notif.request.seatIndex + 1),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 OutlinedButton(onClick = { onDenySeatRequest(notif.request) }) {
@@ -91,12 +97,12 @@ fun RoomNotificationOverlay(
                             Text(
                                 text = stringResource(Res.string.request_accepted),
                                 style = MaterialTheme.typography.bodyLarge,
-                                textAlign = TextAlign.Center
+                                textAlign = TextAlign.Center,
                             )
                             Text(
                                 text = stringResource(Res.string.seat_number, notif.request.seatIndex + 1),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 OutlinedButton(onClick = { onDeclineApprovedRequest(notif.request) }) {
@@ -111,7 +117,7 @@ fun RoomNotificationOverlay(
                             Text(
                                 text = stringResource(Res.string.invited_to_sit),
                                 style = MaterialTheme.typography.bodyLarge,
-                                textAlign = TextAlign.Center
+                                textAlign = TextAlign.Center,
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 OutlinedButton(onClick = onDeclineInvite) {

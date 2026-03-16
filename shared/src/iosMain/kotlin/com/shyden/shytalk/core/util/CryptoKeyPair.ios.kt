@@ -2,8 +2,8 @@
 
 package com.shyden.shytalk.core.util
 
-import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.alloc
+import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.value
 import platform.CoreFoundation.CFDictionaryRef
@@ -12,7 +12,6 @@ import platform.Foundation.NSString
 import platform.Foundation.NSUTF8StringEncoding
 import platform.Foundation.base64EncodedStringWithOptions
 import platform.Foundation.create
-import platform.Security.SecItemAdd
 import platform.Security.SecItemCopyMatching
 import platform.Security.SecItemDelete
 import platform.Security.SecKeyCreateSignature
@@ -27,16 +26,17 @@ import platform.Security.kSecAttrKeyTypeECSECPrimeRandom
 import platform.Security.kSecAttrKeySizeInBits
 import platform.Security.kSecClass
 import platform.Security.kSecClassKey
-import platform.Security.kSecReturnRef
 import platform.Security.kSecMatchLimit
 import platform.Security.kSecMatchLimitOne
 import platform.Security.kSecPrivateKeyAttrs
+import platform.Security.kSecReturnRef
 import platform.Security.kSecAttrIsPermanent
 // Use raw value for kSecKeyAlgorithmECDSASignatureMessageX962SHA256
 import platform.Security.kSecKeyAlgorithmECDSASignatureMessageX962SHA256
 
 @Suppress("UNCHECKED_CAST")
 actual class CryptoKeyPair {
+
     private var currentTag: String? = null
 
     actual fun generateOrLoad(alias: String): Boolean {
@@ -46,14 +46,16 @@ actual class CryptoKeyPair {
 
         // Generate new keypair
         val tagData = (alias as NSString).dataUsingEncoding(NSUTF8StringEncoding) ?: return false
-        val attributes = mapOf<Any?, Any?>(
-            kSecAttrKeyType to kSecAttrKeyTypeECSECPrimeRandom,
-            kSecAttrKeySizeInBits to 256,
-            kSecPrivateKeyAttrs to mapOf<Any?, Any?>(
-                kSecAttrIsPermanent to true,
-                kSecAttrApplicationTag to tagData,
-            ),
-        )
+        val attributes =
+            mapOf<Any?, Any?>(
+                kSecAttrKeyType to kSecAttrKeyTypeECSECPrimeRandom,
+                kSecAttrKeySizeInBits to 256,
+                kSecPrivateKeyAttrs to
+                    mapOf<Any?, Any?>(
+                        kSecAttrIsPermanent to true,
+                        kSecAttrApplicationTag to tagData,
+                    ),
+            )
 
         memScoped {
             val error = alloc<kotlinx.cinterop.ObjCObjectVar<Any?>>()
@@ -82,35 +84,38 @@ actual class CryptoKeyPair {
 
         memScoped {
             val error = alloc<kotlinx.cinterop.ObjCObjectVar<Any?>>()
-            val signature = SecKeyCreateSignature(
-                privateKey,
-                kSecKeyAlgorithmECDSASignatureMessageX962SHA256,
-                nsData as platform.CoreFoundation.CFDataRef,
-                error.ptr
-            ) as? NSData ?: return null
+            val signature =
+                SecKeyCreateSignature(
+                    privateKey,
+                    kSecKeyAlgorithmECDSASignatureMessageX962SHA256,
+                    nsData as platform.CoreFoundation.CFDataRef,
+                    error.ptr,
+                ) as? NSData ?: return null
             return signature.toByteArray()
         }
     }
 
     actual fun delete(alias: String) {
         val tagData = (alias as NSString).dataUsingEncoding(NSUTF8StringEncoding) ?: return
-        val query = mapOf<Any?, Any?>(
-            kSecClass to kSecClassKey,
-            kSecAttrApplicationTag to tagData,
-        )
+        val query =
+            mapOf<Any?, Any?>(
+                kSecClass to kSecClassKey,
+                kSecAttrApplicationTag to tagData,
+            )
         SecItemDelete(query as CFDictionaryRef)
         if (currentTag == alias) currentTag = null
     }
 
     private fun getPrivateKeyRef(alias: String): platform.Security.SecKeyRef? {
         val tagData = (alias as NSString).dataUsingEncoding(NSUTF8StringEncoding) ?: return null
-        val query = mapOf<Any?, Any?>(
-            kSecClass to kSecClassKey,
-            kSecAttrApplicationTag to tagData,
-            kSecAttrKeyClass to kSecAttrKeyClassPrivate,
-            kSecReturnRef to true,
-            kSecMatchLimit to kSecMatchLimitOne,
-        )
+        val query =
+            mapOf<Any?, Any?>(
+                kSecClass to kSecClassKey,
+                kSecAttrApplicationTag to tagData,
+                kSecAttrKeyClass to kSecAttrKeyClassPrivate,
+                kSecReturnRef to true,
+                kSecMatchLimit to kSecMatchLimitOne,
+            )
         memScoped {
             val result = alloc<kotlinx.cinterop.ObjCObjectVar<Any?>>()
             val status = SecItemCopyMatching(query as CFDictionaryRef, result.ptr)
@@ -121,9 +126,10 @@ actual class CryptoKeyPair {
 }
 
 // Extension helpers
-private fun ByteArray.toNSData(): NSData = memScoped {
-    NSData.create(bytes = kotlinx.cinterop.allocArrayOf(this@toNSData), length = this@toNSData.size.toULong())
-}
+private fun ByteArray.toNSData(): NSData =
+    memScoped {
+        NSData.create(bytes = kotlinx.cinterop.allocArrayOf(this@toNSData), length = this@toNSData.size.toULong())
+    }
 
 @OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
 private fun NSData.toByteArray(): ByteArray {

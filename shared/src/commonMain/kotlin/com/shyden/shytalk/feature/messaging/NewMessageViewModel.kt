@@ -5,14 +5,13 @@ import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
-import com.shyden.shytalk.core.util.logE
-import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.core.util.UiText
-import com.shyden.shytalk.resources.Res
-import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.PrivateMessageRepository
 import com.shyden.shytalk.data.repository.UserRepository
+import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,15 +30,14 @@ data class NewMessageUiState(
     val searchAllMode: Boolean = false,
     val allUsersSearchResults: List<User> = emptyList(),
     val isSearchingAll: Boolean = false,
-    val ownedGroupCount: Int = 0
+    val ownedGroupCount: Int = 0,
 )
 
 class NewMessageViewModel(
     private val pmRepository: PrivateMessageRepository,
     private val userRepository: UserRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
 ) : ViewModel() {
-
     companion object {
         private const val TAG = "NewMessageViewModel"
     }
@@ -61,16 +59,19 @@ class NewMessageViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
 
-            val currentUser = when (val result = userRepository.getUser(currentUserId)) {
-                is Resource.Success -> result.data
-                else -> {
-                    _uiState.update { it.copy(isLoading = false, error = UiText.res(Res.string.error_load_user_data)) }
-                    return@launch
+            val currentUser =
+                when (val result = userRepository.getUser(currentUserId)) {
+                    is Resource.Success -> result.data
+                    else -> {
+                        _uiState.update { it.copy(isLoading = false, error = UiText.res(Res.string.error_load_user_data)) }
+                        return@launch
+                    }
                 }
-            }
 
-            val allIds = (currentUser.followerIds + currentUser.followingIds).distinct()
-                .filter { it != currentUserId }
+            val allIds =
+                (currentUser.followerIds + currentUser.followingIds)
+                    .distinct()
+                    .filter { it != currentUserId }
 
             if (allIds.isEmpty()) {
                 _uiState.update { it.copy(isLoading = false, availableUsers = emptyList()) }
@@ -82,7 +83,7 @@ class NewMessageViewModel(
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            availableUsers = result.data.sortedBy { u -> u.displayName.lowercase() }
+                            availableUsers = result.data.sortedBy { u -> u.displayName.lowercase() },
                         )
                     }
                 }
@@ -97,12 +98,13 @@ class NewMessageViewModel(
         viewModelScope.launch {
             // Get recent conversations and extract user IDs from the most recent ones
             pmRepository.getConversations(currentUserId).collect { conversations ->
-                val recentUserIds = conversations
-                    .filter { !it.isGroup && !it.isClosed }
-                    .sortedByDescending { it.lastMessageAt }
-                    .take(5)
-                    .mapNotNull { it.otherUserId(currentUserId) }
-                    .filter { it != Constants.SYSTEM_USER_ID }
+                val recentUserIds =
+                    conversations
+                        .filter { !it.isGroup && !it.isClosed }
+                        .sortedByDescending { it.lastMessageAt }
+                        .take(5)
+                        .mapNotNull { it.otherUserId(currentUserId) }
+                        .filter { it != Constants.SYSTEM_USER_ID }
 
                 if (recentUserIds.isNotEmpty()) {
                     when (val result = userRepository.getUsers(recentUserIds)) {
@@ -133,14 +135,15 @@ class NewMessageViewModel(
     fun toggleSelection(userId: String) {
         _uiState.update { state ->
             val current = state.selectedIds
-            val updated = if (userId in current) {
-                current - userId
-            } else {
-                if (current.size >= Constants.MAX_GROUP_PARTICIPANTS - 1) {
-                    return@update state.copy(error = UiText.res(Res.string.error_max_participants, Constants.MAX_GROUP_PARTICIPANTS))
+            val updated =
+                if (userId in current) {
+                    current - userId
+                } else {
+                    if (current.size >= Constants.MAX_GROUP_PARTICIPANTS - 1) {
+                        return@update state.copy(error = UiText.res(Res.string.error_max_participants, Constants.MAX_GROUP_PARTICIPANTS))
+                    }
+                    current + userId
                 }
-                current + userId
-            }
             state.copy(selectedIds = updated)
         }
     }
@@ -157,7 +160,7 @@ class NewMessageViewModel(
         _uiState.update {
             it.copy(
                 searchAllMode = newMode,
-                allUsersSearchResults = emptyList()
+                allUsersSearchResults = emptyList(),
             )
         }
         if (newMode && _uiState.value.searchQuery.isNotBlank()) {
@@ -167,33 +170,37 @@ class NewMessageViewModel(
 
     private fun searchAllUsers(query: String) {
         searchJob?.cancel()
-        searchJob = viewModelScope.launch {
-            delay(300) // Debounce
-            _uiState.update { it.copy(isSearchingAll = true) }
-            when (val result = pmRepository.searchUsers(query, currentUserId)) {
-                is Resource.Success -> {
-                    _uiState.update {
-                        it.copy(
-                            isSearchingAll = false,
-                            allUsersSearchResults = result.data
-                        )
+        searchJob =
+            viewModelScope.launch {
+                delay(300) // Debounce
+                _uiState.update { it.copy(isSearchingAll = true) }
+                when (val result = pmRepository.searchUsers(query, currentUserId)) {
+                    is Resource.Success -> {
+                        _uiState.update {
+                            it.copy(
+                                isSearchingAll = false,
+                                allUsersSearchResults = result.data,
+                            )
+                        }
                     }
-                }
-                is Resource.Error -> {
-                    _uiState.update {
-                        it.copy(isSearchingAll = false, error = UiText.plain(result.message))
+                    is Resource.Error -> {
+                        _uiState.update {
+                            it.copy(isSearchingAll = false, error = UiText.plain(result.message))
+                        }
                     }
+                    is Resource.Loading -> {}
                 }
-                is Resource.Loading -> {}
             }
-        }
     }
 
     fun getFilteredUsers(): List<User> {
         val query = _uiState.value.searchQuery
         val users = _uiState.value.availableUsers
-        return if (query.isBlank()) users
-        else users.filter { it.displayName.contains(query, ignoreCase = true) }
+        return if (query.isBlank()) {
+            users
+        } else {
+            users.filter { it.displayName.contains(query, ignoreCase = true) }
+        }
     }
 
     fun clearError() {

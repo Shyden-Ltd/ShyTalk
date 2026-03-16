@@ -17,22 +17,24 @@ actual object LanguagePreference {
     }
 
     actual fun get(): String =
-        (prefs?.getString(KEY_LANGUAGE, null)
-            ?: java.util.Locale.getDefault().language).take(2)
+        (
+            prefs?.getString(KEY_LANGUAGE, null)
+                ?: java.util.Locale
+                    .getDefault()
+                    .language
+        ).take(2)
 
     actual fun set(languageCode: String) {
         prefs?.edit()?.putString(KEY_LANGUAGE, languageCode.take(2))?.apply()
     }
 
-    actual fun getAutoTranslate(): Boolean =
-        prefs?.getBoolean(KEY_AUTO_TRANSLATE, false) ?: false
+    actual fun getAutoTranslate(): Boolean = prefs?.getBoolean(KEY_AUTO_TRANSLATE, false) ?: false
 
     actual fun setAutoTranslate(enabled: Boolean) {
         prefs?.edit()?.putBoolean(KEY_AUTO_TRANSLATE, enabled)?.apply()
     }
 
-    actual fun getAcceptedLegalVersion(): Int =
-        prefs?.getInt(KEY_LEGAL_VERSION, 0) ?: 0
+    actual fun getAcceptedLegalVersion(): Int = prefs?.getInt(KEY_LEGAL_VERSION, 0) ?: 0
 
     actual fun setAcceptedLegalVersion(version: Int) {
         prefs?.edit()?.putInt(KEY_LEGAL_VERSION, version)?.apply()

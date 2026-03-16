@@ -10,36 +10,42 @@ data class EconomyConfig(
     val normalSeatCount: Int = 5,
     val wheelInnerThreshold: Int = 18888,
     val dailyBase: Int = 50,
-    val milestoneRewards: Map<Int, MilestoneReward> = emptyMap()
+    val milestoneRewards: Map<Int, MilestoneReward> = emptyMap(),
 ) {
     companion object {
         fun fromMap(map: Map<String, Any?>): EconomyConfig {
             val beanRate = (map["beanConversionRate"] as? Number)?.toDouble() ?: 0.6
 
             val rawPullCosts = map["pullCosts"]
-            val pullCosts = if (rawPullCosts is Map<*, *>) {
-                rawPullCosts.entries.mapNotNull { (k, v) ->
-                    val key = k?.toString()?.toIntOrNull()
-                    val value = (v as? Number)?.toInt()
-                    if (key != null && value != null) key to value else null
-                }.toMap()
-            } else {
-                emptyMap()
-            }
+            val pullCosts =
+                if (rawPullCosts is Map<*, *>) {
+                    rawPullCosts.entries
+                        .mapNotNull { (k, v) ->
+                            val key = k?.toString()?.toIntOrNull()
+                            val value = (v as? Number)?.toInt()
+                            if (key != null && value != null) key to value else null
+                        }.toMap()
+                } else {
+                    emptyMap()
+                }
 
             val rawMilestones = map["milestoneRewards"]
-            val milestoneRewards = if (rawMilestones is Map<*, *>) {
-                rawMilestones.entries.mapNotNull { (k, v) ->
-                    val day = k?.toString()?.toIntOrNull()
-                    val rewardMap = v as? Map<*, *>
-                    if (day != null && rewardMap != null) {
-                        @Suppress("UNCHECKED_CAST")
-                        day to MilestoneReward.fromMap(rewardMap as Map<String, Any?>)
-                    } else null
-                }.toMap()
-            } else {
-                emptyMap()
-            }
+            val milestoneRewards =
+                if (rawMilestones is Map<*, *>) {
+                    rawMilestones.entries
+                        .mapNotNull { (k, v) ->
+                            val day = k?.toString()?.toIntOrNull()
+                            val rewardMap = v as? Map<*, *>
+                            if (day != null && rewardMap != null) {
+                                @Suppress("UNCHECKED_CAST")
+                                day to MilestoneReward.fromMap(rewardMap as Map<String, Any?>)
+                            } else {
+                                null
+                            }
+                        }.toMap()
+                } else {
+                    emptyMap()
+                }
 
             return EconomyConfig(
                 beanConversionRate = beanRate,
@@ -51,7 +57,7 @@ data class EconomyConfig(
                 normalSeatCount = (map["normalSeatCount"] as? Number)?.toInt() ?: 5,
                 wheelInnerThreshold = (map["wheelInnerThreshold"] as? Number)?.toInt() ?: 18888,
                 dailyBase = (map["dailyBase"] as? Number)?.toInt() ?: 50,
-                milestoneRewards = milestoneRewards
+                milestoneRewards = milestoneRewards,
             )
         }
     }

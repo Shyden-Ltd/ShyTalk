@@ -9,10 +9,22 @@ interface VoiceService {
     val isJoined: StateFlow<Boolean>
     val connectionState: StateFlow<VoiceConnectionState>
     val error: StateFlow<String?>
-    suspend fun joinRoom(roomName: String, userId: String)
+
+    suspend fun joinRoom(
+        roomName: String,
+        userId: String,
+    )
+
     fun leaveChannel()
+
     fun setMicrophoneEnabled(enabled: Boolean)
+
     fun setAudioMode(voiceMode: Boolean)
+
     fun clearError()
-    fun prewarmToken(roomName: String, userId: String)
+
+    fun prewarmToken(
+        roomName: String,
+        userId: String,
+    )
 }

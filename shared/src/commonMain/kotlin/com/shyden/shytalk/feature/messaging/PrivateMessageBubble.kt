@@ -1,7 +1,7 @@
 package com.shyden.shytalk.feature.messaging
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,8 +20,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -39,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -56,12 +55,12 @@ import com.shyden.shytalk.core.model.PrivateMessage
 import com.shyden.shytalk.core.model.PrivateMessageType
 import com.shyden.shytalk.core.model.RoomState
 import com.shyden.shytalk.core.model.SendStatus
-import com.shyden.shytalk.feature.home.RoomListItem
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.formatRelativeTime
-import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.feature.home.RoomListItem
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -90,22 +89,23 @@ fun PrivateMessageBubble(
     translatedText: String? = null,
     isModOrAbove: Boolean = false,
     isGroupChat: Boolean = false,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     // System/mod messages: render as centered, non-interactive text
     val isSystemMessage = message.type == PrivateMessageType.MOD_ACTION || message.type == PrivateMessageType.SYSTEM
     if (isSystemMessage) {
         Box(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            contentAlignment = Alignment.Center
+            modifier =
+                modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+            contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = message.text,
                 style = MaterialTheme.typography.bodySmall,
                 fontStyle = FontStyle.Italic,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             )
         }
         return
@@ -114,22 +114,23 @@ fun PrivateMessageBubble(
     // Hidden message replacement
     if (message.isHidden) {
         Row(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 2.dp),
-            horizontalArrangement = if (isSent) Arrangement.End else Arrangement.Start
+            modifier =
+                modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+            horizontalArrangement = if (isSent) Arrangement.End else Arrangement.Start,
         ) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.widthIn(max = 280.dp)
+                modifier = Modifier.widthIn(max = 280.dp),
             ) {
                 Text(
                     text = stringResource(Res.string.message_hidden_by_mod),
                     style = MaterialTheme.typography.bodySmall,
                     fontStyle = FontStyle.Italic,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                 )
             }
         }
@@ -143,51 +144,62 @@ fun PrivateMessageBubble(
     var showContextMenu by remember { mutableStateOf(false) }
     var showReactionPicker by remember { mutableStateOf(false) }
 
-    val canEdit = isSent &&
-        message.sendStatus == SendStatus.SENT &&
+    val canEdit =
+        isSent &&
+            message.sendStatus == SendStatus.SENT &&
+            !message.isRecalled &&
+            (currentTimeMillis() - message.createdAt) < Constants.PM_EDIT_WINDOW_MS
+
+    val canRecall =
+        isSent &&
+            !message.isRecalled &&
+            message.sendStatus == SendStatus.SENT &&
+            (currentTimeMillis() - message.createdAt) < Constants.PM_RECALL_WINDOW_MS
+
+    val isMediaOnly =
         !message.isRecalled &&
-        (currentTimeMillis() - message.createdAt) < Constants.PM_EDIT_WINDOW_MS
-
-    val canRecall = isSent && !message.isRecalled &&
-        message.sendStatus == SendStatus.SENT &&
-        (currentTimeMillis() - message.createdAt) < Constants.PM_RECALL_WINDOW_MS
-
-    val isMediaOnly = !message.isRecalled && (
-        (message.type == PrivateMessageType.STICKER && !message.stickerUrl.isNullOrEmpty()) ||
-        (message.type == PrivateMessageType.IMAGE && (message.imageUrls.isNotEmpty() || message.localImageData.isNotEmpty()) && message.text.isBlank()) ||
-        (message.type == PrivateMessageType.ROOM_INVITE && !message.roomInviteId.isNullOrEmpty())
-    )
+            (
+                (message.type == PrivateMessageType.STICKER && !message.stickerUrl.isNullOrEmpty()) ||
+                    (
+                        message.type == PrivateMessageType.IMAGE &&
+                            (message.imageUrls.isNotEmpty() || message.localImageData.isNotEmpty()) &&
+                            message.text.isBlank()
+                    ) ||
+                    (message.type == PrivateMessageType.ROOM_INVITE && !message.roomInviteId.isNullOrEmpty())
+            )
 
     val isSending = message.sendStatus == SendStatus.SENDING
     val contentAlpha = if (isSending) 0.7f else 1f
 
     // Colors for bottom row — use onSurface for media-only (no bubble), otherwise bubble text color
-    val metaColor = if (isMediaOnly) {
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-    } else if (isSent) {
-        MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.6f)
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-    }
+    val metaColor =
+        if (isMediaOnly) {
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        } else if (isSent) {
+            MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.6f)
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        }
 
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 2.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 2.dp),
         horizontalArrangement = if (isSent) Arrangement.End else Arrangement.Start,
-        verticalAlignment = Alignment.Bottom
+        verticalAlignment = Alignment.Bottom,
     ) {
         // Failed message retry icon
         if (isSent && message.sendStatus == SendStatus.FAILED) {
             IconButton(
                 onClick = onRetry,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(24.dp),
             ) {
                 Icon(
                     Icons.Default.ErrorOutline,
                     contentDescription = stringResource(Res.string.retry),
                     tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(20.dp),
                 )
             }
             Spacer(modifier = Modifier.width(4.dp))
@@ -195,76 +207,112 @@ fun PrivateMessageBubble(
 
         Column {
             Column(
-                modifier = Modifier
-                    .widthIn(max = 280.dp)
-                    .then(
-                        if (isMediaOnly) Modifier else Modifier.clip(
-                            RoundedCornerShape(
-                                topStart = 16.dp,
-                                topEnd = 16.dp,
-                                bottomStart = if (isSent) 16.dp else 4.dp,
-                                bottomEnd = if (isSent) 4.dp else 16.dp
-                            )
-                        )
-                    )
-                    .then(
-                        if (isMediaOnly) Modifier else Modifier.background(
-                            if (isSent) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    )
-                    .combinedClickable(
-                        onClick = { showContextMenu = true },
-                        onLongClick = { showContextMenu = true }
-                    )
-                    .then(
-                        if (isMediaOnly) Modifier.padding(4.dp)
-                        else Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                    )
-                    .alpha(contentAlpha)
+                modifier =
+                    Modifier
+                        .widthIn(max = 280.dp)
+                        .then(
+                            if (isMediaOnly) {
+                                Modifier
+                            } else {
+                                Modifier.clip(
+                                    RoundedCornerShape(
+                                        topStart = 16.dp,
+                                        topEnd = 16.dp,
+                                        bottomStart = if (isSent) 16.dp else 4.dp,
+                                        bottomEnd = if (isSent) 4.dp else 16.dp,
+                                    ),
+                                )
+                            },
+                        ).then(
+                            if (isMediaOnly) {
+                                Modifier
+                            } else {
+                                Modifier.background(
+                                    if (isSent) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    },
+                                )
+                            },
+                        ).combinedClickable(
+                            onClick = { showContextMenu = true },
+                            onLongClick = { showContextMenu = true },
+                        ).then(
+                            if (isMediaOnly) {
+                                Modifier.padding(4.dp)
+                            } else {
+                                Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            },
+                        ).alpha(contentAlpha),
             ) {
                 // Recalled message
                 if (message.isRecalled) {
                     Text(
-                        text = if (isSent) stringResource(Res.string.message_recalled_by_you) else stringResource(Res.string.message_recalled),
+                        text =
+                            if (isSent) {
+                                stringResource(
+                                    Res.string.message_recalled_by_you,
+                                )
+                            } else {
+                                stringResource(Res.string.message_recalled)
+                            },
                         style = MaterialTheme.typography.bodyMedium,
                         fontStyle = FontStyle.Italic,
-                        color = if (isMediaOnly) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                            else if (isSent) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.5f)
-                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        color =
+                            if (isMediaOnly) {
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            } else if (isSent) {
+                                MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.5f)
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            },
                     )
                 } else {
                     // Reply preview
                     if (message.replyToMessageId != null && message.replyToSenderName != null) {
                         Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(
-                                    if (isSent) MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-                                )
-                                .then(
-                                    if (onTapReplyPreview != null) Modifier.clickable { onTapReplyPreview() }
-                                    else Modifier
-                                )
-                                .padding(8.dp)
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(
+                                        if (isSent) {
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                                        } else {
+                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                                        },
+                                    ).then(
+                                        if (onTapReplyPreview != null) {
+                                            Modifier.clickable { onTapReplyPreview() }
+                                        } else {
+                                            Modifier
+                                        },
+                                    ).padding(8.dp),
                         ) {
                             Column {
                                 Text(
                                     text = message.replyToSenderName,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (isSent) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
-                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                                    maxLines = 1
+                                    color =
+                                        if (isSent) {
+                                            MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                        },
+                                    maxLines = 1,
                                 )
                                 Text(
                                     text = message.replyToText ?: "",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (isSent) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.6f)
-                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    color =
+                                        if (isSent) {
+                                            MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.6f)
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                        },
                                     maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                         }
@@ -274,15 +322,18 @@ fun PrivateMessageBubble(
                     // Sticker
                     if (message.type == PrivateMessageType.STICKER && !message.stickerUrl.isNullOrEmpty()) {
                         AsyncImage(
-                            model = ImageRequest.Builder(LocalPlatformContext.current)
-                                .data(message.stickerUrl)
-                                .crossfade(false)
-                                .build(),
+                            model =
+                                ImageRequest
+                                    .Builder(LocalPlatformContext.current)
+                                    .data(message.stickerUrl)
+                                    .crossfade(false)
+                                    .build(),
                             contentDescription = stringResource(Res.string.sticker),
-                            modifier = Modifier
-                                .size(120.dp)
-                                .clip(RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Fit
+                            modifier =
+                                Modifier
+                                    .size(120.dp)
+                                    .clip(RoundedCornerShape(8.dp)),
+                            contentScale = ContentScale.Fit,
                         )
                     }
 
@@ -297,19 +348,20 @@ fun PrivateMessageBubble(
                                     room = preview.room,
                                     seatUsers = preview.seatUsers,
                                     onClick = { onRoomInviteTap?.invoke(roomInviteId) },
-                                    modifier = Modifier.padding(0.dp)
+                                    modifier = Modifier.padding(0.dp),
                                 )
                                 if (isClosed) {
                                     Box(
-                                        modifier = Modifier
-                                            .matchParentSize()
-                                            .background(Color.Black.copy(alpha = 0.35f)),
-                                        contentAlignment = Alignment.Center
+                                        modifier =
+                                            Modifier
+                                                .matchParentSize()
+                                                .background(Color.Black.copy(alpha = 0.35f)),
+                                        contentAlignment = Alignment.Center,
                                     ) {
                                         Text(
                                             text = stringResource(Res.string.closed),
                                             style = MaterialTheme.typography.titleLarge,
-                                            color = Color.White
+                                            color = Color.White,
                                         )
                                     }
                                 }
@@ -317,40 +369,42 @@ fun PrivateMessageBubble(
                         } else {
                             // Fallback while room data loads
                             Box(
-                                modifier = Modifier
-                                    .widthIn(min = 220.dp, max = 280.dp)
-                                    .height(100.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(MaterialTheme.colorScheme.primaryContainer)
-                                    .clickable { onRoomInviteTap?.invoke(roomInviteId) },
-                                contentAlignment = Alignment.Center
+                                modifier =
+                                    Modifier
+                                        .widthIn(min = 220.dp, max = 280.dp)
+                                        .height(100.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.primaryContainer)
+                                        .clickable { onRoomInviteTap?.invoke(roomInviteId) },
+                                contentAlignment = Alignment.Center,
                             ) {
                                 Box(
-                                    modifier = Modifier
-                                        .matchParentSize()
-                                        .background(
-                                            Brush.verticalGradient(
-                                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
-                                                startY = 30f
-                                            )
-                                        )
+                                    modifier =
+                                        Modifier
+                                            .matchParentSize()
+                                            .background(
+                                                Brush.verticalGradient(
+                                                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
+                                                    startY = 30f,
+                                                ),
+                                            ),
                                 )
                                 Column(
                                     modifier = Modifier.matchParentSize().padding(12.dp),
-                                    verticalArrangement = Arrangement.Bottom
+                                    verticalArrangement = Arrangement.Bottom,
                                 ) {
                                     Text(
                                         text = message.roomInviteName ?: stringResource(Res.string.room),
                                         style = MaterialTheme.typography.titleMedium,
                                         color = Color.White,
                                         maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        overflow = TextOverflow.Ellipsis,
                                     )
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
                                         text = stringResource(Res.string.tap_to_join),
                                         style = MaterialTheme.typography.labelMedium,
-                                        color = Color.White.copy(alpha = 0.8f)
+                                        color = Color.White.copy(alpha = 0.8f),
                                     )
                                 }
                             }
@@ -363,13 +417,13 @@ fun PrivateMessageBubble(
                             // Optimistic local preview
                             LocalImageGrid(
                                 localImageData = message.localImageData,
-                                onLongClick = { showContextMenu = true }
+                                onLongClick = { showContextMenu = true },
                             )
                         } else if (message.imageUrls.isNotEmpty()) {
                             ImageGrid(
                                 imageUrls = message.imageUrls,
                                 onImageClick = onImageClick,
-                                onLongClick = { showContextMenu = true }
+                                onLongClick = { showContextMenu = true },
                             )
                         }
                         if (message.text.isNotBlank()) {
@@ -382,8 +436,12 @@ fun PrivateMessageBubble(
                         Text(
                             text = message.text,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = if (isSent) MaterialTheme.colorScheme.onPrimary
-                            else MaterialTheme.colorScheme.onSurfaceVariant
+                            color =
+                                if (isSent) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
                         )
                     }
 
@@ -394,14 +452,18 @@ fun PrivateMessageBubble(
                             text = translatedText,
                             style = MaterialTheme.typography.bodyMedium,
                             fontStyle = FontStyle.Italic,
-                            color = if (isSent) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
-                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                            color =
+                                if (isSent) {
+                                    MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                                },
                         )
                         Text(
                             text = stringResource(Res.string.show_original),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.clickable { /* toggle handled by VM */ }
+                            modifier = Modifier.clickable { /* toggle handled by VM */ },
                         )
                     }
                 }
@@ -410,7 +472,7 @@ fun PrivateMessageBubble(
                 Row(
                     modifier = Modifier.align(Alignment.End),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     // Edited indicator
                     if (!message.isRecalled && message.editCount > 0) {
@@ -418,7 +480,7 @@ fun PrivateMessageBubble(
                             text = stringResource(Res.string.edited_count, message.editCount),
                             style = MaterialTheme.typography.labelSmall,
                             color = metaColor,
-                            modifier = Modifier.clickable { onViewEditHistory() }
+                            modifier = Modifier.clickable { onViewEditHistory() },
                         )
                     }
 
@@ -427,7 +489,7 @@ fun PrivateMessageBubble(
                         Text(
                             text = formatRelativeTime(message.createdAt),
                             style = MaterialTheme.typography.labelSmall,
-                            color = metaColor
+                            color = metaColor,
                         )
                     }
 
@@ -436,7 +498,7 @@ fun PrivateMessageBubble(
                         CircularProgressIndicator(
                             modifier = Modifier.size(12.dp),
                             strokeWidth = 1.5.dp,
-                            color = metaColor
+                            color = metaColor,
                         )
                     }
 
@@ -446,7 +508,7 @@ fun PrivateMessageBubble(
                             imageVector = if (isRead) Icons.Default.DoneAll else Icons.Default.Done,
                             contentDescription = if (isRead) stringResource(Res.string.read) else stringResource(Res.string.sent),
                             modifier = Modifier.size(14.dp),
-                            tint = metaColor
+                            tint = metaColor,
                         )
                     }
                 }
@@ -457,7 +519,7 @@ fun PrivateMessageBubble(
                 ReactionBadges(
                     reactions = message.reactions,
                     currentUserId = currentUserId,
-                    onToggleReaction = onToggleReaction
+                    onToggleReaction = onToggleReaction,
                 )
             }
 
@@ -466,13 +528,13 @@ fun PrivateMessageBubble(
                 Popup(
                     alignment = if (isSent) Alignment.TopEnd else Alignment.TopStart,
                     onDismissRequest = { showReactionPicker = false },
-                    properties = PopupProperties(focusable = true)
+                    properties = PopupProperties(focusable = true),
                 ) {
                     ReactionPicker(
                         onReact = { emoji ->
                             showReactionPicker = false
                             onToggleReaction(emoji)
-                        }
+                        },
                     )
                 }
             }
@@ -480,7 +542,7 @@ fun PrivateMessageBubble(
             // Context menu
             DropdownMenu(
                 expanded = showContextMenu,
-                onDismissRequest = { showContextMenu = false }
+                onDismissRequest = { showContextMenu = false },
             ) {
                 if (!message.isRecalled) {
                     DropdownMenuItem(
@@ -488,14 +550,14 @@ fun PrivateMessageBubble(
                         onClick = {
                             showContextMenu = false
                             showReactionPicker = !showReactionPicker
-                        }
+                        },
                     )
                     DropdownMenuItem(
                         text = { Text(stringResource(Res.string.reply)) },
                         onClick = {
                             showContextMenu = false
                             onReply()
-                        }
+                        },
                     )
                     DropdownMenuItem(
                         text = { Text(stringResource(Res.string.copy)) },
@@ -503,7 +565,7 @@ fun PrivateMessageBubble(
                             showContextMenu = false
                             @Suppress("DEPRECATION")
                             clipboardManager.setText(AnnotatedString(message.text))
-                        }
+                        },
                     )
                     if (onTranslate != null && message.text.isNotBlank() && translatedText == null) {
                         DropdownMenuItem(
@@ -511,7 +573,7 @@ fun PrivateMessageBubble(
                             onClick = {
                                 showContextMenu = false
                                 onTranslate()
-                            }
+                            },
                         )
                     }
                     if (canEdit) {
@@ -520,7 +582,7 @@ fun PrivateMessageBubble(
                             onClick = {
                                 showContextMenu = false
                                 onEdit()
-                            }
+                            },
                         )
                     }
                     if (canRecall) {
@@ -529,7 +591,7 @@ fun PrivateMessageBubble(
                             onClick = {
                                 showContextMenu = false
                                 onRecall()
-                            }
+                            },
                         )
                     }
                     val stickerUrl = message.stickerUrl
@@ -539,7 +601,7 @@ fun PrivateMessageBubble(
                             onClick = {
                                 showContextMenu = false
                                 onSaveSticker(stickerUrl)
-                            }
+                            },
                         )
                     }
                     if (isGroupChat && isModOrAbove && !isSent && onHideMessage != null) {
@@ -548,7 +610,7 @@ fun PrivateMessageBubble(
                             onClick = {
                                 showContextMenu = false
                                 onHideMessage()
-                            }
+                            },
                         )
                     }
                     if (!isSent) {
@@ -557,7 +619,7 @@ fun PrivateMessageBubble(
                             onClick = {
                                 showContextMenu = false
                                 onReportMessage()
-                            }
+                            },
                         )
                     }
                 }
@@ -570,42 +632,44 @@ fun PrivateMessageBubble(
 @Composable
 private fun LocalImageGrid(
     localImageData: List<ByteArray>,
-    onLongClick: (() -> Unit)? = null
+    onLongClick: (() -> Unit)? = null,
 ) {
     when (localImageData.size) {
         1 -> {
             AsyncImage(
                 model = localImageData[0],
                 contentDescription = stringResource(Res.string.image),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .combinedClickable(
-                        onClick = {},
-                        onLongClick = { onLongClick?.invoke() }
-                    ),
-                contentScale = ContentScale.Crop
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .combinedClickable(
+                            onClick = {},
+                            onLongClick = { onLongClick?.invoke() },
+                        ),
+                contentScale = ContentScale.Crop,
             )
         }
         2 -> {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 localImageData.forEach { data ->
                     AsyncImage(
                         model = data,
                         contentDescription = stringResource(Res.string.image),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(150.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .combinedClickable(
-                                onClick = {},
-                                onLongClick = { onLongClick?.invoke() }
-                            ),
-                        contentScale = ContentScale.Crop
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .height(150.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .combinedClickable(
+                                    onClick = {},
+                                    onLongClick = { onLongClick?.invoke() },
+                                ),
+                        contentScale = ContentScale.Crop,
                     )
                 }
             }
@@ -615,21 +679,22 @@ private fun LocalImageGrid(
                 localImageData.chunked(2).forEach { row ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         row.forEach { data ->
                             AsyncImage(
                                 model = data,
                                 contentDescription = stringResource(Res.string.image),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(120.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .combinedClickable(
-                                        onClick = {},
-                                        onLongClick = { onLongClick?.invoke() }
-                                    ),
-                                contentScale = ContentScale.Crop
+                                modifier =
+                                    Modifier
+                                        .weight(1f)
+                                        .height(120.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .combinedClickable(
+                                            onClick = {},
+                                            onLongClick = { onLongClick?.invoke() },
+                                        ),
+                                contentScale = ContentScale.Crop,
                             )
                         }
                         if (row.size == 1) {
@@ -647,42 +712,44 @@ private fun LocalImageGrid(
 private fun ImageGrid(
     imageUrls: List<String>,
     onImageClick: ((List<String>, Int) -> Unit)? = null,
-    onLongClick: (() -> Unit)? = null
+    onLongClick: (() -> Unit)? = null,
 ) {
     when (imageUrls.size) {
         1 -> {
             AsyncImage(
                 model = imageUrls[0],
                 contentDescription = stringResource(Res.string.image),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .combinedClickable(
-                        onClick = { onImageClick?.invoke(imageUrls, 0) },
-                        onLongClick = { onLongClick?.invoke() }
-                    ),
-                contentScale = ContentScale.Crop
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .combinedClickable(
+                            onClick = { onImageClick?.invoke(imageUrls, 0) },
+                            onLongClick = { onLongClick?.invoke() },
+                        ),
+                contentScale = ContentScale.Crop,
             )
         }
         2 -> {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 imageUrls.forEachIndexed { index, url ->
                     AsyncImage(
                         model = url,
                         contentDescription = stringResource(Res.string.image),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(150.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .combinedClickable(
-                                onClick = { onImageClick?.invoke(imageUrls, index) },
-                                onLongClick = { onLongClick?.invoke() }
-                            ),
-                        contentScale = ContentScale.Crop
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .height(150.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .combinedClickable(
+                                    onClick = { onImageClick?.invoke(imageUrls, index) },
+                                    onLongClick = { onLongClick?.invoke() },
+                                ),
+                        contentScale = ContentScale.Crop,
                     )
                 }
             }
@@ -693,22 +760,23 @@ private fun ImageGrid(
                 imageUrls.chunked(2).forEachIndexed { rowIndex, row ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         row.forEachIndexed { colIndex, url ->
                             val globalIndex = rowIndex * 2 + colIndex
                             AsyncImage(
                                 model = url,
                                 contentDescription = stringResource(Res.string.image),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(120.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .combinedClickable(
-                                        onClick = { onImageClick?.invoke(imageUrls, globalIndex) },
-                                        onLongClick = { onLongClick?.invoke() }
-                                    ),
-                                contentScale = ContentScale.Crop
+                                modifier =
+                                    Modifier
+                                        .weight(1f)
+                                        .height(120.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .combinedClickable(
+                                            onClick = { onImageClick?.invoke(imageUrls, globalIndex) },
+                                            onLongClick = { onLongClick?.invoke() },
+                                        ),
+                                contentScale = ContentScale.Crop,
                             )
                         }
                         // If odd number in last row, add spacer

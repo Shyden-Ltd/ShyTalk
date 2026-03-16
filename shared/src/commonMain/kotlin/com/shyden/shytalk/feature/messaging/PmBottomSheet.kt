@@ -7,16 +7,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -28,14 +27,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import com.shyden.shytalk.resources.Res
-import com.shyden.shytalk.resources.*
-import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,7 +46,7 @@ fun PmBottomSheet(
     onPickStickerImage: ((PrivateChatViewModel) -> Unit)? = null,
     onNavigateToRoom: ((String) -> Unit)? = null,
     activeRoomId: String? = null,
-    activeRoomName: String? = null
+    activeRoomName: String? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedChatUserId by remember { mutableStateOf(preOpenUserId) }
@@ -55,7 +54,7 @@ fun PmBottomSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState
+        sheetState = sheetState,
     ) {
         val groupId = selectedGroupConversationId
         val chatUserId = selectedChatUserId
@@ -69,7 +68,7 @@ fun PmBottomSheet(
                     onPickStickerImage = onPickStickerImage,
                     onNavigateToRoom = onNavigateToRoom,
                     activeRoomId = activeRoomId,
-                    activeRoomName = activeRoomName
+                    activeRoomName = activeRoomName,
                 )
             }
             chatUserId != null -> {
@@ -81,14 +80,14 @@ fun PmBottomSheet(
                     onPickStickerImage = onPickStickerImage,
                     onNavigateToRoom = onNavigateToRoom,
                     activeRoomId = activeRoomId,
-                    activeRoomName = activeRoomName
+                    activeRoomName = activeRoomName,
                 )
             }
             else -> {
                 // Conversation list view
                 PmSheetListView(
                     onSelectConversation = { userId -> selectedChatUserId = userId },
-                    onSelectGroupConversation = { conversationId -> selectedGroupConversationId = conversationId }
+                    onSelectGroupConversation = { conversationId -> selectedGroupConversationId = conversationId },
                 )
             }
         }
@@ -99,26 +98,28 @@ fun PmBottomSheet(
 private fun PmSheetListView(
     onSelectConversation: (String) -> Unit,
     onSelectGroupConversation: (String) -> Unit = {},
-    viewModel: ConversationListViewModel = koinViewModel()
+    viewModel: ConversationListViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight(0.7f)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.7f),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = stringResource(Res.string.messages_title),
-                style = MaterialTheme.typography.titleMedium
+                style = MaterialTheme.typography.titleMedium,
             )
         }
         HorizontalDivider()
@@ -127,7 +128,7 @@ private fun PmSheetListView(
         if (uiState.isLoading) {
             Box(
                 modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator()
             }
@@ -136,13 +137,13 @@ private fun PmSheetListView(
                 text = stringResource(Res.string.no_conversations_yet),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(16.dp)
+                modifier = Modifier.padding(16.dp),
             )
         } else {
             LazyColumn {
                 items(
                     items = conversations,
-                    key = { it.conversation.conversationId }
+                    key = { it.conversation.conversationId },
                 ) { cw ->
                     ConversationListItem(
                         otherUser = cw.otherUser,
@@ -164,7 +165,7 @@ private fun PmSheetListView(
                                 onSelectConversation(otherUserId)
                             }
                         },
-                        aliases = uiState.aliases
+                        aliases = uiState.aliases,
                     )
                     HorizontalDivider(modifier = Modifier.padding(start = 80.dp))
                 }
@@ -182,22 +183,33 @@ private fun PmSheetChatView(
     onNavigateToRoom: ((String) -> Unit)? = null,
     activeRoomId: String? = null,
     activeRoomName: String? = null,
-    viewModel: PrivateChatViewModel = koinViewModel(key = otherUserId) { parametersOf(otherUserId) }
+    viewModel: PrivateChatViewModel = koinViewModel(key = otherUserId) { parametersOf(otherUserId) },
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight(0.7f)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.7f),
     ) {
         PrivateChatScreen(
             otherUserId = otherUserId,
             onNavigateBack = onBack,
-            onPickImages = if (onPickImages != null) { { onPickImages(viewModel) } } else null,
-            onPickStickerImage = if (onPickStickerImage != null) { { onPickStickerImage(viewModel) } } else null,
+            onPickImages =
+                if (onPickImages != null) {
+                    { onPickImages(viewModel) }
+                } else {
+                    null
+                },
+            onPickStickerImage =
+                if (onPickStickerImage != null) {
+                    { onPickStickerImage(viewModel) }
+                } else {
+                    null
+                },
             onNavigateToRoom = onNavigateToRoom,
             activeRoomId = activeRoomId,
             activeRoomName = activeRoomName,
-            viewModel = viewModel
+            viewModel = viewModel,
         )
     }
 }
@@ -211,22 +223,33 @@ private fun PmSheetGroupChatView(
     onNavigateToRoom: ((String) -> Unit)? = null,
     activeRoomId: String? = null,
     activeRoomName: String? = null,
-    viewModel: PrivateChatViewModel = koinViewModel(key = conversationId) { parametersOf("", conversationId) }
+    viewModel: PrivateChatViewModel = koinViewModel(key = conversationId) { parametersOf("", conversationId) },
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight(0.7f)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.7f),
     ) {
         PrivateChatScreen(
             conversationId = conversationId,
             onNavigateBack = onBack,
-            onPickImages = if (onPickImages != null) { { onPickImages(viewModel) } } else null,
-            onPickStickerImage = if (onPickStickerImage != null) { { onPickStickerImage(viewModel) } } else null,
+            onPickImages =
+                if (onPickImages != null) {
+                    { onPickImages(viewModel) }
+                } else {
+                    null
+                },
+            onPickStickerImage =
+                if (onPickStickerImage != null) {
+                    { onPickStickerImage(viewModel) }
+                } else {
+                    null
+                },
             onNavigateToRoom = onNavigateToRoom,
             activeRoomId = activeRoomId,
             activeRoomName = activeRoomName,
-            viewModel = viewModel
+            viewModel = viewModel,
         )
     }
 }

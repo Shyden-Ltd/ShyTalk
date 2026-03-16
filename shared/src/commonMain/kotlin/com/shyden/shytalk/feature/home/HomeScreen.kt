@@ -11,8 +11,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -22,6 +22,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,13 +31,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import org.koin.compose.viewmodel.koinViewModel
-import androidx.compose.runtime.collectAsState
 import com.shyden.shytalk.core.model.Banner
 import com.shyden.shytalk.core.model.ChatRoom
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,7 +48,7 @@ fun RoomListContent(
     showCreateDialog: Boolean,
     onDismissCreateDialog: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: HomeViewModel = koinViewModel()
+    viewModel: HomeViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
@@ -76,7 +76,7 @@ fun RoomListContent(
         if (uiState.isLoading || uiState.createdRoomId != null) {
             Box(
                 modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator()
             }
@@ -84,51 +84,54 @@ fun RoomListContent(
             Column(modifier = Modifier.fillMaxSize()) {
                 if (uiState.banners.isNotEmpty()) {
                     BannerCarousel(
-                        banners = uiState.banners.map { banner ->
-                            BannerItem(
-                                key = banner.id,
-                                onClick = { onBannerAction(banner) },
-                                content = {
-                                    AsyncImage(
-                                        model = banner.imageUrl,
-                                        contentDescription = banner.title,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(160.dp)
-                                            .clip(RoundedCornerShape(12.dp)),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                }
-                            )
-                        },
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                        banners =
+                            uiState.banners.map { banner ->
+                                BannerItem(
+                                    key = banner.id,
+                                    onClick = { onBannerAction(banner) },
+                                    content = {
+                                        AsyncImage(
+                                            model = banner.imageUrl,
+                                            contentDescription = banner.title,
+                                            modifier =
+                                                Modifier
+                                                    .fillMaxWidth()
+                                                    .height(160.dp)
+                                                    .clip(RoundedCornerShape(12.dp)),
+                                            contentScale = ContentScale.Crop,
+                                        )
+                                    },
+                                )
+                            },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     )
                 }
                 PullToRefreshBox(
                     isRefreshing = uiState.isRefreshing,
                     onRefresh = { viewModel.refreshRooms() },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 ) {
                     if (uiState.rooms.isEmpty()) {
                         Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(rememberScrollState())
-                                .testTag("roomList_emptyState"),
-                            contentAlignment = Alignment.Center
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .testTag("roomList_emptyState"),
+                            contentAlignment = Alignment.Center,
                         ) {
                             Column(
-                                horizontalAlignment = Alignment.CenterHorizontally
+                                horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
                                 Text(
                                     text = stringResource(Res.string.no_active_rooms),
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 Text(
                                     text = stringResource(Res.string.tap_plus_to_create),
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
@@ -136,7 +139,7 @@ fun RoomListContent(
                         LazyColumn(
                             state = listState,
                             verticalArrangement = Arrangement.Top,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
                         ) {
                             items(uiState.rooms, key = { it.roomId }) { room ->
                                 RoomListItem(
@@ -146,7 +149,7 @@ fun RoomListContent(
                                         onPrewarmRoom(room)
                                         onNavigateToRoom(room.roomId)
                                     },
-                                    modifier = Modifier.testTag("roomList_roomCard_${room.roomId}")
+                                    modifier = Modifier.testTag("roomList_roomCard_${room.roomId}"),
                                 )
                             }
                         }
@@ -163,7 +166,7 @@ fun RoomListContent(
                 onDismissCreateDialog()
                 viewModel.createRoom(name)
             },
-            initialRoomName = uiState.lastRoomName
+            initialRoomName = uiState.lastRoomName,
         )
     }
 }

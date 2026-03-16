@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -40,10 +39,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shyden.shytalk.core.ui.SuperShyGold
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
-import org.jetbrains.compose.resources.stringResource
+import com.shyden.shytalk.resources.Res
 import kotlinx.coroutines.delay
+import org.jetbrains.compose.resources.stringResource
 
 private const val PAGE_COUNT = 2
 
@@ -51,7 +50,7 @@ private const val PAGE_COUNT = 2
 fun RoomActionCarousel(
     onOpenGacha: () -> Unit,
     onOpenDailyReward: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val pagerState = rememberPagerState(pageCount = { PAGE_COUNT })
 
@@ -62,64 +61,72 @@ fun RoomActionCarousel(
             val nextPage = (pagerState.currentPage + 1) % PAGE_COUNT
             pagerState.animateScrollToPage(
                 page = nextPage,
-                animationSpec = tween(500, easing = LinearEasing)
+                animationSpec = tween(500, easing = LinearEasing),
             )
         }
     }
 
     Surface(
-        modifier = modifier
-            .size(76.dp),
+        modifier =
+            modifier
+                .size(76.dp),
         shape = RoundedCornerShape(12.dp),
         color = Color(0xFF263238).copy(alpha = 0.85f),
-        shadowElevation = 4.dp
+        shadowElevation = 4.dp,
     ) {
         Box(modifier = Modifier.padding(3.dp)) {
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
             ) { page ->
                 when (page) {
-                    0 -> SquareCarouselBanner(
-                        icon = { MiniLuckySpinIcon(modifier = Modifier.size(28.dp)) },
-                        title = stringResource(Res.string.lucky_spin),
-                        gradientColors = listOf(Color(0xFFE53935), Color(0xFFFF6B35)),
-                        onClick = onOpenGacha
-                    )
-                    1 -> SquareCarouselBanner(
-                        icon = {
-                            Icon(
-                                Icons.Default.LocalFireDepartment,
-                                contentDescription = null,
-                                tint = Color(0xFFFF6B35),
-                                modifier = Modifier.size(28.dp)
-                            )
-                        },
-                        title = stringResource(Res.string.daily),
-                        gradientColors = listOf(Color(0xFFFF6B35), Color(0xFFFFD700)),
-                        onClick = onOpenDailyReward
-                    )
+                    0 ->
+                        SquareCarouselBanner(
+                            icon = { MiniLuckySpinIcon(modifier = Modifier.size(28.dp)) },
+                            title = stringResource(Res.string.lucky_spin),
+                            gradientColors = listOf(Color(0xFFE53935), Color(0xFFFF6B35)),
+                            onClick = onOpenGacha,
+                        )
+                    1 ->
+                        SquareCarouselBanner(
+                            icon = {
+                                Icon(
+                                    Icons.Default.LocalFireDepartment,
+                                    contentDescription = null,
+                                    tint = Color(0xFFFF6B35),
+                                    modifier = Modifier.size(28.dp),
+                                )
+                            },
+                            title = stringResource(Res.string.daily),
+                            gradientColors = listOf(Color(0xFFFF6B35), Color(0xFFFFD700)),
+                            onClick = onOpenDailyReward,
+                        )
                 }
             }
 
             // Page indicator dots (bottom center)
             Row(
                 horizontalArrangement = Arrangement.Center,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 1.dp)
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 1.dp),
             ) {
                 repeat(PAGE_COUNT) { index ->
                     val isSelected = pagerState.currentPage == index
                     Box(
-                        modifier = Modifier
-                            .padding(horizontal = 1.5.dp)
-                            .size(if (isSelected) 5.dp else 3.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (isSelected) Color.White
-                                else Color.White.copy(alpha = 0.4f)
-                            )
+                        modifier =
+                            Modifier
+                                .padding(horizontal = 1.5.dp)
+                                .size(if (isSelected) 5.dp else 3.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (isSelected) {
+                                        Color.White
+                                    } else {
+                                        Color.White.copy(alpha = 0.4f)
+                                    },
+                                ),
                     )
                 }
             }
@@ -132,18 +139,18 @@ private fun SquareCarouselBanner(
     icon: @Composable () -> Unit,
     title: String,
     gradientColors: List<Color>,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .clip(RoundedCornerShape(8.dp))
-            .background(
-                brush = Brush.verticalGradient(gradientColors.map { it.copy(alpha = 0.3f) })
-            )
-            .clickable { onClick() }
-            .padding(4.dp),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(8.dp))
+                .background(
+                    brush = Brush.verticalGradient(gradientColors.map { it.copy(alpha = 0.3f) }),
+                ).clickable { onClick() }
+                .padding(4.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             icon()
@@ -152,7 +159,7 @@ private fun SquareCarouselBanner(
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
                 fontSize = 10.sp,
-                maxLines = 1
+                maxLines = 1,
             )
         }
     }
@@ -164,10 +171,11 @@ private fun MiniLuckySpinIcon(modifier: Modifier = Modifier) {
     val litSegment by transition.animateFloat(
         initialValue = 0f,
         targetValue = 7f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2100, easing = LinearEasing)
-        ),
-        label = "miniSpinLit"
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(durationMillis = 2100, easing = LinearEasing),
+            ),
+        label = "miniSpinLit",
     )
     val outerSegments = 4
     val innerSegments = 3
@@ -190,7 +198,7 @@ private fun MiniLuckySpinIcon(modifier: Modifier = Modifier) {
                 sweepAngle = outerAngle - 2f,
                 useCenter = true,
                 topLeft = Offset(ctr.x - outerOuter, ctr.y - outerOuter),
-                size = Size(outerOuter * 2, outerOuter * 2)
+                size = Size(outerOuter * 2, outerOuter * 2),
             )
         }
         // Clear inner for outer ring
@@ -209,7 +217,7 @@ private fun MiniLuckySpinIcon(modifier: Modifier = Modifier) {
                 sweepAngle = innerAngle - 2f,
                 useCenter = true,
                 topLeft = Offset(ctr.x - innerOuter, ctr.y - innerOuter),
-                size = Size(innerOuter * 2, innerOuter * 2)
+                size = Size(innerOuter * 2, innerOuter * 2),
             )
         }
         // Center dot

@@ -17,35 +17,34 @@ import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.model.CurrencyType
 import com.shyden.shytalk.core.model.Transaction
 import com.shyden.shytalk.core.model.TransactionType
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
-import org.jetbrains.compose.resources.stringResource
-import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Instant
 
 @Composable
 internal fun TransactionRow(transaction: Transaction) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = transactionIcon(transaction.type),
-            style = MaterialTheme.typography.titleMedium
+            style = MaterialTheme.typography.titleMedium,
         )
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = transactionLabel(transaction),
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
             )
             Text(
                 text = formatTimestamp(transaction.timestamp),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         val isPositive = transaction.amount > 0
@@ -53,27 +52,28 @@ internal fun TransactionRow(transaction: Transaction) {
             text = "${if (isPositive) "+" else ""}${transaction.amount}",
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Bold,
-            color = if (isPositive) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error
+            color = if (isPositive) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
         )
         Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = if (transaction.currency == CurrencyType.BEANS) "\uD83E\uDED8" else "\uD83E\uDE99",
-            style = MaterialTheme.typography.bodySmall
+            style = MaterialTheme.typography.bodySmall,
         )
     }
 }
 
-internal fun transactionIcon(type: TransactionType): String = when (type) {
-    TransactionType.PURCHASE -> "\uD83D\uDCB3"
-    TransactionType.GACHA_PULL -> "\uD83C\uDFB0"
-    TransactionType.GIFT_SENT -> "\uD83C\uDF81"
-    TransactionType.GIFT_RECEIVED -> "\uD83C\uDF89"
-    TransactionType.BEAN_REDEEM -> "\uD83E\uDED8"
-    TransactionType.DAILY_REWARD -> "\uD83D\uDCC5"
-    TransactionType.SUBSCRIPTION -> "\u2B50"
-    TransactionType.ADMIN_ADJUSTMENT -> "\uD83D\uDD27"
-    TransactionType.ADMIN_BACKPACK -> "\uD83C\uDF92"
-}
+internal fun transactionIcon(type: TransactionType): String =
+    when (type) {
+        TransactionType.PURCHASE -> "\uD83D\uDCB3"
+        TransactionType.GACHA_PULL -> "\uD83C\uDFB0"
+        TransactionType.GIFT_SENT -> "\uD83C\uDF81"
+        TransactionType.GIFT_RECEIVED -> "\uD83C\uDF89"
+        TransactionType.BEAN_REDEEM -> "\uD83E\uDED8"
+        TransactionType.DAILY_REWARD -> "\uD83D\uDCC5"
+        TransactionType.SUBSCRIPTION -> "\u2B50"
+        TransactionType.ADMIN_ADJUSTMENT -> "\uD83D\uDD27"
+        TransactionType.ADMIN_BACKPACK -> "\uD83C\uDF92"
+    }
 
 private val uidPattern = Regex("""\(by [a-zA-Z0-9]{20,}\)""")
 
@@ -109,7 +109,9 @@ internal fun formatNumber(value: Long): String {
 
 internal fun formatTimestamp(millis: Long): String {
     if (millis == 0L) return ""
-    val now = com.shyden.shytalk.core.util.currentTimeMillis()
+    val now =
+        com.shyden.shytalk.core.util
+            .currentTimeMillis()
     val diff = now - millis
     return when {
         diff < 60_000 -> "Just now"

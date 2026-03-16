@@ -34,25 +34,24 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.Message
 import com.shyden.shytalk.core.model.MessageType
 import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.ui.StyledDisplayName
-import com.shyden.shytalk.core.util.flagEmojiForCode
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.ui.components.FlagBadge
 import org.jetbrains.compose.resources.stringResource
 
-private val BubbleShape = RoundedCornerShape(
-    topStart = 4.dp,
-    topEnd = 12.dp,
-    bottomStart = 12.dp,
-    bottomEnd = 12.dp
-)
+private val BubbleShape =
+    RoundedCornerShape(
+        topStart = 4.dp,
+        topEnd = 12.dp,
+        bottomStart = 12.dp,
+        bottomEnd = 12.dp,
+    )
 
 @Composable
 private fun UserAvatar(
@@ -60,32 +59,34 @@ private fun UserAvatar(
     displayName: String,
     nationality: String? = null,
     size: Dp,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     Box(contentAlignment = Alignment.Center) {
         if (photoUrl != null) {
             AsyncImage(
                 model = photoUrl,
                 contentDescription = displayName,
-                modifier = Modifier
-                    .size(size)
-                    .clip(CircleShape)
-                    .clickable(onClick = onClick),
-                contentScale = ContentScale.Crop
+                modifier =
+                    Modifier
+                        .size(size)
+                        .clip(CircleShape)
+                        .clickable(onClick = onClick),
+                contentScale = ContentScale.Crop,
             )
         } else {
             Surface(
-                modifier = Modifier
-                    .size(size)
-                    .clickable(onClick = onClick),
+                modifier =
+                    Modifier
+                        .size(size)
+                        .clickable(onClick = onClick),
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer
+                color = MaterialTheme.colorScheme.primaryContainer,
             ) {
                 Icon(
                     Icons.Default.Person,
                     contentDescription = displayName,
                     modifier = Modifier.padding(if (size <= 24.dp) 4.dp else 6.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             }
         }
@@ -93,7 +94,7 @@ private fun UserAvatar(
             FlagBadge(
                 countryCode = nationality,
                 badgeSize = size * 0.4f,
-                modifier = Modifier.align(Alignment.BottomEnd)
+                modifier = Modifier.align(Alignment.BottomEnd),
             )
         }
     }
@@ -112,10 +113,13 @@ fun MessageBubble(
     onEditMessage: (() -> Unit)? = null,
     onTranslate: (() -> Unit)? = null,
     translatedText: String? = null,
-    aliases: Map<String, String> = emptyMap()
+    aliases: Map<String, String> = emptyMap(),
 ) {
-    val canInvite = (currentRole == RoomRole.OWNER || currentRole == RoomRole.HOST)
-            && !isSelf && !isUserSeated && message.senderId != "system"
+    val canInvite =
+        (currentRole == RoomRole.OWNER || currentRole == RoomRole.HOST) &&
+            !isSelf &&
+            !isUserSeated &&
+            message.senderId != "system"
 
     when (message.type) {
         MessageType.SYSTEM -> {
@@ -125,25 +129,27 @@ fun MessageBubble(
                 fontStyle = FontStyle.Italic,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth(0.75f)
-                    .padding(vertical = 4.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth(0.75f)
+                        .padding(vertical = 4.dp),
             )
         }
         MessageType.JOIN -> {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth(0.75f)
-                    .padding(vertical = 4.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth(0.75f)
+                        .padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.Start,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 UserAvatar(
                     photoUrl = user?.photoUrl,
                     displayName = message.senderName,
                     nationality = user?.nationality,
                     size = 24.dp,
-                    onClick = onTapUser
+                    onClick = onTapUser,
                 )
 
                 Spacer(modifier = Modifier.width(8.dp))
@@ -152,29 +158,30 @@ fun MessageBubble(
                     text = message.text,
                     style = MaterialTheme.typography.bodySmall,
                     fontStyle = FontStyle.Italic,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
                 if (canInvite) {
                     Spacer(modifier = Modifier.width(4.dp))
                     IconButton(
                         onClick = onInvite,
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(28.dp),
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 Icons.Default.Mic,
                                 contentDescription = stringResource(Res.string.invite_to_mic),
                                 modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = MaterialTheme.colorScheme.primary,
                             )
                             Icon(
                                 Icons.Default.Add,
                                 contentDescription = null,
-                                modifier = Modifier
-                                    .size(10.dp)
-                                    .align(Alignment.BottomEnd),
-                                tint = MaterialTheme.colorScheme.primary
+                                modifier =
+                                    Modifier
+                                        .size(10.dp)
+                                        .align(Alignment.BottomEnd),
+                                tint = MaterialTheme.colorScheme.primary,
                             )
                         }
                     }
@@ -184,18 +191,19 @@ fun MessageBubble(
         MessageType.TEXT -> {
             val resolvedName = aliases[message.senderId] ?: message.senderName
             Row(
-                modifier = Modifier
-                    .fillMaxWidth(0.75f)
-                    .padding(vertical = 2.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth(0.75f)
+                        .padding(vertical = 2.dp),
                 horizontalArrangement = Arrangement.Start,
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.Top,
             ) {
                 UserAvatar(
                     photoUrl = user?.photoUrl,
                     displayName = resolvedName,
                     nationality = user?.nationality,
                     size = 32.dp,
-                    onClick = onTapUser
+                    onClick = onTapUser,
                 )
 
                 Spacer(modifier = Modifier.width(8.dp))
@@ -204,47 +212,52 @@ fun MessageBubble(
                     StyledDisplayName(
                         displayName = resolvedName,
                         isSuperShy = user?.isSuperShy ?: false,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        style =
+                            MaterialTheme.typography.labelSmall.copy(
+                                color = MaterialTheme.colorScheme.primary,
+                            ),
                     )
 
                     Surface(
                         shape = BubbleShape,
-                        color = if (isSelf) {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant
-                        },
-                        modifier = if (isSelf && onEditMessage != null) {
-                            Modifier.combinedClickable(
-                                onClick = {},
-                                onLongClick = onEditMessage
-                            )
-                        } else {
-                            Modifier
-                        }
+                        color =
+                            if (isSelf) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            },
+                        modifier =
+                            if (isSelf && onEditMessage != null) {
+                                Modifier.combinedClickable(
+                                    onClick = {},
+                                    onLongClick = onEditMessage,
+                                )
+                            } else {
+                                Modifier
+                            },
                     ) {
                         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                             Text(
                                 text = message.text,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = if (isSelf) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                }
+                                color =
+                                    if (isSelf) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
                             )
                             if (message.isEdited) {
                                 Text(
                                     text = stringResource(Res.string.edited),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontStyle = FontStyle.Italic,
-                                    color = if (isSelf) {
-                                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                    }
+                                    color =
+                                        if (isSelf) {
+                                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                        },
                                 )
                             }
                             if (translatedText != null) {
@@ -253,11 +266,12 @@ fun MessageBubble(
                                     text = translatedText,
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontStyle = FontStyle.Italic,
-                                    color = if (isSelf) {
-                                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
-                                    }
+                                    color =
+                                        if (isSelf) {
+                                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                                        },
                                 )
                             }
                             if (onTranslate != null && translatedText == null && !isSelf) {
@@ -265,7 +279,7 @@ fun MessageBubble(
                                     text = stringResource(Res.string.translate),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.clickable { onTranslate() }
+                                    modifier = Modifier.clickable { onTranslate() },
                                 )
                             }
                         }
@@ -275,27 +289,29 @@ fun MessageBubble(
         }
         MessageType.GIFT -> {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth(0.75f)
-                    .padding(vertical = 4.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth(0.75f)
+                        .padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (message.giftIconUrl.isNotEmpty()) {
                     AsyncImage(
                         model = message.giftIconUrl,
                         contentDescription = null,
-                        modifier = Modifier
-                            .size(20.dp)
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
+                        modifier =
+                            Modifier
+                                .size(20.dp)
+                                .clip(CircleShape),
+                        contentScale = ContentScale.Crop,
                     )
                 } else {
                     Icon(
                         Icons.Default.CardGiftcard,
                         contentDescription = null,
                         modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.primary,
                     )
                 }
                 Spacer(modifier = Modifier.width(6.dp))
@@ -303,7 +319,7 @@ fun MessageBubble(
                     text = message.text,
                     style = MaterialTheme.typography.bodySmall,
                     fontStyle = FontStyle.Italic,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
         }

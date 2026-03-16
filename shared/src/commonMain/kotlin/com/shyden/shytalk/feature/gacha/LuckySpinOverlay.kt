@@ -22,12 +22,13 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -40,6 +41,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -48,19 +50,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.audio.GachaSoundPlayer
 import com.shyden.shytalk.core.model.CoinPackage
@@ -68,19 +67,19 @@ import com.shyden.shytalk.core.model.GachaGift
 import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.model.Transaction
 import com.shyden.shytalk.core.ui.SuperShyGold
-import com.shyden.shytalk.resources.Res
-import com.shyden.shytalk.resources.*
-import org.jetbrains.compose.resources.stringResource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.feature.shop.CoinPackageCard
-import com.shyden.shytalk.feature.shop.formatNumber
-import com.shyden.shytalk.feature.shop.formatTimestamp
-import com.shyden.shytalk.feature.shop.transactionLabel
+import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import kotlinx.coroutines.delay
+import org.jetbrains.compose.resources.stringResource
 import kotlin.math.pow
 
 private enum class SpinPhase {
-    IDLE, ANIMATING, CELEBRATING, SHOW_SUMMARY
+    IDLE,
+    ANIMATING,
+    CELEBRATING,
+    SHOW_SUMMARY,
 }
 
 @Composable
@@ -93,13 +92,14 @@ fun LuckySpinOverlay(
     onDismissResults: () -> Unit,
     onDismiss: () -> Unit,
     onTestPurchase: (Int) -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val winnableGifts = gachaState.winnableGifts
     val innerThreshold = gachaState.wheelInnerThreshold
-    val (outerGifts, innerGifts) = remember(winnableGifts, innerThreshold) {
-        buildRingLayout(winnableGifts, innerThreshold)
-    }
+    val (outerGifts, innerGifts) =
+        remember(winnableGifts, innerThreshold) {
+            buildRingLayout(winnableGifts, innerThreshold)
+        }
 
     var phase by remember { mutableStateOf(SpinPhase.IDLE) }
     var outerLitIndex by remember { mutableIntStateOf(-1) }
@@ -145,7 +145,10 @@ fun LuckySpinOverlay(
         shakeX.animateTo(0f, spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow))
     }
 
-    suspend fun celebrate(results: List<GachaGift>, midSpin: Boolean = false) {
+    suspend fun celebrate(
+        results: List<GachaGift>,
+        midSpin: Boolean = false,
+    ) {
         val bestCoinValue = results.maxByOrNull { it.coinValue }?.coinValue ?: 0
         val config = rarityConfigForCoinValue(bestCoinValue)
         confettiCount = if (midSpin) config.burstCount / 2 else config.burstCount
@@ -173,8 +176,11 @@ fun LuckySpinOverlay(
 
     // Recover from pull errors — if pulling finished with no results, reset to IDLE
     LaunchedEffect(gachaState.isPulling) {
-        if (!gachaState.isPulling && phase == SpinPhase.ANIMATING
-            && gachaState.currentWin == null && gachaState.multiSpinResults.isEmpty()) {
+        if (!gachaState.isPulling &&
+            phase == SpinPhase.ANIMATING &&
+            gachaState.currentWin == null &&
+            gachaState.multiSpinResults.isEmpty()
+        ) {
             resetBoard()
         }
     }
@@ -192,8 +198,13 @@ fun LuckySpinOverlay(
             if (pos != null) {
                 val key = "${if (pos.first == Ring.OUTER) "outer" else "inner"}-${pos.second}"
                 wonSegments = setOf(key)
-                if (pos.first == Ring.OUTER) { outerLitIndex = pos.second; innerLitIndex = -1 }
-                else { innerLitIndex = pos.second; outerLitIndex = -1 }
+                if (pos.first == Ring.OUTER) {
+                    outerLitIndex = pos.second
+                    innerLitIndex = -1
+                } else {
+                    innerLitIndex = pos.second
+                    outerLitIndex = -1
+                }
             }
             lastWin = win
             showSummary = true
@@ -201,8 +212,12 @@ fun LuckySpinOverlay(
             return@LaunchedEffect
         }
 
-        val pos = resolveWinPosition(win.giftId, outerGifts, innerGifts)
-            ?: run { phase = SpinPhase.IDLE; return@LaunchedEffect }
+        val pos =
+            resolveWinPosition(win.giftId, outerGifts, innerGifts)
+                ?: run {
+                    phase = SpinPhase.IDLE
+                    return@LaunchedEffect
+                }
 
         // Chase phase (~2.8s) — light chase around both rings
         val totalDuration = 2800L
@@ -221,8 +236,13 @@ fun LuckySpinOverlay(
                 innerLitIndex = if (innerGifts.isNotEmpty()) (innerGifts.size - (step % innerGifts.size)) % innerGifts.size else -1
             } else {
                 // Lock to winner
-                if (pos.first == Ring.OUTER) { outerLitIndex = pos.second; innerLitIndex = -1 }
-                else { innerLitIndex = pos.second; outerLitIndex = -1 }
+                if (pos.first == Ring.OUTER) {
+                    outerLitIndex = pos.second
+                    innerLitIndex = -1
+                } else {
+                    innerLitIndex = pos.second
+                    outerLitIndex = -1
+                }
             }
 
             GachaSoundPlayer.playTick(progress)
@@ -232,8 +252,13 @@ fun LuckySpinOverlay(
         }
 
         // Final lock
-        if (pos.first == Ring.OUTER) { outerLitIndex = pos.second; innerLitIndex = -1 }
-        else { innerLitIndex = pos.second; outerLitIndex = -1 }
+        if (pos.first == Ring.OUTER) {
+            outerLitIndex = pos.second
+            innerLitIndex = -1
+        } else {
+            innerLitIndex = pos.second
+            outerLitIndex = -1
+        }
 
         // Blink phase (3 cycles)
         repeat(3) {
@@ -300,7 +325,10 @@ fun LuckySpinOverlay(
                 val pos = resolveWinPosition(r.giftId, outerGifts, innerGifts) ?: continue
                 val key = "${if (pos.first == Ring.OUTER) "outer" else "inner"}-${pos.second}"
                 allWonSet.add(key)
-                if (key !in seen) { seen.add(key); uniqueWins.add(pos) }
+                if (key !in seen) {
+                    seen.add(key)
+                    uniqueWins.add(pos)
+                }
             }
 
             for (step in 0..totalSteps) {
@@ -310,8 +338,10 @@ fun LuckySpinOverlay(
                     GachaSoundPlayer.playTick(step.toFloat() / totalSteps)
                 } else {
                     val revealStep = step - sweepPhase
-                    val revealIndex = ((revealStep.toFloat() / (totalSteps - sweepPhase)) * uniqueWins.size).toInt()
-                        .coerceAtMost(uniqueWins.size - 1)
+                    val revealIndex =
+                        ((revealStep.toFloat() / (totalSteps - sweepPhase)) * uniqueWins.size)
+                            .toInt()
+                            .coerceAtMost(uniqueWins.size - 1)
                     val revealed = mutableSetOf<String>()
                     for (i in 0..revealIndex) {
                         val prize = uniqueWins[i]
@@ -319,8 +349,13 @@ fun LuckySpinOverlay(
                     }
                     wonSegments = revealed
                     val current = uniqueWins[revealIndex]
-                    if (current.first == Ring.OUTER) { outerLitIndex = current.second; innerLitIndex = -1 }
-                    else { innerLitIndex = current.second; outerLitIndex = -1 }
+                    if (current.first == Ring.OUTER) {
+                        outerLitIndex = current.second
+                        innerLitIndex = -1
+                    } else {
+                        innerLitIndex = current.second
+                        outerLitIndex = -1
+                    }
                 }
                 delay(intervalMs)
             }
@@ -345,10 +380,16 @@ fun LuckySpinOverlay(
                     val progress = ((currentTimeMillis() - chaseStartTime).toFloat() / chaseDuration).coerceIn(0f, 1f)
                     if (progress < 0.75f) {
                         outerLitIndex = if (outerGifts.isNotEmpty()) chaseStep % outerGifts.size else -1
-                        innerLitIndex = if (innerGifts.isNotEmpty()) (innerGifts.size - (chaseStep % innerGifts.size)) % innerGifts.size else -1
+                        innerLitIndex =
+                            if (innerGifts.isNotEmpty()) (innerGifts.size - (chaseStep % innerGifts.size)) % innerGifts.size else -1
                     } else {
-                        if (pos.first == Ring.OUTER) { outerLitIndex = pos.second; innerLitIndex = -1 }
-                        else { innerLitIndex = pos.second; outerLitIndex = -1 }
+                        if (pos.first == Ring.OUTER) {
+                            outerLitIndex = pos.second
+                            innerLitIndex = -1
+                        } else {
+                            innerLitIndex = pos.second
+                            outerLitIndex = -1
+                        }
                     }
                     GachaSoundPlayer.playTick(progress)
                     chaseStep++
@@ -387,47 +428,47 @@ fun LuckySpinOverlay(
 
     // Main overlay layout — bottom-aligned opaque panel, room visible above
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .graphicsLayer {
-                translationX = shakeX.value
-                translationY = shakeY.value
-            }
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() }
-            ) {
-                // Tap outside the panel to close (only when idle)
-                if (phase == SpinPhase.IDLE && !showCoinShop && !showHistory && !showPrizeList && !showSummary) {
-                    resetBoard()
-                    onDismissResults()
-                    onDismiss()
-                }
-            },
-        contentAlignment = Alignment.BottomCenter
+        modifier =
+            modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    translationX = shakeX.value
+                    translationY = shakeY.value
+                }.clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                ) {
+                    // Tap outside the panel to close (only when idle)
+                    if (phase == SpinPhase.IDLE && !showCoinShop && !showHistory && !showPrizeList && !showSummary) {
+                        resetBoard()
+                        onDismissResults()
+                        onDismiss()
+                    }
+                },
+        contentAlignment = Alignment.BottomCenter,
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Bottom,
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Color.Black,
-                    RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
-                )
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() }
-                ) { /* consume taps on panel */ }
-                .padding(horizontal = 16.dp)
-                .navigationBarsPadding()
-                .padding(bottom = 16.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Color.Black,
+                        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                    ).clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                    ) { /* consume taps on panel */ }
+                    .padding(horizontal = 16.dp)
+                    .navigationBarsPadding()
+                    .padding(bottom = 16.dp),
         ) {
             // Header: [X Close] ---- [History] [Prizes] [Balance pill]
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = {
                     resetBoard()
@@ -443,12 +484,12 @@ fun LuckySpinOverlay(
                 Surface(
                     shape = RoundedCornerShape(20.dp),
                     color = Color.White.copy(alpha = 0.06f),
-                    modifier = Modifier.clickable { showHistory = true }
+                    modifier = Modifier.clickable { showHistory = true },
                 ) {
                     Text(
                         "\uD83D\uDCCB",
                         fontSize = 18.sp,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                     )
                 }
 
@@ -458,12 +499,12 @@ fun LuckySpinOverlay(
                 Surface(
                     shape = RoundedCornerShape(20.dp),
                     color = Color.White.copy(alpha = 0.06f),
-                    modifier = Modifier.clickable { showPrizeList = true }
+                    modifier = Modifier.clickable { showPrizeList = true },
                 ) {
                     Text(
                         "\uD83C\uDFC6",
                         fontSize = 18.sp,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                     )
                 }
 
@@ -473,11 +514,11 @@ fun LuckySpinOverlay(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Surface(
                         shape = RoundedCornerShape(30.dp),
-                        color = Color(0xFFFFD700).copy(alpha = 0.06f)
+                        color = Color(0xFFFFD700).copy(alpha = 0.06f),
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 5.dp)
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 5.dp),
                         ) {
                             Text("\uD83E\uDE99", fontSize = 16.sp)
                             Spacer(modifier = Modifier.width(8.dp))
@@ -486,7 +527,7 @@ fun LuckySpinOverlay(
                                 color = SuperShyGold,
                                 fontWeight = FontWeight.ExtraBold,
                                 fontSize = 18.sp,
-                                letterSpacing = 1.sp
+                                letterSpacing = 1.sp,
                             )
                         }
                     }
@@ -494,16 +535,17 @@ fun LuckySpinOverlay(
                     Surface(
                         shape = CircleShape,
                         color = Color(0xFFFFD700).copy(alpha = 0.15f),
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clickable { showCoinShop = true }
+                        modifier =
+                            Modifier
+                                .size(32.dp)
+                                .clickable { showCoinShop = true },
                     ) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                             Icon(
                                 Icons.Default.Add,
                                 contentDescription = stringResource(Res.string.buy_coins),
                                 tint = SuperShyGold,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(18.dp),
                             )
                         }
                     }
@@ -516,33 +558,44 @@ fun LuckySpinOverlay(
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 2.sp,
-                style = androidx.compose.ui.text.TextStyle(
-                    brush = Brush.linearGradient(
-                        listOf(
-                            Color(0xFFFFD700), Color(0xFFFF6B00), Color(0xFFFF1744),
-                            Color(0xFFD500F9), Color(0xFF2979FF), Color(0xFF00E676)
-                        )
-                    )
-                )
+                style =
+                    androidx.compose.ui.text.TextStyle(
+                        brush =
+                            Brush.linearGradient(
+                                listOf(
+                                    Color(0xFFFFD700),
+                                    Color(0xFFFF6B00),
+                                    Color(0xFFFF1744),
+                                    Color(0xFFD500F9),
+                                    Color(0xFF2979FF),
+                                    Color(0xFF00E676),
+                                ),
+                            ),
+                    ),
             )
 
             // Skip animation toggle
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
-                modifier = Modifier
-                    .graphicsLayer { scaleX = 0.65f; scaleY = 0.65f }
+                modifier =
+                    Modifier
+                        .graphicsLayer {
+                            scaleX = 0.65f
+                            scaleY = 0.65f
+                        },
             ) {
                 Switch(
                     checked = skipAnimation,
                     onCheckedChange = { skipAnimation = it },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color(0xFF1A1A2E),
-                        checkedTrackColor = Color(0xFFFFD700),
-                        uncheckedThumbColor = Color(0xFF777777),
-                        uncheckedTrackColor = Color(0xFF333333)
-                    ),
-                    modifier = Modifier.height(20.dp)
+                    colors =
+                        SwitchDefaults.colors(
+                            checkedThumbColor = Color(0xFF1A1A2E),
+                            checkedTrackColor = Color(0xFFFFD700),
+                            uncheckedThumbColor = Color(0xFF777777),
+                            uncheckedTrackColor = Color(0xFF333333),
+                        ),
+                    modifier = Modifier.height(20.dp),
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
@@ -550,7 +603,7 @@ fun LuckySpinOverlay(
                     color = Color.White.copy(alpha = 0.3f),
                     fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 1.sp
+                    letterSpacing = 1.sp,
                 )
             }
 
@@ -559,11 +612,12 @@ fun LuckySpinOverlay(
             // Fixed-size area: 1:1 aspect ratio while spinning so the panel
             // doesn't resize; summary popup drops it so content isn't clipped.
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp)
-                    .then(if (showSummary) Modifier else Modifier.aspectRatio(1f)),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp)
+                        .then(if (showSummary) Modifier else Modifier.aspectRatio(1f)),
+                contentAlignment = Alignment.Center,
             ) {
                 if (showSummary && allWins.isNotEmpty()) {
                     LuckySpinSummaryPopup(
@@ -585,13 +639,13 @@ fun LuckySpinOverlay(
                                 1 -> onSpin()
                                 else -> onQuickSpin(tier.count)
                             }
-                        }
+                        },
                     )
                 } else {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
                     ) {
                         LuckySpinWheel(
                             outerGifts = outerGifts,
@@ -599,9 +653,10 @@ fun LuckySpinOverlay(
                             outerLitIndex = outerLitIndex,
                             innerLitIndex = innerLitIndex,
                             wonSegments = wonSegments,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(1f)
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(1f),
                         )
 
                         Spacer(modifier = Modifier.height(4.dp))
@@ -610,7 +665,7 @@ fun LuckySpinOverlay(
                             if (phase != SpinPhase.IDLE) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
+                                    horizontalArrangement = Arrangement.Center,
                                 ) {
                                     Text(giftEmoji(win.giftName), fontSize = 22.sp)
                                     Spacer(modifier = Modifier.width(6.dp))
@@ -618,7 +673,7 @@ fun LuckySpinOverlay(
                                         text = "${win.giftName} — \uD83E\uDE99${win.coinValue}",
                                         color = Color(0xFFFFD700),
                                         fontWeight = FontWeight.ExtraBold,
-                                        fontSize = 14.sp
+                                        fontSize = 14.sp,
                                     )
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
@@ -633,15 +688,16 @@ fun LuckySpinOverlay(
                 Text(
                     text = stringResource(Res.string.loading_prices),
                     color = Color.White.copy(alpha = 0.5f),
-                    fontSize = 14.sp
+                    fontSize = 14.sp,
                 )
             } else if (gachaState.configLoaded) {
                 val spinning = phase == SpinPhase.ANIMATING || phase == SpinPhase.CELEBRATING
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(IntrinsicSize.Min)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Min),
                 ) {
                     spinTiers.forEach { tier ->
                         val canAfford = gachaState.coinBalance >= tier.cost
@@ -667,18 +723,20 @@ fun LuckySpinOverlay(
                                     }
                                 }
                             },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = tier.color.copy(alpha = 0.15f)
-                            ),
+                            colors =
+                                ButtonDefaults.buttonColors(
+                                    containerColor = tier.color.copy(alpha = 0.15f),
+                                ),
                             shape = RoundedCornerShape(20.dp),
                             contentPadding = ButtonDefaults.ContentPadding,
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 72.dp)
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 72.dp),
                         ) {
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Text(
                                     text = tier.label,
@@ -687,7 +745,7 @@ fun LuckySpinOverlay(
                                     color = tier.color,
                                     letterSpacing = 1.sp,
                                     lineHeight = 20.sp,
-                                    maxLines = 1
+                                    maxLines = 1,
                                 )
                                 Text(
                                     text = stringResource(Res.string.spin),
@@ -695,15 +753,15 @@ fun LuckySpinOverlay(
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White.copy(alpha = 0.55f),
                                     letterSpacing = 1.sp,
-                                    maxLines = 1
+                                    maxLines = 1,
                                 )
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),
-                                    color = tier.color.copy(alpha = 0.12f)
+                                    color = tier.color.copy(alpha = 0.12f),
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                     ) {
                                         Text("\uD83E\uDE99", fontSize = 11.sp, maxLines = 1)
                                         Text(
@@ -711,7 +769,7 @@ fun LuckySpinOverlay(
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = tier.color,
-                                            maxLines = 1
+                                            maxLines = 1,
                                         )
                                     }
                                 }
@@ -725,7 +783,7 @@ fun LuckySpinOverlay(
                                     maxLines = 1,
                                     lineHeight = 9.sp,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Visible,
-                                    softWrap = false
+                                    softWrap = false,
                                 )
                             }
                         }
@@ -737,18 +795,22 @@ fun LuckySpinOverlay(
             if (phase == SpinPhase.CELEBRATING && wonSegments.isNotEmpty() && !showSummary) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
-                    onClick = { showSummary = true; phase = SpinPhase.SHOW_SUMMARY },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFFFD700).copy(alpha = 0.08f)
-                    ),
-                    shape = RoundedCornerShape(50)
+                    onClick = {
+                        showSummary = true
+                        phase = SpinPhase.SHOW_SUMMARY
+                    },
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFFFD700).copy(alpha = 0.08f),
+                        ),
+                    shape = RoundedCornerShape(50),
                 ) {
                     Text(
                         text = stringResource(Res.string.collect_all, allWins.size),
                         color = Color(0xFFFFD700),
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 14.sp,
-                        letterSpacing = 2.sp
+                        letterSpacing = 2.sp,
                     )
                 }
             }
@@ -758,15 +820,16 @@ fun LuckySpinOverlay(
         LuckySpinConfetti(
             active = showConfetti,
             particleCount = confettiCount,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
         )
 
         // Screen flash overlay
         if (showFlash) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(flashColor)
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(flashColor),
             )
         }
 
@@ -779,7 +842,7 @@ fun LuckySpinOverlay(
                     GachaSoundPlayer.playCoinPurchase()
                     onTestPurchase(coins)
                 },
-                onDismiss = { showCoinShop = false }
+                onDismiss = { showCoinShop = false },
             )
         }
 
@@ -788,7 +851,7 @@ fun LuckySpinOverlay(
             InlineSpinHistory(
                 transactions = gachaState.spinHistory,
                 gifts = gachaState.winnableGifts,
-                onDismiss = { showHistory = false }
+                onDismiss = { showHistory = false },
             )
         }
 
@@ -796,7 +859,7 @@ fun LuckySpinOverlay(
         if (showPrizeList) {
             InlinePrizeCatalog(
                 gifts = gachaState.winnableGifts,
-                onDismiss = { showPrizeList = false }
+                onDismiss = { showPrizeList = false },
             )
         }
     }
@@ -807,34 +870,36 @@ private fun InlineCoinShop(
     coinPackages: List<CoinPackage>,
     coinBalance: Long,
     onPurchase: (Int) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.85f))
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() }
-            ) { /* consume taps */ },
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.85f))
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                ) { /* consume taps */ },
+        contentAlignment = Alignment.Center,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = stringResource(Res.string.need_more_coins),
                     color = Color(0xFFFFD700),
                     fontWeight = FontWeight.ExtraBold,
-                    fontSize = 20.sp
+                    fontSize = 20.sp,
                 )
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Default.Close, contentDescription = stringResource(Res.string.close), tint = Color.White)
@@ -845,7 +910,7 @@ private fun InlineCoinShop(
                 text = "\uD83E\uDE99 $coinBalance",
                 color = Color.White.copy(alpha = 0.7f),
                 fontSize = 14.sp,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -854,19 +919,19 @@ private fun InlineCoinShop(
                 Text(
                     text = stringResource(Res.string.no_packages_available),
                     color = Color.White.copy(alpha = 0.5f),
-                    fontSize = 14.sp
+                    fontSize = 14.sp,
                 )
             } else {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.heightIn(max = 260.dp)
+                    modifier = Modifier.heightIn(max = 260.dp),
                 ) {
                     items(coinPackages) { pkg ->
                         CoinPackageCard(
                             pkg = pkg,
-                            onClick = { onPurchase(pkg.totalCoins) }
+                            onClick = { onPurchase(pkg.totalCoins) },
                         )
                     }
                 }
@@ -879,42 +944,44 @@ private fun InlineCoinShop(
 private fun InlineSpinHistory(
     transactions: List<Transaction>,
     gifts: List<Gift>,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     val iconLookup = remember(gifts) { gifts.associateBy({ it.name }, { it.iconUrl }) }
     val sorted = remember(transactions) { transactions.sortedByDescending { it.timestamp } }
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.6f))
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() }
-            ) { onDismiss() },
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth(0.9f)
-                .fillMaxHeight(0.55f)
-                .background(Color(0xFF1A1A2E), RoundedCornerShape(16.dp))
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.6f))
                 .clickable(
                     indication = null,
-                    interactionSource = remember { MutableInteractionSource() }
-                ) { /* consume taps on panel */ }
-                .padding(16.dp)
+                    interactionSource = remember { MutableInteractionSource() },
+                ) { onDismiss() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth(0.9f)
+                    .fillMaxHeight(0.55f)
+                    .background(Color(0xFF1A1A2E), RoundedCornerShape(16.dp))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                    ) { /* consume taps on panel */ }
+                    .padding(16.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = stringResource(Res.string.spin_history),
                     color = Color.White,
                     fontWeight = FontWeight.ExtraBold,
-                    fontSize = 20.sp
+                    fontSize = 20.sp,
                 )
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Default.Close, contentDescription = stringResource(Res.string.close), tint = Color.White)
@@ -927,43 +994,47 @@ private fun InlineSpinHistory(
                 Text(
                     text = stringResource(Res.string.no_spins_yet),
                     color = Color.White.copy(alpha = 0.5f),
-                    fontSize = 14.sp
+                    fontSize = 14.sp,
                 )
             } else {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState()),
                 ) {
                     sorted.forEach { tx ->
-                        val giftNames = tx.details
-                            ?.split(",")
-                            ?.map { it.trim() }
-                            ?.filter { it.isNotBlank() }
-                            ?: emptyList()
+                        val giftNames =
+                            tx.details
+                                ?.split(",")
+                                ?.map { it.trim() }
+                                ?.filter { it.isNotBlank() }
+                                ?: emptyList()
 
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(8.dp))
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             // Pull count badge
                             val pulls = tx.pullCount ?: 1
                             Box(
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .background(Color(0xFFE53935), RoundedCornerShape(6.dp)),
-                                contentAlignment = Alignment.Center
+                                modifier =
+                                    Modifier
+                                        .size(28.dp)
+                                        .background(Color(0xFFE53935), RoundedCornerShape(6.dp)),
+                                contentAlignment = Alignment.Center,
                             ) {
                                 Text(
                                     "${pulls}x",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Black,
-                                    color = Color.White
+                                    color = Color.White,
                                 )
                             }
 
@@ -980,10 +1051,11 @@ private fun InlineSpinHistory(
                                                 AsyncImage(
                                                     model = url,
                                                     contentDescription = name,
-                                                    modifier = Modifier
-                                                        .size(22.dp)
-                                                        .clip(CircleShape),
-                                                    contentScale = ContentScale.Crop
+                                                    modifier =
+                                                        Modifier
+                                                            .size(22.dp)
+                                                            .clip(CircleShape),
+                                                    contentScale = ContentScale.Crop,
                                                 )
                                             } else {
                                                 Text(giftEmoji(name), fontSize = 14.sp)
@@ -994,29 +1066,30 @@ private fun InlineSpinHistory(
                                                 "+${giftNames.size - 10}",
                                                 fontSize = 10.sp,
                                                 color = Color.White.copy(alpha = 0.5f),
-                                                modifier = Modifier.align(Alignment.CenterVertically)
+                                                modifier = Modifier.align(Alignment.CenterVertically),
                                             )
                                         }
                                     }
                                     // Gift names summary
                                     val grouped = giftNames.groupingBy { it }.eachCount()
-                                    val summary = grouped.entries
-                                        .sortedByDescending { it.value }
-                                        .joinToString(", ") { (name, count) ->
-                                            if (count > 1) "${count}x $name" else name
-                                        }
+                                    val summary =
+                                        grouped.entries
+                                            .sortedByDescending { it.value }
+                                            .joinToString(", ") { (name, count) ->
+                                                if (count > 1) "${count}x $name" else name
+                                            }
                                     Text(
                                         text = summary,
                                         color = Color.White.copy(alpha = 0.7f),
                                         fontSize = 10.sp,
                                         maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis
+                                        overflow = TextOverflow.Ellipsis,
                                     )
                                 } else {
                                     Text(
                                         "${pulls}x Pull",
                                         color = Color.White.copy(alpha = 0.7f),
-                                        fontSize = 11.sp
+                                        fontSize = 11.sp,
                                     )
                                 }
                             }
@@ -1026,7 +1099,7 @@ private fun InlineSpinHistory(
                                 text = "\uD83E\uDE99 ${kotlin.math.abs(tx.amount)}",
                                 color = Color(0xFFFFD700),
                                 fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
                             )
                         }
                     }
@@ -1039,37 +1112,40 @@ private fun InlineSpinHistory(
 @Composable
 private fun InlinePrizeCatalog(
     gifts: List<Gift>,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
-    val sorted = remember(gifts) {
-        gifts.sortedByDescending { it.coinValue }
-    }
+    val sorted =
+        remember(gifts) {
+            gifts.sortedByDescending { it.coinValue }
+        }
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.9f))
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() }
-            ) { /* consume taps */ },
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.9f))
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                ) { /* consume taps */ },
+        contentAlignment = Alignment.Center,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = stringResource(Res.string.prizes),
                     color = Color.White,
                     fontWeight = FontWeight.ExtraBold,
-                    fontSize = 20.sp
+                    fontSize = 20.sp,
                 )
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Default.Close, contentDescription = stringResource(Res.string.close), tint = Color.White)
@@ -1080,38 +1156,39 @@ private fun InlinePrizeCatalog(
 
             Column(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f, fill = false)
-                    .verticalScroll(rememberScrollState())
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState()),
             ) {
                 sorted.chunked(4).forEach { row ->
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
                         row.forEach { gift ->
                             Box(modifier = Modifier.weight(1f)) {
                                 Box(
-                                    modifier = Modifier
-                                        .aspectRatio(1f)
-                                        .background(
-                                            Color(0xFF9E9E9E).copy(alpha = 0.1f),
-                                            RoundedCornerShape(8.dp)
-                                        )
-                                        .padding(4.dp),
-                                    contentAlignment = Alignment.Center
+                                    modifier =
+                                        Modifier
+                                            .aspectRatio(1f)
+                                            .background(
+                                                Color(0xFF9E9E9E).copy(alpha = 0.1f),
+                                                RoundedCornerShape(8.dp),
+                                            ).padding(4.dp),
+                                    contentAlignment = Alignment.Center,
                                 ) {
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         verticalArrangement = Arrangement.Center,
-                                        modifier = Modifier.fillMaxSize()
+                                        modifier = Modifier.fillMaxSize(),
                                     ) {
                                         if (gift.iconUrl.isNotBlank()) {
                                             AsyncImage(
                                                 model = gift.iconUrl,
                                                 contentDescription = gift.name,
-                                                modifier = Modifier.size(36.dp)
+                                                modifier = Modifier.size(36.dp),
                                             )
                                         } else {
                                             Text(giftEmoji(gift.name), fontSize = 24.sp)
@@ -1123,14 +1200,14 @@ private fun InlinePrizeCatalog(
                                             fontWeight = FontWeight.Bold,
                                             textAlign = TextAlign.Center,
                                             maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
+                                            overflow = TextOverflow.Ellipsis,
                                         )
                                         Text(
                                             text = "\uD83E\uDE99 ${gift.coinValue}",
                                             color = Color(0xFFFFD700),
                                             fontSize = 8.sp,
                                             fontWeight = FontWeight.ExtraBold,
-                                            maxLines = 1
+                                            maxLines = 1,
                                         )
                                     }
                                 }

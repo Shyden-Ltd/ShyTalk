@@ -13,55 +13,68 @@ private const val SAMPLE_RATE = 44100
 /** Coin-value thresholds for sound tiers (replacing bracket tiers). */
 private enum class SoundTier { COMMON, UNCOMMON, RARE, EPIC, LEGENDARY }
 
-private fun soundTierForCoinValue(coinValue: Int): SoundTier = when {
-    coinValue < 50 -> SoundTier.COMMON
-    coinValue < 200 -> SoundTier.UNCOMMON
-    coinValue < 2000 -> SoundTier.RARE
-    coinValue < 10000 -> SoundTier.EPIC
-    else -> SoundTier.LEGENDARY
-}
+private fun soundTierForCoinValue(coinValue: Int): SoundTier =
+    when {
+        coinValue < 50 -> SoundTier.COMMON
+        coinValue < 200 -> SoundTier.UNCOMMON
+        coinValue < 2000 -> SoundTier.RARE
+        coinValue < 10000 -> SoundTier.EPIC
+        else -> SoundTier.LEGENDARY
+    }
 
 actual object GachaSoundPlayer {
-
     private var spinStartTrack: AudioTrack? = null
     private var blinkClickTrack: AudioTrack? = null
     private var coinPurchaseTrack: AudioTrack? = null
     private var highTierFanfareTrack: AudioTrack? = null
     private val tickTracks = arrayOfNulls<AudioTrack>(8)
     private val winTracks = mutableMapOf<SoundTier, AudioTrack>()
+
     @Volatile private var initialized = false
     private val lock = Any()
 
-    actual fun init(): Unit = synchronized(lock) {
-        if (initialized) return
-        initialized = true
-        spinStartTrack = buildTrack(generateSpinStart())
-        blinkClickTrack = buildTrack(generateBlinkClick())
-        coinPurchaseTrack = buildTrack(generateCoinPurchase())
-        highTierFanfareTrack = buildTrack(generateHighTierFanfare())
-        for (band in 0 until 8) {
-            tickTracks[band] = buildTrack(generateTick(band))
+    actual fun init(): Unit =
+        synchronized(lock) {
+            if (initialized) return
+            initialized = true
+            spinStartTrack = buildTrack(generateSpinStart())
+            blinkClickTrack = buildTrack(generateBlinkClick())
+            coinPurchaseTrack = buildTrack(generateCoinPurchase())
+            highTierFanfareTrack = buildTrack(generateHighTierFanfare())
+            for (band in 0 until 8) {
+                tickTracks[band] = buildTrack(generateTick(band))
+            }
+            SoundTier.entries.forEach { tier ->
+                winTracks[tier] = buildTrack(generateWinReveal(tier))
+            }
         }
-        SoundTier.entries.forEach { tier ->
-            winTracks[tier] = buildTrack(generateWinReveal(tier))
-        }
-    }
 
-    actual fun release(): Unit = synchronized(lock) {
-        if (!initialized) return
-        initialized = false
-        spinStartTrack?.release(); spinStartTrack = null
-        blinkClickTrack?.release(); blinkClickTrack = null
-        coinPurchaseTrack?.release(); coinPurchaseTrack = null
-        highTierFanfareTrack?.release(); highTierFanfareTrack = null
-        tickTracks.indices.forEach { tickTracks[it]?.release(); tickTracks[it] = null }
-        winTracks.values.forEach { it.release() }
-        winTracks.clear()
-    }
+    actual fun release(): Unit =
+        synchronized(lock) {
+            if (!initialized) return
+            initialized = false
+            spinStartTrack?.release()
+            spinStartTrack = null
+            blinkClickTrack?.release()
+            blinkClickTrack = null
+            coinPurchaseTrack?.release()
+            coinPurchaseTrack = null
+            highTierFanfareTrack?.release()
+            highTierFanfareTrack = null
+            tickTracks.indices.forEach {
+                tickTracks[it]?.release()
+                tickTracks[it] = null
+            }
+            winTracks.values.forEach { it.release() }
+            winTracks.clear()
+        }
 
     actual fun playSpinStart() = replay(spinStartTrack)
+
     actual fun playBlinkClick() = replay(blinkClickTrack)
+
     actual fun playCoinPurchase() = replay(coinPurchaseTrack)
+
     actual fun playHighTierFanfare() = replay(highTierFanfareTrack)
 
     actual fun playTick(progress: Float) {
@@ -90,23 +103,25 @@ actual object GachaSoundPlayer {
 
     private fun buildTrack(samples: ShortArray): AudioTrack {
         val bufferSize = samples.size * 2
-        val track = AudioTrack.Builder()
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_GAME)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build()
-            )
-            .setAudioFormat(
-                AudioFormat.Builder()
-                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                    .setSampleRate(SAMPLE_RATE)
-                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                    .build()
-            )
-            .setBufferSizeInBytes(bufferSize)
-            .setTransferMode(AudioTrack.MODE_STATIC)
-            .build()
+        val track =
+            AudioTrack
+                .Builder()
+                .setAudioAttributes(
+                    AudioAttributes
+                        .Builder()
+                        .setUsage(AudioAttributes.USAGE_GAME)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build(),
+                ).setAudioFormat(
+                    AudioFormat
+                        .Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(SAMPLE_RATE)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build(),
+                ).setBufferSizeInBytes(bufferSize)
+                .setTransferMode(AudioTrack.MODE_STATIC)
+                .build()
         track.write(samples, 0, samples.size)
         return track
     }
@@ -139,7 +154,12 @@ actual object GachaSoundPlayer {
                 val dt = (i - (numSamples - decaySamples)).toFloat() / decaySamples
                 envelope = (cos(dt * PI / 2) * cos(dt * PI / 2)).toFloat()
             }
-            samples[i] = (sin(phase) * amplitude * envelope * Short.MAX_VALUE).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+            samples[i] =
+                (
+                    sin(
+                        phase,
+                    ) * amplitude * envelope * Short.MAX_VALUE
+                ).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
         }
         return samples
     }
@@ -165,7 +185,12 @@ actual object GachaSoundPlayer {
                 val dt = (i - (numSamples - decaySamples)).toFloat() / decaySamples
                 envelope = (sin((1 - dt) * PI / 2) * sin((1 - dt) * PI / 2)).toFloat()
             }
-            samples[i] = (sin(phase) * amplitude * envelope * Short.MAX_VALUE).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+            samples[i] =
+                (
+                    sin(
+                        phase,
+                    ) * amplitude * envelope * Short.MAX_VALUE
+                ).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
         }
         return samples
     }
@@ -181,21 +206,25 @@ actual object GachaSoundPlayer {
         for (i in 0 until numSamples) {
             phase += 2.0 * PI * 660.0 / SAMPLE_RATE
             val envelope = exp(-5.0 * i.toDouble() / numSamples).toFloat()
-            samples[i] = (sin(phase) * amplitude * envelope * Short.MAX_VALUE).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+            samples[i] =
+                (
+                    sin(
+                        phase,
+                    ) * amplitude * envelope * Short.MAX_VALUE
+                ).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
         }
         return samples
     }
 
     /** Win reveal sound — complexity scales with coin value tier */
-    private fun generateWinReveal(tier: SoundTier): ShortArray {
-        return when (tier) {
+    private fun generateWinReveal(tier: SoundTier): ShortArray =
+        when (tier) {
             SoundTier.COMMON -> generateWinCommon()
             SoundTier.UNCOMMON -> generateWinUncommon()
             SoundTier.RARE -> generateWinRare()
             SoundTier.EPIC -> generateWinEpic()
             SoundTier.LEGENDARY -> generateWinLegendary()
         }
-    }
 
     /** COMMON (<50 coins): single C5 tone, 280ms */
     private fun generateWinCommon(): ShortArray {
@@ -216,7 +245,12 @@ actual object GachaSoundPlayer {
                 val dt = (i - attackSamples).toFloat() / (numSamples - attackSamples)
                 envelope = (1f - dt * dt)
             }
-            samples[i] = (sin(phase) * amplitude * envelope * Short.MAX_VALUE).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+            samples[i] =
+                (
+                    sin(
+                        phase,
+                    ) * amplitude * envelope * Short.MAX_VALUE
+                ).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
         }
         return samples
     }
@@ -321,7 +355,11 @@ actual object GachaSoundPlayer {
         val amplitude = 0.30f
         val attackSamples = SAMPLE_RATE * 40 / 1000
 
-        var p1 = 0.0; var p2 = 0.0; var p3 = 0.0; var p4 = 0.0; var p5 = 0.0
+        var p1 = 0.0
+        var p2 = 0.0
+        var p3 = 0.0
+        var p4 = 0.0
+        var p5 = 0.0
         var chirpPhase = 0.0
         for (i in 0 until numSamples) {
             p1 += 2.0 * PI * 220.0 / SAMPLE_RATE
@@ -383,13 +421,14 @@ actual object GachaSoundPlayer {
                 octavePhases[n] += 2.0 * PI * notes[n] * 2.0 / SAMPLE_RATE
 
                 val attackSamp = SAMPLE_RATE * 20 / 1000
-                val noteEnv = if (noteT < attackSamp) {
-                    val at = noteT / attackSamp
-                    sin(at * PI / 2) * sin(at * PI / 2)
-                } else {
-                    val dt = (noteT - attackSamp) / (noteDuration - attackSamp)
-                    1.0 - dt * 0.6
-                }
+                val noteEnv =
+                    if (noteT < attackSamp) {
+                        val at = noteT / attackSamp
+                        sin(at * PI / 2) * sin(at * PI / 2)
+                    } else {
+                        val dt = (noteT - attackSamp) / (noteDuration - attackSamp)
+                        1.0 - dt * 0.6
+                    }
 
                 value += (sin(phases[n]) * 0.7 + sin(octavePhases[n]) * 0.3) * noteEnv / notes.size
             }
@@ -397,17 +436,23 @@ actual object GachaSoundPlayer {
             shimmerPhase += 2.0 * PI * 6.0 / SAMPLE_RATE
             val shimmer = 1.0 + 0.12 * sin(shimmerPhase) * t
 
-            val globalEnv = if (i < SAMPLE_RATE * 30 / 1000) {
-                val at = i.toFloat() / (SAMPLE_RATE * 30 / 1000)
-                sin(at * PI / 2) * sin(at * PI / 2)
-            } else if (t > 0.85) {
-                val dt = (t - 0.85) / 0.15
-                (1.0 - dt * dt)
-            } else 1.0
+            val globalEnv =
+                if (i < SAMPLE_RATE * 30 / 1000) {
+                    val at = i.toFloat() / (SAMPLE_RATE * 30 / 1000)
+                    sin(at * PI / 2) * sin(at * PI / 2)
+                } else if (t > 0.85) {
+                    val dt = (t - 0.85) / 0.15
+                    (1.0 - dt * dt)
+                } else {
+                    1.0
+                }
 
             val sample = value * amplitude * shimmer * globalEnv
-            samples[i] = (sample * Short.MAX_VALUE).toInt()
-                .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+            samples[i] =
+                (sample * Short.MAX_VALUE)
+                    .toInt()
+                    .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+                    .toShort()
         }
         return samples
     }
@@ -427,7 +472,12 @@ actual object GachaSoundPlayer {
             phase += 2.0 * PI * freq / SAMPLE_RATE
             val localT = if (i < halfSamples) i.toFloat() / halfSamples else (i - halfSamples).toFloat() / (numSamples - halfSamples)
             val envelope = exp(-3.0 * localT).toFloat()
-            samples[i] = (sin(phase) * amplitude * envelope * Short.MAX_VALUE).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+            samples[i] =
+                (
+                    sin(
+                        phase,
+                    ) * amplitude * envelope * Short.MAX_VALUE
+                ).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
         }
         return samples
     }

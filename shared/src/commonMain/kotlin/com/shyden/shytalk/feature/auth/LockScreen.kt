@@ -23,8 +23,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shyden.shytalk.feature.auth.components.PinDots
 import com.shyden.shytalk.feature.auth.components.PinKeypad
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -52,11 +52,12 @@ fun LockScreen(
     }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(24.dp)
-            .testTag("lockScreen"),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(24.dp)
+                .testTag("lockScreen"),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -100,9 +101,12 @@ fun LockScreen(
             PinKeypad(
                 onDigit = { viewModel.onPinDigit(it) },
                 onBackspace = { viewModel.onPinBackspace() },
-                onBiometric = if (state.biometricAvailable) {
-                    { viewModel.authenticateWithBiometric() }
-                } else null,
+                onBiometric =
+                    if (state.biometricAvailable) {
+                        { viewModel.authenticateWithBiometric() }
+                    } else {
+                        null
+                    },
                 modifier = Modifier.testTag("pinKeypad"),
             )
 

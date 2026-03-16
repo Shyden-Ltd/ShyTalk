@@ -15,7 +15,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -111,17 +110,18 @@ class PinSetupViewModelTest {
     }
 
     @Test
-    fun `submit in Confirm with matching PIN calls setupPin`() = runTest {
-        viewModel.selectPinLength(4)
-        "1234".forEach { viewModel.onDigit(it) }
-        viewModel.submit() // -> Confirm
-        "1234".forEach { viewModel.onDigit(it) }
-        viewModel.submit() // -> save
-        advanceUntilIdle()
+    fun `submit in Confirm with matching PIN calls setupPin`() =
+        runTest {
+            viewModel.selectPinLength(4)
+            "1234".forEach { viewModel.onDigit(it) }
+            viewModel.submit() // -> Confirm
+            "1234".forEach { viewModel.onDigit(it) }
+            viewModel.submit() // -> save
+            advanceUntilIdle()
 
-        assertEquals("1234", fakePinRepo.lastSetupPin)
-        assertTrue(viewModel.state.value.showBiometricOffer)
-    }
+            assertEquals("1234", fakePinRepo.lastSetupPin)
+            assertTrue(viewModel.state.value.showBiometricOffer)
+        }
 
     @Test
     fun `submit in Confirm with mismatched PIN resets to Enter`() {
@@ -137,46 +137,49 @@ class PinSetupViewModelTest {
     }
 
     @Test
-    fun `onBiometricAccepted enables biometric and completes`() = runTest {
-        viewModel.selectPinLength(4)
-        "1234".forEach { viewModel.onDigit(it) }
-        viewModel.submit()
-        "1234".forEach { viewModel.onDigit(it) }
-        viewModel.submit()
-        advanceUntilIdle()
+    fun `onBiometricAccepted enables biometric and completes`() =
+        runTest {
+            viewModel.selectPinLength(4)
+            "1234".forEach { viewModel.onDigit(it) }
+            viewModel.submit()
+            "1234".forEach { viewModel.onDigit(it) }
+            viewModel.submit()
+            advanceUntilIdle()
 
-        viewModel.onBiometricAccepted()
-        assertTrue(appLockRepo.isBiometricEnabled)
-        assertTrue(viewModel.state.value.completed)
-    }
-
-    @Test
-    fun `onBiometricDeclined disables biometric and completes`() = runTest {
-        viewModel.selectPinLength(4)
-        "1234".forEach { viewModel.onDigit(it) }
-        viewModel.submit()
-        "1234".forEach { viewModel.onDigit(it) }
-        viewModel.submit()
-        advanceUntilIdle()
-
-        viewModel.onBiometricDeclined()
-        assertFalse(appLockRepo.isBiometricEnabled)
-        assertTrue(viewModel.state.value.completed)
-    }
+            viewModel.onBiometricAccepted()
+            assertTrue(appLockRepo.isBiometricEnabled)
+            assertTrue(viewModel.state.value.completed)
+        }
 
     @Test
-    fun `setupPin failure shows error`() = runTest {
-        fakePinRepo.setupShouldFail = true
-        viewModel.selectPinLength(4)
-        "1234".forEach { viewModel.onDigit(it) }
-        viewModel.submit()
-        "1234".forEach { viewModel.onDigit(it) }
-        viewModel.submit()
-        advanceUntilIdle()
+    fun `onBiometricDeclined disables biometric and completes`() =
+        runTest {
+            viewModel.selectPinLength(4)
+            "1234".forEach { viewModel.onDigit(it) }
+            viewModel.submit()
+            "1234".forEach { viewModel.onDigit(it) }
+            viewModel.submit()
+            advanceUntilIdle()
 
-        assertEquals("Setup failed", viewModel.state.value.error)
-        assertFalse(viewModel.state.value.showBiometricOffer)
-    }
+            viewModel.onBiometricDeclined()
+            assertFalse(appLockRepo.isBiometricEnabled)
+            assertTrue(viewModel.state.value.completed)
+        }
+
+    @Test
+    fun `setupPin failure shows error`() =
+        runTest {
+            fakePinRepo.setupShouldFail = true
+            viewModel.selectPinLength(4)
+            "1234".forEach { viewModel.onDigit(it) }
+            viewModel.submit()
+            "1234".forEach { viewModel.onDigit(it) }
+            viewModel.submit()
+            advanceUntilIdle()
+
+            assertEquals("Setup failed", viewModel.state.value.error)
+            assertFalse(viewModel.state.value.showBiometricOffer)
+        }
 
     @Test
     fun `reset returns to initial state`() {
@@ -199,8 +202,14 @@ class PinSetupViewModelTest {
             return Result.success("\$2b\$10\$fakebcrypthashfortest")
         }
 
-        override suspend fun verifyPin(uniqueId: String, deviceId: String, pin: String) =
-            Result.success(com.shyden.shytalk.data.repository.PinVerifyResult(customToken = "token"))
+        override suspend fun verifyPin(
+            uniqueId: String,
+            deviceId: String,
+            pin: String,
+        ) = Result.success(
+            com.shyden.shytalk.data.repository
+                .PinVerifyResult(customToken = "token"),
+        )
 
         override suspend fun resetPin(newPin: String) = Result.success(Unit)
     }

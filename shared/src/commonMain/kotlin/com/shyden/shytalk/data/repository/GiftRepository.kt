@@ -10,10 +10,19 @@ import kotlinx.coroutines.flow.Flow
 
 interface GiftRepository {
     fun observeGiftCatalog(): Flow<List<Gift>>
+
     fun observeAllGifts(): Flow<List<Gift>>
+
     fun observeBackpack(userId: String): Flow<List<BackpackItem>>
+
     fun observeGiftWall(userId: String): Flow<List<GiftWallEntry>>
+
     fun observeBroadcasts(): Flow<List<Broadcast>>
-    suspend fun getGiftWallSenders(userId: String, giftId: String): List<GiftSender>
+
+    suspend fun getGiftWallSenders(
+        userId: String,
+        giftId: String,
+    ): List<GiftSender>
+
     suspend fun getGiftRanking(giftId: String): List<GiftRankEntry>
 }

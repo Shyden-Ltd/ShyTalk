@@ -22,39 +22,42 @@ private data class Star(
     val baseRadius: Float,
     val phaseOffset: Float,
     val twinkleSpeed: Float,
-    val brightness: Float
+    val brightness: Float,
 )
 
 @Composable
 fun RoomStarfieldBackground(modifier: Modifier = Modifier) {
-    val stars = remember {
-        val rng = Random(42)
-        List(100) {
-            Star(
-                x = rng.nextFloat(),
-                y = rng.nextFloat(),
-                baseRadius = rng.nextFloat() * 1.5f + 0.5f,
-                phaseOffset = rng.nextFloat() * 6.2832f,
-                twinkleSpeed = rng.nextFloat() * 1.5f + 0.5f,
-                brightness = rng.nextFloat() * 0.6f + 0.4f
-            )
+    val stars =
+        remember {
+            val rng = Random(42)
+            List(100) {
+                Star(
+                    x = rng.nextFloat(),
+                    y = rng.nextFloat(),
+                    baseRadius = rng.nextFloat() * 1.5f + 0.5f,
+                    phaseOffset = rng.nextFloat() * 6.2832f,
+                    twinkleSpeed = rng.nextFloat() * 1.5f + 0.5f,
+                    brightness = rng.nextFloat() * 0.6f + 0.4f,
+                )
+            }
         }
-    }
 
     val transition = rememberInfiniteTransition(label = "starfieldTwinkle")
     val phase by transition.animateFloat(
         initialValue = 0f,
         targetValue = 6.2832f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 8000),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "twinklePhase"
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(durationMillis = 8000),
+                repeatMode = RepeatMode.Restart,
+            ),
+        label = "twinklePhase",
     )
 
-    val gradientColors = remember {
-        listOf(Color(0xFF0A0E21), Color(0xFF1A1A2E))
-    }
+    val gradientColors =
+        remember {
+            listOf(Color(0xFF0A0E21), Color(0xFF1A1A2E))
+        }
 
     Canvas(modifier = modifier) {
         val dp = density // pixels per dp — scale radii so stars are visible on high-DPI
@@ -67,19 +70,19 @@ fun RoomStarfieldBackground(modifier: Modifier = Modifier) {
             color = Color(0xFF4A148C),
             radius = size.minDimension * 0.35f,
             center = Offset(size.width * 0.25f, size.height * 0.3f),
-            alpha = 0.06f
+            alpha = 0.06f,
         )
         drawCircle(
             color = Color(0xFF0D47A1),
             radius = size.minDimension * 0.28f,
             center = Offset(size.width * 0.75f, size.height * 0.65f),
-            alpha = 0.06f
+            alpha = 0.06f,
         )
         drawCircle(
             color = Color(0xFF1A237E),
             radius = size.minDimension * 0.22f,
             center = Offset(size.width * 0.55f, size.height * 0.15f),
-            alpha = 0.05f
+            alpha = 0.05f,
         )
 
         // Stars
@@ -93,7 +96,7 @@ fun RoomStarfieldBackground(modifier: Modifier = Modifier) {
                 color = Color.White,
                 radius = radius,
                 center = center,
-                alpha = alpha
+                alpha = alpha,
             )
 
             // Bright stars get a glow halo
@@ -102,7 +105,7 @@ fun RoomStarfieldBackground(modifier: Modifier = Modifier) {
                     color = Color.White,
                     radius = radius * 3f,
                     center = center,
-                    alpha = alpha * 0.12f
+                    alpha = alpha * 0.12f,
                 )
             }
         }

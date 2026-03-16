@@ -32,30 +32,28 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Tab
 import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -65,8 +63,8 @@ import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.feature.gifting.GiftingViewModel
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 import kotlin.math.ceil
 
@@ -81,31 +79,35 @@ fun BackpackSheet(
     currentUserId: String = "",
     onDismiss: () -> Unit,
     onNavigateToWallet: () -> Unit = {},
-    onLongPressGift: ((Gift) -> Unit)? = null
+    onLongPressGift: ((Gift) -> Unit)? = null,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetMaxWidth = Dp.Unspecified
+        sheetMaxWidth = Dp.Unspecified,
     ) {
         val density = LocalDensity.current
-        val screenHeightDp = with(density) {
-            LocalWindowInfo.current.containerSize.height.toDp()
-        }
+        val screenHeightDp =
+            with(density) {
+                LocalWindowInfo.current.containerSize.height
+                    .toDp()
+            }
         // Use a taller fraction on short screens so grid items stay full-size
         val sheetFraction = if (screenHeightDp < 700.dp) 0.55f else 0.42f
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(sheetFraction)
-                .padding(horizontal = 8.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(sheetFraction)
+                    .padding(horizontal = 8.dp),
         ) {
             // ── Recipient Row ──
-            val allRecipientUsers = remember(seatedUsers, additionalUsers) {
-                val seatedIds = seatedUsers.map { it.uid }.toSet()
-                seatedUsers + additionalUsers.filter { it.uid !in seatedIds }
-            }
+            val allRecipientUsers =
+                remember(seatedUsers, additionalUsers) {
+                    val seatedIds = seatedUsers.map { it.uid }.toSet()
+                    seatedUsers + additionalUsers.filter { it.uid !in seatedIds }
+                }
             RecipientRow(
                 seatedUsers = allRecipientUsers,
                 seatedUserIds = seatedUsers.map { it.uid }.toSet(),
@@ -117,24 +119,26 @@ fun BackpackSheet(
                     val allIds = allRecipientUsers.map { it.uid }.toSet()
                     viewModel.selectAllRecipients(allIds)
                 },
-                onDeselectAll = { viewModel.deselectAllRecipients() }
+                onDeselectAll = { viewModel.deselectAllRecipients() },
             )
 
             Spacer(modifier = Modifier.height(2.dp))
 
             // ── Tab Row ──
-            val backpackValue = remember(state.backpackItems, state.giftCatalog) {
-                state.backpackItems.sumOf { bp ->
-                    val gift = state.giftCatalog.find { it.id == bp.giftId }
-                    (gift?.coinValue?.toLong() ?: 0L) * bp.quantity
+            val backpackValue =
+                remember(state.backpackItems, state.giftCatalog) {
+                    state.backpackItems.sumOf { bp ->
+                        val gift = state.giftCatalog.find { it.id == bp.giftId }
+                        (gift?.coinValue?.toLong() ?: 0L) * bp.quantity
+                    }
                 }
-            }
             @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
             PrimaryTabRow(
                 selectedTabIndex = state.activeTab,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp)),
             ) {
                 Tab(
                     selected = state.activeTab == 0,
@@ -148,10 +152,10 @@ fun BackpackSheet(
                                 formatLargeNumber(state.coinBalance),
                                 fontSize = 10.sp,
                                 color = Color(0xFFFFD700),
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
                             )
                         }
-                    }
+                    },
                 )
                 Tab(
                     selected = state.activeTab == 1,
@@ -166,42 +170,42 @@ fun BackpackSheet(
                                     formatLargeNumber(backpackValue),
                                     fontSize = 10.sp,
                                     color = Color(0xFFFFD700),
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
                                 )
                             }
                         }
-                    }
+                    },
                 )
             }
 
             Spacer(modifier = Modifier.height(2.dp))
 
             // ── Paged Grid ──
-            val items = if (state.activeTab == 0) {
-                state.giftCatalog.filter { it.showInStore }.sortedByDescending { it.coinValue }.map { gift ->
-                    GridItem(gift = gift)
-                }
-            } else {
-                state.backpackItems
-                    .mapNotNull { item ->
-                        state.giftCatalog.find { it.id == item.giftId }?.let { gift ->
-                            GridItem(gift = gift, ownedQuantity = item.quantity, backpackItem = item)
-                        }
+            val items =
+                if (state.activeTab == 0) {
+                    state.giftCatalog.filter { it.showInStore }.sortedByDescending { it.coinValue }.map { gift ->
+                        GridItem(gift = gift)
                     }
-                    .sortedByDescending { it.gift.coinValue }
-            }
+                } else {
+                    state.backpackItems
+                        .mapNotNull { item ->
+                            state.giftCatalog.find { it.id == item.giftId }?.let { gift ->
+                                GridItem(gift = gift, ownedQuantity = item.quantity, backpackItem = item)
+                            }
+                        }.sortedByDescending { it.gift.coinValue }
+                }
 
             Box(modifier = Modifier.weight(1f)) {
                 if (items.isEmpty() && state.activeTab == 1) {
                     Box(
                         modifier = Modifier.fillMaxWidth().height(160.dp),
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.Center,
                     ) {
                         Text(
                             stringResource(Res.string.backpack_empty),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.Center,
                         )
                     }
                 } else {
@@ -210,7 +214,7 @@ fun BackpackSheet(
                         selectedGiftId = state.selectedGiftId,
                         isBackpackTab = state.activeTab == 1,
                         onSelectGift = { viewModel.selectGift(it) },
-                        onLongPressGift = onLongPressGift
+                        onLongPressGift = onLongPressGift,
                     )
                 }
             }
@@ -228,7 +232,7 @@ fun BackpackSheet(
                     onSendClick = { viewModel.activateTrial() },
                     onSendAllClick = null,
                     sendLabel = stringResource(Res.string.use_button),
-                    isSelfUse = true
+                    isSelfUse = true,
                 )
             } else {
                 BottomBar(
@@ -238,9 +242,12 @@ fun BackpackSheet(
                     onNavigateToWallet = onNavigateToWallet,
                     onQuantityClick = { viewModel.toggleQuantityPicker() },
                     onSendClick = { viewModel.requestSend() },
-                    onSendAllClick = if (state.activeTab == 1 && state.selectedRecipientIds.size == 1 && state.backpackItems.isNotEmpty()) {
-                        { viewModel.requestSendAll(state.selectedRecipientIds.first()) }
-                    } else null
+                    onSendAllClick =
+                        if (state.activeTab == 1 && state.selectedRecipientIds.size == 1 && state.backpackItems.isNotEmpty()) {
+                            { viewModel.requestSendAll(state.selectedRecipientIds.first()) }
+                        } else {
+                            null
+                        },
                 )
             }
 
@@ -258,7 +265,7 @@ fun BackpackSheet(
                         viewModel.setQuantity(it)
                         viewModel.toggleQuantityPicker()
                     },
-                    onDismiss = { viewModel.toggleQuantityPicker() }
+                    onDismiss = { viewModel.toggleQuantityPicker() },
                 )
             }
 
@@ -269,7 +276,7 @@ fun BackpackSheet(
                     giftCatalog = state.giftCatalog,
                     isBackpackTab = state.activeTab == 1,
                     onConfirm = { viewModel.confirmSend() },
-                    onDismiss = { viewModel.dismissConfirmDialog() }
+                    onDismiss = { viewModel.dismissConfirmDialog() },
                 )
             }
 
@@ -280,10 +287,11 @@ fun BackpackSheet(
                 val recipientName = recipientUser?.displayName ?: stringResource(Res.string.this_user)
                 val totalItems = state.backpackItems.sumOf { it.quantity }
                 val uniqueGifts = state.backpackItems.size
-                val totalValue = state.backpackItems.sumOf { bp ->
-                    val gift = state.giftCatalog.find { it.id == bp.giftId }
-                    (gift?.coinValue?.toLong() ?: 0L) * bp.quantity
-                }
+                val totalValue =
+                    state.backpackItems.sumOf { bp ->
+                        val gift = state.giftCatalog.find { it.id == bp.giftId }
+                        (gift?.coinValue?.toLong() ?: 0L) * bp.quantity
+                    }
 
                 SendAllConfirmDialog(
                     recipientName = recipientName,
@@ -291,7 +299,7 @@ fun BackpackSheet(
                     uniqueGifts = uniqueGifts,
                     totalValue = totalValue,
                     onConfirm = { viewModel.confirmSendAll() },
-                    onDismiss = { viewModel.dismissSendAllConfirm() }
+                    onDismiss = { viewModel.dismissSendAllConfirm() },
                 )
             }
 
@@ -313,7 +321,7 @@ fun BackpackSheet(
 private data class GridItem(
     val gift: Gift,
     val ownedQuantity: Int = 0,
-    val backpackItem: BackpackItem? = null
+    val backpackItem: BackpackItem? = null,
 )
 
 // ── Recipient Row ──
@@ -327,17 +335,17 @@ private fun RecipientRow(
     isAllSelected: Boolean,
     onToggleRecipient: (String) -> Unit,
     onSelectAll: () -> Unit,
-    onDeselectAll: () -> Unit
+    onDeselectAll: () -> Unit,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
     ) {
         Text(
             stringResource(Res.string.to_label),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(end = 8.dp)
+            modifier = Modifier.padding(end = 8.dp),
         )
 
         val otherUsers = seatedUsers.filter { it.uid != currentUserId }
@@ -345,19 +353,22 @@ private fun RecipientRow(
         LazyRow(
             modifier = Modifier.weight(1f),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
-            contentPadding = PaddingValues(end = 8.dp)
+            contentPadding = PaddingValues(end = 8.dp),
         ) {
             items(otherUsers, key = { it.uid }) { user ->
                 val isSelected = user.uid in selectedRecipientIds
                 // Only show seat badge for users actually in seats
-                val seatIndex = if (user.uid in seatedUserIds) {
-                    seatedUsers.indexOf(user)
-                } else null
+                val seatIndex =
+                    if (user.uid in seatedUserIds) {
+                        seatedUsers.indexOf(user)
+                    } else {
+                        null
+                    }
                 RecipientAvatar(
                     user = user,
                     isSelected = isSelected,
                     seatNumber = seatIndex,
-                    onClick = { onToggleRecipient(user.uid) }
+                    onClick = { onToggleRecipient(user.uid) },
                 )
             }
         }
@@ -367,11 +378,12 @@ private fun RecipientRow(
             TextButton(
                 onClick = { if (isAllSelected) onDeselectAll() else onSelectAll() },
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                colors = ButtonDefaults.textButtonColors(
-                    containerColor = if (isAllSelected) CyanAccent.copy(alpha = 0.2f) else Color.Transparent,
-                    contentColor = if (isAllSelected) CyanAccent else MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                modifier = Modifier.height(32.dp)
+                colors =
+                    ButtonDefaults.textButtonColors(
+                        containerColor = if (isAllSelected) CyanAccent.copy(alpha = 0.2f) else Color.Transparent,
+                        contentColor = if (isAllSelected) CyanAccent else MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                modifier = Modifier.height(32.dp),
             ) {
                 Text(stringResource(Res.string.all_caps), fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
@@ -384,48 +396,51 @@ private fun RecipientAvatar(
     user: User,
     isSelected: Boolean,
     seatNumber: Int?,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     Box(
-        modifier = Modifier
-            .size(44.dp)
-            .clickable(onClick = onClick)
+        modifier =
+            Modifier
+                .size(44.dp)
+                .clickable(onClick = onClick),
     ) {
         val photoUrl = user.photoUrl
         if (photoUrl != null) {
             AsyncImage(
                 model = photoUrl,
                 contentDescription = user.displayName,
-                modifier = Modifier
-                    .size(40.dp)
-                    .align(Alignment.TopCenter)
-                    .clip(CircleShape)
-                    .border(
-                        width = 2.dp,
-                        color = if (isSelected) CyanAccent else MaterialTheme.colorScheme.outlineVariant,
-                        shape = CircleShape
-                    ),
-                contentScale = ContentScale.Crop
+                modifier =
+                    Modifier
+                        .size(40.dp)
+                        .align(Alignment.TopCenter)
+                        .clip(CircleShape)
+                        .border(
+                            width = 2.dp,
+                            color = if (isSelected) CyanAccent else MaterialTheme.colorScheme.outlineVariant,
+                            shape = CircleShape,
+                        ),
+                contentScale = ContentScale.Crop,
             )
         } else {
             Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .align(Alignment.TopCenter)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.secondaryContainer)
-                    .border(
-                        width = 2.dp,
-                        color = if (isSelected) CyanAccent else MaterialTheme.colorScheme.outlineVariant,
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .size(40.dp)
+                        .align(Alignment.TopCenter)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                        .border(
+                            width = 2.dp,
+                            color = if (isSelected) CyanAccent else MaterialTheme.colorScheme.outlineVariant,
+                            shape = CircleShape,
+                        ),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     user.displayName.take(1).uppercase(),
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
             }
         }
@@ -433,18 +448,19 @@ private fun RecipientAvatar(
         // Seat number badge
         if (seatNumber != null) {
             Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .size(16.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .size(16.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     "${seatNumber + 1}",
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimary
+                    color = MaterialTheme.colorScheme.onPrimary,
                 )
             }
         }
@@ -460,7 +476,7 @@ private fun PagedGiftGrid(
     selectedGiftId: String?,
     isBackpackTab: Boolean,
     onSelectGift: (String?) -> Unit,
-    onLongPressGift: ((Gift) -> Unit)?
+    onLongPressGift: ((Gift) -> Unit)?,
 ) {
     val pageSize = 8 // 4 cols × 2 rows
     val pageCount = if (items.isEmpty()) 1 else ceil(items.size.toDouble() / pageSize).toInt()
@@ -469,17 +485,17 @@ private fun PagedGiftGrid(
     Column {
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxWidth().weight(1f)
+            modifier = Modifier.fillMaxWidth().weight(1f),
         ) { page ->
             val pageItems = items.drop(page * pageSize).take(pageSize)
             Column(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 for (row in 0 until 2) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
                         for (col in 0 until 4) {
                             val index = row * 4 + col
@@ -492,10 +508,10 @@ private fun PagedGiftGrid(
                                             isSelected = selectedGiftId == item.gift.id,
                                             onClick = {
                                                 onSelectGift(
-                                                    if (selectedGiftId == item.gift.id) null else item.gift.id
+                                                    if (selectedGiftId == item.gift.id) null else item.gift.id,
                                                 )
                                             },
-                                            onLongClick = { onLongPressGift?.invoke(item.gift) }
+                                            onLongClick = { onLongPressGift?.invoke(item.gift) },
                                         )
                                     } else {
                                         ShopGiftCell(
@@ -503,10 +519,10 @@ private fun PagedGiftGrid(
                                             isSelected = selectedGiftId == item.gift.id,
                                             onClick = {
                                                 onSelectGift(
-                                                    if (selectedGiftId == item.gift.id) null else item.gift.id
+                                                    if (selectedGiftId == item.gift.id) null else item.gift.id,
                                                 )
                                             },
-                                            onLongClick = { onLongPressGift?.invoke(item.gift) }
+                                            onLongClick = { onLongPressGift?.invoke(item.gift) },
                                         )
                                     }
                                 }
@@ -523,18 +539,22 @@ private fun PagedGiftGrid(
         if (pageCount > 1) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                horizontalArrangement = Arrangement.Center
+                horizontalArrangement = Arrangement.Center,
             ) {
                 repeat(pageCount) { i ->
                     Box(
-                        modifier = Modifier
-                            .padding(horizontal = 3.dp)
-                            .size(if (i == pagerState.currentPage) 8.dp else 6.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (i == pagerState.currentPage) CyanAccent
-                                else MaterialTheme.colorScheme.outlineVariant
-                            )
+                        modifier =
+                            Modifier
+                                .padding(horizontal = 3.dp)
+                                .size(if (i == pagerState.currentPage) 8.dp else 6.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (i == pagerState.currentPage) {
+                                        CyanAccent
+                                    } else {
+                                        MaterialTheme.colorScheme.outlineVariant
+                                    },
+                                ),
                     )
                 }
             }
@@ -550,23 +570,23 @@ private fun ShopGiftCell(
     item: GridItem,
     isSelected: Boolean,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
 ) {
     val borderColor = if (isSelected) CyanAccent else MaterialTheme.colorScheme.outlineVariant
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
-        modifier = Modifier
-            .aspectRatio(1f)
-            .clip(RoundedCornerShape(8.dp))
-            .border(
-                width = if (isSelected) 3.dp else 1.dp,
-                color = borderColor,
-                shape = RoundedCornerShape(8.dp)
-            )
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(2.dp)
+        modifier =
+            Modifier
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(8.dp))
+                .border(
+                    width = if (isSelected) 3.dp else 1.dp,
+                    color = borderColor,
+                    shape = RoundedCornerShape(8.dp),
+                ).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                .padding(2.dp),
     ) {
         GiftIcon(gift = item.gift, size = 36)
         Text(
@@ -574,7 +594,7 @@ private fun ShopGiftCell(
             style = MaterialTheme.typography.labelSmall,
             maxLines = 1,
             fontSize = 9.sp,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("\uD83E\uDE99", fontSize = 8.sp)
@@ -584,7 +604,7 @@ private fun ShopGiftCell(
                 style = MaterialTheme.typography.labelSmall,
                 fontSize = 8.sp,
                 color = Color(0xFFFFD700),
-                maxLines = 1
+                maxLines = 1,
             )
         }
     }
@@ -596,7 +616,7 @@ private fun BackpackGiftCell(
     item: GridItem,
     isSelected: Boolean,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
 ) {
     val borderColor = if (isSelected) CyanAccent else MaterialTheme.colorScheme.outlineVariant
     val bp = item.backpackItem
@@ -604,17 +624,17 @@ private fun BackpackGiftCell(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
-        modifier = Modifier
-            .aspectRatio(1f)
-            .clip(RoundedCornerShape(8.dp))
-            .border(
-                width = if (isSelected) 3.dp else 1.dp,
-                color = borderColor,
-                shape = RoundedCornerShape(8.dp)
-            )
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(2.dp)
+        modifier =
+            Modifier
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(8.dp))
+                .border(
+                    width = if (isSelected) 3.dp else 1.dp,
+                    color = borderColor,
+                    shape = RoundedCornerShape(8.dp),
+                ).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                .padding(2.dp),
     ) {
         // Expiry progress bar
         if (bp != null && bp.isExpiring) {
@@ -632,18 +652,19 @@ private fun BackpackGiftCell(
 
             // Red quantity badge
             Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(20.dp)
-                    .clip(CircleShape)
-                    .background(Color.Red),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .size(20.dp)
+                        .clip(CircleShape)
+                        .background(Color.Red),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     "${item.ownedQuantity}",
                     fontSize = 8.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = Color.White
+                    color = Color.White,
                 )
             }
 
@@ -656,10 +677,11 @@ private fun BackpackGiftCell(
                     fontSize = 7.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(2.dp))
-                        .padding(horizontal = 2.dp)
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(2.dp))
+                            .padding(horizontal = 2.dp),
                 )
             }
         }
@@ -668,7 +690,7 @@ private fun BackpackGiftCell(
             style = MaterialTheme.typography.labelSmall,
             maxLines = 1,
             fontSize = 9.sp,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("\uD83E\uDE99", fontSize = 8.sp)
@@ -678,7 +700,7 @@ private fun BackpackGiftCell(
                 style = MaterialTheme.typography.labelSmall,
                 fontSize = 8.sp,
                 color = Color(0xFFFFD700),
-                maxLines = 1
+                maxLines = 1,
             )
         }
     }
@@ -707,21 +729,23 @@ private fun BottomBar(
     onSendClick: () -> Unit,
     onSendAllClick: (() -> Unit)? = null,
     sendLabel: String? = null,
-    isSelfUse: Boolean = false
+    isSelfUse: Boolean = false,
 ) {
     val selectedGift = state.selectedGiftId?.let { id -> giftCatalog.find { it.id == id } }
     val hasRecipients = state.selectedRecipientIds.isNotEmpty()
-    val canSend = selectedGift != null && !state.isSending &&
-        if (isSelfUse) !hasRecipients else hasRecipients
+    val canSend =
+        selectedGift != null &&
+            !state.isSending &&
+            if (isSelfUse) !hasRecipients else hasRecipients
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
     ) {
         // Coin balance
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.clickable { onNavigateToWallet() }
+            modifier = Modifier.clickable { onNavigateToWallet() },
         ) {
             Text("\uD83E\uDE99", fontSize = 14.sp)
             Spacer(modifier = Modifier.width(4.dp))
@@ -729,14 +753,14 @@ private fun BottomBar(
                 "${state.coinBalance}",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.ExtraBold,
-                color = Color(0xFFFFD700)
+                color = Color(0xFFFFD700),
             )
             Spacer(modifier = Modifier.width(2.dp))
             Text(
                 "+",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
-                color = CyanAccent
+                color = CyanAccent,
             )
         }
 
@@ -746,15 +770,16 @@ private fun BottomBar(
         TextButton(
             onClick = onQuantityClick,
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-            colors = ButtonDefaults.textButtonColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            ),
-            modifier = Modifier.height(36.dp)
+            colors =
+                ButtonDefaults.textButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+            modifier = Modifier.height(36.dp),
         ) {
             Text(
                 "${state.selectedQuantity} \u25B2",
                 fontWeight = FontWeight.Bold,
-                fontSize = 13.sp
+                fontSize = 13.sp,
             )
         }
 
@@ -765,18 +790,19 @@ private fun BottomBar(
             Button(
                 onClick = onSendAllClick,
                 enabled = hasRecipients && !state.isSending,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFD32F2F),
-                    contentColor = Color.White,
-                    disabledContainerColor = Color(0xFFD32F2F).copy(alpha = 0.3f)
-                ),
-                modifier = Modifier.height(36.dp)
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFD32F2F),
+                        contentColor = Color.White,
+                        disabledContainerColor = Color(0xFFD32F2F).copy(alpha = 0.3f),
+                    ),
+                modifier = Modifier.height(36.dp),
             ) {
                 Text(
                     stringResource(Res.string.send_all),
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
-                    fontSize = 12.sp
+                    fontSize = 12.sp,
                 )
             }
             Spacer(modifier = Modifier.width(4.dp))
@@ -786,12 +812,13 @@ private fun BottomBar(
         Button(
             onClick = onSendClick,
             enabled = canSend,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = CyanAccent,
-                contentColor = Color.Black,
-                disabledContainerColor = CyanAccent.copy(alpha = 0.3f)
-            ),
-            modifier = Modifier.height(36.dp)
+            colors =
+                ButtonDefaults.buttonColors(
+                    containerColor = CyanAccent,
+                    contentColor = Color.Black,
+                    disabledContainerColor = CyanAccent.copy(alpha = 0.3f),
+                ),
+            modifier = Modifier.height(36.dp),
         ) {
             Text(
                 when {
@@ -801,7 +828,7 @@ private fun BottomBar(
                 },
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -819,31 +846,33 @@ private fun QuantityPickerPopup(
     selectedQuantity: Int,
     recipientCount: Int,
     onSelectQuantity: (Int) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     val gift = selectedGiftId?.let { id -> giftCatalog.find { it.id == id } }
     val ownedQty = selectedGiftId?.let { id -> backpackItems.find { it.giftId == id }?.quantity } ?: 0
 
-    val presets = buildList {
-        addAll(listOf(1, 10, 66, 520, 999, 1314))
-        if (isBackpackTab && ownedQty > 0) {
-            add(-1) // sentinel for "ALL"
+    val presets =
+        buildList {
+            addAll(listOf(1, 10, 66, 520, 999, 1314))
+            if (isBackpackTab && ownedQty > 0) {
+                add(-1) // sentinel for "ALL"
+            }
         }
-    }
 
     Popup(
         alignment = Alignment.BottomCenter,
         onDismissRequest = onDismiss,
-        properties = PopupProperties(focusable = true)
+        properties = PopupProperties(focusable = true),
     ) {
         Column(
-            modifier = Modifier
-                .widthIn(min = 120.dp)
-                .padding(bottom = 48.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .padding(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier =
+                Modifier
+                    .widthIn(min = 120.dp)
+                    .padding(bottom = 48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             presets.forEach { preset ->
                 val isAll = preset == -1
@@ -851,21 +880,27 @@ private fun QuantityPickerPopup(
                 val label = if (isAll) stringResource(Res.string.quantity_all, ownedQty) else "$preset"
                 val isSelected = qty == selectedQuantity
 
-                val enabled = if (isBackpackTab) {
-                    gift != null && qty * recipientCount <= ownedQty
-                } else {
-                    true
-                }
+                val enabled =
+                    if (isBackpackTab) {
+                        gift != null && qty * recipientCount <= ownedQty
+                    } else {
+                        true
+                    }
 
                 TextButton(
                     onClick = { onSelectQuantity(qty) },
                     enabled = enabled,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.textButtonColors(
-                        containerColor = if (isSelected) CyanAccent.copy(alpha = 0.2f) else Color.Transparent,
-                        contentColor = if (enabled) MaterialTheme.colorScheme.onSurface
-                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                    )
+                    colors =
+                        ButtonDefaults.textButtonColors(
+                            containerColor = if (isSelected) CyanAccent.copy(alpha = 0.2f) else Color.Transparent,
+                            contentColor =
+                                if (enabled) {
+                                    MaterialTheme.colorScheme.onSurface
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                },
+                        ),
                 ) {
                     Text(label, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
                 }
@@ -882,7 +917,7 @@ private fun ConfirmSendDialog(
     giftCatalog: List<Gift>,
     isBackpackTab: Boolean,
     onConfirm: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     val gift = state.selectedGiftId?.let { id -> giftCatalog.find { it.id == id } } ?: return
     val recipientCount = state.selectedRecipientIds.size
@@ -894,14 +929,16 @@ private fun ConfirmSendDialog(
         title = { Text(stringResource(Res.string.confirm_send)) },
         text = {
             Column {
-                val headerText = if (recipientCount > 1)
-                    stringResource(Res.string.send_gift_header_multiple, quantity, gift.name, recipientCount)
-                else
-                    stringResource(Res.string.send_gift_header, quantity, gift.name)
+                val headerText =
+                    if (recipientCount > 1) {
+                        stringResource(Res.string.send_gift_header_multiple, quantity, gift.name, recipientCount)
+                    } else {
+                        stringResource(Res.string.send_gift_header, quantity, gift.name)
+                    }
                 Text(
                     headerText,
                     style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 if (isBackpackTab) {
@@ -924,34 +961,38 @@ private fun ConfirmSendDialog(
             TextButton(onClick = onDismiss) {
                 Text(stringResource(Res.string.cancel))
             }
-        }
+        },
     )
 }
 
 // ── Shared Composables ──
 
 @Composable
-fun GiftIcon(gift: Gift, size: Int) {
+fun GiftIcon(
+    gift: Gift,
+    size: Int,
+) {
     if (gift.iconUrl.isNotBlank()) {
         AsyncImage(
             model = gift.iconUrl,
             contentDescription = gift.name,
             modifier = Modifier.size(size.dp).clip(CircleShape),
-            contentScale = ContentScale.Crop
+            contentScale = ContentScale.Crop,
         )
     } else {
         Box(
-            modifier = Modifier
-                .size(size.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .size(size.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center,
         ) {
             Text(
                 gift.name.take(2),
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
-                fontSize = (size / 3).sp
+                fontSize = (size / 3).sp,
             )
         }
     }
@@ -966,7 +1007,7 @@ private fun SendAllConfirmDialog(
     uniqueGifts: Int,
     totalValue: Long = 0L,
     onConfirm: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -975,7 +1016,7 @@ private fun SendAllConfirmDialog(
                 stringResource(Res.string.send_all_warning_title),
                 color = Color(0xFFD32F2F),
                 fontWeight = FontWeight.Black,
-                fontSize = 20.sp
+                fontSize = 20.sp,
             )
         },
         text = {
@@ -983,12 +1024,12 @@ private fun SendAllConfirmDialog(
                 Text(
                     stringResource(Res.string.send_all_warning, recipientName),
                     style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
                     stringResource(Res.string.send_all_includes, totalItems, uniqueGifts),
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
                 )
                 if (totalValue > 0) {
                     Spacer(modifier = Modifier.height(8.dp))
@@ -996,7 +1037,7 @@ private fun SendAllConfirmDialog(
                         stringResource(Res.string.send_all_total_value, totalValue),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFFFFD700)
+                        color = Color(0xFFFFD700),
                     )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
@@ -1004,17 +1045,18 @@ private fun SendAllConfirmDialog(
                     stringResource(Res.string.action_cannot_be_undone),
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Black,
-                    color = Color(0xFFD32F2F)
+                    color = Color(0xFFD32F2F),
                 )
             }
         },
         confirmButton = {
             Button(
                 onClick = onConfirm,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFD32F2F),
-                    contentColor = Color.White
-                )
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFD32F2F),
+                        contentColor = Color.White,
+                    ),
             ) {
                 Text(stringResource(Res.string.send_everything_confirm), fontWeight = FontWeight.Bold)
             }
@@ -1023,7 +1065,7 @@ private fun SendAllConfirmDialog(
             TextButton(onClick = onDismiss) {
                 Text(stringResource(Res.string.cancel))
             }
-        }
+        },
     )
 }
 
@@ -1031,8 +1073,11 @@ private fun SendAllConfirmDialog(
 private fun formatLargeNumber(value: Long): String {
     fun oneDecimal(v: Double): String {
         val rounded = (v * 10).toLong() / 10.0
-        return if (rounded == rounded.toLong().toDouble()) "${rounded.toLong()}.0"
-        else rounded.toString().let { s -> s.substring(0, s.indexOf('.') + 2) }
+        return if (rounded == rounded.toLong().toDouble()) {
+            "${rounded.toLong()}.0"
+        } else {
+            rounded.toString().let { s -> s.substring(0, s.indexOf('.') + 2) }
+        }
     }
     return when {
         value >= 1_000_000_000 -> "${oneDecimal(value / 1_000_000_000.0)}B"
@@ -1041,4 +1086,3 @@ private fun formatLargeNumber(value: Long): String {
         else -> "$value"
     }
 }
-

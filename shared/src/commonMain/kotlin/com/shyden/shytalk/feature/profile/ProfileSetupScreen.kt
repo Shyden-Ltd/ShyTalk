@@ -14,12 +14,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,18 +28,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import org.koin.compose.viewmodel.koinViewModel
-import androidx.compose.runtime.collectAsState
+import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.core.util.formatDateForDisplay
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileSetupScreen(
     onProfileComplete: () -> Unit,
-    viewModel: ProfileViewModel = koinViewModel()
+    viewModel: ProfileViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -64,16 +63,17 @@ fun ProfileSetupScreen(
 
     Scaffold(snackbarHost = { StyledSnackbarHost(snackbarHostState) }) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 32.dp),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 32.dp),
             verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
                 text = stringResource(Res.string.set_up_your_profile),
-                style = MaterialTheme.typography.headlineMedium
+                style = MaterialTheme.typography.headlineMedium,
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -81,7 +81,7 @@ fun ProfileSetupScreen(
             Text(
                 text = stringResource(Res.string.profile_setup_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -92,7 +92,7 @@ fun ProfileSetupScreen(
                 label = { Text(stringResource(Res.string.display_name)) },
                 modifier = Modifier.fillMaxWidth().testTag("profileSetup_displayNameField"),
                 singleLine = true,
-                supportingText = { Text("${displayName.length}/20") }
+                supportingText = { Text("${displayName.length}/20") },
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -100,11 +100,12 @@ fun ProfileSetupScreen(
             // Date of Birth picker
             OutlinedButton(
                 onClick = { showDatePicker = true },
-                modifier = Modifier.fillMaxWidth().testTag("profileSetup_dobButton")
+                modifier = Modifier.fillMaxWidth().testTag("profileSetup_dobButton"),
             ) {
                 Text(
-                    text = selectedDateMillis?.let { formatDateForDisplay(it) }
-                        ?: stringResource(Res.string.select_date_of_birth)
+                    text =
+                        selectedDateMillis?.let { formatDateForDisplay(it) }
+                            ?: stringResource(Res.string.select_date_of_birth),
                 )
             }
 
@@ -113,7 +114,7 @@ fun ProfileSetupScreen(
                 Text(
                     text = error,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
+                    color = MaterialTheme.colorScheme.error,
                 )
             }
 
@@ -122,15 +123,16 @@ fun ProfileSetupScreen(
             Text(
                 text = stringResource(Res.string.dob_privacy_note),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            val canContinue = displayName.isNotBlank() &&
-                selectedDateMillis != null &&
-                dateError == null &&
-                !uiState.isLoading
+            val canContinue =
+                displayName.isNotBlank() &&
+                    selectedDateMillis != null &&
+                    dateError == null &&
+                    !uiState.isLoading
 
             Button(
                 onClick = {
@@ -139,11 +141,11 @@ fun ProfileSetupScreen(
                     }
                 },
                 enabled = canContinue,
-                modifier = Modifier.fillMaxWidth().testTag("profileSetup_continueButton")
+                modifier = Modifier.fillMaxWidth().testTag("profileSetup_continueButton"),
             ) {
                 if (uiState.isLoading) {
                     CircularProgressIndicator(
-                        color = MaterialTheme.colorScheme.onPrimary
+                        color = MaterialTheme.colorScheme.onPrimary,
                     )
                 } else {
                     Text(stringResource(Res.string.continue_button))
@@ -158,7 +160,7 @@ fun ProfileSetupScreen(
             onDateSelected = { millis, error ->
                 selectedDateMillis = millis
                 dateError = error
-            }
+            },
         )
     }
 }

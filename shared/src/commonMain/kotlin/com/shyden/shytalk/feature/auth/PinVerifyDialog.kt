@@ -3,7 +3,6 @@ package com.shyden.shytalk.feature.auth
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -17,8 +16,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.shyden.shytalk.data.repository.PinRepository
 import com.shyden.shytalk.data.repository.AppLockRepository
+import com.shyden.shytalk.data.repository.PinRepository
 import com.shyden.shytalk.feature.auth.components.PinDots
 import com.shyden.shytalk.feature.auth.components.PinKeypad
 import kotlinx.coroutines.launch
@@ -99,22 +98,24 @@ fun PinVerifyDialog(
                     }
                     isLoading = true
                     scope.launch {
-                        pinRepository.verifyPin(uniqueId, deviceId, pinInput).onSuccess { result ->
-                            isLoading = false
-                            if (result.customToken != null) {
-                                onVerified()
-                            } else if (result.locked) {
-                                error = "Account locked"
-                                pinInput = ""
-                            } else {
-                                error = "Wrong PIN. ${result.attemptsRemaining} attempts remaining."
+                        pinRepository
+                            .verifyPin(uniqueId, deviceId, pinInput)
+                            .onSuccess { result ->
+                                isLoading = false
+                                if (result.customToken != null) {
+                                    onVerified()
+                                } else if (result.locked) {
+                                    error = "Account locked"
+                                    pinInput = ""
+                                } else {
+                                    error = "Wrong PIN. ${result.attemptsRemaining} attempts remaining."
+                                    pinInput = ""
+                                }
+                            }.onFailure {
+                                isLoading = false
+                                error = "Verification failed"
                                 pinInput = ""
                             }
-                        }.onFailure {
-                            isLoading = false
-                            error = "Verification failed"
-                            pinInput = ""
-                        }
                     }
                 },
                 enabled = !isLoading && pinInput.length >= 4,

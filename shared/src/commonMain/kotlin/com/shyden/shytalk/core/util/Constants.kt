@@ -23,9 +23,9 @@ object Constants {
     const val MAX_ROOM_MESSAGES = 50
 
     // Message flood protection
-    const val FLOOD_COOLDOWN_MS = 1_000L       // 1 second between messages
-    const val FLOOD_WINDOW_MS = 10_000L        // 10 second sliding window
-    const val FLOOD_MAX_MESSAGES = 5           // max 5 messages per window
+    const val FLOOD_COOLDOWN_MS = 1_000L // 1 second between messages
+    const val FLOOD_WINDOW_MS = 10_000L // 10 second sliding window
+    const val FLOOD_MAX_MESSAGES = 5 // max 5 messages per window
 
     // Profile stalkers
     const val STALKER_EXPIRY_MS = 90L * 24 * 60 * 60 * 1000 // 3 months
@@ -54,7 +54,7 @@ object Constants {
     const val MUTE_DURATION_24HR = 24 * 60 * 60 * 1000L
 
     // Report evidence
-    const val EVIDENCE_MAX_SIZE_BYTES = 20 * 1024 * 1024L   // 20 MB
+    const val EVIDENCE_MAX_SIZE_BYTES = 20 * 1024 * 1024L // 20 MB
     const val EVIDENCE_VIDEO_TARGET_BYTES = 18 * 1024 * 1024L // 18 MB (leave headroom)
 
     // Super Shy trial

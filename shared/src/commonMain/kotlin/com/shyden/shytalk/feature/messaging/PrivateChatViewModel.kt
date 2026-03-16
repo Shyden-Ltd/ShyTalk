@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.model.ChatRoom
 import com.shyden.shytalk.core.model.Conversation
-import com.shyden.shytalk.core.model.ConversationSettings
 import com.shyden.shytalk.core.model.GroupPermissions
 import com.shyden.shytalk.core.model.GroupRole
 import com.shyden.shytalk.core.model.MessageEdit
@@ -19,11 +18,11 @@ import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.ModerationFilter
 import com.shyden.shytalk.core.util.Resource
+import com.shyden.shytalk.core.util.compressImage
+import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.core.util.logW
-import com.shyden.shytalk.core.util.currentTimeMillis
-import com.shyden.shytalk.core.util.compressImage
 import com.shyden.shytalk.data.local.StickerStorage
 import com.shyden.shytalk.data.remote.ConversationEvent
 import com.shyden.shytalk.data.remote.ConversationWebSocketService
@@ -48,7 +47,7 @@ import kotlinx.coroutines.launch
 
 data class RoomInvitePreview(
     val room: ChatRoom,
-    val seatUsers: Map<String, User>
+    val seatUsers: Map<String, User>,
 )
 
 data class PrivateChatUiState(
@@ -94,7 +93,7 @@ data class PrivateChatUiState(
     // Room invite preview data: roomId → (room, seatUsers)
     val roomInvites: Map<String, RoomInvitePreview> = emptyMap(),
     val translations: Map<String, String> = emptyMap(),
-    val successMessage: String? = null
+    val successMessage: String? = null,
 )
 
 class PrivateChatViewModel(
@@ -104,17 +103,23 @@ class PrivateChatViewModel(
     private val authRepository: AuthRepository,
     private val typingRepository: TypingRepository,
     private val reportRepository: ReportRepository,
-    private val storageRepository: StorageRepository = object : StorageRepository {
-        override suspend fun uploadImage(userId: String, path: String, imageData: ByteArray, contentType: String): Resource<String> = Resource.Error("Not available")
-        override suspend fun deleteImageByUrl(url: String) {}
-    },
+    private val storageRepository: StorageRepository =
+        object : StorageRepository {
+            override suspend fun uploadImage(
+                userId: String,
+                path: String,
+                imageData: ByteArray,
+                contentType: String,
+            ): Resource<String> = Resource.Error("Not available")
+
+            override suspend fun deleteImageByUrl(url: String) {}
+        },
     private val stickerStorage: StickerStorage? = null,
     private val initialConversationId: String? = null,
     private val conversationWs: ConversationWebSocketService? = null,
     private val roomRepository: RoomRepository? = null,
-    private val translationRepository: TranslationRepository? = null
+    private val translationRepository: TranslationRepository? = null,
 ) : ViewModel() {
-
     companion object {
         private const val TAG = "PrivateChatViewModel"
     }
@@ -158,14 +163,16 @@ class PrivateChatViewModel(
             _uiState.update { it.copy(isLoading = true, currentUserId = currentUserId) }
 
             // Load both users
-            val currentUser = when (val result = userRepository.getUser(currentUserId)) {
-                is Resource.Success -> result.data
-                else -> null
-            }
-            val otherUser = when (val result = userRepository.getUser(otherUserId)) {
-                is Resource.Success -> result.data
-                else -> null
-            }
+            val currentUser =
+                when (val result = userRepository.getUser(currentUserId)) {
+                    is Resource.Success -> result.data
+                    else -> null
+                }
+            val otherUser =
+                when (val result = userRepository.getUser(otherUserId)) {
+                    is Resource.Success -> result.data
+                    else -> null
+                }
 
             val isSystem = otherUserId == Constants.SYSTEM_USER_ID
 
@@ -174,7 +181,7 @@ class PrivateChatViewModel(
                     currentUser = currentUser,
                     otherUser = otherUser,
                     currentUserName = currentUser?.displayName ?: "",
-                    isSystemConversation = isSystem
+                    isSystemConversation = isSystem,
                 )
             }
 
@@ -186,7 +193,7 @@ class PrivateChatViewModel(
                         it.copy(
                             isLoading = false,
                             isBlocked = true,
-                            blockReason = blockReason
+                            blockReason = blockReason,
                         )
                     }
                 }
@@ -217,14 +224,15 @@ class PrivateChatViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, currentUserId = currentUserId) }
 
-            val currentUser = when (val result = userRepository.getUser(currentUserId)) {
-                is Resource.Success -> result.data
-                else -> null
-            }
+            val currentUser =
+                when (val result = userRepository.getUser(currentUserId)) {
+                    is Resource.Success -> result.data
+                    else -> null
+                }
             _uiState.update {
                 it.copy(
                     currentUser = currentUser,
-                    currentUserName = currentUser?.displayName ?: ""
+                    currentUserName = currentUser?.displayName ?: "",
                 )
             }
 
@@ -232,10 +240,11 @@ class PrivateChatViewModel(
                 is Resource.Success -> {
                     val conversation = result.data
                     // Load participant users
-                    val participants = when (val usersResult = userRepository.getUsers(conversation.participantIds)) {
-                        is Resource.Success -> usersResult.data
-                        else -> emptyList()
-                    }
+                    val participants =
+                        when (val usersResult = userRepository.getUsers(conversation.participantIds)) {
+                            is Resource.Success -> usersResult.data
+                            else -> emptyList()
+                        }
                     _uiState.update {
                         it.copy(
                             conversationId = conversationId,
@@ -245,7 +254,7 @@ class PrivateChatViewModel(
                             isAdmin = conversation.isAdmin(currentUserId),
                             isModOrAbove = conversation.isModOrAbove(currentUserId),
                             currentUserRole = conversation.roleOf(currentUserId),
-                            conversation = conversation
+                            conversation = conversation,
                         )
                     }
                     observeMessages(conversationId)
@@ -264,7 +273,10 @@ class PrivateChatViewModel(
         }
     }
 
-    private fun checkRestrictions(currentUser: User?, otherUser: User?): String? {
+    private fun checkRestrictions(
+        currentUser: User?,
+        otherUser: User?,
+    ): String? {
         if (currentUser == null || otherUser == null) return null
 
         // Check if blocked by target
@@ -291,44 +303,48 @@ class PrivateChatViewModel(
 
     private fun observeMessages(conversationId: String) {
         messagesJob?.cancel()
-        messagesJob = viewModelScope.launch {
-            try {
-                pmRepository.getMessages(conversationId, Constants.PM_MESSAGES_PAGE_SIZE).collect { liveMessages ->
-                    val pending = pendingMessages.values.toList()
-                    val combined = (olderMessages + liveMessages + pending)
-                        .distinctBy { it.messageId }
-                        .sortedBy { it.createdAt }
-                    _uiState.update { it.copy(messages = combined) }
-                    resolveRoomInvites(combined)
+        messagesJob =
+            viewModelScope.launch {
+                try {
+                    pmRepository.getMessages(conversationId, Constants.PM_MESSAGES_PAGE_SIZE).collect { liveMessages ->
+                        val pending = pendingMessages.values.toList()
+                        val combined =
+                            (olderMessages + liveMessages + pending)
+                                .distinctBy { it.messageId }
+                                .sortedBy { it.createdAt }
+                        _uiState.update { it.copy(messages = combined) }
+                        resolveRoomInvites(combined)
+                    }
+                } catch (e: Exception) {
+                    logE(TAG, "Messages observation failed: ${e.message}")
+                    _uiState.update { it.copy(error = e.message ?: "Failed to load messages") }
                 }
-            } catch (e: Exception) {
-                logE(TAG, "Messages observation failed: ${e.message}")
-                _uiState.update { it.copy(error = e.message ?: "Failed to load messages") }
             }
-        }
     }
 
     private fun updateMessagesWithPending() {
         val live = _uiState.value.messages.filter { !it.messageId.startsWith("temp_") }
         val pending = pendingMessages.values.toList()
-        val combined = (live + pending)
-            .distinctBy { it.messageId }
-            .sortedBy { it.createdAt }
+        val combined =
+            (live + pending)
+                .distinctBy { it.messageId }
+                .sortedBy { it.createdAt }
         _uiState.update { it.copy(messages = combined) }
     }
 
     private fun observeSettings(conversationId: String) {
         settingsJob?.cancel()
-        settingsJob = viewModelScope.launch {
-            pmRepository.observeConversationSettings(conversationId, currentUserId).collect { settings ->
-                _uiState.update {
-                    it.copy(
-                        isMuted = settings.isMuted,
-                        isPinned = settings.isPinned
-                    )
+        settingsJob =
+            viewModelScope.launch {
+                pmRepository.observeConversationSettings(conversationId, currentUserId).collect { settings ->
+                    _uiState.update {
+                        it.copy(
+                            isMuted = settings.isMuted,
+                            isPinned = settings.isPinned,
+                        )
+                    }
                 }
             }
-        }
     }
 
     fun sendMessage(text: String) {
@@ -354,15 +370,17 @@ class PrivateChatViewModel(
 
         viewModelScope.launch {
             logI(TAG, "Sending message in conversation=$conversationId")
-            when (pmRepository.sendTextMessage(
-                conversationId = conversationId,
-                senderId = currentUserId,
-                senderName = _uiState.value.currentUserName,
-                text = trimmed,
-                replyToMessageId = replyTo?.messageId,
-                replyToText = replyTo?.text?.take(100),
-                replyToSenderName = replyTo?.senderName
-            )) {
+            when (
+                pmRepository.sendTextMessage(
+                    conversationId = conversationId,
+                    senderId = currentUserId,
+                    senderName = _uiState.value.currentUserName,
+                    text = trimmed,
+                    replyToMessageId = replyTo?.messageId,
+                    replyToText = replyTo?.text?.take(100),
+                    replyToSenderName = replyTo?.senderName,
+                )
+            ) {
                 is Resource.Error -> {
                     logE(TAG, "Failed to send message")
                     _uiState.update { it.copy(error = "Failed to send message") }
@@ -381,15 +399,17 @@ class PrivateChatViewModel(
         cancelReply()
 
         viewModelScope.launch {
-            when (pmRepository.sendImageMessage(
-                conversationId = conversationId,
-                senderId = currentUserId,
-                senderName = _uiState.value.currentUserName,
-                imageUrls = imageUrls,
-                replyToMessageId = replyTo?.messageId,
-                replyToText = replyTo?.let { if (it.imageUrls.isNotEmpty()) "[Image]" else it.text.take(100) },
-                replyToSenderName = replyTo?.senderName
-            )) {
+            when (
+                pmRepository.sendImageMessage(
+                    conversationId = conversationId,
+                    senderId = currentUserId,
+                    senderName = _uiState.value.currentUserName,
+                    imageUrls = imageUrls,
+                    replyToMessageId = replyTo?.messageId,
+                    replyToText = replyTo?.let { if (it.imageUrls.isNotEmpty()) "[Image]" else it.text.take(100) },
+                    replyToSenderName = replyTo?.senderName,
+                )
+            ) {
                 is Resource.Error -> {
                     _uiState.update { it.copy(error = "Failed to send image") }
                 }
@@ -407,7 +427,7 @@ class PrivateChatViewModel(
         _uiState.update {
             it.copy(
                 editingMessageId = message.messageId,
-                editingOriginalText = message.text
+                editingOriginalText = message.text,
             )
         }
     }
@@ -504,20 +524,26 @@ class PrivateChatViewModel(
         _uiState.update { it.copy(isLoadingOlder = true) }
 
         viewModelScope.launch {
-            when (val result = pmRepository.loadOlderMessages(
-                conversationId, oldestTimestamp, Constants.PM_MESSAGES_PAGE_SIZE
-            )) {
+            when (
+                val result =
+                    pmRepository.loadOlderMessages(
+                        conversationId,
+                        oldestTimestamp,
+                        Constants.PM_MESSAGES_PAGE_SIZE,
+                    )
+            ) {
                 is Resource.Success -> {
                     val fetched = result.data
                     olderMessages.addAll(0, fetched)
-                    val combined = (olderMessages + _uiState.value.messages)
-                        .distinctBy { it.messageId }
-                        .sortedBy { it.createdAt }
+                    val combined =
+                        (olderMessages + _uiState.value.messages)
+                            .distinctBy { it.messageId }
+                            .sortedBy { it.createdAt }
                     _uiState.update {
                         it.copy(
                             messages = combined,
                             isLoadingOlder = false,
-                            hasOlderMessages = fetched.size >= Constants.PM_MESSAGES_PAGE_SIZE
+                            hasOlderMessages = fetched.size >= Constants.PM_MESSAGES_PAGE_SIZE,
                         )
                     }
                 }
@@ -550,14 +576,15 @@ class PrivateChatViewModel(
 
         // Auto-reset typing after debounce
         typingResetJob?.cancel()
-        typingResetJob = viewModelScope.launch {
-            delay(Constants.TYPING_DEBOUNCE_MS)
-            if (conversationWs != null) {
-                conversationWs.sendTyping(false)
-            } else {
-                typingRepository.setTyping(conversationId, currentUserId, false)
+        typingResetJob =
+            viewModelScope.launch {
+                delay(Constants.TYPING_DEBOUNCE_MS)
+                if (conversationWs != null) {
+                    conversationWs.sendTyping(false)
+                } else {
+                    typingRepository.setTyping(conversationId, currentUserId, false)
+                }
             }
-        }
     }
 
     /**
@@ -568,29 +595,31 @@ class PrivateChatViewModel(
         if (conversationWs != null) {
             conversationWs.connect(conversationId, currentUserId)
             wsEventsJob?.cancel()
-            wsEventsJob = viewModelScope.launch {
-                conversationWs.events.collect { event ->
-                    when (event) {
-                        is ConversationEvent.NewMessage -> {
-                            // Immediately refetch messages (bypass slow polling)
-                            refreshMessages(conversationId)
-                        }
-                        is ConversationEvent.Typing -> {
-                            // For 1-on-1, only show typing from the other user
-                            if (!_uiState.value.isGroup && event.userId != otherUserId) return@collect
-                            _uiState.update { it.copy(isOtherUserTyping = event.isTyping) }
+            wsEventsJob =
+                viewModelScope.launch {
+                    conversationWs.events.collect { event ->
+                        when (event) {
+                            is ConversationEvent.NewMessage -> {
+                                // Immediately refetch messages (bypass slow polling)
+                                refreshMessages(conversationId)
+                            }
+                            is ConversationEvent.Typing -> {
+                                // For 1-on-1, only show typing from the other user
+                                if (!_uiState.value.isGroup && event.userId != otherUserId) return@collect
+                                _uiState.update { it.copy(isOtherUserTyping = event.isTyping) }
+                            }
                         }
                     }
                 }
-            }
         } else {
             // Fallback: old TypingRepository WS (no new_message support)
             typingJob?.cancel()
-            typingJob = viewModelScope.launch {
-                typingRepository.observeTyping(conversationId, otherUserId).collect { isTyping ->
-                    _uiState.update { it.copy(isOtherUserTyping = isTyping) }
+            typingJob =
+                viewModelScope.launch {
+                    typingRepository.observeTyping(conversationId, otherUserId).collect { isTyping ->
+                        _uiState.update { it.copy(isOtherUserTyping = isTyping) }
+                    }
                 }
-            }
         }
     }
 
@@ -620,30 +649,37 @@ class PrivateChatViewModel(
         httpClient.close()
     }
 
-    fun reportMessage(message: PrivateMessage, reason: String, description: String) {
+    fun reportMessage(
+        message: PrivateMessage,
+        reason: String,
+        description: String,
+    ) {
         val conversationId = _uiState.value.conversationId
         if (conversationId.isEmpty()) return
         val currentUser = _uiState.value.currentUser
         val state = _uiState.value
-        val reportedUser = if (state.isGroup) {
-            state.groupParticipants.find { it.uid == message.senderId }
-        } else {
-            state.otherUser
-        }
+        val reportedUser =
+            if (state.isGroup) {
+                state.groupParticipants.find { it.uid == message.senderId }
+            } else {
+                state.otherUser
+            }
         viewModelScope.launch {
-            when (reportRepository.reportMessage(
-                reporterId = currentUserId,
-                reporterName = currentUser?.displayName ?: "",
-                reporterUniqueId = currentUser?.uniqueId ?: 0L,
-                reportedUserId = message.senderId,
-                reportedUserName = reportedUser?.displayName ?: message.senderName,
-                reportedUserUniqueId = reportedUser?.uniqueId ?: 0L,
-                conversationId = conversationId,
-                messageId = message.messageId,
-                messageText = message.text,
-                reason = reason,
-                description = description
-            )) {
+            when (
+                reportRepository.reportMessage(
+                    reporterId = currentUserId,
+                    reporterName = currentUser?.displayName ?: "",
+                    reporterUniqueId = currentUser?.uniqueId ?: 0L,
+                    reportedUserId = message.senderId,
+                    reportedUserName = reportedUser?.displayName ?: message.senderName,
+                    reportedUserUniqueId = reportedUser?.uniqueId ?: 0L,
+                    conversationId = conversationId,
+                    messageId = message.messageId,
+                    messageText = message.text,
+                    reason = reason,
+                    description = description,
+                )
+            ) {
                 is Resource.Success -> {
                     _uiState.update { it.copy(successMessage = "Report submitted") }
                 }
@@ -655,7 +691,10 @@ class PrivateChatViewModel(
         }
     }
 
-    fun toggleReaction(messageId: String, emoji: String) {
+    fun toggleReaction(
+        messageId: String,
+        emoji: String,
+    ) {
         val conversationId = _uiState.value.conversationId
         if (conversationId.isEmpty()) return
         viewModelScope.launch {
@@ -669,7 +708,7 @@ class PrivateChatViewModel(
             it.copy(
                 isSearching = searching,
                 searchQuery = if (!searching) "" else it.searchQuery,
-                searchResults = if (!searching) emptyList() else it.searchResults
+                searchResults = if (!searching) emptyList() else it.searchResults,
             )
         }
     }
@@ -701,15 +740,16 @@ class PrivateChatViewModel(
         if (imageDataList.isEmpty() || imageDataList.size > Constants.PM_MAX_IMAGES_PER_MESSAGE) return
 
         val tempId = "temp_${currentTimeMillis()}"
-        val pendingMsg = PrivateMessage(
-            messageId = tempId,
-            senderId = currentUserId,
-            senderName = _uiState.value.currentUserName,
-            type = PrivateMessageType.IMAGE,
-            sendStatus = SendStatus.SENDING,
-            localImageData = imageDataList,
-            createdAt = currentTimeMillis()
-        )
+        val pendingMsg =
+            PrivateMessage(
+                messageId = tempId,
+                senderId = currentUserId,
+                senderName = _uiState.value.currentUserName,
+                type = PrivateMessageType.IMAGE,
+                sendStatus = SendStatus.SENDING,
+                localImageData = imageDataList,
+                createdAt = currentTimeMillis(),
+            )
         pendingMessages[tempId] = pendingMsg
         updateMessagesWithPending()
 
@@ -812,7 +852,7 @@ class PrivateChatViewModel(
             _uiState.update {
                 it.copy(
                     showStickerPicker = true,
-                    stickers = stickerStorage.getStickers()
+                    stickers = stickerStorage.getStickers(),
                 )
             }
         } else {
@@ -832,35 +872,45 @@ class PrivateChatViewModel(
             sendStickerMessage(sticker.url)
         } else if (sticker.localPath != null) {
             val tempId = "temp_${currentTimeMillis()}"
-            val pendingMsg = PrivateMessage(
-                messageId = tempId,
-                senderId = currentUserId,
-                senderName = _uiState.value.currentUserName,
-                type = PrivateMessageType.STICKER,
-                stickerUrl = sticker.localPath,
-                sendStatus = SendStatus.SENDING,
-                createdAt = currentTimeMillis()
-            )
+            val pendingMsg =
+                PrivateMessage(
+                    messageId = tempId,
+                    senderId = currentUserId,
+                    senderName = _uiState.value.currentUserName,
+                    type = PrivateMessageType.STICKER,
+                    stickerUrl = sticker.localPath,
+                    sendStatus = SendStatus.SENDING,
+                    createdAt = currentTimeMillis(),
+                )
             pendingMessages[tempId] = pendingMsg
             updateMessagesWithPending()
 
             viewModelScope.launch {
-                val bytes = try {
-                    stickerStorage?.readStickerBytes(sticker.id) ?: error("No sticker storage")
-                } catch (e: Exception) {
-                    pendingMessages[tempId] = pendingMsg.copy(sendStatus = SendStatus.FAILED)
-                    updateMessagesWithPending()
-                    return@launch
-                }
+                val bytes =
+                    try {
+                        stickerStorage?.readStickerBytes(sticker.id) ?: error("No sticker storage")
+                    } catch (e: Exception) {
+                        pendingMessages[tempId] = pendingMsg.copy(sendStatus = SendStatus.FAILED)
+                        updateMessagesWithPending()
+                        return@launch
+                    }
                 // Skip compression for animated formats (GIF/WebP) to preserve animation
-                val isGif = bytes.size >= 4 &&
-                    bytes[0] == 0x47.toByte() && bytes[1] == 0x49.toByte() &&
-                    bytes[2] == 0x46.toByte() && bytes[3] == 0x38.toByte()
-                val isWebp = bytes.size >= 12 &&
-                    bytes[0] == 0x52.toByte() && bytes[1] == 0x49.toByte() &&
-                    bytes[2] == 0x46.toByte() && bytes[3] == 0x46.toByte() &&
-                    bytes[8] == 0x57.toByte() && bytes[9] == 0x45.toByte() &&
-                    bytes[10] == 0x42.toByte() && bytes[11] == 0x50.toByte()
+                val isGif =
+                    bytes.size >= 4 &&
+                        bytes[0] == 0x47.toByte() &&
+                        bytes[1] == 0x49.toByte() &&
+                        bytes[2] == 0x46.toByte() &&
+                        bytes[3] == 0x38.toByte()
+                val isWebp =
+                    bytes.size >= 12 &&
+                        bytes[0] == 0x52.toByte() &&
+                        bytes[1] == 0x49.toByte() &&
+                        bytes[2] == 0x46.toByte() &&
+                        bytes[3] == 0x46.toByte() &&
+                        bytes[8] == 0x57.toByte() &&
+                        bytes[9] == 0x45.toByte() &&
+                        bytes[10] == 0x42.toByte() &&
+                        bytes[11] == 0x50.toByte()
                 val uploadBytes = if (isGif || isWebp) bytes else compressImage(bytes)
                 when (val result = storageRepository.uploadImage(currentUserId, "stickers", uploadBytes)) {
                     is Resource.Success -> {
@@ -889,12 +939,14 @@ class PrivateChatViewModel(
         val conversationId = _uiState.value.conversationId
         if (conversationId.isEmpty()) return
         viewModelScope.launch {
-            when (pmRepository.sendStickerMessage(
-                conversationId = conversationId,
-                senderId = currentUserId,
-                senderName = _uiState.value.currentUserName,
-                stickerUrl = stickerUrl
-            )) {
+            when (
+                pmRepository.sendStickerMessage(
+                    conversationId = conversationId,
+                    senderId = currentUserId,
+                    senderName = _uiState.value.currentUserName,
+                    stickerUrl = stickerUrl,
+                )
+            ) {
                 is Resource.Error -> {
                     _uiState.update { it.copy(error = "Failed to send sticker") }
                 }
@@ -925,14 +977,22 @@ class PrivateChatViewModel(
         // Background pre-upload to R2 for instant sends later
         viewModelScope.launch {
             try {
-                val isGif = imageData.size >= 4 &&
-                    imageData[0] == 0x47.toByte() && imageData[1] == 0x49.toByte() &&
-                    imageData[2] == 0x46.toByte() && imageData[3] == 0x38.toByte()
-                val isWebp = imageData.size >= 12 &&
-                    imageData[0] == 0x52.toByte() && imageData[1] == 0x49.toByte() &&
-                    imageData[2] == 0x46.toByte() && imageData[3] == 0x46.toByte() &&
-                    imageData[8] == 0x57.toByte() && imageData[9] == 0x45.toByte() &&
-                    imageData[10] == 0x42.toByte() && imageData[11] == 0x50.toByte()
+                val isGif =
+                    imageData.size >= 4 &&
+                        imageData[0] == 0x47.toByte() &&
+                        imageData[1] == 0x49.toByte() &&
+                        imageData[2] == 0x46.toByte() &&
+                        imageData[3] == 0x38.toByte()
+                val isWebp =
+                    imageData.size >= 12 &&
+                        imageData[0] == 0x52.toByte() &&
+                        imageData[1] == 0x49.toByte() &&
+                        imageData[2] == 0x46.toByte() &&
+                        imageData[3] == 0x46.toByte() &&
+                        imageData[8] == 0x57.toByte() &&
+                        imageData[9] == 0x45.toByte() &&
+                        imageData[10] == 0x42.toByte() &&
+                        imageData[11] == 0x50.toByte()
                 val uploadBytes = if (isGif || isWebp) imageData else compressImage(imageData)
                 when (val result = storageRepository.uploadImage(currentUserId, "stickers", uploadBytes)) {
                     is Resource.Success -> {
@@ -954,9 +1014,10 @@ class PrivateChatViewModel(
                 val bytes = httpClient.get(url).bodyAsBytes()
                 // Check for duplicates by comparing file content
                 val existing = stickerStorage.getStickers()
-                val isDuplicate = existing.any { sticker ->
-                    stickerStorage.readStickerBytes(sticker.id)?.contentEquals(bytes) == true
-                }
+                val isDuplicate =
+                    existing.any { sticker ->
+                        stickerStorage.readStickerBytes(sticker.id)?.contentEquals(bytes) == true
+                    }
                 if (isDuplicate) {
                     _uiState.update { it.copy(error = "You already have this sticker") }
                     return@launch
@@ -967,7 +1028,7 @@ class PrivateChatViewModel(
                 _uiState.update {
                     it.copy(
                         stickers = stickerStorage.getStickers(),
-                        error = "Sticker saved!"
+                        error = "Sticker saved!",
                     )
                 }
             } catch (e: Exception) {
@@ -977,17 +1038,22 @@ class PrivateChatViewModel(
         }
     }
 
-    fun sendRoomInvite(roomId: String, roomName: String) {
+    fun sendRoomInvite(
+        roomId: String,
+        roomName: String,
+    ) {
         val conversationId = _uiState.value.conversationId
         if (conversationId.isEmpty()) return
         viewModelScope.launch {
-            when (pmRepository.sendRoomInviteMessage(
-                conversationId = conversationId,
-                senderId = currentUserId,
-                senderName = _uiState.value.currentUserName,
-                roomId = roomId,
-                roomName = roomName
-            )) {
+            when (
+                pmRepository.sendRoomInviteMessage(
+                    conversationId = conversationId,
+                    senderId = currentUserId,
+                    senderName = _uiState.value.currentUserName,
+                    roomId = roomId,
+                    roomName = roomName,
+                )
+            ) {
                 is Resource.Error -> _uiState.update { it.copy(error = "Failed to send room invite") }
                 else -> {}
             }
@@ -1011,7 +1077,11 @@ class PrivateChatViewModel(
 
     // ===== Moderator Actions =====
 
-    fun muteGroupMember(userId: String, duration: Long?, reason: String?) {
+    fun muteGroupMember(
+        userId: String,
+        duration: Long?,
+        reason: String?,
+    ) {
         val conversationId = _uiState.value.conversationId
         if (conversationId.isEmpty()) return
         viewModelScope.launch {
@@ -1019,16 +1089,21 @@ class PrivateChatViewModel(
                 is Resource.Success -> {
                     loadGroupMutes(conversationId)
                     // Send MOD_ACTION message
-                    val durationText = when (duration) {
-                        Constants.MUTE_DURATION_5MIN -> "5 minutes"
-                        Constants.MUTE_DURATION_1HR -> "1 hour"
-                        Constants.MUTE_DURATION_24HR -> "24 hours"
-                        null -> "permanently"
-                        else -> "${duration / 60000} minutes"
-                    }
-                    val targetName = _uiState.value.groupParticipants.find { it.uid == userId }?.displayName ?: "User"
-                    val actionText = "${_uiState.value.currentUserName} muted $targetName for $durationText" +
-                        if (reason != null) ". Reason: $reason" else ""
+                    val durationText =
+                        when (duration) {
+                            Constants.MUTE_DURATION_5MIN -> "5 minutes"
+                            Constants.MUTE_DURATION_1HR -> "1 hour"
+                            Constants.MUTE_DURATION_24HR -> "24 hours"
+                            null -> "permanently"
+                            else -> "${duration / 60000} minutes"
+                        }
+                    val targetName =
+                        _uiState.value.groupParticipants
+                            .find { it.uid == userId }
+                            ?.displayName ?: "User"
+                    val actionText =
+                        "${_uiState.value.currentUserName} muted $targetName for $durationText" +
+                            if (reason != null) ". Reason: $reason" else ""
                     sendModActionMessage(actionText)
                 }
                 is Resource.Error -> _uiState.update { it.copy(error = "Failed to mute member") }
@@ -1047,7 +1122,10 @@ class PrivateChatViewModel(
                     if (userId == currentUserId) {
                         _uiState.update { it.copy(currentUserMuteInfo = null) }
                     }
-                    val targetName = _uiState.value.groupParticipants.find { it.uid == userId }?.displayName ?: "User"
+                    val targetName =
+                        _uiState.value.groupParticipants
+                            .find { it.uid == userId }
+                            ?.displayName ?: "User"
                     sendModActionMessage("${_uiState.value.currentUserName} unmuted $targetName")
                 }
                 is Resource.Error -> _uiState.update { it.copy(error = "Failed to unmute member") }
@@ -1078,7 +1156,7 @@ class PrivateChatViewModel(
                 conversationId = conversationId,
                 senderId = Constants.SYSTEM_USER_ID,
                 senderName = "System",
-                text = text
+                text = text,
             )
         }
     }
@@ -1118,7 +1196,10 @@ class PrivateChatViewModel(
 
     // ===== Group Role/Permission Management =====
 
-    fun updateGroupRoles(adminIds: List<String>, modIds: List<String>) {
+    fun updateGroupRoles(
+        adminIds: List<String>,
+        modIds: List<String>,
+    ) {
         val conversationId = _uiState.value.conversationId
         if (conversationId.isEmpty()) return
         viewModelScope.launch {
@@ -1208,11 +1289,12 @@ class PrivateChatViewModel(
 
     private fun resolveRoomInvites(messages: List<PrivateMessage>) {
         val repo = roomRepository ?: return
-        val roomIds = messages
-            .filter { it.type == PrivateMessageType.ROOM_INVITE && !it.roomInviteId.isNullOrEmpty() }
-            .mapNotNull { it.roomInviteId }
-            .distinct()
-            .filter { it !in fetchedRoomIds }
+        val roomIds =
+            messages
+                .filter { it.type == PrivateMessageType.ROOM_INVITE && !it.roomInviteId.isNullOrEmpty() }
+                .mapNotNull { it.roomInviteId }
+                .distinct()
+                .filter { it !in fetchedRoomIds }
         if (roomIds.isEmpty()) return
 
         fetchedRoomIds.addAll(roomIds)
@@ -1223,13 +1305,14 @@ class PrivateChatViewModel(
                 val room = result.data
 
                 // Collect seated user IDs — for closed rooms, use historical data
-                val seatedUserIds = if (room.state == RoomState.CLOSED) {
-                    room.allTimeSeatUserIds.toList()
-                } else {
-                    room.seats.values
-                        .filter { it.state == SeatState.OCCUPIED && it.userId != null }
-                        .mapNotNull { it.userId }
-                }
+                val seatedUserIds =
+                    if (room.state == RoomState.CLOSED) {
+                        room.allTimeSeatUserIds.toList()
+                    } else {
+                        room.seats.values
+                            .filter { it.state == SeatState.OCCUPIED && it.userId != null }
+                            .mapNotNull { it.userId }
+                    }
 
                 // Batch-fetch users
                 val seatUsers = mutableMapOf<String, User>()
@@ -1252,13 +1335,16 @@ class PrivateChatViewModel(
         val message = _uiState.value.messages.find { it.messageId == messageId } ?: return
         if (_uiState.value.translations.containsKey(messageId)) return
         val convId = _uiState.value.conversationId
-        val targetLang = com.shyden.shytalk.core.util.LanguagePreference.get()
+        val targetLang =
+            com.shyden.shytalk.core.util.LanguagePreference
+                .get()
         viewModelScope.launch {
             val messagePath = if (convId.isNotEmpty()) "conversations/$convId/messages/$messageId" else null
             when (val result = repo.translate(message.text, targetLang, messagePath)) {
-                is Resource.Success -> _uiState.update {
-                    it.copy(translations = it.translations + (messageId to result.data.translatedText))
-                }
+                is Resource.Success ->
+                    _uiState.update {
+                        it.copy(translations = it.translations + (messageId to result.data.translatedText))
+                    }
                 else -> { /* Loading or Error — silently fail */ }
             }
         }

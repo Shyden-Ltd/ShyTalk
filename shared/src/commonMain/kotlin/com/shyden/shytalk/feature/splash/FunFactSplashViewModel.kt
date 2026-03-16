@@ -29,7 +29,6 @@ class FunFactSplashViewModel(
     private val roomRepository: RoomRepository,
     private val pmRepository: PrivateMessageRepository,
 ) : ViewModel() {
-
     companion object {
         private const val TAG = "FunFactSplashViewModel"
     }
@@ -48,55 +47,56 @@ class FunFactSplashViewModel(
 
         viewModelScope.launch {
             logI(TAG, "Starting warm-up: banners, fun facts, user data")
-            val jobs = listOf(
-                launch {
-                    try {
-                        val banners = bannerRepository.getActiveBanners()
-                        logI(TAG, "Preloading ${banners.size} banners")
-                        banners.forEach { banner ->
-                            launch {
-                                try {
-                                    imagePreloader?.preload(banner.imageUrl)
-                                } catch (e: Exception) {
-                                    logD(TAG, "Banner image preload failed: ${e.message}")
-                                }
-                            }
-                            val actionValue = banner.actionValue
-                            if (banner.actionType == BannerActionType.URL && !actionValue.isNullOrBlank()) {
+            val jobs =
+                listOf(
+                    launch {
+                        try {
+                            val banners = bannerRepository.getActiveBanners()
+                            logI(TAG, "Preloading ${banners.size} banners")
+                            banners.forEach { banner ->
                                 launch {
                                     try {
-                                        webContentPreloader?.preload(actionValue)
+                                        imagePreloader?.preload(banner.imageUrl)
                                     } catch (e: Exception) {
-                                        logD(TAG, "Web content preload failed: ${e.message}")
+                                        logD(TAG, "Banner image preload failed: ${e.message}")
+                                    }
+                                }
+                                val actionValue = banner.actionValue
+                                if (banner.actionType == BannerActionType.URL && !actionValue.isNullOrBlank()) {
+                                    launch {
+                                        try {
+                                            webContentPreloader?.preload(actionValue)
+                                        } catch (e: Exception) {
+                                            logD(TAG, "Web content preload failed: ${e.message}")
+                                        }
                                     }
                                 }
                             }
+                        } catch (e: Exception) {
+                            logE(TAG, "Banner preload failed: ${e.message}")
                         }
-                    } catch (e: Exception) {
-                        logE(TAG, "Banner preload failed: ${e.message}")
-                    }
-                },
-                launch {
-                    try {
-                        val fresh = funFactRepository.syncFacts()
-                        if (fresh.isNotEmpty()) {
-                            logI(TAG, "Synced ${fresh.size} fresh fun facts")
-                            _funFacts.value = fresh.shuffled()
+                    },
+                    launch {
+                        try {
+                            val fresh = funFactRepository.syncFacts()
+                            if (fresh.isNotEmpty()) {
+                                logI(TAG, "Synced ${fresh.size} fresh fun facts")
+                                _funFacts.value = fresh.shuffled()
+                            }
+                        } catch (e: Exception) {
+                            logE(TAG, "Fun fact sync failed: ${e.message}")
                         }
-                    } catch (e: Exception) {
-                        logE(TAG, "Fun fact sync failed: ${e.message}")
-                    }
-                },
-                launch {
-                    val userId = authRepository.currentUserId ?: return@launch
-                    listOf(
-                        launch { userRepository.getUser(userId) },
-                        launch { userRepository.getBlockedUserIds(userId) },
-                        launch { roomRepository.prefetchActiveRooms() },
-                        launch { pmRepository.prefetchConversations() },
-                    ).joinAll()
-                },
-            )
+                    },
+                    launch {
+                        val userId = authRepository.currentUserId ?: return@launch
+                        listOf(
+                            launch { userRepository.getUser(userId) },
+                            launch { userRepository.getBlockedUserIds(userId) },
+                            launch { roomRepository.prefetchActiveRooms() },
+                            launch { pmRepository.prefetchConversations() },
+                        ).joinAll()
+                    },
+                )
             jobs.joinAll()
             logI(TAG, "Warm-up complete")
             _warmUpComplete.value = true

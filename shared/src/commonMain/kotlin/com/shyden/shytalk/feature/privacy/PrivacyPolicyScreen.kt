@@ -25,8 +25,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.ui.PlatformWebView
 import com.shyden.shytalk.core.util.Constants
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -35,7 +35,7 @@ fun PrivacyPolicyScreen(
     onAccept: () -> Unit,
     onDecline: () -> Unit,
     onNavigateBack: (() -> Unit)? = null,
-    showActions: Boolean = true
+    showActions: Boolean = true,
 ) {
     Scaffold(
         topBar = {
@@ -45,45 +45,48 @@ fun PrivacyPolicyScreen(
                     navigationIcon = {
                         IconButton(
                             onClick = onNavigateBack,
-                            modifier = Modifier.testTag("privacyPolicy_backButton")
+                            modifier = Modifier.testTag("privacyPolicy_backButton"),
                         ) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.back))
                         }
-                    }
+                    },
                 )
             }
-        }
+        },
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding),
         ) {
             PlatformWebView(
                 url = Constants.PRIVACY_POLICY_URL,
-                modifier = Modifier.weight(1f).fillMaxWidth()
+                modifier = Modifier.weight(1f).fillMaxWidth(),
             )
 
             if (showActions) {
                 HorizontalDivider()
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     OutlinedButton(
                         onClick = onDecline,
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
+                        colors =
+                            ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error,
+                            ),
                     ) {
                         Text(stringResource(Res.string.decline))
                     }
                     Button(
                         onClick = onAccept,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     ) {
                         Text(stringResource(Res.string.accept))
                     }

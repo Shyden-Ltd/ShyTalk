@@ -7,5 +7,5 @@ package com.shyden.shytalk.core.util
 expect suspend fun compressImage(
     imageData: ByteArray,
     maxDimension: Int = 1920,
-    quality: Int = 80
+    quality: Int = 80,
 ): ByteArray

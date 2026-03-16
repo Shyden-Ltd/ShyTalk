@@ -25,26 +25,28 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 fun EmailSignInButton(
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     OutlinedButton(
         onClick = onClick,
-        modifier = modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .testTag("signIn_emailButton"),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .testTag("signIn_emailButton"),
         shape = RoundedCornerShape(24.dp),
-        colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = Color.Transparent,
-            contentColor = Color(0xFFCCCCCC)
-        ),
-        border = BorderStroke(1.dp, Color(0xFF555555))
+        colors =
+            ButtonDefaults.outlinedButtonColors(
+                containerColor = Color.Transparent,
+                contentColor = Color(0xFFCCCCCC),
+            ),
+        border = BorderStroke(1.dp, Color(0xFF555555)),
     ) {
         Icon(
             imageVector = Icons.Default.Email,
             contentDescription = null,
             modifier = Modifier.size(20.dp),
-            tint = Color(0xFFCCCCCC)
+            tint = Color(0xFFCCCCCC),
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(stringResource(Res.string.sign_in_with_email))

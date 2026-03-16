@@ -34,9 +34,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -47,17 +45,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.User
-import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,7 +64,7 @@ fun NewMessageScreen(
     onNavigateBack: () -> Unit,
     onNavigateToChat: (String) -> Unit,
     onNavigateToGroupSetup: (String) -> Unit,
-    viewModel: NewMessageViewModel = koinViewModel()
+    viewModel: NewMessageViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -78,10 +77,11 @@ fun NewMessageScreen(
     }
 
     val selectedCount = uiState.selectedIds.size
-    val title = when {
-        selectedCount >= 2 -> stringResource(Res.string.new_group_selected, selectedCount)
-        else -> stringResource(Res.string.new_message)
-    }
+    val title =
+        when {
+            selectedCount >= 2 -> stringResource(Res.string.new_group_selected, selectedCount)
+            else -> stringResource(Res.string.new_message)
+        }
 
     Scaffold(
         snackbarHost = { StyledSnackbarHost(snackbarHostState) },
@@ -92,33 +92,34 @@ fun NewMessageScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.back))
                     }
                 },
-                title = { Text(title) }
+                title = { Text(title) },
             )
-        }
+        },
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 16.dp),
         ) {
             // Recent users row
             if (uiState.recentUsers.isNotEmpty() && uiState.searchQuery.isBlank() && !uiState.searchAllMode) {
                 Text(
                     text = stringResource(Res.string.recent),
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(vertical = 4.dp)
+                    contentPadding = PaddingValues(vertical = 4.dp),
                 ) {
                     items(uiState.recentUsers, key = { it.uid }) { user ->
                         RecentUserAvatar(
                             user = user,
                             isSelected = user.uid in uiState.selectedIds,
-                            onClick = { viewModel.toggleSelection(user.uid) }
+                            onClick = { viewModel.toggleSelection(user.uid) },
                         )
                     }
                 }
@@ -130,7 +131,7 @@ fun NewMessageScreen(
                 Text(
                     text = stringResource(Res.string.selected_count, selectedCount),
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
@@ -149,7 +150,7 @@ fun NewMessageScreen(
                             Icon(Icons.Default.Close, contentDescription = stringResource(Res.string.close))
                         }
                     }
-                }
+                },
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -158,58 +159,69 @@ fun NewMessageScreen(
             FilterChip(
                 selected = uiState.searchAllMode,
                 onClick = { viewModel.toggleSearchAllMode() },
-                label = { Text(stringResource(Res.string.search_all_users)) }
+                label = { Text(stringResource(Res.string.search_all_users)) },
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
             if (uiState.isLoading) {
                 Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
                 ) {
                     CircularProgressIndicator()
                 }
             } else {
-                val users = if (uiState.searchAllMode && uiState.searchQuery.isNotBlank()) {
-                    uiState.allUsersSearchResults
-                } else {
-                    viewModel.getFilteredUsers()
-                }
+                val users =
+                    if (uiState.searchAllMode && uiState.searchQuery.isNotBlank()) {
+                        uiState.allUsersSearchResults
+                    } else {
+                        viewModel.getFilteredUsers()
+                    }
 
                 if (uiState.isSearchingAll) {
                     Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        contentAlignment = Alignment.Center
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                        contentAlignment = Alignment.Center,
                     ) {
                         CircularProgressIndicator()
                     }
                 } else if (users.isEmpty()) {
                     Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        contentAlignment = Alignment.Center
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                        contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            text = if (uiState.searchAllMode) stringResource(Res.string.no_users_found) else stringResource(Res.string.no_followers_following_found),
+                            text =
+                                if (uiState.searchAllMode) {
+                                    stringResource(
+                                        Res.string.no_users_found,
+                                    )
+                                } else {
+                                    stringResource(Res.string.no_followers_following_found)
+                                },
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 } else {
                     LazyColumn(
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     ) {
                         items(users, key = { it.uid }) { user ->
                             UserSelectionRow(
                                 user = user,
                                 isSelected = user.uid in uiState.selectedIds,
-                                onToggle = { viewModel.toggleSelection(user.uid) }
+                                onToggle = { viewModel.toggleSelection(user.uid) },
                             )
                         }
                     }
@@ -226,7 +238,7 @@ fun NewMessageScreen(
                         val ids = uiState.selectedIds.joinToString(",")
                         onNavigateToGroupSetup(ids)
                     },
-                    modifier = Modifier.fillMaxWidth().testTag("newMessage_createGroupButton")
+                    modifier = Modifier.fillMaxWidth().testTag("newMessage_createGroupButton"),
                 ) {
                     Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
@@ -239,7 +251,7 @@ fun NewMessageScreen(
                         val userId = uiState.selectedIds.first()
                         onNavigateToChat(userId)
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
@@ -256,36 +268,45 @@ fun NewMessageScreen(
 private fun RecentUserAvatar(
     user: User,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable(onClick = onClick)
+        modifier = Modifier.clickable(onClick = onClick),
     ) {
-        val borderColor = if (isSelected) MaterialTheme.colorScheme.primary
-        else MaterialTheme.colorScheme.surfaceVariant
+        val borderColor =
+            if (isSelected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            }
         val photoUrl = user.photoUrl
         if (photoUrl != null) {
             AsyncImage(
                 model = photoUrl,
                 contentDescription = user.displayName,
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop
+                modifier =
+                    Modifier
+                        .size(48.dp)
+                        .clip(CircleShape),
+                contentScale = ContentScale.Crop,
             )
         } else {
             Surface(
                 modifier = Modifier.size(48.dp),
                 shape = CircleShape,
-                color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                else MaterialTheme.colorScheme.primaryContainer
+                color =
+                    if (isSelected) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                    } else {
+                        MaterialTheme.colorScheme.primaryContainer
+                    },
             ) {
                 Icon(
                     Icons.Default.Person,
                     contentDescription = null,
                     modifier = Modifier.padding(10.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             }
         }
@@ -295,8 +316,12 @@ private fun RecentUserAvatar(
             style = MaterialTheme.typography.labelSmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            color = if (isSelected) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurface
+            color =
+                if (isSelected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
         )
     }
 }
@@ -305,36 +330,38 @@ private fun RecentUserAvatar(
 private fun UserSelectionRow(
     user: User,
     isSelected: Boolean,
-    onToggle: () -> Unit
+    onToggle: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onToggle)
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onToggle)
+                .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         val photoUrl = user.photoUrl
         if (photoUrl != null) {
             AsyncImage(
                 model = photoUrl,
                 contentDescription = user.displayName,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop
+                modifier =
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape),
+                contentScale = ContentScale.Crop,
             )
         } else {
             Surface(
                 modifier = Modifier.size(40.dp),
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer
+                color = MaterialTheme.colorScheme.primaryContainer,
             ) {
                 Icon(
                     Icons.Default.Person,
                     contentDescription = null,
                     modifier = Modifier.padding(8.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             }
         }
@@ -344,11 +371,11 @@ private fun UserSelectionRow(
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.weight(1f),
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
         )
         Checkbox(
             checked = isSelected,
-            onCheckedChange = { onToggle() }
+            onCheckedChange = { onToggle() },
         )
     }
 }

@@ -24,15 +24,15 @@ fun SeatActionFeedback(message: String) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
-                modifier = Modifier.padding(vertical = 8.dp)
+                modifier = Modifier.padding(vertical = 8.dp),
             ) {
                 CircularProgressIndicator(modifier = Modifier.size(24.dp))
                 Spacer(modifier = Modifier.width(16.dp))
                 Text(
                     text = message,
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
                 )
             }
-        }
+        },
     )
 }

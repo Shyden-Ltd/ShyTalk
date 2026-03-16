@@ -2,11 +2,7 @@ package com.shyden.shytalk.feature.settings
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -20,7 +16,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -35,13 +30,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.data.repository.AppLockRepository
 
-private val TIMEOUT_OPTIONS = listOf(
-    1 to "1 minute",
-    5 to "5 minutes",
-    15 to "15 minutes",
-    30 to "30 minutes",
-    0 to "Never",
-)
+private val TIMEOUT_OPTIONS =
+    listOf(
+        1 to "1 minute",
+        5 to "5 minutes",
+        15 to "15 minutes",
+        30 to "30 minutes",
+        0 to "Never",
+    )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,11 +67,12 @@ fun SecuritySettingsScreen(
         },
     ) { padding ->
         Column(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .testTag("securitySettingsScreen"),
+            modifier =
+                modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState())
+                    .testTag("securitySettingsScreen"),
         ) {
             // App Lock
             ListItem(
@@ -117,9 +114,10 @@ fun SecuritySettingsScreen(
                             }
                         }
                     },
-                    modifier = Modifier
-                        .clickable { showTimeoutMenu = true }
-                        .testTag("lockTimeoutSetting"),
+                    modifier =
+                        Modifier
+                            .clickable { showTimeoutMenu = true }
+                            .testTag("lockTimeoutSetting"),
                 )
             }
 
@@ -130,8 +128,11 @@ fun SecuritySettingsScreen(
                 headlineContent = { Text("Biometric Login") },
                 supportingContent = {
                     Text(
-                        if (biometricAvailable) "Use fingerprint or face to unlock"
-                        else "Not available on this device"
+                        if (biometricAvailable) {
+                            "Use fingerprint or face to unlock"
+                        } else {
+                            "Not available on this device"
+                        },
                     )
                 },
                 trailingContent = {
@@ -156,9 +157,10 @@ fun SecuritySettingsScreen(
                 trailingContent = {
                     Icon(Icons.Default.ChevronRight, contentDescription = null)
                 },
-                modifier = Modifier
-                    .clickable(onClick = onResetPin)
-                    .testTag("resetPinSetting"),
+                modifier =
+                    Modifier
+                        .clickable(onClick = onResetPin)
+                        .testTag("resetPinSetting"),
             )
 
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -170,9 +172,10 @@ fun SecuritySettingsScreen(
                 trailingContent = {
                     Icon(Icons.Default.ChevronRight, contentDescription = null)
                 },
-                modifier = Modifier
-                    .clickable(onClick = onLinkedAccounts)
-                    .testTag("linkedAccountsSetting"),
+                modifier =
+                    Modifier
+                        .clickable(onClick = onLinkedAccounts)
+                        .testTag("linkedAccountsSetting"),
             )
         }
     }

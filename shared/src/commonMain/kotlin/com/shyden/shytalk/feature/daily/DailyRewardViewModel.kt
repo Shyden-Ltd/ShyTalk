@@ -16,12 +16,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlin.time.Instant
 import kotlinx.datetime.DatePeriod
-import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Instant
 
 data class DailyRewardUiState(
     val reward: DailyRewardResult? = null,
@@ -33,14 +32,13 @@ data class DailyRewardUiState(
     val error: String? = null,
     val dailyBase: Int = 50,
     val milestoneRewards: Map<Int, MilestoneReward> = emptyMap(),
-    val claimedDaysThisMonth: Set<Int> = emptySet()
+    val claimedDaysThisMonth: Set<Int> = emptySet(),
 )
 
 class DailyRewardViewModel(
     private val economyRepository: EconomyRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
 ) : ViewModel() {
-
     companion object {
         private const val TAG = "DailyRewardViewModel"
     }
@@ -59,7 +57,7 @@ class DailyRewardViewModel(
                 _uiState.update {
                     it.copy(
                         dailyBase = config.dailyBase,
-                        milestoneRewards = config.milestoneRewards
+                        milestoneRewards = config.milestoneRewards,
                     )
                 }
             }
@@ -82,12 +80,13 @@ class DailyRewardViewModel(
         val claimedDays = mutableSetOf<Int>()
 
         if (streak > 0) {
-            val lastClaimedDate = if (alreadyClaimed) {
-                now.date
-            } else {
-                // Streak was from yesterday
-                now.date.minus(DatePeriod(days = 1))
-            }
+            val lastClaimedDate =
+                if (alreadyClaimed) {
+                    now.date
+                } else {
+                    // Streak was from yesterday
+                    now.date.minus(DatePeriod(days = 1))
+                }
             for (i in 0 until streak) {
                 val claimedDate = lastClaimedDate.minus(DatePeriod(days = i))
                 if (claimedDate.year == currentYear && claimedDate.month == currentMonth) {
@@ -101,7 +100,7 @@ class DailyRewardViewModel(
                 hasClaimedToday = alreadyClaimed,
                 currentStreak = user.loginStreak,
                 showDialog = true, // Always show — calendar visible even after claiming
-                claimedDaysThisMonth = claimedDays
+                claimedDaysThisMonth = claimedDays,
             )
         }
     }
@@ -123,7 +122,7 @@ class DailyRewardViewModel(
                             isClaiming = false,
                             showDialog = false,
                             showCelebration = true,
-                            claimedDaysThisMonth = it.claimedDaysThisMonth + todayDay
+                            claimedDaysThisMonth = it.claimedDaysThisMonth + todayDay,
                         )
                     }
                 }
