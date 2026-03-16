@@ -43,7 +43,7 @@ jest.mock('../../src/utils/firebase', () => ({
     sendEachForMulticast: jest.fn().mockResolvedValue({ responses: [] }),
   },
   FieldValue: {
-    increment: jest.fn(n => `increment(${n})`),
+    increment: jest.fn((n) => `increment(${n})`),
     arrayRemove: jest.fn((...args) => `arrayRemove(${args})`),
   },
 }));
@@ -99,9 +99,7 @@ describe('GET /api/conversations/:id/messages', () => {
     });
 
     const app = createApp();
-    await request(app)
-      .get('/api/conversations/conv-1/messages?limit=abc')
-      .expect(200);
+    await request(app).get('/api/conversations/conv-1/messages?limit=abc').expect(200);
   });
 
   test('respects MAX_MESSAGE_LIMIT of 200', async () => {
@@ -125,9 +123,7 @@ describe('GET /api/conversations/:id/messages', () => {
     });
 
     const app = createApp();
-    await request(app)
-      .get('/api/conversations/conv-1/messages?limit=9999')
-      .expect(200);
+    await request(app).get('/api/conversations/conv-1/messages?limit=9999').expect(200);
   });
 
   test('returns 403 when user is not a participant', async () => {
@@ -137,9 +133,7 @@ describe('GET /api/conversations/:id/messages', () => {
     });
 
     const app = createApp('user-A');
-    await request(app)
-      .get('/api/conversations/conv-1/messages')
-      .expect(403);
+    await request(app).get('/api/conversations/conv-1/messages').expect(403);
   });
 });
 
@@ -176,9 +170,7 @@ describe('POST /api/conversations/:id/messages', () => {
     const app = createApp();
 
     // Send request with no Content-Type header and empty body
-    await request(app)
-      .post('/api/conversations/conv-1/messages')
-      .expect(400);
+    await request(app).post('/api/conversations/conv-1/messages').expect(400);
   });
 
   test('returns 404 when conversation does not exist', async () => {

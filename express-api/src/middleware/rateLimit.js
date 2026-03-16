@@ -46,7 +46,11 @@ const sensitiveLimiter = rateLimit({
   keyGenerator,
   validate: false,
   handler: (req, res) => {
-    log.warn('rateLimit', 'Sensitive rate limit hit', { uid: req.auth?.uid, ip: req.ip, path: req.originalUrl });
+    log.warn('rateLimit', 'Sensitive rate limit hit', {
+      uid: req.auth?.uid,
+      ip: req.ip,
+      path: req.originalUrl,
+    });
     res.status(429).json({ error: 'Rate limit exceeded for this operation' });
   },
 });

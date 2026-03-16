@@ -51,7 +51,7 @@ describe('logger', () => {
     db._spies.setSpy.mockRejectedValue(new Error('Firestore down'));
     // Should not throw
     await expect(
-      logger.log({ level: 'ERROR', source: 'test', message: 'boom' })
+      logger.log({ level: 'ERROR', source: 'test', message: 'boom' }),
     ).resolves.toBeUndefined();
   });
 

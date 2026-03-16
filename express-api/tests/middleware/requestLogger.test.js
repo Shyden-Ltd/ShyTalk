@@ -169,7 +169,9 @@ describe('requestLogger middleware', () => {
 
   test('never throws if logger fails', () => {
     const logger = {
-      log: jest.fn(() => { throw new Error('Logger exploded'); }),
+      log: jest.fn(() => {
+        throw new Error('Logger exploded');
+      }),
     };
     const middleware = createRequestLogger(logger);
     const req = mockReq();

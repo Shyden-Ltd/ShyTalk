@@ -22,8 +22,14 @@ const mockOrderBy = jest.fn(() => ({ get: mockQueryGet }));
 const mockWhere = jest.fn(() => ({ get: mockQueryGet }));
 
 const mockCollection = jest.fn(() => ({
-  where: (...args) => { mockWhere(...args); return { get: mockQueryGet }; },
-  orderBy: (...args) => { mockOrderBy(...args); return { get: mockQueryGet }; },
+  where: (...args) => {
+    mockWhere(...args);
+    return { get: mockQueryGet };
+  },
+  orderBy: (...args) => {
+    mockOrderBy(...args);
+    return { get: mockQueryGet };
+  },
 }));
 
 jest.mock('../../src/utils/firebase', () => ({
@@ -90,7 +96,7 @@ describe('GET /api/fun-facts', () => {
   test('returns 200 with array of active facts', async () => {
     mockQueryDocs.mockResolvedValue([
       { id: 'fact1', text: 'Hello is said in 100+ languages', isActive: true },
-      { id: 'fact2', text: 'Bonjour is French for hello',    isActive: true },
+      { id: 'fact2', text: 'Bonjour is French for hello', isActive: true },
     ]);
 
     const app = createApp();
@@ -112,9 +118,7 @@ describe('GET /api/fun-facts', () => {
   });
 
   test('sets Cache-Control header on 200 response', async () => {
-    mockQueryDocs.mockResolvedValue([
-      { id: 'fact1', text: 'Fun fact', isActive: true },
-    ]);
+    mockQueryDocs.mockResolvedValue([{ id: 'fact1', text: 'Fun fact', isActive: true }]);
 
     const app = createApp();
     const res = await request(app).get('/api/fun-facts').expect(200);
@@ -149,7 +153,7 @@ describe('GET /api/admin/fun-facts', () => {
 
   test('returns 200 with all facts for admin', async () => {
     mockQueryDocs.mockResolvedValue([
-      { id: 'fact1', text: 'Active fact',   isActive: true  },
+      { id: 'fact1', text: 'Active fact', isActive: true },
       { id: 'fact2', text: 'Inactive fact', isActive: false },
     ]);
 
@@ -312,10 +316,7 @@ describe('PUT /api/admin/fun-facts/:id', () => {
     });
 
     const app = createApp();
-    const res = await request(app)
-      .put('/api/admin/fun-facts/fact1')
-      .send({})
-      .expect(400);
+    const res = await request(app).put('/api/admin/fun-facts/fact1').send({}).expect(400);
 
     expect(res.body.error).toMatch(/no fields/i);
   });
@@ -348,9 +349,7 @@ describe('DELETE /api/admin/fun-facts/:id', () => {
     });
 
     const app = createApp(false);
-    const res = await request(app)
-      .delete('/api/admin/fun-facts/fact1')
-      .expect(403);
+    const res = await request(app).delete('/api/admin/fun-facts/fact1').expect(403);
 
     expect(res.body.error).toBeDefined();
   });
@@ -359,9 +358,7 @@ describe('DELETE /api/admin/fun-facts/:id', () => {
     mockDocGet.mockResolvedValue({ exists: false });
 
     const app = createApp();
-    const res = await request(app)
-      .delete('/api/admin/fun-facts/nonexistent')
-      .expect(404);
+    const res = await request(app).delete('/api/admin/fun-facts/nonexistent').expect(404);
 
     expect(res.body.error).toMatch(/not found/i);
   });
@@ -373,9 +370,7 @@ describe('DELETE /api/admin/fun-facts/:id', () => {
     });
 
     const app = createApp();
-    const res = await request(app)
-      .delete('/api/admin/fun-facts/fact1')
-      .expect(200);
+    const res = await request(app).delete('/api/admin/fun-facts/fact1').expect(200);
 
     expect(res.body.success).toBe(true);
     expect(mockDoc).toHaveBeenCalledWith('funFacts/fact1');

@@ -17,11 +17,11 @@ const mockCollectionSelectGet = jest.fn();
 const mockWhereGet = jest.fn();
 
 // Chain builder helpers
-function makeSelectChain(get) {
+function _makeSelectChain(get) {
   return { select: jest.fn(() => ({ limit: jest.fn(() => ({ get })) })) };
 }
 
-function makeWhereChain(get) {
+function _makeWhereChain(get) {
   return { where: jest.fn(() => ({ limit: jest.fn(() => ({ get })) })) };
 }
 
@@ -31,10 +31,12 @@ const collectionMocks = {};
 jest.mock('../../src/utils/firebase', () => ({
   db: {
     collection: jest.fn((path) => {
-      return collectionMocks[path] || {
-        select: jest.fn(() => ({ limit: jest.fn(() => ({ get: mockCollectionSelectGet })) })),
-        where: jest.fn(() => ({ limit: jest.fn(() => ({ get: mockWhereGet })) })),
-      };
+      return (
+        collectionMocks[path] || {
+          select: jest.fn(() => ({ limit: jest.fn(() => ({ get: mockCollectionSelectGet })) })),
+          where: jest.fn(() => ({ limit: jest.fn(() => ({ get: mockWhereGet })) })),
+        }
+      );
     }),
   },
 }));
@@ -71,7 +73,7 @@ beforeEach(() => {
   mockListObjects.mockResolvedValue([]);
 
   // Reset per-collection mocks
-  Object.keys(collectionMocks).forEach(k => delete collectionMocks[k]);
+  Object.keys(collectionMocks).forEach((k) => delete collectionMocks[k]);
 });
 
 // ─── Tests ───────────────────────────────────────────────────────
@@ -94,13 +96,17 @@ describe('orphanedStorage cron', () => {
 
     // profiles/ folder has two orphaned objects
     mockListObjects.mockImplementation((folder) => {
-      if (folder === 'profiles/') return Promise.resolve(['profiles/orphan1.jpg', 'profiles/orphan2.jpg']);
+      if (folder === 'profiles/')
+        return Promise.resolve(['profiles/orphan1.jpg', 'profiles/orphan2.jpg']);
       return Promise.resolve([]);
     });
 
     await orphanedStorage();
 
-    expect(mockDeleteObjects).toHaveBeenCalledWith(['profiles/orphan1.jpg', 'profiles/orphan2.jpg']);
+    expect(mockDeleteObjects).toHaveBeenCalledWith([
+      'profiles/orphan1.jpg',
+      'profiles/orphan2.jpg',
+    ]);
   });
 
   test('keeps R2 keys that are referenced as user profilePhotoUrl', async () => {
@@ -108,9 +114,7 @@ describe('orphanedStorage cron', () => {
 
     // users collection returns a user referencing the key
     mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [
-        makeDoc({ profilePhotoUrl: cdnUrl(referencedKey) }),
-      ],
+      docs: [makeDoc({ profilePhotoUrl: cdnUrl(referencedKey) })],
     }));
     mockWhereGet.mockResolvedValue({ docs: [] });
 
@@ -123,9 +127,7 @@ describe('orphanedStorage cron', () => {
     await orphanedStorage();
 
     // Referenced key must NOT be deleted
-    expect(mockDeleteObjects).not.toHaveBeenCalledWith(
-      expect.arrayContaining([referencedKey]),
-    );
+    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([referencedKey]));
   });
 
   test('keeps R2 keys referenced as user coverPhotoUrl', async () => {
@@ -143,9 +145,7 @@ describe('orphanedStorage cron', () => {
 
     await orphanedStorage();
 
-    expect(mockDeleteObjects).not.toHaveBeenCalledWith(
-      expect.arrayContaining([coverKey]),
-    );
+    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([coverKey]));
   });
 
   test('keeps the hardcoded system key regardless of Firestore state', async () => {
@@ -156,7 +156,8 @@ describe('orphanedStorage cron', () => {
     // More realistic: it won't be in a scanned folder, so deleteObjects never called with it.
     // Here we verify the key is in referencedKeys by putting it in a folder we scan.
     mockListObjects.mockImplementation((folder) => {
-      if (folder === 'profiles/') return Promise.resolve(['system/shytalk_icon.webp', 'profiles/orphan.jpg']);
+      if (folder === 'profiles/')
+        return Promise.resolve(['system/shytalk_icon.webp', 'profiles/orphan.jpg']);
       return Promise.resolve([]);
     });
 
@@ -185,9 +186,7 @@ describe('orphanedStorage cron', () => {
 
     await orphanedStorage();
 
-    expect(mockDeleteObjects).not.toHaveBeenCalledWith(
-      expect.arrayContaining([bannerKey]),
-    );
+    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([bannerKey]));
   });
 
   test('keeps R2 keys referenced in report evidenceUrls', async () => {
@@ -205,9 +204,7 @@ describe('orphanedStorage cron', () => {
 
     await orphanedStorage();
 
-    expect(mockDeleteObjects).not.toHaveBeenCalledWith(
-      expect.arrayContaining([evidenceKey]),
-    );
+    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([evidenceKey]));
   });
 
   test('handles R2 folder listing error without crashing', async () => {
@@ -229,9 +226,7 @@ describe('orphanedStorage cron', () => {
 
     // Users reference both keys
     mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [
-        makeDoc({ profilePhotoUrl: cdnUrl(key1), coverPhotoUrl: cdnUrl(key2) }),
-      ],
+      docs: [makeDoc({ profilePhotoUrl: cdnUrl(key1), coverPhotoUrl: cdnUrl(key2) })],
     }));
     mockWhereGet.mockResolvedValue({ docs: [] });
 
@@ -311,7 +306,7 @@ describe('orphanedStorage cron', () => {
 
     await orphanedStorage();
 
-    const folders = mockListObjects.mock.calls.map(call => call[0]);
+    const folders = mockListObjects.mock.calls.map((call) => call[0]);
     expect(folders).toContain('profiles/');
     expect(folders).toContain('covers/');
     expect(folders).toContain('messages/');

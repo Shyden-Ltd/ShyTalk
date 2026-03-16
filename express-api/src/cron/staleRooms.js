@@ -11,25 +11,22 @@ const log = require('../utils/log');
 
 function hasNonOwnerSeated(room) {
   if (!room.seats) return false;
-  return Object.values(room.seats).some(seat =>
-    seat.userId && seat.userId !== room.ownerId && seat.state === 'OCCUPIED'
+  return Object.values(room.seats).some(
+    (seat) => seat.userId && seat.userId !== room.ownerId && seat.state === 'OCCUPIED',
   );
 }
 
 async function staleRooms() {
-  const tenMinutesAgo = Date.now() - (10 * 60 * 1000);
+  const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
 
-  const snapshot = await db.collection('rooms')
-    .where('state', '==', 'OWNER_AWAY')
-    .limit(100)
-    .get();
+  const snapshot = await db.collection('rooms').where('state', '==', 'OWNER_AWAY').limit(100).get();
 
   if (snapshot.empty) return;
 
   // Close immediately if no non-owner seats occupied; otherwise wait 10 minutes
   const toClose = snapshot.docs
-    .map(d => ({ id: d.id, ...d.data() }))
-    .filter(r => {
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((r) => {
       if (!r.ownerLeftAt) return false;
       if (!hasNonOwnerSeated(r)) return true;
       return r.ownerLeftAt < tenMinutesAgo;

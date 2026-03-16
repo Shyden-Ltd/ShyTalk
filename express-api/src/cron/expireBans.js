@@ -14,21 +14,17 @@ async function expireBans() {
   const nowIso = new Date().toISOString();
 
   // Query expired device bans
-  const deviceSnap = await db.collection('deviceBans')
-    .where('expiresAt', '!=', null)
-    .get();
+  const deviceSnap = await db.collection('deviceBans').where('expiresAt', '!=', null).get();
 
-  const expiredDeviceDocs = deviceSnap.docs.filter(d => {
+  const expiredDeviceDocs = deviceSnap.docs.filter((d) => {
     const expiresAt = d.data().expiresAt;
     return expiresAt && expiresAt < nowIso;
   });
 
   // Query expired network bans
-  const networkSnap = await db.collection('networkBans')
-    .where('expiresAt', '!=', null)
-    .get();
+  const networkSnap = await db.collection('networkBans').where('expiresAt', '!=', null).get();
 
-  const expiredNetworkDocs = networkSnap.docs.filter(d => {
+  const expiredNetworkDocs = networkSnap.docs.filter((d) => {
     const expiresAt = d.data().expiresAt;
     return expiresAt && expiresAt < nowIso;
   });

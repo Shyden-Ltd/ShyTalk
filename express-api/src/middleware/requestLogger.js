@@ -10,7 +10,13 @@
 const crypto = require('crypto');
 
 const SENSITIVE_BODY_KEYS = new Set([
-  'password', 'token', 'idtoken', 'accesstoken', 'refreshtoken', 'secret', 'credential',
+  'password',
+  'token',
+  'idtoken',
+  'accesstoken',
+  'refreshtoken',
+  'secret',
+  'credential',
 ]);
 
 /**
@@ -72,7 +78,8 @@ function createRequestLogger(logger) {
             path,
             statusCode,
             durationMs,
-            requestBody: req.body != null ? sanitizeBody(req.body) : null,
+            requestBody:
+              req.body !== null && req.body !== undefined ? sanitizeBody(req.body) : null,
             userAgent: req.headers['user-agent'] || null,
           },
         });

@@ -148,7 +148,7 @@ describe('PATCH /api/admin/alerts/:alertId', () => {
       expect.objectContaining({
         status: 'acknowledged',
         acknowledgedBy: 'admin1',
-      })
+      }),
     );
   });
 
@@ -159,9 +159,7 @@ describe('PATCH /api/admin/alerts/:alertId', () => {
     });
 
     const app = createApp(true);
-    const res = await request(app)
-      .patch('/api/admin/alerts/alert1')
-      .send({ status: 'resolved' });
+    const res = await request(app).patch('/api/admin/alerts/alert1').send({ status: 'resolved' });
 
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
@@ -172,7 +170,7 @@ describe('PATCH /api/admin/alerts/:alertId', () => {
       expect.objectContaining({
         status: 'resolved',
         resolvedBy: 'admin1',
-      })
+      }),
     );
   });
 
@@ -188,9 +186,7 @@ describe('PATCH /api/admin/alerts/:alertId', () => {
 
   test('rejects invalid status (400)', async () => {
     const app = createApp(true);
-    const res = await request(app)
-      .patch('/api/admin/alerts/alert1')
-      .send({ status: 'invalid' });
+    const res = await request(app).patch('/api/admin/alerts/alert1').send({ status: 'invalid' });
 
     expect(res.status).toBe(400);
   });
@@ -221,9 +217,7 @@ describe('PATCH /api/admin/alert-config', () => {
 
   test('rejects empty update (400)', async () => {
     const app = createApp(true);
-    const res = await request(app)
-      .patch('/api/admin/alert-config')
-      .send({ unknownField: 'value' });
+    const res = await request(app).patch('/api/admin/alert-config').send({ unknownField: 'value' });
 
     expect(res.status).toBe(400);
   });

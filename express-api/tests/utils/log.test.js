@@ -62,7 +62,9 @@ describe('log utility', () => {
   });
 
   test('never throws even if logger throws', () => {
-    mockLog.mockImplementation(() => { throw new Error('boom'); });
+    mockLog.mockImplementation(() => {
+      throw new Error('boom');
+    });
     expect(() => log.info('test', 'msg')).not.toThrow();
   });
 });

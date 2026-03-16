@@ -9,7 +9,13 @@
  * - getExtension() — maps a MIME type to a file extension string
  */
 
-const { generateId, now, todayStr, yesterdayStr, getExtension } = require('../../src/utils/helpers');
+const {
+  generateId,
+  now,
+  todayStr,
+  yesterdayStr,
+  getExtension,
+} = require('../../src/utils/helpers');
 
 // ─── generateId ───────────────────────────────────────────────────
 
@@ -66,7 +72,7 @@ describe('now()', () => {
     const result = now();
     // Must be after 2020-01-01 and before 2100-01-01
     expect(result).toBeGreaterThan(1577836800000); // 2020-01-01
-    expect(result).toBeLessThan(4102444800000);    // 2100-01-01
+    expect(result).toBeLessThan(4102444800000); // 2100-01-01
   });
 });
 
@@ -181,8 +187,13 @@ describe('getExtension()', () => {
 
   it('returns a non-empty string for all handled types', () => {
     const types = [
-      'image/png', 'image/webp', 'image/gif', 'image/jpeg',
-      'video/mp4', 'video/quicktime', 'video/webm',
+      'image/png',
+      'image/webp',
+      'image/gif',
+      'image/jpeg',
+      'video/mp4',
+      'video/quicktime',
+      'video/webm',
     ];
     for (const type of types) {
       const ext = getExtension(type);

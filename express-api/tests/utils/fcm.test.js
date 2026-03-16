@@ -58,7 +58,7 @@ describe('sendFcmToTokens', () => {
 
     const result = await sendFcmToTokens(
       ['good', 'expired', 'invalid', 'mismatch', 'bad-arg', 'error'],
-      { type: 'TEST' }
+      { type: 'TEST' },
     );
 
     expect(result).toEqual(['expired', 'invalid', 'mismatch', 'bad-arg']);
@@ -69,9 +69,7 @@ describe('sendFcmToTokens', () => {
     const warnSpy = jest.spyOn(logModule, 'warn').mockImplementation(() => {});
 
     mockSendEachForMulticast.mockResolvedValue({
-      responses: [
-        { error: { code: 'messaging/internal-error', message: 'Server error' } },
-      ],
+      responses: [{ error: { code: 'messaging/internal-error', message: 'Server error' } }],
     });
 
     await sendFcmToTokens(['token-1'], { type: 'TEST' });
@@ -79,7 +77,7 @@ describe('sendFcmToTokens', () => {
     expect(warnSpy).toHaveBeenCalledWith(
       'fcm',
       expect.stringContaining('FCM send failed for token index 0'),
-      expect.objectContaining({ code: 'messaging/internal-error' })
+      expect.objectContaining({ code: 'messaging/internal-error' }),
     );
 
     warnSpy.mockRestore();

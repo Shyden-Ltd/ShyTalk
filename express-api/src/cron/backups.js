@@ -14,9 +14,21 @@ const log = require('../utils/log');
 
 // Top-level collections to back up
 const TOP_LEVEL_COLLECTIONS = [
-  'users', 'rooms', 'conversations', 'deviceBindings', 'gifts',
-  'giftCatalog', 'economyConfig', 'funFacts', 'banners', 'reports',
-  'appeals', 'subscriptions', 'logConfig', 'deviceBans', 'networkBans',
+  'users',
+  'rooms',
+  'conversations',
+  'deviceBindings',
+  'gifts',
+  'giftCatalog',
+  'economyConfig',
+  'funFacts',
+  'banners',
+  'reports',
+  'appeals',
+  'subscriptions',
+  'logConfig',
+  'deviceBans',
+  'networkBans',
 ];
 
 // Subcollections: [parentCollection, subcollectionName]
@@ -32,7 +44,7 @@ const SUBCOLLECTIONS = [
  */
 async function backupCollection(name) {
   const snapshot = await db.collection(name).get();
-  const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+  const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
   return { name, docs, count: docs.length };
 }
 
@@ -89,7 +101,11 @@ async function backups() {
       });
 
       manifest.collections[name] = count;
-      log.info('cron', 'backup: collection saved', { collection: name, docs: count, bytes: jsonStr.length });
+      log.info('cron', 'backup: collection saved', {
+        collection: name,
+        docs: count,
+        bytes: jsonStr.length,
+      });
     } catch (err) {
       log.error('cron', 'backup: collection failed', { collection: collName, error: err.message });
     }
@@ -108,9 +124,16 @@ async function backups() {
       });
 
       manifest.collections[name] = count;
-      log.info('cron', 'backup: subcollection saved', { collection: name, docs: count, bytes: jsonStr.length });
+      log.info('cron', 'backup: subcollection saved', {
+        collection: name,
+        docs: count,
+        bytes: jsonStr.length,
+      });
     } catch (err) {
-      log.error('cron', 'backup: subcollection failed', { collection: `${parent}_${sub}`, error: err.message });
+      log.error('cron', 'backup: subcollection failed', {
+        collection: `${parent}_${sub}`,
+        error: err.message,
+      });
     }
   }
 
@@ -127,7 +150,10 @@ async function backups() {
     userCount: String(usersCount),
     createdAt: new Date().toISOString(),
   });
-  log.info('cron', 'backup: backwards-compat users backup saved', { key: usersKey, users: usersCount });
+  log.info('cron', 'backup: backwards-compat users backup saved', {
+    key: usersKey,
+    users: usersCount,
+  });
 
   // Prune full backups older than 7 days
   await pruneOldBackups('backups/full/');
@@ -146,7 +172,7 @@ async function pruneOldBackups(prefix) {
   const allKeys = await r2.listObjects(prefix);
   const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
-  const toDelete = allKeys.filter(objKey => {
+  const toDelete = allKeys.filter((objKey) => {
     let dateStr;
     if (prefix === 'backups/full/') {
       const parts = objKey.replace(prefix, '').split('/');

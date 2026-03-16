@@ -1,7 +1,7 @@
 const cors = require('cors');
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
   : ['https://shytalk.shyden.co.uk', 'https://api.shytalk.shyden.co.uk'];
 
 module.exports = cors({
@@ -10,7 +10,10 @@ module.exports = cors({
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
     // Allow Cloudflare Pages preview deployments
-    if (origin.endsWith('.shytalk-site-dev.pages.dev') || origin.endsWith('.shytalk-site.pages.dev')) {
+    if (
+      origin.endsWith('.shytalk-site-dev.pages.dev') ||
+      origin.endsWith('.shytalk-site.pages.dev')
+    ) {
       return callback(null, true);
     }
     callback(new Error('Not allowed by CORS'));

@@ -40,7 +40,7 @@ describe('Email Sender', () => {
         to: 'user@example.com',
         subject: 'Test Subject',
         html: '<p>Hello</p>',
-      })
+      }),
     );
   });
 
@@ -48,7 +48,7 @@ describe('Email Sender', () => {
     await sendEmail('different@test.com', 'Subject', '<p>Body</p>');
 
     expect(mockSendMail).toHaveBeenCalledWith(
-      expect.objectContaining({ to: 'different@test.com' })
+      expect.objectContaining({ to: 'different@test.com' }),
     );
   });
 
@@ -56,7 +56,7 @@ describe('Email Sender', () => {
     await sendEmail('a@b.com', 'My Custom Subject', '<p>x</p>');
 
     expect(mockSendMail).toHaveBeenCalledWith(
-      expect.objectContaining({ subject: 'My Custom Subject' })
+      expect.objectContaining({ subject: 'My Custom Subject' }),
     );
   });
 
@@ -64,9 +64,7 @@ describe('Email Sender', () => {
     const html = '<div style="color:red">Important</div>';
     await sendEmail('a@b.com', 'Sub', html);
 
-    expect(mockSendMail).toHaveBeenCalledWith(
-      expect.objectContaining({ html })
-    );
+    expect(mockSendMail).toHaveBeenCalledWith(expect.objectContaining({ html }));
   });
 
   it('should create transport with correct SMTP config', async () => {
@@ -81,7 +79,7 @@ describe('Email Sender', () => {
           user: 'testuser@example.com',
           pass: 'testsecretpass',
         },
-      })
+      }),
     );
   });
 

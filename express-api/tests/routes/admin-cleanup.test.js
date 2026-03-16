@@ -14,7 +14,7 @@ const makeBatch = () => ({
 });
 
 // Each db.doc() call returns a ref with a delete() method
-const mockDocRef = { delete: jest.fn().mockResolvedValue(), ref: { path: 'mock/ref' } };
+const _mockDocRef = { delete: jest.fn().mockResolvedValue(), ref: { path: 'mock/ref' } };
 
 // Flexible collection chain — tests override mockCollectionSnap
 let mockCollectionSnap = { empty: true, docs: [] };
@@ -29,7 +29,7 @@ const makeChain = (snap) => {
   return chain;
 };
 
-const mockCollection = jest.fn().mockImplementation(() => makeChain());
+const _mockCollection = jest.fn().mockImplementation(() => makeChain());
 const mockDoc = jest.fn().mockImplementation(() => ({
   get: jest.fn().mockResolvedValue({ exists: false }),
   update: jest.fn().mockResolvedValue(),
@@ -39,7 +39,7 @@ const mockDoc = jest.fn().mockImplementation(() => ({
 
 jest.mock('../../src/utils/firebase', () => ({
   db: {
-    collection: (...args) => {
+    collection: (..._args) => {
       // Return a fresh chain each call, sharing mockCollectionSnap
       const chain = {
         where: jest.fn().mockImplementation(() => chain),
@@ -79,7 +79,7 @@ jest.mock('../../src/utils/firestore-helpers', () => ({
 
 // ─── Auth middleware mock ─────────────────────────────────────────
 
-const { requireAdmin } = jest.requireActual('../../src/middleware/auth');
+const { requireAdmin: _requireAdmin } = jest.requireActual('../../src/middleware/auth');
 jest.mock('../../src/middleware/auth', () => ({
   requireAdmin: jest.fn((req, res) => {
     if (!req.auth?.token?.admin) {
@@ -163,7 +163,7 @@ const cleanupEndpoints = [
   ['POST', '/api/cleanup/destroyed-users'],
   ['POST', '/api/cleanup/all-device-bindings'],
   ['POST', '/api/cleanup/device-binding/some-unique-id'],
-  ['GET',  '/api/storage/audit'],
+  ['GET', '/api/storage/audit'],
   ['POST', '/api/cleanup/orphaned-storage'],
   ['POST', '/api/cleanup/all-stalkers'],
 ];
@@ -268,7 +268,15 @@ describe('GET /api/storage/audit', () => {
     expect(res.status).toBe(200);
     expect(res.body.folders).toBeDefined();
     // Should have entries for all 7 folders
-    const expectedFolders = ['profiles', 'covers', 'messages', 'groups', 'evidence', 'stickers', 'banners'];
+    const expectedFolders = [
+      'profiles',
+      'covers',
+      'messages',
+      'groups',
+      'evidence',
+      'stickers',
+      'banners',
+    ];
     for (const folder of expectedFolders) {
       expect(res.body.folders).toHaveProperty(folder);
       expect(res.body.folders[folder]).toHaveProperty('count');

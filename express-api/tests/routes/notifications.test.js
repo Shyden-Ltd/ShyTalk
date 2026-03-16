@@ -12,8 +12,8 @@ jest.mock('../../src/utils/firebase', () => ({
     })),
   },
   FieldValue: {
-    arrayUnion: jest.fn(v => `arrayUnion(${v})`),
-    arrayRemove: jest.fn(v => `arrayRemove(${v})`),
+    arrayUnion: jest.fn((v) => `arrayUnion(${v})`),
+    arrayRemove: jest.fn((v) => `arrayRemove(${v})`),
   },
 }));
 
@@ -60,9 +60,7 @@ describe('POST /api/notifications/token', () => {
 
   test('rejects missing token (400)', async () => {
     const app = createApp();
-    const res = await request(app)
-      .post('/api/notifications/token')
-      .send({});
+    const res = await request(app).post('/api/notifications/token').send({});
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/non-empty string/);
@@ -71,9 +69,7 @@ describe('POST /api/notifications/token', () => {
 
   test('rejects null token (400)', async () => {
     const app = createApp();
-    const res = await request(app)
-      .post('/api/notifications/token')
-      .send({ token: null });
+    const res = await request(app).post('/api/notifications/token').send({ token: null });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/non-empty string/);
@@ -82,9 +78,7 @@ describe('POST /api/notifications/token', () => {
 
   test('rejects empty string token (400)', async () => {
     const app = createApp();
-    const res = await request(app)
-      .post('/api/notifications/token')
-      .send({ token: '' });
+    const res = await request(app).post('/api/notifications/token').send({ token: '' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/non-empty string/);
@@ -115,9 +109,7 @@ describe('POST /api/notifications/token', () => {
 
   test('rejects numeric token (400)', async () => {
     const app = createApp();
-    const res = await request(app)
-      .post('/api/notifications/token')
-      .send({ token: 12345 });
+    const res = await request(app).post('/api/notifications/token').send({ token: 12345 });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/non-empty string/);
@@ -145,9 +137,7 @@ describe('DELETE /api/notifications/token', () => {
 
   test('rejects missing token (400)', async () => {
     const app = createApp();
-    const res = await request(app)
-      .delete('/api/notifications/token')
-      .send({});
+    const res = await request(app).delete('/api/notifications/token').send({});
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/non-empty string/);
@@ -167,9 +157,7 @@ describe('DELETE /api/notifications/token', () => {
 
   test('rejects empty string token (400)', async () => {
     const app = createApp();
-    const res = await request(app)
-      .delete('/api/notifications/token')
-      .send({ token: '' });
+    const res = await request(app).delete('/api/notifications/token').send({ token: '' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/non-empty string/);

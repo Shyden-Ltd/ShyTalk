@@ -9,9 +9,10 @@ const { db } = require('../utils/firebase');
 const log = require('../utils/log');
 
 async function archiveReports() {
-  const sixMonthsAgo = Date.now() - (6 * 30 * 24 * 60 * 60 * 1000);
+  const sixMonthsAgo = Date.now() - 6 * 30 * 24 * 60 * 60 * 1000;
 
-  const snapshot = await db.collection('reports')
+  const snapshot = await db
+    .collection('reports')
     .where('status', '==', 'resolved')
     .where('resolvedAt', '<', sixMonthsAgo)
     .limit(500)
@@ -19,7 +20,7 @@ async function archiveReports() {
 
   if (snapshot.empty) return;
 
-  const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+  const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 
   // Process in batches of 250 (each doc = 2 ops: set archive + delete original)
   for (let i = 0; i < docs.length; i += 250) {

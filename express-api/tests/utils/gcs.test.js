@@ -15,7 +15,7 @@ const { computeDisplayScore } = require('../../src/utils/gcs');
 
 /** Returns a timestamp N months in the past (approximated as 30 days/month). */
 function monthsAgo(n) {
-  return Date.now() - (n * 30 * 24 * 60 * 60 * 1000);
+  return Date.now() - n * 30 * 24 * 60 * 60 * 1000;
 }
 
 // ─── Tests ───────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ describe('computeDisplayScore()', () => {
     it('returns a rounded integer (Math.round applied)', () => {
       const floor = 75;
       // Use a non-round number of months to verify rounding
-      const halfMonthAgo = Date.now() - (0.5 * 30 * 24 * 60 * 60 * 1000);
+      const halfMonthAgo = Date.now() - 0.5 * 30 * 24 * 60 * 60 * 1000;
       const score = computeDisplayScore(floor, halfMonthAgo);
       expect(Number.isInteger(score)).toBe(true);
     });
@@ -142,7 +142,7 @@ describe('computeDisplayScore()', () => {
 
     it('handles a floor of 99 (only 1 point below max)', () => {
       // After half a month, recovery = 2 * 0.5 = 1 → 99 + 1 = 100
-      const halfMonthAgo = Date.now() - (0.5 * 30 * 24 * 60 * 60 * 1000);
+      const halfMonthAgo = Date.now() - 0.5 * 30 * 24 * 60 * 60 * 1000;
       const score = computeDisplayScore(99, halfMonthAgo);
       expect(score).toBe(100);
     });

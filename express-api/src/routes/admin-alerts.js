@@ -53,7 +53,9 @@ router.patch('/admin/alerts/:alertId', async (req, res) => {
     const { status } = req.body;
 
     if (!status || !['acknowledged', 'resolved'].includes(status)) {
-      return res.status(400).json({ error: 'Invalid status. Must be "acknowledged" or "resolved".' });
+      return res
+        .status(400)
+        .json({ error: 'Invalid status. Must be "acknowledged" or "resolved".' });
     }
 
     const ref = db.collection('alerts').doc(alertId);
@@ -75,7 +77,10 @@ router.patch('/admin/alerts/:alertId', async (req, res) => {
 
     res.json({ ok: true, alertId, ...update });
   } catch (err) {
-    log.error('admin-alerts', 'Error updating alert', { alertId: req.params.alertId, error: err.message });
+    log.error('admin-alerts', 'Error updating alert', {
+      alertId: req.params.alertId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });

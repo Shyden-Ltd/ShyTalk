@@ -19,7 +19,7 @@ jest.mock('../../src/utils/firebase', () => ({
           get: mockCollectionGet,
         })),
       })),
-      orderBy: jest.fn((...args) => {
+      orderBy: jest.fn((..._args) => {
         // Support chaining: orderBy().limit() for broadcasts
         return {
           get: mockCollectionGet,
@@ -121,9 +121,7 @@ describe('GET /api/config/:key', () => {
 describe('PUT /api/config/:key', () => {
   test('route is reachable (no double /api prefix)', async () => {
     const app = createApp();
-    const res = await request(app)
-      .put('/api/config/app')
-      .send({ minVersionCode: 2 });
+    const res = await request(app).put('/api/config/app').send({ minVersionCode: 2 });
 
     expect(res.status).not.toBe(404);
     expect(res.status).toBe(200);
@@ -132,9 +130,7 @@ describe('PUT /api/config/:key', () => {
 
   test('rejects unknown config keys', async () => {
     const app = createApp();
-    const res = await request(app)
-      .put('/api/config/unknown')
-      .send({ foo: 'bar' });
+    const res = await request(app).put('/api/config/unknown').send({ foo: 'bar' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/Unknown config key/);
@@ -155,9 +151,7 @@ describe('PUT /api/config/:key', () => {
 
   test('returns 400 when no valid fields provided', async () => {
     const app = createApp();
-    const res = await request(app)
-      .put('/api/config/app')
-      .send({ hackerField: 'pwned' });
+    const res = await request(app).put('/api/config/app').send({ hackerField: 'pwned' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/No valid fields/);
@@ -268,9 +262,7 @@ describe('PUT /api/config/economy', () => {
     });
 
     const app = createApp();
-    const res = await request(app)
-      .put('/api/config/economy')
-      .send({ dailyBase: 100 });
+    const res = await request(app).put('/api/config/economy').send({ dailyBase: 100 });
 
     expect(res.status).not.toBe(404);
     expect(res.status).toBe(200);
@@ -279,9 +271,7 @@ describe('PUT /api/config/economy', () => {
 
   test('rejects body with no valid economy fields', async () => {
     const app = createApp();
-    const res = await request(app)
-      .put('/api/config/economy')
-      .send({ invalidField: 'foo' });
+    const res = await request(app).put('/api/config/economy').send({ invalidField: 'foo' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toContain('No valid economy config fields');

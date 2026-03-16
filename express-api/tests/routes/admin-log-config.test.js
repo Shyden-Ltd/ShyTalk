@@ -117,7 +117,7 @@ describe('PATCH /api/admin/log-config', () => {
     expect(db.doc).toHaveBeenCalledWith('logConfig/settings');
     expect(mockSet).toHaveBeenCalledWith(
       { retentionHours: 96, hardCapDaily: 5000 },
-      { merge: true }
+      { merge: true },
     );
   });
 
@@ -131,18 +131,14 @@ describe('PATCH /api/admin/log-config', () => {
 
   test('rejects body with only unknown fields (400)', async () => {
     const app = createApp(true);
-    const res = await request(app)
-      .patch('/api/admin/log-config')
-      .send({ foo: 'bar', baz: 123 });
+    const res = await request(app).patch('/api/admin/log-config').send({ foo: 'bar', baz: 123 });
 
     expect(res.status).toBe(400);
   });
 
   test('rejects non-admin (403)', async () => {
     const app = createApp(false);
-    const res = await request(app)
-      .patch('/api/admin/log-config')
-      .send({ retentionHours: 24 });
+    const res = await request(app).patch('/api/admin/log-config').send({ retentionHours: 24 });
 
     expect(res.status).toBe(403);
     expect(res.body.error).toMatch(/Admin/i);

@@ -51,7 +51,9 @@ jest.mock('../../src/middleware/auth', () => ({
 }));
 
 jest.mock('../../src/utils/r2', () => ({
-  putObject: jest.fn().mockResolvedValue('https://images.shytalk.shyden.co.uk/banners/banner-id_12345.jpg'),
+  putObject: jest
+    .fn()
+    .mockResolvedValue('https://images.shytalk.shyden.co.uk/banners/banner-id_12345.jpg'),
   deleteObject: jest.fn().mockResolvedValue(),
 }));
 
@@ -110,10 +112,26 @@ describe('GET /api/banners/active', () => {
   });
 
   it('returns 200 with active banners when they exist', async () => {
-    const now = 1709913600000;
+    const _now = 1709913600000;
     queryDocs.mockResolvedValueOnce([
-      { id: 'b1', title: 'Summer Sale', imageUrl: 'https://images.shytalk.shyden.co.uk/banners/b1.jpg', isActive: true, sortOrder: 0, startDate: null, endDate: null },
-      { id: 'b2', title: 'New Feature', imageUrl: 'https://images.shytalk.shyden.co.uk/banners/b2.jpg', isActive: true, sortOrder: 1, startDate: null, endDate: null },
+      {
+        id: 'b1',
+        title: 'Summer Sale',
+        imageUrl: 'https://images.shytalk.shyden.co.uk/banners/b1.jpg',
+        isActive: true,
+        sortOrder: 0,
+        startDate: null,
+        endDate: null,
+      },
+      {
+        id: 'b2',
+        title: 'New Feature',
+        imageUrl: 'https://images.shytalk.shyden.co.uk/banners/b2.jpg',
+        isActive: true,
+        sortOrder: 1,
+        startDate: null,
+        endDate: null,
+      },
     ]);
 
     const app = createApp();
@@ -127,7 +145,15 @@ describe('GET /api/banners/active', () => {
     const now = 1709913600000;
     const futureStart = now + 86400000; // +1 day
     queryDocs.mockResolvedValueOnce([
-      { id: 'b-future', title: 'Upcoming', imageUrl: 'img.jpg', isActive: true, sortOrder: 0, startDate: futureStart, endDate: null },
+      {
+        id: 'b-future',
+        title: 'Upcoming',
+        imageUrl: 'img.jpg',
+        isActive: true,
+        sortOrder: 0,
+        startDate: futureStart,
+        endDate: null,
+      },
     ]);
 
     const app = createApp();
@@ -140,7 +166,15 @@ describe('GET /api/banners/active', () => {
     const now = 1709913600000;
     const pastEnd = now - 1; // already expired
     queryDocs.mockResolvedValueOnce([
-      { id: 'b-expired', title: 'Old Event', imageUrl: 'img.jpg', isActive: true, sortOrder: 0, startDate: null, endDate: pastEnd },
+      {
+        id: 'b-expired',
+        title: 'Old Event',
+        imageUrl: 'img.jpg',
+        isActive: true,
+        sortOrder: 0,
+        startDate: null,
+        endDate: pastEnd,
+      },
     ]);
 
     const app = createApp();
@@ -158,8 +192,8 @@ describe('GET /api/banners/active', () => {
         imageUrl: 'img.jpg',
         isActive: true,
         sortOrder: 0,
-        startDate: now - 86400000,  // started yesterday
-        endDate: now + 86400000,    // ends tomorrow
+        startDate: now - 86400000, // started yesterday
+        endDate: now + 86400000, // ends tomorrow
       },
     ]);
 
@@ -224,9 +258,7 @@ describe('POST /api/admin/banners', () => {
 
   it('returns 400 when imageUrl is missing', async () => {
     const app = createApp({ isAdmin: true });
-    const res = await request(app)
-      .post('/api/admin/banners')
-      .send({ title: 'No image banner' });
+    const res = await request(app).post('/api/admin/banners').send({ title: 'No image banner' });
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/imageUrl/i);
   });
@@ -236,15 +268,13 @@ describe('POST /api/admin/banners', () => {
     queryDocs.mockResolvedValueOnce([]);
 
     const app = createApp({ isAdmin: true });
-    const res = await request(app)
-      .post('/api/admin/banners')
-      .send({
-        title: 'Welcome Banner',
-        imageUrl: 'https://images.shytalk.shyden.co.uk/banners/welcome.jpg',
-        actionType: 'URL',
-        actionValue: 'https://shytalk.shyden.co.uk',
-        isActive: true,
-      });
+    const res = await request(app).post('/api/admin/banners').send({
+      title: 'Welcome Banner',
+      imageUrl: 'https://images.shytalk.shyden.co.uk/banners/welcome.jpg',
+      actionType: 'URL',
+      actionValue: 'https://shytalk.shyden.co.uk',
+      isActive: true,
+    });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -260,7 +290,7 @@ describe('POST /api/admin/banners', () => {
         isActive: true,
         sortOrder: 0,
       }),
-      { merge: true }
+      { merge: true },
     );
   });
 
@@ -277,7 +307,7 @@ describe('POST /api/admin/banners', () => {
     expect(mockDocSet).toHaveBeenCalledWith(
       'banners/banner-id',
       expect.objectContaining({ sortOrder: 6 }),
-      { merge: true }
+      { merge: true },
     );
   });
 
@@ -291,8 +321,10 @@ describe('POST /api/admin/banners', () => {
     expect(res.status).toBe(200);
     expect(mockDocSet).toHaveBeenCalledWith(
       'banners/banner-id',
-      expect.objectContaining({ imageUrl: 'https://images.shytalk.shyden.co.uk/banners/snake.jpg' }),
-      { merge: true }
+      expect.objectContaining({
+        imageUrl: 'https://images.shytalk.shyden.co.uk/banners/snake.jpg',
+      }),
+      { merge: true },
     );
   });
 });
@@ -344,7 +376,7 @@ describe('PUT /api/admin/banners/reorder', () => {
     expect(mockBatchSet).toHaveBeenCalledWith(
       expect.anything(), // doc ref
       expect.objectContaining({ sortOrder: 5 }),
-      { merge: true }
+      { merge: true },
     );
   });
 });
@@ -355,18 +387,14 @@ describe('PUT /api/admin/banners/:id', () => {
   it('returns 403 for non-admin', async () => {
     blockAdmin();
     const app = createApp();
-    const res = await request(app)
-      .put('/api/admin/banners/b1')
-      .send({ title: 'Updated' });
+    const res = await request(app).put('/api/admin/banners/b1').send({ title: 'Updated' });
     expect(res.status).toBe(403);
   });
 
   it('returns 404 when banner does not exist', async () => {
     getDoc.mockResolvedValueOnce(null);
     const app = createApp({ isAdmin: true });
-    const res = await request(app)
-      .put('/api/admin/banners/nonexistent')
-      .send({ title: 'Updated' });
+    const res = await request(app).put('/api/admin/banners/nonexistent').send({ title: 'Updated' });
     expect(res.status).toBe(404);
     expect(res.body.error).toMatch(/not found/i);
   });
@@ -374,15 +402,18 @@ describe('PUT /api/admin/banners/:id', () => {
   it('returns 400 when no valid fields are provided', async () => {
     getDoc.mockResolvedValueOnce({ id: 'b1', title: 'Existing Banner' });
     const app = createApp({ isAdmin: true });
-    const res = await request(app)
-      .put('/api/admin/banners/b1')
-      .send({});
+    const res = await request(app).put('/api/admin/banners/b1').send({});
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/no fields/i);
   });
 
   it('returns 200 and updates the banner fields', async () => {
-    getDoc.mockResolvedValueOnce({ id: 'b1', title: 'Old Title', imageUrl: 'old.jpg', isActive: true });
+    getDoc.mockResolvedValueOnce({
+      id: 'b1',
+      title: 'Old Title',
+      imageUrl: 'old.jpg',
+      isActive: true,
+    });
     const app = createApp({ isAdmin: true });
     const res = await request(app)
       .put('/api/admin/banners/b1')
@@ -393,7 +424,7 @@ describe('PUT /api/admin/banners/:id', () => {
 
     expect(mockDocUpdate).toHaveBeenCalledWith(
       'banners/b1',
-      expect.objectContaining({ title: 'New Title', isActive: false })
+      expect.objectContaining({ title: 'New Title', isActive: false }),
     );
   });
 
@@ -407,7 +438,10 @@ describe('PUT /api/admin/banners/:id', () => {
     expect(res.status).toBe(200);
     expect(mockDocUpdate).toHaveBeenCalledWith(
       'banners/b1',
-      expect.objectContaining({ imageUrl: 'https://images.shytalk.shyden.co.uk/new.jpg', actionType: 'ROOM' })
+      expect.objectContaining({
+        imageUrl: 'https://images.shytalk.shyden.co.uk/new.jpg',
+        actionType: 'ROOM',
+      }),
     );
   });
 });
@@ -470,7 +504,10 @@ describe('POST /api/admin/banners/upload', () => {
     const app = createApp();
     const res = await request(app)
       .post('/api/admin/banners/upload')
-      .attach('file', Buffer.from('image data'), { filename: 'banner.jpg', contentType: 'image/jpeg' });
+      .attach('file', Buffer.from('image data'), {
+        filename: 'banner.jpg',
+        contentType: 'image/jpeg',
+      });
     expect(res.status).toBe(403);
   });
 
@@ -486,12 +523,17 @@ describe('POST /api/admin/banners/upload', () => {
   });
 
   it('returns 200 with imageUrl and key after successful upload', async () => {
-    putObject.mockResolvedValueOnce('https://images.shytalk.shyden.co.uk/banners/banner-id_12345.jpg');
+    putObject.mockResolvedValueOnce(
+      'https://images.shytalk.shyden.co.uk/banners/banner-id_12345.jpg',
+    );
 
     const app = createApp({ isAdmin: true });
     const res = await request(app)
       .post('/api/admin/banners/upload')
-      .attach('file', Buffer.from('fake image bytes'), { filename: 'test.jpg', contentType: 'image/jpeg' });
+      .attach('file', Buffer.from('fake image bytes'), {
+        filename: 'test.jpg',
+        contentType: 'image/jpeg',
+      });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -502,29 +544,39 @@ describe('POST /api/admin/banners/upload', () => {
     expect(putObject).toHaveBeenCalledWith(
       expect.stringMatching(/^banners\/.+\.jpg$/),
       expect.any(Buffer),
-      'image/jpeg'
+      'image/jpeg',
     );
   });
 
   it('uses correct file extension for PNG uploads', async () => {
-    putObject.mockResolvedValueOnce('https://images.shytalk.shyden.co.uk/banners/banner-id_12345.png');
+    putObject.mockResolvedValueOnce(
+      'https://images.shytalk.shyden.co.uk/banners/banner-id_12345.png',
+    );
 
     const app = createApp({ isAdmin: true });
     const res = await request(app)
       .post('/api/admin/banners/upload')
-      .attach('file', Buffer.from('png data'), { filename: 'banner.png', contentType: 'image/png' });
+      .attach('file', Buffer.from('png data'), {
+        filename: 'banner.png',
+        contentType: 'image/png',
+      });
 
     expect(res.status).toBe(200);
     expect(res.body.key).toMatch(/\.png$/);
   });
 
   it('uses correct file extension for WebP uploads', async () => {
-    putObject.mockResolvedValueOnce('https://images.shytalk.shyden.co.uk/banners/banner-id_12345.webp');
+    putObject.mockResolvedValueOnce(
+      'https://images.shytalk.shyden.co.uk/banners/banner-id_12345.webp',
+    );
 
     const app = createApp({ isAdmin: true });
     const res = await request(app)
       .post('/api/admin/banners/upload')
-      .attach('file', Buffer.from('webp data'), { filename: 'banner.webp', contentType: 'image/webp' });
+      .attach('file', Buffer.from('webp data'), {
+        filename: 'banner.webp',
+        contentType: 'image/webp',
+      });
 
     expect(res.status).toBe(200);
     expect(res.body.key).toMatch(/\.webp$/);

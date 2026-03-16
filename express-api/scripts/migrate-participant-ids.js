@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * One-time migration: convert participantIds from strings to numbers
  * in all conversation documents.
@@ -26,16 +27,18 @@ async function migrateParticipantIds(db) {
       continue;
     }
 
-    const hasStringIds = ids.some(id => typeof id === 'string');
+    const hasStringIds = ids.some((id) => typeof id === 'string');
     if (!hasStringIds) {
       skipped++;
       continue;
     }
 
-    const numericIds = ids.map(id => {
-      const num = Number(id);
-      return Number.isFinite(num) ? num : id;
-    }).sort((a, b) => a - b);
+    const numericIds = ids
+      .map((id) => {
+        const num = Number(id);
+        return Number.isFinite(num) ? num : id;
+      })
+      .sort((a, b) => a - b);
 
     batch.push({ ref: doc.ref, numericIds });
     migrated++;
@@ -58,11 +61,13 @@ async function migrateParticipantIds(db) {
 if (require.main === module) {
   const { db } = require('../src/utils/firebase');
   migrateParticipantIds(db)
-    .then(result => {
-      console.log(`Migration complete: ${result.migrated} migrated, ${result.skipped} skipped (${result.total} total)`);
+    .then((result) => {
+      console.log(
+        `Migration complete: ${result.migrated} migrated, ${result.skipped} skipped (${result.total} total)`,
+      );
       process.exit(0);
     })
-    .catch(err => {
+    .catch((err) => {
       console.error('Migration failed:', err);
       process.exit(1);
     });

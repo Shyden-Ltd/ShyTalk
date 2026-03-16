@@ -437,10 +437,7 @@ describe('Flow: Cross-project sign-in', () => {
     expect(store.docs[`users/${uniqueId}`].firebaseUid).toBe('firebase-uid-project-B');
 
     // Verify custom claims were set for project B's UID
-    expect(mockSetCustomUserClaims).toHaveBeenCalledWith(
-      'firebase-uid-project-B',
-      { uniqueId },
-    );
+    expect(mockSetCustomUserClaims).toHaveBeenCalledWith('firebase-uid-project-B', { uniqueId });
   });
 });
 
@@ -518,7 +515,7 @@ describe('Flow: Multiple users — identity isolation', () => {
   test('user cannot link identity that belongs to another user', async () => {
     // Create user 1
     const app1 = createApp('firebase-uid-user1', null);
-    const res1 = await request(app1)
+    const _res1 = await request(app1)
       .post('/api/users')
       .send({
         provider: 'google',

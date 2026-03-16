@@ -113,86 +113,72 @@ describe('PATCH /api/user/:uniqueId — system messages', () => {
   });
 
   it('should send system PM when displayName is updated', async () => {
-    const res = await request(app)
-      .patch('/api/user/user-1')
-      .send({ displayName: 'NewName' });
+    const res = await request(app).patch('/api/user/user-1').send({ displayName: 'NewName' });
 
     expect(res.status).toBe(200);
     expect(mockSendSystemPm).toHaveBeenCalledWith(
       'user-1',
-      'Your display name was updated by a moderator.'
+      'Your display name was updated by a moderator.',
     );
   });
 
   it('should send system PM when profilePhotoUrl is cleared', async () => {
-    const res = await request(app)
-      .patch('/api/user/user-1')
-      .send({ profilePhotoUrl: '' });
+    const res = await request(app).patch('/api/user/user-1').send({ profilePhotoUrl: '' });
 
     expect(res.status).toBe(200);
     expect(mockSendSystemPm).toHaveBeenCalledWith(
       'user-1',
-      'Your profile photo was removed by a moderator.'
+      'Your profile photo was removed by a moderator.',
     );
   });
 
   it('should send system PM when profilePhotoUrl is set to null', async () => {
-    const res = await request(app)
-      .patch('/api/user/user-1')
-      .send({ profilePhotoUrl: null });
+    const res = await request(app).patch('/api/user/user-1').send({ profilePhotoUrl: null });
 
     expect(res.status).toBe(200);
     expect(mockSendSystemPm).toHaveBeenCalledWith(
       'user-1',
-      'Your profile photo was removed by a moderator.'
+      'Your profile photo was removed by a moderator.',
     );
   });
 
   it('should send system PM when coverPhotoUrl is cleared', async () => {
-    const res = await request(app)
-      .patch('/api/user/user-1')
-      .send({ coverPhotoUrl: '' });
+    const res = await request(app).patch('/api/user/user-1').send({ coverPhotoUrl: '' });
 
     expect(res.status).toBe(200);
     expect(mockSendSystemPm).toHaveBeenCalledWith(
       'user-1',
-      'Your cover photo was removed by a moderator.'
+      'Your cover photo was removed by a moderator.',
     );
   });
 
   it('should send system PM when description is cleared', async () => {
-    const res = await request(app)
-      .patch('/api/user/user-1')
-      .send({ description: '' });
+    const res = await request(app).patch('/api/user/user-1').send({ description: '' });
 
     expect(res.status).toBe(200);
     expect(mockSendSystemPm).toHaveBeenCalledWith(
       'user-1',
-      'Your profile description was cleared by a moderator.'
+      'Your profile description was cleared by a moderator.',
     );
   });
 
   it('should send system PM when isSuperShy is activated', async () => {
-    const res = await request(app)
-      .patch('/api/user/user-1')
-      .send({ isSuperShy: true });
+    const res = await request(app).patch('/api/user/user-1').send({ isSuperShy: true });
 
     expect(res.status).toBe(200);
     expect(mockSendSystemPm).toHaveBeenCalledWith(
       'user-1',
-      'Super Shy has been activated on your account.'
+      'Super Shy has been activated on your account.',
     );
   });
 
   it('should send system PM when isSuperShy is deactivated', async () => {
-    const res = await request(app)
-      .patch('/api/user/user-1')
-      .send({ isSuperShy: false });
+    const res = await request(app).patch('/api/user/user-1').send({ isSuperShy: false });
 
     expect(res.status).toBe(200);
     expect(mockSendSystemPm).toHaveBeenCalledWith(
       'user-1',
-      'Super Shy has been removed from your account.'
+      'Super Shy has been removed from your account.',
     );
   });
 
@@ -204,7 +190,7 @@ describe('PATCH /api/user/:uniqueId — system messages', () => {
     expect(res.status).toBe(200);
     expect(mockSendSystemPm).toHaveBeenCalledWith(
       'user-1',
-      'Your Super Shy expiry date has been updated.'
+      'Your Super Shy expiry date has been updated.',
     );
   });
 
@@ -218,9 +204,7 @@ describe('PATCH /api/user/:uniqueId — system messages', () => {
   });
 
   it('should not send PM for non-user-visible fields like gender', async () => {
-    const res = await request(app)
-      .patch('/api/user/user-1')
-      .send({ gender: 'other' });
+    const res = await request(app).patch('/api/user/user-1').send({ gender: 'other' });
 
     expect(res.status).toBe(200);
     expect(mockSendSystemPm).not.toHaveBeenCalled();
@@ -229,9 +213,7 @@ describe('PATCH /api/user/:uniqueId — system messages', () => {
   it('should not fail the PATCH if sendSystemPm throws', async () => {
     mockSendSystemPm.mockRejectedValue(new Error('PM service down'));
 
-    const res = await request(app)
-      .patch('/api/user/user-1')
-      .send({ displayName: 'CrashTest' });
+    const res = await request(app).patch('/api/user/user-1').send({ displayName: 'CrashTest' });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -260,12 +242,16 @@ describe('POST /api/user/:uid/suspend — system message', () => {
   it('should send suspension system PM with reason', async () => {
     const res = await request(app)
       .post('/api/user/user-1/suspend')
-      .send({ reason: 'Spamming', canAppeal: true, endDate: new Date(Date.now() + 86400000).toISOString() });
+      .send({
+        reason: 'Spamming',
+        canAppeal: true,
+        endDate: new Date(Date.now() + 86400000).toISOString(),
+      });
 
     expect(res.status).toBe(200);
     expect(mockSendSystemPm).toHaveBeenCalledWith(
       'user-1',
-      'Your account has been suspended. Reason: Spamming'
+      'Your account has been suspended. Reason: Spamming',
     );
   });
 });
@@ -288,14 +274,12 @@ describe('POST /api/user/:uid/unsuspend — system message', () => {
   });
 
   it('should send unsuspension system PM', async () => {
-    const res = await request(app)
-      .post('/api/user/user-1/unsuspend')
-      .send({});
+    const res = await request(app).post('/api/user/user-1/unsuspend').send({});
 
     expect(res.status).toBe(200);
     expect(mockSendSystemPm).toHaveBeenCalledWith(
       'user-1',
-      'Your account suspension has been lifted.'
+      'Your account suspension has been lifted.',
     );
   });
 });
@@ -325,7 +309,7 @@ describe('POST /api/users/:uniqueId/adjust-balance — system message', () => {
     expect(res.status).toBe(200);
     expect(mockSendSystemPm).toHaveBeenCalledWith(
       'user-1',
-      '50 Shy Coins were added to your account.'
+      '50 Shy Coins were added to your account.',
     );
   });
 
@@ -342,7 +326,7 @@ describe('POST /api/users/:uniqueId/adjust-balance — system message', () => {
     expect(res.status).toBe(200);
     expect(mockSendSystemPm).toHaveBeenCalledWith(
       'user-1',
-      '80 Shy Beans were deducted from your account.'
+      '80 Shy Beans were deducted from your account.',
     );
   });
 
@@ -359,7 +343,7 @@ describe('POST /api/users/:uniqueId/adjust-balance — system message', () => {
     expect(res.status).toBe(200);
     expect(mockSendSystemPm).toHaveBeenCalledWith(
       'user-1',
-      '100 Shy Coins were deducted from your account.'
+      '100 Shy Coins were deducted from your account.',
     );
   });
 
@@ -399,7 +383,7 @@ describe('POST /api/admin/bans/device — system message', () => {
     expect(res.status).toBe(200);
     expect(mockSendSystemPm).toHaveBeenCalledWith(
       'user-1',
-      'A restriction has been placed on your account.'
+      'A restriction has been placed on your account.',
     );
   });
 
@@ -433,7 +417,7 @@ describe('POST /api/admin/bans/network — system message', () => {
     expect(res.status).toBe(200);
     expect(mockSendSystemPm).toHaveBeenCalledWith(
       'user-1',
-      'A restriction has been placed on your account.'
+      'A restriction has been placed on your account.',
     );
   });
 });
@@ -455,14 +439,12 @@ describe('POST /api/admin/bans/unban-all/:userId — system message', () => {
     const mockDoc = { ref: { delete: jest.fn().mockResolvedValue() } };
     mockCollectionGet.mockResolvedValue({ docs: [mockDoc] });
 
-    const res = await request(app)
-      .post('/api/admin/bans/unban-all/user-1')
-      .send({});
+    const res = await request(app).post('/api/admin/bans/unban-all/user-1').send({});
 
     expect(res.status).toBe(200);
     expect(mockSendSystemPm).toHaveBeenCalledWith(
       'user-1',
-      'A restriction on your account has been lifted.'
+      'A restriction on your account has been lifted.',
     );
   });
 });
@@ -485,13 +467,12 @@ describe('DELETE /api/admin/devices/:deviceId — system message', () => {
       data: () => ({ uniqueId: 'user-1', manufacturer: 'Samsung' }),
     });
 
-    const res = await request(app)
-      .delete('/api/admin/devices/dev-123');
+    const res = await request(app).delete('/api/admin/devices/dev-123');
 
     expect(res.status).toBe(200);
     expect(mockSendSystemPm).toHaveBeenCalledWith(
       'user-1',
-      'Your device binding has been reset by a moderator.'
+      'Your device binding has been reset by a moderator.',
     );
   });
 
@@ -502,8 +483,7 @@ describe('DELETE /api/admin/devices/:deviceId — system message', () => {
     });
     mockSendSystemPm.mockRejectedValue(new Error('PM down'));
 
-    const res = await request(app)
-      .delete('/api/admin/devices/dev-123');
+    const res = await request(app).delete('/api/admin/devices/dev-123');
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -515,8 +495,7 @@ describe('DELETE /api/admin/devices/:deviceId — system message', () => {
       data: () => ({ manufacturer: 'Samsung' }),
     });
 
-    const res = await request(app)
-      .delete('/api/admin/devices/dev-123');
+    const res = await request(app).delete('/api/admin/devices/dev-123');
 
     expect(res.status).toBe(200);
     expect(mockSendSystemPm).not.toHaveBeenCalled();

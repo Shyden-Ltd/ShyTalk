@@ -53,7 +53,7 @@ function makeReportDoc(id, overrides = {}) {
       reporterId: 'user-xyz',
       reason: 'spam',
       status: 'resolved',
-      resolvedAt: Date.now() - (7 * 30 * 24 * 60 * 60 * 1000), // 7 months ago
+      resolvedAt: Date.now() - 7 * 30 * 24 * 60 * 60 * 1000, // 7 months ago
       ...overrides,
     }),
   };
@@ -155,7 +155,7 @@ describe('archiveReports', () => {
         reporterId: 'user-good',
         reason: 'harassment',
         status: 'resolved',
-        resolvedAt: Date.now() - (7 * 30 * 24 * 60 * 60 * 1000),
+        resolvedAt: Date.now() - 7 * 30 * 24 * 60 * 60 * 1000,
       };
       const doc1 = {
         id: 'report-x',
@@ -193,7 +193,7 @@ describe('archiveReports', () => {
       expect(log.info).toHaveBeenCalledWith(
         'cron',
         'archiveReports: archived old reports',
-        expect.objectContaining({ count: 3 })
+        expect.objectContaining({ count: 3 }),
       );
     });
   });
@@ -225,7 +225,10 @@ describe('archiveReports', () => {
       // are never returned. This test validates the query is built correctly.
       const queryChain = {
         whereArgs: [],
-        where: jest.fn(function (...args) { this.whereArgs.push(args); return this; }),
+        where: jest.fn(function (...args) {
+          this.whereArgs.push(args);
+          return this;
+        }),
         limit: jest.fn().mockReturnThis(),
         get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
       };
@@ -234,7 +237,7 @@ describe('archiveReports', () => {
       await archiveReports();
 
       // Confirm the query filtered on status = resolved
-      const statusFilter = queryChain.whereArgs.find(args => args[0] === 'status');
+      const statusFilter = queryChain.whereArgs.find((args) => args[0] === 'status');
       expect(statusFilter).toBeDefined();
       expect(statusFilter[1]).toBe('==');
       expect(statusFilter[2]).toBe('resolved');

@@ -13,6 +13,7 @@ patchConsole();
 
 // Catch unhandled promise rejections (e.g., fire-and-forget in cron jobs)
 process.on('unhandledRejection', (reason) => {
+  // eslint-disable-next-line no-console
   console.error('Unhandled promise rejection:', reason);
 });
 
@@ -39,7 +40,8 @@ app.use('/api', require('./routes/auth'));
 
 // Auth middleware for all /api routes (except health, log-config, and auth)
 app.use('/api', (req, res, next) => {
-  if (req.path === '/health' || req.path === '/log-config' || req.path.startsWith('/auth/')) return next();
+  if (req.path === '/health' || req.path === '/log-config' || req.path.startsWith('/auth/'))
+    return next();
   authMiddleware(req, res, next);
 });
 
@@ -103,13 +105,22 @@ app.use((req, res) => {
 });
 
 // Error handler
-app.use((err, req, res, next) => {
-  logger.log({ level: 'ERROR', source: 'server', message: 'Unhandled error', error: err.message, stack: err.stack, path: req.path, method: req.method });
+app.use((err, req, res, _next) => {
+  logger.log({
+    level: 'ERROR',
+    source: 'server',
+    message: 'Unhandled error',
+    error: err.message,
+    stack: err.stack,
+    path: req.path,
+    method: req.method,
+  });
   res.status(500).json({ error: 'Internal server error' });
 });
 
 // Start server
 app.listen(PORT, () => {
+  // eslint-disable-next-line no-console
   console.log(`ShyTalk API listening on port ${PORT}`);
   startCronJobs();
 });

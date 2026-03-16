@@ -22,8 +22,8 @@ function logEntry(level, source, message, context) {
 
 module.exports = {
   debug: (source, message, context) => logEntry('DEBUG', source, message, context),
-  info:  (source, message, context) => logEntry('INFO',  source, message, context),
-  warn:  (source, message, context) => logEntry('WARN',  source, message, context),
+  info: (source, message, context) => logEntry('INFO', source, message, context),
+  warn: (source, message, context) => logEntry('WARN', source, message, context),
   error: (source, message, context) => logEntry('ERROR', source, message, context),
   fatal: (source, message, context) => logEntry('FATAL', source, message, context),
 };

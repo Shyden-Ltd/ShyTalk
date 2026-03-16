@@ -47,10 +47,10 @@ const r2 = require('../../src/utils/r2');
 function makeSnapshot(docs) {
   return {
     empty: docs.length === 0,
-    docs: docs.map(d => ({
+    docs: docs.map((d) => ({
       id: d.id,
       data: () => {
-        const { id, ...rest } = d;
+        const { id: _id, ...rest } = d;
         return rest;
       },
       ref: { path: `col/${d.id}` },
@@ -76,11 +76,11 @@ describe('backups cron', () => {
 
     // Check that all top-level collections have backup files
     const topLevelKeys = putCalls
-      .map(c => c[0])
-      .filter(k => k.startsWith('backups/full/') && !k.endsWith('manifest.json'));
+      .map((c) => c[0])
+      .filter((k) => k.startsWith('backups/full/') && !k.endsWith('manifest.json'));
 
     for (const collName of backups.TOP_LEVEL_COLLECTIONS) {
-      const found = topLevelKeys.some(k => k.endsWith(`/${collName}.json`));
+      const found = topLevelKeys.some((k) => k.endsWith(`/${collName}.json`));
       expect(found).toBe(true);
     }
   });
@@ -88,16 +88,16 @@ describe('backups cron', () => {
   test('backs up subcollections with parentId', async () => {
     // For rooms collection, return one parent doc
     const roomDoc = { id: 'room1', name: 'Test Room' };
-    const roomSnapshot = makeSnapshot([roomDoc]);
+    const _roomSnapshot = makeSnapshot([roomDoc]);
 
     // For subcollection, return one message
     const msgDoc = { id: 'msg1', text: 'Hello' };
-    const msgSnapshot = makeSnapshot([msgDoc]);
+    const _msgSnapshot = makeSnapshot([msgDoc]);
 
     // We need to track which collection is being queried
-    let getCallCount = 0;
+    let _getCallCount = 0;
     mockGet.mockImplementation(() => {
-      getCallCount++;
+      _getCallCount++;
       // The rooms collection get (called multiple times for top-level + subcollection parents)
       // Return room doc for rooms, empty for everything else
       // This is tricky with the flat mock, so we return non-empty for some calls
@@ -110,10 +110,10 @@ describe('backups cron', () => {
     await backups();
 
     // Verify subcollection backup files are created
-    const putKeys = r2.putObject.mock.calls.map(c => c[0]);
-    expect(putKeys.some(k => k.endsWith('/rooms_messages.json'))).toBe(true);
-    expect(putKeys.some(k => k.endsWith('/rooms_seatRequests.json'))).toBe(true);
-    expect(putKeys.some(k => k.endsWith('/conversations_messages.json'))).toBe(true);
+    const putKeys = r2.putObject.mock.calls.map((c) => c[0]);
+    expect(putKeys.some((k) => k.endsWith('/rooms_messages.json'))).toBe(true);
+    expect(putKeys.some((k) => k.endsWith('/rooms_seatRequests.json'))).toBe(true);
+    expect(putKeys.some((k) => k.endsWith('/conversations_messages.json'))).toBe(true);
   });
 
   test('creates manifest with doc counts', async () => {
@@ -135,7 +135,7 @@ describe('backups cron', () => {
     await backups();
 
     // Find the manifest putObject call
-    const manifestCall = r2.putObject.mock.calls.find(c => c[0].endsWith('/manifest.json'));
+    const manifestCall = r2.putObject.mock.calls.find((c) => c[0].endsWith('/manifest.json'));
     expect(manifestCall).toBeDefined();
 
     const manifestBody = JSON.parse(manifestCall[1].toString());
@@ -153,7 +153,8 @@ describe('backups cron', () => {
 
     // Use dynamic dates relative to today to avoid test rot
     const today = new Date();
-    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
     const recentDate = yesterday.toISOString().split('T')[0];
 
     const oldFullKey = 'backups/full/2020-01-01/users.json';
@@ -174,7 +175,7 @@ describe('backups cron', () => {
     await backups();
 
     // Bulk delete should include old keys but not recent ones
-    const allDeletedKeys = r2.deleteObjects.mock.calls.flatMap(c => c[0]);
+    const allDeletedKeys = r2.deleteObjects.mock.calls.flatMap((c) => c[0]);
     expect(allDeletedKeys).toContain(oldFullKey);
     expect(allDeletedKeys).toContain(oldUsersKey);
     expect(allDeletedKeys).not.toContain(recentFullKey);
@@ -192,7 +193,7 @@ describe('backups cron', () => {
     expect(putCalls.length).toBeGreaterThan(0);
 
     // Check that empty collection files contain "[]"
-    const usersCall = putCalls.find(c => c[0].match(/backups\/full\/.*\/users\.json$/));
+    const usersCall = putCalls.find((c) => c[0].match(/backups\/full\/.*\/users\.json$/));
     expect(usersCall).toBeDefined();
     const parsed = JSON.parse(usersCall[1].toString());
     expect(parsed).toEqual([]);
@@ -203,7 +204,7 @@ describe('backups cron', () => {
 
     await backups();
 
-    const legacyCall = r2.putObject.mock.calls.find(c => c[0].match(/^backups\/users\//));
+    const legacyCall = r2.putObject.mock.calls.find((c) => c[0].match(/^backups\/users\//));
     expect(legacyCall).toBeDefined();
     expect(legacyCall[0]).toMatch(/^backups\/users\/\d{4}-\d{2}-\d{2}\.json$/);
   });

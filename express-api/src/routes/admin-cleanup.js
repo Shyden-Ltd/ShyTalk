@@ -49,9 +49,9 @@ async function deleteConversation(convId) {
   ]);
 
   const allDocs = [
-    ...messages.map(m => `conversations/${convId}/messages/${m.id}`),
-    ...userSettings.map(s => `conversations/${convId}/userSettings/${s.id}`),
-    ...mutes.map(m => `conversations/${convId}/mutes/${m.id}`),
+    ...messages.map((m) => `conversations/${convId}/messages/${m.id}`),
+    ...userSettings.map((s) => `conversations/${convId}/userSettings/${s.id}`),
+    ...mutes.map((m) => `conversations/${convId}/mutes/${m.id}`),
     `conversations/${convId}`,
   ];
 
@@ -74,8 +74,8 @@ async function deleteRoom(roomId) {
   ]);
 
   const allDocs = [
-    ...messages.map(m => `rooms/${roomId}/messages/${m.id}`),
-    ...seatRequests.map(s => `rooms/${roomId}/seatRequests/${s.id}`),
+    ...messages.map((m) => `rooms/${roomId}/messages/${m.id}`),
+    ...seatRequests.map((s) => `rooms/${roomId}/seatRequests/${s.id}`),
     `rooms/${roomId}`,
   ];
 
@@ -115,19 +115,22 @@ router.post('/cleanup/system-conversations', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
-    log.info('admin-cleanup', 'Deleting duplicate system conversations', { adminId: req.auth.uniqueId });
+    log.info('admin-cleanup', 'Deleting duplicate system conversations', {
+      adminId: req.auth.uniqueId,
+    });
 
-    const snap = await db.collection('conversations')
+    const snap = await db
+      .collection('conversations')
       .where('participantIds', 'array-contains', 'SHYTALK_SYSTEM')
       .get();
-    const systemConvs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const systemConvs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
     let deleted = 0;
     const seen = new Map(); // recipientUid → first conversation id
 
     for (const conv of systemConvs) {
       const participantIds = conv.participantIds || [];
-      const otherUid = participantIds.find(id => id !== 'SHYTALK_SYSTEM');
+      const otherUid = participantIds.find((id) => id !== 'SHYTALK_SYSTEM');
       if (!otherUid) continue;
 
       const expectedId = [otherUid, 'SHYTALK_SYSTEM'].sort().join('_');
@@ -160,10 +163,11 @@ router.post('/cleanup/all-system-conversations', async (req, res) => {
 
     log.info('admin-cleanup', 'Deleting all system conversations', { adminId: req.auth.uniqueId });
 
-    const snap = await db.collection('conversations')
+    const snap = await db
+      .collection('conversations')
       .where('participantIds', 'array-contains', 'SHYTALK_SYSTEM')
       .get();
-    const systemConvs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const systemConvs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
     for (const conv of systemConvs) {
       await deleteConversation(conv.id);
@@ -194,9 +198,9 @@ router.post('/cleanup/all-reports', async (req, res) => {
     ]);
 
     const allDocs = [
-      ...reports.map(d => `reports/${d.id}`),
-      ...reportsArchive.map(d => `reportsArchive/${d.id}`),
-      ...reportLocks.map(d => `reportLocks/${d.id}`),
+      ...reports.map((d) => `reports/${d.id}`),
+      ...reportsArchive.map((d) => `reportsArchive/${d.id}`),
+      ...reportLocks.map((d) => `reportLocks/${d.id}`),
     ];
 
     for (let i = 0; i < allDocs.length; i += 500) {
@@ -227,8 +231,8 @@ router.post('/cleanup/all-warnings', async (req, res) => {
     ]);
 
     const allIds = new Set([
-      ...usersSnap.docs.map(d => d.id),
-      ...activeSnap.docs.map(d => d.id),
+      ...usersSnap.docs.map((d) => d.id),
+      ...activeSnap.docs.map((d) => d.id),
     ]);
 
     const uids = Array.from(allIds);
@@ -236,13 +240,13 @@ router.post('/cleanup/all-warnings', async (req, res) => {
       const batch = db.batch();
       for (const uid of uids.slice(i, i + 500)) {
         batch.update(db.doc(`users/${uid}`), {
-          gcsScore:           100,
+          gcsScore: 100,
           gcsLastDeductionAt: null,
-          warningCount:       0,
-          hasActiveWarning:   false,
-          hasNewWarning:      false,
-          warningReason:      null,
-          warningIssuedAt:    null,
+          warningCount: 0,
+          hasActiveWarning: false,
+          hasNewWarning: false,
+          warningReason: null,
+          warningIssuedAt: null,
         });
       }
       await batch.commit();
@@ -263,7 +267,7 @@ router.post('/cleanup/all-backpacks', async (req, res) => {
     log.info('admin-cleanup', 'Clearing all backpacks', { adminId: req.auth.uniqueId });
 
     const usersSnap = await db.collection('users').orderBy('uid').get();
-    const users = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const users = usersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
     let deleted = 0;
     for (const user of users) {
@@ -297,7 +301,7 @@ router.post('/cleanup/all-giftwalls', async (req, res) => {
     log.info('admin-cleanup', 'Clearing all gift walls', { adminId: req.auth.uniqueId });
 
     const usersSnap = await db.collection('users').orderBy('uid').get();
-    const users = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const users = usersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
     let deleted = 0;
     for (const user of users) {
@@ -394,12 +398,13 @@ router.post('/cleanup/all-spin-history', async (req, res) => {
 
     // Delete GACHA_PULL transactions from every user's transactions subcollection
     const usersSnap = await db.collection('users').orderBy('uid').get();
-    const users = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const users = usersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
     let txDeleted = 0;
     for (const user of users) {
       const uid = user.uid ?? user.id;
-      const txSnap = await db.collection(`users/${uid}/transactions`)
+      const txSnap = await db
+        .collection(`users/${uid}/transactions`)
         .where('type', '==', 'GACHA_PULL')
         .get();
       if (txSnap.empty) continue;
@@ -436,10 +441,10 @@ router.post('/cleanup/all-supershy', async (req, res) => {
       const batch = db.batch();
       for (const doc of docs.slice(i, i + 500)) {
         batch.update(doc.ref, {
-          isSuperShy:               false,
-          superShyExpiry:           null,
-          superShyTier:             null,
-          hasClaimedSuperShyTrial:  false,
+          isSuperShy: false,
+          superShyExpiry: null,
+          superShyTier: null,
+          hasClaimedSuperShyTrial: false,
         });
       }
       await batch.commit();
@@ -460,7 +465,7 @@ router.post('/cleanup/all-transactions', async (req, res) => {
     log.info('admin-cleanup', 'Deleting all transactions', { adminId: req.auth.uniqueId });
 
     const usersSnap = await db.collection('users').orderBy('uid').get();
-    const users = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const users = usersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
     let deleted = 0;
     for (const user of users) {
@@ -519,8 +524,8 @@ router.post('/cleanup/backfill-user-type', async (req, res) => {
     log.info('admin-cleanup', 'Backfilling userType', { adminId: req.auth.uniqueId });
 
     const snap = await db.collection('users').limit(5000).get();
-    const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const missing = users.filter(u => !u.userType && !u.user_type);
+    const users = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const missing = users.filter((u) => !u.userType && !u.user_type);
 
     if (missing.length === 0) {
       return res.json({ success: true, updated: 0, message: 'All users already have a userType' });
@@ -549,11 +554,16 @@ router.post('/cleanup/all-private-messages', async (req, res) => {
     log.info('admin-cleanup', 'Deleting all private messages', { adminId: req.auth.uniqueId });
 
     const snap = await db.collection('conversations').limit(5000).get();
-    const allConvs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const pms = allConvs.filter(c => !c.isGroup);
+    const allConvs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const pms = allConvs.filter((c) => !c.isGroup);
 
     if (pms.length === 0) {
-      return res.json({ success: true, deleted: 0, mediaDeleted: 0, message: 'No private messages found' });
+      return res.json({
+        success: true,
+        deleted: 0,
+        mediaDeleted: 0,
+        message: 'No private messages found',
+      });
     }
 
     const CDN_PREFIX = 'https://images.shytalk.shyden.co.uk/';
@@ -566,7 +576,15 @@ router.post('/cleanup/all-private-messages', async (req, res) => {
         const urls = msg.imageUrls || [];
         for (const url of urls) {
           if (url && url.startsWith(CDN_PREFIX)) {
-            try { await r2.deleteObject(url.slice(CDN_PREFIX.length)); mediaDeleted++; } catch (err) { log.warn('admin-cleanup', 'R2 delete failed', { key: url.slice(CDN_PREFIX.length), error: err.message }); }
+            try {
+              await r2.deleteObject(url.slice(CDN_PREFIX.length));
+              mediaDeleted++;
+            } catch (err) {
+              log.warn('admin-cleanup', 'R2 delete failed', {
+                key: url.slice(CDN_PREFIX.length),
+                error: err.message,
+              });
+            }
           }
         }
       }
@@ -587,14 +605,20 @@ router.post('/cleanup/all-group-chats', async (req, res) => {
 
     log.info('admin-cleanup', 'Deleting all group chats', { adminId: req.auth.uniqueId });
 
-    const snap = await db.collection('conversations')
+    const snap = await db
+      .collection('conversations')
       .where('isGroup', '==', true)
       .limit(5000)
       .get();
-    const allConvs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const allConvs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
     if (allConvs.length === 0) {
-      return res.json({ success: true, deleted: 0, mediaDeleted: 0, message: 'No group chats found' });
+      return res.json({
+        success: true,
+        deleted: 0,
+        mediaDeleted: 0,
+        message: 'No group chats found',
+      });
     }
 
     const CDN_PREFIX = 'https://images.shytalk.shyden.co.uk/';
@@ -604,7 +628,15 @@ router.post('/cleanup/all-group-chats', async (req, res) => {
       // Delete group photo from R2
       const photoUrl = conv.groupPhotoUrl || conv.group_photo_url;
       if (photoUrl && photoUrl.startsWith(CDN_PREFIX)) {
-        try { await r2.deleteObject(photoUrl.slice(CDN_PREFIX.length)); mediaDeleted++; } catch (err) { log.warn('admin-cleanup', 'R2 delete failed', { key: photoUrl.slice(CDN_PREFIX.length), error: err.message }); }
+        try {
+          await r2.deleteObject(photoUrl.slice(CDN_PREFIX.length));
+          mediaDeleted++;
+        } catch (err) {
+          log.warn('admin-cleanup', 'R2 delete failed', {
+            key: photoUrl.slice(CDN_PREFIX.length),
+            error: err.message,
+          });
+        }
       }
       // Delete message images
       const msgsSnap = await db.collection(`conversations/${conv.id}/messages`).get();
@@ -613,7 +645,15 @@ router.post('/cleanup/all-group-chats', async (req, res) => {
         const urls = msg.imageUrls || [];
         for (const url of urls) {
           if (url && url.startsWith(CDN_PREFIX)) {
-            try { await r2.deleteObject(url.slice(CDN_PREFIX.length)); mediaDeleted++; } catch (err) { log.warn('admin-cleanup', 'R2 delete failed', { key: url.slice(CDN_PREFIX.length), error: err.message }); }
+            try {
+              await r2.deleteObject(url.slice(CDN_PREFIX.length));
+              mediaDeleted++;
+            } catch (err) {
+              log.warn('admin-cleanup', 'R2 delete failed', {
+                key: url.slice(CDN_PREFIX.length),
+                error: err.message,
+              });
+            }
           }
         }
       }
@@ -634,11 +674,8 @@ router.post('/cleanup/all-rooms', async (req, res) => {
 
     log.info('admin-cleanup', 'Deleting all closed rooms', { adminId: req.auth.uniqueId });
 
-    const snap = await db.collection('rooms')
-      .where('state', '==', 'CLOSED')
-      .limit(200)
-      .get();
-    const closedRooms = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const snap = await db.collection('rooms').where('state', '==', 'CLOSED').limit(200).get();
+    const closedRooms = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
     if (closedRooms.length === 0) {
       return res.json({ success: true, deleted: 0, message: 'No closed rooms found' });
@@ -648,7 +685,12 @@ router.post('/cleanup/all-rooms', async (req, res) => {
     for (let i = 0; i < closedRooms.length; i += 20) {
       const batch = closedRooms.slice(i, i + 20);
       for (const room of batch) {
-        try { await deleteRoom(room.id); deleted++; } catch (err) { log.warn('admin-cleanup', 'Room delete failed', { roomId: room.id, error: err.message }); }
+        try {
+          await deleteRoom(room.id);
+          deleted++;
+        } catch (err) {
+          log.warn('admin-cleanup', 'Room delete failed', { roomId: room.id, error: err.message });
+        }
       }
     }
 
@@ -722,12 +764,14 @@ router.post('/cleanup/destroyed-users', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
-    log.info('admin-cleanup', 'Cleaning up destroyed user profiles', { adminId: req.auth.uniqueId });
+    log.info('admin-cleanup', 'Cleaning up destroyed user profiles', {
+      adminId: req.auth.uniqueId,
+    });
 
     const snap = await db.collection('users').limit(5000).get();
-    const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const users = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-    const destroyed = users.filter(u => !u.createdAt);
+    const destroyed = users.filter((u) => !u.createdAt);
     const intact = users.length - destroyed.length;
 
     if (destroyed.length === 0) {
@@ -746,7 +790,7 @@ router.post('/cleanup/destroyed-users', async (req, res) => {
       success: true,
       destroyed: destroyed.length,
       intact,
-      deletedUids: destroyed.map(u => u.id),
+      deletedUids: destroyed.map((u) => u.id),
     });
   } catch (err) {
     log.error('admin-cleanup', 'Cleanup destroyed users failed', { error: err.message });
@@ -789,8 +833,12 @@ router.post('/cleanup/device-binding/:uniqueId', async (req, res) => {
     if (requireAdmin(req, res)) return;
 
     const uniqueId = req.params.uniqueId;
-    log.info('admin-cleanup', 'Deleting device binding for user', { adminId: req.auth.uniqueId, targetUniqueId: uniqueId });
-    const snap = await db.collection('deviceBindings')
+    log.info('admin-cleanup', 'Deleting device binding for user', {
+      adminId: req.auth.uniqueId,
+      targetUniqueId: uniqueId,
+    });
+    const snap = await db
+      .collection('deviceBindings')
       .where('uniqueId', '==', uniqueId)
       .limit(50)
       .get();
@@ -808,7 +856,10 @@ router.post('/cleanup/device-binding/:uniqueId', async (req, res) => {
 
     res.json({ success: true, deleted: docs.length });
   } catch (err) {
-    log.error('admin-cleanup', 'Cleanup device binding failed', { uniqueId: req.params.uniqueId, error: err.message });
+    log.error('admin-cleanup', 'Cleanup device binding failed', {
+      uniqueId: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -823,8 +874,13 @@ router.get('/storage/audit', async (req, res) => {
     if (requireAdmin(req, res)) return;
 
     const folders = [
-      'profiles/', 'covers/', 'messages/', 'groups/',
-      'evidence/', 'stickers/', 'banners/',
+      'profiles/',
+      'covers/',
+      'messages/',
+      'groups/',
+      'evidence/',
+      'stickers/',
+      'banners/',
     ];
     const results = {};
     let totalFiles = 0;
@@ -832,7 +888,7 @@ router.get('/storage/audit', async (req, res) => {
 
     for (const folder of folders) {
       const objects = await listObjectsWithMeta(folder);
-      let count = objects.length;
+      const count = objects.length;
       let bytes = 0;
       for (const obj of objects) {
         bytes += obj.size || 0;
@@ -872,10 +928,14 @@ router.post('/cleanup/orphaned-storage', async (req, res) => {
     for (const doc of usersSnap.docs) {
       const userData = doc.data();
       for (const field of [
-        'profilePhotoUrl', 'coverPhotoUrl',
-        'preSuspensionProfilePhotoUrl', 'preSuspensionCoverPhotoUrl',
-        'profile_photo_url', 'cover_photo_url',
-        'pre_suspension_profile_photo_url', 'pre_suspension_cover_photo_url',
+        'profilePhotoUrl',
+        'coverPhotoUrl',
+        'preSuspensionProfilePhotoUrl',
+        'preSuspensionCoverPhotoUrl',
+        'profile_photo_url',
+        'cover_photo_url',
+        'pre_suspension_profile_photo_url',
+        'pre_suspension_cover_photo_url',
       ]) {
         const storageKey = extractKey(userData[field]);
         if (storageKey) referencedKeys.add(storageKey);
@@ -884,7 +944,7 @@ router.post('/cleanup/orphaned-storage', async (req, res) => {
 
     // ── Conversations (group photo + message images) ──
     const convsSnap = await db.collection('conversations').limit(2000).get();
-    const convs = convsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const convs = convsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     for (const conv of convs) {
       const storageKey = extractKey(conv.groupPhotoUrl ?? conv.group_photo_url);
       if (storageKey) referencedKeys.add(storageKey);
@@ -893,7 +953,8 @@ router.post('/cleanup/orphaned-storage', async (req, res) => {
     // ── Conversation messages (IMAGE type) — cap at 30 convs ──
     const convsToScan = convs.slice(0, 30);
     for (const conv of convsToScan) {
-      const msgsSnap = await db.collection(`conversations/${conv.id}/messages`)
+      const msgsSnap = await db
+        .collection(`conversations/${conv.id}/messages`)
         .where('type', '==', 'IMAGE')
         .limit(200)
         .get();
@@ -911,10 +972,11 @@ router.post('/cleanup/orphaned-storage', async (req, res) => {
 
     // ── Room messages (IMAGE type) — cap at 30 rooms ──
     const roomsSnap = await db.collection('rooms').limit(200).get();
-    const rooms = roomsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const rooms = roomsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     const roomsToScan = rooms.slice(0, 30);
     for (const room of roomsToScan) {
-      const msgsSnap = await db.collection(`rooms/${room.id}/messages`)
+      const msgsSnap = await db
+        .collection(`rooms/${room.id}/messages`)
         .where('type', '==', 'IMAGE')
         .limit(200)
         .get();
@@ -956,15 +1018,20 @@ router.post('/cleanup/orphaned-storage', async (req, res) => {
 
     // ── List and delete orphans ──
     const folders = [
-      'profiles/', 'covers/', 'messages/', 'groups/',
-      'evidence/', 'stickers/', 'banners/',
+      'profiles/',
+      'covers/',
+      'messages/',
+      'groups/',
+      'evidence/',
+      'stickers/',
+      'banners/',
     ];
     const summary = {};
     let totalDeleted = 0;
 
     for (const folder of folders) {
       const allKeys = await r2.listObjects(folder);
-      const toDelete = allKeys.filter(k => !referencedKeys.has(k));
+      const toDelete = allKeys.filter((k) => !referencedKeys.has(k));
 
       if (toDelete.length > 0) {
         await r2.deleteObjects(toDelete);
@@ -1010,7 +1077,11 @@ router.post('/cleanup/all-stalkers', async (req, res) => {
 
       // Reset stalker counts on user doc
       const data = userDoc.data();
-      if ((data.stalkerCount || 0) > 0 || (data.newStalkerCount || 0) > 0 || data.stalkersLastViewedAt) {
+      if (
+        (data.stalkerCount || 0) > 0 ||
+        (data.newStalkerCount || 0) > 0 ||
+        data.stalkersLastViewedAt
+      ) {
         await db.doc(`users/${uid}`).update({
           stalkerCount: 0,
           newStalkerCount: 0,

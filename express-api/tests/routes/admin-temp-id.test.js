@@ -80,7 +80,7 @@ describe('GET /api/admin/users/check-id/:id', () => {
   test('returns available: true for unused ID', async () => {
     // Both real and temp queries return empty
     mockWhereChain.get
-      .mockResolvedValueOnce({ empty: true, docs: [] })  // real uniqueId
+      .mockResolvedValueOnce({ empty: true, docs: [] }) // real uniqueId
       .mockResolvedValueOnce({ empty: true, docs: [] }); // tempUniqueId
 
     const app = createApp();
@@ -90,11 +90,10 @@ describe('GET /api/admin/users/check-id/:id', () => {
   });
 
   test('returns conflict for real uniqueId match', async () => {
-    mockWhereChain.get
-      .mockResolvedValueOnce({
-        empty: false,
-        docs: [{ data: () => ({ uniqueId: 12345678 }) }],
-      });
+    mockWhereChain.get.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ data: () => ({ uniqueId: 12345678 }) }],
+    });
 
     const app = createApp();
     const res = await request(app).get('/api/admin/users/check-id/12345678').expect(200);
@@ -110,7 +109,15 @@ describe('GET /api/admin/users/check-id/:id', () => {
       .mockResolvedValueOnce({ empty: true, docs: [] }) // real uniqueId — no match
       .mockResolvedValueOnce({
         empty: false,
-        docs: [{ data: () => ({ uniqueId: 99999999, tempUniqueId: 12345678, tempUniqueIdExpiry: futureExpiry }) }],
+        docs: [
+          {
+            data: () => ({
+              uniqueId: 99999999,
+              tempUniqueId: 12345678,
+              tempUniqueIdExpiry: futureExpiry,
+            }),
+          },
+        ],
       });
 
     const app = createApp();
@@ -127,7 +134,15 @@ describe('GET /api/admin/users/check-id/:id', () => {
       .mockResolvedValueOnce({ empty: true, docs: [] }) // real uniqueId — no match
       .mockResolvedValueOnce({
         empty: false,
-        docs: [{ data: () => ({ uniqueId: 99999999, tempUniqueId: 12345678, tempUniqueIdExpiry: pastExpiry }) }],
+        docs: [
+          {
+            data: () => ({
+              uniqueId: 99999999,
+              tempUniqueId: 12345678,
+              tempUniqueIdExpiry: pastExpiry,
+            }),
+          },
+        ],
       });
 
     const app = createApp();
@@ -162,7 +177,7 @@ describe('POST /api/admin/users/:uniqueId/temp-id', () => {
 
     // check-id availability: both empty
     mockWhereChain.get
-      .mockResolvedValueOnce({ empty: true, docs: [] })  // real uniqueId
+      .mockResolvedValueOnce({ empty: true, docs: [] }) // real uniqueId
       .mockResolvedValueOnce({ empty: true, docs: [] }); // tempUniqueId
 
     const app = createApp();
@@ -176,11 +191,11 @@ describe('POST /api/admin/users/:uniqueId/temp-id', () => {
       expect.objectContaining({
         tempUniqueId: 12345678,
         tempUniqueIdExpiry: futureExpiry,
-      })
+      }),
     );
     expect(sendSystemPm).toHaveBeenCalledWith(
       'user123',
-      expect.stringContaining('Your display ID has been temporarily changed to 12345678.')
+      expect.stringContaining('Your display ID has been temporarily changed to 12345678.'),
     );
   });
 
@@ -188,11 +203,10 @@ describe('POST /api/admin/users/:uniqueId/temp-id', () => {
     const futureExpiry = Date.now() + 86400000;
 
     // real uniqueId conflict
-    mockWhereChain.get
-      .mockResolvedValueOnce({
-        empty: false,
-        docs: [{ data: () => ({ uniqueId: 12345678 }) }],
-      });
+    mockWhereChain.get.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ data: () => ({ uniqueId: 12345678 }) }],
+    });
 
     const app = createApp();
     const res = await request(app)
@@ -228,20 +242,18 @@ describe('POST /api/admin/users/:uniqueId/temp-id', () => {
 describe('DELETE /api/admin/users/:uniqueId/temp-id', () => {
   test('clears temp ID successfully', async () => {
     const app = createApp();
-    const res = await request(app)
-      .delete('/api/admin/users/user123/temp-id')
-      .expect(200);
+    const res = await request(app).delete('/api/admin/users/user123/temp-id').expect(200);
 
     expect(res.body.success).toBe(true);
     expect(mockDocUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         tempUniqueId: '__DELETE__',
         tempUniqueIdExpiry: '__DELETE__',
-      })
+      }),
     );
     expect(sendSystemPm).toHaveBeenCalledWith(
       'user123',
-      'Your display ID has been restored to your original ID.'
+      'Your display ID has been restored to your original ID.',
     );
   });
 

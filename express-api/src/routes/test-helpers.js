@@ -35,7 +35,7 @@ router.post('/test/setup', async (req, res) => {
     const spec = req.body || {};
 
     // Create test users
-    for (const userSpec of (spec.users || [])) {
+    for (const userSpec of spec.users || []) {
       const uid = `${testRunId}_user_${generateId()}`;
       const userData = {
         uid,
@@ -52,7 +52,7 @@ router.post('/test/setup', async (req, res) => {
     }
 
     // Create test rooms
-    for (const roomSpec of (spec.rooms || [])) {
+    for (const roomSpec of spec.rooms || []) {
       const roomId = `${testRunId}_room_${generateId()}`;
       const ownerId = roomSpec.ownerId || (created.users[0]?.uid ?? testRunId);
       const roomData = {
@@ -68,7 +68,7 @@ router.post('/test/setup', async (req, res) => {
     }
 
     // Create test gifts
-    for (const giftSpec of (spec.gifts || [])) {
+    for (const giftSpec of spec.gifts || []) {
       const giftId = `${testRunId}_gift_${generateId()}`;
       const giftData = {
         id: giftId,
@@ -87,7 +87,11 @@ router.post('/test/setup', async (req, res) => {
       created.gifts.push(giftData);
     }
 
-    log.info('test-helpers', 'Test setup complete', { testRunId, users: created.users.length, rooms: created.rooms.length });
+    log.info('test-helpers', 'Test setup complete', {
+      testRunId,
+      users: created.users.length,
+      rooms: created.rooms.length,
+    });
     res.json(created);
   } catch (err) {
     log.error('test-helpers', 'Setup failed', { error: err.message });

@@ -32,7 +32,7 @@ describe('serverHealth', () => {
     process.memoryUsage = () => ({
       heapUsed: 900 * 1024 * 1024,
       heapTotal: 1000 * 1024 * 1024,
-      rss: 1100 * 1024 * 1024,      // 1100MB RSS
+      rss: 1100 * 1024 * 1024, // 1100MB RSS
       external: 0,
       arrayBuffers: 0,
     });
@@ -49,7 +49,7 @@ describe('serverHealth', () => {
       expect.objectContaining({
         rssMB: 1100,
         systemTotalMB: 2000,
-      })
+      }),
     );
 
     process.memoryUsage = originalMemUsage;
@@ -72,7 +72,7 @@ describe('serverHealth', () => {
     process.memoryUsage = () => ({
       heapUsed: 100 * 1024 * 1024,
       heapTotal: 500 * 1024 * 1024,
-      rss: 200 * 1024 * 1024,       // 200MB RSS
+      rss: 200 * 1024 * 1024, // 200MB RSS
       external: 0,
       arrayBuffers: 0,
     });

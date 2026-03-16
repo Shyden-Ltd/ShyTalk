@@ -106,9 +106,7 @@ describe('GET /api/admin/logs', () => {
 
     const app = createApp(true);
 
-    await request(app).get(
-      '/api/admin/logs?level=ERROR&source=express-api&userId=u1&limit=10'
-    );
+    await request(app).get('/api/admin/logs?level=ERROR&source=express-api&userId=u1&limit=10');
 
     expect(db.collection).toHaveBeenCalledWith('logs');
     expect(mockQuery.where).toHaveBeenCalledWith('level', '==', 'ERROR');

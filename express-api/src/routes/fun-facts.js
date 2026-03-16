@@ -18,9 +18,7 @@ const log = require('../utils/log');
 // -- All active facts (any authenticated user) --
 router.get('/fun-facts', async (req, res) => {
   try {
-    const results = await queryDocs(
-      db.collection('funFacts').where('isActive', '==', true)
-    );
+    const results = await queryDocs(db.collection('funFacts').where('isActive', '==', true));
 
     // Shuffle (Firestore has no RANDOM() order)
     for (let i = results.length - 1; i > 0; i--) {
@@ -41,9 +39,7 @@ router.get('/admin/fun-facts', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
-    const results = await queryDocs(
-      db.collection('funFacts').orderBy('createdAt', 'desc')
-    );
+    const results = await queryDocs(db.collection('funFacts').orderBy('createdAt', 'desc'));
 
     return res.json(results);
   } catch (err) {
@@ -70,7 +66,7 @@ router.post('/admin/fun-facts', async (req, res) => {
       category: body.category || 'trivia',
       emoji: body.emoji || '',
       sourceLanguage: body.sourceLanguage || body.source_language || '',
-      isActive: body.isActive !== undefined ? !!body.isActive : (body.is_active !== false),
+      isActive: body.isActive !== undefined ? !!body.isActive : body.is_active !== false,
       createdAt: timestamp,
       updatedAt: timestamp,
     });
@@ -114,7 +110,10 @@ router.put('/admin/fun-facts/:id', async (req, res) => {
 
     return res.json({ success: true });
   } catch (err) {
-    log.error('fun-facts', 'Failed to update fun fact', { factId: req.params.id, error: err.message });
+    log.error('fun-facts', 'Failed to update fun fact', {
+      factId: req.params.id,
+      error: err.message,
+    });
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -132,7 +131,10 @@ router.delete('/admin/fun-facts/:id', async (req, res) => {
 
     return res.json({ success: true });
   } catch (err) {
-    log.error('fun-facts', 'Failed to delete fun fact', { factId: req.params.id, error: err.message });
+    log.error('fun-facts', 'Failed to delete fun fact', {
+      factId: req.params.id,
+      error: err.message,
+    });
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

@@ -39,10 +39,7 @@ async function resolveUniqueId(uid) {
     return cached.uniqueId;
   }
 
-  const snap = await db.collection('users')
-    .where('firebaseUid', '==', uid)
-    .limit(1)
-    .get();
+  const snap = await db.collection('users').where('firebaseUid', '==', uid).limit(1).get();
 
   const uniqueId = snap.empty ? null : (snap.docs[0].data().uniqueId ?? null);
 
@@ -59,7 +56,7 @@ async function resolveUniqueId(uid) {
  * Uses uniqueId-based doc path: users/{uniqueId}.
  */
 async function checkSuspension(uniqueId) {
-  if (uniqueId == null) return false;
+  if (uniqueId === null || uniqueId === undefined) return false;
 
   const cached = suspensionCache.get(uniqueId);
   if (cached && Date.now() < cached.expiresAt) {
@@ -101,9 +98,10 @@ async function authMiddleware(req, res, next) {
     const isSuspended = await checkSuspension(uniqueId);
 
     if (isSuspended) {
-      const isSuspensionExempt = /^\/users\/[^/]+\/appeal$/.test(req.path)
-        || /^\/users\/[^/]+\/lift-suspension$/.test(req.path)
-        || (req.method === 'POST' && req.path === '/appeals');
+      const isSuspensionExempt =
+        /^\/users\/[^/]+\/appeal$/.test(req.path) ||
+        /^\/users\/[^/]+\/lift-suspension$/.test(req.path) ||
+        (req.method === 'POST' && req.path === '/appeals');
       if (!isSuspensionExempt) {
         return res.status(403).json({ error: 'Account suspended' });
       }

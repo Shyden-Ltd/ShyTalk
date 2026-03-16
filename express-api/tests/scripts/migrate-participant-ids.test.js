@@ -31,9 +31,7 @@ describe('migrateParticipantIds', () => {
   });
 
   test('converts string participantIds to numbers', async () => {
-    mockDocs.push(
-      createMockDoc('conv-1', { participantIds: ['10000001', '10000002'] }),
-    );
+    mockDocs.push(createMockDoc('conv-1', { participantIds: ['10000001', '10000002'] }));
     // Re-mock collection().get() with updated docs
     mockDb.collection.mockReturnValue({
       get: jest.fn().mockResolvedValue({ docs: mockDocs, size: mockDocs.length }),
@@ -43,17 +41,14 @@ describe('migrateParticipantIds', () => {
 
     expect(result.migrated).toBe(1);
     expect(result.skipped).toBe(0);
-    expect(mockBatch.update).toHaveBeenCalledWith(
-      mockDocs[0].ref,
-      { participantIds: [10000001, 10000002] },
-    );
+    expect(mockBatch.update).toHaveBeenCalledWith(mockDocs[0].ref, {
+      participantIds: [10000001, 10000002],
+    });
     expect(mockBatch.commit).toHaveBeenCalledTimes(1);
   });
 
   test('skips docs with already-numeric participantIds', async () => {
-    mockDocs.push(
-      createMockDoc('conv-2', { participantIds: [10000001, 10000002] }),
-    );
+    mockDocs.push(createMockDoc('conv-2', { participantIds: [10000001, 10000002] }));
     mockDb.collection.mockReturnValue({
       get: jest.fn().mockResolvedValue({ docs: mockDocs, size: mockDocs.length }),
     });
@@ -66,9 +61,7 @@ describe('migrateParticipantIds', () => {
   });
 
   test('skips docs without participantIds array', async () => {
-    mockDocs.push(
-      createMockDoc('conv-3', { isGroup: true }),
-    );
+    mockDocs.push(createMockDoc('conv-3', { isGroup: true }));
     mockDb.collection.mockReturnValue({
       get: jest.fn().mockResolvedValue({ docs: mockDocs, size: mockDocs.length }),
     });
@@ -80,9 +73,7 @@ describe('migrateParticipantIds', () => {
   });
 
   test('handles mixed string and numeric ids', async () => {
-    mockDocs.push(
-      createMockDoc('conv-4', { participantIds: ['10000001', 10000002] }),
-    );
+    mockDocs.push(createMockDoc('conv-4', { participantIds: ['10000001', 10000002] }));
     mockDb.collection.mockReturnValue({
       get: jest.fn().mockResolvedValue({ docs: mockDocs, size: mockDocs.length }),
     });
@@ -90,10 +81,9 @@ describe('migrateParticipantIds', () => {
     const result = await migrateParticipantIds(mockDb);
 
     expect(result.migrated).toBe(1);
-    expect(mockBatch.update).toHaveBeenCalledWith(
-      mockDocs[0].ref,
-      { participantIds: [10000001, 10000002] },
-    );
+    expect(mockBatch.update).toHaveBeenCalledWith(mockDocs[0].ref, {
+      participantIds: [10000001, 10000002],
+    });
   });
 
   test('returns correct total count', async () => {

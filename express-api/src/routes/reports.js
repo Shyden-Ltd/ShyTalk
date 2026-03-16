@@ -18,7 +18,7 @@
  */
 
 const router = require('express').Router();
-const { db, rtdb, FieldValue } = require('../utils/firebase');
+const { db, rtdb, FieldValue: _FieldValue } = require('../utils/firebase');
 const { generateId, now } = require('../utils/helpers');
 const { requireAdmin, clearSuspensionCache } = require('../middleware/auth');
 const { sendSystemPm } = require('../utils/system-pm');
@@ -44,7 +44,7 @@ async function cleanupInvalidAdminTokens(invalidTokens, adminUsers) {
 
     for (const u of chunk) {
       if (!Array.isArray(u.fcmTokens)) continue;
-      const filtered = u.fcmTokens.filter(t => !invalidSet.has(t));
+      const filtered = u.fcmTokens.filter((t) => !invalidSet.has(t));
       if (filtered.length !== u.fcmTokens.length) {
         batch.set(db.doc(`users/${u.id}`), { fcmTokens: filtered }, { merge: true });
         hasWrites = true;
@@ -64,9 +64,15 @@ router.post('/reports', async (req, res) => {
     if (!body) return res.status(400).json({ error: 'Invalid JSON body' });
 
     const {
-      reportedUserId, reportedUserName, reportedUserUniqueId,
-      conversationId, messageId, messageText,
-      reason, description, evidenceUrls,
+      reportedUserId,
+      reportedUserName,
+      reportedUserUniqueId,
+      conversationId,
+      messageId,
+      messageText,
+      reason,
+      description,
+      evidenceUrls,
     } = body;
 
     if (!reportedUserId || !reason) {
@@ -79,39 +85,40 @@ router.post('/reports', async (req, res) => {
     const reportId = generateId();
     const timestamp = now();
 
-    await db.doc(`reports/${reportId}`).set({
-      reporterId:              req.auth.uniqueId,
-      reporterName:            reporter?.displayName ?? reporter?.display_name ?? null,
-      reporterUniqueId:        reporter?.uniqueId ?? reporter?.unique_id ?? null,
-      reportedUserId:          reportedUserId,
-      reportedUserName:        reportedUserName || null,
-      reportedUserUniqueId:    reportedUserUniqueId || null,
-      conversationId:          conversationId || null,
-      messageId:               messageId || null,
-      messageText:             messageText || null,
-      reason:                  reason,
-      description:             description || null,
-      evidenceUrls:            evidenceUrls || [],
-      status:                  'pending',
-      actionTaken:             null,
-      resolvedAt:              null,
-      resolvedBy:              null,
-      createdAt:               timestamp,
-    }, { merge: true });
+    await db.doc(`reports/${reportId}`).set(
+      {
+        reporterId: req.auth.uniqueId,
+        reporterName: reporter?.displayName ?? reporter?.display_name ?? null,
+        reporterUniqueId: reporter?.uniqueId ?? reporter?.unique_id ?? null,
+        reportedUserId: reportedUserId,
+        reportedUserName: reportedUserName || null,
+        reportedUserUniqueId: reportedUserUniqueId || null,
+        conversationId: conversationId || null,
+        messageId: messageId || null,
+        messageText: messageText || null,
+        reason: reason,
+        description: description || null,
+        evidenceUrls: evidenceUrls || [],
+        status: 'pending',
+        actionTaken: null,
+        resolvedAt: null,
+        resolvedBy: null,
+        createdAt: timestamp,
+      },
+      { merge: true },
+    );
 
     // Fire-and-forget: FCM push notification to admin tokens
     (async () => {
       try {
-        const adminUsers = await queryDocs(
-          db.collection('users').where('userType', '==', 'admin')
-        );
+        const adminUsers = await queryDocs(db.collection('users').where('userType', '==', 'admin'));
         const tokens = [];
         for (const u of adminUsers) {
           if (Array.isArray(u.fcmTokens)) tokens.push(...u.fcmTokens);
         }
         if (tokens.length > 0) {
           const data = {
-            type:             'ADMIN_NEW_REPORT',
+            type: 'ADMIN_NEW_REPORT',
             reportId,
             reason,
             reportedUserName: reportedUserName || 'Unknown',
@@ -122,7 +129,9 @@ router.post('/reports', async (req, res) => {
       } catch (err) {
         log.error('reports', 'Failed to send report notification', { error: err.message });
       }
-    })().catch(err => log.error('reports', 'Report notification fire-and-forget failed', { error: err.message }));
+    })().catch((err) =>
+      log.error('reports', 'Report notification fire-and-forget failed', { error: err.message }),
+    );
 
     res.json({ success: true, reportId });
   } catch (err) {
@@ -143,7 +152,8 @@ router.get('/reports', async (req, res) => {
     // Build Firestore query — only use status + orderBy to avoid needing a
     // composite index.  The userId filter is applied client-side afterwards.
     const direction = statusFilter === 'pending' ? 'asc' : 'desc';
-    const query = db.collection('reports')
+    const query = db
+      .collection('reports')
       .where('status', '==', statusFilter)
       .orderBy('createdAt', direction)
       .limit(500);
@@ -152,27 +162,28 @@ router.get('/reports', async (req, res) => {
 
     // Client-side userId filter (avoids Firestore composite index requirement)
     const userFiltered = userIdFilter
-      ? reports.filter(r => r.reportedUserId === userIdFilter)
+      ? reports.filter((r) => r.reportedUserId === userIdFilter)
       : reports;
 
     // Client-side search filter (Firestore doesn't support full-text search)
     const filtered = search
-      ? userFiltered.filter(r =>
-          (r.reportedUserName  || '').toLowerCase().includes(search) ||
-          (r.reporterName      || '').toLowerCase().includes(search) ||
-          (r.reason            || '').toLowerCase().includes(search) ||
-          (r.description       || '').toLowerCase().includes(search)
+      ? userFiltered.filter(
+          (r) =>
+            (r.reportedUserName || '').toLowerCase().includes(search) ||
+            (r.reporterName || '').toLowerCase().includes(search) ||
+            (r.reason || '').toLowerCase().includes(search) ||
+            (r.description || '').toLowerCase().includes(search),
         )
       : userFiltered;
 
     // Collect all unique user IDs for enrichment
-    const reportedUserIds = [...new Set(filtered.map(r => r.reportedUserId).filter(Boolean))];
-    const reporterIds     = [...new Set(filtered.map(r => r.reporterId).filter(Boolean))];
+    const reportedUserIds = [...new Set(filtered.map((r) => r.reportedUserId).filter(Boolean))];
+    const reporterIds = [...new Set(filtered.map((r) => r.reporterId).filter(Boolean))];
 
     // Parallel-fetch user enrichment data and report locks
     const [reportedUserDocs, reporterDocs, locks] = await Promise.all([
-      Promise.all(reportedUserIds.map(uid => getDoc(`users/${uid}`))),
-      Promise.all(reporterIds.map(uid => getDoc(`users/${uid}`))),
+      Promise.all(reportedUserIds.map((uid) => getDoc(`users/${uid}`))),
+      Promise.all(reporterIds.map((uid) => getDoc(`users/${uid}`))),
       queryDocs(db.collection('reportLocks')),
     ]);
 
@@ -181,8 +192,9 @@ router.get('/reports', async (req, res) => {
     for (let i = 0; i < reportedUserIds.length; i++) {
       const reportedUser = reportedUserDocs[i];
       if (reportedUser) {
-        const gcsScore         = reportedUser.gcsScore         ?? reportedUser.gcs_score          ?? 100;
-        const gcsLastDeduction = reportedUser.gcsLastDeductionAt ?? reportedUser.gcs_last_deduction_at ?? null;
+        const gcsScore = reportedUser.gcsScore ?? reportedUser.gcs_score ?? 100;
+        const gcsLastDeduction =
+          reportedUser.gcsLastDeductionAt ?? reportedUser.gcs_last_deduction_at ?? null;
         reportedUser.gcsDisplayScore = computeDisplayScore(gcsScore, gcsLastDeduction);
         userMap[reportedUserIds[i]] = reportedUser;
       }
@@ -201,12 +213,12 @@ router.get('/reports', async (req, res) => {
     }
 
     // Enrich reports
-    const enriched = filtered.map(r => ({
+    const enriched = filtered.map((r) => ({
       ...r,
-      evidenceUrls:  r.evidenceUrls || [],
-      reportedUser:  userMap[r.reportedUserId] || null,
-      reporter:      reporterMap[r.reporterId] || null,
-      lock:          lockMap[r.reportedUserId] || null,
+      evidenceUrls: r.evidenceUrls || [],
+      reportedUser: userMap[r.reportedUserId] || null,
+      reporter: reporterMap[r.reporterId] || null,
+      lock: lockMap[r.reportedUserId] || null,
     }));
 
     // Group by reported user for pending reports
@@ -216,17 +228,18 @@ router.get('/reports', async (req, res) => {
         const key = r.reportedUserId;
         if (!grouped[key]) {
           grouped[key] = {
-            uid:            key,
+            uid: key,
             reportedUserId: key,
-            displayName:    r.reportedUser?.displayName ?? r.reportedUser?.display_name ?? null,
-            profilePhotoUrl: r.reportedUser?.profilePhotoUrl ?? r.reportedUser?.profile_photo_url ?? null,
-            uniqueId:       r.reportedUser?.uniqueId ?? r.reportedUser?.unique_id ?? null,
-            warningCount:   r.reportedUser?.warningCount ?? r.reportedUser?.warning_count ?? 0,
-            isSuspended:    r.reportedUser?.isSuspended ?? r.reportedUser?.is_suspended ?? false,
+            displayName: r.reportedUser?.displayName ?? r.reportedUser?.display_name ?? null,
+            profilePhotoUrl:
+              r.reportedUser?.profilePhotoUrl ?? r.reportedUser?.profile_photo_url ?? null,
+            uniqueId: r.reportedUser?.uniqueId ?? r.reportedUser?.unique_id ?? null,
+            warningCount: r.reportedUser?.warningCount ?? r.reportedUser?.warning_count ?? 0,
+            isSuspended: r.reportedUser?.isSuspended ?? r.reportedUser?.is_suspended ?? false,
             gcsDisplayScore: r.reportedUser?.gcsDisplayScore ?? 100,
-            lock:           r.lock,
-            reports:        [],
-            reportCount:    0,
+            lock: r.lock,
+            reports: [],
+            reportCount: 0,
           };
         }
         grouped[key].reports.push(r);
@@ -257,67 +270,90 @@ router.post('/reports/:id/resolve', async (req, res) => {
 
     // Resolve the report
     await db.doc(`reports/${req.params.id}`).update({
-      status:     'resolved',
+      status: 'resolved',
       actionTaken: action,
-      resolvedAt:  timestamp,
-      resolvedBy:  req.auth.uid,
+      resolvedAt: timestamp,
+      resolvedBy: req.auth.uid,
     });
 
     // Audit log (fire-and-forget)
-    const auditWrite = db.doc(`adminAuditLog/${generateId()}`).set({
-      adminId:      req.auth.uid,
-      action:       'RESOLVE_REPORT',
-      targetUserId: report.reportedUserId,
-      details:      `Report ${req.params.id}: ${action}`,
-      createdAt:    timestamp,
-    }, { merge: true });
+    const auditWrite = db.doc(`adminAuditLog/${generateId()}`).set(
+      {
+        adminId: req.auth.uid,
+        action: 'RESOLVE_REPORT',
+        targetUserId: report.reportedUserId,
+        details: `Report ${req.params.id}: ${action}`,
+        createdAt: timestamp,
+      },
+      { merge: true },
+    );
 
     // Warning actions: create warning doc (which deducts GCS)
     if (action === 'warned' || action === 'warned_severe') {
-      const severity  = action === 'warned_severe' ? 4 : 2;
+      const severity = action === 'warned_severe' ? 4 : 2;
       const warningReason = body?.reason || report.reason;
 
       try {
         await createWarning(report.reportedUserId, {
-          reason:         warningReason,
+          reason: warningReason,
           severity,
-          adminNote:      null,
-          source:         'report',
+          adminNote: null,
+          source: 'report',
           linkedReportId: req.params.id,
-          adminUid:       req.auth.uid,
+          adminUid: req.auth.uid,
           adminUniqueId: req.auth.uniqueId,
         });
 
         // Send warning PM (fire-and-forget)
-        sendSystemPm(report.reportedUserId,
-          `\u26a0\ufe0f You have received a warning.\n\nReason: ${warningReason}\n\nRepeated violations may result in suspension.`
-        ).catch(err => log.error('reports', 'Failed to send warning PM', { userId: report.reportedUserId, error: err.message }));
+        sendSystemPm(
+          report.reportedUserId,
+          `\u26a0\ufe0f You have received a warning.\n\nReason: ${warningReason}\n\nRepeated violations may result in suspension.`,
+        ).catch((err) =>
+          log.error('reports', 'Failed to send warning PM', {
+            userId: report.reportedUserId,
+            error: err.message,
+          }),
+        );
       } catch (warnErr) {
-        log.error('reports', 'Failed to create warning from report', { reportId: req.params.id, error: warnErr.message });
+        log.error('reports', 'Failed to create warning from report', {
+          reportId: req.params.id,
+          error: warnErr.message,
+        });
       }
     }
 
     // Resolution PM to reporter (fire-and-forget)
     if (report.reporterId) {
-      const actionText = action === 'dismissed'      ? 'reviewed and dismissed'
-        : action === 'warned'                        ? 'reviewed and a warning was issued'
-        : action === 'warned_severe'                 ? 'reviewed and a severe warning was issued'
-        : action === 'suspended'                     ? 'reviewed and the user has been suspended'
-        : 'reviewed';
-      sendSystemPm(report.reporterId,
-        `Your report has been ${actionText}. Thank you for helping keep ShyTalk safe.`
-      ).catch(err => log.error('reports', 'Failed to send reporter PM', { reporterId: report.reporterId, error: err.message }));
+      const actionText =
+        action === 'dismissed'
+          ? 'reviewed and dismissed'
+          : action === 'warned'
+            ? 'reviewed and a warning was issued'
+            : action === 'warned_severe'
+              ? 'reviewed and a severe warning was issued'
+              : action === 'suspended'
+                ? 'reviewed and the user has been suspended'
+                : 'reviewed';
+      sendSystemPm(
+        report.reporterId,
+        `Your report has been ${actionText}. Thank you for helping keep ShyTalk safe.`,
+      ).catch((err) =>
+        log.error('reports', 'Failed to send reporter PM', {
+          reporterId: report.reporterId,
+          error: err.message,
+        }),
+      );
     }
 
     // Release lock and write audit log in parallel
-    await Promise.all([
-      auditWrite,
-      db.doc(`reportLocks/${report.reportedUserId}`).delete(),
-    ]);
+    await Promise.all([auditWrite, db.doc(`reportLocks/${report.reportedUserId}`).delete()]);
 
     res.json({ success: true });
   } catch (err) {
-    log.error('reports', 'POST /api/reports/:id/resolve failed', { reportId: req.params.id, error: err.message });
+    log.error('reports', 'POST /api/reports/:id/resolve failed', {
+      reportId: req.params.id,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -333,46 +369,56 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
 
     // Fetch all pending reports for this user
     const reports = await queryDocs(
-      db.collection('reports')
+      db
+        .collection('reports')
         .where('reportedUserId', '==', req.params.userId)
-        .where('status', '==', 'pending')
+        .where('status', '==', 'pending'),
     );
 
     if (reports.length === 0) return res.json({ success: true, resolved: 0 });
 
     // Build batch writes for resolving all reports
-    const allWrites = reports.map(r => ({
+    const allWrites = reports.map((r) => ({
       path: `reports/${r.id}`,
       data: {
-        status:     'resolved',
+        status: 'resolved',
         actionTaken: action,
-        resolvedAt:  timestamp,
-        resolvedBy:  req.auth.uid,
+        resolvedAt: timestamp,
+        resolvedBy: req.auth.uid,
       },
     }));
 
     // Apply warning if applicable (uses createWarning to write warning doc + update user)
     if (action === 'warned' || action === 'warned_severe') {
-      const severity  = action === 'warned_severe' ? 4 : 2;
+      const severity = action === 'warned_severe' ? 4 : 2;
       const warningReason = body?.reason || 'Multiple reports';
 
       try {
         await createWarning(req.params.userId, {
-          reason:         warningReason,
+          reason: warningReason,
           severity,
-          adminNote:      null,
-          source:         'report',
+          adminNote: null,
+          source: 'report',
           linkedReportId: null,
-          adminUid:       req.auth.uid,
+          adminUid: req.auth.uid,
           adminUniqueId: req.auth.uniqueId,
         });
 
         // Send warning PM (fire-and-forget)
-        sendSystemPm(req.params.userId,
-          `\u26a0\ufe0f You have received a warning based on multiple reports.\n\nReason: ${warningReason}\n\nRepeated violations may result in suspension.`
-        ).catch(err => log.error('reports', 'Failed to send warning PM', { userId: req.params.userId, error: err.message }));
+        sendSystemPm(
+          req.params.userId,
+          `\u26a0\ufe0f You have received a warning based on multiple reports.\n\nReason: ${warningReason}\n\nRepeated violations may result in suspension.`,
+        ).catch((err) =>
+          log.error('reports', 'Failed to send warning PM', {
+            userId: req.params.userId,
+            error: err.message,
+          }),
+        );
       } catch (warnErr) {
-        log.error('reports', 'Failed to create warning from bulk resolve', { userId: req.params.userId, error: warnErr.message });
+        log.error('reports', 'Failed to create warning from bulk resolve', {
+          userId: req.params.userId,
+          error: warnErr.message,
+        });
       }
     }
 
@@ -389,27 +435,34 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
 
     // Audit log and lock release in parallel
     await Promise.all([
-      db.doc(`adminAuditLog/${generateId()}`).set({
-        adminId:      req.auth.uid,
-        action:       'RESOLVE_ALL_REPORTS',
-        targetUserId: req.params.userId,
-        details:      `Resolved ${reports.length} reports: ${action}`,
-        createdAt:    timestamp,
-      }, { merge: true }),
+      db.doc(`adminAuditLog/${generateId()}`).set(
+        {
+          adminId: req.auth.uid,
+          action: 'RESOLVE_ALL_REPORTS',
+          targetUserId: req.params.userId,
+          details: `Resolved ${reports.length} reports: ${action}`,
+          createdAt: timestamp,
+        },
+        { merge: true },
+      ),
       db.doc(`reportLocks/${req.params.userId}`).delete(),
     ]);
 
     // Resolution PMs to all unique reporters (fire-and-forget)
-    const uniqueReporters = [...new Set(reports.map(r => r.reporterId).filter(Boolean))];
+    const uniqueReporters = [...new Set(reports.map((r) => r.reporterId).filter(Boolean))];
     for (const reporterId of uniqueReporters) {
-      sendSystemPm(reporterId,
-        'Your report has been reviewed. Thank you for helping keep ShyTalk safe.'
+      sendSystemPm(
+        reporterId,
+        'Your report has been reviewed. Thank you for helping keep ShyTalk safe.',
       ).catch(() => {});
     }
 
     res.json({ success: true, resolved: reports.length });
   } catch (err) {
-    log.error('reports', 'POST /api/reports/resolve-all/:userId failed', { userId: req.params.userId, error: err.message });
+    log.error('reports', 'POST /api/reports/resolve-all/:userId failed', {
+      userId: req.params.userId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -425,22 +478,20 @@ router.get('/reports/stats', async (req, res) => {
 
     // Fetch pending and resolved-today in parallel
     const [pendingReports, resolvedTodayReports, allResolved] = await Promise.all([
+      queryDocs(db.collection('reports').where('status', '==', 'pending').limit(1000)),
       queryDocs(
-        db.collection('reports')
-          .where('status', '==', 'pending')
-          .limit(1000)
-      ),
-      queryDocs(
-        db.collection('reports')
+        db
+          .collection('reports')
           .where('status', '==', 'resolved')
           .where('resolvedAt', '>=', todayMs)
-          .limit(1000)
+          .limit(1000),
       ),
       queryDocs(
-        db.collection('reports')
+        db
+          .collection('reports')
           .where('status', '==', 'resolved')
           .where('resolvedAt', '>', 0)
-          .limit(5000)
+          .limit(5000),
       ),
     ]);
 
@@ -449,13 +500,12 @@ router.get('/reports/stats', async (req, res) => {
     let countWithTimes = 0;
     for (const r of allResolved) {
       if (r.resolvedAt && r.createdAt) {
-        totalMs += (r.resolvedAt - r.createdAt);
+        totalMs += r.resolvedAt - r.createdAt;
         countWithTimes++;
       }
     }
-    const avgResponseHours = countWithTimes > 0
-      ? Math.round((totalMs / countWithTimes) / (60 * 60 * 1000) * 10) / 10
-      : 0;
+    const avgResponseHours =
+      countWithTimes > 0 ? Math.round((totalMs / countWithTimes / (60 * 60 * 1000)) * 10) / 10 : 0;
 
     // Active reviewers today
     const reviewerCounts = {};
@@ -470,8 +520,8 @@ router.get('/reports/stats', async (req, res) => {
     }));
 
     res.json({
-      pendingCount:     pendingReports.length,
-      resolvedToday:    resolvedTodayReports.length,
+      pendingCount: pendingReports.length,
+      resolvedToday: resolvedTodayReports.length,
       avgResponseHours,
       activeReviewers,
     });
@@ -487,14 +537,13 @@ router.get('/reports/export', async (req, res) => {
     if (requireAdmin(req, res)) return;
 
     const from = req.query.from;
-    const to   = req.query.to;
+    const to = req.query.to;
 
     const fromMs = from ? new Date(from).getTime() : null;
-    const toMs   = to   ? new Date(to + 'T23:59:59.999Z').getTime() : null;
+    const toMs = to ? new Date(to + 'T23:59:59.999Z').getTime() : null;
 
     // Build Firestore query
-    let query = db.collection('reports')
-      .where('status', '==', 'resolved');
+    let query = db.collection('reports').where('status', '==', 'resolved');
 
     if (fromMs && !isNaN(fromMs)) {
       query = query.where('resolvedAt', '>=', fromMs);
@@ -505,25 +554,35 @@ router.get('/reports/export', async (req, res) => {
     const results = await queryDocs(query);
 
     // Client-side upper bound filter (Firestore requires composite index for two range filters)
-    const rows = toMs && !isNaN(toMs)
-      ? results.filter(r => r.resolvedAt && r.resolvedAt <= toMs)
-      : results;
+    const rows =
+      toMs && !isNaN(toMs) ? results.filter((r) => r.resolvedAt && r.resolvedAt <= toMs) : results;
 
     // Build CSV
     const headers = [
-      'id', 'reporterName', 'reportedUserName', 'reason', 'description',
-      'actionTaken', 'resolvedAt', 'resolvedBy', 'createdAt',
+      'id',
+      'reporterName',
+      'reportedUserName',
+      'reason',
+      'description',
+      'actionTaken',
+      'resolvedAt',
+      'resolvedBy',
+      'createdAt',
     ];
     const csvRows = [headers.join(',')];
     for (const r of rows) {
-      csvRows.push(headers.map(h => {
-        let val = r[h] ?? '';
-        if (h === 'resolvedAt' || h === 'createdAt') {
-          val = val ? new Date(val).toISOString() : '';
-        }
-        val = String(val).replace(/"/g, '""');
-        return `"${val}"`;
-      }).join(','));
+      csvRows.push(
+        headers
+          .map((h) => {
+            let val = r[h] ?? '';
+            if (h === 'resolvedAt' || h === 'createdAt') {
+              val = val ? new Date(val).toISOString() : '';
+            }
+            val = String(val).replace(/"/g, '""');
+            return `"${val}"`;
+          })
+          .join(','),
+      );
     }
 
     res.setHeader('Content-Type', 'text/csv');
@@ -544,15 +603,21 @@ router.post('/reports/:id/lock', async (req, res) => {
     const displayName = admin?.displayName ?? admin?.display_name ?? null;
 
     // reportLocks is keyed by the reported userId (same as report ID here)
-    await db.doc(`reportLocks/${req.params.id}`).set({
-      lockedBy:    req.auth.uid,
-      lockedAt:    now(),
-      displayName: displayName,
-    }, { merge: true });
+    await db.doc(`reportLocks/${req.params.id}`).set(
+      {
+        lockedBy: req.auth.uid,
+        lockedAt: now(),
+        displayName: displayName,
+      },
+      { merge: true },
+    );
 
     res.json({ success: true });
   } catch (err) {
-    log.error('reports', 'POST /api/reports/:id/lock failed', { reportId: req.params.id, error: err.message });
+    log.error('reports', 'POST /api/reports/:id/lock failed', {
+      reportId: req.params.id,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -566,7 +631,10 @@ router.delete('/reports/:id/lock', async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    log.error('reports', 'DELETE /api/reports/:id/lock failed', { reportId: req.params.id, error: err.message });
+    log.error('reports', 'DELETE /api/reports/:id/lock failed', {
+      reportId: req.params.id,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -582,13 +650,16 @@ router.post('/admin/users/:uniqueId/suspend', async (req, res) => {
 
     const body = req.body;
     if (!body?.reason) return res.status(400).json({ error: 'reason is required' });
-    if (typeof body.canAppeal !== 'boolean') return res.status(400).json({ error: 'canAppeal must be a boolean' });
+    if (typeof body.canAppeal !== 'boolean')
+      return res.status(400).json({ error: 'canAppeal must be a boolean' });
 
     let endTimestamp = null;
     if (body.endDate) {
       const endDate = new Date(body.endDate);
-      if (isNaN(endDate.getTime())) return res.status(400).json({ error: 'endDate must be a valid ISO-8601 date' });
-      if (endDate.getTime() <= Date.now()) return res.status(400).json({ error: 'endDate must be in the future' });
+      if (isNaN(endDate.getTime()))
+        return res.status(400).json({ error: 'endDate must be a valid ISO-8601 date' });
+      if (endDate.getTime() <= Date.now())
+        return res.status(400).json({ error: 'endDate must be in the future' });
       endTimestamp = endDate.getTime();
     }
 
@@ -599,38 +670,48 @@ router.post('/admin/users/:uniqueId/suspend', async (req, res) => {
 
     await Promise.all([
       db.doc(`users/${req.params.uniqueId}`).update({
-        isSuspended:                  true,
-        suspensionReason:             body.reason.trim(),
-        suspensionStartDate:          timestamp,
-        suspensionEndDate:             endTimestamp,
-        suspensionCanAppeal:          body.canAppeal,
-        suspendedBy:                  req.auth.uid,
-        preSuspensionDisplayName:     user.displayName     ?? user.display_name     ?? null,
+        isSuspended: true,
+        suspensionReason: body.reason.trim(),
+        suspensionStartDate: timestamp,
+        suspensionEndDate: endTimestamp,
+        suspensionCanAppeal: body.canAppeal,
+        suspendedBy: req.auth.uid,
+        preSuspensionDisplayName: user.displayName ?? user.display_name ?? null,
         preSuspensionProfilePhotoUrl: user.profilePhotoUrl ?? user.profile_photo_url ?? null,
-        preSuspensionCoverPhotoUrl:   user.coverPhotoUrl   ?? user.cover_photo_url   ?? null,
-        displayName:                  'Suspended Account',
-        profilePhotoUrl:              null,
-        coverPhotoUrl:                null,
-        avatarUrl:                    null,
-        description:                  null,
-        currentRoomId:                null,
+        preSuspensionCoverPhotoUrl: user.coverPhotoUrl ?? user.cover_photo_url ?? null,
+        displayName: 'Suspended Account',
+        profilePhotoUrl: null,
+        coverPhotoUrl: null,
+        avatarUrl: null,
+        description: null,
+        currentRoomId: null,
       }),
-      db.doc(`adminAuditLog/${generateId()}`).set({
-        adminId:      req.auth.uid,
-        action:       'SUSPEND',
-        targetUserId: req.params.uniqueId,
-        details:      body.reason.trim(),
-        createdAt:    timestamp,
-      }, { merge: true }),
+      db.doc(`adminAuditLog/${generateId()}`).set(
+        {
+          adminId: req.auth.uid,
+          action: 'SUSPEND',
+          targetUserId: req.params.uniqueId,
+          details: body.reason.trim(),
+          createdAt: timestamp,
+        },
+        { merge: true },
+      ),
     ]);
 
     // Evict from rooms (fire-and-forget)
-    evictSuspendedUser(req.params.uniqueId)
-      .catch(err => log.error('reports', 'Failed to evict suspended user', { userId: req.params.uniqueId, error: err.message }));
+    evictSuspendedUser(req.params.uniqueId).catch((err) =>
+      log.error('reports', 'Failed to evict suspended user', {
+        userId: req.params.uniqueId,
+        error: err.message,
+      }),
+    );
 
     res.json({ success: true });
   } catch (err) {
-    log.error('reports', 'POST /api/admin/users/:uniqueId/suspend failed', { userId: req.params.uniqueId, error: err.message });
+    log.error('reports', 'POST /api/admin/users/:uniqueId/suspend failed', {
+      userId: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -643,41 +724,48 @@ router.post('/admin/users/:uniqueId/unsuspend', async (req, res) => {
     const user = await getDoc(`users/${req.params.uniqueId}`);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const preName  = user.preSuspensionDisplayName     ?? user.pre_suspension_display_name     ?? null;
-    const prePhoto = user.preSuspensionProfilePhotoUrl  ?? user.pre_suspension_profile_photo_url ?? null;
-    const preCover = user.preSuspensionCoverPhotoUrl    ?? user.pre_suspension_cover_photo_url   ?? null;
+    const preName = user.preSuspensionDisplayName ?? user.pre_suspension_display_name ?? null;
+    const prePhoto =
+      user.preSuspensionProfilePhotoUrl ?? user.pre_suspension_profile_photo_url ?? null;
+    const preCover = user.preSuspensionCoverPhotoUrl ?? user.pre_suspension_cover_photo_url ?? null;
 
     const restore = {};
-    if (preName)  restore.displayName     = preName;
+    if (preName) restore.displayName = preName;
     if (prePhoto) restore.profilePhotoUrl = prePhoto;
-    if (preCover) restore.coverPhotoUrl   = preCover;
+    if (preCover) restore.coverPhotoUrl = preCover;
 
     await Promise.all([
       db.doc(`users/${req.params.uniqueId}`).update({
-        isSuspended:                  false,
-        suspensionReason:             null,
-        suspensionStartDate:          null,
-        suspensionEndDate:             null,
-        suspensionCanAppeal:          null,
-        suspendedBy:                  null,
-        preSuspensionDisplayName:     null,
+        isSuspended: false,
+        suspensionReason: null,
+        suspensionStartDate: null,
+        suspensionEndDate: null,
+        suspensionCanAppeal: null,
+        suspendedBy: null,
+        preSuspensionDisplayName: null,
         preSuspensionProfilePhotoUrl: null,
-        preSuspensionCoverPhotoUrl:   null,
+        preSuspensionCoverPhotoUrl: null,
         ...restore,
       }),
-      db.doc(`adminAuditLog/${generateId()}`).set({
-        adminId:      req.auth.uid,
-        action:       'UNSUSPEND',
-        targetUserId: req.params.uniqueId,
-        details:      null,
-        createdAt:    now(),
-      }, { merge: true }),
+      db.doc(`adminAuditLog/${generateId()}`).set(
+        {
+          adminId: req.auth.uid,
+          action: 'UNSUSPEND',
+          targetUserId: req.params.uniqueId,
+          details: null,
+          createdAt: now(),
+        },
+        { merge: true },
+      ),
     ]);
 
     clearSuspensionCache(req.params.uniqueId);
     res.json({ success: true });
   } catch (err) {
-    log.error('reports', 'POST /api/admin/users/:uniqueId/unsuspend failed', { userId: req.params.uniqueId, error: err.message });
+    log.error('reports', 'POST /api/admin/users/:uniqueId/unsuspend failed', {
+      userId: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -692,37 +780,44 @@ router.post('/appeals', async (req, res) => {
     const body = req.body;
     if (!body?.appealText) return res.status(400).json({ error: 'appealText is required' });
     if (typeof body.appealText !== 'string' || body.appealText.length > 500) {
-      return res.status(400).json({ error: 'appealText must be a string of at most 500 characters' });
+      return res
+        .status(400)
+        .json({ error: 'appealText must be a string of at most 500 characters' });
     }
 
     const uniqueId = req.auth.uniqueId;
 
     const user = await getDoc(`users/${uniqueId}`);
-    const isSuspended      = user?.isSuspended      ?? user?.is_suspended      ?? false;
-    const canAppeal        = user?.suspensionCanAppeal ?? user?.suspension_can_appeal ?? false;
+    const isSuspended = user?.isSuspended ?? user?.is_suspended ?? false;
+    const canAppeal = user?.suspensionCanAppeal ?? user?.suspension_can_appeal ?? false;
 
     if (!isSuspended) return res.status(400).json({ error: 'User is not suspended' });
-    if (!canAppeal)   return res.status(403).json({ error: 'Appeals are not allowed for this suspension' });
+    if (!canAppeal)
+      return res.status(403).json({ error: 'Appeals are not allowed for this suspension' });
 
     // Check for existing pending appeal
     const existing = await queryDocs(
-      db.collection('suspensionAppeals')
+      db
+        .collection('suspensionAppeals')
         .where('userId', '==', uniqueId)
         .where('status', '==', 'pending')
-        .limit(1)
+        .limit(1),
     );
 
     if (existing.length > 0) return res.status(409).json({ error: 'An appeal is already pending' });
 
     const appealId = generateId();
-    await db.doc(`suspensionAppeals/${appealId}`).set({
-      userId:     uniqueId,
-      appealText: body.appealText,
-      status:     'pending',
-      reviewedBy: null,
-      reviewedAt: null,
-      createdAt:  now(),
-    }, { merge: true });
+    await db.doc(`suspensionAppeals/${appealId}`).set(
+      {
+        userId: uniqueId,
+        appealText: body.appealText,
+        status: 'pending',
+        reviewedBy: null,
+        reviewedAt: null,
+        createdAt: now(),
+      },
+      { merge: true },
+    );
 
     res.json({ success: true, appealId });
   } catch (err) {
@@ -747,17 +842,19 @@ router.get('/appeals', async (req, res) => {
     const appeals = await queryDocs(query);
 
     // Enrich with user data (display name, uniqueId, suspension info)
-    const enriched = await Promise.all(appeals.map(async a => {
-      const uid = a.userId ?? a.user_id;
-      const userData = uid ? await getDoc(`users/${uid}`) : null;
-      return {
-        ...a,
-        displayName:      userData?.displayName     ?? userData?.display_name     ?? null,
-        uniqueId:         userData?.uniqueId        ?? userData?.unique_id        ?? null,
-        suspensionReason: userData?.suspensionReason ?? userData?.suspension_reason ?? null,
-        suspensionEndDate: userData?.suspensionEndDate ?? userData?.suspension_end_date ?? null,
-      };
-    }));
+    const enriched = await Promise.all(
+      appeals.map(async (a) => {
+        const uid = a.userId ?? a.user_id;
+        const userData = uid ? await getDoc(`users/${uid}`) : null;
+        return {
+          ...a,
+          displayName: userData?.displayName ?? userData?.display_name ?? null,
+          uniqueId: userData?.uniqueId ?? userData?.unique_id ?? null,
+          suspensionReason: userData?.suspensionReason ?? userData?.suspension_reason ?? null,
+          suspensionEndDate: userData?.suspensionEndDate ?? userData?.suspension_end_date ?? null,
+        };
+      }),
+    );
 
     res.json(enriched);
   } catch (err) {
@@ -781,11 +878,11 @@ router.patch('/appeals/:id', async (req, res) => {
     if (!appeal) return res.status(404).json({ error: 'Appeal not found' });
 
     const timestamp = now();
-    const userId    = appeal.userId ?? appeal.user_id;
+    const userId = appeal.userId ?? appeal.user_id;
 
     // Update the appeal document
     await db.doc(`suspensionAppeals/${req.params.id}`).update({
-      status:     status,
+      status: status,
       reviewedBy: req.auth.uid,
       reviewedAt: timestamp,
     });
@@ -794,25 +891,27 @@ router.patch('/appeals/:id', async (req, res) => {
     if (status === 'approved') {
       const user = await getDoc(`users/${userId}`);
       if (user) {
-        const preName  = user.preSuspensionDisplayName     ?? user.pre_suspension_display_name     ?? null;
-        const prePhoto = user.preSuspensionProfilePhotoUrl  ?? user.pre_suspension_profile_photo_url ?? null;
-        const preCover = user.preSuspensionCoverPhotoUrl    ?? user.pre_suspension_cover_photo_url   ?? null;
+        const preName = user.preSuspensionDisplayName ?? user.pre_suspension_display_name ?? null;
+        const prePhoto =
+          user.preSuspensionProfilePhotoUrl ?? user.pre_suspension_profile_photo_url ?? null;
+        const preCover =
+          user.preSuspensionCoverPhotoUrl ?? user.pre_suspension_cover_photo_url ?? null;
 
         const restore = {};
-        if (preName)  restore.displayName     = preName;
+        if (preName) restore.displayName = preName;
         if (prePhoto) restore.profilePhotoUrl = prePhoto;
-        if (preCover) restore.coverPhotoUrl   = preCover;
+        if (preCover) restore.coverPhotoUrl = preCover;
 
         await db.doc(`users/${userId}`).update({
-          isSuspended:                  false,
-          suspensionReason:             null,
-          suspensionStartDate:          null,
-          suspensionEndDate:             null,
-          suspensionCanAppeal:          null,
-          suspendedBy:                  null,
-          preSuspensionDisplayName:     null,
+          isSuspended: false,
+          suspensionReason: null,
+          suspensionStartDate: null,
+          suspensionEndDate: null,
+          suspensionCanAppeal: null,
+          suspendedBy: null,
+          preSuspensionDisplayName: null,
           preSuspensionProfilePhotoUrl: null,
-          preSuspensionCoverPhotoUrl:   null,
+          preSuspensionCoverPhotoUrl: null,
           ...restore,
         });
         clearSuspensionCache(userId);
@@ -820,17 +919,23 @@ router.patch('/appeals/:id', async (req, res) => {
     }
 
     // Audit log
-    await db.doc(`adminAuditLog/${generateId()}`).set({
-      adminId:      req.auth.uid,
-      action:       status === 'approved' ? 'APPEAL_APPROVED' : 'APPEAL_DENIED',
-      targetUserId: userId,
-      details:      null,
-      createdAt:    timestamp,
-    }, { merge: true });
+    await db.doc(`adminAuditLog/${generateId()}`).set(
+      {
+        adminId: req.auth.uid,
+        action: status === 'approved' ? 'APPEAL_APPROVED' : 'APPEAL_DENIED',
+        targetUserId: userId,
+        details: null,
+        createdAt: timestamp,
+      },
+      { merge: true },
+    );
 
     res.json({ success: true });
   } catch (err) {
-    log.error('reports', 'PATCH /api/appeals/:id failed', { appealId: req.params.id, error: err.message });
+    log.error('reports', 'PATCH /api/appeals/:id failed', {
+      appealId: req.params.id,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -846,14 +951,12 @@ router.get('/admin/audit-log', async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit) || 50, 200);
 
     const entries = await queryDocs(
-      db.collection('adminAuditLog')
-        .orderBy('createdAt', 'desc')
-        .limit(limit)
+      db.collection('adminAuditLog').orderBy('createdAt', 'desc').limit(limit),
     );
 
     // Enrich with admin display name
-    const adminIds = [...new Set(entries.map(e => e.adminId).filter(Boolean))];
-    const adminDocs = await Promise.all(adminIds.map(id => getDoc(`users/${id}`)));
+    const adminIds = [...new Set(entries.map((e) => e.adminId).filter(Boolean))];
+    const adminDocs = await Promise.all(adminIds.map((id) => getDoc(`users/${id}`)));
 
     const adminNameMap = {};
     for (let i = 0; i < adminIds.length; i++) {
@@ -863,7 +966,7 @@ router.get('/admin/audit-log', async (req, res) => {
       }
     }
 
-    const enriched = entries.map(e => ({
+    const enriched = entries.map((e) => ({
       ...e,
       adminName: adminNameMap[e.adminId] || null,
     }));
@@ -888,8 +991,7 @@ router.get('/admin/audit-log', async (req, res) => {
  */
 async function evictSuspendedUser(userId) {
   const rooms = await queryDocs(
-    db.collection('rooms')
-      .where('participantIds', 'array-contains', userId)
+    db.collection('rooms').where('participantIds', 'array-contains', userId),
   );
 
   if (rooms.length === 0) return;
@@ -907,7 +1009,7 @@ async function evictSuspendedUser(userId) {
       rtdbEvents.push({ roomId: room.id, type: 'room_closed', remove: true });
     } else {
       // Regular participant — remove from participants and clear their seat
-      const participantIds = (room.participantIds || []).filter(id => id !== userId);
+      const participantIds = (room.participantIds || []).filter((id) => id !== userId);
 
       const seats = room.seats ? { ...room.seats } : {};
       for (const [index, seat] of Object.entries(seats)) {
@@ -947,11 +1049,21 @@ async function evictSuspendedUser(userId) {
         type: evt.type,
         ts: Date.now(),
       });
-    } catch (err) { log.warn('reports', `Failed to write ${evt.type} RTDB event`, { roomId: evt.roomId, error: err.message }); }
+    } catch (err) {
+      log.warn('reports', `Failed to write ${evt.type} RTDB event`, {
+        roomId: evt.roomId,
+        error: err.message,
+      });
+    }
     if (evt.remove) {
       try {
         await rtdb.ref(`rooms/${evt.roomId}`).remove();
-      } catch (err) { log.warn('reports', 'Failed to remove RTDB room node', { roomId: evt.roomId, error: err.message }); }
+      } catch (err) {
+        log.warn('reports', 'Failed to remove RTDB room node', {
+          roomId: evt.roomId,
+          error: err.message,
+        });
+      }
     }
   }
 }

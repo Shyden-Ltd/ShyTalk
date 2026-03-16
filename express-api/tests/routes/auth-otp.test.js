@@ -22,7 +22,7 @@ jest.mock('../../src/utils/firebase', () => ({
     getUserByEmail: jest.fn(),
   },
   FieldValue: {
-    increment: jest.fn(n => `increment(${n})`),
+    increment: jest.fn((n) => `increment(${n})`),
   },
 }));
 
@@ -80,12 +80,11 @@ describe('OTP Routes', () => {
   describe('POST /api/auth/otp/send', () => {
     it('should send OTP and return 200', async () => {
       // No existing OTP doc
-      mockDocGet.mockResolvedValueOnce({ exists: false }) // otpCodes/{email}
+      mockDocGet
+        .mockResolvedValueOnce({ exists: false }) // otpCodes/{email}
         .mockResolvedValueOnce({ exists: false }); // emailMetrics/daily
 
-      const res = await request(app)
-        .post('/api/auth/otp/send')
-        .send({ email: 'user@example.com' });
+      const res = await request(app).post('/api/auth/otp/send').send({ email: 'user@example.com' });
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ message: 'OTP sent' });
@@ -94,35 +93,28 @@ describe('OTP Routes', () => {
     });
 
     it('should store hashed OTP in Firestore', async () => {
-      mockDocGet.mockResolvedValueOnce({ exists: false })
-        .mockResolvedValueOnce({ exists: false });
+      mockDocGet.mockResolvedValueOnce({ exists: false }).mockResolvedValueOnce({ exists: false });
 
-      await request(app)
-        .post('/api/auth/otp/send')
-        .send({ email: 'user@example.com' });
+      await request(app).post('/api/auth/otp/send').send({ email: 'user@example.com' });
 
       expect(mockDocSet).toHaveBeenCalledWith(
         'otpCodes/user@example.com',
         expect.objectContaining({
           hashedCode: '$2b$10$hashedcode',
           attempts: 0,
-        })
+        }),
       );
     });
 
     it('should reject missing email', async () => {
-      const res = await request(app)
-        .post('/api/auth/otp/send')
-        .send({});
+      const res = await request(app).post('/api/auth/otp/send').send({});
 
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/email/i);
     });
 
     it('should reject invalid email format', async () => {
-      const res = await request(app)
-        .post('/api/auth/otp/send')
-        .send({ email: 'not-an-email' });
+      const res = await request(app).post('/api/auth/otp/send').send({ email: 'not-an-email' });
 
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/email/i);
@@ -148,17 +140,17 @@ describe('OTP Routes', () => {
 
     it('should reset rate limit after 60 minutes', async () => {
       // Existing OTP doc with 5 requests but first request was 61 min ago
-      mockDocGet.mockResolvedValueOnce({
-        exists: true,
-        data: () => ({
-          requestCount: 5,
-          firstRequestAt: Date.now() - 61 * 60 * 1000, // 61 min ago — window expired
-        }),
-      }).mockResolvedValueOnce({ exists: false }); // emailMetrics/daily
+      mockDocGet
+        .mockResolvedValueOnce({
+          exists: true,
+          data: () => ({
+            requestCount: 5,
+            firstRequestAt: Date.now() - 61 * 60 * 1000, // 61 min ago — window expired
+          }),
+        })
+        .mockResolvedValueOnce({ exists: false }); // emailMetrics/daily
 
-      const res = await request(app)
-        .post('/api/auth/otp/send')
-        .send({ email: 'user@example.com' });
+      const res = await request(app).post('/api/auth/otp/send').send({ email: 'user@example.com' });
 
       expect(res.status).toBe(200);
       expect(sendEmail).toHaveBeenCalledTimes(1);
@@ -175,9 +167,7 @@ describe('OTP Routes', () => {
           }),
         }); // emailMetrics/daily
 
-      const res = await request(app)
-        .post('/api/auth/otp/send')
-        .send({ email: 'user@example.com' });
+      const res = await request(app).post('/api/auth/otp/send').send({ email: 'user@example.com' });
 
       expect(res.status).toBe(429);
       expect(res.body.error).toBe('daily_limit');
@@ -195,9 +185,7 @@ describe('OTP Routes', () => {
           }),
         }); // emailMetrics/daily
 
-      const res = await request(app)
-        .post('/api/auth/otp/send')
-        .send({ email: 'user@example.com' });
+      const res = await request(app).post('/api/auth/otp/send').send({ email: 'user@example.com' });
 
       expect(res.status).toBe(200);
     });
@@ -205,8 +193,7 @@ describe('OTP Routes', () => {
     it('should accept valid email addresses', async () => {
       // Disposable email blocking is handled client-side (AuthViewModel)
       // Server accepts all valid email formats
-      mockDocGet.mockResolvedValueOnce({ exists: false })
-        .mockResolvedValueOnce({ exists: false });
+      mockDocGet.mockResolvedValueOnce({ exists: false }).mockResolvedValueOnce({ exists: false });
 
       const res = await request(app)
         .post('/api/auth/otp/send')
@@ -299,7 +286,7 @@ describe('OTP Routes', () => {
 
       expect(mockDocUpdate).toHaveBeenCalledWith(
         'otpCodes/user@example.com',
-        expect.objectContaining({ attempts: 2 })
+        expect.objectContaining({ attempts: 2 }),
       );
     });
 
@@ -350,9 +337,7 @@ describe('OTP Routes', () => {
     });
 
     it('should reject missing email', async () => {
-      const res = await request(app)
-        .post('/api/auth/otp/verify')
-        .send({ code: '123456' });
+      const res = await request(app).post('/api/auth/otp/verify').send({ code: '123456' });
 
       expect(res.status).toBe(400);
     });

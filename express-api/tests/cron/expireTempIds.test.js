@@ -55,15 +55,24 @@ describe('expireTempIds', () => {
       size: 2,
       docs: [
         { ref: docRef1, data: () => ({ tempUniqueId: 11111111, tempUniqueIdExpiry: pastExpiry }) },
-        { ref: docRef2, data: () => ({ tempUniqueId: 22222222, tempUniqueIdExpiry: pastExpiry - 100000 }) },
+        {
+          ref: docRef2,
+          data: () => ({ tempUniqueId: 22222222, tempUniqueIdExpiry: pastExpiry - 100000 }),
+        },
       ],
     });
 
     await expireTempIds();
 
     expect(mockBatchUpdate).toHaveBeenCalledTimes(2);
-    expect(mockBatchUpdate).toHaveBeenCalledWith(docRef1, { tempUniqueId: null, tempUniqueIdExpiry: null });
-    expect(mockBatchUpdate).toHaveBeenCalledWith(docRef2, { tempUniqueId: null, tempUniqueIdExpiry: null });
+    expect(mockBatchUpdate).toHaveBeenCalledWith(docRef1, {
+      tempUniqueId: null,
+      tempUniqueIdExpiry: null,
+    });
+    expect(mockBatchUpdate).toHaveBeenCalledWith(docRef2, {
+      tempUniqueId: null,
+      tempUniqueIdExpiry: null,
+    });
     expect(mockBatchCommit).toHaveBeenCalledTimes(1);
   });
 

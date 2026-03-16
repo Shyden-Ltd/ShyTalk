@@ -56,8 +56,11 @@ router.patch('/notifications/settings', async (req, res) => {
     }
 
     const allowedFields = [
-      'pmNotificationsEnabled', 'pmSoundEnabled',
-      'pmShowTimestamps', 'pmShowDateSeparators', 'pmNotificationPreview',
+      'pmNotificationsEnabled',
+      'pmSoundEnabled',
+      'pmShowTimestamps',
+      'pmShowDateSeparators',
+      'pmNotificationPreview',
     ];
 
     const updates = {};

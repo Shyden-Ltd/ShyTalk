@@ -26,7 +26,7 @@ jest.mock('../../src/utils/firebase', () => ({
     setCustomUserClaims: jest.fn().mockResolvedValue(),
   },
   FieldValue: {
-    increment: jest.fn(n => `increment(${n})`),
+    increment: jest.fn((n) => `increment(${n})`),
     arrayUnion: jest.fn((...args) => `arrayUnion(${args})`),
     arrayRemove: jest.fn((...args) => `arrayRemove(${args})`),
   },
@@ -98,9 +98,7 @@ describe('POST /api/users/:uniqueId/appeal', () => {
 
   it('returns 400 when appealText is missing', async () => {
     const app = createApp('uid-A', 10000001);
-    const res = await request(app)
-      .post('/api/users/10000001/appeal')
-      .send({});
+    const res = await request(app).post('/api/users/10000001/appeal').send({});
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/appealText/i);
@@ -132,13 +130,13 @@ describe('POST /api/users/:uniqueId/appeal', () => {
         appealText: 'I believe my suspension was a mistake.',
         status: 'pending',
       }),
-      { merge: true }
+      { merge: true },
     );
 
     // Should update the user doc
     expect(mockDocUpdate).toHaveBeenCalledWith(
       'users/10000001',
-      expect.objectContaining({ suspensionAppealStatus: 'pending' })
+      expect.objectContaining({ suspensionAppealStatus: 'pending' }),
     );
   });
 });
@@ -148,9 +146,7 @@ describe('POST /api/users/:uniqueId/appeal', () => {
 describe('POST /api/users/:uniqueId/lift-suspension', () => {
   it('returns 403 when caller does not own the account', async () => {
     const app = createApp('uid-A', 10000001);
-    const res = await request(app)
-      .post('/api/users/10000099/lift-suspension')
-      .send({});
+    const res = await request(app).post('/api/users/10000099/lift-suspension').send({});
 
     expect(res.status).toBe(403);
   });
@@ -162,9 +158,7 @@ describe('POST /api/users/:uniqueId/lift-suspension', () => {
     });
 
     const app = createApp('uid-A', 10000001);
-    const res = await request(app)
-      .post('/api/users/10000001/lift-suspension')
-      .send({});
+    const res = await request(app).post('/api/users/10000001/lift-suspension').send({});
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/not suspended/i);
@@ -179,9 +173,7 @@ describe('POST /api/users/:uniqueId/lift-suspension', () => {
     });
 
     const app = createApp('uid-A', 10000001);
-    const res = await request(app)
-      .post('/api/users/10000001/lift-suspension')
-      .send({});
+    const res = await request(app).post('/api/users/10000001/lift-suspension').send({});
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/not expired/i);
@@ -198,9 +190,7 @@ describe('POST /api/users/:uniqueId/lift-suspension', () => {
     const { clearSuspensionCache } = require('../../src/middleware/auth');
 
     const app = createApp('uid-A', 10000001);
-    const res = await request(app)
-      .post('/api/users/10000001/lift-suspension')
-      .send({});
+    const res = await request(app).post('/api/users/10000001/lift-suspension').send({});
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -211,7 +201,7 @@ describe('POST /api/users/:uniqueId/lift-suspension', () => {
         isSuspended: false,
         suspensionReason: null,
         suspensionEndDate: null,
-      })
+      }),
     );
 
     // Should clear the suspension cache
@@ -227,9 +217,7 @@ describe('POST /api/users/:uniqueId/lift-suspension', () => {
     });
 
     const app = createApp('uid-A', 10000001);
-    const res = await request(app)
-      .post('/api/users/10000001/lift-suspension')
-      .send({});
+    const res = await request(app).post('/api/users/10000001/lift-suspension').send({});
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -241,9 +229,7 @@ describe('POST /api/users/:uniqueId/lift-suspension', () => {
 describe('POST /api/users/:uniqueId/unfollow', () => {
   it('returns 400 when targetUserId is missing', async () => {
     const app = createApp('uid-A', 10000001);
-    const res = await request(app)
-      .post('/api/users/10000001/unfollow')
-      .send({});
+    const res = await request(app).post('/api/users/10000001/unfollow').send({});
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/targetUserId/i);
@@ -278,9 +264,7 @@ describe('POST /api/users/:uniqueId/unfollow', () => {
 describe('POST /api/users/:uniqueId/remove-follower', () => {
   it('returns 400 when followerUserId is missing', async () => {
     const app = createApp('uid-A', 10000001);
-    const res = await request(app)
-      .post('/api/users/10000001/remove-follower')
-      .send({});
+    const res = await request(app).post('/api/users/10000001/remove-follower').send({});
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/followerUserId/i);

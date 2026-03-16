@@ -8,12 +8,15 @@
 
 const admin = require('firebase-admin');
 
-const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH
-  || process.env.GOOGLE_APPLICATION_CREDENTIALS;
+const serviceAccountPath =
+  process.env.FIREBASE_SERVICE_ACCOUNT_PATH || process.env.GOOGLE_APPLICATION_CREDENTIALS;
 
 if (!admin.apps.length) {
   if (!process.env.FIREBASE_DATABASE_URL) {
-    console.error('FIREBASE_DATABASE_URL env var is required (RTDB region differs between dev and prod)');
+    // eslint-disable-next-line no-console
+    console.error(
+      'FIREBASE_DATABASE_URL env var is required (RTDB region differs between dev and prod)',
+    );
     process.exit(1);
   }
   const initOptions = {

@@ -15,9 +15,7 @@ const log = require('./log');
 async function sendFcmToTokens(tokens, data) {
   if (!tokens || tokens.length === 0) return [];
 
-  const stringData = Object.fromEntries(
-    Object.entries(data).map(([k, v]) => [k, String(v)])
-  );
+  const stringData = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)]));
 
   const result = await messaging.sendEachForMulticast({
     tokens,
@@ -36,7 +34,10 @@ async function sendFcmToTokens(tokens, data) {
       ) {
         invalidTokens.push(tokens[i]);
       } else {
-        log.warn('fcm', `FCM send failed for token index ${i}`, { code, message: resp.error.message });
+        log.warn('fcm', `FCM send failed for token index ${i}`, {
+          code,
+          message: resp.error.message,
+        });
       }
     }
   });

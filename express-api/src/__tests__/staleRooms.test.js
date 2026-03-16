@@ -54,16 +54,16 @@ function makeRoomDoc(id, overrides) {
   const data = {
     state: 'OWNER_AWAY',
     ownerId: 'owner1',
-    ownerLeftAt: Date.now() - (1 * 60 * 1000), // 1 minute ago by default
+    ownerLeftAt: Date.now() - 1 * 60 * 1000, // 1 minute ago by default
     seats: {
-      '0': makeOccupiedSeat('owner1'),
-      '1': makeEmptySeat(),
-      '2': makeEmptySeat(),
-      '3': makeEmptySeat(),
-      '4': makeEmptySeat(),
-      '5': makeEmptySeat(),
-      '6': makeEmptySeat(),
-      '7': makeEmptySeat(),
+      0: makeOccupiedSeat('owner1'),
+      1: makeEmptySeat(),
+      2: makeEmptySeat(),
+      3: makeEmptySeat(),
+      4: makeEmptySeat(),
+      5: makeEmptySeat(),
+      6: makeEmptySeat(),
+      7: makeEmptySeat(),
     },
     participantIds: ['owner1'],
     ...overrides,
@@ -91,7 +91,7 @@ describe('staleRooms cron', () => {
   test('closes OWNER_AWAY rooms with empty non-owner seats immediately', async () => {
     // Room where owner left only 1 minute ago, but all non-owner seats are empty
     const room = makeRoomDoc('room-empty', {
-      ownerLeftAt: Date.now() - (1 * 60 * 1000), // Only 1 minute ago
+      ownerLeftAt: Date.now() - 1 * 60 * 1000, // Only 1 minute ago
     });
     mockSnapshot([room]);
 
@@ -102,9 +102,7 @@ describe('staleRooms cron', () => {
     expect(mockBatchSet).toHaveBeenCalled();
 
     // Verify the room was included in the batch write with state CLOSED
-    const roomWrite = mockBatchSet.mock.calls.find(
-      ([ref]) => ref.path === 'rooms/room-empty'
-    );
+    const roomWrite = mockBatchSet.mock.calls.find(([ref]) => ref.path === 'rooms/room-empty');
     expect(roomWrite).toBeDefined();
     expect(roomWrite[1].state).toBe('CLOSED');
   });
@@ -112,16 +110,16 @@ describe('staleRooms cron', () => {
   test('does NOT close OWNER_AWAY rooms that still have seated non-owners', async () => {
     // Room where owner left 1 minute ago, but seat 1 has a non-owner
     const room = makeRoomDoc('room-occupied', {
-      ownerLeftAt: Date.now() - (1 * 60 * 1000), // Only 1 minute ago
+      ownerLeftAt: Date.now() - 1 * 60 * 1000, // Only 1 minute ago
       seats: {
-        '0': makeOccupiedSeat('owner1'),
-        '1': makeOccupiedSeat('user2'), // Non-owner seated
-        '2': makeEmptySeat(),
-        '3': makeEmptySeat(),
-        '4': makeEmptySeat(),
-        '5': makeEmptySeat(),
-        '6': makeEmptySeat(),
-        '7': makeEmptySeat(),
+        0: makeOccupiedSeat('owner1'),
+        1: makeOccupiedSeat('user2'), // Non-owner seated
+        2: makeEmptySeat(),
+        3: makeEmptySeat(),
+        4: makeEmptySeat(),
+        5: makeEmptySeat(),
+        6: makeEmptySeat(),
+        7: makeEmptySeat(),
       },
       participantIds: ['owner1', 'user2'],
     });
@@ -137,16 +135,16 @@ describe('staleRooms cron', () => {
   test('closes OWNER_AWAY rooms after 10 minutes regardless of seat state', async () => {
     // Room where owner left 11 minutes ago with a non-owner still seated
     const room = makeRoomDoc('room-stale', {
-      ownerLeftAt: Date.now() - (11 * 60 * 1000), // 11 minutes ago
+      ownerLeftAt: Date.now() - 11 * 60 * 1000, // 11 minutes ago
       seats: {
-        '0': makeOccupiedSeat('owner1'),
-        '1': makeOccupiedSeat('user2'), // Non-owner seated
-        '2': makeEmptySeat(),
-        '3': makeEmptySeat(),
-        '4': makeEmptySeat(),
-        '5': makeEmptySeat(),
-        '6': makeEmptySeat(),
-        '7': makeEmptySeat(),
+        0: makeOccupiedSeat('owner1'),
+        1: makeOccupiedSeat('user2'), // Non-owner seated
+        2: makeEmptySeat(),
+        3: makeEmptySeat(),
+        4: makeEmptySeat(),
+        5: makeEmptySeat(),
+        6: makeEmptySeat(),
+        7: makeEmptySeat(),
       },
       participantIds: ['owner1', 'user2'],
     });
@@ -159,16 +157,12 @@ describe('staleRooms cron', () => {
     expect(mockBatchSet).toHaveBeenCalled();
 
     // Verify the room was included in the batch write with state CLOSED
-    const roomWrite = mockBatchSet.mock.calls.find(
-      ([ref]) => ref.path === 'rooms/room-stale'
-    );
+    const roomWrite = mockBatchSet.mock.calls.find(([ref]) => ref.path === 'rooms/room-stale');
     expect(roomWrite).toBeDefined();
     expect(roomWrite[1].state).toBe('CLOSED');
 
     // Verify participant currentRoomId was cleared
-    const userWrite = mockBatchSet.mock.calls.find(
-      ([ref]) => ref.path === 'users/user2'
-    );
+    const userWrite = mockBatchSet.mock.calls.find(([ref]) => ref.path === 'users/user2');
     expect(userWrite).toBeDefined();
     expect(userWrite[1].currentRoomId).toBeNull();
   });

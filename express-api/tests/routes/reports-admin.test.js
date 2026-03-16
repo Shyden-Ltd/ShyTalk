@@ -41,7 +41,7 @@ jest.mock('../../src/utils/firebase', () => ({
   FieldValue: {
     arrayRemove: jest.fn(),
     arrayUnion: jest.fn(),
-    increment: jest.fn(n => `increment(${n})`),
+    increment: jest.fn((n) => `increment(${n})`),
   },
 }));
 
@@ -132,7 +132,7 @@ describe('GET /api/reports/stats', () => {
           status: 'resolved',
           resolvedAt: 1700000000000,
           resolvedBy: 'admin-firebase-uid',
-          createdAt:  1699900000000,
+          createdAt: 1699900000000,
         },
       ])
       .mockResolvedValueOnce([
@@ -140,7 +140,7 @@ describe('GET /api/reports/stats', () => {
           id: 'r3',
           status: 'resolved',
           resolvedAt: 1700000000000,
-          createdAt:  1699900000000,
+          createdAt: 1699900000000,
         },
       ]);
 
@@ -182,14 +182,14 @@ describe('GET /api/reports/export', () => {
     queryDocs.mockResolvedValueOnce([
       {
         id: 'r1',
-        reporterName:     'Alice',
+        reporterName: 'Alice',
         reportedUserName: 'Bob',
-        reason:           'spam',
-        description:      'Sent spam messages',
-        actionTaken:      'warned',
-        resolvedAt:       1700000000000,
-        resolvedBy:       'admin-firebase-uid',
-        createdAt:        1699000000000,
+        reason: 'spam',
+        description: 'Sent spam messages',
+        actionTaken: 'warned',
+        resolvedAt: 1700000000000,
+        resolvedBy: 'admin-firebase-uid',
+        createdAt: 1699000000000,
       },
     ]);
 
@@ -251,7 +251,7 @@ describe('POST /api/reports/:id/lock', () => {
       expect.objectContaining({
         lockedBy: 'admin-firebase-uid',
       }),
-      { merge: true }
+      { merge: true },
     );
   });
 
@@ -377,19 +377,19 @@ describe('GET /api/admin/audit-log', () => {
     queryDocs.mockResolvedValueOnce([
       {
         id: 'log-1',
-        adminId:      'admin-firebase-uid',
-        action:       'SUSPEND',
+        adminId: 'admin-firebase-uid',
+        action: 'SUSPEND',
         targetUserId: 'user-123',
-        details:      'Spam',
-        createdAt:    1700000000000,
+        details: 'Spam',
+        createdAt: 1700000000000,
       },
       {
         id: 'log-2',
-        adminId:      'admin-firebase-uid',
-        action:       'RESOLVE_REPORT',
+        adminId: 'admin-firebase-uid',
+        action: 'RESOLVE_REPORT',
         targetUserId: 'user-456',
-        details:      'Report r1: dismissed',
-        createdAt:    1699990000000,
+        details: 'Report r1: dismissed',
+        createdAt: 1699990000000,
       },
     ]);
 

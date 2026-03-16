@@ -51,15 +51,22 @@ function buildMessage(doc) {
  * Uses batch Firestore reads to minimize read cost.
  */
 async function sendMessageNotifications(
-  conversationId, senderId, senderName, previewText, type, recipients, isGroup, groupName
+  conversationId,
+  senderId,
+  senderName,
+  previewText,
+  type,
+  recipients,
+  isGroup,
+  groupName,
 ) {
   try {
     if (recipients.length === 0) return;
 
     // Batch-fetch all user docs and settings docs (2 reads instead of 2*N)
-    const userRefs = recipients.map(p => db.doc(`users/${p.userId}`));
-    const settingsRefs = recipients.map(p =>
-      db.doc(`conversations/${conversationId}/userSettings/${p.userId}`)
+    const userRefs = recipients.map((p) => db.doc(`users/${p.userId}`));
+    const settingsRefs = recipients.map((p) =>
+      db.doc(`conversations/${conversationId}/userSettings/${p.userId}`),
     );
 
     const [userSnaps, settingsSnaps] = await Promise.all([
@@ -122,7 +129,10 @@ async function sendMessageNotifications(
       }
     }
   } catch (err) {
-    log.error('conversations', 'Failed to send message notifications', { conversationId, error: err.message });
+    log.error('conversations', 'Failed to send message notifications', {
+      conversationId,
+      error: err.message,
+    });
   }
 }
 
@@ -134,7 +144,10 @@ async function broadcastToConversation(conversationId, data) {
       ts: Date.now(),
     });
   } catch (err) {
-    log.error('conversations', 'Failed to write RTDB event', { conversationId, error: err.message });
+    log.error('conversations', 'Failed to write RTDB event', {
+      conversationId,
+      error: err.message,
+    });
   }
 }
 
@@ -149,22 +162,23 @@ router.get('/conversations/:id/messages', async (req, res) => {
       return res.status(403).json({ error: 'Not a participant of this conversation' });
     }
 
-    const limit = Math.min(
-      parseInt(req.query.limit) || DEFAULT_MESSAGE_LIMIT,
-      MAX_MESSAGE_LIMIT
-    );
+    const limit = Math.min(parseInt(req.query.limit) || DEFAULT_MESSAGE_LIMIT, MAX_MESSAGE_LIMIT);
 
-    const snap = await db.collection(`conversations/${req.params.id}/messages`)
+    const snap = await db
+      .collection(`conversations/${req.params.id}/messages`)
       .orderBy('createdAt', 'desc')
       .limit(limit)
       .get();
 
-    const messages = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const messages = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
     // Return in chronological order (oldest first)
     return res.json(messages.reverse().map(buildMessage));
   } catch (err) {
-    log.error('conversations', 'Failed to fetch messages', { conversationId: req.params.id, error: err.message });
+    log.error('conversations', 'Failed to fetch messages', {
+      conversationId: req.params.id,
+      error: err.message,
+    });
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -190,7 +204,9 @@ router.post('/conversations/:id/messages', async (req, res) => {
     }
 
     // Validate imageUrls count
-    const imageUrls = Array.isArray(body.imageUrls) ? body.imageUrls.slice(0, MAX_IMAGES_PER_MESSAGE) : [];
+    const imageUrls = Array.isArray(body.imageUrls)
+      ? body.imageUrls.slice(0, MAX_IMAGES_PER_MESSAGE)
+      : [];
 
     log.info('conversations', 'Sending message', { conversationId, senderId, type });
 
@@ -210,7 +226,7 @@ router.post('/conversations/:id/messages', async (req, res) => {
     if (!participantIds.includes(senderId)) {
       return res.status(403).json({ error: 'Not a participant of this conversation' });
     }
-    const recipientIds = participantIds.filter(pid => pid !== senderId);
+    const recipientIds = participantIds.filter((pid) => pid !== senderId);
     const isGroup = !!convDoc.isGroup;
     const groupName = convDoc.groupName || null;
 
@@ -240,39 +256,76 @@ router.post('/conversations/:id/messages', async (req, res) => {
     const batch = db.batch();
 
     batch.set(db.doc(`conversations/${conversationId}/messages/${messageId}`), msgData);
-    batch.set(db.doc(`conversations/${conversationId}`), {
-      lastMessage,
-      lastMessageAt: timestamp,
-    }, { merge: true });
+    batch.set(
+      db.doc(`conversations/${conversationId}`),
+      {
+        lastMessage,
+        lastMessageAt: timestamp,
+      },
+      { merge: true },
+    );
 
     // Increment unread counts for all recipients (set+merge in case doc doesn't exist yet)
     for (const pid of recipientIds) {
-      batch.set(db.doc(`conversations/${conversationId}/userSettings/${pid}`), {
-        unreadCount: FieldValue.increment(1),
-      }, { merge: true });
+      batch.set(
+        db.doc(`conversations/${conversationId}/userSettings/${pid}`),
+        {
+          unreadCount: FieldValue.increment(1),
+        },
+        { merge: true },
+      );
     }
 
     await batch.commit();
 
     // Un-hide conversation for all recipients (fire-and-forget)
     Promise.all(
-      recipientIds.map(pid =>
-        db.doc(`conversations/${conversationId}/userSettings/${pid}`).set({ isHidden: false }, { merge: true })
-      )
-    ).catch(err => log.error('conversations', 'Failed to un-hide for recipients', { conversationId, error: err.message }));
+      recipientIds.map((pid) =>
+        db
+          .doc(`conversations/${conversationId}/userSettings/${pid}`)
+          .set({ isHidden: false }, { merge: true }),
+      ),
+    ).catch((err) =>
+      log.error('conversations', 'Failed to un-hide for recipients', {
+        conversationId,
+        error: err.message,
+      }),
+    );
 
     // FCM notifications + RTDB broadcast (fire-and-forget)
-    const recipients = recipientIds.map(id => ({ userId: id }));
+    const recipients = recipientIds.map((id) => ({ userId: id }));
     sendMessageNotifications(
-      conversationId, senderId, senderName, previewText, type, recipients, isGroup, groupName
-    ).catch(err => log.error('conversations', 'Failed to send notifications', { conversationId, error: err.message }));
+      conversationId,
+      senderId,
+      senderName,
+      previewText,
+      type,
+      recipients,
+      isGroup,
+      groupName,
+    ).catch((err) =>
+      log.error('conversations', 'Failed to send notifications', {
+        conversationId,
+        error: err.message,
+      }),
+    );
 
-    broadcastToConversation(conversationId, { type: 'new_message' })
-      .catch(err => log.error('conversations', 'Failed to broadcast event', { conversationId, error: err.message }));
+    broadcastToConversation(conversationId, { type: 'new_message' }).catch((err) =>
+      log.error('conversations', 'Failed to broadcast event', {
+        conversationId,
+        error: err.message,
+      }),
+    );
 
-    return res.json(buildMessage({ id: messageId, ...msgData, replyToMessageId: msgData.replyToId }));
+    return res.json(
+      buildMessage({ id: messageId, ...msgData, replyToMessageId: msgData.replyToId }),
+    );
   } catch (err) {
-    log.error('conversations', 'Failed to send message', { conversationId: req.params.id, senderId: req.auth?.uniqueId, error: err.message });
+    log.error('conversations', 'Failed to send message', {
+      conversationId: req.params.id,
+      senderId: req.auth?.uniqueId,
+      error: err.message,
+    });
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

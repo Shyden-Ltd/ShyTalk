@@ -207,9 +207,7 @@ describe('POST /api/admin/bans/network', () => {
 describe('DELETE /api/admin/bans/device/:deviceId', () => {
   test('unbans a device (200)', async () => {
     const app = createApp();
-    const res = await request(app)
-      .delete('/api/admin/bans/device/abc-123')
-      .expect(200);
+    const res = await request(app).delete('/api/admin/bans/device/abc-123').expect(200);
 
     expect(res.body.success).toBe(true);
     expect(mockDoc).toHaveBeenCalledWith('deviceBans/abc-123');
@@ -220,9 +218,7 @@ describe('DELETE /api/admin/bans/device/:deviceId', () => {
 describe('DELETE /api/admin/bans/network/:banId', () => {
   test('unbans a network (200)', async () => {
     const app = createApp();
-    const res = await request(app)
-      .delete('/api/admin/bans/network/ban-xyz')
-      .expect(200);
+    const res = await request(app).delete('/api/admin/bans/network/ban-xyz').expect(200);
 
     expect(res.body.success).toBe(true);
     expect(mockDoc).toHaveBeenCalledWith('networkBans/ban-xyz');
@@ -242,9 +238,7 @@ describe('POST /api/admin/bans/unban-all/:uniqueId', () => {
     });
 
     const app = createApp();
-    const res = await request(app)
-      .post('/api/admin/bans/unban-all/user456')
-      .expect(200);
+    const res = await request(app).post('/api/admin/bans/unban-all/user456').expect(200);
 
     expect(res.body.success).toBe(true);
     expect(res.body.removed).toBe(4); // 2 from deviceBans + 2 from networkBans (same mock)
@@ -255,15 +249,11 @@ describe('POST /api/admin/bans/unban-all/:uniqueId', () => {
 describe('GET /api/admin/bans/user/:uniqueId', () => {
   test('gets all bans for user (200)', async () => {
     mockWhereGet.mockResolvedValue({
-      docs: [
-        { id: 'ban1', data: () => ({ reason: 'Spam', type: 'ip' }) },
-      ],
+      docs: [{ id: 'ban1', data: () => ({ reason: 'Spam', type: 'ip' }) }],
     });
 
     const app = createApp();
-    const res = await request(app)
-      .get('/api/admin/bans/user/user456')
-      .expect(200);
+    const res = await request(app).get('/api/admin/bans/user/user456').expect(200);
 
     expect(res.body).toHaveProperty('deviceBans');
     expect(res.body).toHaveProperty('networkBans');

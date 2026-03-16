@@ -43,7 +43,7 @@ jest.mock('../../src/utils/firebase', () => ({
     })),
   },
   FieldValue: {
-    increment: jest.fn(n => `increment(${n})`),
+    increment: jest.fn((n) => `increment(${n})`),
     arrayUnion: jest.fn((...args) => `arrayUnion(${args})`),
     arrayRemove: jest.fn((...args) => `arrayRemove(${args})`),
   },
@@ -57,7 +57,11 @@ jest.mock('../../src/utils/helpers', () => ({
   generateId: () => 'tx-query-123',
   now: () => 1709913600000,
   todayStr: () => new Date().toISOString().split('T')[0],
-  yesterdayStr: () => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0]; },
+  yesterdayStr: () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  },
 }));
 
 jest.mock('../../src/utils/playStore', () => ({

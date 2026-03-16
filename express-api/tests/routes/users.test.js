@@ -36,7 +36,7 @@ jest.mock('../../src/utils/firebase', () => ({
     setCustomUserClaims: jest.fn().mockResolvedValue(),
   },
   FieldValue: {
-    increment: jest.fn(n => `increment(${n})`),
+    increment: jest.fn((n) => `increment(${n})`),
     arrayUnion: jest.fn((...args) => `arrayUnion(${args})`),
     arrayRemove: jest.fn((...args) => `arrayRemove(${args})`),
   },
@@ -102,18 +102,12 @@ describe('POST /api/users', () => {
 
   test('rejects missing provider', async () => {
     const app = createApp('new-user-uid', null);
-    await request(app)
-      .post('/api/users')
-      .send({ identifier: 'alice@gmail.com' })
-      .expect(400);
+    await request(app).post('/api/users').send({ identifier: 'alice@gmail.com' }).expect(400);
   });
 
   test('rejects missing identifier', async () => {
     const app = createApp('new-user-uid', null);
-    await request(app)
-      .post('/api/users')
-      .send({ provider: 'google' })
-      .expect(400);
+    await request(app).post('/api/users').send({ provider: 'google' }).expect(400);
   });
 });
 
@@ -146,10 +140,7 @@ describe('PATCH /api/users/:uniqueId', () => {
 
   test('rejects updating another user', async () => {
     const app = createApp('firebase-uid-A', 10000001);
-    await request(app)
-      .patch('/api/users/10000099')
-      .send({ displayName: 'Hacked' })
-      .expect(403);
+    await request(app).patch('/api/users/10000099').send({ displayName: 'Hacked' }).expect(403);
   });
 });
 
@@ -206,10 +197,7 @@ describe('POST /api/users/:uniqueId/record-visit', () => {
 
   test('rejects missing visitorId', async () => {
     const app = createApp('firebase-uid-visitor', 10000002);
-    await request(app)
-      .post('/api/users/10000099/record-visit')
-      .send({})
-      .expect(400);
+    await request(app).post('/api/users/10000099/record-visit').send({}).expect(400);
   });
 
   test('rejects impersonation (visitorId must match auth uniqueId)', async () => {

@@ -14,7 +14,7 @@ jest.mock('../../src/utils/firebase', () => ({
     })),
   },
   FieldValue: {
-    increment: jest.fn(n => `increment(${n})`),
+    increment: jest.fn((n) => `increment(${n})`),
   },
 }));
 
@@ -38,10 +38,11 @@ beforeEach(() => {
   // Default: successful translation
   global.fetch = jest.fn().mockResolvedValue({
     ok: true,
-    json: () => Promise.resolve({
-      translatedText: 'Hola',
-      detectedLanguage: { language: 'en' },
-    }),
+    json: () =>
+      Promise.resolve({
+        translatedText: 'Hola',
+        detectedLanguage: { language: 'en' },
+      }),
   });
 });
 
@@ -69,18 +70,12 @@ function createApp(uniqueId = 12345) {
 describe('POST /api/translate', () => {
   test('returns 400 when text is missing', async () => {
     const app = createApp();
-    await request(app)
-      .post('/api/translate')
-      .send({ targetLang: 'es' })
-      .expect(400);
+    await request(app).post('/api/translate').send({ targetLang: 'es' }).expect(400);
   });
 
   test('returns 400 when targetLang is missing', async () => {
     const app = createApp();
-    await request(app)
-      .post('/api/translate')
-      .send({ text: 'Hello' })
-      .expect(400);
+    await request(app).post('/api/translate').send({ text: 'Hello' }).expect(400);
   });
 
   test('returns 400 for invalid targetLang format', async () => {
@@ -121,7 +116,7 @@ describe('POST /api/translate', () => {
     const app = createApp();
 
     // This messagePath points to a user doc instead of a message doc
-    const res = await request(app)
+    const _res = await request(app)
       .post('/api/translate')
       .send({
         text: 'Hello',
@@ -133,7 +128,7 @@ describe('POST /api/translate', () => {
     // Should NOT have tried to read the invalid path
     // The db.doc mock is called for user quota check, but not for the invalid messagePath
     const { db } = require('../../src/utils/firebase');
-    const docCalls = db.doc.mock.calls.map(c => c[0]);
+    const docCalls = db.doc.mock.calls.map((c) => c[0]);
     expect(docCalls).not.toContain('users/admin-user');
   });
 
@@ -166,7 +161,7 @@ describe('POST /api/translate', () => {
       .expect(200);
 
     const { db } = require('../../src/utils/firebase');
-    const docCalls = db.doc.mock.calls.map(c => c[0]);
+    const docCalls = db.doc.mock.calls.map((c) => c[0]);
     expect(docCalls).toContain('conversations/conv-1/messages/msg-1');
   });
 
@@ -197,7 +192,7 @@ describe('POST /api/translate', () => {
       .expect(200);
 
     const { db } = require('../../src/utils/firebase');
-    const docCalls = db.doc.mock.calls.map(c => c[0]);
+    const docCalls = db.doc.mock.calls.map((c) => c[0]);
     expect(docCalls).toContain('rooms/room-1/messages/msg-1');
   });
 
@@ -213,7 +208,7 @@ describe('POST /api/translate', () => {
       .expect(200);
 
     const { db } = require('../../src/utils/firebase');
-    const docCalls = db.doc.mock.calls.map(c => c[0]);
+    const docCalls = db.doc.mock.calls.map((c) => c[0]);
     expect(docCalls).not.toContain('conversations/../users/admin');
   });
 
@@ -248,10 +243,7 @@ describe('POST /api/translate', () => {
     });
 
     const app = createApp();
-    await request(app)
-      .post('/api/translate')
-      .send({ text: 'Hello', targetLang: 'es' })
-      .expect(200);
+    await request(app).post('/api/translate').send({ text: 'Hello', targetLang: 'es' }).expect(200);
 
     // Verify FieldValue.increment was called for the same-day counter update
     const { FieldValue } = require('../../src/utils/firebase');
@@ -271,9 +263,7 @@ describe('GET /api/translate/quota', () => {
     });
 
     const app = createApp();
-    const res = await request(app)
-      .get('/api/translate/quota')
-      .expect(200);
+    const res = await request(app).get('/api/translate/quota').expect(200);
 
     expect(res.body.used).toBe(10);
     expect(res.body.limit).toBe(50);
@@ -291,9 +281,7 @@ describe('GET /api/translate/quota', () => {
     });
 
     const app = createApp();
-    const res = await request(app)
-      .get('/api/translate/quota')
-      .expect(200);
+    const res = await request(app).get('/api/translate/quota').expect(200);
 
     expect(res.body.unlimited).toBe(true);
     expect(res.body.limit).toBe(-1);

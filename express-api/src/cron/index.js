@@ -19,57 +19,71 @@ function startCronJobs() {
   // Archive old reports — Sunday 03:00 UTC
   cron.schedule('0 3 * * 0', () => {
     log.info('cron', 'Running archiveReports');
-    archiveReports().catch(err => log.error('cron', 'archiveReports failed', { error: err.message }));
+    archiveReports().catch((err) =>
+      log.error('cron', 'archiveReports failed', { error: err.message }),
+    );
   });
 
   // Check expired subscriptions + clean expired backpack items + expire temp IDs — daily midnight UTC
   cron.schedule('0 0 * * *', () => {
     log.info('cron', 'Running subscriptions + backpackCleanup + expireTempIds');
-    subscriptions().catch(err => log.error('cron', 'subscriptions failed', { error: err.message }));
-    backpackCleanup().catch(err => log.error('cron', 'backpackCleanup failed', { error: err.message }));
-    expireTempIds().catch(err => log.error('cron', 'expireTempIds failed', { error: err.message }));
+    subscriptions().catch((err) =>
+      log.error('cron', 'subscriptions failed', { error: err.message }),
+    );
+    backpackCleanup().catch((err) =>
+      log.error('cron', 'backpackCleanup failed', { error: err.message }),
+    );
+    expireTempIds().catch((err) =>
+      log.error('cron', 'expireTempIds failed', { error: err.message }),
+    );
   });
 
   // Close stale OWNER_AWAY rooms — every 5 minutes
   cron.schedule('*/5 * * * *', () => {
-    staleRooms().catch(err => log.error('cron', 'staleRooms failed', { error: err.message }));
+    staleRooms().catch((err) => log.error('cron', 'staleRooms failed', { error: err.message }));
   });
 
   // Backup user profiles + cleanup old closed rooms — daily 02:00 UTC
   cron.schedule('0 2 * * *', () => {
     log.info('cron', 'Running backups + closedRooms');
-    backups().catch(err => log.error('cron', 'backups failed', { error: err.message }));
-    closedRooms().catch(err => log.error('cron', 'closedRooms failed', { error: err.message }));
+    backups().catch((err) => log.error('cron', 'backups failed', { error: err.message }));
+    closedRooms().catch((err) => log.error('cron', 'closedRooms failed', { error: err.message }));
   });
 
   // Cleanup orphaned storage — daily 04:00 UTC
   cron.schedule('0 4 * * *', () => {
     log.info('cron', 'Running orphanedStorage');
-    orphanedStorage().catch(err => log.error('cron', 'orphanedStorage failed', { error: err.message }));
+    orphanedStorage().catch((err) =>
+      log.error('cron', 'orphanedStorage failed', { error: err.message }),
+    );
   });
 
   // Rotate logs from Firestore to R2 — every hour
   cron.schedule('0 * * * *', () => {
     log.info('cron', 'Running rotateLogs');
-    rotateLogs().catch(err => log.error('cron', 'rotateLogs failed', { error: err.message }));
+    rotateLogs().catch((err) => log.error('cron', 'rotateLogs failed', { error: err.message }));
   });
 
   // Expire bans — every 15 minutes
   cron.schedule('*/15 * * * *', () => {
     log.info('cron', 'Running expireBans');
-    expireBans().catch(err => log.error('cron', 'expireBans failed', { error: err.message }));
+    expireBans().catch((err) => log.error('cron', 'expireBans failed', { error: err.message }));
   });
 
   // Server health check — every 5 minutes
   cron.schedule('*/5 * * * *', () => {
-    serverHealth(alertManager).catch(err => log.error('cron', 'serverHealth failed', { error: err.message }));
+    serverHealth(alertManager).catch((err) =>
+      log.error('cron', 'serverHealth failed', { error: err.message }),
+    );
   });
 
   // Test data cleanup — every 30 minutes (dev only)
   if (process.env.NODE_ENV !== 'production') {
     cron.schedule('*/30 * * * *', () => {
       log.info('cron', 'Running testDataCleanup');
-      testDataCleanup().catch(err => log.error('cron', 'testDataCleanup failed', { error: err.message }));
+      testDataCleanup().catch((err) =>
+        log.error('cron', 'testDataCleanup failed', { error: err.message }),
+      );
     });
   }
 

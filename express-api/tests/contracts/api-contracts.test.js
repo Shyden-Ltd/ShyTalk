@@ -46,7 +46,7 @@ jest.mock('../../src/utils/firebase', () => ({
     setCustomUserClaims: jest.fn().mockResolvedValue(),
   },
   FieldValue: {
-    increment: jest.fn(n => `increment(${n})`),
+    increment: jest.fn((n) => `increment(${n})`),
     arrayUnion: jest.fn((...args) => `arrayUnion(${args})`),
     arrayRemove: jest.fn((...args) => `arrayRemove(${args})`),
   },
@@ -120,7 +120,11 @@ beforeEach(() => {
   mockDocUpdate.mockResolvedValue();
   mockDocSet.mockResolvedValue();
   // Reset the economy config cache between tests
-  try { economyRouter._resetConfigCache(); } catch (_) {}
+  try {
+    economyRouter._resetConfigCache();
+  } catch (_e) {
+    /* ignore */
+  }
 });
 
 // ─── GET /api/users/:uniqueId — user profile contract ─────────────
@@ -140,7 +144,9 @@ describe('GET /api/users/:uniqueId response contract', () => {
     blockedUserIds: [],
     followingIds: [],
     followerIds: [],
-    providers: [{ type: 'google', identifier: 'google-sub-123', active: true, linkedAt: 1709913600000 }],
+    providers: [
+      { type: 'google', identifier: 'google-sub-123', active: true, linkedAt: 1709913600000 },
+    ],
     fcmTokens: [],
     aliases: {},
     language: 'en',
@@ -353,11 +359,11 @@ describe('POST /api/economy/daily-reward response contract', () => {
       exists: true,
       data: () => ({
         dailyBase: 50,
-        milestoneRewards: { '7': 100, '14': 200 },
+        milestoneRewards: { 7: 100, 14: 200 },
         beanConversionRate: 0.6,
         beanRedeemBonusThreshold: 2000,
         beanRedeemBonusMultiplier: 1.1,
-        pullCosts: { '1': 10, '10': 100, '100': 1000 },
+        pullCosts: { 1: 10, 10: 100, 100: 1000 },
         broadcastSendThreshold: 0,
         broadcastWinThreshold: 5000,
         dropRateExponent: 1.5,
@@ -375,7 +381,7 @@ describe('POST /api/economy/daily-reward response contract', () => {
         shyBeans: 0,
         isSuperShy: false,
         loginStreak: 0,
-        lastLoginDate: '2024-03-06',  // two days ago, streak resets
+        lastLoginDate: '2024-03-06', // two days ago, streak resets
         lastLoginRewardDate: '2024-03-07', // yesterday — not yet claimed today
       }),
     });
@@ -431,7 +437,7 @@ describe('POST /api/economy/daily-reward response contract', () => {
       data: () => ({
         shyCoins: 100,
         loginStreak: 5,
-        lastLoginRewardDate: '2024-03-08',  // matches todayStr() mock
+        lastLoginRewardDate: '2024-03-08', // matches todayStr() mock
       }),
     });
 
@@ -528,7 +534,11 @@ describe('POST /api/conversations/:id/messages response contract', () => {
   function setupConversation() {
     const { db } = require('../../src/utils/firebase');
     mockDocGet.mockImplementation((path) => {
-      if (path.startsWith('conversations/conv-1') && !path.includes('/messages/') && !path.includes('/userSettings/')) {
+      if (
+        path.startsWith('conversations/conv-1') &&
+        !path.includes('/messages/') &&
+        !path.includes('/userSettings/')
+      ) {
         return Promise.resolve({
           exists: true,
           data: () => conversationFixture,

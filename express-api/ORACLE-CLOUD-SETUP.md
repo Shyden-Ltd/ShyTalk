@@ -14,23 +14,23 @@ Go to **Hamburger menu → Compute → Instances → Create Instance**
 
 ### Section 1: Name and compartment
 
-| Field | What to set |
-|---|---|
-| **Name** | `shytalk-api` |
+| Field                     | What to set                              |
+| ------------------------- | ---------------------------------------- |
+| **Name**                  | `shytalk-api`                            |
 | **Create in compartment** | Leave as your root compartment (default) |
 
 ### Section 2: Placement
 
-| Field | What to set |
-|---|---|
+| Field                   | What to set                                                     |
+| ----------------------- | --------------------------------------------------------------- |
 | **Availability domain** | Leave as default (AD-1). Free tier regions typically have 1 AD. |
-| **Capacity type** | Leave as **On-demand capacity** (default) |
-| **Fault domain** | Leave as **Let Oracle choose the best fault domain** (default) |
+| **Capacity type**       | Leave as **On-demand capacity** (default)                       |
+| **Fault domain**        | Leave as **Let Oracle choose the best fault domain** (default)  |
 
 ### Section 3: Security (Shielded Instance)
 
-| Field | What to set |
-|---|---|
+| Field                 | What to set                                                                         |
+| --------------------- | ----------------------------------------------------------------------------------- |
 | **Shielded instance** | Leave **unchecked** (default). Shielded instances are not available for ARM shapes. |
 
 ### Section 4: Image and shape
@@ -39,64 +39,64 @@ Click **Edit** to change from the default.
 
 **Image:**
 
-| Field | What to set |
-|---|---|
-| **Image** | **Canonical Ubuntu 24.04** (click "Change image" → Ubuntu → select 24.04 Minimal aarch64). You want the **aarch64** (ARM) version. |
-| **Image build** | Leave as latest (default) |
+| Field           | What to set                                                                                                                        |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **Image**       | **Canonical Ubuntu 24.04** (click "Change image" → Ubuntu → select 24.04 Minimal aarch64). You want the **aarch64** (ARM) version. |
+| **Image build** | Leave as latest (default)                                                                                                          |
 
 **Shape:**
 
 Click **Change shape**.
 
-| Field | What to set |
-|---|---|
-| **Shape series** | Select **Ampere** (ARM-based processors — this is the free tier) |
-| **Shape name** | **VM.Standard.A1.Flex** (this is the Always Free eligible shape) |
-| **Number of OCPUs** | **2** (free tier allows up to 4 total across all A1 instances; 2 is plenty) |
+| Field                     | What to set                                                                                            |
+| ------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Shape series**          | Select **Ampere** (ARM-based processors — this is the free tier)                                       |
+| **Shape name**            | **VM.Standard.A1.Flex** (this is the Always Free eligible shape)                                       |
+| **Number of OCPUs**       | **2** (free tier allows up to 4 total across all A1 instances; 2 is plenty)                            |
 | **Amount of memory (GB)** | **12** (auto-calculated: 6GB per OCPU, so 2 OCPUs = 12GB. You can set up to 24GB if using all 4 OCPUs) |
 
 > You'll see a green banner: **"Always Free eligible"** — make sure this appears.
 
 ### Section 5: Primary VNIC information (Networking)
 
-| Field | What to set |
-|---|---|
-| **Virtual cloud network** | If you have no VCN yet, select **Create new virtual cloud network** |
-| **New VCN name** | `shytalk-vcn` (or leave default) |
-| **Subnet** | Select **Create new public subnet** |
-| **New subnet name** | `shytalk-subnet` (or leave default) |
-| **Public IPv4 address** | Select **Assign a public IPv4 address** (REQUIRED — this is how you'll connect to the VM) |
-| **Private IPv4 address** | Leave **Automatically assign private IPv4 address** (default) |
-| **IPv6 addresses** | Leave **unchecked** (default) |
-| **DNS** | Leave defaults |
+| Field                     | What to set                                                                               |
+| ------------------------- | ----------------------------------------------------------------------------------------- |
+| **Virtual cloud network** | If you have no VCN yet, select **Create new virtual cloud network**                       |
+| **New VCN name**          | `shytalk-vcn` (or leave default)                                                          |
+| **Subnet**                | Select **Create new public subnet**                                                       |
+| **New subnet name**       | `shytalk-subnet` (or leave default)                                                       |
+| **Public IPv4 address**   | Select **Assign a public IPv4 address** (REQUIRED — this is how you'll connect to the VM) |
+| **Private IPv4 address**  | Leave **Automatically assign private IPv4 address** (default)                             |
+| **IPv6 addresses**        | Leave **unchecked** (default)                                                             |
+| **DNS**                   | Leave defaults                                                                            |
 
 > If a VCN already exists, select it and pick the public subnet.
 
 ### Section 6: Add SSH keys
 
-| Field | What to set |
-|---|---|
+| Field        | What to set                                                                                                                                                                                                                                                                                   |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **SSH keys** | Select **Generate a key pair for me**, then **IMMEDIATELY click "Save private key" and "Save public key"**. Store these files safely — you need the private key to SSH into the VM. If you already have an SSH key pair, choose **Upload public key files** or **Paste public keys** instead. |
 
 **CRITICAL: If you lose the private key, you cannot SSH into the instance. Download it NOW.**
 
 ### Section 7: Boot volume
 
-| Field | What to set |
-|---|---|
-| **Specify a custom boot volume size** | Leave **unchecked** (default gives 46.6 GB, which is plenty). Free tier allows up to 200GB total but default is fine. |
-| **Use in-transit encryption** | Leave **unchecked** (default) |
-| **Encrypt this volume with a key that you manage** | Leave **unchecked** (default — uses Oracle-managed encryption) |
+| Field                                              | What to set                                                                                                           |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **Specify a custom boot volume size**              | Leave **unchecked** (default gives 46.6 GB, which is plenty). Free tier allows up to 200GB total but default is fine. |
+| **Use in-transit encryption**                      | Leave **unchecked** (default)                                                                                         |
+| **Encrypt this volume with a key that you manage** | Leave **unchecked** (default — uses Oracle-managed encryption)                                                        |
 
 ### Section 8: Advanced options (click to expand — leave all defaults)
 
-| Field | What to set |
-|---|---|
-| **Initialization script (Cloud-init)** | Leave blank (we'll configure manually via SSH) |
-| **Oracle Cloud Agent plugins** | Leave all defaults (Vulnerability Scanning, OS Management, etc. are pre-checked) |
-| **Availability configuration** | Leave as **Restore instance lifecycle state** (default) |
-| **Capacity reservation** | Leave as **No reservation** (default) |
-| **Launch mode** | Leave as **Paravirtualized** (default) |
+| Field                                  | What to set                                                                      |
+| -------------------------------------- | -------------------------------------------------------------------------------- |
+| **Initialization script (Cloud-init)** | Leave blank (we'll configure manually via SSH)                                   |
+| **Oracle Cloud Agent plugins**         | Leave all defaults (Vulnerability Scanning, OS Management, etc. are pre-checked) |
+| **Availability configuration**         | Leave as **Restore instance lifecycle state** (default)                          |
+| **Capacity reservation**               | Leave as **No reservation** (default)                                            |
+| **Launch mode**                        | Leave as **Paravirtualized** (default)                                           |
 
 ### Create the Instance
 
@@ -112,14 +112,14 @@ Oracle Cloud has a firewall at the VCN level. You must open ports 80 and 443 for
 2. Click the **Default Security List**
 3. Click **Add Ingress Rules** and add these two rules:
 
-| Field | Rule 1 | Rule 2 |
-|---|---|---|
-| **Source Type** | CIDR | CIDR |
-| **Source CIDR** | `0.0.0.0/0` | `0.0.0.0/0` |
-| **IP Protocol** | TCP | TCP |
-| **Source Port Range** | Leave blank (All) | Leave blank (All) |
-| **Destination Port Range** | `80` | `443` |
-| **Description** | HTTP | HTTPS |
+| Field                      | Rule 1            | Rule 2            |
+| -------------------------- | ----------------- | ----------------- |
+| **Source Type**            | CIDR              | CIDR              |
+| **Source CIDR**            | `0.0.0.0/0`       | `0.0.0.0/0`       |
+| **IP Protocol**            | TCP               | TCP               |
+| **Source Port Range**      | Leave blank (All) | Leave blank (All) |
+| **Destination Port Range** | `80`              | `443`             |
+| **Description**            | HTTP              | HTTPS             |
 
 Click **Add Ingress Rules** for each.
 
@@ -178,9 +178,9 @@ sudo apt install caddy
 
 Add an A record for your domain:
 
-| Type | Name | Value | TTL |
-|---|---|---|---|
-| A | `api.shytalk.shyden.co.uk` | `<PUBLIC_IP>` | 300 |
+| Type | Name                       | Value         | TTL |
+| ---- | -------------------------- | ------------- | --- |
+| A    | `api.shytalk.shyden.co.uk` | `<PUBLIC_IP>` | 300 |
 
 Set this in your DNS provider (Cloudflare DNS). Set the proxy status to **DNS only** (grey cloud), NOT proxied — Caddy handles HTTPS itself.
 

@@ -34,7 +34,7 @@ const DEFAULT_ECONOMY_CONFIG = {
   beanConversionRate: 0.6,
   beanRedeemBonusThreshold: 2000,
   beanRedeemBonusMultiplier: 1.1,
-  pullCosts: { '1': 10, '10': 100, '100': 1000 },
+  pullCosts: { 1: 10, 10: 100, 100: 1000 },
   broadcastSendThreshold: 0,
   broadcastWinThreshold: 5000,
   dropRateExponent: 1.5,
@@ -43,7 +43,7 @@ const DEFAULT_ECONOMY_CONFIG = {
   pitySoftMaxShift: 0.15,
   pityHighValueThreshold: 5000,
   dailyBase: 50,
-  milestoneRewards: { '7': 100, '14': 200, '30': 500, '60': 1000, '90': 2000 },
+  milestoneRewards: { 7: 100, 14: 200, 30: 500, 60: 1000, 90: 2000 },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -54,8 +54,8 @@ let economyConfigCachedAt = 0;
 const ECONOMY_CONFIG_TTL = 60_000; // 1 minute
 
 async function loadEconomyConfig() {
-  const now = Date.now();
-  if (cachedEconomyConfig && (now - economyConfigCachedAt) < ECONOMY_CONFIG_TTL) {
+  const currentTime = Date.now();
+  if (cachedEconomyConfig && currentTime - economyConfigCachedAt < ECONOMY_CONFIG_TTL) {
     return cachedEconomyConfig;
   }
 
@@ -68,7 +68,7 @@ async function loadEconomyConfig() {
     await db.doc('config/economy').set(DEFAULT_ECONOMY_CONFIG);
     cachedEconomyConfig = { ...DEFAULT_ECONOMY_CONFIG };
   }
-  economyConfigCachedAt = now;
+  economyConfigCachedAt = currentTime;
   return cachedEconomyConfig;
 }
 
@@ -98,7 +98,8 @@ async function addBroadcast(data) {
   });
 
   // Trim old broadcasts (keep last 50) — query oldest beyond 50
-  const oldSnap = await db.collection('broadcasts')
+  const oldSnap = await db
+    .collection('broadcasts')
     .orderBy('timestamp', 'desc')
     .offset(50)
     .limit(100)
@@ -128,7 +129,7 @@ async function updateGiftWall(recipientId, giftId, senderId, quantity) {
   const senders = wallDoc?.senders || [];
 
   // Update or add sender
-  const existingSender = senders.find(s => s.senderId === senderId);
+  const existingSender = senders.find((s) => s.senderId === senderId);
   if (existingSender) {
     existingSender.sendCount = (existingSender.sendCount || 0) + quantity;
     existingSender.lastSentAt = now();
@@ -188,7 +189,7 @@ async function updateGiftRankings(recipientId, giftId, quantity) {
     const totalSent = (rankDoc.totalSent || 0) + quantity;
 
     // Find or add recipient in rankings
-    const existing = rankings.find(r => r.userId === recipientId);
+    const existing = rankings.find((r) => r.userId === recipientId);
     if (existing) {
       existing.count = (existing.count || 0) + quantity;
     } else {
@@ -208,7 +209,9 @@ async function updateGiftRankings(recipientId, giftId, quantity) {
     const trimmed = rankings.slice(0, 100);
 
     // Re-assign ranks
-    trimmed.forEach((r, i) => { r.rank = i + 1; });
+    trimmed.forEach((r, i) => {
+      r.rank = i + 1;
+    });
 
     await db.doc(`giftRankings/${giftId}`).set({
       rankings: trimmed,
@@ -244,7 +247,7 @@ router.post('/economy/daily-reward', async (req, res) => {
       return res.status(409).json({ error: 'Already claimed today' });
     }
 
-    const newStreak = (lastLoginDate === yesterday) ? loginStreak + 1 : 1;
+    const newStreak = lastLoginDate === yesterday ? loginStreak + 1 : 1;
     const milestoneRewards = config.milestoneRewards || {};
     const rawReward = milestoneRewards[String(newStreak)];
     const isMilestone = String(newStreak) in milestoneRewards;
@@ -255,9 +258,12 @@ router.post('/economy/daily-reward', async (req, res) => {
     if (rawReward && typeof rawReward === 'object' && rawReward.type === 'gift') {
       giftReward = { giftId: rawReward.giftId, quantity: rawReward.quantity || 1 };
     } else {
-      coinReward = (typeof rawReward === 'number') ? rawReward
-        : (rawReward?.amount) ? rawReward.amount
-        : config.dailyBase;
+      coinReward =
+        typeof rawReward === 'number'
+          ? rawReward
+          : rawReward?.amount
+            ? rawReward.amount
+            : config.dailyBase;
       if (isSuperShy) coinReward = Math.ceil(coinReward * 1.1);
     }
 
@@ -275,7 +281,7 @@ router.post('/economy/daily-reward', async (req, res) => {
     // Add gift to backpack if gift reward
     if (giftReward) {
       const bpSnap = await db.doc(`users/${uniqueId}/backpack/${giftReward.giftId}`).get();
-      const currentQty = bpSnap.exists ? (bpSnap.data().quantity || 0) : 0;
+      const currentQty = bpSnap.exists ? bpSnap.data().quantity || 0 : 0;
       await db.doc(`users/${uniqueId}/backpack/${giftReward.giftId}`).set({
         giftId: giftReward.giftId,
         quantity: currentQty + giftReward.quantity,
@@ -302,7 +308,11 @@ router.post('/economy/daily-reward', async (req, res) => {
       result.giftId = giftReward.giftId;
       result.giftQuantity = giftReward.quantity;
     }
-    log.info('economy', 'Daily reward claimed', { userId: uniqueId, coinReward, streak: newStreak });
+    log.info('economy', 'Daily reward claimed', {
+      userId: uniqueId,
+      coinReward,
+      streak: newStreak,
+    });
     res.json(result);
   } catch (err) {
     log.error('economy', 'POST /economy/daily-reward failed', { error: err.message });
@@ -323,16 +333,20 @@ router.post('/economy/gacha', async (req, res) => {
     }
 
     const config = await loadEconomyConfig();
-    const pullCosts = config.pullCosts || { '1': 10, '10': 100, '100': 1000 };
+    const pullCosts = config.pullCosts || { 1: 10, 10: 100, 100: 1000 };
     const cost = pullCosts[String(pullCount)];
     if (!cost) return res.status(400).json({ error: 'Invalid pull count' });
 
     // Price validation
-    if (expectedCost != null && expectedCost !== cost) {
+    if (expectedCost !== null && expectedCost !== undefined && expectedCost !== cost) {
       return res.json({
         priceChanged: true,
         currentPullCosts: pullCosts,
-        gifts: [], coinsSpent: 0, newBalance: 0, newPityCounter: 0, newLuckScore: 0,
+        gifts: [],
+        coinsSpent: 0,
+        newBalance: 0,
+        newPityCounter: 0,
+        newLuckScore: 0,
       });
     }
 
@@ -344,22 +358,23 @@ router.post('/economy/gacha', async (req, res) => {
     if (shyCoins < cost) return res.status(402).json({ error: 'Insufficient coins' });
 
     // Load winnable gifts
-    const giftsSnap = await db.collection('gifts')
+    const giftsSnap = await db
+      .collection('gifts')
       .where('showOnWheel', '==', true)
       .orderBy('order')
       .limit(16)
       .get();
-    const allGifts = giftsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const allGifts = giftsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
     if (allGifts.length === 0) return res.status(500).json({ error: 'No winnable gifts' });
 
     // Filter to gifts with coinValue > 0
-    const winnableGifts = allGifts.filter(g => (g.coinValue || 0) > 0);
+    const winnableGifts = allGifts.filter((g) => (g.coinValue || 0) > 0);
     if (winnableGifts.length === 0) return res.status(500).json({ error: 'No winnable gifts' });
 
     // Compute base weights
     const exponent = config.dropRateExponent;
-    const baseWeights = winnableGifts.map(g => 1 / Math.pow(g.coinValue, exponent));
+    const baseWeights = winnableGifts.map((g) => 1 / Math.pow(g.coinValue, exponent));
 
     let pity = userField(user, 'pityCounter', 'pity_counter') || 0;
     let luck = userField(user, 'luckScore', 'luck_score') || 0;
@@ -368,9 +383,13 @@ router.post('/economy/gacha', async (req, res) => {
 
     // Admin-guaranteed first pull
     let guaranteedFirstPull = false;
-    const guaranteedGiftId = userField(user, 'guaranteedNextPullGiftId', 'guaranteed_next_pull_gift_id');
+    const guaranteedGiftId = userField(
+      user,
+      'guaranteedNextPullGiftId',
+      'guaranteed_next_pull_gift_id',
+    );
     if (guaranteedGiftId) {
-      const guaranteedGift = winnableGifts.find(g => g.id === guaranteedGiftId);
+      const guaranteedGift = winnableGifts.find((g) => g.id === guaranteedGiftId);
       if (guaranteedGift) {
         results.push(guaranteedGift);
         guaranteedFirstPull = true;
@@ -389,7 +408,7 @@ router.post('/economy/gacha', async (req, res) => {
         for (let j = 0; j < winnableGifts.length; j++) {
           if (winnableGifts[j].coinValue < highValueThreshold) weights[j] = 0;
         }
-        if (weights.every(w => w === 0)) {
+        if (weights.every((w) => w === 0)) {
           // No gifts meet the threshold — guarantee the most expensive gift
           let bestIdx = 0;
           for (let j = 1; j < winnableGifts.length; j++) {
@@ -399,9 +418,11 @@ router.post('/economy/gacha', async (req, res) => {
           for (let j = 0; j < weights.length; j++) weights[j] = j === bestIdx ? 1 : 0;
         }
       } else if (pity >= config.pitySoftStart) {
-        const progress = (pity - config.pitySoftStart) / (config.pityHardLimit - config.pitySoftStart);
+        const progress =
+          (pity - config.pitySoftStart) / (config.pityHardLimit - config.pitySoftStart);
         const shift = config.pitySoftMaxShift * progress;
-        let lowTotal = 0, highTotal = 0;
+        let lowTotal = 0,
+          highTotal = 0;
         for (let j = 0; j < winnableGifts.length; j++) {
           if (winnableGifts[j].coinValue >= highValueThreshold) highTotal += weights[j];
           else lowTotal += weights[j];
@@ -425,8 +446,9 @@ router.post('/economy/gacha', async (req, res) => {
       if (luckBoost > 0) {
         const totalWeight = weights.reduce((s, w) => s + w, 0);
         const shiftAmount = luckBoost * totalWeight;
-        const minValue = Math.min(...winnableGifts.map(g => g.coinValue));
-        let cheapTotal = 0, expensiveTotal = 0;
+        const minValue = Math.min(...winnableGifts.map((g) => g.coinValue));
+        let cheapTotal = 0,
+          expensiveTotal = 0;
         for (let j = 0; j < winnableGifts.length; j++) {
           if (winnableGifts[j].coinValue === minValue) cheapTotal += weights[j];
           else expensiveTotal += weights[j];
@@ -444,19 +466,27 @@ router.post('/economy/gacha', async (req, res) => {
 
       // Roll
       const total = weights.reduce((s, w) => s + w, 0);
-      if (total <= 0) { results.push(winnableGifts[0]); pity = hardPityTriggered ? 0 : pity + 1; continue; }
+      if (total <= 0) {
+        results.push(winnableGifts[0]);
+        pity = hardPityTriggered ? 0 : pity + 1;
+        continue;
+      }
 
       const roll = Math.random() * total;
-      let cumulative = 0, selectedIndex = 0;
+      let cumulative = 0,
+        selectedIndex = 0;
       for (let j = 0; j < weights.length; j++) {
         cumulative += weights[j];
-        if (roll <= cumulative) { selectedIndex = j; break; }
+        if (roll <= cumulative) {
+          selectedIndex = j;
+          break;
+        }
       }
 
       const gift = winnableGifts[selectedIndex];
       results.push(gift);
       // Reset pity on hard pity trigger OR when a high-value gift is won naturally
-      pity = (hardPityTriggered || gift.coinValue >= highValueThreshold) ? 0 : pity + 1;
+      pity = hardPityTriggered || gift.coinValue >= highValueThreshold ? 0 : pity + 1;
     }
 
     if (pullCount === 100) luck = Math.min(100, luck + 2);
@@ -473,31 +503,35 @@ router.post('/economy/gacha', async (req, res) => {
 
     // Fetch existing backpack docs in parallel
     const existingDocs = await Promise.all(
-      uniqueGiftIds.map(async gid => {
+      uniqueGiftIds.map(async (gid) => {
         const snap = await db.doc(`users/${uniqueId}/backpack/${gid}`).get();
         return snap.exists ? snap.data() : null;
-      })
+      }),
     );
 
     // Build batch writes for backpack + user update in one atomic operation
     const batch = db.batch();
     for (let i = 0; i < uniqueGiftIds.length; i++) {
       const gid = uniqueGiftIds[i];
-      const gift = results.find(g => g.id === gid);
+      const gift = results.find((g) => g.id === gid);
       const bpDoc = existingDocs[i];
       const currentQty = bpDoc?.quantity || 0;
       const expiresAt = gift.expiresAfterDays
         ? timestamp + gift.expiresAfterDays * 86400000
         : bpDoc?.expiresAt || null;
-      batch.set(db.doc(`users/${uniqueId}/backpack/${gid}`), {
-        giftId: gid,
-        quantity: currentQty + giftCounts[gid],
-        lastAcquired: timestamp,
-        expiresAt,
-        giftName: gift.name,
-        coinValue: gift.coinValue,
-        iconUrl: gift.iconUrl || gift.icon_url || '',
-      }, { merge: true });
+      batch.set(
+        db.doc(`users/${uniqueId}/backpack/${gid}`),
+        {
+          giftId: gid,
+          quantity: currentQty + giftCounts[gid],
+          lastAcquired: timestamp,
+          expiresAt,
+          giftName: gift.name,
+          coinValue: gift.coinValue,
+          iconUrl: gift.iconUrl || gift.icon_url || '',
+        },
+        { merge: true },
+      );
     }
 
     // Include coin deduction in the same batch
@@ -520,7 +554,7 @@ router.post('/economy/gacha', async (req, res) => {
         currency: 'COINS',
         balanceAfter: newBalance,
         pullCount,
-        details: results.map(g => g.name).join(', '),
+        details: results.map((g) => g.name).join(', '),
         guaranteed: !!guaranteedFirstPull,
       });
     } catch (err) {
@@ -549,12 +583,16 @@ router.post('/economy/gacha', async (req, res) => {
     }
 
     res.json({
-      gifts: results.map(g => ({
-        giftId: g.id, giftName: g.name,
-        coinValue: g.coinValue, iconUrl: g.iconUrl || '',
+      gifts: results.map((g) => ({
+        giftId: g.id,
+        giftName: g.name,
+        coinValue: g.coinValue,
+        iconUrl: g.iconUrl || '',
       })),
-      coinsSpent: cost, newBalance,
-      newPityCounter: pity, newLuckScore: luck,
+      coinsSpent: cost,
+      newBalance,
+      newPityCounter: pity,
+      newLuckScore: luck,
       currentPullCosts: pullCosts,
     });
     log.info('economy', `Gacha pull x${pullCount}`, { userId: uniqueId, cost, newBalance });
@@ -572,9 +610,12 @@ router.post('/economy/gift', async (req, res) => {
     const { recipientId, giftId } = body || {};
     const quantity = Math.max(1, Math.min(9999, parseInt(body?.quantity) || 1));
 
-    if (!recipientId || !giftId) return res.status(400).json({ error: 'recipientId and giftId required' });
-    if (giftId === 'super_shy_trial') return res.status(400).json({ error: 'Trial items cannot be transferred' });
-    if (uniqueId === recipientId) return res.status(400).json({ error: 'Cannot send gift to yourself' });
+    if (!recipientId || !giftId)
+      return res.status(400).json({ error: 'recipientId and giftId required' });
+    if (giftId === 'super_shy_trial')
+      return res.status(400).json({ error: 'Trial items cannot be transferred' });
+    if (uniqueId === recipientId)
+      return res.status(400).json({ error: 'Cannot send gift to yourself' });
 
     const [giftSnap, bpSnap, senderSnap, recipientSnap] = await Promise.all([
       db.doc(`gifts/${giftId}`).get(),
@@ -589,7 +630,8 @@ router.post('/economy/gift', async (req, res) => {
     const recipient = recipientSnap.exists ? recipientSnap.data() : null;
 
     if (!gift) return res.status(404).json({ error: 'Gift not found' });
-    if (!bpItem || (bpItem.quantity || 0) < quantity) return res.status(402).json({ error: 'Insufficient items in backpack' });
+    if (!bpItem || (bpItem.quantity || 0) < quantity)
+      return res.status(402).json({ error: 'Insufficient items in backpack' });
     if (!recipient) return res.status(404).json({ error: 'Recipient not found' });
 
     const config = await loadEconomyConfig();
@@ -603,7 +645,7 @@ router.post('/economy/gift', async (req, res) => {
     const bpRef = db.doc(`users/${uniqueId}/backpack/${giftId}`);
     await db.runTransaction(async (t) => {
       const snap = await t.get(bpRef);
-      const qty = snap.exists ? (snap.data().quantity || 0) : 0;
+      const qty = snap.exists ? snap.data().quantity || 0 : 0;
       if (qty < quantity) throw new Error('Insufficient items in backpack');
       const newQty = qty - quantity;
       if (newQty <= 0) {
@@ -625,16 +667,27 @@ router.post('/economy/gift', async (req, res) => {
       const sName = userField(sender, 'displayName', 'display_name') || 'Someone';
       const rName = userField(recipient, 'displayName', 'display_name') || 'Someone';
       const qtyLabel = quantity > 1 ? `${quantity}x ` : '';
-      await writeRoomGiftMessage(currentRoomId, uniqueId, sName,
-        `${sName} sent ${qtyLabel}${gift.name} to ${rName}`, giftId, gift.iconUrl || gift.icon_url || '');
+      await writeRoomGiftMessage(
+        currentRoomId,
+        uniqueId,
+        sName,
+        `${sName} sent ${qtyLabel}${gift.name} to ${rName}`,
+        giftId,
+        gift.iconUrl || gift.icon_url || '',
+      );
 
       // Update last gift event on room doc
       await db.doc(`rooms/${currentRoomId}`).update({
         lastGiftEvent: {
-          senderId: uniqueId, senderName: sName,
-          recipientId, recipientName: rName,
-          giftId, giftName: gift.name,
-          coinValue, quantity, timestamp,
+          senderId: uniqueId,
+          senderName: sName,
+          recipientId,
+          recipientName: rName,
+          giftId,
+          giftName: gift.name,
+          coinValue,
+          quantity,
+          timestamp,
         },
       });
     }
@@ -645,14 +698,26 @@ router.post('/economy/gift', async (req, res) => {
 
     await Promise.all([
       writeTransaction(uniqueId, giftSentTxId, {
-        type: 'GIFT_SENT', amount: -quantity, currency: 'COINS',
-        balanceAfter: senderCoins, giftId, giftName: gift.name,
-        recipientId, quantity, timestamp,
+        type: 'GIFT_SENT',
+        amount: -quantity,
+        currency: 'COINS',
+        balanceAfter: senderCoins,
+        giftId,
+        giftName: gift.name,
+        recipientId,
+        quantity,
+        timestamp,
       }),
       writeTransaction(recipientId, giftReceivedTxId, {
-        type: 'GIFT_RECEIVED', amount: beanReward, currency: 'BEANS',
-        balanceAfter: recipientBeans + beanReward, giftId, giftName: gift.name,
-        senderId: uniqueId, quantity, timestamp,
+        type: 'GIFT_RECEIVED',
+        amount: beanReward,
+        currency: 'BEANS',
+        balanceAfter: recipientBeans + beanReward,
+        giftId,
+        giftName: gift.name,
+        senderId: uniqueId,
+        quantity,
+        timestamp,
       }),
     ]);
 
@@ -663,8 +728,10 @@ router.post('/economy/gift', async (req, res) => {
         senderName: userField(sender, 'displayName', 'display_name') || '',
         senderPhotoUrl: null,
         recipientName: userField(recipient, 'displayName', 'display_name') || '',
-        giftName: gift.name, giftIconUrl: gift.iconUrl || gift.icon_url || '',
-        giftCoinValue: coinValue, quantity,
+        giftName: gift.name,
+        giftIconUrl: gift.iconUrl || gift.icon_url || '',
+        giftCoinValue: coinValue,
+        quantity,
       });
     }
 
@@ -686,8 +753,10 @@ router.post('/economy/gift-direct', async (req, res) => {
     const { recipientId, giftId } = body || {};
     const quantity = Math.max(1, Math.min(9999, parseInt(body?.quantity) || 1));
 
-    if (!recipientId || !giftId) return res.status(400).json({ error: 'recipientId and giftId required' });
-    if (uniqueId === recipientId) return res.status(400).json({ error: 'Cannot send gift to yourself' });
+    if (!recipientId || !giftId)
+      return res.status(400).json({ error: 'recipientId and giftId required' });
+    if (uniqueId === recipientId)
+      return res.status(400).json({ error: 'Cannot send gift to yourself' });
 
     const [giftSnap, senderSnap, recipientSnap] = await Promise.all([
       db.doc(`gifts/${giftId}`).get(),
@@ -728,8 +797,14 @@ router.post('/economy/gift-direct', async (req, res) => {
       const sName = userField(sender, 'displayName', 'display_name') || 'Someone';
       const rName = userField(recipient, 'displayName', 'display_name') || 'Someone';
       const qtyLabel = quantity > 1 ? `${quantity}x ` : '';
-      await writeRoomGiftMessage(currentRoomId, uniqueId, sName,
-        `${sName} sent ${qtyLabel}${gift.name} to ${rName}`, giftId, gift.iconUrl || gift.icon_url || '');
+      await writeRoomGiftMessage(
+        currentRoomId,
+        uniqueId,
+        sName,
+        `${sName} sent ${qtyLabel}${gift.name} to ${rName}`,
+        giftId,
+        gift.iconUrl || gift.icon_url || '',
+      );
     }
 
     // Transactions
@@ -738,16 +813,27 @@ router.post('/economy/gift-direct', async (req, res) => {
 
     await Promise.all([
       writeTransaction(uniqueId, directSentTxId, {
-        type: 'GIFT_SENT', amount: -totalCost, currency: 'COINS',
-        balanceAfter: newSenderCoins, giftId, giftName: gift.name,
-        recipientId, quantity,
+        type: 'GIFT_SENT',
+        amount: -totalCost,
+        currency: 'COINS',
+        balanceAfter: newSenderCoins,
+        giftId,
+        giftName: gift.name,
+        recipientId,
+        quantity,
         details: `Sent ${quantity > 1 ? quantity + 'x ' : ''}${gift.name} directly (${totalCost} coins)`,
         timestamp,
       }),
       writeTransaction(recipientId, directReceivedTxId, {
-        type: 'GIFT_RECEIVED', amount: beanReward, currency: 'BEANS',
-        balanceAfter: recipientBeans + beanReward, giftId, giftName: gift.name,
-        senderId: uniqueId, quantity, timestamp,
+        type: 'GIFT_RECEIVED',
+        amount: beanReward,
+        currency: 'BEANS',
+        balanceAfter: recipientBeans + beanReward,
+        giftId,
+        giftName: gift.name,
+        senderId: uniqueId,
+        quantity,
+        timestamp,
       }),
     ]);
 
@@ -756,8 +842,10 @@ router.post('/economy/gift-direct', async (req, res) => {
         type: 'GIFT_SEND',
         senderName: userField(sender, 'displayName', 'display_name') || '',
         recipientName: userField(recipient, 'displayName', 'display_name') || '',
-        giftName: gift.name, giftIconUrl: gift.iconUrl || gift.icon_url || '',
-        giftCoinValue: coinValue, quantity,
+        giftName: gift.name,
+        giftIconUrl: gift.iconUrl || gift.icon_url || '',
+        giftCoinValue: coinValue,
+        quantity,
       });
     }
 
@@ -782,8 +870,10 @@ router.post('/economy/gift-batch', async (req, res) => {
     if (!recipientIds || !Array.isArray(recipientIds) || recipientIds.length === 0 || !giftId) {
       return res.status(400).json({ error: 'recipientIds array and giftId required' });
     }
-    if (giftId === 'super_shy_trial') return res.status(400).json({ error: 'Trial items cannot be transferred' });
-    if (recipientIds.includes(uniqueId)) return res.status(400).json({ error: 'Cannot send gift to yourself' });
+    if (giftId === 'super_shy_trial')
+      return res.status(400).json({ error: 'Trial items cannot be transferred' });
+    if (recipientIds.includes(uniqueId))
+      return res.status(400).json({ error: 'Cannot send gift to yourself' });
     if (recipientIds.length > 50) return res.status(400).json({ error: 'Max 50 recipients' });
 
     const giftSnap = await db.doc(`gifts/${giftId}`).get();
@@ -802,7 +892,8 @@ router.post('/economy/gift-batch', async (req, res) => {
     if (fromBackpack) {
       const bpSnap = await db.doc(`users/${uniqueId}/backpack/${giftId}`).get();
       bpItem = bpSnap.exists ? bpSnap.data() : null;
-      if (!bpItem || (bpItem.quantity || 0) < totalQty) return res.status(402).json({ error: 'Insufficient items in backpack' });
+      if (!bpItem || (bpItem.quantity || 0) < totalQty)
+        return res.status(402).json({ error: 'Insufficient items in backpack' });
     } else {
       const totalCost = coinValue * totalQty;
       if (senderCoins < totalCost) return res.status(402).json({ error: 'Insufficient coins' });
@@ -818,9 +909,7 @@ router.post('/economy/gift-batch', async (req, res) => {
     const totalCost = coinValue * totalQty;
 
     // Validate recipient docs exist before starting
-    const recipientSnaps = await Promise.all(
-      recipientIds.map(id => db.doc(`users/${id}`).get())
-    );
+    const recipientSnaps = await Promise.all(recipientIds.map((id) => db.doc(`users/${id}`).get()));
     const validRecipients = recipientIds.filter((_, i) => recipientSnaps[i].exists);
     if (validRecipients.length === 0) return res.status(404).json({ error: 'No valid recipients' });
 
@@ -828,7 +917,7 @@ router.post('/economy/gift-batch', async (req, res) => {
     await db.runTransaction(async (t) => {
       if (fromBackpack) {
         const snap = await t.get(bpRef);
-        const qty = snap.exists ? (snap.data().quantity || 0) : 0;
+        const qty = snap.exists ? snap.data().quantity || 0 : 0;
         if (qty < totalQty) throw new Error('Insufficient items in backpack');
         const newQty = qty - totalQty;
         if (newQty <= 0) {
@@ -838,7 +927,7 @@ router.post('/economy/gift-batch', async (req, res) => {
         }
       } else {
         const snap = await t.get(senderRef);
-        const coins = snap.exists ? (userField(snap.data(), 'shyCoins', 'shy_coins') || 0) : 0;
+        const coins = snap.exists ? userField(snap.data(), 'shyCoins', 'shy_coins') || 0 : 0;
         if (coins < totalCost) throw new Error('Insufficient coins');
         t.update(senderRef, { shyCoins: FieldValue.increment(-totalCost) });
       }
@@ -860,9 +949,15 @@ router.post('/economy/gift-batch', async (req, res) => {
 
       const recipientTxId = generateId();
       await writeTransaction(recipientId, recipientTxId, {
-        type: 'GIFT_RECEIVED', amount: beanReward, currency: 'BEANS',
-        balanceAfter: recipientBeans + beanReward, giftId, giftName: gift.name,
-        senderId: uniqueId, quantity, timestamp,
+        type: 'GIFT_RECEIVED',
+        amount: beanReward,
+        currency: 'BEANS',
+        balanceAfter: recipientBeans + beanReward,
+        giftId,
+        giftName: gift.name,
+        senderId: uniqueId,
+        quantity,
+        timestamp,
       });
     }
 
@@ -873,8 +968,10 @@ router.post('/economy/gift-batch', async (req, res) => {
       type: 'GIFT_SENT',
       amount: fromBackpack ? 0 : -(coinValue * totalQty),
       currency: 'COINS',
-      balanceAfter: fromBackpack ? senderCoins : (senderCoins - coinValue * totalQty),
-      giftId, giftName: gift.name, quantity,
+      balanceAfter: fromBackpack ? senderCoins : senderCoins - coinValue * totalQty,
+      giftId,
+      giftName: gift.name,
+      quantity,
       details: `Batch ${source}: ${totalQty}x ${gift.name} to ${recipientIds.length} users`,
       timestamp,
     });
@@ -883,9 +980,14 @@ router.post('/economy/gift-batch', async (req, res) => {
     const currentRoomId = userField(sender, 'currentRoomId', 'current_room_id');
     if (currentRoomId) {
       const sName = userField(sender, 'displayName', 'display_name') || 'Someone';
-      await writeRoomGiftMessage(currentRoomId, uniqueId, sName,
+      await writeRoomGiftMessage(
+        currentRoomId,
+        uniqueId,
+        sName,
         `${sName} sent ${totalQty}x ${gift.name} to ${recipientIds.length} people`,
-        giftId, gift.iconUrl || gift.icon_url || '');
+        giftId,
+        gift.iconUrl || gift.icon_url || '',
+      );
     }
 
     // Broadcast
@@ -894,12 +996,19 @@ router.post('/economy/gift-batch', async (req, res) => {
         type: 'GIFT_SEND',
         senderName: userField(sender, 'displayName', 'display_name') || '',
         recipientName: `${recipientIds.length} people`,
-        giftName: gift.name, giftIconUrl: gift.iconUrl || gift.icon_url || '',
-        giftCoinValue: coinValue, quantity: totalQty,
+        giftName: gift.name,
+        giftIconUrl: gift.iconUrl || gift.icon_url || '',
+        giftCoinValue: coinValue,
+        quantity: totalQty,
       });
     }
 
-    res.json({ success: true, giftName: gift.name, totalSent: totalQty, recipientCount: recipientIds.length });
+    res.json({
+      success: true,
+      giftName: gift.name,
+      totalSent: totalQty,
+      recipientCount: recipientIds.length,
+    });
   } catch (err) {
     log.error('economy', 'POST /economy/gift-batch failed', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });
@@ -927,9 +1036,9 @@ router.post('/economy/backpack-send', async (req, res) => {
 
     // Get backpack items (excluding trial items)
     const backpackSnap = await db.collection(`users/${uniqueId}/backpack`).get();
-    const backpackItems = backpackSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const backpackItems = backpackSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
     const sendableItems = backpackItems.filter(
-      item => item.giftId !== 'super_shy_trial' && (item.quantity || 0) > 0
+      (item) => item.giftId !== 'super_shy_trial' && (item.quantity || 0) > 0,
     );
 
     if (sendableItems.length === 0) return res.status(400).json({ error: 'Backpack is empty' });
@@ -947,9 +1056,9 @@ router.post('/economy/backpack-send', async (req, res) => {
 
       // Get coin value from backpack doc or gift catalog
       let coinVal = item.coinValue;
-      if (coinVal == null) {
+      if (coinVal === null || coinVal === undefined) {
         const giftDocSnap = await db.doc(`gifts/${item.giftId}`).get();
-        coinVal = giftDocSnap.exists ? (giftDocSnap.data().coinValue || 0) : 0;
+        coinVal = giftDocSnap.exists ? giftDocSnap.data().coinValue || 0 : 0;
       }
 
       const beanReward = Math.floor(coinVal * config.beanConversionRate * qty);
@@ -961,7 +1070,9 @@ router.post('/economy/backpack-send', async (req, res) => {
     }
 
     // Credit beans (atomic)
-    await db.doc(`users/${recipientId}`).update({ shyBeans: FieldValue.increment(totalBeanReward) });
+    await db
+      .doc(`users/${recipientId}`)
+      .update({ shyBeans: FieldValue.increment(totalBeanReward) });
 
     // Clear sender's backpack (except trial items) — chunk into batches of 500
     for (let i = 0; i < sendableItems.length; i += 500) {
@@ -983,23 +1094,36 @@ router.post('/economy/backpack-send', async (req, res) => {
 
     await Promise.all([
       writeTransaction(uniqueId, bpSentTxId, {
-        type: 'BACKPACK_SENT', amount: 0, currency: 'ITEMS',
-        balanceAfter: senderCoins, totalItemsSent,
-        details: `Sent entire backpack (${totalItemsSent} items) to ${recipientName}`, timestamp,
+        type: 'BACKPACK_SENT',
+        amount: 0,
+        currency: 'ITEMS',
+        balanceAfter: senderCoins,
+        totalItemsSent,
+        details: `Sent entire backpack (${totalItemsSent} items) to ${recipientName}`,
+        timestamp,
       }),
       writeTransaction(recipientId, bpReceivedTxId, {
-        type: 'BACKPACK_RECEIVED', amount: totalBeanReward, currency: 'BEANS',
-        balanceAfter: recipientBeans + totalBeanReward, totalItemsReceived: totalItemsSent,
-        details: `Received entire backpack (${totalItemsSent} items) from ${senderName}`, timestamp,
+        type: 'BACKPACK_RECEIVED',
+        amount: totalBeanReward,
+        currency: 'BEANS',
+        balanceAfter: recipientBeans + totalBeanReward,
+        totalItemsReceived: totalItemsSent,
+        details: `Received entire backpack (${totalItemsSent} items) from ${senderName}`,
+        timestamp,
       }),
     ]);
 
     // Room message
     const currentRoomId = userField(sender, 'currentRoomId', 'current_room_id');
     if (currentRoomId) {
-      await writeRoomGiftMessage(currentRoomId, uniqueId, senderName,
+      await writeRoomGiftMessage(
+        currentRoomId,
+        uniqueId,
+        senderName,
         `${senderName} sent their entire backpack (${totalItemsSent} items) to ${recipientName}`,
-        null, '');
+        null,
+        '',
+      );
     }
 
     res.json({ success: true, totalItemsSent, totalBeanReward });
@@ -1036,13 +1160,15 @@ router.post('/economy/redeem-beans', async (req, res) => {
 
     await db.doc(`users/${uniqueId}`).update({
       shyBeans: FieldValue.increment(-amount),
-      shyCoins: FieldValue.increment(coins)
+      shyCoins: FieldValue.increment(coins),
     });
 
     const bonusPct = Math.round((config.beanRedeemBonusMultiplier - 1) * 100);
     const redeemTxId = generateId();
     await writeTransaction(uniqueId, redeemTxId, {
-      type: 'BEAN_REDEEM', amount: coins, currency: 'COINS',
+      type: 'BEAN_REDEEM',
+      amount: coins,
+      currency: 'COINS',
       balanceAfter: newCoins,
       details: `Redeemed ${amount} beans${hasBonus ? ` (${bonusPct}% bonus)` : ''}`,
     });
@@ -1061,10 +1187,12 @@ router.post('/economy/purchase', async (req, res) => {
     const body = req.body;
     const { productId, purchaseToken, isSubscription } = body || {};
 
-    if (!productId || !purchaseToken) return res.status(400).json({ error: 'productId and purchaseToken required' });
+    if (!productId || !purchaseToken)
+      return res.status(400).json({ error: 'productId and purchaseToken required' });
 
     // Check for duplicate purchase token to prevent replay attacks
-    const existingSnap = await db.collection('purchaseReceipts')
+    const existingSnap = await db
+      .collection('purchaseReceipts')
       .where('purchaseToken', '==', purchaseToken)
       .limit(1)
       .get();
@@ -1078,7 +1206,9 @@ router.post('/economy/purchase', async (req, res) => {
     let verification;
     if (process.env.NODE_ENV !== 'production') {
       log.warn('economy', 'Skipping purchase verification in non-production environment', {
-        userId: uniqueId, productId, isSubscription: !!isSubscription,
+        userId: uniqueId,
+        productId,
+        isSubscription: !!isSubscription,
       });
       verification = { orderId: 'dev-unverified' };
     } else {
@@ -1090,7 +1220,9 @@ router.post('/economy/purchase', async (req, res) => {
         }
       } catch (verifyErr) {
         log.warn('economy', 'Purchase verification rejected', {
-          userId: uniqueId, productId, isSubscription: !!isSubscription,
+          userId: uniqueId,
+          productId,
+          isSubscription: !!isSubscription,
           error: verifyErr.message,
         });
         return res.status(403).json({ error: 'Purchase verification failed' });
@@ -1133,15 +1265,20 @@ router.post('/economy/purchase', async (req, res) => {
 
       const subTxId = generateId();
       await writeTransaction(uniqueId, subTxId, {
-        type: 'SUBSCRIPTION', amount: 0, currency: 'COINS',
-        balanceAfter: 0, details: `Super Shy ${sub.tier}`, timestamp,
+        type: 'SUBSCRIPTION',
+        amount: 0,
+        currency: 'COINS',
+        balanceAfter: 0,
+        details: `Super Shy ${sub.tier}`,
+        timestamp,
       });
 
       return res.json({ success: true, tier: sub.tier });
     }
 
     // Coin package
-    const pkgSnap = await db.collection('coinPackages')
+    const pkgSnap = await db
+      .collection('coinPackages')
       .where('productId', '==', productId)
       .limit(1)
       .get();
@@ -1161,9 +1298,12 @@ router.post('/economy/purchase', async (req, res) => {
     const newBalance = shyCoins + totalCoins;
     const purchaseTxId = generateId();
     await writeTransaction(uniqueId, purchaseTxId, {
-      type: 'PURCHASE', amount: totalCoins, currency: 'COINS',
+      type: 'PURCHASE',
+      amount: totalCoins,
+      currency: 'COINS',
       balanceAfter: newBalance,
-      details: `${pkg.coins} + ${pkg.bonusCoins || 0} bonus coins`, timestamp,
+      details: `${pkg.coins} + ${pkg.bonusCoins || 0} bonus coins`,
+      timestamp,
     });
 
     res.json({ success: true, coinsAdded: totalCoins, newBalance });
@@ -1198,8 +1338,11 @@ router.post('/economy/trial-claim', async (req, res) => {
 
     const trialClaimTxId = generateId();
     await writeTransaction(uniqueId, trialClaimTxId, {
-      type: 'TRIAL_CLAIM', amount: 0, currency: 'COINS',
-      balanceAfter: shyCoins, details: 'Claimed 30 days of Super Shy',
+      type: 'TRIAL_CLAIM',
+      amount: 0,
+      currency: 'COINS',
+      balanceAfter: shyCoins,
+      details: 'Claimed 30 days of Super Shy',
     });
 
     res.json({ success: true });
@@ -1223,7 +1366,8 @@ router.post('/economy/trial-activate', async (req, res) => {
     const bpItem = bpSnap.exists ? bpSnap.data() : null;
 
     if (!user) return res.status(404).json({ error: 'User not found' });
-    if (!bpItem || (bpItem.quantity || 0) < 1) return res.status(402).json({ error: 'No trial item in backpack' });
+    if (!bpItem || (bpItem.quantity || 0) < 1)
+      return res.status(402).json({ error: 'No trial item in backpack' });
 
     const timestamp = now();
     const thirtyDays = 30 * 24 * 60 * 60 * 1000;
@@ -1231,7 +1375,7 @@ router.post('/economy/trial-activate', async (req, res) => {
     const baseTime = Math.max(currentExpiry, timestamp);
     const newExpiry = baseTime + thirtyDays;
     const currentTier = userField(user, 'superShyTier', 'super_shy_tier');
-    const newTier = (currentTier && currentTier !== 'trial') ? currentTier : 'trial';
+    const newTier = currentTier && currentTier !== 'trial' ? currentTier : 'trial';
 
     // Remove trial from backpack and activate
     await db.doc(`users/${uniqueId}/backpack/super_shy_trial`).delete();
@@ -1244,8 +1388,12 @@ router.post('/economy/trial-activate', async (req, res) => {
     const shyCoins = userField(user, 'shyCoins', 'shy_coins') || 0;
     const trialActivateTxId = generateId();
     await writeTransaction(uniqueId, trialActivateTxId, {
-      type: 'TRIAL_ACTIVATE', amount: 0, currency: 'COINS',
-      balanceAfter: shyCoins, details: 'Activated 30 days of Super Shy', timestamp,
+      type: 'TRIAL_ACTIVATE',
+      amount: 0,
+      currency: 'COINS',
+      balanceAfter: shyCoins,
+      details: 'Activated 30 days of Super Shy',
+      timestamp,
     });
 
     res.json({ success: true, newTier, newExpiry });
@@ -1279,8 +1427,11 @@ router.post('/economy/test-coins', async (req, res) => {
     const newBalance = shyCoins + amount;
     const testTxId = generateId();
     await writeTransaction(uniqueId, testTxId, {
-      type: 'PURCHASE', amount, currency: 'COINS',
-      balanceAfter: newBalance, details: `Test purchase (+${amount} coins)`,
+      type: 'PURCHASE',
+      amount,
+      currency: 'COINS',
+      balanceAfter: newBalance,
+      details: `Test purchase (+${amount} coins)`,
     });
 
     res.json({ success: true, coinsAdded: amount, newBalance });
@@ -1323,7 +1474,7 @@ router.get('/economy/transactions', async (req, res) => {
     query = query.orderBy('timestamp', 'desc').limit(limit);
 
     const snap = await query.get();
-    const results = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const results = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     res.json(results);
   } catch (err) {
     log.error('economy', 'GET /economy/transactions failed', { error: err.message });
@@ -1336,10 +1487,10 @@ router.get('/users/:uniqueId/backpack', async (req, res) => {
   try {
     const isAdmin = req.auth.token && req.auth.token.admin;
     if (String(req.auth.uniqueId) !== req.params.uniqueId && !isAdmin) {
-      return res.status(403).json({ error: 'Cannot access another user\'s backpack' });
+      return res.status(403).json({ error: "Cannot access another user's backpack" });
     }
     const snap = await db.collection(`users/${req.params.uniqueId}/backpack`).get();
-    const results = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const results = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     res.json(results);
   } catch (err) {
     log.error('economy', 'GET /users/:uniqueId/backpack failed', { error: err.message });
@@ -1351,7 +1502,7 @@ router.get('/users/:uniqueId/backpack', async (req, res) => {
 router.get('/users/:uniqueId/gift-wall', async (req, res) => {
   try {
     const snap = await db.collection(`users/${req.params.uniqueId}/giftWall`).get();
-    const results = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const results = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     res.json(results);
   } catch (err) {
     log.error('economy', 'GET /users/:uniqueId/gift-wall failed', { error: err.message });
@@ -1362,18 +1513,25 @@ router.get('/users/:uniqueId/gift-wall', async (req, res) => {
 // ── Gift wall senders ──
 router.get('/users/:uniqueId/gift-wall/:giftId/senders', async (req, res) => {
   try {
-    const docSnap = await db.doc(`users/${req.params.uniqueId}/giftWall/${req.params.giftId}`).get();
-    const senders = docSnap.exists ? (docSnap.data().senders || []) : [];
+    const docSnap = await db
+      .doc(`users/${req.params.uniqueId}/giftWall/${req.params.giftId}`)
+      .get();
+    const senders = docSnap.exists ? docSnap.data().senders || [] : [];
     // Sort by sendCount descending
     senders.sort((a, b) => (b.sendCount || 0) - (a.sendCount || 0));
     res.json(senders);
   } catch (err) {
-    log.error('economy', 'GET /users/:uniqueId/gift-wall/:giftId/senders failed', { error: err.message });
+    log.error('economy', 'GET /users/:uniqueId/gift-wall/:giftId/senders failed', {
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // Test helper to reset in-memory config cache
-router._resetConfigCache = () => { cachedEconomyConfig = null; economyConfigCachedAt = 0; };
+router._resetConfigCache = () => {
+  cachedEconomyConfig = null;
+  economyConfigCachedAt = 0;
+};
 
 module.exports = router;

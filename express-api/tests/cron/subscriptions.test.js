@@ -34,12 +34,12 @@ const subscriptions = require('../../src/cron/subscriptions');
 
 // Helper: timestamp in the past (expired)
 function pastTimestamp() {
-  return Date.now() - (24 * 60 * 60 * 1000); // 1 day ago
+  return Date.now() - 24 * 60 * 60 * 1000; // 1 day ago
 }
 
 // Helper: timestamp in the future (not expired)
-function futureTimestamp() {
-  return Date.now() + (30 * 24 * 60 * 60 * 1000); // 30 days from now
+function _futureTimestamp() {
+  return Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days from now
 }
 
 beforeEach(() => {
@@ -77,10 +77,11 @@ describe('subscriptions cron', () => {
     await subscriptions();
 
     expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
-    expect(mockBatchUpdate).toHaveBeenCalledWith(
-      expect.anything(),
-      { isSuperShy: false, superShyExpiry: null, superShyTier: null },
-    );
+    expect(mockBatchUpdate).toHaveBeenCalledWith(expect.anything(), {
+      isSuperShy: false,
+      superShyExpiry: null,
+      superShyTier: null,
+    });
     expect(mockBatchCommit).toHaveBeenCalledTimes(1);
   });
 
@@ -90,11 +91,19 @@ describe('subscriptions cron', () => {
       docs: [
         {
           id: 'user-1',
-          data: () => ({ isSuperShy: true, superShyExpiry: pastTimestamp(), superShyTier: 'monthly' }),
+          data: () => ({
+            isSuperShy: true,
+            superShyExpiry: pastTimestamp(),
+            superShyTier: 'monthly',
+          }),
         },
         {
           id: 'user-2',
-          data: () => ({ isSuperShy: true, superShyExpiry: pastTimestamp(), superShyTier: 'annual' }),
+          data: () => ({
+            isSuperShy: true,
+            superShyExpiry: pastTimestamp(),
+            superShyTier: 'annual',
+          }),
         },
       ],
     });
@@ -132,11 +141,19 @@ describe('subscriptions cron', () => {
       docs: [
         {
           id: 'user-monthly',
-          data: () => ({ isSuperShy: true, superShyExpiry: pastTimestamp(), superShyTier: 'monthly' }),
+          data: () => ({
+            isSuperShy: true,
+            superShyExpiry: pastTimestamp(),
+            superShyTier: 'monthly',
+          }),
         },
         {
           id: 'user-lifetime',
-          data: () => ({ isSuperShy: true, superShyExpiry: pastTimestamp(), superShyTier: 'lifetime' }),
+          data: () => ({
+            isSuperShy: true,
+            superShyExpiry: pastTimestamp(),
+            superShyTier: 'lifetime',
+          }),
         },
       ],
     });
@@ -154,11 +171,19 @@ describe('subscriptions cron', () => {
       docs: [
         {
           id: 'user-a',
-          data: () => ({ isSuperShy: true, superShyExpiry: pastTimestamp(), superShyTier: 'lifetime' }),
+          data: () => ({
+            isSuperShy: true,
+            superShyExpiry: pastTimestamp(),
+            superShyTier: 'lifetime',
+          }),
         },
         {
           id: 'user-b',
-          data: () => ({ isSuperShy: true, superShyExpiry: pastTimestamp(), superShyTier: 'lifetime' }),
+          data: () => ({
+            isSuperShy: true,
+            superShyExpiry: pastTimestamp(),
+            superShyTier: 'lifetime',
+          }),
         },
       ],
     });
@@ -175,21 +200,22 @@ describe('subscriptions cron', () => {
       docs: [
         {
           id: 'user-expired',
-          data: () => ({ isSuperShy: true, superShyExpiry: pastTimestamp(), superShyTier: 'monthly' }),
+          data: () => ({
+            isSuperShy: true,
+            superShyExpiry: pastTimestamp(),
+            superShyTier: 'monthly',
+          }),
         },
       ],
     });
 
     await subscriptions();
 
-    expect(mockBatchUpdate).toHaveBeenCalledWith(
-      expect.anything(),
-      {
-        isSuperShy: false,
-        superShyExpiry: null,
-        superShyTier: null,
-      },
-    );
+    expect(mockBatchUpdate).toHaveBeenCalledWith(expect.anything(), {
+      isSuperShy: false,
+      superShyExpiry: null,
+      superShyTier: null,
+    });
   });
 
   test('processes users in batches of 500', async () => {
@@ -214,7 +240,11 @@ describe('subscriptions cron', () => {
       docs: [
         {
           id: 'user-ok',
-          data: () => ({ isSuperShy: true, superShyExpiry: pastTimestamp(), superShyTier: 'annual' }),
+          data: () => ({
+            isSuperShy: true,
+            superShyExpiry: pastTimestamp(),
+            superShyTier: 'annual',
+          }),
         },
       ],
     });

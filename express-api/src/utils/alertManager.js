@@ -48,7 +48,7 @@ function createAlertManager(db, messaging) {
         cachedConfig = { ...DEFAULT_ALERT_CONFIG };
       }
       configLoadedAt = now;
-    } catch (err) {
+    } catch (_err) {
       // On error, use cached or defaults
       if (!cachedConfig) cachedConfig = { ...DEFAULT_ALERT_CONFIG };
     }
@@ -141,7 +141,7 @@ function createAlertManager(db, messaging) {
             'critical',
             `Error spike on ${route}`,
             `${timestamps.length} errors in ${config.errorSpikeWindowMinutes} minutes`,
-            { route, errorCount: timestamps.length }
+            { route, errorCount: timestamps.length },
           );
         }
       }
@@ -169,7 +169,7 @@ function createAlertManager(db, messaging) {
         'warning',
         `Slow endpoint: ${route}`,
         `Response took ${durationMs}ms (threshold: ${threshold}ms)`,
-        { route, durationMs, thresholdMs: threshold }
+        { route, durationMs, thresholdMs: threshold },
       );
     } catch (_err) {
       // Never throw

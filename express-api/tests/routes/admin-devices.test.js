@@ -77,8 +77,24 @@ describe('GET /api/admin/devices', () => {
   test('returns device list (200)', async () => {
     mockCollectionGet.mockResolvedValue({
       docs: [
-        { id: 'dev-001', data: () => ({ userId: 'u1', manufacturer: 'Samsung', model: 'Galaxy S21', lastIp: '1.2.3.4' }) },
-        { id: 'dev-002', data: () => ({ userId: 'u2', manufacturer: 'Google', model: 'Pixel 7', lastIp: '5.6.7.8' }) },
+        {
+          id: 'dev-001',
+          data: () => ({
+            userId: 'u1',
+            manufacturer: 'Samsung',
+            model: 'Galaxy S21',
+            lastIp: '1.2.3.4',
+          }),
+        },
+        {
+          id: 'dev-002',
+          data: () => ({
+            userId: 'u2',
+            manufacturer: 'Google',
+            model: 'Pixel 7',
+            lastIp: '5.6.7.8',
+          }),
+        },
       ],
     });
 
@@ -94,8 +110,24 @@ describe('GET /api/admin/devices', () => {
   test('filters by search query', async () => {
     mockCollectionGet.mockResolvedValue({
       docs: [
-        { id: 'dev-001', data: () => ({ userId: 'u1', manufacturer: 'Samsung', model: 'Galaxy S21', lastIp: '1.2.3.4' }) },
-        { id: 'dev-002', data: () => ({ userId: 'u2', manufacturer: 'Google', model: 'Pixel 7', lastIp: '5.6.7.8' }) },
+        {
+          id: 'dev-001',
+          data: () => ({
+            userId: 'u1',
+            manufacturer: 'Samsung',
+            model: 'Galaxy S21',
+            lastIp: '1.2.3.4',
+          }),
+        },
+        {
+          id: 'dev-002',
+          data: () => ({
+            userId: 'u2',
+            manufacturer: 'Google',
+            model: 'Pixel 7',
+            lastIp: '5.6.7.8',
+          }),
+        },
       ],
     });
 

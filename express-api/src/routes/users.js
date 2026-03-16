@@ -43,12 +43,15 @@ function requireOwner(req, res) {
 
 router.post('/users', async (req, res) => {
   try {
-    const { provider, identifier, displayName, email, profilePhotoUrl, dateOfBirth, language } = req.body || {};
+    const { provider, identifier, displayName, email, profilePhotoUrl, dateOfBirth, language } =
+      req.body || {};
 
     if (!provider) return res.status(400).json({ error: 'provider required' });
     if (!identifier) return res.status(400).json({ error: 'identifier required' });
     if (!VALID_PROVIDERS.includes(provider)) {
-      return res.status(400).json({ error: `Invalid provider. Must be one of: ${VALID_PROVIDERS.join(', ')}` });
+      return res
+        .status(400)
+        .json({ error: `Invalid provider. Must be one of: ${VALID_PROVIDERS.join(', ')}` });
     }
 
     const identityDocId = `${provider}:${identifier}`;
@@ -70,7 +73,7 @@ router.post('/users', async (req, res) => {
       }
 
       // Atomic counter increment
-      let current = counterSnap.exists ? (counterSnap.data().value || 0) : 0;
+      let current = counterSnap.exists ? counterSnap.data().value || 0 : 0;
       if (current < MIN_UNIQUE_ID) current = MIN_UNIQUE_ID - 1;
       const next = current + 1;
 
@@ -87,9 +90,7 @@ router.post('/users', async (req, res) => {
         email: email || null,
         profilePhotoUrl: profilePhotoUrl || null,
         dateOfBirth: dateOfBirth || null,
-        providers: [
-          { type: provider, identifier, active: true, linkedAt: timestamp },
-        ],
+        providers: [{ type: provider, identifier, active: true, linkedAt: timestamp }],
         userType: 'MEMBER',
         blockedUserIds: [],
         followingIds: [],
@@ -129,7 +130,9 @@ router.post('/users', async (req, res) => {
       return res.status(409).json({ error: 'Identity already linked to an account' });
     }
     if (err.code === 'DEACTIVATED') {
-      return res.status(409).json({ error: 'This identity has been deactivated. Contact support for assistance.' });
+      return res
+        .status(409)
+        .json({ error: 'This identity has been deactivated. Contact support for assistance.' });
     }
     log.error('users', 'POST /users failed', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });
@@ -190,8 +193,8 @@ router.get('/users/:uniqueId', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     user.blockedUserIds = user.blockedUserIds || [];
-    user.followingIds   = user.followingIds   || [];
-    user.followerIds    = user.followerIds     || [];
+    user.followingIds = user.followingIds || [];
+    user.followerIds = user.followerIds || [];
 
     // Strip admin-only fields
     delete user.gcsScore;
@@ -203,7 +206,10 @@ router.get('/users/:uniqueId', async (req, res) => {
 
     res.json(user);
   } catch (err) {
-    log.error('users', 'GET /users/:uniqueId failed', { uniqueId: req.params.uniqueId, error: err.message });
+    log.error('users', 'GET /users/:uniqueId failed', {
+      uniqueId: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -220,14 +226,30 @@ router.patch('/users/:uniqueId', async (req, res) => {
     if (!body) return res.status(400).json({ error: 'Invalid JSON body' });
 
     const allowedFields = [
-      'displayName', 'description', 'nationality',
-      'profilePhotoUrl', 'coverPhotoUrl',
-      'pmPrivacy', 'pmNotificationsEnabled', 'pmSoundEnabled',
-      'pmShowTimestamps', 'pmShowDateSeparators', 'pmNotificationPreview',
-      'hideFollowing', 'hideOnlineStatus', 'hideAge',
-      'selfDestructAlertEnabled', 'minGiftAnimationValue',
-      'dndEnabled', 'dndStartHour', 'dndStartMinute', 'dndEndHour', 'dndEndMinute',
-      'acceptedLegalVersion', 'currentRoomId', 'lastRoomName',
+      'displayName',
+      'description',
+      'nationality',
+      'profilePhotoUrl',
+      'coverPhotoUrl',
+      'pmPrivacy',
+      'pmNotificationsEnabled',
+      'pmSoundEnabled',
+      'pmShowTimestamps',
+      'pmShowDateSeparators',
+      'pmNotificationPreview',
+      'hideFollowing',
+      'hideOnlineStatus',
+      'hideAge',
+      'selfDestructAlertEnabled',
+      'minGiftAnimationValue',
+      'dndEnabled',
+      'dndStartHour',
+      'dndStartMinute',
+      'dndEndHour',
+      'dndEndMinute',
+      'acceptedLegalVersion',
+      'currentRoomId',
+      'lastRoomName',
       'language',
     ];
 
@@ -242,29 +264,61 @@ router.patch('/users/:uniqueId', async (req, res) => {
 
     // Validate field value types and lengths
     const stringFields = [
-      'displayName', 'description', 'nationality', 'profilePhotoUrl', 'coverPhotoUrl',
-      'pmPrivacy', 'currentRoomId', 'lastRoomName', 'language',
+      'displayName',
+      'description',
+      'nationality',
+      'profilePhotoUrl',
+      'coverPhotoUrl',
+      'pmPrivacy',
+      'currentRoomId',
+      'lastRoomName',
+      'language',
     ];
-    const maxLengths = { displayName: 20, description: 200, nationality: 3, language: 10, lastRoomName: 50 };
+    const maxLengths = {
+      displayName: 20,
+      description: 200,
+      nationality: 3,
+      language: 10,
+      lastRoomName: 50,
+    };
     for (const key of stringFields) {
       if (key in updates && updates[key] !== null && typeof updates[key] !== 'string') {
         return res.status(400).json({ error: `${key} must be a string` });
       }
-      if (key in updates && typeof updates[key] === 'string' && maxLengths[key] && updates[key].length > maxLengths[key]) {
+      if (
+        key in updates &&
+        typeof updates[key] === 'string' &&
+        maxLengths[key] &&
+        updates[key].length > maxLengths[key]
+      ) {
         return res.status(400).json({ error: `${key} exceeds max length of ${maxLengths[key]}` });
       }
     }
     const boolFields = [
-      'pmNotificationsEnabled', 'pmSoundEnabled', 'pmShowTimestamps', 'pmShowDateSeparators',
-      'pmNotificationPreview', 'hideFollowing', 'hideOnlineStatus', 'hideAge',
-      'selfDestructAlertEnabled', 'dndEnabled',
+      'pmNotificationsEnabled',
+      'pmSoundEnabled',
+      'pmShowTimestamps',
+      'pmShowDateSeparators',
+      'pmNotificationPreview',
+      'hideFollowing',
+      'hideOnlineStatus',
+      'hideAge',
+      'selfDestructAlertEnabled',
+      'dndEnabled',
     ];
     for (const key of boolFields) {
       if (key in updates && typeof updates[key] !== 'boolean') {
         return res.status(400).json({ error: `${key} must be a boolean` });
       }
     }
-    const intFields = ['dndStartHour', 'dndStartMinute', 'dndEndHour', 'dndEndMinute', 'minGiftAnimationValue', 'acceptedLegalVersion'];
+    const intFields = [
+      'dndStartHour',
+      'dndStartMinute',
+      'dndEndHour',
+      'dndEndMinute',
+      'minGiftAnimationValue',
+      'acceptedLegalVersion',
+    ];
     for (const key of intFields) {
       if (key in updates && (typeof updates[key] !== 'number' || !Number.isInteger(updates[key]))) {
         return res.status(400).json({ error: `${key} must be an integer` });
@@ -281,12 +335,18 @@ router.patch('/users/:uniqueId', async (req, res) => {
       }
     }
 
-    log.info('users', 'Updating profile', { uniqueId: req.params.uniqueId, fields: Object.keys(updates) });
+    log.info('users', 'Updating profile', {
+      uniqueId: req.params.uniqueId,
+      fields: Object.keys(updates),
+    });
     await db.doc(`users/${req.params.uniqueId}`).update(updates);
 
     res.json({ success: true });
   } catch (err) {
-    log.error('users', 'PATCH /users/:uniqueId failed', { uniqueId: req.params.uniqueId, error: err.message });
+    log.error('users', 'PATCH /users/:uniqueId failed', {
+      uniqueId: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -303,7 +363,9 @@ router.post('/users/:uniqueId/link-provider', async (req, res) => {
     if (!provider) return res.status(400).json({ error: 'provider required' });
     if (!identifier) return res.status(400).json({ error: 'identifier required' });
     if (!VALID_PROVIDERS.includes(provider)) {
-      return res.status(400).json({ error: `Invalid provider. Must be one of: ${VALID_PROVIDERS.join(', ')}` });
+      return res
+        .status(400)
+        .json({ error: `Invalid provider. Must be one of: ${VALID_PROVIDERS.join(', ')}` });
     }
 
     const uniqueId = Number(req.params.uniqueId);
@@ -320,7 +382,9 @@ router.post('/users/:uniqueId/link-provider', async (req, res) => {
     // Check if identity is already claimed
     if (existingIdentity) {
       if (existingIdentity.uniqueId !== uniqueId) {
-        return res.status(409).json({ error: 'This identity is already linked to another account' });
+        return res
+          .status(409)
+          .json({ error: 'This identity is already linked to another account' });
       }
       // Re-linking own deactivated identity
       if (existingIdentity.unlinked) {
@@ -334,10 +398,10 @@ router.post('/users/:uniqueId/link-provider', async (req, res) => {
         });
 
         // Update providers array in user doc
-        const providers = (user.providers || []).map(p =>
+        const providers = (user.providers || []).map((p) =>
           p.type === provider && p.identifier === identifier
             ? { ...p, active: true, linkedAt: timestamp, unlinkedAt: undefined }
-            : p
+            : p,
         );
 
         await db.doc(`users/${uniqueId}`).update({ providers });
@@ -350,9 +414,11 @@ router.post('/users/:uniqueId/link-provider', async (req, res) => {
     }
 
     // Check provider count limit
-    const existingOfType = (user.providers || []).filter(p => p.type === provider && p.active);
+    const existingOfType = (user.providers || []).filter((p) => p.type === provider && p.active);
     if (existingOfType.length >= MAX_IDENTIFIERS_PER_PROVIDER) {
-      return res.status(409).json({ error: 'Unable to link this account. Please contact support for assistance.' });
+      return res
+        .status(409)
+        .json({ error: 'Unable to link this account. Please contact support for assistance.' });
     }
 
     const timestamp = now();
@@ -377,7 +443,10 @@ router.post('/users/:uniqueId/link-provider', async (req, res) => {
     log.info('users', 'Provider linked', { uniqueId, provider, identifier });
     res.json({ success: true });
   } catch (err) {
-    log.error('users', 'Link provider failed', { uniqueId: req.params.uniqueId, error: err.message });
+    log.error('users', 'Link provider failed', {
+      uniqueId: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -412,9 +481,11 @@ router.delete('/users/:uniqueId/link-provider', async (req, res) => {
     }
 
     // Check at least 2 active providers remain
-    const activeProviders = (user.providers || []).filter(p => p.active);
+    const activeProviders = (user.providers || []).filter((p) => p.active);
     if (activeProviders.length < 2) {
-      return res.status(400).json({ error: 'Cannot unlink your only active provider. At least one provider must remain linked.' });
+      return res.status(400).json({
+        error: 'Cannot unlink your only active provider. At least one provider must remain linked.',
+      });
     }
 
     const timestamp = now();
@@ -426,17 +497,20 @@ router.delete('/users/:uniqueId/link-provider', async (req, res) => {
     });
 
     // Update providers array — set active=false + unlinkedAt
-    const providers = (user.providers || []).map(p =>
+    const providers = (user.providers || []).map((p) =>
       p.type === provider && p.identifier === identifier
         ? { ...p, active: false, unlinkedAt: timestamp }
-        : p
+        : p,
     );
     await db.doc(`users/${uniqueId}`).update({ providers });
 
     log.info('users', 'Provider unlinked', { uniqueId, provider, identifier });
     res.json({ success: true });
   } catch (err) {
-    log.error('users', 'Unlink provider failed', { uniqueId: req.params.uniqueId, error: err.message });
+    log.error('users', 'Unlink provider failed', {
+      uniqueId: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -452,19 +526,24 @@ router.post('/users/:uniqueId/appeal', async (req, res) => {
     const body = req.body;
     if (!body?.appealText) return res.status(400).json({ error: 'appealText required' });
     if (typeof body.appealText !== 'string' || body.appealText.length > 500) {
-      return res.status(400).json({ error: 'appealText must be a string of at most 500 characters' });
+      return res
+        .status(400)
+        .json({ error: 'appealText must be a string of at most 500 characters' });
     }
 
     const uniqueId = req.params.uniqueId;
     log.info('users', 'Suspension appeal submitted', { uniqueId });
 
     await Promise.all([
-      db.doc(`suspensionAppeals/${generateId()}`).set({
-        uniqueId,
-        appealText: body.appealText,
-        status: 'pending',
-        createdAt: now(),
-      }, { merge: true }),
+      db.doc(`suspensionAppeals/${generateId()}`).set(
+        {
+          uniqueId,
+          appealText: body.appealText,
+          status: 'pending',
+          createdAt: now(),
+        },
+        { merge: true },
+      ),
       db.doc(`users/${uniqueId}`).update({
         suspensionAppealStatus: 'pending',
       }),
@@ -472,7 +551,10 @@ router.post('/users/:uniqueId/appeal', async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    log.error('users', 'Suspension appeal failed', { uniqueId: req.params.uniqueId, error: err.message });
+    log.error('users', 'Suspension appeal failed', {
+      uniqueId: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -512,7 +594,10 @@ router.post('/users/:uniqueId/lift-suspension', async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    log.error('users', 'Lift suspension failed', { uniqueId: req.params.uniqueId, error: err.message });
+    log.error('users', 'Lift suspension failed', {
+      uniqueId: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -527,7 +612,8 @@ router.post('/users/:uniqueId/follow', async (req, res) => {
     const targetId = body?.targetUserId;
     if (!targetId) return res.status(400).json({ error: 'targetUserId required' });
     if (requireOwner(req, res)) return;
-    if (req.params.uniqueId === targetId) return res.status(400).json({ error: 'Cannot follow yourself' });
+    if (req.params.uniqueId === targetId)
+      return res.status(400).json({ error: 'Cannot follow yourself' });
 
     const uniqueId = req.params.uniqueId;
     const batch = db.batch();
@@ -542,7 +628,11 @@ router.post('/users/:uniqueId/follow', async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    log.error('users', 'Follow failed', { uniqueId: req.params.uniqueId, targetUserId: req.body?.targetUserId, error: err.message });
+    log.error('users', 'Follow failed', {
+      uniqueId: req.params.uniqueId,
+      targetUserId: req.body?.targetUserId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Failed to follow user' });
   }
 });
@@ -571,7 +661,11 @@ router.post('/users/:uniqueId/unfollow', async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    log.error('users', 'Unfollow failed', { uniqueId: req.params.uniqueId, targetUserId: req.body?.targetUserId, error: err.message });
+    log.error('users', 'Unfollow failed', {
+      uniqueId: req.params.uniqueId,
+      targetUserId: req.body?.targetUserId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Failed to unfollow user' });
   }
 });
@@ -600,7 +694,11 @@ router.post('/users/:uniqueId/remove-follower', async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    log.error('users', 'Remove follower failed', { uniqueId: req.params.uniqueId, followerUserId: req.body?.followerUserId, error: err.message });
+    log.error('users', 'Remove follower failed', {
+      uniqueId: req.params.uniqueId,
+      followerUserId: req.body?.followerUserId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Failed to remove follower' });
   }
 });
@@ -637,12 +735,16 @@ router.post('/users/:uniqueId/record-visit', async (req, res) => {
       await batch.commit();
     } else {
       const batch = db.batch();
-      batch.set(db.doc(stalkerPath), {
-        visitorId,
-        lastVisitedAt: timestamp,
-        firstVisitedAt: timestamp,
-        visitCount: 1,
-      }, { merge: true });
+      batch.set(
+        db.doc(stalkerPath),
+        {
+          visitorId,
+          lastVisitedAt: timestamp,
+          firstVisitedAt: timestamp,
+          visitCount: 1,
+        },
+        { merge: true },
+      );
       batch.update(db.doc(`users/${profileUniqueId}`), {
         stalkerCount: FieldValue.increment(1),
         newStalkerCount: FieldValue.increment(1),
@@ -652,7 +754,11 @@ router.post('/users/:uniqueId/record-visit', async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    log.error('users', 'Record visit failed', { profileUniqueId: req.params.uniqueId, visitorId: req.body?.visitorId, error: err.message });
+    log.error('users', 'Record visit failed', {
+      profileUniqueId: req.params.uniqueId,
+      visitorId: req.body?.visitorId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });

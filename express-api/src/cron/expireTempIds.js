@@ -3,7 +3,8 @@ const log = require('../utils/log');
 
 async function expireTempIds() {
   const nowMs = Date.now();
-  const snap = await db.collection('users')
+  const snap = await db
+    .collection('users')
     .where('tempUniqueIdExpiry', '<=', nowMs)
     .where('tempUniqueIdExpiry', '>', 0)
     .get();

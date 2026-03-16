@@ -15,11 +15,29 @@ const log = require('../utils/log');
 
 // Same collections the backup cron tracks, minus large operational ones (logs, alerts)
 const TOP_LEVEL_COLLECTIONS = [
-  'users', 'rooms', 'conversations', 'deviceBindings', 'gifts',
-  'giftCatalog', 'economyConfig', 'funFacts', 'banners', 'reports',
-  'appeals', 'subscriptions', 'logConfig', 'deviceBans', 'networkBans',
-  'config', 'coinPackages', 'purchaseReceipts', 'reportLocks',
-  'reportsArchive', 'suspensionAppeals', 'broadcasts', 'adminAuditLog',
+  'users',
+  'rooms',
+  'conversations',
+  'deviceBindings',
+  'gifts',
+  'giftCatalog',
+  'economyConfig',
+  'funFacts',
+  'banners',
+  'reports',
+  'appeals',
+  'subscriptions',
+  'logConfig',
+  'deviceBans',
+  'networkBans',
+  'config',
+  'coinPackages',
+  'purchaseReceipts',
+  'reportLocks',
+  'reportsArchive',
+  'suspensionAppeals',
+  'broadcasts',
+  'adminAuditLog',
   'alertConfig',
 ];
 
@@ -41,7 +59,7 @@ function getProdDb() {
 
   const prodApp = admin.initializeApp(
     { credential: admin.credential.cert(require(prodSaPath)) },
-    'prod-readonly'
+    'prod-readonly',
   );
   prodDb = prodApp.firestore();
   return prodDb;
@@ -112,12 +130,8 @@ async function copySubcollection(srcDb, destDb, parentCollection, subName) {
       const chunk = docs.slice(i, i + 500);
       for (const doc of chunk) {
         batch.set(
-          destDb
-            .collection(parentCollection)
-            .doc(parentRef.id)
-            .collection(subName)
-            .doc(doc.id),
-          doc.data()
+          destDb.collection(parentCollection).doc(parentRef.id).collection(subName).doc(doc.id),
+          doc.data(),
         );
       }
       await batch.commit();
@@ -151,10 +165,18 @@ router.post('/admin/migrate-prod-data', async (req, res) => {
           subDeleted += await deleteCollection(db, `${collPath}/${parentRef.id}/${sub}`);
         }
         results.deleted[`${parent}/${sub}`] = subDeleted;
-        log.info('admin-migrate', `Deleted dev subcollection ${parent}/${sub}`, { count: subDeleted });
+        log.info('admin-migrate', `Deleted dev subcollection ${parent}/${sub}`, {
+          count: subDeleted,
+        });
       } catch (err) {
-        results.errors.push({ collection: `${parent}/${sub}`, phase: 'delete', error: err.message });
-        log.error('admin-migrate', `Failed to delete dev subcollection ${parent}/${sub}`, { error: err.message });
+        results.errors.push({
+          collection: `${parent}/${sub}`,
+          phase: 'delete',
+          error: err.message,
+        });
+        log.error('admin-migrate', `Failed to delete dev subcollection ${parent}/${sub}`, {
+          error: err.message,
+        });
       }
     }
 
@@ -166,7 +188,9 @@ router.post('/admin/migrate-prod-data', async (req, res) => {
         log.info('admin-migrate', `Deleted dev collection ${name}`, { count: deleted });
       } catch (err) {
         results.errors.push({ collection: name, phase: 'delete', error: err.message });
-        log.error('admin-migrate', `Failed to delete dev collection ${name}`, { error: err.message });
+        log.error('admin-migrate', `Failed to delete dev collection ${name}`, {
+          error: err.message,
+        });
       }
     }
 
@@ -187,10 +211,14 @@ router.post('/admin/migrate-prod-data', async (req, res) => {
       try {
         const copied = await copySubcollection(srcDb, db, parent, sub);
         results.copied[`${parent}/${sub}`] = copied;
-        log.info('admin-migrate', `Copied prod → dev subcollection ${parent}/${sub}`, { count: copied });
+        log.info('admin-migrate', `Copied prod → dev subcollection ${parent}/${sub}`, {
+          count: copied,
+        });
       } catch (err) {
         results.errors.push({ collection: `${parent}/${sub}`, phase: 'copy', error: err.message });
-        log.error('admin-migrate', `Failed to copy subcollection ${parent}/${sub}`, { error: err.message });
+        log.error('admin-migrate', `Failed to copy subcollection ${parent}/${sub}`, {
+          error: err.message,
+        });
       }
     }
 
@@ -198,7 +226,9 @@ router.post('/admin/migrate-prod-data', async (req, res) => {
     const totalCopied = Object.values(results.copied).reduce((a, b) => a + b, 0);
 
     log.info('admin-migrate', 'Migration complete', {
-      totalDeleted, totalCopied, errors: results.errors.length,
+      totalDeleted,
+      totalCopied,
+      errors: results.errors.length,
     });
 
     res.json({

@@ -21,7 +21,7 @@ async function getDoc(path) {
  */
 async function queryDocs(ref) {
   const snap = await ref.get();
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
 module.exports = { getDoc, queryDocs };

@@ -20,7 +20,11 @@ async function rotateLogs() {
   let retentionHours = DEFAULT_RETENTION_HOURS;
   try {
     const configDoc = await db.collection('logConfig').doc('settings').get();
-    if (configDoc.exists && configDoc.data().retentionHours != null) {
+    if (
+      configDoc.exists &&
+      configDoc.data().retentionHours !== null &&
+      configDoc.data().retentionHours !== undefined
+    ) {
       retentionHours = configDoc.data().retentionHours;
     }
   } catch (err) {
@@ -31,7 +35,8 @@ async function rotateLogs() {
   const cutoff = new Date(Date.now() - retentionHours * 3600000).toISOString();
 
   // 3. Query expired logs
-  const snapshot = await db.collection('logs')
+  const snapshot = await db
+    .collection('logs')
     .where('timestamp', '<', cutoff)
     .orderBy('timestamp')
     .limit(500)
@@ -41,7 +46,7 @@ async function rotateLogs() {
     const docs = snapshot.docs;
 
     // 3a. Build NDJSON
-    const ndjson = docs.map(d => JSON.stringify({ id: d.id, ...d.data() })).join('\n');
+    const ndjson = docs.map((d) => JSON.stringify({ id: d.id, ...d.data() })).join('\n');
 
     // 3b. Write to R2
     const now = new Date();
@@ -71,7 +76,7 @@ async function pruneOldLogs() {
   const keys = await r2.listObjects('logs/');
   const cutoffDate = new Date(Date.now() - PRUNE_DAYS * 24 * 3600000);
 
-  const toDelete = keys.filter(key => {
+  const toDelete = keys.filter((key) => {
     const match = key.match(/^logs\/(\d{4})\/(\d{2})\/(\d{2})\//);
     if (!match) return false;
     const keyDate = new Date(`${match[1]}-${match[2]}-${match[3]}T00:00:00Z`);

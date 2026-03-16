@@ -4,7 +4,7 @@ const request = require('supertest');
 const mockDocGet = jest.fn();
 const mockDocUpdate = jest.fn().mockResolvedValue();
 const mockDocDelete = jest.fn().mockResolvedValue();
-const mockCollectionWhere = jest.fn();
+const _mockCollectionWhere = jest.fn();
 const mockCollectionGet = jest.fn();
 
 jest.mock('../../src/utils/firebase', () => ({
@@ -24,10 +24,13 @@ jest.mock('../../src/utils/firebase', () => ({
     })),
   },
   auth: {},
-  FieldValue: { increment: jest.fn(n => `increment(${n})`) },
+  FieldValue: { increment: jest.fn((n) => `increment(${n})`) },
 }));
 
-jest.mock('../../src/utils/helpers', () => ({ generateId: () => 'gen-id', now: () => 1709913600000 }));
+jest.mock('../../src/utils/helpers', () => ({
+  generateId: () => 'gen-id',
+  now: () => 1709913600000,
+}));
 jest.mock('../../src/utils/firestore-helpers', () => ({
   getDoc: jest.fn(),
 }));
@@ -46,7 +49,10 @@ const { getDoc } = require('../../src/utils/firestore-helpers');
 function buildApp() {
   const app = express();
   app.use(express.json());
-  app.use((req, res, next) => { req.auth = { uniqueId: 99999999, uid: 'admin-uid' }; next(); });
+  app.use((req, res, next) => {
+    req.auth = { uniqueId: 99999999, uid: 'admin-uid' };
+    next();
+  });
   app.use('/api', require('../../src/routes/admin-users'));
   return app;
 }
@@ -69,9 +75,7 @@ describe('Admin Auth Management', () => {
         pinLockoutCount: 0,
       });
       mockCollectionGet.mockResolvedValueOnce({
-        docs: [
-          { id: '12345678:dev-1', data: () => ({ createdAt: 1709913600000 }) },
-        ],
+        docs: [{ id: '12345678:dev-1', data: () => ({ createdAt: 1709913600000 }) }],
       });
 
       const res = await request(app).get('/api/user/12345678/auth-status');
@@ -114,7 +118,7 @@ describe('Admin Auth Management', () => {
       expect(res.body.message).toBe('PIN lockout reset');
       expect(mockDocUpdate).toHaveBeenCalledWith(
         'users/12345678',
-        expect.objectContaining({ pinAttempts: 0, pinLockedUntil: null, pinLockoutCount: 0 })
+        expect.objectContaining({ pinAttempts: 0, pinLockedUntil: null, pinLockoutCount: 0 }),
       );
     });
   });

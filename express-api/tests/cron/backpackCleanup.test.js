@@ -135,10 +135,7 @@ describe('backpackCleanup', () => {
     });
 
     it('logs the count of cleaned expired items', async () => {
-      const docs = [
-        makeExpiredItem('user-1', 'gift-a'),
-        makeExpiredItem('user-2', 'gift-b'),
-      ];
+      const docs = [makeExpiredItem('user-1', 'gift-a'), makeExpiredItem('user-2', 'gift-b')];
 
       db.collectionGroup.mockReturnValueOnce({
         where: jest.fn().mockReturnThis(),
@@ -151,7 +148,7 @@ describe('backpackCleanup', () => {
       expect(log.info).toHaveBeenCalledWith(
         'cron',
         'backpackCleanup: cleaned expired items',
-        expect.objectContaining({ count: 2 })
+        expect.objectContaining({ count: 2 }),
       );
     });
   });
@@ -159,9 +156,7 @@ describe('backpackCleanup', () => {
   describe('when there are more than 500 expired items (chunked batch processing)', () => {
     it('commits multiple batches for large result sets', async () => {
       // Create 600 expired items to trigger the chunking path (500 per batch)
-      const docs = Array.from({ length: 600 }, (_, i) =>
-        makeExpiredItem(`user-${i}`, `gift-${i}`)
-      );
+      const docs = Array.from({ length: 600 }, (_, i) => makeExpiredItem(`user-${i}`, `gift-${i}`));
 
       db.collectionGroup.mockReturnValueOnce({
         where: jest.fn().mockReturnThis(),
@@ -193,7 +188,10 @@ describe('backpackCleanup', () => {
     it('applies expiresAt <= timestamp filter', async () => {
       const whereArgs = [];
       const chainMock = {
-        where: jest.fn((...args) => { whereArgs.push(args); return chainMock; }),
+        where: jest.fn((...args) => {
+          whereArgs.push(args);
+          return chainMock;
+        }),
         limit: jest.fn().mockReturnThis(),
         get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
       };
@@ -202,7 +200,7 @@ describe('backpackCleanup', () => {
       await backpackCleanup();
 
       expect(whereArgs.length).toBeGreaterThan(0);
-      const filter = whereArgs.find(args => args[0] === 'expiresAt');
+      const filter = whereArgs.find((args) => args[0] === 'expiresAt');
       expect(filter).toBeDefined();
       expect(filter[1]).toBe('<=');
       expect(typeof filter[2]).toBe('number');

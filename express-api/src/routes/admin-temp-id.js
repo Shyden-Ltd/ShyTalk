@@ -58,12 +58,20 @@ router.post('/admin/users/:uniqueId/temp-id', async (req, res) => {
     }
 
     // Availability check
-    const realSnap = await db.collection('users').where('uniqueId', '==', tempUniqueId).limit(1).get();
+    const realSnap = await db
+      .collection('users')
+      .where('uniqueId', '==', tempUniqueId)
+      .limit(1)
+      .get();
     if (!realSnap.empty) {
       return res.status(409).json({ error: 'ID is in use as a real unique ID' });
     }
 
-    const tempSnap = await db.collection('users').where('tempUniqueId', '==', tempUniqueId).limit(1).get();
+    const tempSnap = await db
+      .collection('users')
+      .where('tempUniqueId', '==', tempUniqueId)
+      .limit(1)
+      .get();
     if (!tempSnap.empty) {
       const user = tempSnap.docs[0].data();
       if (user.tempUniqueIdExpiry && user.tempUniqueIdExpiry > Date.now()) {
@@ -89,14 +97,30 @@ router.post('/admin/users/:uniqueId/temp-id', async (req, res) => {
     });
 
     // System PM (fire-and-forget)
-    const expiryStr = new Date(expiryDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-    sendSystemPm(targetUniqueId, `Your display ID has been temporarily changed to ${tempUniqueId}. It will expire on ${expiryStr} and return to your original ID.`)
-      .catch(err => log.warn('system-pm', 'Failed to send', { uniqueId: targetUniqueId, error: err.message }));
+    const expiryStr = new Date(expiryDate).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+    sendSystemPm(
+      targetUniqueId,
+      `Your display ID has been temporarily changed to ${tempUniqueId}. It will expire on ${expiryStr} and return to your original ID.`,
+    ).catch((err) =>
+      log.warn('system-pm', 'Failed to send', { uniqueId: targetUniqueId, error: err.message }),
+    );
 
-    log.info('admin-temp-id', 'Temp ID set', { adminId: req.auth.uid, targetUniqueId, tempUniqueId, expiryDate });
+    log.info('admin-temp-id', 'Temp ID set', {
+      adminId: req.auth.uid,
+      targetUniqueId,
+      tempUniqueId,
+      expiryDate,
+    });
     res.json({ success: true });
   } catch (err) {
-    log.error('admin-temp-id', 'Set temp ID failed', { uniqueId: req.params.uniqueId, error: err.message });
+    log.error('admin-temp-id', 'Set temp ID failed', {
+      uniqueId: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -124,13 +148,18 @@ router.delete('/admin/users/:uniqueId/temp-id', async (req, res) => {
     });
 
     // System PM (fire-and-forget)
-    sendSystemPm(targetUniqueId, 'Your display ID has been restored to your original ID.')
-      .catch(err => log.warn('system-pm', 'Failed to send', { uniqueId: targetUniqueId, error: err.message }));
+    sendSystemPm(targetUniqueId, 'Your display ID has been restored to your original ID.').catch(
+      (err) =>
+        log.warn('system-pm', 'Failed to send', { uniqueId: targetUniqueId, error: err.message }),
+    );
 
     log.info('admin-temp-id', 'Temp ID cleared', { adminId: req.auth.uid, targetUniqueId });
     res.json({ success: true });
   } catch (err) {
-    log.error('admin-temp-id', 'Clear temp ID failed', { uniqueId: req.params.uniqueId, error: err.message });
+    log.error('admin-temp-id', 'Clear temp ID failed', {
+      uniqueId: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });

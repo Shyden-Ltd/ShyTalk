@@ -10,12 +10,24 @@ const crypto = require('crypto');
 
 const VALID_LEVELS = ['DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL'];
 const SENSITIVE_KEYS = new Set([
-  'password', 'token', 'idtoken', 'accesstoken', 'refreshtoken', 'secret', 'credential',
+  'password',
+  'token',
+  'idtoken',
+  'accesstoken',
+  'refreshtoken',
+  'secret',
+  'credential',
 ]);
 const DEFAULT_HARD_CAP = 15000;
 const PASSTHROUGH_FIELDS = [
-  'sessionTraceId', 'requestTraceId', 'userId', 'deviceId',
-  'context', 'appVersion', 'platform', 'osVersion',
+  'sessionTraceId',
+  'requestTraceId',
+  'userId',
+  'deviceId',
+  'context',
+  'appVersion',
+  'platform',
+  'osVersion',
 ];
 
 /**
@@ -101,7 +113,12 @@ function createLogger(db) {
       dailyCount++;
     } catch (err) {
       // Logger must never throw
-      try { console.error('[logger] Failed to write log:', err.message); } catch (_) { /* swallow */ }
+      try {
+        // eslint-disable-next-line no-console
+        console.error('[logger] Failed to write log:', err.message);
+      } catch (_) {
+        /* swallow */
+      }
     }
   }
 
@@ -111,9 +128,15 @@ function createLogger(db) {
   }
 
   // Test helpers
-  function _resetDailyCount() { dailyCount = 0; }
-  function _setDailyCount(n) { dailyCount = n; }
-  function _setHardCap(n) { hardCap = n; }
+  function _resetDailyCount() {
+    dailyCount = 0;
+  }
+  function _setDailyCount(n) {
+    dailyCount = n;
+  }
+  function _setHardCap(n) {
+    hardCap = n;
+  }
 
   return { log, getDailyStats, _resetDailyCount, _setDailyCount, _setHardCap };
 }

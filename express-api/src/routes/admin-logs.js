@@ -59,14 +59,14 @@ router.get('/admin/logs', async (req, res) => {
 
     // Client-side filters (can't be compound-queried in Firestore)
     if (route) {
-      logs = logs.filter((log) => log.context?.route === route || log.route === route);
+      logs = logs.filter((entry) => entry.context?.route === route || entry.route === route);
     }
     if (keyword) {
       const lowerKeyword = keyword.toLowerCase();
       logs = logs.filter(
-        (log) =>
-          (log.message && log.message.toLowerCase().includes(lowerKeyword)) ||
-          (log.context && JSON.stringify(log.context).toLowerCase().includes(lowerKeyword))
+        (entry) =>
+          (entry.message && entry.message.toLowerCase().includes(lowerKeyword)) ||
+          (entry.context && JSON.stringify(entry.context).toLowerCase().includes(lowerKeyword)),
       );
     }
 
@@ -100,7 +100,10 @@ router.get('/admin/logs/trace/:traceId', async (req, res) => {
 
     res.json({ logs });
   } catch (err) {
-    log.error('admin-logs', 'Error querying trace logs', { traceId: req.params.traceId, error: err.message });
+    log.error('admin-logs', 'Error querying trace logs', {
+      traceId: req.params.traceId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });

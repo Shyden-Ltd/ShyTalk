@@ -94,27 +94,21 @@ describe('PATCH /api/user/:uid', () => {
     expect(res.body.success).toBe(true);
     expect(res.body.updatedFields).toContain('superShyExpiry');
     expect(mockDocUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ superShyExpiry: 1700000000000 })
+      expect.objectContaining({ superShyExpiry: 1700000000000 }),
     );
   });
 
   it('should accept superShyExpiry as null to clear it', async () => {
-    const res = await request(app)
-      .patch('/api/user/user-1')
-      .send({ superShyExpiry: null });
+    const res = await request(app).patch('/api/user/user-1').send({ superShyExpiry: null });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.updatedFields).toContain('superShyExpiry');
-    expect(mockDocUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ superShyExpiry: null })
-    );
+    expect(mockDocUpdate).toHaveBeenCalledWith(expect.objectContaining({ superShyExpiry: null }));
   });
 
   it('should reject superShyTier as it is no longer an allowed field', async () => {
-    const res = await request(app)
-      .patch('/api/user/user-1')
-      .send({ superShyTier: 'monthly' });
+    const res = await request(app).patch('/api/user/user-1').send({ superShyTier: 'monthly' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('No valid fields to update');
@@ -133,27 +127,21 @@ describe('PATCH /api/user/:uid', () => {
   });
 
   it('should return 400 when no valid fields are provided', async () => {
-    const res = await request(app)
-      .patch('/api/user/user-1')
-      .send({ invalidField: 'value' });
+    const res = await request(app).patch('/api/user/user-1').send({ invalidField: 'value' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('No valid fields to update');
   });
 
   it('should return 400 when body is empty', async () => {
-    const res = await request(app)
-      .patch('/api/user/user-1')
-      .send({});
+    const res = await request(app).patch('/api/user/user-1').send({});
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('No valid fields to update');
   });
 
   it('should accept other allowed fields like displayName', async () => {
-    const res = await request(app)
-      .patch('/api/user/user-1')
-      .send({ displayName: 'New Name' });
+    const res = await request(app).patch('/api/user/user-1').send({ displayName: 'New Name' });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -161,16 +149,14 @@ describe('PATCH /api/user/:uid', () => {
   });
 
   it('should create an audit log entry', async () => {
-    await request(app)
-      .patch('/api/user/user-1')
-      .send({ displayName: 'Test' });
+    await request(app).patch('/api/user/user-1').send({ displayName: 'Test' });
 
     expect(mockDocSet).toHaveBeenCalledWith(
       expect.objectContaining({
         adminId: 'admin-1',
         action: 'EDIT_USER',
         targetUserId: 'user-1',
-      })
+      }),
     );
   });
 });
@@ -191,19 +177,22 @@ describe('GET /api/search/uniqueId/:id', () => {
     let callCount = 0;
     db.collection.mockImplementation(() => {
       callCount++;
-      const getResult = callCount === 1
-        ? { empty: true, docs: [] }
-        : {
-            empty: false,
-            docs: [{
-              id: 'user-abc',
-              data: () => ({
-                uniqueId: 99999999,
-                tempUniqueId: 12345678,
-                gcsScore: 100,
-              }),
-            }],
-          };
+      const getResult =
+        callCount === 1
+          ? { empty: true, docs: [] }
+          : {
+              empty: false,
+              docs: [
+                {
+                  id: 'user-abc',
+                  data: () => ({
+                    uniqueId: 99999999,
+                    tempUniqueId: 12345678,
+                    gcsScore: 100,
+                  }),
+                },
+              ],
+            };
       const chain = {
         where: jest.fn().mockImplementation(() => chain),
         orderBy: jest.fn().mockImplementation(() => chain),

@@ -21,9 +21,12 @@ function isIpInSubnet(ip, cidr) {
     const prefixLen = parseInt(bits);
     const mask = prefixLen === 0 ? 0 : (~0 << (32 - prefixLen)) >>> 0;
     const ipNum = ip.split('.').reduce((acc, oct) => ((acc << 8) >>> 0) + parseInt(oct), 0) >>> 0;
-    const subNum = subnet.split('.').reduce((acc, oct) => ((acc << 8) >>> 0) + parseInt(oct), 0) >>> 0;
+    const subNum =
+      subnet.split('.').reduce((acc, oct) => ((acc << 8) >>> 0) + parseInt(oct), 0) >>> 0;
     return (ipNum & mask) === (subNum & mask);
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 /**

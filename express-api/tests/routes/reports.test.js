@@ -128,17 +128,16 @@ describe('GET /api/reports', () => {
 
     // queryDocs is called for: reports query, then reportedUser docs, reporter docs, reportLocks
     queryDocs
-      .mockResolvedValueOnce(mockReports)   // reports query
-      .mockResolvedValueOnce([]);           // reportLocks
+      .mockResolvedValueOnce(mockReports) // reports query
+      .mockResolvedValueOnce([]); // reportLocks
 
     // getDoc calls for user enrichment
     const { getDoc } = require('../../src/utils/firestore-helpers');
     getDoc
-      .mockResolvedValueOnce({ id: 'user-1', displayName: 'Test User', gcsScore: 80 })  // reported user
-      .mockResolvedValueOnce({ id: 'reporter-1', displayName: 'Reporter' });             // reporter
+      .mockResolvedValueOnce({ id: 'user-1', displayName: 'Test User', gcsScore: 80 }) // reported user
+      .mockResolvedValueOnce({ id: 'reporter-1', displayName: 'Reporter' }); // reporter
 
-    const res = await request(app)
-      .get('/api/reports?status=resolved&userId=user-1');
+    const res = await request(app).get('/api/reports?status=resolved&userId=user-1');
 
     expect(res.status).toBe(200);
     expect(res.body.users).toBeDefined();
@@ -147,11 +146,10 @@ describe('GET /api/reports', () => {
 
   it('should return 200 with empty list when no resolved reports exist for user', async () => {
     queryDocs
-      .mockResolvedValueOnce([])   // reports query returns empty
-      .mockResolvedValueOnce([]);  // reportLocks
+      .mockResolvedValueOnce([]) // reports query returns empty
+      .mockResolvedValueOnce([]); // reportLocks
 
-    const res = await request(app)
-      .get('/api/reports?status=resolved&userId=user-1');
+    const res = await request(app).get('/api/reports?status=resolved&userId=user-1');
 
     expect(res.status).toBe(200);
     expect(res.body.users).toBeDefined();
@@ -178,8 +176,8 @@ describe('GET /api/reports', () => {
     ];
 
     queryDocs
-      .mockResolvedValueOnce(mockReports)  // reports query
-      .mockResolvedValueOnce([]);          // reportLocks
+      .mockResolvedValueOnce(mockReports) // reports query
+      .mockResolvedValueOnce([]); // reportLocks
 
     const { getDoc } = require('../../src/utils/firestore-helpers');
     getDoc
@@ -187,8 +185,7 @@ describe('GET /api/reports', () => {
       .mockResolvedValueOnce({ id: 'reporter-1', displayName: 'Reporter 1' })
       .mockResolvedValueOnce({ id: 'reporter-2', displayName: 'Reporter 2' });
 
-    const res = await request(app)
-      .get('/api/reports?status=pending');
+    const res = await request(app).get('/api/reports?status=pending');
 
     expect(res.status).toBe(200);
     expect(res.body.users).toBeDefined();
@@ -223,16 +220,15 @@ describe('GET /api/reports', () => {
     ];
 
     queryDocs
-      .mockResolvedValueOnce(mockReports)  // all resolved reports
-      .mockResolvedValueOnce([]);          // reportLocks
+      .mockResolvedValueOnce(mockReports) // all resolved reports
+      .mockResolvedValueOnce([]); // reportLocks
 
     const { getDoc } = require('../../src/utils/firestore-helpers');
     getDoc
       .mockResolvedValueOnce({ id: 'user-1', displayName: 'Target User', gcsScore: 80 })
       .mockResolvedValueOnce({ id: 'reporter-1', displayName: 'Reporter' });
 
-    const res = await request(app)
-      .get('/api/reports?status=resolved&userId=user-1');
+    const res = await request(app).get('/api/reports?status=resolved&userId=user-1');
 
     expect(res.status).toBe(200);
     // Only report-1 should be returned (user-2's report is filtered out)
@@ -242,10 +238,11 @@ describe('GET /api/reports', () => {
 
   it('should handle Firestore query errors gracefully for resolved reports with userId filter', async () => {
     // Simulate Firestore index error
-    queryDocs.mockRejectedValueOnce(new Error('9 FAILED_PRECONDITION: The query requires an index'));
+    queryDocs.mockRejectedValueOnce(
+      new Error('9 FAILED_PRECONDITION: The query requires an index'),
+    );
 
-    const res = await request(app)
-      .get('/api/reports?status=resolved&userId=user-1');
+    const res = await request(app).get('/api/reports?status=resolved&userId=user-1');
 
     expect(res.status).toBe(500);
     expect(res.body.error).toBe('Internal server error');

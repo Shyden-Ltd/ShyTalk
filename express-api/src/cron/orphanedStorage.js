@@ -21,11 +21,20 @@ async function orphanedStorage() {
   referencedKeys.add('system/shytalk_icon.webp');
 
   // Users -> profilePhotoUrl, coverPhotoUrl, preSuspension*
-  const usersSnap = await db.collection('users').select(
-    'profilePhotoUrl', 'profile_photo_url', 'coverPhotoUrl', 'cover_photo_url',
-    'preSuspensionProfilePhotoUrl', 'pre_suspension_profile_photo_url',
-    'preSuspensionCoverPhotoUrl', 'pre_suspension_cover_photo_url'
-  ).limit(2000).get();
+  const usersSnap = await db
+    .collection('users')
+    .select(
+      'profilePhotoUrl',
+      'profile_photo_url',
+      'coverPhotoUrl',
+      'cover_photo_url',
+      'preSuspensionProfilePhotoUrl',
+      'pre_suspension_profile_photo_url',
+      'preSuspensionCoverPhotoUrl',
+      'pre_suspension_cover_photo_url',
+    )
+    .limit(2000)
+    .get();
   for (const doc of usersSnap.docs) {
     const userData = doc.data();
     for (const url of [
@@ -40,7 +49,11 @@ async function orphanedStorage() {
   }
 
   // Conversations -> groupPhotoUrl (select only needed fields to save bandwidth)
-  const convsSnap = await db.collection('conversations').select('groupPhotoUrl', 'group_photo_url').limit(2000).get();
+  const convsSnap = await db
+    .collection('conversations')
+    .select('groupPhotoUrl', 'group_photo_url')
+    .limit(2000)
+    .get();
   for (const doc of convsSnap.docs) {
     const convData = doc.data();
     const key = extractKey(convData.groupPhotoUrl || convData.group_photo_url);
@@ -53,7 +66,8 @@ async function orphanedStorage() {
   for (const convDoc of convsToScan) {
     const convId = convDoc.id;
 
-    const imageMessagesSnap = await db.collection(`conversations/${convId}/messages`)
+    const imageMessagesSnap = await db
+      .collection(`conversations/${convId}/messages`)
       .where('type', '==', 'IMAGE')
       .limit(200)
       .get();
@@ -67,7 +81,8 @@ async function orphanedStorage() {
       }
     }
 
-    const stickerMessagesSnap = await db.collection(`conversations/${convId}/messages`)
+    const stickerMessagesSnap = await db
+      .collection(`conversations/${convId}/messages`)
       .where('type', '==', 'STICKER')
       .limit(200)
       .get();
@@ -80,7 +95,11 @@ async function orphanedStorage() {
 
   // Reports + archive -> evidenceUrls (array)
   for (const collection of ['reports', 'reportsArchive']) {
-    const snap = await db.collection(collection).select('evidenceUrls', 'evidence_urls').limit(1000).get();
+    const snap = await db
+      .collection(collection)
+      .select('evidenceUrls', 'evidence_urls')
+      .limit(1000)
+      .get();
     for (const doc of snap.docs) {
       const row = doc.data();
       const urls = row.evidenceUrls || row.evidence_urls || [];
@@ -93,7 +112,11 @@ async function orphanedStorage() {
   }
 
   // Banners -> imageUrl
-  const bannersSnap = await db.collection('banners').select('imageUrl', 'image_url').limit(500).get();
+  const bannersSnap = await db
+    .collection('banners')
+    .select('imageUrl', 'image_url')
+    .limit(500)
+    .get();
   for (const doc of bannersSnap.docs) {
     const bannerData = doc.data();
     const bannerKey = extractKey(bannerData.imageUrl || bannerData.image_url);
@@ -103,22 +126,31 @@ async function orphanedStorage() {
   // List and delete orphaned R2 objects
   // Must match ALLOWED_UPLOAD_PATHS in storage.js
   const folders = [
-    'profiles/', 'covers/', 'messages/', 'groups/',
-    'evidence/', 'stickers/', 'banners/',
+    'profiles/',
+    'covers/',
+    'messages/',
+    'groups/',
+    'evidence/',
+    'stickers/',
+    'banners/',
   ];
   let totalDeleted = 0;
 
   for (const folder of folders) {
     try {
       const allKeys = await r2.listObjects(folder);
-      const toDelete = allKeys.filter(objKey => !referencedKeys.has(objKey));
+      const toDelete = allKeys.filter((objKey) => !referencedKeys.has(objKey));
 
       if (toDelete.length > 0) {
         await r2.deleteObjects(toDelete);
       }
 
       const folderName = folder.replace('/', '');
-      log.info('cron', 'orphanedStorage: folder cleanup', { folder: folderName, deleted: toDelete.length, total: allKeys.length });
+      log.info('cron', 'orphanedStorage: folder cleanup', {
+        folder: folderName,
+        deleted: toDelete.length,
+        total: allKeys.length,
+      });
       totalDeleted += toDelete.length;
     } catch (err) {
       log.error('cron', 'orphanedStorage: folder cleanup failed', { folder, error: err.message });

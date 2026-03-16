@@ -33,7 +33,7 @@ async function serverHealth(alertManager) {
         rssMB,
         systemTotalMB,
         rssPercent: Math.round(rssPercent * 10) / 10,
-      }
+      },
     );
   }
 
@@ -55,13 +55,23 @@ async function serverHealth(alertManager) {
               const lastKnown = lastRestartCounts[name] || 0;
 
               if (restarts > lastKnown && lastKnown > 0) {
-                alertManager.createAlert(
-                  'pm2_restart',
-                  'warning',
-                  `PM2 process restarted: ${name}`,
-                  `${restarts - lastKnown} new restart(s) (total: ${restarts})`,
-                  { processName: name, restartCount: restarts, newRestarts: restarts - lastKnown }
-                ).catch(err => log.error('server-health', 'Failed to create PM2 restart alert', { error: err.message }));
+                alertManager
+                  .createAlert(
+                    'pm2_restart',
+                    'warning',
+                    `PM2 process restarted: ${name}`,
+                    `${restarts - lastKnown} new restart(s) (total: ${restarts})`,
+                    {
+                      processName: name,
+                      restartCount: restarts,
+                      newRestarts: restarts - lastKnown,
+                    },
+                  )
+                  .catch((alertErr) =>
+                    log.error('server-health', 'Failed to create PM2 restart alert', {
+                      error: alertErr.message,
+                    }),
+                  );
               }
 
               lastRestartCounts[name] = restarts;
@@ -77,7 +87,10 @@ async function serverHealth(alertManager) {
     }
   }
 
-  log.debug('cron', 'serverHealth: check completed', { rssMB, rssPercent: Math.round(rssPercent * 10) / 10 });
+  log.debug('cron', 'serverHealth: check completed', {
+    rssMB,
+    rssPercent: Math.round(rssPercent * 10) / 10,
+  });
 }
 
 module.exports = serverHealth;

@@ -53,7 +53,7 @@ jest.mock('../../src/utils/firebase', () => ({
     })),
   },
   FieldValue: {
-    increment: jest.fn(n => `increment(${n})`),
+    increment: jest.fn((n) => `increment(${n})`),
     arrayUnion: jest.fn((...args) => `arrayUnion(${args})`),
     arrayRemove: jest.fn((...args) => `arrayRemove(${args})`),
   },
@@ -67,7 +67,11 @@ jest.mock('../../src/utils/helpers', () => ({
   generateId: () => 'tx-purchase-123',
   now: () => 1709913600000,
   todayStr: () => new Date().toISOString().split('T')[0],
-  yesterdayStr: () => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0]; },
+  yesterdayStr: () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  },
 }));
 
 // playStore is imported by economy.js; mock it so it doesn't require real credentials
@@ -119,7 +123,7 @@ function makeConfigDoc() {
       beanConversionRate: 0.6,
       beanRedeemBonusThreshold: 2000,
       beanRedeemBonusMultiplier: 1.1,
-      pullCosts: { '1': 10, '10': 100, '100': 1000 },
+      pullCosts: { 1: 10, 10: 100, 100: 1000 },
     }),
   };
 }
@@ -139,9 +143,7 @@ describe('POST /api/economy/purchase', () => {
 
   test('returns 400 when purchaseToken is missing', async () => {
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/purchase')
-      .send({ productId: 'coins_100' });
+    const res = await request(app).post('/api/economy/purchase').send({ productId: 'coins_100' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/purchaseToken/i);
@@ -213,13 +215,11 @@ describe('POST /api/economy/purchase', () => {
     mockDocGet.mockResolvedValue(makeConfigDoc());
 
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/purchase')
-      .send({
-        productId: 'super_shy_monthly',
-        purchaseToken: 'sub-token-new',
-        isSubscription: true,
-      });
+    const res = await request(app).post('/api/economy/purchase').send({
+      productId: 'super_shy_monthly',
+      purchaseToken: 'sub-token-new',
+      isSubscription: true,
+    });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -242,9 +242,7 @@ describe('POST /api/economy/trial-claim', () => {
     });
 
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/trial-claim')
-      .send({});
+    const res = await request(app).post('/api/economy/trial-claim').send({});
 
     expect(res.status).toBe(409);
     expect(res.body.error).toMatch(/already claimed/i);
@@ -257,9 +255,7 @@ describe('POST /api/economy/trial-claim', () => {
     });
 
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/trial-claim')
-      .send({});
+    const res = await request(app).post('/api/economy/trial-claim').send({});
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -301,9 +297,7 @@ describe('POST /api/economy/trial-activate', () => {
     });
 
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/trial-activate')
-      .send({});
+    const res = await request(app).post('/api/economy/trial-activate').send({});
 
     expect(res.status).toBe(402);
     expect(res.body.error).toMatch(/no trial item/i);
@@ -332,9 +326,7 @@ describe('POST /api/economy/trial-activate', () => {
     });
 
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/trial-activate')
-      .send({});
+    const res = await request(app).post('/api/economy/trial-activate').send({});
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -356,9 +348,7 @@ describe('POST /api/economy/trial-activate', () => {
 describe('POST /api/economy/redeem-beans', () => {
   test('returns 400 when amount is 0', async () => {
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/redeem-beans')
-      .send({ amount: 0 });
+    const res = await request(app).post('/api/economy/redeem-beans').send({ amount: 0 });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/positive/i);
@@ -366,9 +356,7 @@ describe('POST /api/economy/redeem-beans', () => {
 
   test('returns 400 when amount is negative', async () => {
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/redeem-beans')
-      .send({ amount: -5 });
+    const res = await request(app).post('/api/economy/redeem-beans').send({ amount: -5 });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/positive/i);
@@ -376,9 +364,7 @@ describe('POST /api/economy/redeem-beans', () => {
 
   test('returns 400 when amount is missing', async () => {
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/redeem-beans')
-      .send({});
+    const res = await request(app).post('/api/economy/redeem-beans').send({});
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/positive/i);
@@ -391,9 +377,7 @@ describe('POST /api/economy/redeem-beans', () => {
     });
 
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/redeem-beans')
-      .send({ amount: 100 }); // user only has 50
+    const res = await request(app).post('/api/economy/redeem-beans').send({ amount: 100 }); // user only has 50
 
     expect(res.status).toBe(402);
     expect(res.body.error).toMatch(/insufficient beans/i);
@@ -416,9 +400,7 @@ describe('POST /api/economy/redeem-beans', () => {
     });
 
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/redeem-beans')
-      .send({ amount: 100 }); // below beanRedeemBonusThreshold of 2000
+    const res = await request(app).post('/api/economy/redeem-beans').send({ amount: 100 }); // below beanRedeemBonusThreshold of 2000
 
     expect(res.status).toBe(200);
     expect(res.body.coinsReceived).toBe(100); // 1:1 below threshold
@@ -442,9 +424,7 @@ describe('POST /api/economy/redeem-beans', () => {
     });
 
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/redeem-beans')
-      .send({ amount: 2000 }); // at beanRedeemBonusThreshold (2000)
+    const res = await request(app).post('/api/economy/redeem-beans').send({ amount: 2000 }); // at beanRedeemBonusThreshold (2000)
 
     expect(res.status).toBe(200);
     // 2000 * 1.1 = 2200 (floored)
@@ -467,10 +447,7 @@ describe('POST /api/economy/redeem-beans', () => {
     });
 
     const app = createApp('user-A');
-    await request(app)
-      .post('/api/economy/redeem-beans')
-      .send({ amount: 50 })
-      .expect(200);
+    await request(app).post('/api/economy/redeem-beans').send({ amount: 50 }).expect(200);
 
     expect(mockDocUpdate).toHaveBeenCalledWith(
       expect.objectContaining({

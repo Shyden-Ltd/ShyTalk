@@ -58,7 +58,7 @@ describe('economy: POST /api/economy/daily-reward returns 500 on Firestore error
         })),
       },
       FieldValue: {
-        increment: jest.fn(n => `increment(${n})`),
+        increment: jest.fn((n) => `increment(${n})`),
         arrayUnion: jest.fn((...a) => `arrayUnion(${a})`),
         arrayRemove: jest.fn((...a) => `arrayRemove(${a})`),
       },
@@ -182,7 +182,7 @@ describe('reports: POST /api/reports returns 500 on Firestore error', () => {
     }));
 
     jest.mock('../../src/utils/gcs', () => ({
-      computeDisplayScore: jest.fn(score => score),
+      computeDisplayScore: jest.fn((score) => score),
     }));
 
     jest.mock('../../src/utils/fcm', () => ({
@@ -479,7 +479,7 @@ describe('conversations: POST /api/conversations/:id/messages returns 500 on Fir
         })),
       },
       FieldValue: {
-        increment: jest.fn(n => `increment(${n})`),
+        increment: jest.fn((n) => `increment(${n})`),
         arrayRemove: jest.fn((...a) => `arrayRemove(${a})`),
       },
     }));
@@ -540,7 +540,7 @@ describe('storage: DELETE /api/storage/delete returns 500 when r2.deleteObject t
     }));
 
     jest.mock('../../src/utils/helpers', () => ({
-      getExtension: jest.fn(mime => {
+      getExtension: jest.fn((mime) => {
         const map = { 'image/jpeg': 'jpg', 'image/png': 'png' };
         return map[mime] || 'bin';
       }),
@@ -566,9 +566,7 @@ describe('storage: DELETE /api/storage/delete returns 500 when r2.deleteObject t
   test('returns 500 when r2.deleteObject throws', async () => {
     // Key format must pass the ownership check: "{path}/{uniqueId}/{filename}"
     const key = 'profiles/user-abc/1700000000-photo.jpg';
-    const res = await request(app)
-      .delete('/api/storage/delete')
-      .query({ key });
+    const res = await request(app).delete('/api/storage/delete').query({ key });
 
     expect(res.status).toBe(500);
     expect(res.body.error).toBeDefined();
@@ -609,7 +607,7 @@ describe('economy: POST /api/economy/gacha returns 500 when economy config load 
         })),
       },
       FieldValue: {
-        increment: jest.fn(n => `increment(${n})`),
+        increment: jest.fn((n) => `increment(${n})`),
         arrayUnion: jest.fn((...a) => `arrayUnion(${a})`),
         arrayRemove: jest.fn((...a) => `arrayRemove(${a})`),
       },
@@ -657,9 +655,7 @@ describe('economy: POST /api/economy/gacha returns 500 when economy config load 
     // The first db.doc().get() call is loadEconomyConfig() → config/economy
     mockDocGet.mockRejectedValue(new Error('Firestore unavailable'));
 
-    const res = await request(app)
-      .post('/api/economy/gacha')
-      .send({ pullCount: 1 });
+    const res = await request(app).post('/api/economy/gacha').send({ pullCount: 1 });
 
     expect(res.status).toBe(500);
     expect(res.body.error).toBeDefined();
@@ -687,7 +683,7 @@ describe('translate: POST /api/translate returns 500 on Firestore error', () => 
         })),
       },
       FieldValue: {
-        increment: jest.fn(n => `increment(${n})`),
+        increment: jest.fn((n) => `increment(${n})`),
       },
     }));
 
@@ -711,9 +707,7 @@ describe('translate: POST /api/translate returns 500 on Firestore error', () => 
   test('returns 500 when Firestore doc.get throws during quota check', async () => {
     // The translate route first checks cache (optional messagePath), then reads
     // the user doc for quota check — that get() will throw.
-    const res = await request(app)
-      .post('/api/translate')
-      .send({ text: 'Hello', targetLang: 'es' });
+    const res = await request(app).post('/api/translate').send({ text: 'Hello', targetLang: 'es' });
 
     expect(res.status).toBe(500);
     expect(res.body.error).toBeDefined();
@@ -740,8 +734,8 @@ describe('notifications: POST /api/notifications/token returns 500 on Firestore 
         })),
       },
       FieldValue: {
-        arrayUnion: jest.fn(v => `arrayUnion(${v})`),
-        arrayRemove: jest.fn(v => `arrayRemove(${v})`),
+        arrayUnion: jest.fn((v) => `arrayUnion(${v})`),
+        arrayRemove: jest.fn((v) => `arrayRemove(${v})`),
       },
     }));
 

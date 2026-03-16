@@ -58,7 +58,7 @@ jest.mock('../../src/utils/firebase', () => ({
     setCustomUserClaims: (...args) => mockSetCustomUserClaims(...args),
   },
   FieldValue: {
-    increment: jest.fn(n => `increment(${n})`),
+    increment: jest.fn((n) => `increment(${n})`),
     arrayUnion: jest.fn((...args) => `arrayUnion(${args})`),
     arrayRemove: jest.fn((...args) => `arrayRemove(${args})`),
   },
@@ -187,10 +187,7 @@ describe('POST /api/users (identity-based creation)', () => {
     );
 
     // Verify Firebase custom claims were set for Firestore security rules
-    expect(mockSetCustomUserClaims).toHaveBeenCalledWith(
-      'firebase-uid-1',
-      { uniqueId: 10000000 },
-    );
+    expect(mockSetCustomUserClaims).toHaveBeenCalledWith('firebase-uid-1', { uniqueId: 10000000 });
   });
 
   test('increments existing counter correctly', async () => {
@@ -225,18 +222,12 @@ describe('POST /api/users (identity-based creation)', () => {
 
   test('rejects when provider is missing', async () => {
     const app = createApp();
-    await request(app)
-      .post('/api/users')
-      .send({ identifier: 'alice@gmail.com' })
-      .expect(400);
+    await request(app).post('/api/users').send({ identifier: 'alice@gmail.com' }).expect(400);
   });
 
   test('rejects when identifier is missing', async () => {
     const app = createApp();
-    await request(app)
-      .post('/api/users')
-      .send({ provider: 'google' })
-      .expect(400);
+    await request(app).post('/api/users').send({ provider: 'google' }).expect(400);
   });
 
   test('rejects invalid provider type', async () => {
@@ -389,10 +380,9 @@ describe('POST /api/users/sign-in', () => {
     );
 
     // Should set Firebase custom claims for Firestore security rules
-    expect(mockSetCustomUserClaims).toHaveBeenCalledWith(
-      'new-firebase-uid',
-      { uniqueId: 10000005 },
-    );
+    expect(mockSetCustomUserClaims).toHaveBeenCalledWith('new-firebase-uid', {
+      uniqueId: 10000005,
+    });
   });
 
   test('returns found=false for unknown identity', async () => {
@@ -439,10 +429,7 @@ describe('POST /api/users/sign-in', () => {
 
   test('rejects when identifier is missing', async () => {
     const app = createApp();
-    await request(app)
-      .post('/api/users/sign-in')
-      .send({ provider: 'google' })
-      .expect(400);
+    await request(app).post('/api/users/sign-in').send({ provider: 'google' }).expect(400);
   });
 });
 
@@ -536,7 +523,7 @@ describe('POST /api/users/:uniqueId/link-provider', () => {
       if (path === 'identityMap/email:old@work.com') {
         return Promise.resolve({
           uniqueId: 10000005, // same user
-          unlinked: true,     // was deactivated
+          unlinked: true, // was deactivated
         });
       }
       if (path === 'users/10000005') {
@@ -794,9 +781,7 @@ describe('Route parameter migration (:uid → :uniqueId)', () => {
     });
 
     const app = createApp('firebase-uid-1', 10000005);
-    const res = await request(app)
-      .get('/api/users/10000005')
-      .expect(200);
+    const res = await request(app).get('/api/users/10000005').expect(200);
 
     expect(res.body.displayName).toBe('Alice');
   });
@@ -805,16 +790,10 @@ describe('Route parameter migration (:uid → :uniqueId)', () => {
     const app = createApp('firebase-uid-1', 10000005);
 
     // Should succeed — caller is user 10000005
-    await request(app)
-      .patch('/api/users/10000005')
-      .send({ displayName: 'New Name' })
-      .expect(200);
+    await request(app).patch('/api/users/10000005').send({ displayName: 'New Name' }).expect(200);
 
     // Should fail — caller is not user 10000099
-    await request(app)
-      .patch('/api/users/10000099')
-      .send({ displayName: 'Hacked' })
-      .expect(403);
+    await request(app).patch('/api/users/10000099').send({ displayName: 'Hacked' }).expect(403);
   });
 
   test('POST /api/users/:uniqueId/follow uses uniqueId for ownership check', async () => {

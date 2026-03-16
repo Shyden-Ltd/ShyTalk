@@ -17,7 +17,15 @@ const log = require('../utils/log');
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
-const ALLOWED_UPLOAD_PATHS = ['profiles', 'covers', 'messages', 'groups', 'evidence', 'stickers', 'banners'];
+const ALLOWED_UPLOAD_PATHS = [
+  'profiles',
+  'covers',
+  'messages',
+  'groups',
+  'evidence',
+  'stickers',
+  'banners',
+];
 
 // POST /api/storage/upload
 router.post('/storage/upload', upload.single('file'), async (req, res) => {
@@ -40,7 +48,9 @@ router.post('/storage/upload', upload.single('file'), async (req, res) => {
     const contentType = file.mimetype || 'image/jpeg';
     if (!ALLOWED_MIME_TYPES.includes(contentType)) {
       log.warn('storage', 'Upload rejected: disallowed MIME type', { uniqueId, contentType });
-      return res.status(400).json({ error: 'Only image uploads are allowed (jpeg, png, webp, gif)' });
+      return res
+        .status(400)
+        .json({ error: 'Only image uploads are allowed (jpeg, png, webp, gif)' });
     }
     const extension = getExtension(contentType);
     const key = `${path}/${uniqueId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
@@ -75,7 +85,11 @@ router.delete('/storage/delete', async (req, res) => {
     log.info('storage', 'File deleted', { key, uniqueId });
     res.json({ ok: true });
   } catch (err) {
-    log.error('storage', 'Delete failed', { uniqueId: req.auth?.uniqueId, key: req.query.key, error: err.message });
+    log.error('storage', 'Delete failed', {
+      uniqueId: req.auth?.uniqueId,
+      key: req.query.key,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Delete failed' });
   }
 });

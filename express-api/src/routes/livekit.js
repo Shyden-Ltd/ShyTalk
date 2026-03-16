@@ -35,7 +35,10 @@ router.post('/livekit/token', async (req, res) => {
     const token = await at.toJwt();
     return res.json({ token });
   } catch (err) {
-    log.error('livekit', 'Failed to generate token', { userId: req.auth?.uniqueId, error: err.message });
+    log.error('livekit', 'Failed to generate token', {
+      userId: req.auth?.uniqueId,
+      error: err.message,
+    });
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

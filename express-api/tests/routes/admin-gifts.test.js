@@ -81,30 +81,21 @@ describe('POST /api/gifts', () => {
 
   test('returns 400 when name is missing', async () => {
     const app = createApp();
-    const res = await request(app)
-      .post('/api/gifts')
-      .send({ coinValue: 10 })
-      .expect(400);
+    const res = await request(app).post('/api/gifts').send({ coinValue: 10 }).expect(400);
 
     expect(res.body.error).toMatch(/name/i);
   });
 
   test('returns 400 when coinValue is missing', async () => {
     const app = createApp();
-    const res = await request(app)
-      .post('/api/gifts')
-      .send({ name: 'Rose' })
-      .expect(400);
+    const res = await request(app).post('/api/gifts').send({ name: 'Rose' }).expect(400);
 
     expect(res.body.error).toMatch(/coinValue/i);
   });
 
   test('returns 400 when both name and coinValue are missing', async () => {
     const app = createApp();
-    const res = await request(app)
-      .post('/api/gifts')
-      .send({})
-      .expect(400);
+    const res = await request(app).post('/api/gifts').send({}).expect(400);
 
     expect(res.body.error).toBeDefined();
   });
@@ -144,10 +135,7 @@ describe('POST /api/gifts', () => {
 
   test('stores default values for optional fields', async () => {
     const app = createApp();
-    await request(app)
-      .post('/api/gifts')
-      .send({ name: 'Flower', coinValue: 50 })
-      .expect(200);
+    await request(app).post('/api/gifts').send({ name: 'Flower', coinValue: 50 }).expect(200);
 
     expect(mockDocSet).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -187,10 +175,7 @@ describe('POST /api/gifts', () => {
 
   test('writes an audit log entry on success', async () => {
     const app = createApp();
-    await request(app)
-      .post('/api/gifts')
-      .send({ name: 'Balloon', coinValue: 30 })
-      .expect(200);
+    await request(app).post('/api/gifts').send({ name: 'Balloon', coinValue: 30 }).expect(200);
 
     // adminAuditLog doc should also be set
     expect(mockDoc).toHaveBeenCalledWith(expect.stringMatching(/^adminAuditLog\//));
@@ -213,20 +198,14 @@ describe('PUT /api/gifts/:id', () => {
     });
 
     const app = createApp(false);
-    const res = await request(app)
-      .put('/api/gifts/gift-abc')
-      .send({ name: 'Updated' })
-      .expect(403);
+    const res = await request(app).put('/api/gifts/gift-abc').send({ name: 'Updated' }).expect(403);
 
     expect(res.body.error).toBeDefined();
   });
 
   test('returns 400 when no valid fields are provided', async () => {
     const app = createApp();
-    const res = await request(app)
-      .put('/api/gifts/gift-abc')
-      .send({})
-      .expect(400);
+    const res = await request(app).put('/api/gifts/gift-abc').send({}).expect(400);
 
     expect(res.body.error).toMatch(/no valid fields/i);
   });
@@ -240,34 +219,22 @@ describe('PUT /api/gifts/:id', () => {
 
     expect(res.body.success).toBe(true);
     expect(mockDoc).toHaveBeenCalledWith('gifts/gift-abc');
-    expect(mockDocUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'Renamed Gift' }),
-    );
+    expect(mockDocUpdate).toHaveBeenCalledWith(expect.objectContaining({ name: 'Renamed Gift' }));
   });
 
   test('returns 200 and updates coinValue', async () => {
     const app = createApp();
-    const res = await request(app)
-      .put('/api/gifts/gift-abc')
-      .send({ coinValue: 999 })
-      .expect(200);
+    const res = await request(app).put('/api/gifts/gift-abc').send({ coinValue: 999 }).expect(200);
 
     expect(res.body.success).toBe(true);
-    expect(mockDocUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ coinValue: 999 }),
-    );
+    expect(mockDocUpdate).toHaveBeenCalledWith(expect.objectContaining({ coinValue: 999 }));
   });
 
   test('accepts snake_case coin_value alias', async () => {
     const app = createApp();
-    await request(app)
-      .put('/api/gifts/gift-abc')
-      .send({ coin_value: 750 })
-      .expect(200);
+    await request(app).put('/api/gifts/gift-abc').send({ coin_value: 750 }).expect(200);
 
-    expect(mockDocUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ coinValue: 750 }),
-    );
+    expect(mockDocUpdate).toHaveBeenCalledWith(expect.objectContaining({ coinValue: 750 }));
   });
 
   test('coerces showInStore and showOnWheel to boolean', async () => {
@@ -305,18 +272,14 @@ describe('DELETE /api/gifts/:id', () => {
     });
 
     const app = createApp(false);
-    const res = await request(app)
-      .delete('/api/gifts/gift-abc')
-      .expect(403);
+    const res = await request(app).delete('/api/gifts/gift-abc').expect(403);
 
     expect(res.body.error).toBeDefined();
   });
 
   test('returns 200 and deletes the gift', async () => {
     const app = createApp();
-    const res = await request(app)
-      .delete('/api/gifts/gift-abc')
-      .expect(200);
+    const res = await request(app).delete('/api/gifts/gift-abc').expect(200);
 
     expect(res.body.success).toBe(true);
     expect(mockDoc).toHaveBeenCalledWith('gifts/gift-abc');
@@ -325,9 +288,7 @@ describe('DELETE /api/gifts/:id', () => {
 
   test('writes an audit log entry on delete', async () => {
     const app = createApp();
-    await request(app)
-      .delete('/api/gifts/gift-abc')
-      .expect(200);
+    await request(app).delete('/api/gifts/gift-abc').expect(200);
 
     expect(mockDoc).toHaveBeenCalledWith(expect.stringMatching(/^adminAuditLog\//));
     expect(mockDocSet).toHaveBeenCalledWith(
@@ -343,9 +304,7 @@ describe('DELETE /api/gifts/:id', () => {
     mockDocDelete.mockRejectedValue(new Error('Firestore error'));
 
     const app = createApp();
-    const res = await request(app)
-      .delete('/api/gifts/gift-abc')
-      .expect(500);
+    const res = await request(app).delete('/api/gifts/gift-abc').expect(500);
 
     expect(res.body.error).toBeDefined();
   });

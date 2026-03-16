@@ -1,4 +1,8 @@
-const { buildOtpEmail, buildLockoutEmail, buildResetEmail } = require('../../src/utils/email-templates');
+const {
+  buildOtpEmail,
+  buildLockoutEmail,
+  buildResetEmail,
+} = require('../../src/utils/email-templates');
 
 describe('Email Templates', () => {
   describe('buildOtpEmail', () => {

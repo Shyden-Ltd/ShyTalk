@@ -17,7 +17,11 @@ const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const { db, auth } = require('../utils/firebase');
 const { sendEmail } = require('../utils/email');
-const { buildOtpEmail, buildLockoutEmail, buildResetEmail } = require('../utils/email-templates');
+const {
+  buildOtpEmail,
+  buildLockoutEmail: _buildLockoutEmail,
+  buildResetEmail: _buildResetEmail,
+} = require('../utils/email-templates');
 const log = require('../utils/log');
 const { authMiddleware } = require('../middleware/auth');
 const { sensitiveLimiter } = require('../middleware/rateLimit');
@@ -113,7 +117,7 @@ router.post('/auth/otp/send', sensitiveLimiter, async (req, res) => {
     // Update daily metrics
     const metricsData = metricsDoc.exists ? metricsDoc.data() : null;
     const todayStr = today();
-    const currentCount = (metricsData && metricsData.date === todayStr) ? metricsData.count : 0;
+    const currentCount = metricsData && metricsData.date === todayStr ? metricsData.count : 0;
     await metricsRef.set({ count: currentCount + 1, date: todayStr });
 
     if (currentCount + 1 >= DAILY_EMAIL_WARN) {
@@ -174,12 +178,16 @@ router.post('/auth/otp/verify', sensitiveLimiter, async (req, res) => {
     try {
       const userRecord = await auth.getUserByEmail(emailLower);
       // Prevent OTP bypass for Google/Apple accounts — they must use their provider
-      const providers = (userRecord.providerData || []).map(p => p.providerId);
+      const providers = (userRecord.providerData || []).map((p) => p.providerId);
       const hasPasswordOrEmail = providers.includes('password') || providers.length === 0;
       const isOtpOnlyOrNew = hasPasswordOrEmail || providers.includes('email');
-      if (!isOtpOnlyOrNew && (providers.includes('google.com') || providers.includes('apple.com'))) {
+      if (
+        !isOtpOnlyOrNew &&
+        (providers.includes('google.com') || providers.includes('apple.com'))
+      ) {
         return res.status(403).json({
-          error: 'This email is linked to a Google or Apple account. Please sign in with that provider.',
+          error:
+            'This email is linked to a Google or Apple account. Please sign in with that provider.',
         });
       }
       firebaseUid = userRecord.uid;
@@ -216,12 +224,14 @@ router.post('/auth/pin/setup', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'PIN must be numeric' });
     }
     if (pin.length < PIN_MIN_LENGTH || pin.length > PIN_MAX_LENGTH) {
-      return res.status(400).json({ error: `PIN must be ${PIN_MIN_LENGTH}-${PIN_MAX_LENGTH} digits` });
+      return res
+        .status(400)
+        .json({ error: `PIN must be ${PIN_MIN_LENGTH}-${PIN_MAX_LENGTH} digits` });
     }
 
     const pinHash = await bcrypt.hash(pin, BCRYPT_ROUNDS);
     const userRef = db.doc(`users/${uniqueId}`);
-    await userRef.update( {
+    await userRef.update({
       pinHash,
       pinSetAt: Date.now(),
       pinAttempts: 0,
@@ -297,11 +307,11 @@ router.post('/auth/pin/verify', sensitiveLimiter, async (req, res) => {
           response.requiresReauth = true;
         }
 
-        await userRef.update( updates);
+        await userRef.update(updates);
         return res.status(423).json(response);
       }
 
-      await userRef.update( updates);
+      await userRef.update(updates);
       return res.status(401).json({
         error: 'Wrong PIN',
         attemptsRemaining: PIN_MAX_ATTEMPTS - newAttempts,
@@ -309,7 +319,7 @@ router.post('/auth/pin/verify', sensitiveLimiter, async (req, res) => {
     }
 
     // PIN is valid — reset attempts
-    await userRef.update( {
+    await userRef.update({
       pinAttempts: 0,
       pinLockedUntil: null,
     });
@@ -339,12 +349,14 @@ router.post('/auth/pin/reset', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'PIN must be numeric' });
     }
     if (pin.length < PIN_MIN_LENGTH || pin.length > PIN_MAX_LENGTH) {
-      return res.status(400).json({ error: `PIN must be ${PIN_MIN_LENGTH}-${PIN_MAX_LENGTH} digits` });
+      return res
+        .status(400)
+        .json({ error: `PIN must be ${PIN_MIN_LENGTH}-${PIN_MAX_LENGTH} digits` });
     }
 
     const pinHash = await bcrypt.hash(pin, BCRYPT_ROUNDS);
     const userRef = db.doc(`users/${uniqueId}`);
-    await userRef.update( {
+    await userRef.update({
       pinHash,
       pinSetAt: Date.now(),
       pinAttempts: 0,
@@ -414,7 +426,6 @@ router.get('/auth/biometric/challenge', sensitiveLimiter, async (req, res) => {
     cleanExpiredChallenges();
 
     // Generate challenge nonce
-    const crypto = require('crypto');
     const nonce = crypto.randomBytes(32).toString('base64');
     const challengeKey = `${uniqueId}:${deviceId}`;
     challenges.set(challengeKey, {

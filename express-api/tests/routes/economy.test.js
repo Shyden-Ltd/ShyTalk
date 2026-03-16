@@ -36,7 +36,7 @@ jest.mock('../../src/utils/firebase', () => ({
     })),
   },
   FieldValue: {
-    increment: jest.fn(n => `increment(${n})`),
+    increment: jest.fn((n) => `increment(${n})`),
     arrayUnion: jest.fn((...args) => `arrayUnion(${args})`),
     arrayRemove: jest.fn((...args) => `arrayRemove(${args})`),
   },
@@ -50,7 +50,11 @@ jest.mock('../../src/utils/helpers', () => ({
   generateId: () => 'tx-123',
   now: () => 1709913600000,
   todayStr: () => new Date().toISOString().split('T')[0],
-  yesterdayStr: () => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0]; },
+  yesterdayStr: () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  },
 }));
 
 beforeEach(() => {
@@ -86,9 +90,7 @@ describe('POST /api/economy/test-coins', () => {
     });
 
     const app = createApp('user-A', false);
-    const res = await request(app)
-      .post('/api/economy/test-coins')
-      .send({ amount: 1000 });
+    const res = await request(app).post('/api/economy/test-coins').send({ amount: 1000 });
 
     expect(res.status).toBe(403);
     expect(requireAdmin).toHaveBeenCalled();
@@ -101,9 +103,7 @@ describe('POST /api/economy/test-coins', () => {
     });
 
     const app = createApp('admin-user', true);
-    const res = await request(app)
-      .post('/api/economy/test-coins')
-      .send({ amount: 1000 });
+    const res = await request(app).post('/api/economy/test-coins').send({ amount: 1000 });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -114,20 +114,11 @@ describe('POST /api/economy/test-coins', () => {
   test('rejects invalid amount', async () => {
     const app = createApp('admin-user', true);
 
-    await request(app)
-      .post('/api/economy/test-coins')
-      .send({ amount: 0 })
-      .expect(400);
+    await request(app).post('/api/economy/test-coins').send({ amount: 0 }).expect(400);
 
-    await request(app)
-      .post('/api/economy/test-coins')
-      .send({ amount: 200000 })
-      .expect(400);
+    await request(app).post('/api/economy/test-coins').send({ amount: 200000 }).expect(400);
 
-    await request(app)
-      .post('/api/economy/test-coins')
-      .send({ amount: -100 })
-      .expect(400);
+    await request(app).post('/api/economy/test-coins').send({ amount: -100 }).expect(400);
   });
 });
 
@@ -163,9 +154,7 @@ describe('POST /api/economy/daily-reward', () => {
     });
 
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/daily-reward')
-      .send({});
+    const res = await request(app).post('/api/economy/daily-reward').send({});
 
     expect(res.status).toBe(200);
     expect(res.body.coinsAwarded).toBe(50);
@@ -193,9 +182,7 @@ describe('POST /api/economy/daily-reward', () => {
     });
 
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/daily-reward')
-      .send({});
+    const res = await request(app).post('/api/economy/daily-reward').send({});
 
     expect(res.status).toBe(409);
   });
@@ -209,9 +196,7 @@ describe('GET /api/economy/balance', () => {
     });
 
     const app = createApp('user-A');
-    const res = await request(app)
-      .get('/api/economy/balance')
-      .expect(200);
+    const res = await request(app).get('/api/economy/balance').expect(200);
 
     expect(res.body.coins).toBe(500);
     expect(res.body.beans).toBe(200);
@@ -221,9 +206,7 @@ describe('GET /api/economy/balance', () => {
     mockDocGet.mockResolvedValue({ exists: false });
 
     const app = createApp('user-A');
-    await request(app)
-      .get('/api/economy/balance')
-      .expect(404);
+    await request(app).get('/api/economy/balance').expect(404);
   });
 });
 
@@ -232,16 +215,12 @@ describe('GET /api/users/:uniqueId/backpack', () => {
     const { db } = require('../../src/utils/firebase');
     db.collection.mockReturnValueOnce({
       get: jest.fn().mockResolvedValue({
-        docs: [
-          { id: 'gift-1', data: () => ({ quantity: 3, lastAcquired: 1700000000000 }) },
-        ],
+        docs: [{ id: 'gift-1', data: () => ({ quantity: 3, lastAcquired: 1700000000000 }) }],
       }),
     });
 
     const app = createApp('user-A');
-    const res = await request(app)
-      .get('/api/users/user-A/backpack')
-      .expect(200);
+    const res = await request(app).get('/api/users/user-A/backpack').expect(200);
 
     expect(res.body).toHaveLength(1);
     expect(res.body[0].id).toBe('gift-1');
@@ -249,9 +228,7 @@ describe('GET /api/users/:uniqueId/backpack', () => {
 
   test('rejects access to another user backpack for non-admin', async () => {
     const app = createApp('user-A', false);
-    const res = await request(app)
-      .get('/api/users/user-B/backpack')
-      .expect(403);
+    const res = await request(app).get('/api/users/user-B/backpack').expect(403);
 
     expect(res.body.error).toMatch(/Cannot access/);
   });
@@ -261,16 +238,20 @@ describe('GET /api/users/:uniqueId/backpack', () => {
     db.collection.mockReturnValueOnce({
       get: jest.fn().mockResolvedValue({
         docs: [
-          { id: 'gift-rose', data: () => ({ giftId: 'gift-rose', quantity: 5, lastAcquired: 1700000000000 }) },
-          { id: 'gift-crown', data: () => ({ giftId: 'gift-crown', quantity: 2, lastAcquired: 1699900000000 }) },
+          {
+            id: 'gift-rose',
+            data: () => ({ giftId: 'gift-rose', quantity: 5, lastAcquired: 1700000000000 }),
+          },
+          {
+            id: 'gift-crown',
+            data: () => ({ giftId: 'gift-crown', quantity: 2, lastAcquired: 1699900000000 }),
+          },
         ],
       }),
     });
 
     const app = createApp('admin-1', true);
-    const res = await request(app)
-      .get('/api/users/user-B/backpack')
-      .expect(200);
+    const res = await request(app).get('/api/users/user-B/backpack').expect(200);
 
     expect(res.body).toHaveLength(2);
     expect(res.body[0].giftId).toBe('gift-rose');

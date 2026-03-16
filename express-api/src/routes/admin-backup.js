@@ -121,11 +121,17 @@ router.get('/admin/backups/:date/:collection', async (req, res) => {
 
     const { date, collection } = req.params;
     if (!BACKUP_DATE_REGEX.test(date)) {
-      log.warn('admin-backup', 'Invalid date format in backup download', { date, uid: req.auth?.uid });
+      log.warn('admin-backup', 'Invalid date format in backup download', {
+        date,
+        uid: req.auth?.uid,
+      });
       return res.status(400).json({ error: 'Invalid date format (expected YYYY-MM-DD)' });
     }
     if (!ALLOWED_BACKUP_COLLECTIONS.has(collection)) {
-      log.warn('admin-backup', 'Invalid collection name in backup download', { collection, uid: req.auth?.uid });
+      log.warn('admin-backup', 'Invalid collection name in backup download', {
+        collection,
+        uid: req.auth?.uid,
+      });
       return res.status(400).json({ error: 'Invalid collection name' });
     }
     const key = `backups/full/${date}/${collection}.json`;
@@ -143,7 +149,11 @@ router.get('/admin/backups/:date/:collection', async (req, res) => {
     res.set('Content-Type', 'application/json');
     obj.Body.pipe(res);
   } catch (err) {
-    log.error('admin-backup', 'Error downloading collection backup', { date: req.params.date, collection: req.params.collection, error: err.message });
+    log.error('admin-backup', 'Error downloading collection backup', {
+      date: req.params.date,
+      collection: req.params.collection,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -154,7 +164,10 @@ router.get('/admin/backups/:date', async (req, res) => {
     if (requireAdmin(req, res)) return;
 
     if (!BACKUP_DATE_REGEX.test(req.params.date)) {
-      log.warn('admin-backup', 'Invalid date format in legacy backup download', { date: req.params.date, uid: req.auth?.uid });
+      log.warn('admin-backup', 'Invalid date format in legacy backup download', {
+        date: req.params.date,
+        uid: req.auth?.uid,
+      });
       return res.status(400).json({ error: 'Invalid date format (expected YYYY-MM-DD)' });
     }
     const key = `backups/users/${req.params.date}.json`;
@@ -171,7 +184,10 @@ router.get('/admin/backups/:date', async (req, res) => {
     res.set('Content-Type', 'application/json');
     obj.Body.pipe(res);
   } catch (err) {
-    log.error('admin-backup', 'Error downloading legacy backup', { date: req.params.date, error: err.message });
+    log.error('admin-backup', 'Error downloading legacy backup', {
+      date: req.params.date,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -188,7 +204,9 @@ router.post('/admin/backups/restore/:date', async (req, res) => {
     const { mode = 'missing-only', collection } = req.body;
 
     if (!['full', 'collection', 'missing-only'].includes(mode)) {
-      return res.status(400).json({ error: 'Invalid mode. Use: full, collection, or missing-only' });
+      return res
+        .status(400)
+        .json({ error: 'Invalid mode. Use: full, collection, or missing-only' });
     }
 
     if (mode === 'collection' && !collection) {
@@ -196,13 +214,14 @@ router.post('/admin/backups/restore/:date', async (req, res) => {
     }
 
     // Auto-create a fresh backup before any restore
-    log.info('admin-backup', 'Creating pre-restore backup', { date: req.params.date, mode: req.body.mode || 'missing-only' });
+    log.info('admin-backup', 'Creating pre-restore backup', {
+      date: req.params.date,
+      mode: req.body.mode || 'missing-only',
+    });
     await backupFn();
 
     // Determine which collections to restore
-    const collectionsToRestore = mode === 'collection'
-      ? [collection]
-      : [...RESTORABLE_COLLECTIONS];
+    const collectionsToRestore = mode === 'collection' ? [collection] : [...RESTORABLE_COLLECTIONS];
 
     const results = {};
 
@@ -220,10 +239,10 @@ router.post('/admin/backups/restore/:date', async (req, res) => {
       if (mode === 'full' || mode === 'collection') {
         // Full restore: delete existing docs in batches of 500, then write from backup
         const existingSnap = await db.collection(collName).get();
-        const refs = existingSnap.docs.map(d => d.ref);
+        const refs = existingSnap.docs.map((d) => d.ref);
         for (let i = 0; i < refs.length; i += 500) {
           const batch = db.batch();
-          refs.slice(i, i + 500).forEach(ref => batch.delete(ref));
+          refs.slice(i, i + 500).forEach((ref) => batch.delete(ref));
           await batch.commit();
         }
 
@@ -261,7 +280,10 @@ router.post('/admin/backups/restore/:date', async (req, res) => {
       results,
     });
   } catch (err) {
-    log.error('admin-backup', 'Error restoring from backup', { date: req.params.date, error: err.message });
+    log.error('admin-backup', 'Error restoring from backup', {
+      date: req.params.date,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -286,7 +308,10 @@ router.post('/admin/backups/recover-photos', async (req, res) => {
         if (parts.length >= 3) {
           const uid = parts[1];
           // Keep the most recently uploaded photo per user
-          if (!userPhotos[uid] || (obj.lastModified && obj.lastModified > userPhotos[uid].lastModified)) {
+          if (
+            !userPhotos[uid] ||
+            (obj.lastModified && obj.lastModified > userPhotos[uid].lastModified)
+          ) {
             userPhotos[uid] = { key: obj.key, lastModified: obj.lastModified };
           }
         }

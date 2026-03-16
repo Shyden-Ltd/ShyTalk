@@ -64,7 +64,7 @@ function createApp() {
 function mockUser(uid, uniqueId, isSuspended = false) {
   mockVerifyIdToken.mockResolvedValueOnce({ uid });
   // uniqueId resolution query
-  if (uniqueId != null) {
+  if (uniqueId !== null && uniqueId !== undefined) {
     mockCollectionQuery.mockResolvedValueOnce({
       empty: false,
       docs: [{ id: String(uniqueId), data: () => ({ uniqueId, firebaseUid: uid }) }],
@@ -91,10 +91,7 @@ describe('authMiddleware', () => {
 
   test('returns 401 when Authorization header has no Bearer prefix', async () => {
     const app = createApp();
-    await request(app)
-      .get('/api/users/10000001')
-      .set('Authorization', 'Basic abc')
-      .expect(401);
+    await request(app).get('/api/users/10000001').set('Authorization', 'Basic abc').expect(401);
   });
 
   test('returns 401 when token verification fails', async () => {

@@ -7,7 +7,10 @@ jest.mock('../../src/utils/firebase', () => ({
   admin: { firestore: () => ({}) },
 }));
 jest.mock('../../src/utils/log', () => ({
-  debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn(),
+  debug: jest.fn(),
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
 }));
 
 // ─── LiveKit SDK mock ────────────────────────────────────────────
@@ -55,10 +58,7 @@ function createApp(uniqueId = 12345) {
 describe('POST /api/livekit/token', () => {
   test('returns 400 when roomName is missing', async () => {
     const app = createApp();
-    await request(app)
-      .post('/api/livekit/token')
-      .send({})
-      .expect(400);
+    await request(app).post('/api/livekit/token').send({}).expect(400);
   });
 
   test('generates token with authenticated uniqueId as identity', async () => {
@@ -74,13 +74,13 @@ describe('POST /api/livekit/token', () => {
     expect(AccessToken).toHaveBeenCalledWith(
       'test-key',
       'test-secret',
-      expect.objectContaining({ identity: '99001' })
+      expect.objectContaining({ identity: '99001' }),
     );
   });
 
   test('ignores identity from request body (prevents impersonation)', async () => {
     const app = createApp(99001);
-    const res = await request(app)
+    const _res = await request(app)
       .post('/api/livekit/token')
       .send({ roomName: 'test-room', identity: 'impersonated-user' })
       .expect(200);
@@ -89,16 +89,13 @@ describe('POST /api/livekit/token', () => {
     expect(AccessToken).toHaveBeenCalledWith(
       'test-key',
       'test-secret',
-      expect.objectContaining({ identity: '99001' })
+      expect.objectContaining({ identity: '99001' }),
     );
   });
 
   test('grants correct room permissions', async () => {
     const app = createApp();
-    await request(app)
-      .post('/api/livekit/token')
-      .send({ roomName: 'my-room' })
-      .expect(200);
+    await request(app).post('/api/livekit/token').send({ roomName: 'my-room' }).expect(200);
 
     expect(mockAddGrant).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -106,7 +103,7 @@ describe('POST /api/livekit/token', () => {
         room: 'my-room',
         canPublish: true,
         canSubscribe: true,
-      })
+      }),
     );
   });
 });

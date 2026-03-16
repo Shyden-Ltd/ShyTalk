@@ -14,7 +14,11 @@ jest.mock('../../src/utils/log', () => ({
   debug: jest.fn(),
 }));
 
-const { verifyProductPurchase, verifySubscription, _resetAuthClient } = require('../../src/utils/playStore');
+const {
+  verifyProductPurchase,
+  verifySubscription,
+  _resetAuthClient,
+} = require('../../src/utils/playStore');
 const log = require('../../src/utils/log');
 
 beforeEach(() => {
@@ -52,7 +56,7 @@ describe('verifyProductPurchase', () => {
     expect(result).toEqual(purchaseData);
     expect(global.fetch).toHaveBeenCalledWith(
       `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${pkg}/purchases/products/${productId}/tokens/${token}`,
-      { headers: { Authorization: 'Bearer mock-access-token' } }
+      { headers: { Authorization: 'Bearer mock-access-token' } },
     );
   });
 
@@ -63,52 +67,57 @@ describe('verifyProductPurchase', () => {
       text: () => Promise.resolve('Not found'),
     });
 
-    await expect(verifyProductPurchase(pkg, productId, token))
-      .rejects.toThrow('Google Play API returned 404');
+    await expect(verifyProductPurchase(pkg, productId, token)).rejects.toThrow(
+      'Google Play API returned 404',
+    );
 
     expect(log.warn).toHaveBeenCalledWith(
       'playStore',
       'Product purchase verification failed',
-      expect.objectContaining({ status: 404 })
+      expect.objectContaining({ status: 404 }),
     );
   });
 
   test('throws on already-consumed purchase (consumptionState === 1)', async () => {
     global.fetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({
-        purchaseState: 0,
-        consumptionState: 1,
-        orderId: 'GPA.1234-5678',
-      }),
+      json: () =>
+        Promise.resolve({
+          purchaseState: 0,
+          consumptionState: 1,
+          orderId: 'GPA.1234-5678',
+        }),
     });
 
-    await expect(verifyProductPurchase(pkg, productId, token))
-      .rejects.toThrow('Purchase already consumed');
+    await expect(verifyProductPurchase(pkg, productId, token)).rejects.toThrow(
+      'Purchase already consumed',
+    );
 
     expect(log.warn).toHaveBeenCalledWith(
       'playStore',
       'Purchase already consumed',
-      expect.objectContaining({ productId })
+      expect.objectContaining({ productId }),
     );
   });
 
   test('throws on non-purchased state (purchaseState !== 0)', async () => {
     global.fetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({
-        purchaseState: 1,
-        consumptionState: 0,
-      }),
+      json: () =>
+        Promise.resolve({
+          purchaseState: 1,
+          consumptionState: 0,
+        }),
     });
 
-    await expect(verifyProductPurchase(pkg, productId, token))
-      .rejects.toThrow('Purchase not in purchased state');
+    await expect(verifyProductPurchase(pkg, productId, token)).rejects.toThrow(
+      'Purchase not in purchased state',
+    );
 
     expect(log.warn).toHaveBeenCalledWith(
       'playStore',
       'Purchase not in purchased state',
-      expect.objectContaining({ purchaseState: 1 })
+      expect.objectContaining({ purchaseState: 1 }),
     );
   });
 });
@@ -137,7 +146,7 @@ describe('verifySubscription', () => {
     expect(result).toEqual(subData);
     expect(global.fetch).toHaveBeenCalledWith(
       `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${pkg}/purchases/subscriptionsv2/tokens/${token}`,
-      { headers: { Authorization: 'Bearer mock-access-token' } }
+      { headers: { Authorization: 'Bearer mock-access-token' } },
     );
   });
 
@@ -150,9 +159,9 @@ describe('verifySubscription', () => {
       }),
     });
 
-    await expect(
-      verifySubscription(pkg, subscriptionId, token)
-    ).rejects.toThrow('Subscription not active');
+    await expect(verifySubscription(pkg, subscriptionId, token)).rejects.toThrow(
+      'Subscription not active',
+    );
   });
 
   test('throws on non-OK response', async () => {
@@ -162,13 +171,14 @@ describe('verifySubscription', () => {
       text: () => Promise.resolve('Unauthorized'),
     });
 
-    await expect(verifySubscription(pkg, subscriptionId, token))
-      .rejects.toThrow('Google Play API returned 401');
+    await expect(verifySubscription(pkg, subscriptionId, token)).rejects.toThrow(
+      'Google Play API returned 401',
+    );
 
     expect(log.warn).toHaveBeenCalledWith(
       'playStore',
       'Subscription verification failed',
-      expect.objectContaining({ status: 401 })
+      expect.objectContaining({ status: 401 }),
     );
   });
 });

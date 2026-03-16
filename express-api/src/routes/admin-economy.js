@@ -29,19 +29,23 @@ router.get('/users/:uniqueId/economy', async (req, res) => {
     const user = snap.data();
 
     res.json({
-      shyCoins:                user.shyCoins                ?? user.shy_coins                ?? 0,
-      shyBeans:                user.shyBeans                ?? user.shy_beans                ?? 0,
-      luckScore:               user.luckScore               ?? user.luck_score               ?? 0,
-      pityCounter:             user.pityCounter             ?? user.pity_counter             ?? 0,
-      isSuperShy:              user.isSuperShy              ?? user.is_super_shy             ?? false,
-      superShyExpiry:          user.superShyExpiry          ?? user.super_shy_expiry         ?? null,
-      superShyTier:            user.superShyTier            ?? user.super_shy_tier           ?? null,
-      loginStreak:             user.loginStreak             ?? user.login_streak             ?? 0,
-      lastLoginDate:           user.lastLoginDate           ?? user.last_login_date          ?? null,
-      guaranteedNextPullGiftId: user.guaranteedNextPullGiftId ?? user.guaranteed_next_pull_gift_id ?? null,
+      shyCoins: user.shyCoins ?? user.shy_coins ?? 0,
+      shyBeans: user.shyBeans ?? user.shy_beans ?? 0,
+      luckScore: user.luckScore ?? user.luck_score ?? 0,
+      pityCounter: user.pityCounter ?? user.pity_counter ?? 0,
+      isSuperShy: user.isSuperShy ?? user.is_super_shy ?? false,
+      superShyExpiry: user.superShyExpiry ?? user.super_shy_expiry ?? null,
+      superShyTier: user.superShyTier ?? user.super_shy_tier ?? null,
+      loginStreak: user.loginStreak ?? user.login_streak ?? 0,
+      lastLoginDate: user.lastLoginDate ?? user.last_login_date ?? null,
+      guaranteedNextPullGiftId:
+        user.guaranteedNextPullGiftId ?? user.guaranteed_next_pull_gift_id ?? null,
     });
   } catch (err) {
-    log.error('admin-economy', 'Error fetching economy snapshot', { uid: req.params.uniqueId, error: err.message });
+    log.error('admin-economy', 'Error fetching economy snapshot', {
+      uid: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -71,7 +75,8 @@ router.post('/users/:uniqueId/adjust-balance', async (req, res) => {
     if (!snap.exists) return res.status(404).json({ error: 'User not found' });
     const user = snap.data();
 
-    const currentBalance = user[field] ?? (currency === 'coins' ? (user.shy_coins ?? 0) : (user.shy_beans ?? 0));
+    const currentBalance =
+      user[field] ?? (currency === 'coins' ? (user.shy_coins ?? 0) : (user.shy_beans ?? 0));
     const newBalance = Math.max(0, currentBalance + amount);
     const timestamp = now();
     const txId = generateId();
@@ -81,22 +86,22 @@ router.post('/users/:uniqueId/adjust-balance', async (req, res) => {
       db.doc(`users/${req.params.uniqueId}`).update({ [field]: newBalance }),
 
       db.doc(`users/${req.params.uniqueId}/transactions/${txId}`).set({
-        id:           txId,
-        userId:       req.params.uniqueId,
-        type:         'ADMIN_ADJUSTMENT',
-        amount:       amount,
-        currency:     currency.toUpperCase(),
+        id: txId,
+        userId: req.params.uniqueId,
+        type: 'ADMIN_ADJUSTMENT',
+        amount: amount,
+        currency: currency.toUpperCase(),
         balanceAfter: newBalance,
-        details:      reason || `Admin adjustment: ${amount > 0 ? '+' : ''}${amount} ${currency}`,
-        timestamp:    timestamp,
+        details: reason || `Admin adjustment: ${amount > 0 ? '+' : ''}${amount} ${currency}`,
+        timestamp: timestamp,
       }),
 
       db.doc(`adminAuditLog/${logId}`).set({
-        adminId:      req.auth.uid,
-        action:       'ADJUST_BALANCE',
+        adminId: req.auth.uid,
+        action: 'ADJUST_BALANCE',
         targetUserId: req.params.uniqueId,
-        details:      `${amount > 0 ? '+' : ''}${amount} ${currency} (${reason || 'no reason'})`,
-        createdAt:    timestamp,
+        details: `${amount > 0 ? '+' : ''}${amount} ${currency} (${reason || 'no reason'})`,
+        createdAt: timestamp,
       }),
     ]);
 
@@ -104,11 +109,21 @@ router.post('/users/:uniqueId/adjust-balance', async (req, res) => {
     const currencyName = currency === 'coins' ? 'Shy Coins' : 'Shy Beans';
     const absAmount = Math.abs(amount);
     const action = amount > 0 ? 'were added to' : 'were deducted from';
-    try { await sendSystemPm(req.params.uniqueId, `${absAmount} ${currencyName} ${action} your account.`); } catch (e) { log.warn('system-pm', 'Failed to send', { uid: req.params.uniqueId, error: e.message }); }
+    try {
+      await sendSystemPm(
+        req.params.uniqueId,
+        `${absAmount} ${currencyName} ${action} your account.`,
+      );
+    } catch (e) {
+      log.warn('system-pm', 'Failed to send', { uid: req.params.uniqueId, error: e.message });
+    }
 
     res.json({ success: true, newBalance, currency });
   } catch (err) {
-    log.error('admin-economy', 'Error adjusting balance', { uid: req.params.uniqueId, error: err.message });
+    log.error('admin-economy', 'Error adjusting balance', {
+      uid: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -131,33 +146,41 @@ router.post('/users/:uniqueId/backpack', async (req, res) => {
       await backpackRef.delete();
     } else {
       await backpackRef.set({
-        giftId:       body.giftId,
-        quantity:     body.quantity,
+        giftId: body.giftId,
+        quantity: body.quantity,
         lastAcquired: timestamp,
       });
     }
 
     await db.doc(`adminAuditLog/${generateId()}`).set({
-      adminId:      req.auth.uid,
-      action:       'SET_BACKPACK',
+      adminId: req.auth.uid,
+      action: 'SET_BACKPACK',
       targetUserId: req.params.uniqueId,
-      details:      `Set ${body.giftId} quantity to ${body.quantity}`,
-      createdAt:    timestamp,
+      details: `Set ${body.giftId} quantity to ${body.quantity}`,
+      createdAt: timestamp,
     });
 
     // Notify user about backpack change (unless silent)
     if (!body.silent) {
       const name = body.giftName || body.giftId;
-      const msg = body.quantity === 0
-        ? `🎒 "${name}" has been removed from your backpack by the moderation team.`
-        : `🎒 Your backpack has been updated: "${name}" quantity set to ${body.quantity}.`;
-      sendSystemPm(req.params.uniqueId, msg)
-        .catch(err => log.error('admin-economy', 'Failed to send backpack PM', { uid: req.params.uniqueId, error: err.message }));
+      const msg =
+        body.quantity === 0
+          ? `🎒 "${name}" has been removed from your backpack by the moderation team.`
+          : `🎒 Your backpack has been updated: "${name}" quantity set to ${body.quantity}.`;
+      sendSystemPm(req.params.uniqueId, msg).catch((err) =>
+        log.error('admin-economy', 'Failed to send backpack PM', {
+          uid: req.params.uniqueId,
+          error: err.message,
+        }),
+      );
     }
 
     res.json({ success: true });
   } catch (err) {
-    log.error('admin-economy', 'Error setting backpack item', { uid: req.params.uniqueId, error: err.message });
+    log.error('admin-economy', 'Error setting backpack item', {
+      uid: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -172,11 +195,14 @@ router.get('/users/:uniqueId/luck', async (req, res) => {
     const user = snap.data();
 
     res.json({
-      luckScore:   user.luckScore   ?? user.luck_score   ?? 0,
+      luckScore: user.luckScore ?? user.luck_score ?? 0,
       pityCounter: user.pityCounter ?? user.pity_counter ?? 0,
     });
   } catch (err) {
-    log.error('admin-economy', 'Error fetching luck', { uid: req.params.uniqueId, error: err.message });
+    log.error('admin-economy', 'Error fetching luck', {
+      uid: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -190,34 +216,38 @@ router.post('/users/:uniqueId/luck', async (req, res) => {
     if (!body) return res.status(400).json({ error: 'Invalid JSON body' });
 
     const updates = {};
-    if (body.luckScore != null) {
+    if (body.luckScore !== null && body.luckScore !== undefined) {
       const parsed = parseInt(body.luckScore);
       if (isNaN(parsed)) return res.status(400).json({ error: 'luckScore must be a number' });
       updates.luckScore = Math.max(0, Math.min(100, parsed));
     }
-    if (body.pityCounter != null) {
+    if (body.pityCounter !== null && body.pityCounter !== undefined) {
       const parsed = parseInt(body.pityCounter);
       if (isNaN(parsed)) return res.status(400).json({ error: 'pityCounter must be a number' });
       updates.pityCounter = Math.max(0, parsed);
     }
 
-    if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'No fields to update' });
+    if (Object.keys(updates).length === 0)
+      return res.status(400).json({ error: 'No fields to update' });
 
     await Promise.all([
       db.doc(`users/${req.params.uniqueId}`).update(updates),
 
       db.doc(`adminAuditLog/${generateId()}`).set({
-        adminId:      req.auth.uid,
-        action:       'SET_LUCK',
+        adminId: req.auth.uid,
+        action: 'SET_LUCK',
         targetUserId: req.params.uniqueId,
-        details:      JSON.stringify(body),
-        createdAt:    now(),
+        details: JSON.stringify(body),
+        createdAt: now(),
       }),
     ]);
 
     res.json({ success: true });
   } catch (err) {
-    log.error('admin-economy', 'Error updating luck', { uid: req.params.uniqueId, error: err.message });
+    log.error('admin-economy', 'Error updating luck', {
+      uid: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -239,11 +269,14 @@ router.get('/users/:uniqueId/transactions', async (req, res) => {
     query = query.orderBy('timestamp', 'desc').limit(limit);
 
     const snapshot = await query.get();
-    const results = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    const results = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 
     res.json(results);
   } catch (err) {
-    log.error('admin-economy', 'Error fetching transactions', { uid: req.params.uniqueId, error: err.message });
+    log.error('admin-economy', 'Error fetching transactions', {
+      uid: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -257,9 +290,8 @@ router.get('/users/:uniqueId/guarantee-next-pull', async (req, res) => {
     if (!snap.exists) return res.status(404).json({ error: 'User not found' });
     const user = snap.data();
 
-    const guaranteedGiftId = user.guaranteedNextPullGiftId
-      ?? user.guaranteed_next_pull_gift_id
-      ?? null;
+    const guaranteedGiftId =
+      user.guaranteedNextPullGiftId ?? user.guaranteed_next_pull_gift_id ?? null;
 
     let gift = null;
     if (guaranteedGiftId) {
@@ -267,17 +299,20 @@ router.get('/users/:uniqueId/guarantee-next-pull', async (req, res) => {
       if (giftSnap.exists) {
         const giftData = giftSnap.data();
         gift = {
-          id:        giftSnap.id,
-          name:      giftData.name,
+          id: giftSnap.id,
+          name: giftData.name,
           coinValue: giftData.coinValue ?? giftData.coin_value,
-          iconUrl:   giftData.iconUrl   ?? giftData.icon_url,
+          iconUrl: giftData.iconUrl ?? giftData.icon_url,
         };
       }
     }
 
     res.json({ guaranteedGiftId, gift });
   } catch (err) {
-    log.error('admin-economy', 'Error checking guarantee status', { uid: req.params.uniqueId, error: err.message });
+    log.error('admin-economy', 'Error checking guarantee status', {
+      uid: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -299,11 +334,11 @@ router.post('/users/:uniqueId/guarantee-next-pull', async (req, res) => {
       db.doc(`users/${req.params.uniqueId}`).update({ guaranteedNextPullGiftId: body.giftId }),
 
       db.doc(`adminAuditLog/${generateId()}`).set({
-        adminId:      req.auth.uid,
-        action:       'SET_GUARANTEE',
+        adminId: req.auth.uid,
+        action: 'SET_GUARANTEE',
         targetUserId: req.params.uniqueId,
-        details:      `Guaranteed: ${body.giftId}`,
-        createdAt:    now(),
+        details: `Guaranteed: ${body.giftId}`,
+        createdAt: now(),
       }),
     ]);
 
@@ -313,7 +348,10 @@ router.post('/users/:uniqueId/guarantee-next-pull', async (req, res) => {
       coinValue: gift.coinValue ?? gift.coin_value ?? 0,
     });
   } catch (err) {
-    log.error('admin-economy', 'Error setting guarantee', { uid: req.params.uniqueId, error: err.message });
+    log.error('admin-economy', 'Error setting guarantee', {
+      uid: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -327,17 +365,20 @@ router.delete('/users/:uniqueId/guarantee-next-pull', async (req, res) => {
       db.doc(`users/${req.params.uniqueId}`).update({ guaranteedNextPullGiftId: null }),
 
       db.doc(`adminAuditLog/${generateId()}`).set({
-        adminId:      req.auth.uid,
-        action:       'REVOKE_GUARANTEE',
+        adminId: req.auth.uid,
+        action: 'REVOKE_GUARANTEE',
         targetUserId: req.params.uniqueId,
-        details:      null,
-        createdAt:    now(),
+        details: null,
+        createdAt: now(),
       }),
     ]);
 
     res.json({ success: true });
   } catch (err) {
-    log.error('admin-economy', 'Error revoking guarantee', { uid: req.params.uniqueId, error: err.message });
+    log.error('admin-economy', 'Error revoking guarantee', {
+      uid: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });

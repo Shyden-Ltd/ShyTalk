@@ -47,7 +47,7 @@ jest.mock('../../src/utils/firebase', () => ({
     })),
   },
   FieldValue: {
-    increment: jest.fn(n => `increment(${n})`),
+    increment: jest.fn((n) => `increment(${n})`),
     arrayUnion: jest.fn((...args) => `arrayUnion(${args})`),
     arrayRemove: jest.fn((...args) => `arrayRemove(${args})`),
   },
@@ -61,7 +61,11 @@ jest.mock('../../src/utils/helpers', () => ({
   generateId: () => 'tx-gacha-123',
   now: () => 1709913600000,
   todayStr: () => new Date().toISOString().split('T')[0],
-  yesterdayStr: () => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0]; },
+  yesterdayStr: () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  },
 }));
 
 // playStore is imported by economy.js; mock it so it doesn't require real credentials
@@ -110,7 +114,7 @@ function createApp(uniqueId = 'user-A') {
  * 2. user doc
  * 3+ backpack docs (one per unique gift, resolves to non-existent)
  */
-function setupHappyPathMocks({ shyCoins = 500, pullCount = 1 } = {}) {
+function setupHappyPathMocks({ shyCoins = 500, pullCount: _pullCount = 1 } = {}) {
   // The gacha handler calls db.doc().get() in this order:
   //   1. config/economy (loadEconomyConfig)
   //   2. users/{uniqueId}  (user lookup)
@@ -126,7 +130,7 @@ function setupHappyPathMocks({ shyCoins = 500, pullCount = 1 } = {}) {
         exists: true,
         id: 'economy',
         data: () => ({
-          pullCosts: { '1': 10, '10': 100, '100': 1000 },
+          pullCosts: { 1: 10, 10: 100, 100: 1000 },
           broadcastWinThreshold: 5000,
           dropRateExponent: 1.5,
           pitySoftStart: 80,
@@ -158,11 +162,23 @@ function setupHappyPathMocks({ shyCoins = 500, pullCount = 1 } = {}) {
     docs: [
       {
         id: 'gift-rose',
-        data: () => ({ name: 'Rose', coinValue: 10, showOnWheel: true, order: 1, iconUrl: 'rose.png' }),
+        data: () => ({
+          name: 'Rose',
+          coinValue: 10,
+          showOnWheel: true,
+          order: 1,
+          iconUrl: 'rose.png',
+        }),
       },
       {
         id: 'gift-crown',
-        data: () => ({ name: 'Crown', coinValue: 500, showOnWheel: true, order: 2, iconUrl: 'crown.png' }),
+        data: () => ({
+          name: 'Crown',
+          coinValue: 500,
+          showOnWheel: true,
+          order: 2,
+          iconUrl: 'crown.png',
+        }),
       },
     ],
   });
@@ -175,9 +191,7 @@ describe('POST /api/economy/gacha', () => {
 
   test('returns 400 when pullCount is missing', async () => {
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/gacha')
-      .send({});
+    const res = await request(app).post('/api/economy/gacha').send({});
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/pullCount/);
@@ -185,9 +199,7 @@ describe('POST /api/economy/gacha', () => {
 
   test('returns 400 when pullCount is 0', async () => {
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/gacha')
-      .send({ pullCount: 0 });
+    const res = await request(app).post('/api/economy/gacha').send({ pullCount: 0 });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/pullCount/);
@@ -195,9 +207,7 @@ describe('POST /api/economy/gacha', () => {
 
   test('returns 400 when pullCount is 5 (not 1, 10, or 100)', async () => {
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/gacha')
-      .send({ pullCount: 5 });
+    const res = await request(app).post('/api/economy/gacha').send({ pullCount: 5 });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/pullCount/);
@@ -205,9 +215,7 @@ describe('POST /api/economy/gacha', () => {
 
   test('returns 400 when pullCount is a string', async () => {
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/gacha')
-      .send({ pullCount: '10' });
+    const res = await request(app).post('/api/economy/gacha').send({ pullCount: '10' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/pullCount/);
@@ -225,7 +233,7 @@ describe('POST /api/economy/gacha', () => {
           exists: true,
           id: 'economy',
           data: () => ({
-            pullCosts: { '1': 10, '10': 100, '100': 1000 },
+            pullCosts: { 1: 10, 10: 100, 100: 1000 },
           }),
         });
       }
@@ -234,9 +242,7 @@ describe('POST /api/economy/gacha', () => {
     });
 
     const app = createApp('unknown-user');
-    const res = await request(app)
-      .post('/api/economy/gacha')
-      .send({ pullCount: 1 });
+    const res = await request(app).post('/api/economy/gacha').send({ pullCount: 1 });
 
     expect(res.status).toBe(404);
     expect(res.body.error).toMatch(/not found/i);
@@ -252,7 +258,7 @@ describe('POST /api/economy/gacha', () => {
         return Promise.resolve({
           exists: true,
           id: 'economy',
-          data: () => ({ pullCosts: { '1': 10, '10': 100, '100': 1000 } }),
+          data: () => ({ pullCosts: { 1: 10, 10: 100, 100: 1000 } }),
         });
       }
       return Promise.resolve({
@@ -262,9 +268,7 @@ describe('POST /api/economy/gacha', () => {
     });
 
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/gacha')
-      .send({ pullCount: 1 });
+    const res = await request(app).post('/api/economy/gacha').send({ pullCount: 1 });
 
     expect(res.status).toBe(402);
     expect(res.body.error).toMatch(/Insufficient coins/i);
@@ -278,7 +282,7 @@ describe('POST /api/economy/gacha', () => {
         return Promise.resolve({
           exists: true,
           id: 'economy',
-          data: () => ({ pullCosts: { '1': 10, '10': 100, '100': 1000 } }),
+          data: () => ({ pullCosts: { 1: 10, 10: 100, 100: 1000 } }),
         });
       }
       return Promise.resolve({
@@ -288,9 +292,7 @@ describe('POST /api/economy/gacha', () => {
     });
 
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/gacha')
-      .send({ pullCount: 10 });
+    const res = await request(app).post('/api/economy/gacha').send({ pullCount: 10 });
 
     expect(res.status).toBe(402);
     expect(res.body.error).toMatch(/Insufficient coins/i);
@@ -302,9 +304,7 @@ describe('POST /api/economy/gacha', () => {
     setupHappyPathMocks({ shyCoins: 500, pullCount: 1 });
 
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/gacha')
-      .send({ pullCount: 1 });
+    const res = await request(app).post('/api/economy/gacha').send({ pullCount: 1 });
 
     expect(res.status).toBe(200);
     expect(res.body.gifts).toBeDefined();
@@ -319,9 +319,7 @@ describe('POST /api/economy/gacha', () => {
     setupHappyPathMocks({ shyCoins: 5000, pullCount: 10 });
 
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/gacha')
-      .send({ pullCount: 10 });
+    const res = await request(app).post('/api/economy/gacha').send({ pullCount: 10 });
 
     expect(res.status).toBe(200);
     expect(res.body.gifts).toBeDefined();
@@ -333,9 +331,7 @@ describe('POST /api/economy/gacha', () => {
     setupHappyPathMocks({ shyCoins: 10000, pullCount: 100 });
 
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/gacha')
-      .send({ pullCount: 100 });
+    const res = await request(app).post('/api/economy/gacha').send({ pullCount: 100 });
 
     expect(res.status).toBe(200);
     expect(res.body.gifts).toBeDefined();
@@ -349,9 +345,7 @@ describe('POST /api/economy/gacha', () => {
     setupHappyPathMocks({ shyCoins: 500, pullCount: 1 });
 
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/gacha')
-      .send({ pullCount: 1 });
+    const res = await request(app).post('/api/economy/gacha').send({ pullCount: 1 });
 
     expect(res.status).toBe(200);
     // Single pull costs 10 coins; newBalance should be 500 - 10 = 490
@@ -363,9 +357,7 @@ describe('POST /api/economy/gacha', () => {
     setupHappyPathMocks({ shyCoins: 500, pullCount: 10 });
 
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/gacha')
-      .send({ pullCount: 10 });
+    const res = await request(app).post('/api/economy/gacha').send({ pullCount: 10 });
 
     expect(res.status).toBe(200);
     // 10-pull costs 100 coins; newBalance should be 500 - 100 = 400
@@ -377,10 +369,7 @@ describe('POST /api/economy/gacha', () => {
     setupHappyPathMocks({ shyCoins: 500, pullCount: 1 });
 
     const app = createApp('user-A');
-    await request(app)
-      .post('/api/economy/gacha')
-      .send({ pullCount: 1 })
-      .expect(200);
+    await request(app).post('/api/economy/gacha').send({ pullCount: 1 }).expect(200);
 
     // The batch.update call should set shyCoins to 490 (500 - 10)
     expect(mockBatchUpdate).toHaveBeenCalledWith(
@@ -399,7 +388,7 @@ describe('POST /api/economy/gacha', () => {
         return Promise.resolve({
           exists: true,
           id: 'economy',
-          data: () => ({ pullCosts: { '1': 10, '10': 100, '100': 1000 } }),
+          data: () => ({ pullCosts: { 1: 10, 10: 100, 100: 1000 } }),
         });
       }
       return Promise.resolve({ exists: true, data: () => ({ shyCoins: 500 }) });
@@ -423,9 +412,7 @@ describe('POST /api/economy/gacha', () => {
     setupHappyPathMocks({ shyCoins: 500, pullCount: 1 });
 
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/gacha')
-      .send({ pullCount: 1 });
+    const res = await request(app).post('/api/economy/gacha').send({ pullCount: 1 });
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('newPityCounter');

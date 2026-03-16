@@ -32,7 +32,8 @@ router.post('/translate', async (req, res) => {
 
     // Check cache on message doc if messagePath provided
     // Validate messagePath matches expected patterns to prevent path traversal
-    const validMessagePath = messagePath &&
+    const validMessagePath =
+      messagePath &&
       /^(conversations|rooms)\/[a-zA-Z0-9_-]+\/messages\/[a-zA-Z0-9_-]+$/.test(messagePath);
     if (validMessagePath) {
       const msgSnap = await db.doc(messagePath).get();
@@ -50,7 +51,7 @@ router.post('/translate', async (req, res) => {
 
     if (!isSuperShy) {
       const translationDate = userData.translationDate || '';
-      const translationsToday = translationDate === today ? (userData.translationsToday || 0) : 0;
+      const translationsToday = translationDate === today ? userData.translationsToday || 0 : 0;
       if (translationsToday >= FREE_DAILY_LIMIT) {
         return res.status(429).json({
           error: 'Daily translation limit reached',
@@ -73,7 +74,10 @@ router.post('/translate', async (req, res) => {
 
     if (!ltResp.ok) {
       const err = await ltResp.text();
-      log.error('translate', 'LibreTranslate request failed', { status: ltResp.status, error: err });
+      log.error('translate', 'LibreTranslate request failed', {
+        status: ltResp.status,
+        error: err,
+      });
       return res.status(502).json({ error: 'Translation service unavailable' });
     }
 
@@ -83,19 +87,32 @@ router.post('/translate', async (req, res) => {
 
     // Cache translation on message doc
     if (validMessagePath) {
-      db.doc(messagePath).update({
-        [`translations.${targetLang}`]: translatedText,
-      }).catch(err => log.error('translate', 'Failed to cache translation', { messagePath, targetLang, error: err.message }));
+      db.doc(messagePath)
+        .update({
+          [`translations.${targetLang}`]: translatedText,
+        })
+        .catch((err) =>
+          log.error('translate', 'Failed to cache translation', {
+            messagePath,
+            targetLang,
+            error: err.message,
+          }),
+        );
     }
 
     // Increment daily counter (non-SuperShy only)
     if (!isSuperShy) {
-      db.doc(`users/${uniqueId}`).update({
-        translationsToday: userData.translationDate === today
-          ? FieldValue.increment(1)
-          : 1,
-        translationDate: today,
-      }).catch(err => log.error('translate', 'Failed to update translation quota', { userId: uniqueId, error: err.message }));
+      db.doc(`users/${uniqueId}`)
+        .update({
+          translationsToday: userData.translationDate === today ? FieldValue.increment(1) : 1,
+          translationDate: today,
+        })
+        .catch((err) =>
+          log.error('translate', 'Failed to update translation quota', {
+            userId: uniqueId,
+            error: err.message,
+          }),
+        );
     }
 
     res.json({ translatedText, detectedSourceLang, cached: false });
@@ -113,8 +130,8 @@ router.get('/translate/quota', async (req, res) => {
     const userData = userSnap.data() || {};
     const isSuperShy = userData.isSuperShy === true;
     const today = new Date().toISOString().slice(0, 10);
-    const translationsToday = userData.translationDate === today
-      ? (userData.translationsToday || 0) : 0;
+    const translationsToday =
+      userData.translationDate === today ? userData.translationsToday || 0 : 0;
 
     res.json({
       used: translationsToday,
@@ -122,7 +139,10 @@ router.get('/translate/quota', async (req, res) => {
       unlimited: isSuperShy,
     });
   } catch (err) {
-    log.error('translate', 'Failed to check translation quota', { userId: req.auth.uniqueId, error: err.message });
+    log.error('translate', 'Failed to check translation quota', {
+      userId: req.auth.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Failed to check quota' });
   }
 });

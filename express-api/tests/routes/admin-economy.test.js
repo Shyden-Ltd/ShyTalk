@@ -76,72 +76,56 @@ describe('POST /api/users/:uniqueId/luck', () => {
   });
 
   it('should accept valid numeric luckScore', async () => {
-    const res = await request(app)
-      .post('/api/users/user-1/luck')
-      .send({ luckScore: 50 });
+    const res = await request(app).post('/api/users/user-1/luck').send({ luckScore: 50 });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
   });
 
   it('should accept valid string numeric luckScore', async () => {
-    const res = await request(app)
-      .post('/api/users/user-1/luck')
-      .send({ luckScore: '75' });
+    const res = await request(app).post('/api/users/user-1/luck').send({ luckScore: '75' });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
   });
 
   it('should reject NaN luckScore', async () => {
-    const res = await request(app)
-      .post('/api/users/user-1/luck')
-      .send({ luckScore: 'abc' });
+    const res = await request(app).post('/api/users/user-1/luck').send({ luckScore: 'abc' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('luckScore must be a number');
   });
 
   it('should reject NaN pityCounter', async () => {
-    const res = await request(app)
-      .post('/api/users/user-1/luck')
-      .send({ pityCounter: 'invalid' });
+    const res = await request(app).post('/api/users/user-1/luck').send({ pityCounter: 'invalid' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('pityCounter must be a number');
   });
 
   it('should clamp luckScore between 0 and 100', async () => {
-    await request(app)
-      .post('/api/users/user-1/luck')
-      .send({ luckScore: 200 });
+    await request(app).post('/api/users/user-1/luck').send({ luckScore: 200 });
 
     const updateCall = mockDocUpdate.mock.calls[0]?.[0];
     expect(updateCall?.luckScore).toBe(100);
   });
 
   it('should clamp negative luckScore to 0', async () => {
-    await request(app)
-      .post('/api/users/user-1/luck')
-      .send({ luckScore: -50 });
+    await request(app).post('/api/users/user-1/luck').send({ luckScore: -50 });
 
     const updateCall = mockDocUpdate.mock.calls[0]?.[0];
     expect(updateCall?.luckScore).toBe(0);
   });
 
   it('should clamp negative pityCounter to 0', async () => {
-    await request(app)
-      .post('/api/users/user-1/luck')
-      .send({ pityCounter: -10 });
+    await request(app).post('/api/users/user-1/luck').send({ pityCounter: -10 });
 
     const updateCall = mockDocUpdate.mock.calls[0]?.[0];
     expect(updateCall?.pityCounter).toBe(0);
   });
 
   it('should return 400 when no fields provided', async () => {
-    const res = await request(app)
-      .post('/api/users/user-1/luck')
-      .send({});
+    const res = await request(app).post('/api/users/user-1/luck').send({});
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('No fields to update');
@@ -285,13 +269,28 @@ describe('GET /api/users/:uniqueId/transactions', () => {
   it('should return transaction history', async () => {
     mockCollectionGet.mockResolvedValueOnce({
       docs: [
-        { id: 'tx-1', data: () => ({ type: 'ADMIN_ADJUSTMENT', amount: 50, currency: 'COINS', timestamp: 1700000000000 }) },
-        { id: 'tx-2', data: () => ({ type: 'GACHA_PULL', amount: -10, currency: 'COINS', timestamp: 1699900000000 }) },
+        {
+          id: 'tx-1',
+          data: () => ({
+            type: 'ADMIN_ADJUSTMENT',
+            amount: 50,
+            currency: 'COINS',
+            timestamp: 1700000000000,
+          }),
+        },
+        {
+          id: 'tx-2',
+          data: () => ({
+            type: 'GACHA_PULL',
+            amount: -10,
+            currency: 'COINS',
+            timestamp: 1699900000000,
+          }),
+        },
       ],
     });
 
-    const res = await request(app)
-      .get('/api/users/user-1/transactions');
+    const res = await request(app).get('/api/users/user-1/transactions');
 
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
@@ -303,8 +302,7 @@ describe('GET /api/users/:uniqueId/transactions', () => {
   it('should return empty array when no transactions exist', async () => {
     mockCollectionGet.mockResolvedValueOnce({ docs: [] });
 
-    const res = await request(app)
-      .get('/api/users/user-1/transactions');
+    const res = await request(app).get('/api/users/user-1/transactions');
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual([]);
@@ -313,12 +311,19 @@ describe('GET /api/users/:uniqueId/transactions', () => {
   it('should filter by transaction type', async () => {
     mockCollectionGet.mockResolvedValueOnce({
       docs: [
-        { id: 'tx-1', data: () => ({ type: 'ADMIN_ADJUSTMENT', amount: 50, currency: 'COINS', timestamp: 1700000000000 }) },
+        {
+          id: 'tx-1',
+          data: () => ({
+            type: 'ADMIN_ADJUSTMENT',
+            amount: 50,
+            currency: 'COINS',
+            timestamp: 1700000000000,
+          }),
+        },
       ],
     });
 
-    const res = await request(app)
-      .get('/api/users/user-1/transactions?type=ADMIN_ADJUSTMENT');
+    const res = await request(app).get('/api/users/user-1/transactions?type=ADMIN_ADJUSTMENT');
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
@@ -331,8 +336,7 @@ describe('GET /api/users/:uniqueId/transactions', () => {
       ],
     });
 
-    const res = await request(app)
-      .get('/api/users/user-1/transactions?limit=1');
+    const res = await request(app).get('/api/users/user-1/transactions?limit=1');
 
     expect(res.status).toBe(200);
   });
@@ -340,8 +344,7 @@ describe('GET /api/users/:uniqueId/transactions', () => {
   it('should cap limit at 200', async () => {
     mockCollectionGet.mockResolvedValueOnce({ docs: [] });
 
-    const res = await request(app)
-      .get('/api/users/user-1/transactions?limit=9999');
+    const res = await request(app).get('/api/users/user-1/transactions?limit=9999');
 
     expect(res.status).toBe(200);
   });

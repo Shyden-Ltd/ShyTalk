@@ -17,7 +17,8 @@ async function testDataCleanup() {
   let totalDeleted = 0;
 
   for (const colName of collections) {
-    const snap = await db.collection(colName)
+    const snap = await db
+      .collection(colName)
       .where('_testRun', '>=', TEST_PREFIX)
       .where('createdAt', '<', cutoff)
       .limit(500)

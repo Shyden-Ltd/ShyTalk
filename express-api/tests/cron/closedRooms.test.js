@@ -51,12 +51,12 @@ const closedRooms = require('../../src/cron/closedRooms');
 
 // Helper: timestamp more than 7 days ago
 function oldTimestamp() {
-  return Date.now() - (8 * 24 * 60 * 60 * 1000);
+  return Date.now() - 8 * 24 * 60 * 60 * 1000;
 }
 
 // Helper: timestamp less than 7 days ago (recent)
 function recentTimestamp() {
-  return Date.now() - (1 * 24 * 60 * 60 * 1000);
+  return Date.now() - 1 * 24 * 60 * 60 * 1000;
 }
 
 beforeEach(() => {
@@ -139,7 +139,7 @@ describe('closedRooms cron', () => {
 
     // Both subcollections return empty on first call
     mockSubGet
-      .mockResolvedValueOnce({ empty: true, size: 0, docs: [] })  // messages
+      .mockResolvedValueOnce({ empty: true, size: 0, docs: [] }) // messages
       .mockResolvedValueOnce({ empty: true, size: 0, docs: [] }); // seatRequests
 
     await closedRooms();
@@ -166,7 +166,7 @@ describe('closedRooms cron', () => {
 
     // room-error: messages subcollection throws
     mockSubGet
-      .mockRejectedValueOnce(new Error('Firestore error'))  // messages for room-error
+      .mockRejectedValueOnce(new Error('Firestore error')) // messages for room-error
       // room-ok: both subcollections empty
       .mockResolvedValueOnce({ empty: true, size: 0, docs: [] })
       .mockResolvedValueOnce({ empty: true, size: 0, docs: [] });

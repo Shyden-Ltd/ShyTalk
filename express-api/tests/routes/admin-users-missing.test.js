@@ -169,9 +169,7 @@ describe('POST /api/user/:uniqueId/warn', () => {
 
   it('returns 400 when reason is missing', async () => {
     const app = createAdminApp();
-    const res = await request(app)
-      .post('/api/user/10000001/warn')
-      .send({ severity: 2 });
+    const res = await request(app).post('/api/user/10000001/warn').send({ severity: 2 });
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/reason/i);
   });
@@ -243,8 +241,19 @@ describe('GET /api/user/:uniqueId/warnings', () => {
 
   it('returns 200 with warnings and hasMore=false when under limit', async () => {
     const warnDocs = [
-      { id: 'warn-1', data: () => ({ reason: 'Spam', severity: 1, createdAt: 1709913600000, revoked: false }) },
-      { id: 'warn-2', data: () => ({ reason: 'Harassment', severity: 3, createdAt: 1709913500000, revoked: false }) },
+      {
+        id: 'warn-1',
+        data: () => ({ reason: 'Spam', severity: 1, createdAt: 1709913600000, revoked: false }),
+      },
+      {
+        id: 'warn-2',
+        data: () => ({
+          reason: 'Harassment',
+          severity: 3,
+          createdAt: 1709913500000,
+          revoked: false,
+        }),
+      },
     ];
     mockCollectionGet = jest.fn().mockResolvedValue({ docs: warnDocs });
 
@@ -278,8 +287,7 @@ describe('POST /api/user/:uniqueId/warnings/:warningId/revoke', () => {
   it('returns 403 for non-admin', async () => {
     blockAdmin();
     const app = createAdminApp();
-    const res = await request(app)
-      .post('/api/user/10000001/warnings/warn-1/revoke');
+    const res = await request(app).post('/api/user/10000001/warnings/warn-1/revoke');
     expect(res.status).toBe(403);
   });
 
@@ -287,8 +295,7 @@ describe('POST /api/user/:uniqueId/warnings/:warningId/revoke', () => {
     getDoc.mockResolvedValueOnce(null); // warning doc not found
 
     const app = createAdminApp();
-    const res = await request(app)
-      .post('/api/user/10000001/warnings/warn-999/revoke');
+    const res = await request(app).post('/api/user/10000001/warnings/warn-999/revoke');
     expect(res.status).toBe(404);
     expect(res.body.error).toMatch(/warning not found/i);
   });
@@ -301,8 +308,7 @@ describe('POST /api/user/:uniqueId/warnings/:warningId/revoke', () => {
     });
 
     const app = createAdminApp();
-    const res = await request(app)
-      .post('/api/user/10000001/warnings/warn-1/revoke');
+    const res = await request(app).post('/api/user/10000001/warnings/warn-1/revoke');
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/already revoked/i);
   });
@@ -322,8 +328,7 @@ describe('POST /api/user/:uniqueId/warnings/:warningId/revoke', () => {
     });
 
     const app = createAdminApp();
-    const res = await request(app)
-      .post('/api/user/10000001/warnings/warn-1/revoke');
+    const res = await request(app).post('/api/user/10000001/warnings/warn-1/revoke');
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -333,12 +338,12 @@ describe('POST /api/user/:uniqueId/warnings/:warningId/revoke', () => {
     // Warning should be marked revoked
     expect(mockDocUpdate).toHaveBeenCalledWith(
       'users/10000001/warnings/warn-1',
-      expect.objectContaining({ revoked: true, revokedBy: 'admin-uid' })
+      expect.objectContaining({ revoked: true, revokedBy: 'admin-uid' }),
     );
     // User GCS should be restored
     expect(mockDocUpdate).toHaveBeenCalledWith(
       'users/10000001',
-      expect.objectContaining({ gcsScore: 90, warningCount: 1 })
+      expect.objectContaining({ gcsScore: 90, warningCount: 1 }),
     );
   });
 });
@@ -349,15 +354,13 @@ describe('POST /api/user/:uniqueId/reset-gcs', () => {
   it('returns 403 for non-admin', async () => {
     blockAdmin();
     const app = createAdminApp();
-    const res = await request(app)
-      .post('/api/user/10000001/reset-gcs');
+    const res = await request(app).post('/api/user/10000001/reset-gcs');
     expect(res.status).toBe(403);
   });
 
   it('returns 200 and resets GCS to 100 with cleared warning fields', async () => {
     const app = createAdminApp();
-    const res = await request(app)
-      .post('/api/user/10000001/reset-gcs');
+    const res = await request(app).post('/api/user/10000001/reset-gcs');
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -372,22 +375,20 @@ describe('POST /api/user/:uniqueId/reset-gcs', () => {
         hasNewWarning: false,
         warningReason: null,
         warningIssuedAt: null,
-      })
+      }),
     );
   });
 
   it('creates an audit log entry on GCS reset', async () => {
     const app = createAdminApp();
-    await request(app)
-      .post('/api/user/10000001/reset-gcs')
-      .expect(200);
+    await request(app).post('/api/user/10000001/reset-gcs').expect(200);
 
     expect(mockDocSet).toHaveBeenCalledWith(
       'adminAuditLog/warn-id',
       expect.objectContaining({
         action: 'RESET_GCS',
         targetUserId: '10000001',
-      })
+      }),
     );
   });
 });
@@ -413,11 +414,7 @@ describe('GET /api/user/:uniqueId/stalkers', () => {
 
   it('returns 200 with stalker IDs and count when stalkers exist', async () => {
     mockCollectionGet = jest.fn().mockResolvedValue({
-      docs: [
-        { id: 'stalker-A' },
-        { id: 'stalker-B' },
-        { id: 'stalker-C' },
-      ],
+      docs: [{ id: 'stalker-A' }, { id: 'stalker-B' }, { id: 'stalker-C' }],
     });
 
     const app = createAdminApp();

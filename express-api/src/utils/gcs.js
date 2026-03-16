@@ -6,7 +6,7 @@
  */
 
 function computeDisplayScore(floor, lastDeductionMs) {
-  if (floor == null || floor >= 100) return 100;
+  if (floor === null || floor === undefined || floor >= 100) return 100;
   if (!lastDeductionMs) return floor;
 
   const monthsSince = (Date.now() - lastDeductionMs) / (30 * 24 * 60 * 60 * 1000);

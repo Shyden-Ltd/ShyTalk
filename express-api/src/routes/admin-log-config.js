@@ -15,8 +15,8 @@ const DEFAULT_CONFIG = {
   retentionHours: 48,
   levelPerSource: {
     'express-api': 'INFO',
-    'android': 'INFO',
-    'ios': 'INFO',
+    android: 'INFO',
+    ios: 'INFO',
     'admin-panel': 'INFO',
     'landing-page': 'WARN',
   },

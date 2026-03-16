@@ -10,7 +10,12 @@ jest.mock('../../src/utils/r2', () => ({
 
 jest.mock('../../src/utils/helpers', () => ({
   getExtension: jest.fn((mime) => {
-    const map = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
+    const map = {
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+      'image/gif': 'gif',
+    };
     return map[mime] || 'bin';
   }),
 }));
@@ -50,7 +55,10 @@ describe('POST /api/storage/upload', () => {
     const res = await request(app)
       .post('/api/storage/upload')
       .field('path', 'profiles')
-      .attach('file', Buffer.from('fake-image'), { filename: 'photo.jpg', contentType: 'image/jpeg' });
+      .attach('file', Buffer.from('fake-image'), {
+        filename: 'photo.jpg',
+        contentType: 'image/jpeg',
+      });
 
     expect(res.status).toBe(200);
     expect(res.body.url).toBeDefined();
@@ -72,7 +80,10 @@ describe('POST /api/storage/upload', () => {
     const res = await request(app)
       .post('/api/storage/upload')
       .field('path', 'messages')
-      .attach('file', Buffer.from('fake-webp'), { filename: 'photo.webp', contentType: 'image/webp' });
+      .attach('file', Buffer.from('fake-webp'), {
+        filename: 'photo.webp',
+        contentType: 'image/webp',
+      });
 
     expect(res.status).toBe(200);
   });
@@ -82,7 +93,10 @@ describe('POST /api/storage/upload', () => {
     const res = await request(app)
       .post('/api/storage/upload')
       .field('path', 'profiles')
-      .attach('file', Buffer.from('<script>alert(1)</script>'), { filename: 'evil.html', contentType: 'text/html' });
+      .attach('file', Buffer.from('<script>alert(1)</script>'), {
+        filename: 'evil.html',
+        contentType: 'text/html',
+      });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/Only image uploads/);
@@ -94,7 +108,10 @@ describe('POST /api/storage/upload', () => {
     const res = await request(app)
       .post('/api/storage/upload')
       .field('path', 'profiles')
-      .attach('file', Buffer.from('<svg onload="alert(1)">'), { filename: 'evil.svg', contentType: 'image/svg+xml' });
+      .attach('file', Buffer.from('<svg onload="alert(1)">'), {
+        filename: 'evil.svg',
+        contentType: 'image/svg+xml',
+      });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/Only image uploads/);
@@ -105,7 +122,10 @@ describe('POST /api/storage/upload', () => {
     const res = await request(app)
       .post('/api/storage/upload')
       .field('path', 'profiles')
-      .attach('file', Buffer.from('fake-pdf'), { filename: 'doc.pdf', contentType: 'application/pdf' });
+      .attach('file', Buffer.from('fake-pdf'), {
+        filename: 'doc.pdf',
+        contentType: 'application/pdf',
+      });
 
     expect(res.status).toBe(400);
   });
@@ -123,9 +143,7 @@ describe('POST /api/storage/upload', () => {
 
   test('returns 400 when file is missing', async () => {
     const app = createApp();
-    const res = await request(app)
-      .post('/api/storage/upload')
-      .field('path', 'profiles');
+    const res = await request(app).post('/api/storage/upload').field('path', 'profiles');
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/Missing file or path/);

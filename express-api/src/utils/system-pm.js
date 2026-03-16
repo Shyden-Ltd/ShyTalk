@@ -34,7 +34,9 @@ async function sendSystemPm(recipientUid, text) {
   const convData = {
     id: convId,
     isGroup: false,
-    participantIds: convSnap.exists ? (convSnap.data().participantIds || [recipientUid, SYSTEM_UID]) : [recipientUid, SYSTEM_UID],
+    participantIds: convSnap.exists
+      ? convSnap.data().participantIds || [recipientUid, SYSTEM_UID]
+      : [recipientUid, SYSTEM_UID],
     lastMessage: {
       text,
       senderId: SYSTEM_UID,
@@ -58,19 +60,24 @@ async function sendSystemPm(recipientUid, text) {
   });
 
   const settingsPath = `conversations/${convId}/userSettings/${recipientUid}`;
-  await db.doc(settingsPath).set({
-    userId: recipientUid,
-    conversationId: convId,
-    unreadCount: FieldValue.increment(1),
-    isHidden: false,
-  }, { merge: true });
+  await db.doc(settingsPath).set(
+    {
+      userId: recipientUid,
+      conversationId: convId,
+      unreadCount: FieldValue.increment(1),
+      isHidden: false,
+    },
+    { merge: true },
+  );
 
   try {
     await rtdb.ref(`conversations/${convId}/events/lastEvent`).set({
       type: 'new_message',
       ts: Date.now(),
     });
-  } catch (err) { log.warn('system-pm', 'Failed to write RTDB event', { convId, error: err.message }); }
+  } catch (err) {
+    log.warn('system-pm', 'Failed to write RTDB event', { convId, error: err.message });
+  }
 }
 
 module.exports = { sendSystemPm, SYSTEM_UID, systemConversationId };

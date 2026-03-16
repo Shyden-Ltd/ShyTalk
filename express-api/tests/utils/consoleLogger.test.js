@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 const mockLog = jest.fn();
 
 jest.mock('../../src/utils/loggerInstance', () => ({
@@ -34,7 +35,7 @@ describe('patchConsole', () => {
         level: 'ERROR',
         source: 'express-api',
         message: expect.stringContaining('Something failed:'),
-      })
+      }),
     );
   });
 
@@ -45,7 +46,7 @@ describe('patchConsole', () => {
         level: 'INFO',
         source: 'cron',
         message: expect.stringContaining('[CRON] archiveReports'),
-      })
+      }),
     );
   });
 
@@ -55,7 +56,7 @@ describe('patchConsole', () => {
       expect.objectContaining({
         level: 'WARN',
         source: 'express-api',
-      })
+      }),
     );
   });
 
@@ -64,12 +65,14 @@ describe('patchConsole', () => {
     expect(mockLog).toHaveBeenCalledWith(
       expect.objectContaining({
         source: 'admin',
-      })
+      }),
     );
   });
 
   test('never throws even if logger fails', () => {
-    mockLog.mockImplementation(() => { throw new Error('boom'); });
+    mockLog.mockImplementation(() => {
+      throw new Error('boom');
+    });
     expect(() => console.error('test')).not.toThrow();
   });
 

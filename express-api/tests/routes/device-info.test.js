@@ -43,12 +43,13 @@ beforeEach(() => {
   // Default: successful geo response
   global.fetch = jest.fn().mockResolvedValue({
     ok: true,
-    json: () => Promise.resolve({
-      isp: 'BT',
-      as: 'AS2856 British Telecommunications PLC',
-      country: 'United Kingdom',
-      regionName: 'England',
-    }),
+    json: () =>
+      Promise.resolve({
+        isp: 'BT',
+        as: 'AS2856 British Telecommunications PLC',
+        country: 'United Kingdom',
+        regionName: 'England',
+      }),
   });
 });
 
@@ -139,10 +140,7 @@ describe('POST /api/device-info', () => {
 
     const app = createApp();
 
-    const res = await request(app)
-      .post('/api/device-info')
-      .send(validBody)
-      .expect(200);
+    const res = await request(app).post('/api/device-info').send(validBody).expect(200);
 
     expect(res.body.banStatus.isBanned).toBe(false);
     expect(res.body.banStatus.banType).toBeNull();
@@ -170,10 +168,7 @@ describe('POST /api/device-info', () => {
 
     const app = createApp();
 
-    const res = await request(app)
-      .post('/api/device-info')
-      .send(validBody)
-      .expect(200);
+    const res = await request(app).post('/api/device-info').send(validBody).expect(200);
 
     expect(res.body.banStatus.isBanned).toBe(true);
     expect(res.body.banStatus.banType).toBe('device');
@@ -247,10 +242,7 @@ describe('POST /api/device-info', () => {
 
     const app = createApp();
 
-    const res = await request(app)
-      .post('/api/device-info')
-      .send(validBody)
-      .expect(200);
+    const res = await request(app).post('/api/device-info').send(validBody).expect(200);
 
     expect(res.body.banStatus.isBanned).toBe(false);
   });
@@ -260,10 +252,7 @@ describe('POST /api/device-info', () => {
 
     const app = createApp();
 
-    const res = await request(app)
-      .post('/api/device-info')
-      .send(validBody)
-      .expect(200);
+    const res = await request(app).post('/api/device-info').send(validBody).expect(200);
 
     expect(res.body.success).toBe(true);
     // Geo fields should be null
@@ -284,10 +273,7 @@ describe('POST /api/device-info', () => {
 
     const app = createApp();
 
-    await request(app)
-      .post('/api/device-info')
-      .send(validBody)
-      .expect(200);
+    await request(app).post('/api/device-info').send(validBody).expect(200);
 
     const firstCallDoc = mockSet.mock.calls[0][0];
     expect(firstCallDoc).toHaveProperty('firstSeen');
@@ -297,17 +283,15 @@ describe('POST /api/device-info', () => {
     jest.clearAllMocks();
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ isp: 'BT', as: 'AS2856 BT', country: 'UK', regionName: 'England' }),
+      json: () =>
+        Promise.resolve({ isp: 'BT', as: 'AS2856 BT', country: 'UK', regionName: 'England' }),
     });
 
     // Second request: doc exists — should NOT include firstSeen
     mockDocGet.mockResolvedValue({ exists: true, data: () => ({}) });
     mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
 
-    await request(app)
-      .post('/api/device-info')
-      .send(validBody)
-      .expect(200);
+    await request(app).post('/api/device-info').send(validBody).expect(200);
 
     const secondCallDoc = mockSet.mock.calls[0][0];
     expect(secondCallDoc).not.toHaveProperty('firstSeen');

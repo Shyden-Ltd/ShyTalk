@@ -11,12 +11,14 @@
  *   - Falls back to source "express-api"
  */
 
+/* eslint-disable no-console */
+
 const logger = require('./loggerInstance');
 
 const LEVEL_MAP = {
-  log:   'INFO',
-  info:  'INFO',
-  warn:  'WARN',
+  log: 'INFO',
+  info: 'INFO',
+  warn: 'WARN',
   error: 'ERROR',
 };
 
@@ -36,9 +38,9 @@ function detectSource(message) {
 
 function patchConsole() {
   const originalConsole = {
-    log:   console.log.bind(console),
-    info:  console.info.bind(console),
-    warn:  console.warn.bind(console),
+    log: console.log.bind(console),
+    info: console.info.bind(console),
+    warn: console.warn.bind(console),
     error: console.error.bind(console),
   };
 
@@ -49,9 +51,7 @@ function patchConsole() {
 
       // Also send to structured logger
       try {
-        const message = args
-          .map(a => (typeof a === 'string' ? a : JSON.stringify(a)))
-          .join(' ');
+        const message = args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
 
         logger.log({
           level,

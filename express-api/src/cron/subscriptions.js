@@ -11,7 +11,8 @@ const log = require('../utils/log');
 async function subscriptions() {
   const timestamp = Date.now();
 
-  const snapshot = await db.collection('users')
+  const snapshot = await db
+    .collection('users')
     .where('isSuperShy', '==', true)
     .where('superShyExpiry', '<=', timestamp)
     .limit(500)
@@ -21,8 +22,8 @@ async function subscriptions() {
 
   // Filter out lifetime subscribers client-side
   const toExpire = snapshot.docs
-    .map(d => ({ id: d.id, ...d.data() }))
-    .filter(u => u.superShyTier !== 'lifetime');
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((u) => u.superShyTier !== 'lifetime');
 
   if (toExpire.length === 0) return;
 

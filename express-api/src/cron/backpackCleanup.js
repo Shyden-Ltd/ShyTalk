@@ -12,7 +12,8 @@ async function backpackCleanup() {
   const timestamp = Date.now();
 
   // Single collection group query instead of reading all users + their backpacks
-  const snapshot = await db.collectionGroup('backpack')
+  const snapshot = await db
+    .collectionGroup('backpack')
     .where('expiresAt', '<=', timestamp)
     .limit(500)
     .get();

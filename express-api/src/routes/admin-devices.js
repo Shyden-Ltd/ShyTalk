@@ -25,11 +25,11 @@ router.get('/admin/devices', async (req, res) => {
     const offset = Math.max(parseInt(req.query.offset) || 0, 0);
 
     const snap = await db.collection('deviceBindings').get();
-    let devices = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    let devices = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
     // In-memory search (Firestore doesn't support full-text search)
     if (searchQuery) {
-      devices = devices.filter(device => {
+      devices = devices.filter((device) => {
         const searchable = [
           device.id,
           device.uniqueId,
@@ -39,7 +39,7 @@ router.get('/admin/devices', async (req, res) => {
           device.isp,
         ]
           .filter(Boolean)
-          .map(v => String(v).toLowerCase())
+          .map((v) => String(v).toLowerCase())
           .join(' ');
         return searchable.includes(searchQuery);
       });
@@ -64,11 +64,14 @@ router.get('/admin/devices/user/:uniqueId', async (req, res) => {
     const uniqueId = req.params.uniqueId;
     const snap = await db.collection('deviceBindings').where('uniqueId', '==', uniqueId).get();
 
-    const devices = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const devices = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
     res.json({ devices });
   } catch (err) {
-    log.error('admin-devices', 'Error fetching devices for user', { uniqueId: req.params.uniqueId, error: err.message });
+    log.error('admin-devices', 'Error fetching devices for user', {
+      uniqueId: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -88,7 +91,10 @@ router.get('/admin/devices/:deviceId', async (req, res) => {
 
     res.json({ id: snap.id, ...snap.data() });
   } catch (err) {
-    log.error('admin-devices', 'Error fetching device binding', { deviceId: req.params.deviceId, error: err.message });
+    log.error('admin-devices', 'Error fetching device binding', {
+      deviceId: req.params.deviceId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -121,12 +127,22 @@ router.delete('/admin/devices/:deviceId', async (req, res) => {
 
     // Send system PM to the bound user (non-blocking)
     if (deviceData.uniqueId) {
-      try { await sendSystemPm(deviceData.uniqueId, 'Your device binding has been reset by a moderator.'); } catch (e) { log.warn('system-pm', 'Failed to send', { error: e.message }); }
+      try {
+        await sendSystemPm(
+          deviceData.uniqueId,
+          'Your device binding has been reset by a moderator.',
+        );
+      } catch (e) {
+        log.warn('system-pm', 'Failed to send', { error: e.message });
+      }
     }
 
     res.json({ success: true });
   } catch (err) {
-    log.error('admin-devices', 'Error unbinding device', { deviceId: req.params.deviceId, error: err.message });
+    log.error('admin-devices', 'Error unbinding device', {
+      deviceId: req.params.deviceId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });

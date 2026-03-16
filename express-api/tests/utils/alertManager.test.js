@@ -1,18 +1,18 @@
 const { createAlertManager } = require('../../src/utils/alertManager');
 
-function createMockDb(configData = null, userData = null) {
+function createMockDb(_configData = null, _userData = null) {
   const setFn = jest.fn().mockResolvedValue(undefined);
   const getFn = jest.fn().mockImplementation(() => {
     // Default: return config doc
     return Promise.resolve({ exists: false });
   });
 
-  const docFn = jest.fn().mockImplementation((docId) => ({
+  const docFn = jest.fn().mockImplementation((_docId) => ({
     set: setFn,
     get: getFn,
   }));
 
-  const collectionFn = jest.fn().mockImplementation((name) => ({
+  const collectionFn = jest.fn().mockImplementation((_name) => ({
     doc: docFn,
   }));
 
@@ -40,15 +40,15 @@ function createMockMessaging() {
 }
 
 describe('alertManager', () => {
-  let db, messaging, setFn, getFn, collectionFn, docFn, getResponses;
+  let db, messaging, setFn, _getFn, collectionFn, _docFn, getResponses;
 
   beforeEach(() => {
     const mocks = createMockDb();
     db = mocks.db;
     setFn = mocks.setFn;
-    getFn = mocks.getFn;
+    _getFn = mocks.getFn;
     collectionFn = mocks.collectionFn;
-    docFn = mocks.docFn;
+    _docFn = mocks.docFn;
     getResponses = mocks.getResponses;
     messaging = createMockMessaging();
   });
@@ -67,7 +67,9 @@ describe('alertManager', () => {
       });
 
       const manager = createAlertManager(db, messaging);
-      await manager.createAlert('error_spike', 'critical', 'Test Alert', 'Something broke', { route: '/api/test' });
+      await manager.createAlert('error_spike', 'critical', 'Test Alert', 'Something broke', {
+        route: '/api/test',
+      });
 
       // Should write alert doc
       expect(collectionFn).toHaveBeenCalledWith('alerts');
@@ -111,9 +113,7 @@ describe('alertManager', () => {
       const manager = createAlertManager(db, messaging);
 
       // Should not throw
-      await expect(
-        manager.createAlert('test', 'info', 'Title', 'Body')
-      ).resolves.toBeUndefined();
+      await expect(manager.createAlert('test', 'info', 'Title', 'Body')).resolves.toBeUndefined();
 
       // Alert doc should still be written
       expect(setFn).toHaveBeenCalledTimes(1);
@@ -133,12 +133,8 @@ describe('alertManager', () => {
       await manager.createAlert('test', 'info', 'Title', 'Body');
 
       expect(messaging.send).toHaveBeenCalledTimes(2);
-      expect(messaging.send).toHaveBeenCalledWith(
-        expect.objectContaining({ token: 'token1' })
-      );
-      expect(messaging.send).toHaveBeenCalledWith(
-        expect.objectContaining({ token: 'token2' })
-      );
+      expect(messaging.send).toHaveBeenCalledWith(expect.objectContaining({ token: 'token1' }));
+      expect(messaging.send).toHaveBeenCalledWith(expect.objectContaining({ token: 'token2' }));
     });
   });
 
@@ -147,7 +143,11 @@ describe('alertManager', () => {
       // Config: threshold=3 for easier testing
       getResponses.push({
         exists: true,
-        data: () => ({ errorSpikeThreshold: 3, errorSpikeWindowMinutes: 5, fcmRecipientUserIds: [] }),
+        data: () => ({
+          errorSpikeThreshold: 3,
+          errorSpikeWindowMinutes: 5,
+          fcmRecipientUserIds: [],
+        }),
       });
       // Need config for each subsequent call too (cached after first)
 
@@ -169,7 +169,11 @@ describe('alertManager', () => {
     test('deduplicates within window', async () => {
       getResponses.push({
         exists: true,
-        data: () => ({ errorSpikeThreshold: 2, errorSpikeWindowMinutes: 5, fcmRecipientUserIds: [] }),
+        data: () => ({
+          errorSpikeThreshold: 2,
+          errorSpikeWindowMinutes: 5,
+          fcmRecipientUserIds: [],
+        }),
       });
 
       const manager = createAlertManager(db, messaging);

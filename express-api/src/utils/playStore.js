@@ -46,7 +46,9 @@ async function verifyProductPurchase(packageName, productId, token) {
   if (!resp.ok) {
     const text = await resp.text();
     log.warn('playStore', 'Product purchase verification failed', {
-      status: resp.status, productId, response: text,
+      status: resp.status,
+      productId,
+      response: text,
     });
     throw new Error(`Google Play API returned ${resp.status}: ${text}`);
   }
@@ -55,14 +57,16 @@ async function verifyProductPurchase(packageName, productId, token) {
 
   if (data.purchaseState !== 0) {
     log.warn('playStore', 'Purchase not in purchased state', {
-      productId, purchaseState: data.purchaseState,
+      productId,
+      purchaseState: data.purchaseState,
     });
     throw new Error(`Purchase not in purchased state (purchaseState=${data.purchaseState})`);
   }
 
   if (data.consumptionState === 1) {
     log.warn('playStore', 'Purchase already consumed', {
-      productId, orderId: data.orderId,
+      productId,
+      orderId: data.orderId,
     });
     throw new Error('Purchase already consumed');
   }
@@ -90,7 +94,9 @@ async function verifySubscription(packageName, subscriptionId, token) {
   if (!resp.ok) {
     const text = await resp.text();
     log.warn('playStore', 'Subscription verification failed', {
-      status: resp.status, subscriptionId, response: text,
+      status: resp.status,
+      subscriptionId,
+      response: text,
     });
     throw new Error(`Google Play API returned ${resp.status}: ${text}`);
   }

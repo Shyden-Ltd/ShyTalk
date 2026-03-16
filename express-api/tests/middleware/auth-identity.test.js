@@ -61,24 +61,14 @@ function createApp() {
   router.use(authMiddleware);
 
   // Dummy routes for testing — capture req.auth
-  router.get('/users/:uniqueId', (req, res) =>
-    res.json({ ok: true, auth: req.auth }),
-  );
-  router.post('/users', (req, res) =>
-    res.json({ ok: true, auth: req.auth }),
-  );
-  router.post('/users/sign-in', (req, res) =>
-    res.json({ ok: true, auth: req.auth }),
-  );
-  router.post('/users/:uniqueId/appeal', (req, res) =>
-    res.json({ ok: true, auth: req.auth }),
-  );
+  router.get('/users/:uniqueId', (req, res) => res.json({ ok: true, auth: req.auth }));
+  router.post('/users', (req, res) => res.json({ ok: true, auth: req.auth }));
+  router.post('/users/sign-in', (req, res) => res.json({ ok: true, auth: req.auth }));
+  router.post('/users/:uniqueId/appeal', (req, res) => res.json({ ok: true, auth: req.auth }));
   router.post('/users/:uniqueId/lift-suspension', (req, res) =>
     res.json({ ok: true, auth: req.auth }),
   );
-  router.post('/users/:uniqueId/follow', (req, res) =>
-    res.json({ ok: true, auth: req.auth }),
-  );
+  router.post('/users/:uniqueId/follow', (req, res) => res.json({ ok: true, auth: req.auth }));
 
   app.use('/api', router);
   return app;

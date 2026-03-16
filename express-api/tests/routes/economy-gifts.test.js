@@ -54,7 +54,7 @@ jest.mock('../../src/utils/firebase', () => ({
     runTransaction: mockRunTransaction,
   },
   FieldValue: {
-    increment: jest.fn(n => `increment(${n})`),
+    increment: jest.fn((n) => `increment(${n})`),
     arrayUnion: jest.fn((...args) => `arrayUnion(${args})`),
     arrayRemove: jest.fn((...args) => `arrayRemove(${args})`),
   },
@@ -68,7 +68,11 @@ jest.mock('../../src/utils/helpers', () => ({
   generateId: () => 'tx-gift-123',
   now: () => 1709913600000,
   todayStr: () => new Date().toISOString().split('T')[0],
-  yesterdayStr: () => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0]; },
+  yesterdayStr: () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  },
 }));
 
 // playStore is imported by economy.js; mock it so it doesn't require real credentials
@@ -128,7 +132,7 @@ const ECONOMY_CONFIG_DOC = {
   exists: true,
   id: 'economy',
   data: () => ({
-    pullCosts: { '1': 10, '10': 100, '100': 1000 },
+    pullCosts: { 1: 10, 10: 100, 100: 1000 },
     beanConversionRate: 0.6,
     broadcastSendThreshold: 5000,
     broadcastWinThreshold: 5000,
@@ -183,9 +187,7 @@ describe('POST /api/economy/gift', () => {
 
   test('returns 400 when recipientId is missing', async () => {
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/gift')
-      .send({ giftId: 'gift-rose' });
+    const res = await request(app).post('/api/economy/gift').send({ giftId: 'gift-rose' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/recipientId/i);
@@ -193,9 +195,7 @@ describe('POST /api/economy/gift', () => {
 
   test('returns 400 when giftId is missing', async () => {
     const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/economy/gift')
-      .send({ recipientId: 'user-B' });
+    const res = await request(app).post('/api/economy/gift').send({ recipientId: 'user-B' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/giftId/i);
@@ -206,9 +206,9 @@ describe('POST /api/economy/gift', () => {
   test('returns 404 when gift not found', async () => {
     // gift not found, backpack present, sender present, recipient present
     mockDocGet
-      .mockResolvedValueOnce({ exists: false })             // gift
-      .mockResolvedValueOnce(makeBackpackDoc(5))            // backpack
-      .mockResolvedValueOnce(makeUserDoc())                 // sender
+      .mockResolvedValueOnce({ exists: false }) // gift
+      .mockResolvedValueOnce(makeBackpackDoc(5)) // backpack
+      .mockResolvedValueOnce(makeUserDoc()) // sender
       .mockResolvedValueOnce(makeUserDoc({ displayName: 'Bob' })); // recipient
 
     const app = createApp('user-A');
@@ -223,9 +223,9 @@ describe('POST /api/economy/gift', () => {
   test('returns 402 when backpack quantity is insufficient', async () => {
     // gift found, backpack has only 1 item, sender found, recipient found
     mockDocGet
-      .mockResolvedValueOnce(makeGiftDoc())        // gift
-      .mockResolvedValueOnce(makeBackpackDoc(1))   // backpack (qty=1)
-      .mockResolvedValueOnce(makeUserDoc())        // sender
+      .mockResolvedValueOnce(makeGiftDoc()) // gift
+      .mockResolvedValueOnce(makeBackpackDoc(1)) // backpack (qty=1)
+      .mockResolvedValueOnce(makeUserDoc()) // sender
       .mockResolvedValueOnce(makeUserDoc({ displayName: 'Bob' })); // recipient
 
     const app = createApp('user-A');
@@ -240,10 +240,10 @@ describe('POST /api/economy/gift', () => {
   test('returns 404 when recipient not found', async () => {
     // gift found, backpack ok, sender found, recipient NOT found
     mockDocGet
-      .mockResolvedValueOnce(makeGiftDoc())           // gift
-      .mockResolvedValueOnce(makeBackpackDoc(10))     // backpack
-      .mockResolvedValueOnce(makeUserDoc())           // sender
-      .mockResolvedValueOnce({ exists: false });       // recipient not found
+      .mockResolvedValueOnce(makeGiftDoc()) // gift
+      .mockResolvedValueOnce(makeBackpackDoc(10)) // backpack
+      .mockResolvedValueOnce(makeUserDoc()) // sender
+      .mockResolvedValueOnce({ exists: false }); // recipient not found
 
     const app = createApp('user-A');
     const res = await request(app)
@@ -259,10 +259,10 @@ describe('POST /api/economy/gift', () => {
   test('returns 200 and decrements backpack on success', async () => {
     // gift found, backpack has 5, sender found, recipient found
     mockDocGet
-      .mockResolvedValueOnce(makeGiftDoc())                       // gift
-      .mockResolvedValueOnce(makeBackpackDoc(5))                  // backpack
-      .mockResolvedValueOnce(makeUserDoc())                       // sender
-      .mockResolvedValueOnce(makeUserDoc({ displayName: 'Bob' }))// recipient
+      .mockResolvedValueOnce(makeGiftDoc()) // gift
+      .mockResolvedValueOnce(makeBackpackDoc(5)) // backpack
+      .mockResolvedValueOnce(makeUserDoc()) // sender
+      .mockResolvedValueOnce(makeUserDoc({ displayName: 'Bob' })) // recipient
       // config/economy (called by loadEconomyConfig)
       .mockResolvedValueOnce(ECONOMY_CONFIG_DOC)
       // giftWall get (updateGiftWall)
@@ -303,8 +303,8 @@ describe('POST /api/economy/gift-direct', () => {
   test('returns 402 when sender has insufficient coins', async () => {
     // gift costs 100 coins, sender has only 50
     mockDocGet
-      .mockResolvedValueOnce(makeGiftDoc({ coinValue: 100 }))   // gift
-      .mockResolvedValueOnce(makeUserDoc({ shyCoins: 50 }))     // sender
+      .mockResolvedValueOnce(makeGiftDoc({ coinValue: 100 })) // gift
+      .mockResolvedValueOnce(makeUserDoc({ shyCoins: 50 })) // sender
       .mockResolvedValueOnce(makeUserDoc({ displayName: 'Bob' })); // recipient
 
     const app = createApp('user-A');
@@ -321,8 +321,8 @@ describe('POST /api/economy/gift-direct', () => {
   test('returns 200 and deducts coins on success', async () => {
     // gift costs 10 coins, sender has 500 coins
     mockDocGet
-      .mockResolvedValueOnce(makeGiftDoc({ coinValue: 10 }))    // gift
-      .mockResolvedValueOnce(makeUserDoc({ shyCoins: 500 }))    // sender
+      .mockResolvedValueOnce(makeGiftDoc({ coinValue: 10 })) // gift
+      .mockResolvedValueOnce(makeUserDoc({ shyCoins: 500 })) // sender
       .mockResolvedValueOnce(makeUserDoc({ displayName: 'Bob' })) // recipient
       // loadEconomyConfig
       .mockResolvedValueOnce(ECONOMY_CONFIG_DOC)
@@ -387,13 +387,18 @@ describe('POST /api/economy/gift-batch', () => {
     // gift costs 100 coins each, 3 recipients → 300 total, sender has only 50
     // The handler returns 402 after loading gift + sender, before fetching recipients
     mockDocGet
-      .mockResolvedValueOnce(makeGiftDoc({ coinValue: 100 }))    // gift
-      .mockResolvedValueOnce(makeUserDoc({ shyCoins: 50 }));     // sender (50 < 300 → 402)
+      .mockResolvedValueOnce(makeGiftDoc({ coinValue: 100 })) // gift
+      .mockResolvedValueOnce(makeUserDoc({ shyCoins: 50 })); // sender (50 < 300 → 402)
 
     const app = createApp('user-A');
     const res = await request(app)
       .post('/api/economy/gift-batch')
-      .send({ recipientIds: ['user-B', 'user-C', 'user-D'], giftId: 'gift-rose', quantity: 1, fromBackpack: false });
+      .send({
+        recipientIds: ['user-B', 'user-C', 'user-D'],
+        giftId: 'gift-rose',
+        quantity: 1,
+        fromBackpack: false,
+      });
 
     expect(res.status).toBe(402);
     expect(res.body.error).toMatch(/insufficient coins/i);
@@ -404,8 +409,8 @@ describe('POST /api/economy/gift-batch', () => {
   test('returns 200 with correct recipientCount on success', async () => {
     // gift costs 10 coins each, 2 recipients → 20 total, sender has 500
     mockDocGet
-      .mockResolvedValueOnce(makeGiftDoc({ coinValue: 10 }))      // gift
-      .mockResolvedValueOnce(makeUserDoc({ shyCoins: 500 }))      // sender
+      .mockResolvedValueOnce(makeGiftDoc({ coinValue: 10 })) // gift
+      .mockResolvedValueOnce(makeUserDoc({ shyCoins: 500 })) // sender
       // recipient existence checks (2 users via Promise.all)
       .mockResolvedValueOnce(makeUserDoc({ displayName: 'Bob' }))
       .mockResolvedValueOnce(makeUserDoc({ displayName: 'Carol' }))
@@ -430,7 +435,12 @@ describe('POST /api/economy/gift-batch', () => {
     const app = createApp('user-A');
     const res = await request(app)
       .post('/api/economy/gift-batch')
-      .send({ recipientIds: ['user-B', 'user-C'], giftId: 'gift-rose', quantity: 1, fromBackpack: false });
+      .send({
+        recipientIds: ['user-B', 'user-C'],
+        giftId: 'gift-rose',
+        quantity: 1,
+        fromBackpack: false,
+      });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -446,7 +456,7 @@ describe('POST /api/economy/backpack-send', () => {
 
   test('returns 400 when backpack is empty', async () => {
     mockDocGet
-      .mockResolvedValueOnce(makeUserDoc())                       // sender
+      .mockResolvedValueOnce(makeUserDoc()) // sender
       .mockResolvedValueOnce(makeUserDoc({ displayName: 'Bob' })); // recipient
 
     // collection().get() returns empty backpack
@@ -465,7 +475,7 @@ describe('POST /api/economy/backpack-send', () => {
 
   test('returns 200 and clears entire backpack on success', async () => {
     mockDocGet
-      .mockResolvedValueOnce(makeUserDoc())                        // sender
+      .mockResolvedValueOnce(makeUserDoc()) // sender
       .mockResolvedValueOnce(makeUserDoc({ displayName: 'Bob' })) // recipient
       // loadEconomyConfig
       .mockResolvedValueOnce(ECONOMY_CONFIG_DOC)

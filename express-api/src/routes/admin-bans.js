@@ -45,12 +45,12 @@ router.get('/admin/bans', async (req, res) => {
     const nowMs = Date.now();
 
     const deviceBans = deviceSnap.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .filter(b => !b.expiresAt || new Date(b.expiresAt).getTime() > nowMs);
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((b) => !b.expiresAt || new Date(b.expiresAt).getTime() > nowMs);
 
     const networkBans = networkSnap.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .filter(b => !b.expiresAt || new Date(b.expiresAt).getTime() > nowMs);
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((b) => !b.expiresAt || new Date(b.expiresAt).getTime() > nowMs);
 
     res.json({ deviceBans, networkBans });
   } catch (err) {
@@ -92,7 +92,11 @@ router.post('/admin/bans/device', async (req, res) => {
 
     // Send system PM if linked to a user (non-blocking)
     if (linkedUniqueId) {
-      try { await sendSystemPm(linkedUniqueId, 'A restriction has been placed on your account.'); } catch (e) { log.warn('system-pm', 'Failed to send', { uniqueId: linkedUniqueId, error: e.message }); }
+      try {
+        await sendSystemPm(linkedUniqueId, 'A restriction has been placed on your account.');
+      } catch (e) {
+        log.warn('system-pm', 'Failed to send', { uniqueId: linkedUniqueId, error: e.message });
+      }
     }
 
     res.json({ success: true });
@@ -114,7 +118,8 @@ router.post('/admin/bans/network', async (req, res) => {
     if (!type || !validTypes.includes(type)) {
       return res.status(400).json({ error: 'type must be one of: ip, subnet, asn' });
     }
-    if (!value || typeof value !== 'string') return res.status(400).json({ error: 'value is required' });
+    if (!value || typeof value !== 'string')
+      return res.status(400).json({ error: 'value is required' });
     if (!reason) return res.status(400).json({ error: 'reason is required' });
 
     // Validate format based on type
@@ -155,7 +160,11 @@ router.post('/admin/bans/network', async (req, res) => {
 
     // Send system PM if linked to a user (non-blocking)
     if (linkedUniqueId) {
-      try { await sendSystemPm(linkedUniqueId, 'A restriction has been placed on your account.'); } catch (e) { log.warn('system-pm', 'Failed to send', { uniqueId: linkedUniqueId, error: e.message }); }
+      try {
+        await sendSystemPm(linkedUniqueId, 'A restriction has been placed on your account.');
+      } catch (e) {
+        log.warn('system-pm', 'Failed to send', { uniqueId: linkedUniqueId, error: e.message });
+      }
     }
 
     res.json({ success: true });
@@ -182,7 +191,10 @@ router.delete('/admin/bans/device/:deviceId', async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    log.error('admin-bans', 'Error unbanning device', { deviceId: req.params.deviceId, error: err.message });
+    log.error('admin-bans', 'Error unbanning device', {
+      deviceId: req.params.deviceId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -204,7 +216,10 @@ router.delete('/admin/bans/network/:banId', async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    log.error('admin-bans', 'Error unbanning network', { banId: req.params.banId, error: err.message });
+    log.error('admin-bans', 'Error unbanning network', {
+      banId: req.params.banId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -224,7 +239,7 @@ router.post('/admin/bans/unban-all/:uniqueId', async (req, res) => {
 
     const allDocs = [...deviceSnap.docs, ...networkSnap.docs];
 
-    await Promise.all(allDocs.map(d => d.ref.delete()));
+    await Promise.all(allDocs.map((d) => d.ref.delete()));
 
     await db.doc(`adminAuditLog/${generateId()}`).set({
       adminId: req.auth.uid,
@@ -235,11 +250,18 @@ router.post('/admin/bans/unban-all/:uniqueId', async (req, res) => {
     });
 
     // Send system PM about restriction lifted (non-blocking)
-    try { await sendSystemPm(uniqueId, 'A restriction on your account has been lifted.'); } catch (e) { log.warn('system-pm', 'Failed to send', { uniqueId, error: e.message }); }
+    try {
+      await sendSystemPm(uniqueId, 'A restriction on your account has been lifted.');
+    } catch (e) {
+      log.warn('system-pm', 'Failed to send', { uniqueId, error: e.message });
+    }
 
     res.json({ success: true, removed: allDocs.length });
   } catch (err) {
-    log.error('admin-bans', 'Error unbanning all for user', { uniqueId: req.params.uniqueId, error: err.message });
+    log.error('admin-bans', 'Error unbanning all for user', {
+      uniqueId: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -257,12 +279,15 @@ router.get('/admin/bans/user/:uniqueId', async (req, res) => {
       db.collection('networkBans').where('linkedUniqueId', '==', uniqueId).get(),
     ]);
 
-    const deviceBans = deviceSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const networkBans = networkSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const deviceBans = deviceSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const networkBans = networkSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
     res.json({ deviceBans, networkBans });
   } catch (err) {
-    log.error('admin-bans', 'Error getting bans for user', { uniqueId: req.params.uniqueId, error: err.message });
+    log.error('admin-bans', 'Error getting bans for user', {
+      uniqueId: req.params.uniqueId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });

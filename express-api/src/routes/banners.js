@@ -27,13 +27,11 @@ router.get('/banners/active', async (req, res) => {
 
     // Query active banners, then client-filter by date range
     const results = await queryDocs(
-      db.collection('banners')
-        .where('isActive', '==', true)
-        .orderBy('sortOrder', 'asc')
+      db.collection('banners').where('isActive', '==', true).orderBy('sortOrder', 'asc'),
     );
 
     // Filter by start/end date
-    const active = results.filter(b => {
+    const active = results.filter((b) => {
       if (b.startDate && b.startDate > timestamp) return false;
       if (b.endDate && b.endDate <= timestamp) return false;
       return true;
@@ -52,10 +50,7 @@ router.get('/admin/banners', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
-    const results = await queryDocs(
-      db.collection('banners')
-        .orderBy('sortOrder', 'asc')
-    );
+    const results = await queryDocs(db.collection('banners').orderBy('sortOrder', 'asc'));
 
     res.json(results);
   } catch (err) {
@@ -71,32 +66,34 @@ router.post('/admin/banners', async (req, res) => {
 
     const body = req.body;
     if (!body) return res.status(400).json({ error: 'Invalid JSON body' });
-    if (!body.image_url && !body.imageUrl) return res.status(400).json({ error: 'imageUrl is required' });
+    if (!body.image_url && !body.imageUrl)
+      return res.status(400).json({ error: 'imageUrl is required' });
 
     const id = generateId();
     const timestamp = now();
 
     // Get next sort_order by querying existing banners
     const allBanners = await queryDocs(
-      db.collection('banners')
-        .orderBy('sortOrder', 'desc')
-        .limit(1)
+      db.collection('banners').orderBy('sortOrder', 'desc').limit(1),
     );
     const sortOrder = allBanners.length > 0 ? (allBanners[0].sortOrder || 0) + 1 : 0;
 
-    await db.doc(`banners/${id}`).set({
-      id,
-      title: body.title || null,
-      imageUrl: body.imageUrl || body.image_url,
-      actionType: body.actionType || body.action_type || 'NONE',
-      actionValue: body.actionValue || body.action_value || null,
-      startDate: body.startDate ?? body.start_date ?? null,
-      endDate: body.endDate ?? body.end_date ?? null,
-      sortOrder,
-      isActive: body.isActive !== undefined ? !!body.isActive : (body.is_active !== false),
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    }, { merge: true });
+    await db.doc(`banners/${id}`).set(
+      {
+        id,
+        title: body.title || null,
+        imageUrl: body.imageUrl || body.image_url,
+        actionType: body.actionType || body.action_type || 'NONE',
+        actionValue: body.actionValue || body.action_value || null,
+        startDate: body.startDate ?? body.start_date ?? null,
+        endDate: body.endDate ?? body.end_date ?? null,
+        sortOrder,
+        isActive: body.isActive !== undefined ? !!body.isActive : body.is_active !== false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+      { merge: true },
+    );
 
     res.json({ success: true, id });
   } catch (err) {
@@ -111,7 +108,8 @@ router.put('/admin/banners/reorder', async (req, res) => {
     if (requireAdmin(req, res)) return;
 
     const body = req.body;
-    if (!Array.isArray(body)) return res.status(400).json({ error: 'Expected array of {id, sort_order}' });
+    if (!Array.isArray(body))
+      return res.status(400).json({ error: 'Expected array of {id, sort_order}' });
 
     const timestamp = now();
 
@@ -120,10 +118,14 @@ router.put('/admin/banners/reorder', async (req, res) => {
       const chunk = body.slice(i, i + 500);
       const batch = db.batch();
       for (const item of chunk) {
-        batch.set(db.doc(`banners/${item.id}`), {
-          sortOrder: item.sort_order ?? item.sortOrder,
-          updatedAt: timestamp,
-        }, { merge: true });
+        batch.set(
+          db.doc(`banners/${item.id}`),
+          {
+            sortOrder: item.sort_order ?? item.sortOrder,
+            updatedAt: timestamp,
+          },
+          { merge: true },
+        );
       }
       await batch.commit();
     }
@@ -167,14 +169,18 @@ router.put('/admin/banners/:id', async (req, res) => {
       fields.isActive = !!(body.isActive ?? body.is_active);
     }
 
-    if (Object.keys(fields).length === 0) return res.status(400).json({ error: 'No fields to update' });
+    if (Object.keys(fields).length === 0)
+      return res.status(400).json({ error: 'No fields to update' });
 
     fields.updatedAt = now();
     await db.doc(`banners/${req.params.id}`).update(fields);
 
     res.json({ success: true });
   } catch (err) {
-    log.error('banners', 'Failed to update banner', { bannerId: req.params.id, error: err.message });
+    log.error('banners', 'Failed to update banner', {
+      bannerId: req.params.id,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -198,7 +204,10 @@ router.delete('/admin/banners/:id', async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    log.error('banners', 'Failed to delete banner', { bannerId: req.params.id, error: err.message });
+    log.error('banners', 'Failed to delete banner', {
+      bannerId: req.params.id,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });

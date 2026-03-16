@@ -12,7 +12,12 @@ jest.mock('../../src/utils/r2', () => ({
 
 jest.mock('../../src/utils/helpers', () => ({
   getExtension: jest.fn((mime) => {
-    const map = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
+    const map = {
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+      'image/gif': 'gif',
+    };
     return map[mime] || 'bin';
   }),
 }));
@@ -75,9 +80,7 @@ describe('DELETE /api/storage/delete', () => {
   it('returns 200 and calls deleteObject when key matches the caller uniqueId', async () => {
     const app = createApp('user-abc');
     const key = 'profiles/user-abc/1700000000000-abcdef.jpg';
-    const res = await request(app)
-      .delete('/api/storage/delete')
-      .query({ key });
+    const res = await request(app).delete('/api/storage/delete').query({ key });
 
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);

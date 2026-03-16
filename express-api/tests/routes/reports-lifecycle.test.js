@@ -41,7 +41,7 @@ jest.mock('../../src/utils/firebase', () => ({
   FieldValue: {
     arrayRemove: jest.fn(),
     arrayUnion: jest.fn(),
-    increment: jest.fn(n => `increment(${n})`),
+    increment: jest.fn((n) => `increment(${n})`),
   },
 }));
 
@@ -127,18 +127,14 @@ describe('POST /api/reports (submit report)', () => {
   });
 
   it('returns 400 when reportedUserId is missing', async () => {
-    const res = await request(app)
-      .post('/api/reports')
-      .send({ reason: 'spam' });
+    const res = await request(app).post('/api/reports').send({ reason: 'spam' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/reportedUserId/i);
   });
 
   it('returns 400 when reason is missing', async () => {
-    const res = await request(app)
-      .post('/api/reports')
-      .send({ reportedUserId: 'target-user' });
+    const res = await request(app).post('/api/reports').send({ reportedUserId: 'target-user' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/reason/i);
@@ -148,14 +144,12 @@ describe('POST /api/reports (submit report)', () => {
     getDoc.mockResolvedValueOnce({ id: 'user-123', displayName: 'Reporter', uniqueId: 'user-123' });
     queryDocs.mockResolvedValueOnce([]); // admin users for FCM (fire-and-forget)
 
-    const res = await request(app)
-      .post('/api/reports')
-      .send({
-        reportedUserId: 'target-user',
-        reportedUserName: 'Target',
-        reason: 'harassment',
-        description: 'Sent mean messages',
-      });
+    const res = await request(app).post('/api/reports').send({
+      reportedUserId: 'target-user',
+      reportedUserName: 'Target',
+      reason: 'harassment',
+      description: 'Sent mean messages',
+    });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -166,7 +160,7 @@ describe('POST /api/reports (submit report)', () => {
         reason: 'harassment',
         status: 'pending',
       }),
-      { merge: true }
+      { merge: true },
     );
   });
 });
@@ -227,7 +221,7 @@ describe('POST /api/reports/:id/resolve (admin resolve)', () => {
       expect.objectContaining({
         status: 'resolved',
         actionTaken: 'dismissed',
-      })
+      }),
     );
   });
 
@@ -240,9 +234,7 @@ describe('POST /api/reports/:id/resolve (admin resolve)', () => {
       reason: 'harassment',
     });
 
-    const res = await request(app)
-      .post('/api/reports/report-1/resolve')
-      .send({ action: 'warned' });
+    const res = await request(app).post('/api/reports/report-1/resolve').send({ action: 'warned' });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -252,7 +244,7 @@ describe('POST /api/reports/:id/resolve (admin resolve)', () => {
         severity: 2,
         source: 'report',
         linkedReportId: 'report-1',
-      })
+      }),
     );
   });
 
@@ -274,7 +266,7 @@ describe('POST /api/reports/:id/resolve (admin resolve)', () => {
       expect.objectContaining({
         status: 'resolved',
         actionTaken: 'suspended',
-      })
+      }),
     );
   });
 });
@@ -305,9 +297,7 @@ describe('POST /api/appeals (user submit appeal)', () => {
   });
 
   it('returns 400 when appealText is empty or missing', async () => {
-    const res = await request(app)
-      .post('/api/appeals')
-      .send({});
+    const res = await request(app).post('/api/appeals').send({});
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/appealText/i);
@@ -365,7 +355,7 @@ describe('POST /api/appeals (user submit appeal)', () => {
         appealText: 'I believe this suspension was a mistake',
         status: 'pending',
       }),
-      { merge: true }
+      { merge: true },
     );
   });
 });
@@ -384,9 +374,7 @@ describe('PATCH /api/appeals/:id (admin review appeal)', () => {
   });
 
   it('returns 400 for invalid status value', async () => {
-    const res = await request(app)
-      .patch('/api/appeals/appeal-1')
-      .send({ status: 'rejected' }); // invalid — must be "approved" or "denied"
+    const res = await request(app).patch('/api/appeals/appeal-1').send({ status: 'rejected' }); // invalid — must be "approved" or "denied"
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/approved.*denied|denied.*approved/i);
@@ -409,9 +397,7 @@ describe('PATCH /api/appeals/:id (admin review appeal)', () => {
         preSuspensionCoverPhotoUrl: null,
       });
 
-    const res = await request(app)
-      .patch('/api/appeals/appeal-1')
-      .send({ status: 'approved' });
+    const res = await request(app).patch('/api/appeals/appeal-1').send({ status: 'approved' });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -420,7 +406,7 @@ describe('PATCH /api/appeals/:id (admin review appeal)', () => {
       expect.objectContaining({
         isSuspended: false,
         suspensionReason: null,
-      })
+      }),
     );
     expect(clearSuspensionCache).toHaveBeenCalledWith('suspended-user');
   });
@@ -434,9 +420,7 @@ describe('PATCH /api/appeals/:id (admin review appeal)', () => {
       status: 'pending',
     });
 
-    const res = await request(app)
-      .patch('/api/appeals/appeal-1')
-      .send({ status: 'denied' });
+    const res = await request(app).patch('/api/appeals/appeal-1').send({ status: 'denied' });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -445,7 +429,7 @@ describe('PATCH /api/appeals/:id (admin review appeal)', () => {
       expect.objectContaining({
         status: 'denied',
         reviewedBy: 'admin-firebase-uid',
-      })
+      }),
     );
     // User should NOT be unsuspended — clearSuspensionCache not called
     expect(clearSuspensionCache).not.toHaveBeenCalled();

@@ -55,7 +55,10 @@ function buildApp(authUser) {
   app.use(express.json());
   // Simulate auth middleware for authenticated routes
   if (authUser) {
-    app.use((req, res, next) => { req.auth = authUser; next(); });
+    app.use((req, res, next) => {
+      req.auth = authUser;
+      next();
+    });
   }
   app.use('/api', require('../../src/routes/auth'));
   return app;
@@ -72,9 +75,7 @@ describe('PIN Routes', () => {
     it('should set PIN and return 200', async () => {
       const app = buildApp({ uniqueId: 12345678 });
 
-      const res = await request(app)
-        .post('/api/auth/pin/setup')
-        .send({ pin: '1234' });
+      const res = await request(app).post('/api/auth/pin/setup').send({ pin: '1234' });
 
       expect(res.status).toBe(200);
       expect(res.body.message).toBe('PIN set');
@@ -86,16 +87,14 @@ describe('PIN Routes', () => {
           pinAttempts: 0,
           pinLockedUntil: null,
           pinLockoutCount: 0,
-        })
+        }),
       );
     });
 
     it('should accept 8-digit PIN', async () => {
       const app = buildApp({ uniqueId: 12345678 });
 
-      const res = await request(app)
-        .post('/api/auth/pin/setup')
-        .send({ pin: '12345678' });
+      const res = await request(app).post('/api/auth/pin/setup').send({ pin: '12345678' });
 
       expect(res.status).toBe(200);
     });
@@ -103,9 +102,7 @@ describe('PIN Routes', () => {
     it('should reject PIN shorter than 4 digits', async () => {
       const app = buildApp({ uniqueId: 12345678 });
 
-      const res = await request(app)
-        .post('/api/auth/pin/setup')
-        .send({ pin: '123' });
+      const res = await request(app).post('/api/auth/pin/setup').send({ pin: '123' });
 
       expect(res.status).toBe(400);
     });
@@ -113,9 +110,7 @@ describe('PIN Routes', () => {
     it('should reject PIN longer than 8 digits', async () => {
       const app = buildApp({ uniqueId: 12345678 });
 
-      const res = await request(app)
-        .post('/api/auth/pin/setup')
-        .send({ pin: '123456789' });
+      const res = await request(app).post('/api/auth/pin/setup').send({ pin: '123456789' });
 
       expect(res.status).toBe(400);
     });
@@ -123,9 +118,7 @@ describe('PIN Routes', () => {
     it('should reject non-numeric PIN', async () => {
       const app = buildApp({ uniqueId: 12345678 });
 
-      const res = await request(app)
-        .post('/api/auth/pin/setup')
-        .send({ pin: '12ab' });
+      const res = await request(app).post('/api/auth/pin/setup').send({ pin: '12ab' });
 
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/numeric/i);
@@ -134,9 +127,7 @@ describe('PIN Routes', () => {
     it('should reject missing PIN', async () => {
       const app = buildApp({ uniqueId: 12345678 });
 
-      const res = await request(app)
-        .post('/api/auth/pin/setup')
-        .send({});
+      const res = await request(app).post('/api/auth/pin/setup').send({});
 
       expect(res.status).toBe(400);
     });
@@ -144,9 +135,7 @@ describe('PIN Routes', () => {
     it('should return 401 without auth', async () => {
       const app = buildApp(null);
 
-      const res = await request(app)
-        .post('/api/auth/pin/setup')
-        .send({ pin: '1234' });
+      const res = await request(app).post('/api/auth/pin/setup').send({ pin: '1234' });
 
       expect(res.status).toBe(401);
     });
@@ -194,7 +183,7 @@ describe('PIN Routes', () => {
 
       expect(mockDocUpdate).toHaveBeenCalledWith(
         'users/12345678',
-        expect.objectContaining({ pinAttempts: 0, pinLockedUntil: null })
+        expect.objectContaining({ pinAttempts: 0, pinLockedUntil: null }),
       );
     });
 
@@ -320,9 +309,7 @@ describe('PIN Routes', () => {
     it('should reject missing fields', async () => {
       const app = buildApp(null);
 
-      const res = await request(app)
-        .post('/api/auth/pin/verify')
-        .send({ uniqueId: 12345678 });
+      const res = await request(app).post('/api/auth/pin/verify').send({ uniqueId: 12345678 });
 
       expect(res.status).toBe(400);
     });
@@ -334,9 +321,7 @@ describe('PIN Routes', () => {
     it('should reset PIN and clear lockout', async () => {
       const app = buildApp({ uniqueId: 12345678 });
 
-      const res = await request(app)
-        .post('/api/auth/pin/reset')
-        .send({ pin: '5678' });
+      const res = await request(app).post('/api/auth/pin/reset').send({ pin: '5678' });
 
       expect(res.status).toBe(200);
       expect(res.body.message).toBe('PIN reset');
@@ -347,16 +332,14 @@ describe('PIN Routes', () => {
           pinAttempts: 0,
           pinLockedUntil: null,
           pinLockoutCount: 0,
-        })
+        }),
       );
     });
 
     it('should reject invalid PIN on reset', async () => {
       const app = buildApp({ uniqueId: 12345678 });
 
-      const res = await request(app)
-        .post('/api/auth/pin/reset')
-        .send({ pin: 'abc' });
+      const res = await request(app).post('/api/auth/pin/reset').send({ pin: 'abc' });
 
       expect(res.status).toBe(400);
     });
@@ -364,9 +347,7 @@ describe('PIN Routes', () => {
     it('should return 401 without auth', async () => {
       const app = buildApp(null);
 
-      const res = await request(app)
-        .post('/api/auth/pin/reset')
-        .send({ pin: '5678' });
+      const res = await request(app).post('/api/auth/pin/reset').send({ pin: '5678' });
 
       expect(res.status).toBe(401);
     });

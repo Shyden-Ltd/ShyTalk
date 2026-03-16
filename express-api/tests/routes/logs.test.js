@@ -7,7 +7,10 @@ jest.mock('../../src/utils/firebase', () => ({
   admin: { firestore: () => ({}) },
 }));
 jest.mock('../../src/utils/log', () => ({
-  debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn(),
+  debug: jest.fn(),
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
 }));
 
 const { createLogsRouter } = require('../../src/routes/logs');
@@ -55,9 +58,7 @@ describe('POST /api/logs', () => {
       { level: 'ERROR', source: 'app', message: 'Entry 3' },
     ];
 
-    const res = await request(app)
-      .post('/api/logs')
-      .send({ batch });
+    const res = await request(app).post('/api/logs').send({ batch });
 
     expect(res.status).toBe(202);
     expect(res.body).toEqual({ accepted: 3 });
@@ -75,9 +76,7 @@ describe('POST /api/logs', () => {
   });
 
   test('rejects missing source (400)', async () => {
-    const res = await request(app)
-      .post('/api/logs')
-      .send({ level: 'INFO', message: 'Hello' });
+    const res = await request(app).post('/api/logs').send({ level: 'INFO', message: 'Hello' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/source/);
@@ -85,9 +84,7 @@ describe('POST /api/logs', () => {
   });
 
   test('rejects missing message (400)', async () => {
-    const res = await request(app)
-      .post('/api/logs')
-      .send({ level: 'INFO', source: 'app' });
+    const res = await request(app).post('/api/logs').send({ level: 'INFO', source: 'app' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/message/);
@@ -143,9 +140,7 @@ describe('POST /api/logs', () => {
       message: `Entry ${i}`,
     }));
 
-    const res = await request(app)
-      .post('/api/logs')
-      .send({ batch });
+    const res = await request(app).post('/api/logs').send({ batch });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/exceeds maximum/);
@@ -153,9 +148,7 @@ describe('POST /api/logs', () => {
   });
 
   test('enriches with userId from req.auth', async () => {
-    await request(app)
-      .post('/api/logs')
-      .send({ level: 'INFO', source: 'app', message: 'Hello' });
+    await request(app).post('/api/logs').send({ level: 'INFO', source: 'app', message: 'Hello' });
 
     expect(mockLogger.log).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -164,7 +157,7 @@ describe('POST /api/logs', () => {
         level: 'INFO',
         source: 'app',
         message: 'Hello',
-      })
+      }),
     );
   });
 });

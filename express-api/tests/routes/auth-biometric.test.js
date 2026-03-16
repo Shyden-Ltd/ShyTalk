@@ -58,7 +58,10 @@ function buildApp(authUser) {
   const app = express();
   app.use(express.json());
   if (authUser) {
-    app.use((req, res, next) => { req.auth = authUser; next(); });
+    app.use((req, res, next) => {
+      req.auth = authUser;
+      next();
+    });
   }
   app.use('/api', require('../../src/routes/auth'));
   return app;
@@ -83,7 +86,7 @@ describe('Biometric Routes', () => {
       expect(res.body.message).toBe('Biometric registered');
       expect(mockDocSet).toHaveBeenCalledWith(
         'biometricKeys/12345678:dev-1',
-        expect.objectContaining({ publicKey: 'base64pubkey' })
+        expect.objectContaining({ publicKey: 'base64pubkey' }),
       );
     });
 
@@ -245,7 +248,7 @@ describe('Biometric Routes', () => {
         .get('/api/auth/biometric/challenge')
         .query({ uniqueId: '12345678', deviceId: 'dev-1' });
 
-      const { challenge } = challengeRes.body;
+      const { challenge: _challenge } = challengeRes.body;
 
       // Mock for verify
       mockDocGet.mockResolvedValueOnce({ exists: true, data: () => ({ publicKey }) });
@@ -269,8 +272,7 @@ describe('Biometric Routes', () => {
     it('should revoke biometric key and return 200', async () => {
       const app = buildApp({ uniqueId: 12345678 });
 
-      const res = await request(app)
-        .delete('/api/auth/biometric/dev-1');
+      const res = await request(app).delete('/api/auth/biometric/dev-1');
 
       expect(res.status).toBe(200);
       expect(res.body.message).toBe('Biometric key revoked');
@@ -280,8 +282,7 @@ describe('Biometric Routes', () => {
     it('should return 401 without auth', async () => {
       const app = buildApp(null);
 
-      const res = await request(app)
-        .delete('/api/auth/biometric/dev-1');
+      const res = await request(app).delete('/api/auth/biometric/dev-1');
 
       expect(res.status).toBe(401);
     });
