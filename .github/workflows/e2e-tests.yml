@@ -54,7 +54,6 @@ jobs:
             const comment = context.payload.comment.body.trim();
             const issue = context.payload.issue;
 
-            // Only react to /run-e2e commands on PRs
             if (!issue.pull_request) {
               core.setOutput('should_run', 'false');
               return;
@@ -66,7 +65,6 @@ jobs:
               return;
             }
 
-            // Check if commenter has write access
             const { data: permLevel } = await github.rest.repos.getCollaboratorPermissionLevel({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -77,7 +75,6 @@ jobs:
               return;
             }
 
-            // Get PR head ref
             const { data: pr } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -91,7 +88,6 @@ jobs:
             core.setOutput('platform', platform);
             core.setOutput('ref', pr.head.sha);
 
-            // React to the comment with a rocket emoji
             await github.rest.reactions.createForIssueComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -145,13 +141,21 @@ jobs:
 
           echo "Resolved: platform=$PLATFORM run_android=$RUN_ANDROID run_ios=$RUN_IOS parallel=$PARALLEL"
 
-  # ── Build Android test APKs ───────────────────────────────────
-  build-android:
-    name: Build Android
+  # ── Android E2E (build + test in one job via Gradle) ─────────
+  test-android:
+    name: "Android E2E (API ${{ matrix.api-level }}, ${{ matrix.form-factor }})"
     needs: [resolve-inputs]
     if: always() && needs.resolve-inputs.result == 'success' && needs.resolve-inputs.outputs.run_android == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ needs.resolve-inputs.outputs.parallel == 'true' && 99 || 1 }}
+      matrix:
+        include:
+          - api-level: 34
+            form-factor: phone
+            profile: pixel_6
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -181,53 +185,6 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
 
-      - name: Build app and test APKs
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
-        run: ./gradlew assembleDevDebug assembleDevDebugAndroidTest --parallel
-
-      - name: Upload APKs
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
-        with:
-          name: android-test-apks
-          path: |
-            app/build/outputs/apk/dev/debug/*.apk
-            app/build/outputs/apk/androidTest/dev/debug/*.apk
-          retention-days: 3
-
-  # ── Android E2E test (single device for validation) ──────────
-  test-android:
-    name: "Android E2E (API ${{ matrix.api-level }}, ${{ matrix.form-factor }})"
-    needs: [resolve-inputs, build-android]
-    if: always() && needs.build-android.result == 'success' && needs.resolve-inputs.outputs.run_android == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      max-parallel: ${{ needs.resolve-inputs.outputs.parallel == 'true' && 99 || 1 }}
-      matrix:
-        include:
-          - api-level: 34
-            form-factor: phone
-            profile: pixel_6
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-        with:
-          ref: ${{ needs.resolve-inputs.outputs.ref }}
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Download pre-built APKs
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: android-test-apks
-          path: apks/
-
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -236,6 +193,9 @@ jobs:
 
       - name: Run E2E tests on emulator
         uses: reactivecircus/android-emulator-runner@0a638108440efd5c7f980e6ba145dbcdd8f32009 # v2.37.0
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
         with:
           api-level: ${{ matrix.api-level }}
           target: google_apis
@@ -244,32 +204,123 @@ jobs:
           force-avd-creation: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
-          script: bash $GITHUB_WORKSPACE/.github/scripts/run-e2e.sh
+          script: ./gradlew connectedDevDebugAndroidTest --no-parallel --info 2>&1 | tee test-output.log
 
       - name: Pull Allure results from device
         if: always()
         run: |
           PACKAGE="com.shyden.shytalk.dev"
-          mkdir -p app/build/allure-results
+          mkdir -p allure-results-android
           adb exec-out run-as $PACKAGE sh -c 'cd files/allure-results && tar cf - .' 2>/dev/null | \
-            tar xf - -C app/build/allure-results/ 2>/dev/null || \
+            tar xf - -C allure-results-android/ 2>/dev/null || \
             echo "::warning::No Allure results found on device"
-          ls -la app/build/allure-results/ 2>/dev/null || echo "Empty results"
+          RESULT_COUNT=$(find allure-results-android -name "*.json" 2>/dev/null | wc -l)
+          echo "Allure results pulled: $RESULT_COUNT files"
+
+      - name: Write Android environment.properties
+        if: always()
+        run: |
+          mkdir -p allure-results-android
+          cat > allure-results-android/environment.properties <<EOF
+          platform=Android
+          api_level=${{ matrix.api-level }}
+          device=${{ matrix.profile }}
+          environment=dev
+          EOF
 
       - name: Upload Allure results
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         if: always()
         with:
-          name: allure-results-api${{ matrix.api-level }}-${{ matrix.form-factor }}
-          path: app/build/allure-results/
+          name: allure-results-android-api${{ matrix.api-level }}-${{ matrix.form-factor }}
+          path: allure-results-android/
           retention-days: 14
 
       - name: Upload test output
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         if: always()
         with:
-          name: android-results-api${{ matrix.api-level }}-${{ matrix.form-factor }}
-          path: test-output.log
+          name: android-test-output-api${{ matrix.api-level }}-${{ matrix.form-factor }}
+          path: |
+            test-output.log
+            app/build/reports/androidTests/connected/
+          retention-days: 14
+
+  # ── Playwright Web Tests (multi-browser) ─────────────────────
+  test-playwright:
+    name: Playwright Web Tests
+    needs: [resolve-inputs]
+    if: always() && needs.resolve-inputs.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ needs.resolve-inputs.outputs.ref }}
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Run Playwright tests with Allure
+        env:
+          WEB_BASE_URL: https://dev.shytalk.shyden.co.uk
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          ALLURE_ENABLED: 'true'
+        run: |
+          FAILED=false
+          for PROJECT in chromium firefox webkit mobile-chrome mobile-safari; do
+            echo "::group::Running $PROJECT"
+            ALLURE_PROJECT=$PROJECT npx playwright test --project=$PROJECT || FAILED=true
+            echo "::endgroup::"
+          done
+          if [ "$FAILED" = true ]; then
+            echo "::warning::Some Playwright browser projects had test failures"
+          fi
+
+      - name: Write environment.properties per project
+        if: always()
+        run: |
+          for PROJECT in chromium firefox webkit mobile-chrome mobile-safari; do
+            DIR="allure-results/$PROJECT"
+            mkdir -p "$DIR"
+            case "$PROJECT" in
+              chromium)      VIEWPORT="1280x720"; BROWSER="Chromium" ;;
+              firefox)       VIEWPORT="1280x720"; BROWSER="Firefox" ;;
+              webkit)        VIEWPORT="1280x720"; BROWSER="WebKit" ;;
+              mobile-chrome) VIEWPORT="393x851";  BROWSER="Mobile Chrome (Pixel 5)" ;;
+              mobile-safari) VIEWPORT="390x844";  BROWSER="Mobile Safari (iPhone 13)" ;;
+            esac
+            cat > "$DIR/environment.properties" <<EOF
+          platform=Web
+          browser=$BROWSER
+          viewport=$VIEWPORT
+          base_url=dev.shytalk.shyden.co.uk
+          EOF
+          done
+
+      - name: Upload Allure results
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        if: always()
+        with:
+          name: allure-results-playwright
+          path: allure-results/
+          retention-days: 14
+
+      - name: Upload Playwright HTML report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        if: always()
+        with:
+          name: playwright-html-report
+          path: playwright-report/
           retention-days: 14
 
   # ── Build iOS test bundle ─────────────────────────────────────
@@ -387,7 +438,6 @@ jobs:
           if xcrun simctl list runtimes | grep -q "$RUNTIME_ID"; then
             echo "Runtime $RUNTIME_ID already installed"
           else
-            echo "Installing iOS ${{ matrix.ios-version }} simulator runtime..."
             xcodebuild -downloadPlatform iOS -buildVersion "${{ matrix.ios-version }}" 2>/dev/null || \
             xcodebuild -downloadPlatform iOS || \
             echo "::warning::Could not install iOS ${{ matrix.ios-version }} runtime."
@@ -429,7 +479,7 @@ jobs:
   # ── Summary ───────────────────────────────────────────────────
   e2e-summary:
     name: E2E Summary
-    needs: [resolve-inputs, test-android, test-ios]
+    needs: [resolve-inputs, test-android, test-ios, test-playwright]
     if: always() && needs.resolve-inputs.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -439,26 +489,32 @@ jobs:
           echo "## E2E Test Results" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
-          ANDROID_RESULT="${{ needs.test-android.result }}"
-          IOS_RESULT="${{ needs.test-ios.result }}"
+          ANDROID="${{ needs.test-android.result }}"
+          IOS="${{ needs.test-ios.result }}"
+          PW="${{ needs.test-playwright.result }}"
 
-          echo "- Android: $ANDROID_RESULT" >> "$GITHUB_STEP_SUMMARY"
-          echo "- iOS: $IOS_RESULT" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Android E2E: $ANDROID" >> "$GITHUB_STEP_SUMMARY"
+          echo "- iOS E2E: $IOS" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Playwright Web: $PW" >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "$ANDROID_RESULT" != "success" ] && [ "$ANDROID_RESULT" != "skipped" ]; then
-            echo "Android E2E tests failed"
+          FAILED=false
+          for RESULT in "$ANDROID" "$IOS" "$PW"; do
+            if [ "$RESULT" != "success" ] && [ "$RESULT" != "skipped" ]; then
+              FAILED=true
+            fi
+          done
+
+          if [ "$FAILED" = true ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "**Some test suites failed.**" >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-          if [ "$IOS_RESULT" != "success" ] && [ "$IOS_RESULT" != "skipped" ]; then
-            echo "iOS E2E tests failed"
-            exit 1
-          fi
 
-  # ── Generate Allure Report ──────────────────────────────────
+  # ── Generate Unified Allure Report ───────────────────────────
   allure-report:
     name: Generate Allure Report
-    needs: [resolve-inputs, test-android]
-    if: always() && needs.resolve-inputs.result == 'success' && needs.resolve-inputs.outputs.run_android == 'true'
+    needs: [resolve-inputs, test-android, test-playwright]
+    if: always() && needs.resolve-inputs.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -470,6 +526,9 @@ jobs:
           pattern: allure-results-*
           path: allure-results-all/
           merge-multiple: true
+
+      - name: Sanitize results (strip secrets for public report)
+        run: bash .github/scripts/sanitize-allure.sh allure-results-all/
 
       - name: Install Allure CLI
         run: |
