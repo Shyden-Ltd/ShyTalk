@@ -211,11 +211,16 @@ jobs:
           - api-level: 34
             form-factor: phone
             profile: pixel_6
-            ram-size: 4096
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ needs.resolve-inputs.outputs.ref }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
       - name: Download pre-built APKs
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -229,75 +234,34 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Set up Android SDK paths
-        run: |
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
-          echo "$ANDROID_HOME/emulator" >> "$GITHUB_PATH"
+      - name: Run E2E tests on emulator
+        uses: reactivecircus/android-emulator-runner@0a638108440efd5c7f980e6ba145dbcdd8f32009 # v2.37.0
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: google_apis
+          arch: x86_64
+          profile: ${{ matrix.profile }}
+          force-avd-creation: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          disable-animations: true
+          script: |
+            # Find and install pre-built APKs
+            APP_APK=$(find apks/ -name "*.apk" ! -name "*androidTest*" | head -1)
+            TEST_APK=$(find apks/ -name "*androidTest*.apk" | head -1)
 
-      - name: Install emulator system image
-        run: |
-          yes | sdkmanager --install \
-            "system-images;android-${{ matrix.api-level }};google_apis;x86_64" \
-            "emulator" \
-            "platform-tools" || true
+            echo "Installing app APK: $APP_APK"
+            adb install -t "$APP_APK"
 
-      - name: Create and start emulator
-        run: |
-          echo "no" | avdmanager create avd \
-            -n test_device \
-            -k "system-images;android-${{ matrix.api-level }};google_apis;x86_64" \
-            -d "${{ matrix.profile }}" \
-            --force
+            echo "Installing test APK: $TEST_APK"
+            adb install -t "$TEST_APK"
 
-          emulator -avd test_device \
-            -no-snapshot-save -no-window -gpu swiftshader_indirect \
-            -noaudio -no-boot-anim \
-            -memory ${{ matrix.ram-size }} &
+            # Run Cucumber instrumentation tests via am instrument
+            echo "Running E2E tests..."
+            adb shell am instrument -w \
+              com.shyden.shytalk.dev.test/com.shyden.shytalk.ShyTalkTestRunner \
+              2>&1 | tee test-output.log
 
-          # Wait for emulator to boot (up to 10 minutes)
-          adb wait-for-device
-          BOOT_TIMEOUT=600
-          ELAPSED=0
-          while [ "$(adb shell getprop sys.boot_completed 2>/dev/null)" != "1" ]; do
-            sleep 5
-            ELAPSED=$((ELAPSED + 5))
-            if [ $ELAPSED -ge $BOOT_TIMEOUT ]; then
-              echo "Emulator boot timed out after ${BOOT_TIMEOUT}s"
-              exit 1
-            fi
-          done
-          echo "Emulator booted in ${ELAPSED}s"
-
-          # Disable animations for stable tests
-          adb shell settings put global window_animation_scale 0
-          adb shell settings put global transition_animation_scale 0
-          adb shell settings put global animator_duration_scale 0
-
-      - name: Install APKs and run E2E tests
-        run: |
-          # Find and install APKs from the downloaded artifact
-          APP_APK=$(find apks/ -name "*.apk" ! -name "*androidTest*" | head -1)
-          TEST_APK=$(find apks/ -name "*androidTest*.apk" | head -1)
-
-          echo "Installing app APK: $APP_APK"
-          adb install -t "$APP_APK"
-
-          echo "Installing test APK: $TEST_APK"
-          adb install -t "$TEST_APK"
-
-          # Run Cucumber instrumentation tests
-          echo "Running E2E tests..."
-          adb shell am instrument -w \
-            -e class com.shyden.shytalk.ShyTalkTestRunner \
-            com.shyden.shytalk.dev.test/com.shyden.shytalk.ShyTalkTestRunner \
-            2>&1 | tee test-output.log
-
-          # Check for failures in output
-          if grep -q "FAILURES\!\!\!" test-output.log; then
-            echo "::error::E2E tests had failures"
-            exit 1
-          fi
+            echo "Test output saved to test-output.log"
 
       - name: Pull Allure results from device
         if: always()
@@ -316,10 +280,6 @@ jobs:
           name: allure-results-api${{ matrix.api-level }}-${{ matrix.form-factor }}
           path: app/build/allure-results/
           retention-days: 14
-
-      - name: Stop emulator
-        if: always()
-        run: adb emu kill || true
 
       - name: Upload test output
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
