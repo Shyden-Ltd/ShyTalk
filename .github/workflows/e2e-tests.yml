@@ -22,7 +22,7 @@ on:
     types: [created]
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: write
   checks: write
   issues: read
@@ -204,29 +204,38 @@ jobs:
           force-avd-creation: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
-          script: ./gradlew connectedDevDebugAndroidTest --no-parallel --info 2>&1 | tee test-output.log
+          script: ./gradlew connectedDevDebugAndroidTest --no-parallel 2>&1 | tee test-output.log
 
-      - name: Pull Allure results from device
+      - name: Collect Allure results from JUnit XML
         if: always()
         run: |
-          PACKAGE="com.shyden.shytalk.dev"
           mkdir -p allure-results-android
+
+          # Try pulling native Allure results from device first
+          PACKAGE="com.shyden.shytalk.dev"
           adb exec-out run-as $PACKAGE sh -c 'cd files/allure-results && tar cf - .' 2>/dev/null | \
-            tar xf - -C allure-results-android/ 2>/dev/null || \
-            echo "::warning::No Allure results found on device"
-          RESULT_COUNT=$(find allure-results-android -name "*.json" 2>/dev/null | wc -l)
-          echo "Allure results pulled: $RESULT_COUNT files"
+            tar xf - -C allure-results-android/ 2>/dev/null || true
+          NATIVE_COUNT=$(find allure-results-android -name "*-result.json" 2>/dev/null | wc -l)
+          echo "Native Allure results: $NATIVE_COUNT files"
+
+          # If no native results, copy JUnit XML (Allure can read these directly)
+          if [ "$NATIVE_COUNT" -eq 0 ]; then
+            echo "No native Allure results — using JUnit XML for Allure import"
+            find app/build/outputs/androidTest-results -name "TEST-*.xml" 2>/dev/null \
+              -exec cp {} allure-results-android/ \; || true
+            XML_COUNT=$(find allure-results-android -name "TEST-*.xml" 2>/dev/null | wc -l)
+            echo "JUnit XML files copied: $XML_COUNT"
+          fi
 
       - name: Write Android environment.properties
         if: always()
         run: |
-          mkdir -p allure-results-android
-          cat > allure-results-android/environment.properties <<EOF
+          cat > allure-results-android/environment.properties <<'ENVEOF'
           platform=Android
           api_level=${{ matrix.api-level }}
           device=${{ matrix.profile }}
           environment=dev
-          EOF
+          ENVEOF
 
       - name: Upload Allure results
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
@@ -517,6 +526,8 @@ jobs:
     if: always() && needs.resolve-inputs.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 

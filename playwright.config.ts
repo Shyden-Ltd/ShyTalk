@@ -10,6 +10,7 @@ if (process.env.ALLURE_ENABLED === 'true') {
     {
       outputFolder: `allure-results/${process.env.ALLURE_PROJECT || 'default'}`,
       suiteTitle: true,
+      detail: false, // Security: prevent pw:api steps from leaking fill() values (passwords, emails)
     },
   ]);
 }
