@@ -7,7 +7,6 @@ import platform.LocalAuthentication.LAPolicyDeviceOwnerAuthenticationWithBiometr
 import kotlin.coroutines.resume
 
 actual class BiometricAuth {
-
     actual fun isAvailable(): Boolean {
         val context = LAContext()
         return context.canEvaluatePolicy(

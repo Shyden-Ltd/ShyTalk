@@ -41,7 +41,6 @@ private val ALL_KEYS =
 
 @Suppress("UNCHECKED_CAST")
 actual class SecureStorage {
-
     actual fun getString(key: String): String? {
         val query =
             mapOf<Any?, Any?>(

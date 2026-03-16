@@ -1,7 +1,6 @@
 package com.shyden.shytalk.core.audio
 
 actual object GachaSoundPlayer {
-
     actual fun init() {}
 
     actual fun release() {}

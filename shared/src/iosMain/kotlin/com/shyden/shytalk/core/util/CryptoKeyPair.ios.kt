@@ -14,29 +14,27 @@ import platform.Foundation.base64EncodedStringWithOptions
 import platform.Foundation.create
 import platform.Security.SecItemCopyMatching
 import platform.Security.SecItemDelete
-import platform.Security.SecKeyCreateSignature
 import platform.Security.SecKeyCopyExternalRepresentation
 import platform.Security.SecKeyCreateRandomKey
+import platform.Security.SecKeyCreateSignature
 import platform.Security.errSecSuccess
 import platform.Security.kSecAttrApplicationTag
+import platform.Security.kSecAttrIsPermanent
 import platform.Security.kSecAttrKeyClass
 import platform.Security.kSecAttrKeyClassPrivate
+import platform.Security.kSecAttrKeySizeInBits
 import platform.Security.kSecAttrKeyType
 import platform.Security.kSecAttrKeyTypeECSECPrimeRandom
-import platform.Security.kSecAttrKeySizeInBits
 import platform.Security.kSecClass
 import platform.Security.kSecClassKey
+import platform.Security.kSecKeyAlgorithmECDSASignatureMessageX962SHA256
 import platform.Security.kSecMatchLimit
 import platform.Security.kSecMatchLimitOne
 import platform.Security.kSecPrivateKeyAttrs
 import platform.Security.kSecReturnRef
-import platform.Security.kSecAttrIsPermanent
-// Use raw value for kSecKeyAlgorithmECDSASignatureMessageX962SHA256
-import platform.Security.kSecKeyAlgorithmECDSASignatureMessageX962SHA256
 
 @Suppress("UNCHECKED_CAST")
 actual class CryptoKeyPair {
-
     private var currentTag: String? = null
 
     actual fun generateOrLoad(alias: String): Boolean {

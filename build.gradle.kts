@@ -20,11 +20,16 @@ subprojects {
         android.set(true)
         outputToConsole.set(true)
         ignoreFailures.set(false)
+        filter {
+            exclude { element ->
+                element.file.absolutePath.replace("\\", "/").contains("/build/")
+            }
+        }
     }
 }
 
 detekt {
-    buildUponDefaultConfig = true
+    buildUponDefaultConfig = false
     config.setFrom(files("detekt.yml"))
     parallel = true
     source.setFrom(files(

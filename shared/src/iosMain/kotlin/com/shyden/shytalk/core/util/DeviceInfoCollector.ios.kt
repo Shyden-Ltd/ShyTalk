@@ -11,7 +11,6 @@ import platform.UIKit.UIDevice
 import platform.UIKit.UIScreen
 
 actual class DeviceInfoCollector {
-
     @OptIn(ExperimentalForeignApi::class)
     actual fun collect(): DeviceInfo {
         val device = UIDevice.currentDevice

@@ -1,43 +1,32 @@
 # detekt.yml — ShyTalk custom configuration
-# Builds on default config, disabling rules that are too noisy for mobile apps.
+# Only enable naming and style rule sets. Others are too noisy for Compose/mobile apps.
 
 complexity:
-  LongParameterList:
-    active: false
-  TooManyFunctions:
-    active: false
-  CyclomaticComplexMethod:
-    threshold: 20
-  LongMethod:
-    threshold: 80
-  LargeClass:
-    threshold: 400
+  active: false
 
-style:
-  MagicNumber:
-    active: false
-  MaxLineLength:
-    maxLineLength: 140
-  WildcardImport:
-    active: false
-  ReturnCount:
-    max: 5
-  UnusedPrivateMember:
-    active: true
-  ForbiddenComment:
-    active: false
+coroutines:
+  active: false
 
-naming:
-  FunctionNaming:
-    ignoreAnnotated:
-      - "Composable"
-  TopLevelPropertyNaming:
-    constantPattern: "[A-Z][A-Za-z0-9_]*"
+empty-blocks:
+  active: false
 
 exceptions:
-  TooGenericExceptionCaught:
+  active: false
+
+naming:
+  active: true
+  FunctionNaming:
+    active: true
+    ignoreAnnotated:
+      - "Composable"
+  MatchingDeclarationName:
     active: false
 
 performance:
-  SpreadOperator:
-    active: false
+  active: false
+
+potential-bugs:
+  active: false
+
+style:
+  active: false

@@ -3,7 +3,6 @@ package com.shyden.shytalk.data.local
 import com.shyden.shytalk.feature.messaging.Sticker
 
 actual class StickerStorage {
-
     actual fun getStickers(): List<Sticker> = emptyList()
 
     actual fun addSticker(

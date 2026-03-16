@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.ComposeUIViewController
 import com.shyden.shytalk.ui.theme.ShyTalkTheme
 
+@Suppress("ktlint:standard:function-naming")
 fun MainViewController() = ComposeUIViewController { IosApp() }
 
 @Composable

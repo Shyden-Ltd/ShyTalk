@@ -77,7 +77,11 @@ fun DailyRewardDialog(
     val daysInMonth =
         when (currentMonth) {
             kotlinx.datetime.Month.FEBRUARY -> if (currentYear % 4 == 0 && (currentYear % 100 != 0 || currentYear % 400 == 0)) 29 else 28
-            kotlinx.datetime.Month.APRIL, kotlinx.datetime.Month.JUNE, kotlinx.datetime.Month.SEPTEMBER, kotlinx.datetime.Month.NOVEMBER -> 30
+            kotlinx.datetime.Month.APRIL,
+            kotlinx.datetime.Month.JUNE,
+            kotlinx.datetime.Month.SEPTEMBER,
+            kotlinx.datetime.Month.NOVEMBER,
+            -> 30
             else -> 31
         }
     // Monday = 0, Sunday = 6 for grid alignment
