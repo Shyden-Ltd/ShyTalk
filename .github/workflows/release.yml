@@ -243,8 +243,11 @@ jobs:
 
   test-backend:
     name: Test Backend
-    needs: [detect-changes]
-    if: needs.detect-changes.outputs.backend_changed == 'true'
+    needs: [detect-changes, deploy-backend-dev]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.backend_changed == 'true' &&
+      (needs.deploy-backend-dev.result == 'success' || needs.deploy-backend-dev.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -301,11 +304,10 @@ jobs:
 
   deploy-backend-dev:
     name: Deploy Backend to Dev
-    needs: [detect-changes, test-backend]
+    needs: [detect-changes]
     if: |
       always() &&
-      needs.detect-changes.outputs.backend_changed == 'true' &&
-      needs.test-backend.result == 'success'
+      needs.detect-changes.outputs.backend_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -363,10 +365,11 @@ jobs:
 
   deploy-web-dev:
     name: Deploy Web to Dev
-    needs: [detect-changes]
+    needs: [detect-changes, deploy-backend-dev]
     if: |
       always() &&
-      needs.detect-changes.outputs.web_changed == 'true'
+      needs.detect-changes.outputs.web_changed == 'true' &&
+      (needs.deploy-backend-dev.result == 'success' || needs.deploy-backend-dev.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
