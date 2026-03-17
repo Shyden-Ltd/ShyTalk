@@ -281,8 +281,8 @@ jobs:
       - name: Run Playwright tests with Allure
         env:
           WEB_BASE_URL: https://dev.shytalk.shyden.co.uk
-          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL_DEV }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD_DEV }}
           ALLURE_ENABLED: 'true'
         run: |
           FAILED=false
