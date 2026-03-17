@@ -29,8 +29,8 @@ test.describe('Admin Users - Security Subtab', () => {
       const valueEl = page.locator(field.id);
       await expect(valueEl).toBeAttached({ timeout: 15_000 });
 
-      // Verify the label exists alongside the value
-      const labelEl = pinStatusGrid.locator('.detail-label', { hasText: field.label });
+      // Verify the label exists alongside the value (exact match to avoid "PIN Set" matching "PIN Set At")
+      const labelEl = pinStatusGrid.getByText(field.label, { exact: true });
       await expect(labelEl).toBeAttached({ timeout: 15_000 });
     }
   });
