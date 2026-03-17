@@ -18,7 +18,7 @@ if (process.env.ALLURE_ENABLED === 'true') {
 export default defineConfig({
   testDir: './tests/web',
   testIgnore: ['**/auth.setup.ts'],
-  timeout: 60_000,
+  timeout: 90_000, // 90s per test — CI runners have higher latency to dev API
   retries: 1,
   workers: 1, // Serial — Firebase Auth rate-limits concurrent logins causing flaky admin tests
   reporter: reporters,
