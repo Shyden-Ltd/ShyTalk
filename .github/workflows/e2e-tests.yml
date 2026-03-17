@@ -305,10 +305,8 @@ jobs:
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           ALLURE_ENABLED: 'true'
           ALLURE_PROJECT: ${{ matrix.project }}
-        run: |
-          npx playwright test --project=${{ matrix.project }} --reporter=list,allure-playwright,html || {
-            echo "::warning::Some ${{ matrix.project }} tests failed — see Allure report for details"
-          }
+        continue-on-error: true
+        run: npx playwright test --project=${{ matrix.project }} --reporter=list,allure-playwright,html
 
       - name: Write environment.properties
         if: always()
