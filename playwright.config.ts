@@ -20,7 +20,7 @@ export default defineConfig({
   testIgnore: ['**/auth.setup.ts'],
   timeout: 60_000,
   retries: 1,
-  workers: 3, // Limited parallelism — Firebase Auth rate-limits concurrent logins
+  workers: 1, // Serial — Firebase Auth rate-limits concurrent logins causing flaky admin tests
   reporter: reporters,
   use: {
     baseURL: process.env.WEB_BASE_URL || 'https://dev.shytalk.shyden.co.uk',

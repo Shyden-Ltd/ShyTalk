@@ -261,7 +261,7 @@ jobs:
     needs: [resolve-inputs]
     if: always() && needs.resolve-inputs.result == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     environment: dev
     strategy:
       fail-fast: false
