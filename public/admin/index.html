@@ -5707,6 +5707,7 @@
     });
 
     async function loadReportHistory(uid) {
+      if (!uid || uid === "undefined" || uid === "null") return;
       reportHistorySection.style.display = "block";
       reportHistoryList.innerHTML = '<div style="color:var(--text2);font-size:12px;">Loading...</div>';
       try {
