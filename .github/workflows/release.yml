@@ -390,7 +390,7 @@ jobs:
           DEV_FIREBASE_API_KEY: ${{ secrets.DEV_FIREBASE_API_KEY }}
         run: |
           sed "s|<DEV_FIREBASE_API_KEY>|$DEV_FIREBASE_API_KEY|" public/admin/config.dev.example.js > public/admin/config.js
-          wrangler pages deploy public --project-name shytalk-site-dev
+          wrangler pages deploy public --project-name shytalk-site-dev --branch main
 
   # ──────────────────────────────────────────────
   # /deploy comment: Distribute to testers
@@ -1092,7 +1092,7 @@ jobs:
           PROD_FIREBASE_API_KEY: ${{ secrets.PROD_FIREBASE_API_KEY }}
         run: |
           sed "s|<PROD_FIREBASE_API_KEY>|$PROD_FIREBASE_API_KEY|" public/admin/config.example.js > public/admin/config.js
-          wrangler pages deploy public --project-name shytalk-site
+          wrangler pages deploy public --project-name shytalk-site --branch main
 
   deploy-ios-prod:
     name: Deploy iOS to App Store
