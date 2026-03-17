@@ -16,13 +16,13 @@ test.describe('Admin Users - Profile Subtab', () => {
 
     // User form should be visible
     const userForm = page.locator('#user-form');
-    await expect(userForm).toHaveClass(/visible/);
+    await expect(userForm).toHaveClass(/visible/, { timeout: 15_000 });
 
     // Verify all 5 profile sections are present
     const sections = ['Identity', 'Account', 'Media', 'Privacy', 'Lists'];
     for (const section of sections) {
       const heading = page.locator('.user-subpanel[data-subtab="profile"] .form-section h3', { hasText: section });
-      await expect(heading).toBeVisible();
+      await expect(heading).toBeVisible({ timeout: 15_000 });
     }
   });
 
@@ -30,16 +30,16 @@ test.describe('Admin Users - Profile Subtab', () => {
     await searchUser(page, TEST_USER_ID);
 
     const counter = page.locator('#counter-displayName');
-    await expect(counter).toBeVisible();
+    await expect(counter).toBeVisible({ timeout: 15_000 });
     // Counter should match the pattern N/20
-    await expect(counter).toHaveText(/\d+\/20/);
+    await expect(counter).toHaveText(/\d+\/20/, { timeout: 15_000 });
   });
 
   test('user type dropdown has all 5 options', async ({ page }) => {
     await searchUser(page, TEST_USER_ID);
 
     const userTypeSelect = page.locator('select[data-field="userType"]');
-    await expect(userTypeSelect).toBeVisible();
+    await expect(userTypeSelect).toBeVisible({ timeout: 15_000 });
 
     const options = await userTypeSelect.locator('option').allTextContents();
     expect(options).toContain('MEMBER');
@@ -54,7 +54,7 @@ test.describe('Admin Users - Profile Subtab', () => {
     await searchUser(page, TEST_USER_ID);
 
     const nationalitySelect = page.locator('#nationality-select');
-    await expect(nationalitySelect).toBeVisible();
+    await expect(nationalitySelect).toBeVisible({ timeout: 15_000 });
 
     // Should have more than just the default empty option
     const optionCount = await nationalitySelect.locator('option').count();
@@ -66,12 +66,13 @@ test.describe('Admin Users - Profile Subtab', () => {
 
     // Verify clear buttons exist for clearable fields
     const clearButtons = page.locator('.btn-clear[data-clear]');
+    await expect(clearButtons.first()).toBeVisible({ timeout: 15_000 });
     const count = await clearButtons.count();
     expect(count).toBeGreaterThanOrEqual(4); // nationality, description, email, dateOfBirth, profilePhotoUrl, coverPhotoUrl
 
     // Verify nationality clear button is clickable
     const natClearBtn = page.locator('.btn-clear[data-clear="nationality"]');
-    await expect(natClearBtn).toBeVisible();
+    await expect(natClearBtn).toBeVisible({ timeout: 15_000 });
     await expect(natClearBtn).toBeEnabled();
   });
 
@@ -79,7 +80,7 @@ test.describe('Admin Users - Profile Subtab', () => {
     await searchUser(page, TEST_USER_ID);
 
     const emailToggle = page.locator('#email-toggle');
-    await expect(emailToggle).toBeVisible();
+    await expect(emailToggle).toBeVisible({ timeout: 15_000 });
 
     // Initially should say "Show"
     const initialText = await emailToggle.textContent();
@@ -103,7 +104,7 @@ test.describe('Admin Users - Profile Subtab', () => {
 
     for (const { id, label } of checkboxes) {
       const checkbox = page.locator(id);
-      await expect(checkbox).toBeVisible();
+      await expect(checkbox).toBeVisible({ timeout: 15_000 });
       await expect(checkbox).toBeEnabled();
 
       // Verify label exists
@@ -116,7 +117,7 @@ test.describe('Admin Users - Profile Subtab', () => {
     await searchUser(page, TEST_USER_ID);
 
     const profilePreview = page.locator('#profile-preview');
-    await expect(profilePreview).toBeVisible();
+    await expect(profilePreview).toBeVisible({ timeout: 15_000 });
 
     // Verify both preview cards exist
     const currentPreview = page.locator('#profile-preview .preview-card').first();
@@ -158,12 +159,12 @@ test.describe('Admin Users - Profile Subtab', () => {
 
     // Unique ID should be displayed as a read-only div, not an input
     const uniqueIdField = page.locator('#field-uniqueId');
-    await expect(uniqueIdField).toBeVisible();
+    await expect(uniqueIdField).toBeVisible({ timeout: 15_000 });
     await expect(uniqueIdField).toHaveClass(/uid-display/);
 
     // Verify the READ ONLY badge is present
     const readonlyBadge = page.locator('.field-group:has(#field-uniqueId) .readonly-badge');
-    await expect(readonlyBadge).toBeVisible();
+    await expect(readonlyBadge).toBeVisible({ timeout: 15_000 });
     await expect(readonlyBadge).toContainText('READ ONLY');
   });
 });

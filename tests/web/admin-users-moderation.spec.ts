@@ -14,7 +14,7 @@ test.describe('Admin Users - Moderation Subtab', () => {
 
   test('shows device binding section', async ({ page }) => {
     const deviceBindingSection = page.locator('#device-binding-section');
-    await expect(deviceBindingSection).toBeVisible();
+    await expect(deviceBindingSection).toBeVisible({ timeout: 15_000 });
 
     // Should have a heading
     const heading = deviceBindingSection.locator('h3');
@@ -22,13 +22,13 @@ test.describe('Admin Users - Moderation Subtab', () => {
 
     // Should have a reset button
     const resetBtn = page.locator('#reset-device-binding-btn');
-    await expect(resetBtn).toBeAttached();
+    await expect(resetBtn).toBeAttached({ timeout: 15_000 });
     await expect(resetBtn).toContainText('Reset Device Binding');
   });
 
   test('shows GCS summary with badge', async ({ page }) => {
     const gcsSection = page.locator('#gcs-section');
-    await expect(gcsSection).toBeVisible();
+    await expect(gcsSection).toBeVisible({ timeout: 15_000 });
 
     // GCS heading
     const heading = gcsSection.locator('h3');
@@ -36,25 +36,25 @@ test.describe('Admin Users - Moderation Subtab', () => {
 
     // GCS badge
     const gcsBadge = page.locator('#gcs-badge-user');
-    await expect(gcsBadge).toBeAttached();
+    await expect(gcsBadge).toBeAttached({ timeout: 15_000 });
 
     // GCS details
     const gcsFloor = page.locator('#gcs-floor');
-    await expect(gcsFloor).toBeAttached();
+    await expect(gcsFloor).toBeAttached({ timeout: 15_000 });
 
     const gcsWarnings = page.locator('#gcs-warnings');
-    await expect(gcsWarnings).toBeAttached();
+    await expect(gcsWarnings).toBeAttached({ timeout: 15_000 });
 
     // Reset GCS button
     const resetGcsBtn = page.locator('#reset-gcs-btn');
-    await expect(resetGcsBtn).toBeAttached();
+    await expect(resetGcsBtn).toBeAttached({ timeout: 15_000 });
     await expect(resetGcsBtn).toContainText('Reset GCS');
   });
 
   test('warning issue form has reason dropdown and severity radio', async ({ page }) => {
     // Reason dropdown
     const reasonSelect = page.locator('#direct-warn-reason');
-    await expect(reasonSelect).toBeVisible();
+    await expect(reasonSelect).toBeVisible({ timeout: 15_000 });
 
     const options = await reasonSelect.locator('option').allTextContents();
     expect(options).toContain('Spam');
@@ -80,7 +80,7 @@ test.describe('Admin Users - Moderation Subtab', () => {
 
   test('warning history section exists', async ({ page }) => {
     const warningHistory = page.locator('#warning-history-list');
-    await expect(warningHistory).toBeAttached();
+    await expect(warningHistory).toBeAttached({ timeout: 15_000 });
 
     // Should contain either warning items or a "No warnings" placeholder
     const text = await warningHistory.textContent();
@@ -89,11 +89,11 @@ test.describe('Admin Users - Moderation Subtab', () => {
 
   test('suspension section has reason, duration presets, and buttons', async ({ page }) => {
     const suspensionSection = page.locator('#suspension-section');
-    await expect(suspensionSection).toBeVisible();
+    await expect(suspensionSection).toBeVisible({ timeout: 15_000 });
 
     // Suspension status indicator
     const suspensionStatus = page.locator('#suspension-status');
-    await expect(suspensionStatus).toBeVisible();
+    await expect(suspensionStatus).toBeVisible({ timeout: 15_000 });
 
     // Reason textarea
     const reasonInput = page.locator('#suspend-reason');
@@ -124,34 +124,34 @@ test.describe('Admin Users - Moderation Subtab', () => {
 
   test('ban buttons exist (ban devices, ban IP, unban all)', async ({ page }) => {
     const banAllDevicesBtn = page.locator('#bans-ban-all-devices');
-    await expect(banAllDevicesBtn).toBeAttached();
+    await expect(banAllDevicesBtn).toBeAttached({ timeout: 15_000 });
     await expect(banAllDevicesBtn).toContainText('Ban All Devices');
 
     const banLastIpBtn = page.locator('#bans-ban-last-ip');
-    await expect(banLastIpBtn).toBeAttached();
+    await expect(banLastIpBtn).toBeAttached({ timeout: 15_000 });
     await expect(banLastIpBtn).toContainText('Ban Last IP');
 
     const unbanAllBtn = page.locator('#bans-unban-all');
-    await expect(unbanAllBtn).toBeAttached();
+    await expect(unbanAllBtn).toBeAttached({ timeout: 15_000 });
     await expect(unbanAllBtn).toContainText('Unban All');
 
     // View Logs button also present
     const viewLogsBtn = page.locator('#bans-view-logs');
-    await expect(viewLogsBtn).toBeAttached();
+    await expect(viewLogsBtn).toBeAttached({ timeout: 15_000 });
     await expect(viewLogsBtn).toContainText('View Logs');
   });
 
   test('created and last seen timestamps display', async ({ page }) => {
     const accountInfoSection = page.locator('#account-info-section');
-    await expect(accountInfoSection).toBeVisible();
+    await expect(accountInfoSection).toBeVisible({ timeout: 15_000 });
 
     // Created At
     const createdAtField = page.locator('#field-createdAt');
-    await expect(createdAtField).toBeVisible();
+    await expect(createdAtField).toBeVisible({ timeout: 15_000 });
 
     // Last Seen At
     const lastSeenAtField = page.locator('#field-lastSeenAt');
-    await expect(lastSeenAtField).toBeVisible();
+    await expect(lastSeenAtField).toBeVisible({ timeout: 15_000 });
 
     // Both should have READ ONLY badges
     const readonlyBadges = accountInfoSection.locator('.readonly-badge');

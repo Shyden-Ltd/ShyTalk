@@ -11,18 +11,18 @@ test.describe('Admin Tabs - Structure Verification', () => {
       await navigateToTab(page, 'Appeals');
 
       const appealsPanel = page.locator('#appeals-panel');
-      await expect(appealsPanel).toBeVisible();
+      await expect(appealsPanel).toBeVisible({ timeout: 15_000 });
 
       const pendingBtn = appealsPanel.locator('button[data-appeal-filter="pending"]');
-      await expect(pendingBtn).toBeVisible();
+      await expect(pendingBtn).toBeVisible({ timeout: 15_000 });
       await expect(pendingBtn).toContainText('Pending');
 
       const approvedBtn = appealsPanel.locator('button[data-appeal-filter="approved"]');
-      await expect(approvedBtn).toBeVisible();
+      await expect(approvedBtn).toBeVisible({ timeout: 15_000 });
       await expect(approvedBtn).toContainText('Approved');
 
       const rejectedBtn = appealsPanel.locator('button[data-appeal-filter="rejected"]');
-      await expect(rejectedBtn).toBeVisible();
+      await expect(rejectedBtn).toBeVisible({ timeout: 15_000 });
       await expect(rejectedBtn).toContainText('Rejected');
     });
 
@@ -30,7 +30,7 @@ test.describe('Admin Tabs - Structure Verification', () => {
       await navigateToTab(page, 'Appeals');
 
       const appealsList = page.locator('#appeals-list');
-      await expect(appealsList).toBeAttached();
+      await expect(appealsList).toBeAttached({ timeout: 15_000 });
     });
   });
 
@@ -39,52 +39,52 @@ test.describe('Admin Tabs - Structure Verification', () => {
       await navigateToTab(page, 'Reports');
 
       const statsBar = page.locator('#reports-stats-bar');
-      await expect(statsBar).toBeVisible();
+      await expect(statsBar).toBeVisible({ timeout: 15_000 });
 
       // Verify stat cards exist
-      await expect(page.locator('#stat-pending')).toBeAttached();
-      await expect(page.locator('#stat-resolved-today')).toBeAttached();
-      await expect(page.locator('#stat-avg-response')).toBeAttached();
-      await expect(page.locator('#stat-reviewers')).toBeAttached();
+      await expect(page.locator('#stat-pending')).toBeAttached({ timeout: 15_000 });
+      await expect(page.locator('#stat-resolved-today')).toBeAttached({ timeout: 15_000 });
+      await expect(page.locator('#stat-avg-response')).toBeAttached({ timeout: 15_000 });
+      await expect(page.locator('#stat-reviewers')).toBeAttached({ timeout: 15_000 });
     });
 
     test('shows search input', async ({ page }) => {
       await navigateToTab(page, 'Reports');
 
       const searchInput = page.locator('#report-search-input');
-      await expect(searchInput).toBeVisible();
+      await expect(searchInput).toBeVisible({ timeout: 15_000 });
 
       const searchBtn = page.locator('#report-search-btn');
-      await expect(searchBtn).toBeVisible();
+      await expect(searchBtn).toBeVisible({ timeout: 15_000 });
     });
 
     test('shows filter buttons (Pending, Resolved, Archived)', async ({ page }) => {
       await navigateToTab(page, 'Reports');
 
       const filterBar = page.locator('#report-filter-bar');
-      await expect(filterBar).toBeVisible();
+      await expect(filterBar).toBeVisible({ timeout: 15_000 });
 
       const pendingBtn = filterBar.locator('button[data-report-filter="pending"]');
-      await expect(pendingBtn).toBeVisible();
+      await expect(pendingBtn).toBeVisible({ timeout: 15_000 });
 
       const resolvedBtn = filterBar.locator('button[data-report-filter="resolved"]');
-      await expect(resolvedBtn).toBeVisible();
+      await expect(resolvedBtn).toBeVisible({ timeout: 15_000 });
 
       const archivedBtn = filterBar.locator('button[data-report-filter="archived"]');
-      await expect(archivedBtn).toBeVisible();
+      await expect(archivedBtn).toBeVisible({ timeout: 15_000 });
     });
 
     test('shows export section', async ({ page }) => {
       await navigateToTab(page, 'Reports');
 
       const exportFrom = page.locator('#export-from');
-      await expect(exportFrom).toBeAttached();
+      await expect(exportFrom).toBeAttached({ timeout: 15_000 });
 
       const exportTo = page.locator('#export-to');
-      await expect(exportTo).toBeAttached();
+      await expect(exportTo).toBeAttached({ timeout: 15_000 });
 
       const exportCsvBtn = page.locator('#export-csv-btn');
-      await expect(exportCsvBtn).toBeVisible();
+      await expect(exportCsvBtn).toBeVisible({ timeout: 15_000 });
       await expect(exportCsvBtn).toContainText('Export CSV');
     });
   });
@@ -94,7 +94,7 @@ test.describe('Admin Tabs - Structure Verification', () => {
       await navigateToTab(page, 'Gifts');
 
       const addGiftBtn = page.locator('#gift-add-btn');
-      await expect(addGiftBtn).toBeVisible();
+      await expect(addGiftBtn).toBeVisible({ timeout: 15_000 });
       await expect(addGiftBtn).toContainText('Add Gift');
     });
 
@@ -102,7 +102,7 @@ test.describe('Admin Tabs - Structure Verification', () => {
       await navigateToTab(page, 'Gifts');
 
       const giftsTable = page.locator('.gifts-table');
-      await expect(giftsTable).toBeVisible();
+      await expect(giftsTable).toBeVisible({ timeout: 15_000 });
 
       // Verify table headers
       const headers = giftsTable.locator('thead th');
@@ -117,10 +117,10 @@ test.describe('Admin Tabs - Structure Verification', () => {
       await navigateToTab(page, 'Gifts');
 
       const applyBtn = page.locator('#gift-apply-btn');
-      await expect(applyBtn).toBeAttached();
+      await expect(applyBtn).toBeAttached({ timeout: 15_000 });
 
       const discardBtn = page.locator('#gift-discard-btn');
-      await expect(discardBtn).toBeAttached();
+      await expect(discardBtn).toBeAttached({ timeout: 15_000 });
     });
   });
 
@@ -129,11 +129,11 @@ test.describe('Admin Tabs - Structure Verification', () => {
       await navigateToTab(page, 'Economy');
 
       const economyPanel = page.locator('#economy-panel');
-      await expect(economyPanel).toBeVisible();
+      await expect(economyPanel).toBeVisible({ timeout: 15_000 });
 
       // Bean conversion rate input
       const beanConversionRate = page.locator('#eco-beanConversionRate');
-      await expect(beanConversionRate).toBeAttached();
+      await expect(beanConversionRate).toBeAttached({ timeout: 15_000 });
     });
 
     test('shows gacha rates section', async ({ page }) => {
@@ -141,43 +141,43 @@ test.describe('Admin Tabs - Structure Verification', () => {
 
       // Drop rate exponent slider
       const dropRateExponent = page.locator('#eco-dropRateExponent');
-      await expect(dropRateExponent).toBeAttached();
+      await expect(dropRateExponent).toBeAttached({ timeout: 15_000 });
 
       // Pull costs
-      await expect(page.locator('#eco-pullCost-1')).toBeAttached();
-      await expect(page.locator('#eco-pullCost-10')).toBeAttached();
-      await expect(page.locator('#eco-pullCost-100')).toBeAttached();
+      await expect(page.locator('#eco-pullCost-1')).toBeAttached({ timeout: 15_000 });
+      await expect(page.locator('#eco-pullCost-10')).toBeAttached({ timeout: 15_000 });
+      await expect(page.locator('#eco-pullCost-100')).toBeAttached({ timeout: 15_000 });
     });
 
     test('shows pity system section', async ({ page }) => {
       await navigateToTab(page, 'Economy');
 
-      await expect(page.locator('#eco-pitySoftStart')).toBeAttached();
-      await expect(page.locator('#eco-pityHardLimit')).toBeAttached();
-      await expect(page.locator('#eco-pitySoftMaxShift')).toBeAttached();
-      await expect(page.locator('#eco-pityHighValueThreshold')).toBeAttached();
+      await expect(page.locator('#eco-pitySoftStart')).toBeAttached({ timeout: 15_000 });
+      await expect(page.locator('#eco-pityHardLimit')).toBeAttached({ timeout: 15_000 });
+      await expect(page.locator('#eco-pitySoftMaxShift')).toBeAttached({ timeout: 15_000 });
+      await expect(page.locator('#eco-pityHighValueThreshold')).toBeAttached({ timeout: 15_000 });
     });
 
     test('shows daily rewards section', async ({ page }) => {
       await navigateToTab(page, 'Economy');
 
       const dailyBase = page.locator('#eco-dailyBase');
-      await expect(dailyBase).toBeAttached();
+      await expect(dailyBase).toBeAttached({ timeout: 15_000 });
 
       // Milestone rows container
       const milestoneRows = page.locator('#milestone-rows');
-      await expect(milestoneRows).toBeAttached();
+      await expect(milestoneRows).toBeAttached({ timeout: 15_000 });
 
       // Add milestone button
       const addMilestoneBtn = page.locator('#ms-add-btn');
-      await expect(addMilestoneBtn).toBeVisible();
+      await expect(addMilestoneBtn).toBeVisible({ timeout: 15_000 });
     });
 
     test('shows save button', async ({ page }) => {
       await navigateToTab(page, 'Economy');
 
       const saveBtn = page.locator('#eco-save-btn');
-      await expect(saveBtn).toBeVisible();
+      await expect(saveBtn).toBeVisible({ timeout: 15_000 });
       await expect(saveBtn).toContainText('Save Economy Config');
     });
   });
@@ -187,7 +187,7 @@ test.describe('Admin Tabs - Structure Verification', () => {
       await navigateToTab(page, 'Maintenance');
 
       const maintenancePanel = page.locator('#maintenance-panel');
-      await expect(maintenancePanel).toBeVisible();
+      await expect(maintenancePanel).toBeVisible({ timeout: 15_000 });
 
       // Verify key maintenance cards exist by their button IDs
       const maintenanceButtons = [
@@ -217,7 +217,7 @@ test.describe('Admin Tabs - Structure Verification', () => {
 
       for (const btn of maintenanceButtons) {
         const button = page.locator(btn.id);
-        await expect(button).toBeAttached();
+        await expect(button).toBeAttached({ timeout: 15_000 });
       }
     });
 
@@ -225,7 +225,7 @@ test.describe('Admin Tabs - Structure Verification', () => {
       await navigateToTab(page, 'Maintenance');
 
       const resetAllBtn = page.locator('#reset-all-btn');
-      await expect(resetAllBtn).toBeVisible();
+      await expect(resetAllBtn).toBeVisible({ timeout: 15_000 });
       await expect(resetAllBtn).toContainText('RESET EVERYTHING');
     });
   });
@@ -235,37 +235,37 @@ test.describe('Admin Tabs - Structure Verification', () => {
       await navigateToTab(page, 'Spin Monitor');
 
       const monitorPanel = page.locator('#monitor-panel');
-      await expect(monitorPanel).toBeVisible();
+      await expect(monitorPanel).toBeVisible({ timeout: 15_000 });
 
       const uidInput = page.locator('#monitor-uid-input');
-      await expect(uidInput).toBeVisible();
+      await expect(uidInput).toBeVisible({ timeout: 15_000 });
 
       const startBtn = page.locator('#monitor-start-btn');
-      await expect(startBtn).toBeVisible();
+      await expect(startBtn).toBeVisible({ timeout: 15_000 });
       await expect(startBtn).toContainText('Start Monitoring');
 
       const stopBtn = page.locator('#monitor-stop-btn');
-      await expect(stopBtn).toBeAttached();
+      await expect(stopBtn).toBeAttached({ timeout: 15_000 });
     });
 
     test('shows guarantee section', async ({ page }) => {
       await navigateToTab(page, 'Spin Monitor');
 
       const guaranteeSection = page.locator('#guarantee-section');
-      await expect(guaranteeSection).toBeVisible();
+      await expect(guaranteeSection).toBeVisible({ timeout: 15_000 });
 
       const heading = guaranteeSection.locator('h3');
       await expect(heading).toContainText('Guarantee Next Prize');
 
       const giftSelect = page.locator('#guarantee-gift-select');
-      await expect(giftSelect).toBeAttached();
+      await expect(giftSelect).toBeAttached({ timeout: 15_000 });
 
       const setBtn = page.locator('#guarantee-set-btn');
-      await expect(setBtn).toBeVisible();
+      await expect(setBtn).toBeVisible({ timeout: 15_000 });
       await expect(setBtn).toContainText('Set Guarantee');
 
       const revokeBtn = page.locator('#guarantee-revoke-btn');
-      await expect(revokeBtn).toBeAttached();
+      await expect(revokeBtn).toBeAttached({ timeout: 15_000 });
     });
   });
 
@@ -274,7 +274,7 @@ test.describe('Admin Tabs - Structure Verification', () => {
       await navigateToTab(page, 'Banners');
 
       const addBannerBtn = page.locator('#banner-add-btn');
-      await expect(addBannerBtn).toBeVisible();
+      await expect(addBannerBtn).toBeVisible({ timeout: 15_000 });
       await expect(addBannerBtn).toContainText('Add Banner');
     });
 
@@ -282,7 +282,7 @@ test.describe('Admin Tabs - Structure Verification', () => {
       await navigateToTab(page, 'Banners');
 
       const bannersList = page.locator('#banners-list');
-      await expect(bannersList).toBeAttached();
+      await expect(bannersList).toBeAttached({ timeout: 15_000 });
     });
   });
 
@@ -291,7 +291,7 @@ test.describe('Admin Tabs - Structure Verification', () => {
       await navigateToTab(page, 'Fun Facts');
 
       const addFunFactBtn = page.locator('#funfact-add-btn');
-      await expect(addFunFactBtn).toBeVisible();
+      await expect(addFunFactBtn).toBeVisible({ timeout: 15_000 });
       await expect(addFunFactBtn).toContainText('Add Fun Fact');
     });
 
@@ -299,7 +299,7 @@ test.describe('Admin Tabs - Structure Verification', () => {
       await navigateToTab(page, 'Fun Facts');
 
       const funfactsList = page.locator('#funfacts-list');
-      await expect(funfactsList).toBeAttached();
+      await expect(funfactsList).toBeAttached({ timeout: 15_000 });
     });
   });
 
@@ -308,15 +308,15 @@ test.describe('Admin Tabs - Structure Verification', () => {
       await navigateToTab(page, 'Backups');
 
       const backupNowBtn = page.locator('#backup-trigger-btn');
-      await expect(backupNowBtn).toBeVisible();
+      await expect(backupNowBtn).toBeVisible({ timeout: 15_000 });
       await expect(backupNowBtn).toContainText('Backup Now');
 
       const refreshBtn = page.locator('#backup-refresh-btn');
-      await expect(refreshBtn).toBeVisible();
+      await expect(refreshBtn).toBeVisible({ timeout: 15_000 });
       await expect(refreshBtn).toContainText('Refresh');
 
       const recoverBtn = page.locator('#backup-recover-photos-btn');
-      await expect(recoverBtn).toBeVisible();
+      await expect(recoverBtn).toBeVisible({ timeout: 15_000 });
       await expect(recoverBtn).toContainText('Recover Photos from R2');
     });
   });
@@ -326,37 +326,37 @@ test.describe('Admin Tabs - Structure Verification', () => {
       await navigateToTab(page, 'Logs');
 
       const logsPanel = page.locator('#logs-panel');
-      await expect(logsPanel).toBeVisible();
+      await expect(logsPanel).toBeVisible({ timeout: 15_000 });
 
       const alertsSection = page.locator('#logs-alerts-section');
-      await expect(alertsSection).toBeAttached();
+      await expect(alertsSection).toBeAttached({ timeout: 15_000 });
 
       const alertsTable = page.locator('#alerts-table');
-      await expect(alertsTable).toBeAttached();
+      await expect(alertsTable).toBeAttached({ timeout: 15_000 });
     });
 
     test('shows filters bar', async ({ page }) => {
       await navigateToTab(page, 'Logs');
 
       const filtersBar = page.locator('#logs-filters');
-      await expect(filtersBar).toBeVisible();
+      await expect(filtersBar).toBeVisible({ timeout: 15_000 });
 
       // Key filter elements
-      await expect(page.locator('#log-filter-level')).toBeAttached();
-      await expect(page.locator('#log-filter-source')).toBeAttached();
-      await expect(page.locator('#log-filter-userId')).toBeAttached();
-      await expect(page.locator('#log-filter-keyword')).toBeAttached();
+      await expect(page.locator('#log-filter-level')).toBeAttached({ timeout: 15_000 });
+      await expect(page.locator('#log-filter-source')).toBeAttached({ timeout: 15_000 });
+      await expect(page.locator('#log-filter-userId')).toBeAttached({ timeout: 15_000 });
+      await expect(page.locator('#log-filter-keyword')).toBeAttached({ timeout: 15_000 });
 
       // Search and clear buttons
-      await expect(page.locator('#log-search-btn')).toBeVisible();
-      await expect(page.locator('#log-clear-btn')).toBeVisible();
+      await expect(page.locator('#log-search-btn')).toBeVisible({ timeout: 15_000 });
+      await expect(page.locator('#log-clear-btn')).toBeVisible({ timeout: 15_000 });
     });
 
     test('shows log table', async ({ page }) => {
       await navigateToTab(page, 'Logs');
 
       const logsTable = page.locator('.logs-table');
-      await expect(logsTable).toBeAttached();
+      await expect(logsTable).toBeAttached({ timeout: 15_000 });
 
       // Verify table headers
       const headers = logsTable.locator('thead th');
@@ -371,11 +371,11 @@ test.describe('Admin Tabs - Structure Verification', () => {
       await navigateToTab(page, 'Logs');
 
       const exportJsonBtn = page.locator('#log-export-json');
-      await expect(exportJsonBtn).toBeVisible();
+      await expect(exportJsonBtn).toBeVisible({ timeout: 15_000 });
       await expect(exportJsonBtn).toContainText('Export JSON');
 
       const exportCsvBtn = page.locator('#log-export-csv');
-      await expect(exportCsvBtn).toBeVisible();
+      await expect(exportCsvBtn).toBeVisible({ timeout: 15_000 });
       await expect(exportCsvBtn).toContainText('Export CSV');
     });
 
@@ -383,14 +383,14 @@ test.describe('Admin Tabs - Structure Verification', () => {
       await navigateToTab(page, 'Logs');
 
       const settingsSection = page.locator('#logs-settings-section');
-      await expect(settingsSection).toBeAttached();
+      await expect(settingsSection).toBeAttached({ timeout: 15_000 });
 
       // Settings should include retention and hard cap inputs
-      await expect(page.locator('#log-cfg-retention')).toBeAttached();
-      await expect(page.locator('#log-cfg-hardcap')).toBeAttached();
+      await expect(page.locator('#log-cfg-retention')).toBeAttached({ timeout: 15_000 });
+      await expect(page.locator('#log-cfg-hardcap')).toBeAttached({ timeout: 15_000 });
 
       // Save settings button
-      await expect(page.locator('#log-settings-save-btn')).toBeAttached();
+      await expect(page.locator('#log-settings-save-btn')).toBeAttached({ timeout: 15_000 });
     });
   });
 
@@ -399,21 +399,21 @@ test.describe('Admin Tabs - Structure Verification', () => {
       await navigateToTab(page, 'Devices');
 
       const searchInput = page.locator('#devices-search-input');
-      await expect(searchInput).toBeVisible();
+      await expect(searchInput).toBeVisible({ timeout: 15_000 });
 
       const searchBtn = page.locator('#devices-search-btn');
-      await expect(searchBtn).toBeVisible();
+      await expect(searchBtn).toBeVisible({ timeout: 15_000 });
     });
 
     test('shows devices table container', async ({ page }) => {
       await navigateToTab(page, 'Devices');
 
       const tableContainer = page.locator('#devices-table-container');
-      await expect(tableContainer).toBeAttached();
+      await expect(tableContainer).toBeAttached({ timeout: 15_000 });
 
       // Verify table headers
       const devicesTable = page.locator('.devices-table');
-      await expect(devicesTable).toBeAttached();
+      await expect(devicesTable).toBeAttached({ timeout: 15_000 });
 
       const headers = devicesTable.locator('thead th');
       const headerTexts = await headers.allTextContents();

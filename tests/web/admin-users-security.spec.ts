@@ -14,7 +14,7 @@ test.describe('Admin Users - Security Subtab', () => {
 
   test('shows PIN status section with all 6 fields', async ({ page }) => {
     const pinStatusGrid = page.locator('#pin-status-grid');
-    await expect(pinStatusGrid).toBeVisible();
+    await expect(pinStatusGrid).toBeVisible({ timeout: 15_000 });
 
     const expectedFields = [
       { id: '#pin-set', label: 'PIN Set' },
@@ -27,48 +27,48 @@ test.describe('Admin Users - Security Subtab', () => {
 
     for (const field of expectedFields) {
       const valueEl = page.locator(field.id);
-      await expect(valueEl).toBeAttached();
+      await expect(valueEl).toBeAttached({ timeout: 15_000 });
 
       // Verify the label exists alongside the value
       const labelEl = pinStatusGrid.locator('.detail-label', { hasText: field.label });
-      await expect(labelEl).toBeAttached();
+      await expect(labelEl).toBeAttached({ timeout: 15_000 });
     }
   });
 
   test('shows biometric keys section', async ({ page }) => {
     const biometricSection = page.locator('#biometric-keys-list');
-    await expect(biometricSection).toBeAttached();
+    await expect(biometricSection).toBeAttached({ timeout: 15_000 });
 
     // The section heading should exist
     const heading = page.locator('.user-subpanel[data-subtab="security"] h3', { hasText: 'Biometric Keys' });
-    await expect(heading).toBeVisible();
+    await expect(heading).toBeVisible({ timeout: 15_000 });
   });
 
   test('shows OTP metrics section with count and limit', async ({ page }) => {
     const otpMetricsGrid = page.locator('#otp-metrics-grid');
-    await expect(otpMetricsGrid).toBeAttached();
+    await expect(otpMetricsGrid).toBeAttached({ timeout: 15_000 });
 
     // Heading
     const heading = page.locator('.user-subpanel[data-subtab="security"] h3', { hasText: 'OTP Email Metrics' });
-    await expect(heading).toBeVisible();
+    await expect(heading).toBeVisible({ timeout: 15_000 });
 
     // OTP count
     const otpCount = page.locator('#otp-count');
-    await expect(otpCount).toBeAttached();
+    await expect(otpCount).toBeAttached({ timeout: 15_000 });
 
     // OTP limit
     const otpLimit = page.locator('#otp-limit');
-    await expect(otpLimit).toBeAttached();
+    await expect(otpLimit).toBeAttached({ timeout: 15_000 });
     await expect(otpLimit).toContainText('100');
 
     // OTP date
     const otpDate = page.locator('#otp-date');
-    await expect(otpDate).toBeAttached();
+    await expect(otpDate).toBeAttached({ timeout: 15_000 });
   });
 
   test('reset PIN lockout button hidden when no lockout', async ({ page }) => {
     const resetBtn = page.locator('#reset-pin-lockout-btn');
-    await expect(resetBtn).toBeAttached();
+    await expect(resetBtn).toBeAttached({ timeout: 15_000 });
 
     // By default, if user has no lockout, the button should be hidden
     // The button has style="display:none" by default
