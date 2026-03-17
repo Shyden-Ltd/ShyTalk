@@ -260,8 +260,11 @@ jobs:
 
   web-tests:
     name: Web Tests (Playwright)
-    needs: [detect-changes]
-    if: needs.detect-changes.outputs.web_changed == 'true'
+    needs: [detect-changes, deploy-web-dev]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.web_changed == 'true' &&
+      needs.deploy-web-dev.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -360,11 +363,10 @@ jobs:
 
   deploy-web-dev:
     name: Deploy Web to Dev
-    needs: [detect-changes, web-tests]
+    needs: [detect-changes]
     if: |
       always() &&
-      needs.detect-changes.outputs.web_changed == 'true' &&
-      needs.web-tests.result == 'success'
+      needs.detect-changes.outputs.web_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
