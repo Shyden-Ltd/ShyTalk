@@ -25,8 +25,8 @@ export default defineConfig({
   use: {
     baseURL: process.env.WEB_BASE_URL || 'https://dev.shytalk.shyden.co.uk',
     headless: true,
-    screenshot: 'off', // Security: Allure report is public
-    trace: 'off',
+    screenshot: 'only-on-failure', // Failure screenshots go to test-results/ artifacts (NOT Allure)
+    trace: 'retain-on-failure', // Trace on failure for debugging
     video: 'off',
   },
   projects: [

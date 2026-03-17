@@ -34,7 +34,6 @@ export async function adminLogin(page: Page): Promise<void> {
  */
 export async function goToAdmin(page: Page): Promise<void> {
   await page.goto('/admin/');
-  // Firebase persists within the same browser context
   await expect(page.locator('#dashboard-screen')).toBeVisible({ timeout: 15_000 });
 }
 
@@ -48,13 +47,35 @@ export async function navigateToTab(page: Page, tabName: string): Promise<void> 
 }
 
 /**
- * Search for a user by unique ID.
+ * Search for a user by unique ID and wait for profile data to load.
+ * Monitors API responses to fail fast on backend errors instead of timing out.
  */
 export async function searchUser(page: Page, uniqueId: string): Promise<void> {
+  // Monitor for API errors during search
+  const apiErrors: string[] = [];
+  const errorHandler = (response: any) => {
+    if (response.status() >= 500) {
+      apiErrors.push(`${response.status()}: ${response.url()}`);
+    }
+  };
+  page.on('response', errorHandler);
+
   const searchInput = page.getByRole('spinbutton', { name: 'ShyTalk User ID' });
   await searchInput.fill(uniqueId);
   await page.getByRole('button', { name: 'Search' }).click();
-  await expect(page.locator('.user-subtab[data-subtab="profile"]')).toBeVisible({ timeout: 20_000 });
+
+  try {
+    await expect(page.locator('.user-subtab[data-subtab="profile"]')).toBeVisible({ timeout: 20_000 });
+  } catch (err) {
+    // If search timed out, report any API errors that might explain why
+    if (apiErrors.length > 0) {
+      throw new Error(`User search failed — backend API errors:\n${apiErrors.join('\n')}`);
+    }
+    throw err;
+  } finally {
+    page.off('response', errorHandler);
+  }
+
   await page.waitForTimeout(500);
 }
 
