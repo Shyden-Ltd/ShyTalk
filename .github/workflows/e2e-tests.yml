@@ -255,14 +255,33 @@ jobs:
             app/build/reports/androidTests/connected/
           retention-days: 14
 
-  # ── Playwright Web Tests (multi-browser) ─────────────────────
+  # ── Playwright Web Tests (multi-browser matrix) ───────────────
   test-playwright:
-    name: Playwright Web Tests
+    name: "Playwright (${{ matrix.project }})"
     needs: [resolve-inputs]
     if: always() && needs.resolve-inputs.result == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
     environment: dev
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: chromium
+            browser: Chromium
+            viewport: 1280x720
+          - project: firefox
+            browser: Firefox
+            viewport: 1280x720
+          - project: webkit
+            browser: WebKit
+            viewport: 1280x720
+          - project: mobile-chrome
+            browser: "Mobile Chrome (Pixel 5)"
+            viewport: 393x851
+          - project: mobile-safari
+            browser: "Mobile Safari (iPhone 13)"
+            viewport: 390x844
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -279,58 +298,33 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
-      - name: Run Playwright tests with Allure
+      - name: Run Playwright tests (${{ matrix.project }})
         env:
           WEB_BASE_URL: https://dev.shytalk.shyden.co.uk
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           ALLURE_ENABLED: 'true'
-        run: |
-          FAILED=false
-          for PROJECT in chromium firefox webkit mobile-chrome mobile-safari; do
-            echo "::group::Running $PROJECT"
-            ALLURE_PROJECT=$PROJECT npx playwright test --project=$PROJECT || FAILED=true
-            echo "::endgroup::"
-          done
-          if [ "$FAILED" = true ]; then
-            echo "::warning::Some Playwright browser projects had test failures"
-          fi
+          ALLURE_PROJECT: ${{ matrix.project }}
+        run: npx playwright test --project=${{ matrix.project }} --reporter=list,allure-playwright,html
 
-      - name: Write environment.properties per project
+      - name: Write environment.properties
         if: always()
         run: |
-          for PROJECT in chromium firefox webkit mobile-chrome mobile-safari; do
-            DIR="allure-results/$PROJECT"
-            mkdir -p "$DIR"
-            case "$PROJECT" in
-              chromium)      VIEWPORT="1280x720"; BROWSER="Chromium" ;;
-              firefox)       VIEWPORT="1280x720"; BROWSER="Firefox" ;;
-              webkit)        VIEWPORT="1280x720"; BROWSER="WebKit" ;;
-              mobile-chrome) VIEWPORT="393x851";  BROWSER="Mobile Chrome (Pixel 5)" ;;
-              mobile-safari) VIEWPORT="390x844";  BROWSER="Mobile Safari (iPhone 13)" ;;
-            esac
-            cat > "$DIR/environment.properties" <<EOF
+          DIR="allure-results/${{ matrix.project }}"
+          mkdir -p "$DIR"
+          cat > "$DIR/environment.properties" <<EOF
           platform=Web
-          browser=$BROWSER
-          viewport=$VIEWPORT
+          browser=${{ matrix.browser }}
+          viewport=${{ matrix.viewport }}
           base_url=dev.shytalk.shyden.co.uk
           EOF
-          done
 
       - name: Upload Allure results
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         if: always()
         with:
-          name: allure-results-playwright
+          name: allure-results-playwright-${{ matrix.project }}
           path: allure-results/
-          retention-days: 14
-
-      - name: Upload Playwright HTML report
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
-        if: always()
-        with:
-          name: playwright-html-report
-          path: playwright-report/
           retention-days: 14
 
   # ── Build iOS test bundle ─────────────────────────────────────
