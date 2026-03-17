@@ -18,9 +18,9 @@ if (process.env.ALLURE_ENABLED === 'true') {
 export default defineConfig({
   testDir: './tests/web',
   testIgnore: ['**/auth.setup.ts'],
-  timeout: 90_000, // 90s per test — CI runners have higher latency to dev API
+  timeout: 60_000,
   retries: 1,
-  workers: 1, // Serial — Firebase Auth rate-limits concurrent logins causing flaky admin tests
+  workers: 1, // Serial — Firebase Auth rate-limits concurrent logins
   reporter: reporters,
   use: {
     baseURL: process.env.WEB_BASE_URL || 'https://dev.shytalk.shyden.co.uk',
@@ -28,6 +28,9 @@ export default defineConfig({
     screenshot: 'off', // Security: Allure report is public
     trace: 'off',
     video: 'off',
+    // Reuse browser context across tests — Firebase Auth persists in IndexedDB
+    // within the same context, eliminating redundant logins
+    launchOptions: { slowMo: 0 },
   },
   projects: [
     { name: 'chromium', use: { browserName: 'chromium' } },

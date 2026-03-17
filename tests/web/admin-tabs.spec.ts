@@ -183,6 +183,7 @@ test.describe('Admin Tabs - Structure Verification', () => {
   });
 
   test.describe('Maintenance Tab', () => {
+
     test('shows all maintenance cards', async ({ page }) => {
       await navigateToTab(page, 'Maintenance');
 
@@ -270,6 +271,7 @@ test.describe('Admin Tabs - Structure Verification', () => {
   });
 
   test.describe('Banners Tab', () => {
+
     test('shows add banner button', async ({ page }) => {
       await navigateToTab(page, 'Banners');
 
@@ -287,6 +289,7 @@ test.describe('Admin Tabs - Structure Verification', () => {
   });
 
   test.describe('Fun Facts Tab', () => {
+
     test('shows add fun fact button', async ({ page }) => {
       await navigateToTab(page, 'Fun Facts');
 
@@ -322,6 +325,7 @@ test.describe('Admin Tabs - Structure Verification', () => {
   });
 
   test.describe('Logs Tab', () => {
+
     test('shows alerts section', async ({ page }) => {
       await navigateToTab(page, 'Logs');
 
@@ -395,6 +399,7 @@ test.describe('Admin Tabs - Structure Verification', () => {
   });
 
   test.describe('Devices Tab', () => {
+
     test('shows search input', async ({ page }) => {
       await navigateToTab(page, 'Devices');
 
