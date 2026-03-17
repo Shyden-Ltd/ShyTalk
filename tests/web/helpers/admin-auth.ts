@@ -22,13 +22,8 @@ export async function adminLogin(page: Page): Promise<void> {
   const signInBtn = page.getByRole('button', { name: 'Sign In' });
   await expect(signInBtn).toBeVisible({ timeout: 10_000 });
 
-  // Use evaluate to set values without logging credentials in CI console
-  const emailInput = page.getByRole('textbox', { name: 'Email' });
-  const passwordInput = page.getByRole('textbox', { name: 'Password' });
-  await emailInput.click();
-  await emailInput.evaluate((el, val) => { (el as HTMLInputElement).value = val; el.dispatchEvent(new Event('input', { bubbles: true })); }, ADMIN_EMAIL);
-  await passwordInput.click();
-  await passwordInput.evaluate((el, val) => { (el as HTMLInputElement).value = val; el.dispatchEvent(new Event('input', { bubbles: true })); }, ADMIN_PASSWORD);
+  await page.getByRole('textbox', { name: 'Email' }).fill(ADMIN_EMAIL);
+  await page.getByRole('textbox', { name: 'Password' }).fill(ADMIN_PASSWORD);
   await signInBtn.click();
 
   await expect(dashboard).toBeVisible({ timeout: 30_000 });
