@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/admin';
 import { adminLogin, navigateToTab, searchUser, switchUserSubtab } from './helpers/admin-auth';
 
 const TEST_USER_ID = '10000001';

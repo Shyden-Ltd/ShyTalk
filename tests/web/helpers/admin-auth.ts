@@ -4,24 +4,29 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL || '';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 
 /**
- * Sign into the admin panel. Firebase Auth uses IndexedDB so storageState
- * doesn't persist sessions — we must sign in per browser context.
+ * Sign into the admin panel. When used with the shared admin fixture,
+ * Firebase Auth tokens persist in IndexedDB across pages in the same
+ * BrowserContext — so this usually just waits for auto-login.
  */
 export async function adminLogin(page: Page): Promise<void> {
   await page.goto('/admin/');
 
-  // Check if already signed in
+  // Wait for the page to settle — Firebase Auth may auto-sign-in from IndexedDB
   const dashboard = page.locator('#dashboard-screen');
-  const isVisible = await dashboard.isVisible().catch(() => false);
-  if (isVisible) return;
+  const signInBtn = page.getByRole('button', { name: 'Sign In' });
+  await Promise.race([
+    dashboard.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {}),
+    signInBtn.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {}),
+  ]);
+
+  // Already authenticated (shared context with IndexedDB tokens)
+  if (await dashboard.isVisible()) return;
 
   if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
     throw new Error('ADMIN_EMAIL and ADMIN_PASSWORD env vars required');
   }
 
-  const signInBtn = page.getByRole('button', { name: 'Sign In' });
   await expect(signInBtn).toBeVisible({ timeout: 10_000 });
-
   await page.getByRole('textbox', { name: 'Email' }).fill(ADMIN_EMAIL);
   await page.getByRole('textbox', { name: 'Password' }).fill(ADMIN_PASSWORD);
   await signInBtn.click();

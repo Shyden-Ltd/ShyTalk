@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/admin';
 import { adminLogin, navigateToTab } from './helpers/admin-auth';
 
 test.describe('Admin Tabs - Structure Verification', () => {
