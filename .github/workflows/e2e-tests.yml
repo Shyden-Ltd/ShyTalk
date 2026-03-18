@@ -384,6 +384,12 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-browsers-${{ needs.prepare-playwright.outputs.pw-version }}
 
+      - name: Cache apt packages for Playwright
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+        with:
+          path: /var/cache/apt/archives
+          key: apt-playwright-${{ needs.prepare-playwright.outputs.pw-version }}
+
       - name: Install system dependencies
         run: npx playwright install-deps
 
