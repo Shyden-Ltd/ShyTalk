@@ -6,13 +6,19 @@ on:
     types: [opened, synchronize, reopened]
   issue_comment:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      cancel_stale_only:
+        description: 'Only cancel stale runs (skip everything else)'
+        type: boolean
+        default: true
 
 permissions:
   contents: write
   pull-requests: write
   issues: write
   checks: write
-  actions: read          # cross-run artifact download for /deploy
+  actions: write         # needed to cancel runs and reject deployments
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -29,58 +35,59 @@ jobs:
 
   cancel-stale:
     name: Cancel Stale Runs
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Reject pending deployments from older runs
+      - name: Force-cancel all stale runs
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           script: |
-            // Find all in-progress or waiting runs for this workflow on the same branch
-            const { data: runs } = await github.rest.actions.listWorkflowRuns({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'release.yml',
-              branch: context.payload.pull_request.head.ref,
-              status: 'waiting',
-            });
+            const branch = context.payload.pull_request?.head?.ref || context.ref?.replace('refs/heads/', '');
 
-            for (const run of runs.workflow_runs) {
-              if (run.id === context.runId) continue; // skip current run
+            // Find ALL non-completed runs (in_progress, waiting, queued, pending)
+            for (const status of ['waiting', 'in_progress', 'queued', 'pending']) {
+              const { data: runs } = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'release.yml',
+                ...(branch ? { branch } : {}),
+                status,
+              });
 
-              // Reject any pending deployments so the run can be cancelled
-              try {
-                const { data: deployments } = await github.rest.actions.getPendingDeploymentsForRun({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  run_id: run.id,
-                });
-                for (const deployment of deployments) {
-                  await github.rest.actions.reviewPendingDeploymentsForRun({
+              for (const run of runs.workflow_runs) {
+                if (run.id === context.runId) continue;
+
+                // Force-reject any pending deployment approvals
+                try {
+                  const { data: deployments } = await github.rest.actions.getPendingDeploymentsForRun({
                     owner: context.repo.owner,
                     repo: context.repo.repo,
                     run_id: run.id,
-                    environment_ids: [deployment.environment.id],
-                    state: 'rejected',
-                    comment: 'Superseded by newer run',
                   });
-                  console.log(`Rejected deployment for run ${run.id} (env: ${deployment.environment.name})`);
-                }
-              } catch (err) {
-                console.log(`Could not reject deployments for run ${run.id}: ${err.message}`);
-              }
+                  for (const dep of deployments) {
+                    await github.rest.actions.reviewPendingDeploymentsForRun({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      run_id: run.id,
+                      environment_ids: [dep.environment.id],
+                      state: 'rejected',
+                      comment: 'Force-cancelled: superseded by newer run',
+                    });
+                  }
+                } catch (err) { /* no pending deployments */ }
 
-              // Cancel the stale run
-              try {
-                await github.rest.actions.cancelWorkflowRun({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  run_id: run.id,
-                });
-                console.log(`Cancelled stale run ${run.id}`);
-              } catch (err) {
-                console.log(`Could not cancel run ${run.id}: ${err.message}`);
+                // Force-cancel the run
+                try {
+                  await github.rest.actions.cancelWorkflowRun({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    run_id: run.id,
+                  });
+                  console.log(`Force-cancelled run ${run.id} (was ${status})`);
+                } catch (err) {
+                  console.log(`Could not cancel run ${run.id}: ${err.message}`);
+                }
               }
             }
 
@@ -341,17 +348,14 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
 
-      - name: Build and run tests for analysis
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
-        run: ./gradlew testDevDebugUnitTest :shared:jvmTest --parallel || true
+      - name: Run shared module tests for analysis
+        run: ./gradlew :shared:jvmTest || true
 
       - name: Run SonarCloud analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew sonar -Dsonar.token=$SONAR_TOKEN
+        run: ./gradlew sonar -Dsonar.token=$SONAR_TOKEN -x :app:sonar
 
   test-backend:
     name: Test Backend

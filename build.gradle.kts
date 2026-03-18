@@ -39,34 +39,39 @@ detekt {
     ))
 }
 
+// Skip sonar on the app module — SonarQube plugin v7 uses AppExtension (old AGP API)
+// which doesn't exist in AGP 8+. Analyze shared + express-api only until plugin is updated.
+project(":app") {
+    sonar {
+        isSkipProject = true
+    }
+}
+
 sonar {
     properties {
         property("sonar.projectKey", "ShydenMcM_ShyTalk")
         property("sonar.organization", "shydenmcm")
         property("sonar.host.url", "https://sonarcloud.io")
+        property("sonar.gradle.skipCompile", "true")
 
-        // Kotlin sources
+        // Kotlin sources (app excluded — see skip above)
         property("sonar.sources", listOf(
             "shared/src/commonMain/kotlin",
             "shared/src/androidMain/kotlin",
-            "app/src/main/java",
             "express-api/src",
         ).joinToString(","))
 
-        // Test sources
+        // Test sources (app excluded — see skip above)
         property("sonar.tests", listOf(
             "shared/src/commonTest/kotlin",
             "shared/src/jvmTest/kotlin",
-            "app/src/test/java",
-            "app/src/androidTest/java",
             "express-api/tests",
         ).joinToString(","))
 
         // Kotlin test reports
-        property("sonar.junit.reportPaths", listOf(
-            "app/build/test-results/testDevDebugUnitTest",
-            "shared/build/test-results/jvmTest",
-        ).joinToString(","))
+        property("sonar.junit.reportPaths",
+            "shared/build/test-results/jvmTest"
+        )
 
         // Exclusions (generated code, resources)
         property("sonar.exclusions", listOf(
