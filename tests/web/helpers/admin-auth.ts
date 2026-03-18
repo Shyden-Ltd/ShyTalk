@@ -53,35 +53,58 @@ export async function navigateToTab(page: Page, tabName: string): Promise<void> 
 
 /**
  * Search for a user by unique ID and wait for profile data to load.
- * Monitors API responses to fail fast on backend errors instead of timing out.
+ * Retries the search once if the backend doesn't respond in time —
+ * the dev API on Oracle Cloud free tier intermittently drops requests.
  */
 export async function searchUser(page: Page, uniqueId: string): Promise<void> {
-  // Monitor for API errors during search
   const apiErrors: string[] = [];
-  const errorHandler = (response: any) => {
+  const networkErrors: string[] = [];
+  const onResponse = (response: any) => {
     if (response.status() >= 500) {
       apiErrors.push(`${response.status()}: ${response.url()}`);
     }
   };
-  page.on('response', errorHandler);
+  const onRequestFailed = (request: any) => {
+    networkErrors.push(`${request.failure()?.errorText}: ${request.url()}`);
+  };
+  page.on('response', onResponse);
+  page.on('requestfailed', onRequestFailed);
 
-  const searchInput = page.getByRole('spinbutton', { name: 'ShyTalk User ID' });
-  await searchInput.fill(uniqueId);
-  await page.getByRole('button', { name: 'Search' }).click();
+  const subtab = page.locator('.user-subtab[data-subtab="profile"]');
+  const searchBtn = page.getByRole('button', { name: 'Search' });
 
-  try {
-    await expect(page.locator('.user-subtab[data-subtab="profile"]')).toBeVisible({ timeout: 20_000 });
-  } catch (err) {
-    // If search timed out, report any API errors that might explain why
-    if (apiErrors.length > 0) {
-      throw new Error(`User search failed — backend API errors:\n${apiErrors.join('\n')}`);
+  async function doSearch(): Promise<boolean> {
+    await page.getByRole('spinbutton', { name: 'ShyTalk User ID' }).fill(uniqueId);
+    await searchBtn.click();
+    try {
+      await expect(subtab).toBeVisible({ timeout: 10_000 });
+      return true;
+    } catch {
+      return false;
     }
-    throw err;
-  } finally {
-    page.off('response', errorHandler);
   }
 
-  await page.waitForTimeout(500);
+  try {
+    // First attempt
+    if (await doSearch()) return;
+
+    // Retry once — transient backend failures are common on dev
+    apiErrors.length = 0;
+    networkErrors.length = 0;
+    if (await doSearch()) return;
+
+    // Both attempts failed — build a diagnostic message
+    const details: string[] = [];
+    if (apiErrors.length > 0) details.push(`API errors: ${apiErrors.join(', ')}`);
+    if (networkErrors.length > 0) details.push(`Network errors: ${networkErrors.join(', ')}`);
+    throw new Error(
+      `User search failed after 2 attempts (user ${uniqueId})` +
+      (details.length > 0 ? `\n${details.join('\n')}` : ''),
+    );
+  } finally {
+    page.off('response', onResponse);
+    page.off('requestfailed', onRequestFailed);
+  }
 }
 
 /**
