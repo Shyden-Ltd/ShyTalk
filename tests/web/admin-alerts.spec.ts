@@ -32,12 +32,7 @@ test.describe('Admin Alerts', () => {
   let ownAlertId: string;
 
   test.beforeAll(async ({ testData }) => {
-    // Seed a fresh alert that only this file uses
-    const alertData = await testData.api.post('/api/test/setup', {
-      alerts: [{ type: 'error_rate', severity: 'high', message: `alert-spec-${testData.prefix}`, status: 'new' }],
-    });
-    // Note: testData.api.post sends with X-Test-API-Key, but testSetup returns the full shape
-    // We may need to extract the alert ID from the response
+    ownAlertId = await seedOwnAlert(testData, testData.prefix);
   });
 
   test.beforeEach(async ({ page }) => {
