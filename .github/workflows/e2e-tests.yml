@@ -152,10 +152,33 @@ jobs:
       fail-fast: false
       max-parallel: ${{ needs.resolve-inputs.outputs.parallel == 'true' && 99 || 1 }}
       matrix:
+        api-level: [28, 30, 33, 35]
+        form-factor: [phone, tablet]
         include:
-          - api-level: 34
+          - api-level: 28
+            form-factor: phone
+            profile: pixel_2
+          - api-level: 28
+            form-factor: tablet
+            profile: Nexus 10
+          - api-level: 30
+            form-factor: phone
+            profile: pixel_4
+          - api-level: 30
+            form-factor: tablet
+            profile: Nexus 10
+          - api-level: 33
             form-factor: phone
             profile: pixel_6
+          - api-level: 33
+            form-factor: tablet
+            profile: pixel_tablet
+          - api-level: 35
+            form-factor: phone
+            profile: pixel_9
+          - api-level: 35
+            form-factor: tablet
+            profile: pixel_tablet
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
