@@ -16,17 +16,68 @@ export interface SetupUserPayload {
   };
 }
 
+export interface SetupBannerPayload {
+  title?: string;
+  imageUrl?: string;
+  actionType?: string;
+  isActive?: boolean;
+  sortOrder?: number;
+}
+
+export interface SetupFunFactPayload {
+  text?: string;
+  category?: string;
+  emoji?: string;
+  sourceLanguage?: string;
+  isActive?: boolean;
+}
+
+export interface SetupReportPayload {
+  reportedUserIndex?: number;
+  reporterUserIndex?: number;
+  reason?: string;
+  status?: string;
+}
+
+export interface SetupAppealPayload {
+  userIndex?: number;
+  appealText?: string;
+  status?: string;
+}
+
+export interface SetupAlertPayload {
+  type?: string;
+  severity?: string;
+  message?: string;
+  status?: string;
+}
+
+export interface SetupConversationPayload {
+  participants?: string[];
+  messages?: Array<{ text: string; senderId: string }>;
+}
+
 export interface SetupPayload {
-  users: SetupUserPayload[];
+  users?: SetupUserPayload[];
+  banners?: SetupBannerPayload[];
+  funFacts?: SetupFunFactPayload[];
+  reports?: SetupReportPayload[];
+  appeals?: SetupAppealPayload[];
+  alerts?: SetupAlertPayload[];
+  conversations?: SetupConversationPayload[];
 }
 
 export interface SetupResult {
   testRunId: string;
-  users: Array<{
-    uid: string;
-    uniqueId: number;
-    displayName: string;
-  }>;
+  users: Array<{ uid: string; uniqueId: number; displayName: string }>;
+  gifts: Array<{ id: string; name: string; coinValue: number }>;
+  banners: Array<{ id: string; title: string }>;
+  funFacts: Array<{ id: string; text: string }>;
+  reports: Array<{ id: string; reportedUserId: string; reporterId: string }>;
+  appeals: Array<{ id: string }>;
+  alerts: Array<{ id: string }>;
+  conversations: Array<{ id: string }>;
+  economyConfig: Record<string, any>;
 }
 
 export class AdminApi {

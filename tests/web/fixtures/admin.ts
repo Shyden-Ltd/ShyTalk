@@ -7,11 +7,16 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 export interface TestData {
   testRunId: string;
   prefix: string;
-  user: {
-    uid: string;
-    uniqueId: number;
-    displayName: string;
-  };
+  user: { uid: string; uniqueId: number; displayName: string };
+  secondUser: { uid: string; uniqueId: number; displayName: string };
+  gift: { id: string; name: string; coinValue: number };
+  banner: { id: string; title: string };
+  funFact: { id: string; text: string };
+  report: { id: string; reportedUserId: string; reporterId: string };
+  appeal: { id: string };
+  alert: { id: string };
+  conversation: { id: string };
+  economyConfig: Record<string, any>;
   api: AdminApi;
 }
 
@@ -57,17 +62,33 @@ export const test = base.extend<{}, { adminContext: BrowserContext; testData: Te
 
       const prefix = `${workerInfo.project.name}-w${workerInfo.workerIndex}`;
       const result: SetupResult = await api.testSetup({
-        users: [{
-          name: `e2e-${prefix}-user`,
-          shyCoins: 1000,
-          shyBeans: 500,
-          deviceInfo: {
-            deviceId: `e2e-${prefix}-device`,
-            manufacturer: 'Google',
-            model: 'Pixel 6',
-            lastIp: '203.0.113.1',
-            isp: 'Test ISP',
+        users: [
+          {
+            name: `e2e-${prefix}-user`,
+            shyCoins: 1000,
+            shyBeans: 500,
+            deviceInfo: {
+              deviceId: `e2e-${prefix}-device`,
+              manufacturer: 'Google',
+              model: 'Pixel 6',
+              lastIp: '203.0.113.1',
+              isp: 'Test ISP',
+            },
           },
+          {
+            name: `e2e-${prefix}-user2`,
+            shyCoins: 500,
+            shyBeans: 250,
+          },
+        ],
+        banners: [{ title: `e2e-${prefix}-banner` }],
+        funFacts: [{ text: `e2e-${prefix}-fact`, category: 'Science', emoji: '🔬' }],
+        reports: [{ reportedUserIndex: 0, reporterUserIndex: 1, reason: 'Spam' }],
+        appeals: [{ userIndex: 0, appealText: 'I did not do this' }],
+        alerts: [{ type: 'error_rate', severity: 'high', message: `e2e-${prefix}-alert` }],
+        conversations: [{
+          participants: ['placeholder'],
+          messages: [{ text: 'test message', senderId: 'placeholder' }],
         }],
       });
       testRunId = result.testRunId;
@@ -76,6 +97,15 @@ export const test = base.extend<{}, { adminContext: BrowserContext; testData: Te
         testRunId: result.testRunId,
         prefix,
         user: result.users[0],
+        secondUser: result.users[1],
+        gift: result.gifts?.[0] || { id: '', name: '', coinValue: 0 },
+        banner: result.banners?.[0] || { id: '', title: '' },
+        funFact: result.funFacts?.[0] || { id: '', text: '' },
+        report: result.reports?.[0] || { id: '', reportedUserId: '', reporterId: '' },
+        appeal: result.appeals?.[0] || { id: '' },
+        alert: result.alerts?.[0] || { id: '' },
+        conversation: result.conversations?.[0] || { id: '' },
+        economyConfig: result.economyConfig || {},
         api,
       });
     } finally {
