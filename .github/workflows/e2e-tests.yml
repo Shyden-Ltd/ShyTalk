@@ -33,7 +33,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 concurrency:
-  group: e2e-tests-${{ github.run_id }}
+  group: testing-${{ github.head_ref || github.ref }}
   cancel-in-progress: false
 
 jobs:

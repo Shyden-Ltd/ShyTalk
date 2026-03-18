@@ -6,12 +6,6 @@ on:
     types: [opened, synchronize, reopened]
   issue_comment:
     types: [created]
-  workflow_dispatch:
-    inputs:
-      cancel_stale_only:
-        description: 'Only cancel stale runs (skip everything else)'
-        type: boolean
-        default: true
 
 permissions:
   contents: write
@@ -23,73 +17,72 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
-## No workflow-level concurrency group — GitHub Actions cannot cancel jobs
-## waiting on environment approval gates, causing newer runs to be blocked
-## indefinitely. The cancel-stale job handles rejecting stale approvals
-## instead. Deploy jobs use job-level concurrency to prevent double-deploys.
-
 jobs:
   # ──────────────────────────────────────────────
-  # Cancel stale runs stuck at approval gates
+  # Auto-cancel previous runs on the same branch
+  # Rejects approval gates + cancels in-progress jobs
   # ──────────────────────────────────────────────
 
-  cancel-stale:
-    name: Cancel Stale Runs
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+  auto-cancel-previous:
+    name: Auto-Cancel Previous Runs
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Force-cancel all stale runs
+      - name: Cancel older runs on this branch
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           script: |
-            const branch = context.payload.pull_request?.head?.ref || context.ref?.replace('refs/heads/', '');
+            const branch = context.payload.pull_request.head.ref;
+            let cancelled = 0;
 
-            // Find ALL non-completed runs (in_progress, waiting, queued, pending)
             for (const status of ['waiting', 'in_progress', 'queued', 'pending']) {
               const { data: runs } = await github.rest.actions.listWorkflowRuns({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 workflow_id: 'release.yml',
-                ...(branch ? { branch } : {}),
+                branch,
                 status,
               });
 
               for (const run of runs.workflow_runs) {
                 if (run.id === context.runId) continue;
 
-                // Force-reject any pending deployment approvals
+                // Reject pending deployment approvals (unblocks approval gates)
                 try {
-                  const { data: deployments } = await github.rest.actions.getPendingDeploymentsForRun({
+                  const { data: deps } = await github.rest.actions.getPendingDeploymentsForRun({
                     owner: context.repo.owner,
                     repo: context.repo.repo,
                     run_id: run.id,
                   });
-                  for (const dep of deployments) {
+                  for (const dep of deps) {
                     await github.rest.actions.reviewPendingDeploymentsForRun({
                       owner: context.repo.owner,
                       repo: context.repo.repo,
                       run_id: run.id,
                       environment_ids: [dep.environment.id],
                       state: 'rejected',
-                      comment: 'Force-cancelled: superseded by newer run',
+                      comment: 'Superseded by newer run',
                     });
                   }
                 } catch (err) { /* no pending deployments */ }
 
-                // Force-cancel the run
+                // Cancel the run
                 try {
                   await github.rest.actions.cancelWorkflowRun({
                     owner: context.repo.owner,
                     repo: context.repo.repo,
                     run_id: run.id,
                   });
-                  console.log(`Force-cancelled run ${run.id} (was ${status})`);
+                  cancelled++;
+                  console.log(`Cancelled run ${run.id} (was ${status})`);
                 } catch (err) {
                   console.log(`Could not cancel run ${run.id}: ${err.message}`);
                 }
               }
             }
+            if (cancelled > 0) console.log(`Cancelled ${cancelled} previous run(s)`);
+            else console.log('No previous runs to cancel');
 
   # ──────────────────────────────────────────────
   # Detect which paths changed (PR events only)
@@ -204,8 +197,11 @@ jobs:
 
   build-and-test:
     name: Build & Test
-    needs: [detect-changes]
-    if: needs.detect-changes.outputs.app_changed == 'true'
+    needs: [detect-changes, sonarcloud]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.app_changed == 'true' &&
+      needs.sonarcloud.result != 'failure'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
