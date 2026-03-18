@@ -57,18 +57,24 @@ export async function navigateToTab(page: Page, tabName: string): Promise<void> 
  * the dev API on Oracle Cloud free tier intermittently drops requests.
  */
 export async function searchUser(page: Page, uniqueId: string): Promise<void> {
-  const apiErrors: string[] = [];
+  const apiResponses: string[] = [];
   const networkErrors: string[] = [];
+  const consoleErrors: string[] = [];
   const onResponse = (response: any) => {
-    if (response.status() >= 500) {
-      apiErrors.push(`${response.status()}: ${response.url()}`);
+    const url: string = response.url();
+    if (url.includes('/api/')) {
+      apiResponses.push(`${response.status()} ${url.split('/api/')[1]}`);
     }
   };
   const onRequestFailed = (request: any) => {
     networkErrors.push(`${request.failure()?.errorText}: ${request.url()}`);
   };
+  const onConsoleError = (msg: any) => {
+    if (msg.type() === 'error') consoleErrors.push(msg.text());
+  };
   page.on('response', onResponse);
   page.on('requestfailed', onRequestFailed);
+  page.on('console', onConsoleError);
 
   const subtab = page.locator('.user-subtab[data-subtab="profile"]');
   const searchBtn = page.getByRole('button', { name: 'Search' });
@@ -89,21 +95,25 @@ export async function searchUser(page: Page, uniqueId: string): Promise<void> {
     if (await doSearch()) return;
 
     // Retry once — transient backend failures are common on dev
-    apiErrors.length = 0;
+    const firstAttemptDiag = {
+      api: [...apiResponses],
+      net: [...networkErrors],
+      console: [...consoleErrors],
+    };
+    apiResponses.length = 0;
     networkErrors.length = 0;
+    consoleErrors.length = 0;
     if (await doSearch()) return;
 
-    // Both attempts failed — build a diagnostic message
-    const details: string[] = [];
-    if (apiErrors.length > 0) details.push(`API errors: ${apiErrors.join(', ')}`);
-    if (networkErrors.length > 0) details.push(`Network errors: ${networkErrors.join(', ')}`);
-    throw new Error(
-      `User search failed after 2 attempts (user ${uniqueId})` +
-      (details.length > 0 ? `\n${details.join('\n')}` : ''),
-    );
+    // Both attempts failed — build a full diagnostic message
+    const lines: string[] = [`User search failed after 2 attempts (user ${uniqueId})`];
+    lines.push(`  Attempt 1: API=[${firstAttemptDiag.api.join('; ')}] Net=[${firstAttemptDiag.net.join('; ')}] Console=[${firstAttemptDiag.console.join('; ')}]`);
+    lines.push(`  Attempt 2: API=[${apiResponses.join('; ')}] Net=[${networkErrors.join('; ')}] Console=[${consoleErrors.join('; ')}]`);
+    throw new Error(lines.join('\n'));
   } finally {
     page.off('response', onResponse);
     page.off('requestfailed', onRequestFailed);
+    page.off('console', onConsoleError);
   }
 }
 
