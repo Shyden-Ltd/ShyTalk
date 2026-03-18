@@ -1,24 +1,26 @@
 import { test as base, BrowserContext, expect } from '@playwright/test';
+import { AdminApi, SetupResult } from '../helpers/api';
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || '';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 
-/**
- * Worker-scoped fixture that logs in once and shares the authenticated
- * BrowserContext across all tests in the same worker.
- *
- * Firebase Auth stores tokens in IndexedDB, which is per-context —
- * by sharing the context, all pages inherit the authenticated session
- * without re-signing in.
- */
-export const test = base.extend<{}, { adminContext: BrowserContext }>({
+export interface TestData {
+  testRunId: string;
+  prefix: string;
+  user: {
+    uid: string;
+    uniqueId: number;
+    displayName: string;
+  };
+  api: AdminApi;
+}
+
+export const test = base.extend<{}, { adminContext: BrowserContext; testData: TestData }>({
   adminContext: [async ({ browser }, use) => {
     const context = await browser.newContext();
     const page = await context.newPage();
 
     await page.goto('/admin/');
-
-    // Wait for the page to settle into either the login screen or an already-authenticated dashboard
     const dashboard = page.locator('#dashboard-screen');
     const signInBtn = page.getByRole('button', { name: 'Sign In' });
     await Promise.race([
@@ -41,9 +43,46 @@ export const test = base.extend<{}, { adminContext: BrowserContext }>({
     await context.close();
   }, { scope: 'worker' }],
 
-  // Override page to open in the shared authenticated context.
-  // Clear sessionStorage so the admin panel doesn't restore a heavy tab
-  // (like Logs with 4+ API calls) — prevents needless 429s from the rate limiter.
+  testData: [async ({ adminContext }, use, workerInfo) => {
+    const page = await adminContext.newPage();
+    // Register token interceptor BEFORE navigating — otherwise the
+    // admin panel's initial API calls fire before the listener is attached
+    const api = new AdminApi(page);
+
+    // Navigate — Firebase auto-authenticates from IndexedDB
+    await page.goto('/admin/');
+    await page.locator('#dashboard-screen').waitFor({ state: 'visible', timeout: 15_000 });
+    await api.waitForToken();
+
+    const prefix = workerInfo.project.name;
+    const result: SetupResult = await api.testSetup({
+      users: [{
+        name: `e2e-${prefix}-user`,
+        shyCoins: 1000,
+        shyBeans: 500,
+        deviceInfo: {
+          deviceId: `e2e-${prefix}-device`,
+          manufacturer: 'Google',
+          model: 'Pixel 6',
+          lastIp: '203.0.113.1',
+          isp: 'Test ISP',
+        },
+      }],
+    });
+
+    await use({
+      testRunId: result.testRunId,
+      prefix,
+      user: result.users[0],
+      api,
+    });
+
+    // Cleanup
+    await api.testTeardown(result.testRunId);
+    await page.close();
+  }, { scope: 'worker' }],
+
+  // Override page: open in shared context, clear sessionStorage
   page: async ({ adminContext }, use) => {
     const page = await adminContext.newPage();
     await page.addInitScript(() => sessionStorage.clear());
