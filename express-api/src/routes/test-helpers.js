@@ -44,7 +44,7 @@ router.post('/test/setup', async (req, res) => {
       const counterRef = db.doc('counters/uniqueId');
       const uniqueId = await db.runTransaction(async (t) => {
         const counterDoc = await t.get(counterRef);
-        const current = counterDoc.exists ? counterDoc.data().value : 10000000;
+        const current = counterDoc.exists ? counterDoc.data().value : 100000000;
         const next = current + 1;
         t.set(counterRef, { value: next }, { merge: true });
         return next;

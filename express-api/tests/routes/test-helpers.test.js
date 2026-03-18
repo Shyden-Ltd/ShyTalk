@@ -27,7 +27,7 @@ const mockWhere = jest.fn(() => ({ get: mockQueryGet }));
 const mockCollection = jest.fn(() => ({ where: mockWhere }));
 
 // Transaction mock: calls the callback with a transaction object that has get/set
-let transactionUniqueIdCounter = 10000000;
+let transactionUniqueIdCounter = 100000000;
 const mockTransactionGet = jest.fn();
 const mockTransactionSet = jest.fn();
 const mockRunTransaction = jest.fn(async (callback) => {
@@ -74,7 +74,7 @@ function createApp() {
 beforeEach(() => {
   jest.clearAllMocks();
   mockIdCounter = 0;
-  transactionUniqueIdCounter = 10000000;
+  transactionUniqueIdCounter = 100000000;
   process.env.TEST_API_KEY = VALID_API_KEY;
 
   // Restore default mock implementations after clearAllMocks
