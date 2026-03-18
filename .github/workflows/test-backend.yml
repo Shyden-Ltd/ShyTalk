@@ -1,0 +1,32 @@
+name: Test Backend
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git ref to check out'
+        type: string
+        required: true
+
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  test-backend:
+    name: Test Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Set up Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: '24'
+
+      - name: Run Express API tests
+        run: cd express-api && npm ci && npm test

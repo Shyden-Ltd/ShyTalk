@@ -1,6 +1,29 @@
 name: E2E Tests
 
 on:
+  workflow_call:
+    inputs:
+      android:
+        description: 'Android (all, none, or e.g. 28-phone,35-tablet)'
+        type: string
+        default: 'all'
+      ios:
+        description: 'iOS (all, none, or e.g. 16.4-iphone,18.1-ipad)'
+        type: string
+        default: 'all'
+      web:
+        description: 'Web (all, none, or e.g. chromium,firefox,mobile-chrome)'
+        type: string
+        default: 'all'
+      parallel:
+        description: 'Run matrix jobs in parallel'
+        type: boolean
+        default: true
+      ref:
+        description: 'Git ref to test'
+        type: string
+        required: true
+
   workflow_dispatch:
     inputs:
       android:
@@ -20,110 +43,20 @@ on:
         type: boolean
         default: true
 
-  issue_comment:
-    types: [created]
-
-permissions:
-  contents: read
-  pull-requests: write
-  checks: write
-  issues: read
+# Only one E2E run at a time — prevents resource contention and Firestore conflicts
+concurrency:
+  group: e2e-tests
+  cancel-in-progress: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
-concurrency:
-  group: testing-${{ github.head_ref || github.ref }}
-  cancel-in-progress: false
-
 jobs:
-  # ── Parse PR comment trigger ──────────────────────────────────
-  parse-comment:
-    name: Parse Comment
-    if: github.event_name == 'issue_comment'
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    outputs:
-      should_run: ${{ steps.parse.outputs.should_run }}
-      android: ${{ steps.parse.outputs.android }}
-      ios: ${{ steps.parse.outputs.ios }}
-      web: ${{ steps.parse.outputs.web }}
-      ref: ${{ steps.parse.outputs.ref }}
-    steps:
-      - name: Parse /run-e2e comment
-        id: parse
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
-        with:
-          script: |
-            const comment = context.payload.comment.body.trim();
-            const issue = context.payload.issue;
-
-            if (!issue.pull_request) {
-              core.setOutput('should_run', 'false');
-              return;
-            }
-
-            if (!comment.startsWith('/run-e2e')) {
-              core.setOutput('should_run', 'false');
-              return;
-            }
-            const args = comment.replace(/^\/run-e2e\s*/i, '').toLowerCase().split(/\s+/).filter(Boolean);
-
-            const { data: permLevel } = await github.rest.repos.getCollaboratorPermissionLevel({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              username: context.payload.comment.user.login,
-            });
-            if (!['admin', 'write'].includes(permLevel.permission)) {
-              core.setOutput('should_run', 'false');
-              return;
-            }
-
-            const { data: pr } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: issue.number,
-            });
-
-            // Parse: /run-e2e → all; /run-e2e android web → platforms;
-            //        /run-e2e android:28-phone web:chromium,firefox → specific devices
-            const platforms = { android: 'none', ios: 'none', web: 'none' };
-            if (args.length === 0 || args.includes('all')) {
-              platforms.android = 'all';
-              platforms.ios = 'all';
-              platforms.web = 'all';
-            } else {
-              for (const arg of args) {
-                const [name, devices] = arg.split(':');
-                if (name in platforms) {
-                  platforms[name] = devices || 'all';
-                }
-              }
-            }
-
-            core.setOutput('should_run', 'true');
-            core.setOutput('android', platforms.android);
-            core.setOutput('ios', platforms.ios);
-            core.setOutput('web', platforms.web);
-            core.setOutput('ref', pr.head.sha);
-
-            await github.rest.reactions.createForIssueComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              comment_id: context.payload.comment.id,
-              content: 'rocket',
-            });
-
-  # ── Resolve inputs ────────────────────────────────────────────
+  # ── Resolve inputs into device matrices ──────────────────────
   resolve-inputs:
     name: Resolve Inputs
     runs-on: ubuntu-latest
     timeout-minutes: 2
-    needs: [parse-comment]
-    if: |
-      always() &&
-      (github.event_name == 'workflow_dispatch' ||
-       (needs.parse-comment.result == 'success' && needs.parse-comment.outputs.should_run == 'true'))
     outputs:
       run_android: ${{ steps.resolve.outputs.run_android }}
       run_ios: ${{ steps.resolve.outputs.run_ios }}
@@ -139,7 +72,6 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           script: |
-            // ── Full device catalogs ──
             const ANDROID_ALL = [
               { 'api-level': 28, 'form-factor': 'phone', profile: 'pixel_2' },
               { 'api-level': 28, 'form-factor': 'tablet', profile: 'Nexus 10' },
@@ -166,23 +98,12 @@ jobs:
               { project: 'mobile-safari', browser: 'Mobile Safari (iPhone 13)', viewport: '390x844' },
             ];
 
-            // ── Read inputs ──
-            let android, ios, web, parallel, ref;
-            if (context.eventName === 'workflow_dispatch') {
-              android = '${{ github.event.inputs.android }}' || 'all';
-              ios = '${{ github.event.inputs.ios }}' || 'all';
-              web = '${{ github.event.inputs.web }}' || 'all';
-              parallel = '${{ github.event.inputs.parallel }}' === 'true';
-              ref = context.sha;
-            } else {
-              android = '${{ needs.parse-comment.outputs.android }}' || 'none';
-              ios = '${{ needs.parse-comment.outputs.ios }}' || 'none';
-              web = '${{ needs.parse-comment.outputs.web }}' || 'none';
-              parallel = true;
-              ref = '${{ needs.parse-comment.outputs.ref }}';
-            }
+            const android = '${{ inputs.android }}' || 'all';
+            const ios = '${{ inputs.ios }}' || 'all';
+            const web = '${{ inputs.web }}' || 'all';
+            const parallel = '${{ inputs.parallel }}' !== 'false';
+            const ref = '${{ inputs.ref }}' || context.sha;
 
-            // ── Filter helper: "all" → full list, "none" → [], "28-phone,35-tablet" → filtered ──
             function filter(input, catalog, keyFn) {
               if (input === 'none' || input === 'false') return [];
               if (input === 'all' || input === 'true') return catalog;
@@ -194,7 +115,6 @@ jobs:
             const iosMatrix = filter(ios, IOS_ALL, d => `${d['ios-version']}-${d['form-factor']}`);
             const webMatrix = filter(web, WEB_ALL, d => d.project);
 
-            // ── Outputs ──
             core.setOutput('ref', ref);
             core.setOutput('parallel', String(parallel));
             core.setOutput('run_android', String(androidMatrix.length > 0));
@@ -206,7 +126,7 @@ jobs:
 
             console.log(`Android: ${androidMatrix.length} devices, iOS: ${iosMatrix.length} devices, Web: ${webMatrix.length} browsers`);
 
-  # ── Android E2E (build + test in one job via Gradle) ─────────
+  # ── Android E2E ─────────────────────────────────────────────
   test-android:
     name: "Android E2E (API ${{ matrix.api-level }}, ${{ matrix.form-factor }})"
     needs: [resolve-inputs]
@@ -271,21 +191,15 @@ jobs:
         if: always()
         run: |
           mkdir -p allure-results-android
-
-          # Try pulling native Allure results from device first
           PACKAGE="com.shyden.shytalk.dev"
           adb exec-out run-as $PACKAGE sh -c 'cd files/allure-results && tar cf - .' 2>/dev/null | \
             tar xf - -C allure-results-android/ 2>/dev/null || true
           NATIVE_COUNT=$(find allure-results-android -name "*-result.json" 2>/dev/null | wc -l)
           echo "Native Allure results: $NATIVE_COUNT files"
-
-          # If no native results, copy JUnit XML (Allure can read these directly)
           if [ "$NATIVE_COUNT" -eq 0 ]; then
             echo "No native Allure results — using JUnit XML for Allure import"
             find app/build/outputs/androidTest-results -name "TEST-*.xml" 2>/dev/null \
               -exec cp {} allure-results-android/ \; || true
-            XML_COUNT=$(find allure-results-android -name "TEST-*.xml" 2>/dev/null | wc -l)
-            echo "JUnit XML files copied: $XML_COUNT"
           fi
 
       - name: Write Android environment.properties
@@ -316,7 +230,7 @@ jobs:
             app/build/reports/androidTests/connected/
           retention-days: 14
 
-  # ── Prepare Playwright browsers (shared across matrix) ────────
+  # ── Prepare Playwright browsers ─────────────────────────────
   prepare-playwright:
     name: Prepare Playwright
     needs: [resolve-inputs]
@@ -354,7 +268,7 @@ jobs:
     outputs:
       pw-version: ${{ steps.pw.outputs.version }}
 
-  # ── Playwright Web Tests (multi-browser matrix) ───────────────
+  # ── Playwright Web Tests ────────────────────────────────────
   test-playwright:
     name: "Playwright (${{ matrix.project }})"
     needs: [resolve-inputs, prepare-playwright]
@@ -432,7 +346,7 @@ jobs:
           path: test-results/
           retention-days: 7
 
-  # ── Build iOS test bundle ─────────────────────────────────────
+  # ── Build iOS test bundle ───────────────────────────────────
   build-ios:
     name: Build iOS
     needs: [resolve-inputs]
@@ -498,7 +412,7 @@ jobs:
     outputs:
       has_tests: ${{ steps.check-tests.outputs.has_tests }}
 
-  # ── iOS E2E test matrix ───────────────────────────────────────
+  # ── iOS E2E test matrix ─────────────────────────────────────
   test-ios:
     name: "iOS E2E (iOS ${{ matrix.ios-version }}, ${{ matrix.form-factor }})"
     needs: [resolve-inputs, build-ios]
@@ -564,7 +478,7 @@ jobs:
         if: always()
         run: xcrun simctl shutdown "${{ steps.sim.outputs.device_id }}" || true
 
-  # ── Summary ───────────────────────────────────────────────────
+  # ── Summary ─────────────────────────────────────────────────
   e2e-summary:
     name: E2E Summary
     needs: [resolve-inputs, test-android, test-ios, test-playwright]
@@ -598,7 +512,7 @@ jobs:
             exit 1
           fi
 
-  # ── Generate Unified Allure Report ───────────────────────────
+  # ── Generate Unified Allure Report ──────────────────────────
   allure-report:
     name: Generate Allure Report
     needs: [resolve-inputs, test-android, test-playwright]
@@ -619,9 +533,6 @@ jobs:
 
       - name: Merge environment.properties from all test suites
         run: |
-          # Each artifact writes its own environment.properties in a subdirectory.
-          # Allure only reads one file at the results root — merge them all into one
-          # with section headers so every suite's environment is visible.
           MERGED="allure-results-all/environment.properties"
           > "$MERGED"
           find allure-results-all -name environment.properties -not -path "$MERGED" | sort | while read -r f; do
