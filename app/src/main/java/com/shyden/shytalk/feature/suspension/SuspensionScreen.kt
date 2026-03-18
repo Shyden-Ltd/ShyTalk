@@ -236,8 +236,8 @@ fun SuspensionScreen(
                     color = MaterialTheme.colorScheme.primary
                 )
             }
-            // Rejected
-            appealStatus == "rejected" -> {
+            // Denied
+            appealStatus == "denied" -> {
                 Text(
                     text = stringResource(Res.string.appeal_unsuccessful),
                     style = MaterialTheme.typography.bodyMedium,
