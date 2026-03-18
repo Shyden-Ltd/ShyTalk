@@ -40,7 +40,7 @@ app.use('/api', require('./routes/auth'));
 
 // Auth middleware for all /api routes (except health, log-config, and auth)
 app.use('/api', (req, res, next) => {
-  if (req.path === '/health' || req.path === '/log-config' || req.path.startsWith('/auth/'))
+  if (req.path === '/health' || req.path === '/log-config' || req.path.startsWith('/auth/') || req.path.startsWith('/test/'))
     return next();
   authMiddleware(req, res, next);
 });
