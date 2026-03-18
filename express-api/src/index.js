@@ -44,7 +44,7 @@ app.use('/api', (req, res, next) => {
     req.path === '/health' ||
     req.path === '/log-config' ||
     req.path.startsWith('/auth/') ||
-    req.path.startsWith('/test/')
+    (req.path.startsWith('/test/') && process.env.NODE_ENV !== 'production')
   )
     return next();
   authMiddleware(req, res, next);

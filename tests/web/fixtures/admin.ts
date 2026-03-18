@@ -45,41 +45,44 @@ export const test = base.extend<{}, { adminContext: BrowserContext; testData: Te
 
   testData: [async ({ adminContext }, use, workerInfo) => {
     const page = await adminContext.newPage();
-    // Register token interceptor BEFORE navigating — otherwise the
-    // admin panel's initial API calls fire before the listener is attached
     const api = new AdminApi(page);
+    let testRunId: string | undefined;
 
-    // Navigate — Firebase auto-authenticates from IndexedDB
-    await page.goto('/admin/');
-    await page.locator('#dashboard-screen').waitFor({ state: 'visible', timeout: 15_000 });
-    await api.waitForToken();
+    try {
+      // Register token interceptor BEFORE navigating — otherwise the
+      // admin panel's initial API calls fire before the listener is attached
+      await page.goto('/admin/');
+      await page.locator('#dashboard-screen').waitFor({ state: 'visible', timeout: 15_000 });
+      await api.waitForToken();
 
-    const prefix = workerInfo.project.name;
-    const result: SetupResult = await api.testSetup({
-      users: [{
-        name: `e2e-${prefix}-user`,
-        shyCoins: 1000,
-        shyBeans: 500,
-        deviceInfo: {
-          deviceId: `e2e-${prefix}-device`,
-          manufacturer: 'Google',
-          model: 'Pixel 6',
-          lastIp: '203.0.113.1',
-          isp: 'Test ISP',
-        },
-      }],
-    });
+      const prefix = `${workerInfo.project.name}-w${workerInfo.workerIndex}`;
+      const result: SetupResult = await api.testSetup({
+        users: [{
+          name: `e2e-${prefix}-user`,
+          shyCoins: 1000,
+          shyBeans: 500,
+          deviceInfo: {
+            deviceId: `e2e-${prefix}-device`,
+            manufacturer: 'Google',
+            model: 'Pixel 6',
+            lastIp: '203.0.113.1',
+            isp: 'Test ISP',
+          },
+        }],
+      });
+      testRunId = result.testRunId;
 
-    await use({
-      testRunId: result.testRunId,
-      prefix,
-      user: result.users[0],
-      api,
-    });
-
-    // Cleanup
-    await api.testTeardown(result.testRunId);
-    await page.close();
+      await use({
+        testRunId: result.testRunId,
+        prefix,
+        user: result.users[0],
+        api,
+      });
+    } finally {
+      // Cleanup — always runs even if setup or tests throw
+      if (testRunId) await api.testTeardown(testRunId).catch(() => {});
+      await page.close();
+    }
   }, { scope: 'worker' }],
 
   // Override page: open in shared context, clear sessionStorage

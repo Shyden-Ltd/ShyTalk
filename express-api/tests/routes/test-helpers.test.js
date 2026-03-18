@@ -86,10 +86,12 @@ beforeEach(() => {
   mockQueryGet.mockResolvedValue({ empty: true, docs: [], size: 0 });
 
   // Transaction mock: simulate atomic counter increment
+  // Start at 0 so the first call exercises the exists:false / cold-start branch
+  transactionUniqueIdCounter = 0;
   mockTransactionGet.mockImplementation(() => {
     const current = transactionUniqueIdCounter;
     return Promise.resolve({
-      exists: current > 10000000,
+      exists: current > 0,
       data: () => ({ value: current }),
     });
   });
