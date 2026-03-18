@@ -3,18 +3,20 @@ name: E2E Tests
 on:
   workflow_dispatch:
     inputs:
-      platform:
-        description: 'Platform to test'
-        required: true
-        type: choice
-        options:
-          - both
-          - android
-          - ios
-        default: both
+      android:
+        description: 'Android (all, none, or e.g. 28-phone,35-tablet)'
+        type: string
+        default: 'all'
+      ios:
+        description: 'iOS (all, none, or e.g. 16.4-iphone,18.1-ipad)'
+        type: string
+        default: 'all'
+      web:
+        description: 'Web (all, none, or e.g. chromium,firefox,mobile-chrome)'
+        type: string
+        default: 'all'
       parallel:
         description: 'Run matrix jobs in parallel'
-        required: true
         type: boolean
         default: true
 
@@ -43,7 +45,9 @@ jobs:
     timeout-minutes: 2
     outputs:
       should_run: ${{ steps.parse.outputs.should_run }}
-      platform: ${{ steps.parse.outputs.platform }}
+      android: ${{ steps.parse.outputs.android }}
+      ios: ${{ steps.parse.outputs.ios }}
+      web: ${{ steps.parse.outputs.web }}
       ref: ${{ steps.parse.outputs.ref }}
     steps:
       - name: Parse /run-e2e comment
@@ -59,11 +63,11 @@ jobs:
               return;
             }
 
-            const match = comment.match(/^\/run-e2e(?:\s+(android|ios|all|both))?$/i);
-            if (!match) {
+            if (!comment.startsWith('/run-e2e')) {
               core.setOutput('should_run', 'false');
               return;
             }
+            const args = comment.replace(/^\/run-e2e\s*/i, '').toLowerCase().split(/\s+/).filter(Boolean);
 
             const { data: permLevel } = await github.rest.repos.getCollaboratorPermissionLevel({
               owner: context.repo.owner,
@@ -81,11 +85,26 @@ jobs:
               pull_number: issue.number,
             });
 
-            let platform = (match[1] || 'both').toLowerCase();
-            if (platform === 'all') platform = 'both';
+            // Parse: /run-e2e → all; /run-e2e android web → platforms;
+            //        /run-e2e android:28-phone web:chromium,firefox → specific devices
+            const platforms = { android: 'none', ios: 'none', web: 'none' };
+            if (args.length === 0 || args.includes('all')) {
+              platforms.android = 'all';
+              platforms.ios = 'all';
+              platforms.web = 'all';
+            } else {
+              for (const arg of args) {
+                const [name, devices] = arg.split(':');
+                if (name in platforms) {
+                  platforms[name] = devices || 'all';
+                }
+              }
+            }
 
             core.setOutput('should_run', 'true');
-            core.setOutput('platform', platform);
+            core.setOutput('android', platforms.android);
+            core.setOutput('ios', platforms.ios);
+            core.setOutput('web', platforms.web);
             core.setOutput('ref', pr.head.sha);
 
             await github.rest.reactions.createForIssueComment({
@@ -106,40 +125,86 @@ jobs:
       (github.event_name == 'workflow_dispatch' ||
        (needs.parse-comment.result == 'success' && needs.parse-comment.outputs.should_run == 'true'))
     outputs:
-      platform: ${{ steps.resolve.outputs.platform }}
       run_android: ${{ steps.resolve.outputs.run_android }}
       run_ios: ${{ steps.resolve.outputs.run_ios }}
+      run_web: ${{ steps.resolve.outputs.run_web }}
+      android_matrix: ${{ steps.resolve.outputs.android_matrix }}
+      ios_matrix: ${{ steps.resolve.outputs.ios_matrix }}
+      web_matrix: ${{ steps.resolve.outputs.web_matrix }}
       parallel: ${{ steps.resolve.outputs.parallel }}
       ref: ${{ steps.resolve.outputs.ref }}
     steps:
-      - name: Resolve platform and ref
+      - name: Resolve platforms, devices, and ref
         id: resolve
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            PLATFORM="${{ github.event.inputs.platform }}"
-            PARALLEL="${{ github.event.inputs.parallel }}"
-            REF="${{ github.sha }}"
-          else
-            PLATFORM="${{ needs.parse-comment.outputs.platform }}"
-            PARALLEL="true"
-            REF="${{ needs.parse-comment.outputs.ref }}"
-          fi
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            // ── Full device catalogs ──
+            const ANDROID_ALL = [
+              { 'api-level': 28, 'form-factor': 'phone', profile: 'pixel_2' },
+              { 'api-level': 28, 'form-factor': 'tablet', profile: 'Nexus 10' },
+              { 'api-level': 30, 'form-factor': 'phone', profile: 'pixel_4' },
+              { 'api-level': 30, 'form-factor': 'tablet', profile: 'Nexus 10' },
+              { 'api-level': 33, 'form-factor': 'phone', profile: 'pixel_6' },
+              { 'api-level': 33, 'form-factor': 'tablet', profile: 'pixel_tablet' },
+              { 'api-level': 35, 'form-factor': 'phone', profile: 'pixel_9' },
+              { 'api-level': 35, 'form-factor': 'tablet', profile: 'pixel_tablet' },
+            ];
+            const IOS_ALL = [
+              { 'ios-version': '16.4', 'form-factor': 'iphone', simulator: 'iPhone 14' },
+              { 'ios-version': '16.4', 'form-factor': 'ipad', simulator: 'iPad (10th generation)' },
+              { 'ios-version': '17.5', 'form-factor': 'iphone', simulator: 'iPhone 15' },
+              { 'ios-version': '17.5', 'form-factor': 'ipad', simulator: 'iPad Air (M2)' },
+              { 'ios-version': '18.1', 'form-factor': 'iphone', simulator: 'iPhone 16' },
+              { 'ios-version': '18.1', 'form-factor': 'ipad', simulator: 'iPad Air (M3)' },
+            ];
+            const WEB_ALL = [
+              { project: 'chromium', browser: 'Chromium', viewport: '1280x720' },
+              { project: 'firefox', browser: 'Firefox', viewport: '1280x720' },
+              { project: 'webkit', browser: 'WebKit', viewport: '1280x720' },
+              { project: 'mobile-chrome', browser: 'Mobile Chrome (Pixel 5)', viewport: '393x851' },
+              { project: 'mobile-safari', browser: 'Mobile Safari (iPhone 13)', viewport: '390x844' },
+            ];
 
-          RUN_ANDROID=false
-          RUN_IOS=false
-          case "$PLATFORM" in
-            android) RUN_ANDROID=true ;;
-            ios)     RUN_IOS=true ;;
-            both)    RUN_ANDROID=true; RUN_IOS=true ;;
-          esac
+            // ── Read inputs ──
+            let android, ios, web, parallel, ref;
+            if (context.eventName === 'workflow_dispatch') {
+              android = '${{ github.event.inputs.android }}' || 'all';
+              ios = '${{ github.event.inputs.ios }}' || 'all';
+              web = '${{ github.event.inputs.web }}' || 'all';
+              parallel = '${{ github.event.inputs.parallel }}' === 'true';
+              ref = context.sha;
+            } else {
+              android = '${{ needs.parse-comment.outputs.android }}' || 'none';
+              ios = '${{ needs.parse-comment.outputs.ios }}' || 'none';
+              web = '${{ needs.parse-comment.outputs.web }}' || 'none';
+              parallel = true;
+              ref = '${{ needs.parse-comment.outputs.ref }}';
+            }
 
-          echo "platform=$PLATFORM" >> "$GITHUB_OUTPUT"
-          echo "parallel=$PARALLEL" >> "$GITHUB_OUTPUT"
-          echo "ref=$REF" >> "$GITHUB_OUTPUT"
-          echo "run_android=$RUN_ANDROID" >> "$GITHUB_OUTPUT"
-          echo "run_ios=$RUN_IOS" >> "$GITHUB_OUTPUT"
+            // ── Filter helper: "all" → full list, "none" → [], "28-phone,35-tablet" → filtered ──
+            function filter(input, catalog, keyFn) {
+              if (input === 'none' || input === 'false') return [];
+              if (input === 'all' || input === 'true') return catalog;
+              const selected = input.split(',').map(s => s.trim().toLowerCase());
+              return catalog.filter(item => selected.includes(keyFn(item)));
+            }
 
-          echo "Resolved: platform=$PLATFORM run_android=$RUN_ANDROID run_ios=$RUN_IOS parallel=$PARALLEL"
+            const androidMatrix = filter(android, ANDROID_ALL, d => `${d['api-level']}-${d['form-factor']}`);
+            const iosMatrix = filter(ios, IOS_ALL, d => `${d['ios-version']}-${d['form-factor']}`);
+            const webMatrix = filter(web, WEB_ALL, d => d.project);
+
+            // ── Outputs ──
+            core.setOutput('ref', ref);
+            core.setOutput('parallel', String(parallel));
+            core.setOutput('run_android', String(androidMatrix.length > 0));
+            core.setOutput('run_ios', String(iosMatrix.length > 0));
+            core.setOutput('run_web', String(webMatrix.length > 0));
+            core.setOutput('android_matrix', JSON.stringify({ include: androidMatrix }));
+            core.setOutput('ios_matrix', JSON.stringify({ include: iosMatrix }));
+            core.setOutput('web_matrix', JSON.stringify({ include: webMatrix }));
+
+            console.log(`Android: ${androidMatrix.length} devices, iOS: ${iosMatrix.length} devices, Web: ${webMatrix.length} browsers`);
 
   # ── Android E2E (build + test in one job via Gradle) ─────────
   test-android:
@@ -151,34 +216,7 @@ jobs:
     strategy:
       fail-fast: false
       max-parallel: ${{ needs.resolve-inputs.outputs.parallel == 'true' && 99 || 1 }}
-      matrix:
-        api-level: [28, 30, 33, 35]
-        form-factor: [phone, tablet]
-        include:
-          - api-level: 28
-            form-factor: phone
-            profile: pixel_2
-          - api-level: 28
-            form-factor: tablet
-            profile: Nexus 10
-          - api-level: 30
-            form-factor: phone
-            profile: pixel_4
-          - api-level: 30
-            form-factor: tablet
-            profile: Nexus 10
-          - api-level: 33
-            form-factor: phone
-            profile: pixel_6
-          - api-level: 33
-            form-factor: tablet
-            profile: pixel_tablet
-          - api-level: 35
-            form-factor: phone
-            profile: pixel_9
-          - api-level: 35
-            form-factor: tablet
-            profile: pixel_tablet
+      matrix: ${{ fromJSON(needs.resolve-inputs.outputs.android_matrix) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -282,7 +320,7 @@ jobs:
   prepare-playwright:
     name: Prepare Playwright
     needs: [resolve-inputs]
-    if: always() && needs.resolve-inputs.result == 'success'
+    if: always() && needs.resolve-inputs.result == 'success' && needs.resolve-inputs.outputs.run_web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -326,23 +364,7 @@ jobs:
     environment: dev
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - project: chromium
-            browser: Chromium
-            viewport: 1280x720
-          - project: firefox
-            browser: Firefox
-            viewport: 1280x720
-          - project: webkit
-            browser: WebKit
-            viewport: 1280x720
-          - project: mobile-chrome
-            browser: "Mobile Chrome (Pixel 5)"
-            viewport: 393x851
-          - project: mobile-safari
-            browser: "Mobile Safari (iPhone 13)"
-            viewport: 390x844
+      matrix: ${{ fromJSON(needs.resolve-inputs.outputs.web_matrix) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -478,28 +500,7 @@ jobs:
     strategy:
       fail-fast: false
       max-parallel: ${{ needs.resolve-inputs.outputs.parallel == 'true' && 99 || 1 }}
-      matrix:
-        ios-version: ['16.4', '17.5', '18.1']
-        form-factor: [iphone, ipad]
-        include:
-          - ios-version: '16.4'
-            form-factor: iphone
-            simulator: 'iPhone 14'
-          - ios-version: '17.5'
-            form-factor: iphone
-            simulator: 'iPhone 15'
-          - ios-version: '18.1'
-            form-factor: iphone
-            simulator: 'iPhone 16'
-          - ios-version: '16.4'
-            form-factor: ipad
-            simulator: 'iPad (10th generation)'
-          - ios-version: '17.5'
-            form-factor: ipad
-            simulator: 'iPad Air (M2)'
-          - ios-version: '18.1'
-            form-factor: ipad
-            simulator: 'iPad Air (M3)'
+      matrix: ${{ fromJSON(needs.resolve-inputs.outputs.ios_matrix) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
