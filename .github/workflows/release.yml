@@ -365,10 +365,11 @@ jobs:
 
   deploy-backend-dev:
     name: Deploy Backend to Dev
-    needs: [detect-changes]
+    needs: [detect-changes, sonarcloud]
     if: |
       always() &&
-      needs.detect-changes.outputs.backend_changed == 'true'
+      needs.detect-changes.outputs.backend_changed == 'true' &&
+      (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -724,12 +725,13 @@ jobs:
     name: Approve Production Release
     runs-on: ubuntu-latest
     timeout-minutes: 1440
-    needs: [detect-changes, build-and-test, test-backend, web-tests, deploy-backend-dev, deploy-web-dev]
+    needs: [detect-changes, sonarcloud, build-and-test, test-backend, web-tests, deploy-backend-dev, deploy-web-dev]
     if: |
       always() &&
       github.event_name == 'pull_request' &&
       needs.detect-changes.outputs.workflow_only != 'true' &&
       needs.detect-changes.result == 'success' &&
+      (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') &&
       (needs.build-and-test.result == 'success' || needs.build-and-test.result == 'skipped') &&
       (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped') &&
       (needs.web-tests.result == 'success' || needs.web-tests.result == 'skipped') &&
