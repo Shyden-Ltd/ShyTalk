@@ -316,18 +316,20 @@ describe('POST /api/test/setup', () => {
       .post('/api/test/setup')
       .set('X-Test-Api-Key', VALID_API_KEY)
       .send({
-        users: [{
-          name: 'e2e-chromium-user',
-          shyCoins: 1000,
-          shyBeans: 500,
-          deviceInfo: {
-            deviceId: 'e2e-chromium-device-1',
-            manufacturer: 'Google',
-            model: 'Pixel 6',
-            lastIp: '203.0.113.1',
-            isp: 'Test ISP',
+        users: [
+          {
+            name: 'e2e-chromium-user',
+            shyCoins: 1000,
+            shyBeans: 500,
+            deviceInfo: {
+              deviceId: 'e2e-chromium-device-1',
+              manufacturer: 'Google',
+              model: 'Pixel 6',
+              lastIp: '203.0.113.1',
+              isp: 'Test ISP',
+            },
           },
-        }],
+        ],
       })
       .expect(200);
 
@@ -365,13 +367,15 @@ describe('POST /api/test/setup', () => {
       .post('/api/test/setup')
       .set('X-Test-Api-Key', VALID_API_KEY)
       .send({
-        users: [{
-          name: 'ip-test-user',
-          deviceInfo: {
-            deviceId: 'ip-test-device',
-            lastIp: '203.0.113.99',
+        users: [
+          {
+            name: 'ip-test-user',
+            deviceInfo: {
+              deviceId: 'ip-test-device',
+              lastIp: '203.0.113.99',
+            },
           },
-        }],
+        ],
       })
       .expect(200);
 
@@ -388,14 +392,16 @@ describe('POST /api/test/setup', () => {
       .post('/api/test/setup')
       .set('X-Test-Api-Key', VALID_API_KEY)
       .send({
-        users: [{
-          name: 'no-ip-user',
-          deviceInfo: {
-            deviceId: 'no-ip-device',
-            manufacturer: 'Samsung',
-            model: 'Galaxy S21',
+        users: [
+          {
+            name: 'no-ip-user',
+            deviceInfo: {
+              deviceId: 'no-ip-device',
+              manufacturer: 'Samsung',
+              model: 'Galaxy S21',
+            },
           },
-        }],
+        ],
       })
       .expect(200);
 
@@ -409,12 +415,14 @@ describe('POST /api/test/setup', () => {
       .post('/api/test/setup')
       .set('X-Test-Api-Key', VALID_API_KEY)
       .send({
-        users: [{
-          name: 'minimal-device-user',
-          deviceInfo: {
-            deviceId: 'minimal-device',
+        users: [
+          {
+            name: 'minimal-device-user',
+            deviceInfo: {
+              deviceId: 'minimal-device',
+            },
           },
-        }],
+        ],
       })
       .expect(200);
 
@@ -438,9 +446,7 @@ describe('POST /api/test/setup', () => {
       .expect(200);
 
     // Only user doc should be set, no deviceBindings
-    expect(mockDoc).not.toHaveBeenCalledWith(
-      expect.stringContaining('deviceBindings/'),
-    );
+    expect(mockDoc).not.toHaveBeenCalledWith(expect.stringContaining('deviceBindings/'));
   });
 
   test('creates test rooms with correct defaults', async () => {
@@ -727,7 +733,15 @@ describe('POST /api/test/teardown', () => {
 
     // New implementation queries: users, deviceBindings, deviceBans (0 users so no ban queries),
     // then gifts, rooms, banners, funFacts, conversations = 7 collections total
-    const expectedCollections = ['users', 'deviceBindings', 'gifts', 'rooms', 'banners', 'funFacts', 'conversations'];
+    const expectedCollections = [
+      'users',
+      'deviceBindings',
+      'gifts',
+      'rooms',
+      'banners',
+      'funFacts',
+      'conversations',
+    ];
     for (const col of expectedCollections) {
       expect(mockCollection).toHaveBeenCalledWith(col);
     }
@@ -808,7 +822,15 @@ describe('POST /api/test/reset', () => {
       .send()
       .expect(200);
 
-    const expectedCollections = ['users', 'deviceBindings', 'gifts', 'rooms', 'banners', 'funFacts', 'conversations'];
+    const expectedCollections = [
+      'users',
+      'deviceBindings',
+      'gifts',
+      'rooms',
+      'banners',
+      'funFacts',
+      'conversations',
+    ];
     for (const col of expectedCollections) {
       expect(mockCollection).toHaveBeenCalledWith(col);
     }
@@ -868,10 +890,12 @@ describe('deleteTestData (exported function)', () => {
     // Track which collections are queried and return appropriate data
     const collectionQueryResults = {
       users: {
-        docs: [{
-          ref: userDocRef,
-          data: () => ({ uniqueId: userUniqueId, _testRun: testRunId }),
-        }],
+        docs: [
+          {
+            ref: userDocRef,
+            data: () => ({ uniqueId: userUniqueId, _testRun: testRunId }),
+          },
+        ],
         size: 1,
         empty: false,
       },
@@ -995,7 +1019,9 @@ describe('deleteTestData (exported function)', () => {
         if (colName === 'users') {
           return {
             get: jest.fn().mockResolvedValue({
-              docs: [{ ref: userDocRef, data: () => ({ uniqueId: userUniqueId, _testRun: testRunId }) }],
+              docs: [
+                { ref: userDocRef, data: () => ({ uniqueId: userUniqueId, _testRun: testRunId }) },
+              ],
               size: 1,
               empty: false,
             }),
@@ -1010,8 +1036,8 @@ describe('deleteTestData (exported function)', () => {
     await deleteTestData(testRunId);
 
     // Should query deviceBans and networkBans with BOTH number and string variants
-    const deviceBanQueries = queriedLinkedUniqueIds.filter(q => q.collection === 'deviceBans');
-    const networkBanQueries = queriedLinkedUniqueIds.filter(q => q.collection === 'networkBans');
+    const deviceBanQueries = queriedLinkedUniqueIds.filter((q) => q.collection === 'deviceBans');
+    const networkBanQueries = queriedLinkedUniqueIds.filter((q) => q.collection === 'networkBans');
 
     expect(deviceBanQueries).toEqual(
       expect.arrayContaining([

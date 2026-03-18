@@ -200,7 +200,7 @@ async function deleteDocWithSubcollections(docRef) {
   for (const sub of subcollections) {
     const snap = await docRef.collection(sub).get();
     const batch = db.batch();
-    snap.docs.forEach(d => batch.delete(d.ref));
+    snap.docs.forEach((d) => batch.delete(d.ref));
     if (snap.size > 0) await batch.commit();
   }
   await docRef.delete();
@@ -246,11 +246,23 @@ async function deleteTestData(testRunId) {
   // Query both number and string variants (Firestore equality is type-strict)
   for (const uid of userUniqueIds) {
     for (const uidVariant of [uid, String(uid)]) {
-      const deviceBanSnap = await db.collection('deviceBans').where('linkedUniqueId', '==', uidVariant).get();
-      for (const doc of deviceBanSnap.docs) { await doc.ref.delete(); deleted++; }
+      const deviceBanSnap = await db
+        .collection('deviceBans')
+        .where('linkedUniqueId', '==', uidVariant)
+        .get();
+      for (const doc of deviceBanSnap.docs) {
+        await doc.ref.delete();
+        deleted++;
+      }
 
-      const networkBanSnap = await db.collection('networkBans').where('linkedUniqueId', '==', uidVariant).get();
-      for (const doc of networkBanSnap.docs) { await doc.ref.delete(); deleted++; }
+      const networkBanSnap = await db
+        .collection('networkBans')
+        .where('linkedUniqueId', '==', uidVariant)
+        .get();
+      for (const doc of networkBanSnap.docs) {
+        await doc.ref.delete();
+        deleted++;
+      }
     }
   }
 
@@ -266,7 +278,10 @@ async function deleteTestData(testRunId) {
     }
     const snap = await query.get();
     const batch = db.batch();
-    for (const doc of snap.docs) { batch.delete(doc.ref); deleted++; }
+    for (const doc of snap.docs) {
+      batch.delete(doc.ref);
+      deleted++;
+    }
     if (snap.size > 0) await batch.commit();
   }
 
