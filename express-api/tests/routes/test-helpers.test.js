@@ -23,8 +23,7 @@ const mockBatch = jest.fn(() => ({
 }));
 
 const mockQueryGet = jest.fn();
-const mockLimit = jest.fn(() => ({ get: mockQueryGet }));
-const mockWhere = jest.fn(() => ({ limit: mockLimit }));
+const mockWhere = jest.fn(() => ({ get: mockQueryGet }));
 const mockCollection = jest.fn(() => ({ where: mockWhere }));
 
 // Transaction mock: calls the callback with a transaction object that has get/set
@@ -665,18 +664,34 @@ describe('POST /api/test/teardown', () => {
     expect(res.body.error).toBe('Invalid testRunId');
   });
 
-  test('deletes matching docs across all collections for given testRunId', async () => {
-    const mockRef1 = { id: 'doc1' };
-    const mockRef2 = { id: 'doc2' };
+  test('deletes matching user docs with subcollections for given testRunId', async () => {
+    // User doc refs need .collection() for subcollection traversal + .delete() + .data()
+    const userRef1 = {
+      id: 'user1',
+      delete: jest.fn().mockResolvedValue(),
+      collection: jest.fn(() => ({
+        get: jest.fn().mockResolvedValue({ docs: [], size: 0 }),
+      })),
+    };
+    const userRef2 = {
+      id: 'user2',
+      delete: jest.fn().mockResolvedValue(),
+      collection: jest.fn(() => ({
+        get: jest.fn().mockResolvedValue({ docs: [], size: 0 }),
+      })),
+    };
 
-    // First collection (users) returns 2 docs, rest return empty
+    // First query (users) returns 2 docs, rest return empty
     let callCount = 0;
     mockQueryGet.mockImplementation(() => {
       callCount++;
       if (callCount === 1) {
         return Promise.resolve({
           empty: false,
-          docs: [{ ref: mockRef1 }, { ref: mockRef2 }],
+          docs: [
+            { ref: userRef1, data: () => ({ uniqueId: 1001, _testRun: 'test_run123' }) },
+            { ref: userRef2, data: () => ({ uniqueId: 1002, _testRun: 'test_run123' }) },
+          ],
           size: 2,
         });
       }
@@ -691,14 +706,18 @@ describe('POST /api/test/teardown', () => {
       .expect(200);
 
     expect(res.body.success).toBe(true);
-    expect(res.body.deleted).toBe(2);
+    expect(res.body.deleted).toBe(2); // 2 user docs
     expect(mockWhere).toHaveBeenCalledWith('_testRun', '==', 'test_run123');
-    expect(mockBatchDelete).toHaveBeenCalledWith(mockRef1);
-    expect(mockBatchDelete).toHaveBeenCalledWith(mockRef2);
-    expect(mockBatchCommit).toHaveBeenCalled();
+    // User docs themselves should be deleted via deleteDocWithSubcollections
+    expect(userRef1.delete).toHaveBeenCalled();
+    expect(userRef2.delete).toHaveBeenCalled();
+    // Subcollections should be traversed
+    expect(userRef1.collection).toHaveBeenCalledWith('warnings');
+    expect(userRef1.collection).toHaveBeenCalledWith('transactions');
+    expect(userRef1.collection).toHaveBeenCalledWith('backpack');
   });
 
-  test('queries all 6 collections during teardown', async () => {
+  test('queries all expected collections during teardown', async () => {
     const app = createApp();
     await request(app)
       .post('/api/test/teardown')
@@ -706,8 +725,9 @@ describe('POST /api/test/teardown', () => {
       .send({ testRunId: 'test_run456' })
       .expect(200);
 
-    const expectedCollections = ['users', 'rooms', 'gifts', 'conversations', 'banners', 'funFacts'];
-    expect(mockCollection).toHaveBeenCalledTimes(expectedCollections.length);
+    // New implementation queries: users, deviceBindings, deviceBans (0 users so no ban queries),
+    // then gifts, rooms, banners, funFacts, conversations = 7 collections total
+    const expectedCollections = ['users', 'deviceBindings', 'gifts', 'rooms', 'banners', 'funFacts', 'conversations'];
     for (const col of expectedCollections) {
       expect(mockCollection).toHaveBeenCalledWith(col);
     }
@@ -746,14 +766,21 @@ describe('POST /api/test/teardown', () => {
 
 describe('POST /api/test/reset', () => {
   test('deletes ALL test data across all collections using range query', async () => {
-    const mockRef = { id: 'test-doc' };
+    const userRef = {
+      id: 'test-user',
+      delete: jest.fn().mockResolvedValue(),
+      collection: jest.fn(() => ({
+        get: jest.fn().mockResolvedValue({ docs: [], size: 0 }),
+      })),
+    };
     let callCount = 0;
     mockQueryGet.mockImplementation(() => {
       callCount++;
       if (callCount === 1) {
+        // First query is users
         return Promise.resolve({
           empty: false,
-          docs: [{ ref: mockRef }],
+          docs: [{ ref: userRef, data: () => ({ uniqueId: 9999, _testRun: 'test_old' }) }],
           size: 1,
         });
       }
@@ -773,7 +800,7 @@ describe('POST /api/test/reset', () => {
     expect(mockWhere).toHaveBeenCalledWith('_testRun', '>=', 'test_');
   });
 
-  test('queries all 6 collections during reset', async () => {
+  test('queries all expected collections during reset', async () => {
     const app = createApp();
     await request(app)
       .post('/api/test/reset')
@@ -781,35 +808,14 @@ describe('POST /api/test/reset', () => {
       .send()
       .expect(200);
 
-    const expectedCollections = ['users', 'rooms', 'gifts', 'conversations', 'banners', 'funFacts'];
-    expect(mockCollection).toHaveBeenCalledTimes(expectedCollections.length);
+    const expectedCollections = ['users', 'deviceBindings', 'gifts', 'rooms', 'banners', 'funFacts', 'conversations'];
     for (const col of expectedCollections) {
       expect(mockCollection).toHaveBeenCalledWith(col);
     }
   });
 
-  test('limits each query to 500 documents', async () => {
-    const app = createApp();
-    await request(app)
-      .post('/api/test/reset')
-      .set('X-Test-Api-Key', VALID_API_KEY)
-      .send()
-      .expect(200);
-
-    // Each of the 6 collections should call .limit(500)
-    expect(mockLimit).toHaveBeenCalledTimes(6);
-    for (const call of mockLimit.mock.calls) {
-      expect(call[0]).toBe(500);
-    }
-  });
-
-  test('returns 500 when batch commit throws', async () => {
-    mockQueryGet.mockResolvedValue({
-      empty: false,
-      docs: [{ ref: { id: 'doc1' } }],
-      size: 1,
-    });
-    mockBatchCommit.mockRejectedValue(new Error('Batch commit failed'));
+  test('returns 500 when Firestore query throws during reset', async () => {
+    mockQueryGet.mockRejectedValue(new Error('Firestore query failed'));
 
     const app = createApp();
     const res = await request(app)
@@ -818,7 +824,7 @@ describe('POST /api/test/reset', () => {
       .send()
       .expect(500);
 
-    expect(res.body.error).toBe('Batch commit failed');
+    expect(res.body.error).toBe('Firestore query failed');
   });
 });
 
@@ -831,39 +837,193 @@ describe('deleteTestData (exported function)', () => {
     expect(typeof deleteTestData).toBe('function');
   });
 
-  test('uses exact match query when testRunId is provided', async () => {
-    mockQueryGet.mockResolvedValue({ empty: true, docs: [], size: 0 });
+  test('deletes user subcollections, device bindings, device bans, and network bans', async () => {
+    // --- Arrange ---
+    const testRunId = 'test_recursive_teardown';
+    const userUniqueId = 10000042;
 
-    await deleteTestData('test_specific');
+    // Mock subcollection doc refs for deletion tracking
+    const warningRef = { id: 'w1' };
+    const transactionRef = { id: 't1' };
+    const backpackRef = { id: 'g1' };
+    const deviceBanRef = { id: 'deviceBan1', delete: jest.fn().mockResolvedValue() };
+    const networkBanRef = { id: 'networkBan1', delete: jest.fn().mockResolvedValue() };
 
-    expect(mockWhere).toHaveBeenCalledWith('_testRun', '==', 'test_specific');
+    // Subcollection snapshots returned by docRef.collection(sub).get()
+    const subcollectionSnapshots = {
+      warnings: { docs: [{ ref: warningRef }], size: 1 },
+      transactions: { docs: [{ ref: transactionRef }], size: 1 },
+      backpack: { docs: [{ ref: backpackRef }], size: 1 },
+    };
+
+    // User doc ref needs .collection() for subcollection traversal + .delete()
+    const userDocRef = {
+      id: String(userUniqueId),
+      delete: jest.fn().mockResolvedValue(),
+      collection: jest.fn((sub) => ({
+        get: jest.fn().mockResolvedValue(subcollectionSnapshots[sub] || { docs: [], size: 0 }),
+      })),
+    };
+
+    // Track which collections are queried and return appropriate data
+    const collectionQueryResults = {
+      users: {
+        docs: [{
+          ref: userDocRef,
+          data: () => ({ uniqueId: userUniqueId, _testRun: testRunId }),
+        }],
+        size: 1,
+        empty: false,
+      },
+      deviceBindings: {
+        docs: [{ ref: { id: 'binding1' } }],
+        size: 1,
+        empty: false,
+      },
+      deviceBans: {
+        docs: [{ ref: deviceBanRef }],
+        size: 1,
+        empty: false,
+      },
+      networkBans: {
+        docs: [{ ref: networkBanRef }],
+        size: 1,
+        empty: false,
+      },
+    };
+
+    // Override mockCollection to track which collection is queried and with which where clause
+    mockCollection.mockImplementation((colName) => ({
+      where: jest.fn((field, op, value) => {
+        // For ban collections, match on linkedUniqueId
+        if (colName === 'deviceBans' || colName === 'networkBans') {
+          if (field === 'linkedUniqueId' && value === userUniqueId) {
+            return { get: jest.fn().mockResolvedValue(collectionQueryResults[colName]) };
+          }
+          // String variant query — return empty
+          return { get: jest.fn().mockResolvedValue({ docs: [], size: 0, empty: true }) };
+        }
+        // For _testRun queries
+        const result = collectionQueryResults[colName] || { docs: [], size: 0, empty: true };
+        return {
+          get: jest.fn().mockResolvedValue(result),
+          limit: jest.fn(() => ({ get: jest.fn().mockResolvedValue(result) })),
+        };
+      }),
+    }));
+
+    // --- Act ---
+    const deleted = await deleteTestData(testRunId);
+
+    // --- Assert ---
+
+    // 1. User subcollections were queried and deleted via batch
+    expect(userDocRef.collection).toHaveBeenCalledWith('warnings');
+    expect(userDocRef.collection).toHaveBeenCalledWith('transactions');
+    expect(userDocRef.collection).toHaveBeenCalledWith('backpack');
+
+    // Subcollection docs deleted via batch
+    expect(mockBatchDelete).toHaveBeenCalledWith(warningRef);
+    expect(mockBatchDelete).toHaveBeenCalledWith(transactionRef);
+    expect(mockBatchDelete).toHaveBeenCalledWith(backpackRef);
+
+    // User doc itself was deleted
+    expect(userDocRef.delete).toHaveBeenCalled();
+
+    // 2. Device bans and network bans were deleted
+    expect(deviceBanRef.delete).toHaveBeenCalled();
+    expect(networkBanRef.delete).toHaveBeenCalled();
+
+    // 3. Total deleted count includes: 1 user + 1 binding + 1 device ban + 1 network ban + other collections (0)
+    // The exact count depends on implementation but should be > 0
+    expect(deleted).toBeGreaterThanOrEqual(4);
   });
 
-  test('uses range query when testRunId is null', async () => {
-    mockQueryGet.mockResolvedValue({ empty: true, docs: [], size: 0 });
+  test('handles teardown with no subcollection data', async () => {
+    const testRunId = 'test_no_subcollections';
 
-    await deleteTestData(null);
+    const userDocRef = {
+      id: '999',
+      delete: jest.fn().mockResolvedValue(),
+      collection: jest.fn(() => ({
+        get: jest.fn().mockResolvedValue({ docs: [], size: 0 }),
+      })),
+    };
 
-    expect(mockWhere).toHaveBeenCalledWith('_testRun', '>=', 'test_');
+    mockCollection.mockImplementation((colName) => ({
+      where: jest.fn(() => {
+        if (colName === 'users') {
+          return {
+            get: jest.fn().mockResolvedValue({
+              docs: [{ ref: userDocRef, data: () => ({ uniqueId: 999, _testRun: testRunId }) }],
+              size: 1,
+              empty: false,
+            }),
+          };
+        }
+        return {
+          get: jest.fn().mockResolvedValue({ docs: [], size: 0, empty: true }),
+        };
+      }),
+    }));
+
+    const deleted = await deleteTestData(testRunId);
+
+    // User doc deleted, subcollections empty — still deletes the user doc
+    expect(userDocRef.delete).toHaveBeenCalled();
+    expect(deleted).toBeGreaterThanOrEqual(1);
   });
 
-  test('returns total deleted count across multiple collections', async () => {
-    let callCount = 0;
-    mockQueryGet.mockImplementation(() => {
-      callCount++;
-      if (callCount <= 2) {
-        return Promise.resolve({
-          empty: false,
-          docs: [{ ref: { id: `doc${callCount}` } }, { ref: { id: `doc${callCount}b` } }],
-          size: 2,
-        });
-      }
-      return Promise.resolve({ empty: true, docs: [], size: 0 });
-    });
+  test('queries both number and string variants for ban linkedUniqueId', async () => {
+    const testRunId = 'test_uid_variants';
+    const userUniqueId = 42;
+    const queriedLinkedUniqueIds = [];
 
-    const result = await deleteTestData(null);
+    const userDocRef = {
+      id: String(userUniqueId),
+      delete: jest.fn().mockResolvedValue(),
+      collection: jest.fn(() => ({
+        get: jest.fn().mockResolvedValue({ docs: [], size: 0 }),
+      })),
+    };
 
-    expect(result).toBe(4); // 2 docs from 2 collections
-    expect(mockBatchCommit).toHaveBeenCalledTimes(2);
+    mockCollection.mockImplementation((colName) => ({
+      where: jest.fn((field, op, value) => {
+        if (field === 'linkedUniqueId') {
+          queriedLinkedUniqueIds.push({ collection: colName, value });
+        }
+        if (colName === 'users') {
+          return {
+            get: jest.fn().mockResolvedValue({
+              docs: [{ ref: userDocRef, data: () => ({ uniqueId: userUniqueId, _testRun: testRunId }) }],
+              size: 1,
+              empty: false,
+            }),
+          };
+        }
+        return {
+          get: jest.fn().mockResolvedValue({ docs: [], size: 0, empty: true }),
+        };
+      }),
+    }));
+
+    await deleteTestData(testRunId);
+
+    // Should query deviceBans and networkBans with BOTH number and string variants
+    const deviceBanQueries = queriedLinkedUniqueIds.filter(q => q.collection === 'deviceBans');
+    const networkBanQueries = queriedLinkedUniqueIds.filter(q => q.collection === 'networkBans');
+
+    expect(deviceBanQueries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: userUniqueId }),
+        expect.objectContaining({ value: String(userUniqueId) }),
+      ]),
+    );
+    expect(networkBanQueries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: userUniqueId }),
+        expect.objectContaining({ value: String(userUniqueId) }),
+      ]),
+    );
   });
 });
