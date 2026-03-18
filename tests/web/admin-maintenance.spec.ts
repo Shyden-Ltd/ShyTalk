@@ -79,14 +79,18 @@ test.describe('Admin Maintenance Tab', () => {
       const hasAfter = (devicesAfter.devices || []).some((d: any) => d.id === deviceId);
       expect(hasAfter).toBe(false);
 
-      // Re-seed the device for subsequent tests
-      await testData.api.post('/api/admin/devices', {
-        deviceId,
-        uniqueId: testData.user.uniqueId,
-        manufacturer: 'Google',
-        model: 'Pixel 6',
-        lastIp: '203.0.113.1',
-        isp: 'Test ISP',
+      // Re-seed the device binding via test setup API
+      await testData.api.testSetup({
+        users: [{
+          name: `reseed-${testData.prefix}`,
+          deviceInfo: {
+            deviceId,
+            manufacturer: 'Google',
+            model: 'Pixel 6',
+            lastIp: '203.0.113.1',
+            isp: 'Test ISP',
+          },
+        }],
       });
     }
   });

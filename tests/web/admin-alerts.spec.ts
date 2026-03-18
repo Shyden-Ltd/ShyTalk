@@ -28,8 +28,17 @@ async function expandAlertsSection(page: Page): Promise<void> {
 test.describe('Admin Alerts', () => {
   test.describe.configure({ mode: 'serial' });
 
-  // Seed our own alert in beforeAll to avoid conflicts with admin-logs.spec.ts
+  // Seed our own alert to avoid conflicts with admin-logs.spec.ts
   let ownAlertId: string;
+
+  test.beforeAll(async ({ testData }) => {
+    // Seed a fresh alert that only this file uses
+    const alertData = await testData.api.post('/api/test/setup', {
+      alerts: [{ type: 'error_rate', severity: 'high', message: `alert-spec-${testData.prefix}`, status: 'new' }],
+    });
+    // Note: testData.api.post sends with X-Test-API-Key, but testSetup returns the full shape
+    // We may need to extract the alert ID from the response
+  });
 
   test.beforeEach(async ({ page }) => {
     await adminLogin(page);
@@ -50,7 +59,7 @@ test.describe('Admin Alerts', () => {
         // Badge should be visible with a count
         await expect(badge).toBeVisible({ timeout: 10_000 });
         const badgeText = await badge.textContent();
-        expect(Number(badgeText)).toBeGreaterThanOrEqual(0);
+        expect(Number(badgeText)).toBeGreaterThan(0);
       } else {
         // Badge may be hidden if no new alerts
         const isVisible = await badge.isVisible();

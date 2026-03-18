@@ -55,6 +55,15 @@ async function unsuspendUser(testData: TestData): Promise<void> {
 test.describe('Admin Appeals', () => {
   test.describe.configure({ mode: 'serial' });
 
+  // Suspend the test user so the seeded appeal is valid
+  // (fixture no longer auto-suspends to avoid cross-file fragility)
+  test.beforeAll(async ({ testData }) => {
+    await testData.api.post(`/api/user/${testData.user.uniqueId}/suspend`, {
+      reason: 'E2E test setup',
+      canAppeal: true,
+    });
+  });
+
   test.beforeEach(async ({ page }) => {
     await adminLogin(page);
     await navigateToTab(page, 'Appeals');

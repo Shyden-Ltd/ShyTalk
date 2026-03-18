@@ -87,7 +87,7 @@ test.describe('Admin Reports', () => {
 
     // API verification
     const result = await getReportsViaApi(testData, 'pending');
-    expect(result.users.length).toBeGreaterThanOrEqual(1);
+    expect((result.users || result.reports || []).length).toBeGreaterThanOrEqual(1);
   });
 
   // ── Test 2: Filter by status — Pending/Resolved/Archived ──

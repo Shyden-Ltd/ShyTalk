@@ -196,16 +196,13 @@ router.post('/test/setup', async (req, res) => {
       created.reports.push(reportData);
     }
 
-    // Create test suspension appeals (set user suspended first)
+    // Create test suspension appeals
+    // NOTE: Does NOT set user as suspended — appeal tests manage suspension state themselves
+    // to avoid cross-file fragility (other tests depend on user not being suspended)
     for (const appealSpec of spec.appeals || []) {
       const appealId = `${testRunId}_appeal_${generateId()}`;
       const appealUser = created.users[appealSpec.userIndex || 0];
       if (!appealUser) throw new Error('Appeal seed requires users to be seeded first');
-      // Set user as suspended with canAppeal
-      await db.doc(`users/${appealUser.uniqueId}`).update({
-        isSuspended: true,
-        suspensionCanAppeal: true,
-      });
       const appealData = {
         id: appealId,
         userId: appealUser.uniqueId,
@@ -434,12 +431,17 @@ async function deleteTestData(testRunId) {
       query = db.collection(col).where('_testRun', '>=', TEST_PREFIX);
     }
     const snap = await query.get();
-    const batch = db.batch();
     for (const doc of snap.docs) {
-      batch.delete(doc.ref);
+      if (col === 'conversations') {
+        // Conversations have messages subcollection — delete those first
+        const msgSnap = await doc.ref.collection('messages').get();
+        const msgBatch = db.batch();
+        msgSnap.docs.forEach((m) => msgBatch.delete(m.ref));
+        if (msgSnap.size > 0) await msgBatch.commit();
+      }
+      await doc.ref.delete();
       deleted++;
     }
-    if (snap.size > 0) await batch.commit();
   }
 
   return deleted;

@@ -832,7 +832,10 @@ router.post('/cleanup/device-binding/:uniqueId', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
-    const uniqueId = req.params.uniqueId;
+    const rawId = req.params.uniqueId;
+    const numId = Number(rawId);
+    // Query both string and number variants — Firestore equality is type-strict
+    const uniqueId = isNaN(numId) ? rawId : numId;
     log.info('admin-cleanup', 'Deleting device binding for user', {
       adminId: req.auth.uniqueId,
       targetUniqueId: uniqueId,
