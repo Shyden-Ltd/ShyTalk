@@ -60,6 +60,11 @@ test.describe('Admin Login Flow', () => {
     await page.locator('#signout-btn').click();
     await expect(page.getByRole('button', { name: 'Sign In' })).toBeVisible({ timeout: 10_000 });
     await expect(page.locator('#dashboard-screen')).not.toBeVisible();
+
+    // Round-trip: reload confirms session is truly cleared
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Sign In' })).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('#dashboard-screen')).not.toBeVisible();
   });
 
   test('session persists across page reload', async ({ page }) => {
