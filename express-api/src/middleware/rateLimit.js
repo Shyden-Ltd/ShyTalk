@@ -12,6 +12,8 @@ const log = require('../utils/log');
 const keyGenerator = (req) => req.auth?.uid || req.ip;
 
 // General API rate limit: 200 requests per minute per user
+// Admin users are exempt — the admin panel legitimately makes many parallel
+// API calls (logs, alerts, economy, search) across multiple tabs.
 const generalLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 200,
@@ -19,6 +21,7 @@ const generalLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator,
   validate: false,
+  skip: (req) => req.auth?.token?.admin === true,
   handler: (req, res) => {
     res.status(429).json({ error: 'Too many requests, please try again later' });
   },

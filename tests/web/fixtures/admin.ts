@@ -41,9 +41,12 @@ export const test = base.extend<{}, { adminContext: BrowserContext }>({
     await context.close();
   }, { scope: 'worker' }],
 
-  // Override page to open in the shared authenticated context
+  // Override page to open in the shared authenticated context.
+  // Clear sessionStorage so the admin panel doesn't restore a heavy tab
+  // (like Logs with 4+ API calls) — prevents needless 429s from the rate limiter.
   page: async ({ adminContext }, use) => {
     const page = await adminContext.newPage();
+    await page.addInitScript(() => sessionStorage.clear());
     await use(page);
     await page.close();
   },
