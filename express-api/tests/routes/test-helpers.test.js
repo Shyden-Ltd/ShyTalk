@@ -835,7 +835,7 @@ describe('POST /api/test/setup', () => {
     expect(mockDoc).toHaveBeenCalledWith('config/economy');
   });
 
-  test('economy config defaults to empty object when doc does not exist', async () => {
+  test('economy config uses production defaults when doc does not exist', async () => {
     mockDocGet.mockResolvedValue({ exists: false });
 
     const app = createApp();
@@ -849,7 +849,7 @@ describe('POST /api/test/setup', () => {
     expect(Object.keys(res.body.economyConfig).length).toBeGreaterThan(0);
   });
 
-  test('economy config defaults to empty object when Firestore read fails', async () => {
+  test('economy config uses production defaults when Firestore read fails', async () => {
     mockDocGet.mockRejectedValue(new Error('Firestore read error'));
 
     const app = createApp();
