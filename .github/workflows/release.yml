@@ -17,9 +17,10 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
-concurrency:
-  group: ${{ github.event_name == 'issue_comment' && format('deploy-{0}', github.event.issue.number) || format('release-{0}', github.head_ref || github.event.pull_request.number) }}
-  cancel-in-progress: true
+## No workflow-level concurrency group — GitHub Actions cannot cancel jobs
+## waiting on environment approval gates, causing newer runs to be blocked
+## indefinitely. The cancel-stale job handles rejecting stale approvals
+## instead. Deploy jobs use job-level concurrency to prevent double-deploys.
 
 jobs:
   # ──────────────────────────────────────────────
@@ -416,6 +417,7 @@ jobs:
 
   deploy-backend-dev:
     name: Deploy Backend to Dev
+    concurrency: { group: deploy-backend-dev, cancel-in-progress: true }
     needs: [detect-changes, lint, sonarcloud]
     if: |
       always() &&
@@ -479,6 +481,7 @@ jobs:
 
   deploy-web-dev:
     name: Deploy Web to Dev
+    concurrency: { group: deploy-web-dev, cancel-in-progress: true }
     needs: [detect-changes, deploy-backend-dev]
     if: |
       always() &&
@@ -1084,6 +1087,7 @@ jobs:
 
   deploy-prod:
     name: Deploy to Production
+    concurrency: { group: deploy-prod, cancel-in-progress: false }
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [detect-changes, merge-pr]
