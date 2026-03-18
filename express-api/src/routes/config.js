@@ -80,6 +80,9 @@ router.put('/config/economy', async (req, res) => {
       'pityHighValueThreshold',
       'dailyBase',
       'milestoneRewards',
+      'wheelInnerThreshold',
+      'maxRoomDurationMinutes',
+      'superShyRoomDurationMinutes',
     ];
 
     const filtered = {};
