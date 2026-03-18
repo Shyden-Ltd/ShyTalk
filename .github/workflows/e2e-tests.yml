@@ -608,6 +608,26 @@ jobs:
           path: allure-results-all/
           merge-multiple: true
 
+      - name: Merge environment.properties from all test suites
+        run: |
+          # Each artifact writes its own environment.properties in a subdirectory.
+          # Allure only reads one file at the results root — merge them all into one
+          # with section headers so every suite's environment is visible.
+          MERGED="allure-results-all/environment.properties"
+          > "$MERGED"
+          find allure-results-all -name environment.properties -not -path "$MERGED" | sort | while read -r f; do
+            SUITE=$(echo "$f" | sed 's|allure-results-all/||;s|/environment.properties||;s|/|.|g')
+            while IFS= read -r line; do
+              trimmed=$(echo "$line" | sed 's/^[[:space:]]*//')
+              [ -z "$trimmed" ] && continue
+              KEY=$(echo "$trimmed" | cut -d= -f1)
+              VALUE=$(echo "$trimmed" | cut -d= -f2-)
+              echo "${SUITE}.${KEY}=${VALUE}" >> "$MERGED"
+            done < "$f"
+          done
+          echo "Merged environment.properties:"
+          cat "$MERGED"
+
       - name: Sanitize results (strip secrets for public report)
         run: bash .github/scripts/sanitize-allure.sh allure-results-all/
 
