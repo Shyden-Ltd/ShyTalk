@@ -68,6 +68,26 @@ router.post('/test/setup', async (req, res) => {
         _testRun: testRunId,
       };
       await db.doc(`users/${uniqueId}`).set(userData);
+
+      // Create device binding if deviceInfo is provided
+      if (userSpec.deviceInfo) {
+        const { deviceId, manufacturer, model, lastIp, isp } = userSpec.deviceInfo;
+        await db.doc(`deviceBindings/${deviceId}`).set({
+          deviceId,
+          uniqueId, // number — must match user doc type for Firestore queries
+          manufacturer: manufacturer || 'Unknown',
+          model: model || 'Unknown',
+          lastIp: lastIp || null,
+          isp: isp || null,
+          boundAt: Date.now(),
+          _testRun: testRunId,
+        });
+        // Also set lastIp on user doc for ban tests
+        if (lastIp) {
+          await db.doc(`users/${uniqueId}`).update({ lastIp });
+        }
+      }
+
       created.users.push({ ...userData });
     }
 

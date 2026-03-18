@@ -5,11 +5,13 @@ const request = require('supertest');
 
 const mockDocGet = jest.fn();
 const mockDocSet = jest.fn().mockResolvedValue();
+const mockDocUpdate = jest.fn().mockResolvedValue();
 const mockDocDelete = jest.fn().mockResolvedValue();
 
 const mockDoc = jest.fn(() => ({
   get: mockDocGet,
   set: mockDocSet,
+  update: mockDocUpdate,
   delete: mockDocDelete,
 }));
 
@@ -79,6 +81,7 @@ beforeEach(() => {
   // Restore default mock implementations after clearAllMocks
   mockDocGet.mockResolvedValue({ exists: false });
   mockDocSet.mockResolvedValue();
+  mockDocUpdate.mockResolvedValue();
   mockDocDelete.mockResolvedValue();
   mockBatchCommit.mockResolvedValue();
   mockQueryGet.mockResolvedValue({ empty: true, docs: [], size: 0 });
@@ -306,6 +309,139 @@ describe('POST /api/test/setup', () => {
     expect(typeof u2.uniqueId).toBe('number');
     // Each should have a different uniqueId
     expect(u1.uniqueId).not.toBe(u2.uniqueId);
+  });
+
+  test('creates deviceBinding doc when user.deviceInfo is provided', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({
+        users: [{
+          name: 'e2e-chromium-user',
+          shyCoins: 1000,
+          shyBeans: 500,
+          deviceInfo: {
+            deviceId: 'e2e-chromium-device-1',
+            manufacturer: 'Google',
+            model: 'Pixel 6',
+            lastIp: '203.0.113.1',
+            isp: 'Test ISP',
+          },
+        }],
+      })
+      .expect(200);
+
+    const user = res.body.users[0];
+
+    // deviceBindings/{deviceId} doc should be created
+    expect(mockDoc).toHaveBeenCalledWith('deviceBindings/e2e-chromium-device-1');
+    expect(mockDocSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deviceId: 'e2e-chromium-device-1',
+        uniqueId: user.uniqueId,
+        manufacturer: 'Google',
+        model: 'Pixel 6',
+        lastIp: '203.0.113.1',
+        isp: 'Test ISP',
+        _testRun: res.body.testRunId,
+      }),
+    );
+
+    // uniqueId in binding doc must be a number (Firestore type-sensitive)
+    const bindingSetCall = mockDocSet.mock.calls.find(
+      (call) => call[0] && call[0].deviceId === 'e2e-chromium-device-1',
+    );
+    expect(bindingSetCall).toBeTruthy();
+    expect(typeof bindingSetCall[0].uniqueId).toBe('number');
+
+    // boundAt should be a number (timestamp)
+    expect(typeof bindingSetCall[0].boundAt).toBe('number');
+    expect(bindingSetCall[0].boundAt).toBeGreaterThan(0);
+  });
+
+  test('sets lastIp on user doc when deviceInfo.lastIp is provided', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({
+        users: [{
+          name: 'ip-test-user',
+          deviceInfo: {
+            deviceId: 'ip-test-device',
+            lastIp: '203.0.113.99',
+          },
+        }],
+      })
+      .expect(200);
+
+    const user = res.body.users[0];
+
+    // user doc should be updated with lastIp
+    expect(mockDoc).toHaveBeenCalledWith(`users/${user.uniqueId}`);
+    expect(mockDocUpdate).toHaveBeenCalledWith({ lastIp: '203.0.113.99' });
+  });
+
+  test('does not call update on user doc when lastIp is not provided', async () => {
+    const app = createApp();
+    await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({
+        users: [{
+          name: 'no-ip-user',
+          deviceInfo: {
+            deviceId: 'no-ip-device',
+            manufacturer: 'Samsung',
+            model: 'Galaxy S21',
+          },
+        }],
+      })
+      .expect(200);
+
+    // update should NOT be called since lastIp was not provided
+    expect(mockDocUpdate).not.toHaveBeenCalled();
+  });
+
+  test('deviceBinding uses default values for missing manufacturer/model', async () => {
+    const app = createApp();
+    await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({
+        users: [{
+          name: 'minimal-device-user',
+          deviceInfo: {
+            deviceId: 'minimal-device',
+          },
+        }],
+      })
+      .expect(200);
+
+    // Should use 'Unknown' defaults for manufacturer and model
+    const bindingSetCall = mockDocSet.mock.calls.find(
+      (call) => call[0] && call[0].deviceId === 'minimal-device',
+    );
+    expect(bindingSetCall).toBeTruthy();
+    expect(bindingSetCall[0].manufacturer).toBe('Unknown');
+    expect(bindingSetCall[0].model).toBe('Unknown');
+    expect(bindingSetCall[0].lastIp).toBeNull();
+    expect(bindingSetCall[0].isp).toBeNull();
+  });
+
+  test('does not create deviceBinding when deviceInfo is not provided', async () => {
+    const app = createApp();
+    await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({ users: [{ name: 'no-device-user' }] })
+      .expect(200);
+
+    // Only user doc should be set, no deviceBindings
+    expect(mockDoc).not.toHaveBeenCalledWith(
+      expect.stringContaining('deviceBindings/'),
+    );
   });
 
   test('creates test rooms with correct defaults', async () => {
