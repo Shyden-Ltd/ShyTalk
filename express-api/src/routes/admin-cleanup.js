@@ -1099,4 +1099,34 @@ router.post('/cleanup/all-stalkers', async (req, res) => {
   }
 });
 
+// POST /api/cleanup/user-coins/:uniqueId — reset coins for a single user
+router.post('/cleanup/user-coins/:uniqueId', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+    await db.doc(`users/${req.params.uniqueId}`).update({ shyCoins: 0 });
+    res.json({ success: true });
+  } catch (err) {
+    log.error('admin-cleanup', 'User coin reset failed', {
+      uniqueId: req.params.uniqueId,
+      error: err.message,
+    });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/cleanup/user-beans/:uniqueId — reset beans for a single user
+router.post('/cleanup/user-beans/:uniqueId', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+    await db.doc(`users/${req.params.uniqueId}`).update({ shyBeans: 0 });
+    res.json({ success: true });
+  } catch (err) {
+    log.error('admin-cleanup', 'User bean reset failed', {
+      uniqueId: req.params.uniqueId,
+      error: err.message,
+    });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router;
