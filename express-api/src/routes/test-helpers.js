@@ -35,20 +35,40 @@ router.post('/test/setup', async (req, res) => {
     const spec = req.body || {};
 
     // Create test users
+    let userIndex = 0;
     for (const userSpec of spec.users || []) {
+      userIndex++;
       const uid = `${testRunId}_user_${generateId()}`;
+
+      // Allocate real uniqueId via atomic counter transaction
+      const counterRef = db.doc('counters/uniqueId');
+      const uniqueId = await db.runTransaction(async (t) => {
+        const counterDoc = await t.get(counterRef);
+        const current = counterDoc.exists ? counterDoc.data().value : 10000000;
+        const next = current + 1;
+        t.set(counterRef, { value: next }, { merge: true });
+        return next;
+      });
+
       const userData = {
         uid,
-        displayName: `[TEST] ${userSpec.name || 'User'}`,
+        firebaseUid: uid,
+        uniqueId,
+        displayName: userSpec.name || `Test User ${userIndex}`,
         userType: userSpec.role || 'MEMBER',
-        coins: userSpec.coins ?? 1000,
-        beans: userSpec.beans ?? 0,
-        gcs: 100,
+        shyCoins: userSpec.shyCoins ?? 0,
+        shyBeans: userSpec.shyBeans ?? 0,
+        gcsScore: 100,
+        warningCount: 0,
+        hasActiveWarning: false,
+        luckScore: 0,
+        pityCounter: 0,
+        isSuspended: false,
         createdAt: now,
         _testRun: testRunId,
       };
-      await db.doc(`users/${uid}`).set(userData);
-      created.users.push(userData);
+      await db.doc(`users/${uniqueId}`).set(userData);
+      created.users.push({ ...userData });
     }
 
     // Create test rooms

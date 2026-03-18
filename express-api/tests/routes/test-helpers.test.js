@@ -25,11 +25,24 @@ const mockLimit = jest.fn(() => ({ get: mockQueryGet }));
 const mockWhere = jest.fn(() => ({ limit: mockLimit }));
 const mockCollection = jest.fn(() => ({ where: mockWhere }));
 
+// Transaction mock: calls the callback with a transaction object that has get/set
+let transactionUniqueIdCounter = 10000000;
+const mockTransactionGet = jest.fn();
+const mockTransactionSet = jest.fn();
+const mockRunTransaction = jest.fn(async (callback) => {
+  const transaction = {
+    get: mockTransactionGet,
+    set: mockTransactionSet,
+  };
+  return callback(transaction);
+});
+
 jest.mock('../../src/utils/firebase', () => ({
   db: {
     doc: (...args) => mockDoc(...args),
     batch: (...args) => mockBatch(...args),
     collection: (...args) => mockCollection(...args),
+    runTransaction: (...args) => mockRunTransaction(...args),
   },
 }));
 
@@ -60,6 +73,7 @@ function createApp() {
 beforeEach(() => {
   jest.clearAllMocks();
   mockIdCounter = 0;
+  transactionUniqueIdCounter = 10000000;
   process.env.TEST_API_KEY = VALID_API_KEY;
 
   // Restore default mock implementations after clearAllMocks
@@ -68,6 +82,28 @@ beforeEach(() => {
   mockDocDelete.mockResolvedValue();
   mockBatchCommit.mockResolvedValue();
   mockQueryGet.mockResolvedValue({ empty: true, docs: [], size: 0 });
+
+  // Transaction mock: simulate atomic counter increment
+  mockTransactionGet.mockImplementation(() => {
+    const current = transactionUniqueIdCounter;
+    return Promise.resolve({
+      exists: current > 10000000,
+      data: () => ({ value: current }),
+    });
+  });
+  mockTransactionSet.mockImplementation((ref, data) => {
+    // Simulate the counter being incremented so next call gets the new value
+    if (data && data.value) {
+      transactionUniqueIdCounter = data.value;
+    }
+  });
+  mockRunTransaction.mockImplementation(async (callback) => {
+    const transaction = {
+      get: mockTransactionGet,
+      set: mockTransactionSet,
+    };
+    return callback(transaction);
+  });
 });
 
 afterEach(() => {
@@ -165,29 +201,29 @@ describe('POST /api/test/setup', () => {
 
     expect(res.body.users).toHaveLength(1);
     const user = res.body.users[0];
-    expect(user.displayName).toBe('[TEST] Alice');
+    expect(user.displayName).toBe('Alice');
     expect(user.userType).toBe('MEMBER');
-    expect(user.coins).toBe(1000);
-    expect(user.beans).toBe(0);
-    expect(user.gcs).toBe(100);
+    expect(user.shyCoins).toBe(0);
+    expect(user.shyBeans).toBe(0);
+    expect(user.gcsScore).toBe(100);
     expect(user._testRun).toBe(res.body.testRunId);
     expect(user.uid).toContain(res.body.testRunId);
-    expect(mockDoc).toHaveBeenCalledWith(`users/${user.uid}`);
+    expect(mockDoc).toHaveBeenCalledWith(`users/${user.uniqueId}`);
     expect(mockDocSet).toHaveBeenCalledWith(expect.objectContaining({ uid: user.uid }));
   });
 
-  test('creates test user with custom role and coins', async () => {
+  test('creates test user with custom role and shyCoins', async () => {
     const app = createApp();
     const res = await request(app)
       .post('/api/test/setup')
       .set('X-Test-Api-Key', VALID_API_KEY)
-      .send({ users: [{ name: 'Admin', role: 'ADMIN', coins: 5000, beans: 200 }] })
+      .send({ users: [{ name: 'Admin', role: 'ADMIN', shyCoins: 5000, shyBeans: 200 }] })
       .expect(200);
 
     const user = res.body.users[0];
     expect(user.userType).toBe('ADMIN');
-    expect(user.coins).toBe(5000);
-    expect(user.beans).toBe(200);
+    expect(user.shyCoins).toBe(5000);
+    expect(user.shyBeans).toBe(200);
   });
 
   test('creates test user with default name when name not specified', async () => {
@@ -198,7 +234,78 @@ describe('POST /api/test/setup', () => {
       .send({ users: [{}] })
       .expect(200);
 
-    expect(res.body.users[0].displayName).toBe('[TEST] User');
+    expect(res.body.users[0].displayName).toMatch(/^Test User \d+$/);
+  });
+
+  test('uniqueId allocation — assigns numeric uniqueId and uses production field names', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({ users: [{ name: 'test-uid-alloc', shyCoins: 100, shyBeans: 50 }] })
+      .expect(200);
+
+    expect(res.body.users).toHaveLength(1);
+    const user = res.body.users[0];
+
+    // uniqueId must be a number > 0
+    expect(typeof user.uniqueId).toBe('number');
+    expect(user.uniqueId).toBeGreaterThan(0);
+
+    // uid must be present
+    expect(user.uid).toBeTruthy();
+
+    // firebaseUid must match uid
+    expect(user.firebaseUid).toBe(user.uid);
+
+    // Production field names (not coins/beans/gcs)
+    expect(user.shyCoins).toBe(100);
+    expect(user.shyBeans).toBe(50);
+    expect(user.gcsScore).toBe(100);
+    expect(user.warningCount).toBe(0);
+    expect(user.hasActiveWarning).toBe(false);
+    expect(user.luckScore).toBe(0);
+    expect(user.pityCounter).toBe(0);
+    expect(user.isSuspended).toBe(false);
+
+    // Old field names must NOT be present
+    expect(user.coins).toBeUndefined();
+    expect(user.beans).toBeUndefined();
+    expect(user.gcs).toBeUndefined();
+
+    // Firestore doc stored at users/{uniqueId}
+    expect(mockDoc).toHaveBeenCalledWith(`users/${user.uniqueId}`);
+    expect(mockDocSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        uniqueId: user.uniqueId,
+        uid: user.uid,
+        firebaseUid: user.uid,
+        shyCoins: 100,
+        shyBeans: 50,
+        gcsScore: 100,
+      }),
+    );
+
+    // Transaction was used for atomic counter
+    expect(mockRunTransaction).toHaveBeenCalled();
+    expect(mockTransactionGet).toHaveBeenCalled();
+    expect(mockTransactionSet).toHaveBeenCalled();
+  });
+
+  test('uniqueId allocation — multiple users get sequential uniqueIds', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({ users: [{ name: 'User1' }, { name: 'User2' }] })
+      .expect(200);
+
+    expect(res.body.users).toHaveLength(2);
+    const [u1, u2] = res.body.users;
+    expect(typeof u1.uniqueId).toBe('number');
+    expect(typeof u2.uniqueId).toBe('number');
+    // Each should have a different uniqueId
+    expect(u1.uniqueId).not.toBe(u2.uniqueId);
   });
 
   test('creates test rooms with correct defaults', async () => {
