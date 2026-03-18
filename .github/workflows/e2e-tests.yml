@@ -515,7 +515,7 @@ jobs:
   # ── Generate Unified Allure Report ──────────────────────────
   allure-report:
     name: Generate Allure Report
-    needs: [resolve-inputs, test-android, test-playwright]
+    needs: [resolve-inputs, test-android, test-ios, test-playwright]
     if: always() && needs.resolve-inputs.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
