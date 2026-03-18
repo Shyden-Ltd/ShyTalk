@@ -3421,7 +3421,7 @@
             <div class="filter-bar">
                 <button class="tab-btn active" data-appeal-filter="pending">Pending</button>
                 <button class="tab-btn" data-appeal-filter="approved">Approved</button>
-                <button class="tab-btn" data-appeal-filter="rejected">Rejected</button>
+                <button class="tab-btn" data-appeal-filter="denied">Denied</button>
             </div>
             <div id="appeals-list"></div>
         </div>
@@ -3665,7 +3665,7 @@
                 </div>
                 <div class="maintenance-card">
                     <h3>Appeals</h3>
-                    <p>Delete all suspension appeals (pending, approved, rejected).</p>
+                    <p>Delete all suspension appeals (pending, approved, denied).</p>
                     <button id="clear-appeals-btn">Delete All Appeals</button>
                     <div class="maintenance-result" id="clear-appeals-result"></div>
                 </div>
@@ -5590,7 +5590,7 @@
             <div class="appeal-actions">
               <input type="text" placeholder="Admin note (optional)" data-note-for="${appeal.id}">
               <button class="btn-approve" data-resolve="${appeal.id}" data-status="approved">Approve</button>
-              <button class="btn-reject" data-resolve="${appeal.id}" data-status="rejected">Reject</button>
+              <button class="btn-reject" data-resolve="${appeal.id}" data-status="denied">Deny</button>
             </div>` : `
             <div style="font-size:12px;color:var(--text2);">
               ${appeal.adminNote ? `Note: ${escapeHtml(appeal.adminNote)}` : ""}
