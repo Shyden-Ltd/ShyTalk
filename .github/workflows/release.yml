@@ -512,8 +512,13 @@ jobs:
 
   distribute-android:
     name: Distribute Android to Testers
-    needs: [parse-deploy-comment]
-    if: needs.parse-deploy-comment.outputs.should_deploy == 'true'
+    needs: [parse-deploy-comment, lint, build-and-test, test-backend, web-tests]
+    if: |
+      needs.parse-deploy-comment.outputs.should_deploy == 'true' &&
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
+      (needs.build-and-test.result == 'success' || needs.build-and-test.result == 'skipped') &&
+      (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped') &&
+      (needs.web-tests.result == 'success' || needs.web-tests.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -619,8 +624,13 @@ jobs:
 
   distribute-ios:
     name: Distribute iOS to TestFlight (Dev)
-    needs: [parse-deploy-comment]
-    if: needs.parse-deploy-comment.outputs.should_deploy == 'true'
+    needs: [parse-deploy-comment, lint, build-and-test, test-backend, web-tests]
+    if: |
+      needs.parse-deploy-comment.outputs.should_deploy == 'true' &&
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
+      (needs.build-and-test.result == 'success' || needs.build-and-test.result == 'skipped') &&
+      (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped') &&
+      (needs.web-tests.result == 'success' || needs.web-tests.result == 'skipped')
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
