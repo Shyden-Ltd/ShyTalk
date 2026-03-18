@@ -442,3 +442,71 @@ describe('POST /api/cleanup/user-beans/:uniqueId', () => {
     expect(res.body.error).toBeDefined();
   });
 });
+
+// ── POST /cleanup/device-binding/:uniqueId ──────────────────────
+
+describe('POST /api/cleanup/device-binding/:uniqueId', () => {
+  test('requires admin — returns 403 for non-admin', async () => {
+    const app = createApp(false);
+    const res = await request(app).post('/api/cleanup/device-binding/10000001');
+    expect(res.status).toBe(403);
+  });
+
+  test('parses numeric uniqueId string to number for Firestore query', async () => {
+    const mockDeleteFn = jest.fn().mockResolvedValue();
+    mockCollectionSnap = {
+      empty: false,
+      docs: [{ ref: { delete: mockDeleteFn }, id: 'device-1' }],
+    };
+
+    const app = createApp(true);
+    const res = await request(app).post('/api/cleanup/device-binding/10000001');
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.deleted).toBe(1);
+  });
+
+  test('keeps non-numeric uniqueId as string', async () => {
+    mockCollectionSnap = {
+      empty: true,
+      docs: [],
+    };
+
+    const app = createApp(true);
+    const res = await request(app).post('/api/cleanup/device-binding/abc123');
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.deleted).toBe(0);
+    expect(res.body.message).toContain('No device bindings');
+  });
+
+  test('returns deleted count when bindings exist', async () => {
+    const mockDeleteFn = jest.fn().mockResolvedValue();
+    mockCollectionSnap = {
+      empty: false,
+      docs: [
+        { ref: { delete: mockDeleteFn }, id: 'device-1' },
+        { ref: { delete: mockDeleteFn }, id: 'device-2' },
+      ],
+    };
+
+    const app = createApp(true);
+    const res = await request(app).post('/api/cleanup/device-binding/10000001');
+
+    expect(res.status).toBe(200);
+    expect(res.body.deleted).toBe(2);
+  });
+
+  test('returns deleted 0 with message when no bindings found', async () => {
+    mockCollectionSnap = { empty: true, docs: [] };
+
+    const app = createApp(true);
+    const res = await request(app).post('/api/cleanup/device-binding/99999999');
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.deleted).toBe(0);
+  });
+});
