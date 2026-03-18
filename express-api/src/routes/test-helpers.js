@@ -255,11 +255,27 @@ router.post('/test/setup', async (req, res) => {
     }
 
     // Read current economy config for backup/restore
+    // If the doc doesn't exist, use production defaults so restore always has valid data
+    const ECONOMY_DEFAULTS = {
+      beanConversionRate: 0.6,
+      beanRedeemBonusThreshold: 2000,
+      beanRedeemBonusMultiplier: 1.1,
+      pullCosts: { 1: 10, 10: 100, 100: 1000 },
+      broadcastSendThreshold: 0,
+      broadcastWinThreshold: 5000,
+      dropRateExponent: 1.5,
+      pitySoftStart: 80,
+      pityHardLimit: 120,
+      pitySoftMaxShift: 0.15,
+      pityHighValueThreshold: 5000,
+      dailyBase: 50,
+      milestoneRewards: { 7: 100, 14: 200, 30: 500, 60: 1000, 90: 2000 },
+    };
     try {
       const ecoDoc = await db.doc('config/economy').get();
-      created.economyConfig = ecoDoc.exists ? ecoDoc.data() : {};
+      created.economyConfig = ecoDoc.exists ? ecoDoc.data() : ECONOMY_DEFAULTS;
     } catch (_err) {
-      created.economyConfig = {};
+      created.economyConfig = ECONOMY_DEFAULTS;
     }
 
     log.info('test-helpers', 'Test setup complete', {

@@ -197,7 +197,8 @@ describe('POST /api/test/setup', () => {
     expect(res.body.appeals).toEqual([]);
     expect(res.body.alerts).toEqual([]);
     expect(res.body.conversations).toEqual([]);
-    expect(res.body.economyConfig).toEqual({});
+    expect(res.body.economyConfig).toBeDefined();
+    expect(Object.keys(res.body.economyConfig).length).toBeGreaterThan(0);
     expect(mockDocSet).not.toHaveBeenCalled();
   });
 
@@ -844,7 +845,8 @@ describe('POST /api/test/setup', () => {
       .send({})
       .expect(200);
 
-    expect(res.body.economyConfig).toEqual({});
+    expect(res.body.economyConfig).toBeDefined();
+    expect(Object.keys(res.body.economyConfig).length).toBeGreaterThan(0);
   });
 
   test('economy config defaults to empty object when Firestore read fails', async () => {
@@ -857,7 +859,8 @@ describe('POST /api/test/setup', () => {
       .send({})
       .expect(200);
 
-    expect(res.body.economyConfig).toEqual({});
+    expect(res.body.economyConfig).toBeDefined();
+    expect(Object.keys(res.body.economyConfig).length).toBeGreaterThan(0);
   });
 
   test('returns 500 when Firestore set throws', async () => {
