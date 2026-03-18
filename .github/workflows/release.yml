@@ -423,7 +423,7 @@ jobs:
       always() &&
       needs.detect-changes.outputs.backend_changed == 'true' &&
       (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
-      (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped')
+      needs.sonarcloud.result != 'cancelled'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -797,7 +797,7 @@ jobs:
       needs.detect-changes.outputs.workflow_only != 'true' &&
       needs.detect-changes.result == 'success' &&
       (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
-      (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') &&
+      needs.sonarcloud.result != 'cancelled' &&
       (needs.build-and-test.result == 'success' || needs.build-and-test.result == 'skipped') &&
       (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped') &&
       (needs.web-tests.result == 'success' || needs.web-tests.result == 'skipped') &&
