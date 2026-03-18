@@ -390,8 +390,10 @@ jobs:
       - name: Run Playwright tests (${{ matrix.project }})
         env:
           WEB_BASE_URL: https://dev.shytalk.shyden.co.uk
+          API_BASE_URL: https://dev-api.shytalk.shyden.co.uk
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          TEST_API_KEY: ${{ secrets.TEST_API_KEY }}
           ALLURE_ENABLED: 'true'
           ALLURE_PROJECT: ${{ matrix.project }}
         run: npx playwright test --project=${{ matrix.project }} --reporter=list,allure-playwright,html
