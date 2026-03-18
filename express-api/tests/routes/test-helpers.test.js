@@ -706,11 +706,8 @@ describe('POST /api/test/setup', () => {
     expect(appeal._testRun).toBe(res.body.testRunId);
     expect(mockDoc).toHaveBeenCalledWith(`suspensionAppeals/${appeal.id}`);
 
-    // Verify user was set as suspended before appeal creation
-    expect(mockDocUpdate).toHaveBeenCalledWith({
-      isSuspended: true,
-      suspensionCanAppeal: true,
-    });
+    // NOTE: Setup no longer auto-suspends the user — appeal tests manage suspension themselves
+    // to avoid cross-file fragility (other tests depend on user not being suspended)
   });
 
   test('appeal seed fails when no users are seeded', async () => {
