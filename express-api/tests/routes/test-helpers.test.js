@@ -191,7 +191,13 @@ describe('POST /api/test/setup', () => {
     expect(res.body.users).toEqual([]);
     expect(res.body.rooms).toEqual([]);
     expect(res.body.gifts).toEqual([]);
+    expect(res.body.banners).toEqual([]);
+    expect(res.body.funFacts).toEqual([]);
+    expect(res.body.reports).toEqual([]);
+    expect(res.body.appeals).toEqual([]);
+    expect(res.body.alerts).toEqual([]);
     expect(res.body.conversations).toEqual([]);
+    expect(res.body.economyConfig).toEqual({});
     expect(mockDocSet).not.toHaveBeenCalled();
   });
 
@@ -547,6 +553,316 @@ describe('POST /api/test/setup', () => {
     expect(mockDocSet).toHaveBeenCalledTimes(6);
   });
 
+  test('creates test banner with correct fields and _testRun tag', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({
+        banners: [
+          {
+            title: 'Welcome Banner',
+            imageUrl: 'https://example.com/banner.png',
+            actionType: 'URL',
+            actionValue: 'https://example.com',
+            isActive: true,
+            sortOrder: 1,
+          },
+        ],
+      })
+      .expect(200);
+
+    expect(res.body.banners).toHaveLength(1);
+    const banner = res.body.banners[0];
+    expect(banner.title).toBe('Welcome Banner');
+    expect(banner.imageUrl).toBe('https://example.com/banner.png');
+    expect(banner.actionType).toBe('URL');
+    expect(banner.actionValue).toBe('https://example.com');
+    expect(banner.isActive).toBe(true);
+    expect(banner.sortOrder).toBe(1);
+    expect(banner._testRun).toBe(res.body.testRunId);
+    expect(banner.id).toContain(res.body.testRunId);
+    expect(mockDoc).toHaveBeenCalledWith(`banners/${banner.id}`);
+  });
+
+  test('creates test banner with default values', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({ banners: [{}] })
+      .expect(200);
+
+    const banner = res.body.banners[0];
+    expect(banner.title).toBe('Test Banner');
+    expect(banner.imageUrl).toBe('');
+    expect(banner.actionType).toBe('NONE');
+    expect(banner.actionValue).toBe('');
+    expect(banner.isActive).toBe(true);
+    expect(banner.sortOrder).toBe(0);
+  });
+
+  test('creates test fun fact with correct fields and _testRun tag', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({
+        funFacts: [
+          {
+            text: 'Octopi have three hearts',
+            category: 'Science',
+            emoji: '🐙',
+            sourceLanguage: 'English',
+            isActive: true,
+          },
+        ],
+      })
+      .expect(200);
+
+    expect(res.body.funFacts).toHaveLength(1);
+    const fact = res.body.funFacts[0];
+    expect(fact.text).toBe('Octopi have three hearts');
+    expect(fact.category).toBe('Science');
+    expect(fact.emoji).toBe('🐙');
+    expect(fact.sourceLanguage).toBe('English');
+    expect(fact.isActive).toBe(true);
+    expect(fact._testRun).toBe(res.body.testRunId);
+    expect(fact.id).toContain(res.body.testRunId);
+    expect(mockDoc).toHaveBeenCalledWith(`funFacts/${fact.id}`);
+  });
+
+  test('creates test fun fact with default values', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({ funFacts: [{}] })
+      .expect(200);
+
+    const fact = res.body.funFacts[0];
+    expect(fact.text).toBe('Test fact');
+    expect(fact.category).toBe('trivia');
+    expect(fact.sourceLanguage).toBe('English');
+    expect(fact.isActive).toBe(true);
+  });
+
+  test('creates test report with index-based user references', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({
+        users: [{ name: 'Reported' }, { name: 'Reporter' }],
+        reports: [
+          { reportedUserIndex: 0, reporterUserIndex: 1, reason: 'Harassment', status: 'pending' },
+        ],
+      })
+      .expect(200);
+
+    expect(res.body.reports).toHaveLength(1);
+    const report = res.body.reports[0];
+    expect(report.reportedUserId).toBe(res.body.users[0].uid);
+    expect(report.reportedUserUniqueId).toBe(res.body.users[0].uniqueId);
+    expect(report.reportedUserName).toBe('Reported');
+    expect(report.reporterId).toBe(res.body.users[1].uid);
+    expect(report.reporterName).toBe('Reporter');
+    expect(report.reason).toBe('Harassment');
+    expect(report.status).toBe('pending');
+    expect(report._testRun).toBe(res.body.testRunId);
+    expect(mockDoc).toHaveBeenCalledWith(`reports/${report.id}`);
+  });
+
+  test('report seed fails when fewer than 2 users are seeded', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({
+        users: [{ name: 'OnlyOne' }],
+        reports: [{ reportedUserIndex: 0, reporterUserIndex: 1 }],
+      })
+      .expect(500);
+
+    expect(res.body.error).toBe('Report seed requires at least 2 users');
+  });
+
+  test('creates test appeal and sets user as suspended', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({
+        users: [{ name: 'Suspended User' }],
+        appeals: [{ userIndex: 0, appealText: 'Please reconsider', status: 'pending' }],
+      })
+      .expect(200);
+
+    expect(res.body.appeals).toHaveLength(1);
+    const appeal = res.body.appeals[0];
+    expect(appeal.userId).toBe(res.body.users[0].uniqueId);
+    expect(appeal.appealText).toBe('Please reconsider');
+    expect(appeal.status).toBe('pending');
+    expect(appeal._testRun).toBe(res.body.testRunId);
+    expect(mockDoc).toHaveBeenCalledWith(`suspensionAppeals/${appeal.id}`);
+
+    // Verify user was set as suspended before appeal creation
+    expect(mockDocUpdate).toHaveBeenCalledWith({
+      isSuspended: true,
+      suspensionCanAppeal: true,
+    });
+  });
+
+  test('appeal seed fails when no users are seeded', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({
+        appeals: [{ userIndex: 0, appealText: 'Help' }],
+      })
+      .expect(500);
+
+    expect(res.body.error).toBe('Appeal seed requires users to be seeded first');
+  });
+
+  test('creates test alert with correct fields and _testRun tag', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({
+        alerts: [
+          {
+            type: 'error_rate',
+            severity: 'high',
+            message: 'Error rate exceeded threshold',
+            status: 'new',
+          },
+        ],
+      })
+      .expect(200);
+
+    expect(res.body.alerts).toHaveLength(1);
+    const alert = res.body.alerts[0];
+    expect(alert.type).toBe('error_rate');
+    expect(alert.severity).toBe('high');
+    expect(alert.message).toBe('Error rate exceeded threshold');
+    expect(alert.status).toBe('new');
+    expect(alert._testRun).toBe(res.body.testRunId);
+    expect(alert.id).toContain(res.body.testRunId);
+    expect(mockDoc).toHaveBeenCalledWith(`alerts/${alert.id}`);
+  });
+
+  test('creates test alert with default values', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({ alerts: [{}] })
+      .expect(200);
+
+    const alert = res.body.alerts[0];
+    expect(alert.type).toBe('error_rate');
+    expect(alert.severity).toBe('medium');
+    expect(alert.message).toBe('Test alert');
+    expect(alert.status).toBe('new');
+  });
+
+  test('creates test conversation with messages subcollection', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({
+        conversations: [
+          {
+            participants: ['uid1', 'uid2'],
+            messages: [
+              { text: 'Hello!', senderId: 'uid1' },
+              { text: 'Hi there!', senderId: 'uid2' },
+            ],
+          },
+        ],
+      })
+      .expect(200);
+
+    expect(res.body.conversations).toHaveLength(1);
+    const conv = res.body.conversations[0];
+    expect(conv.participants).toEqual(['uid1', 'uid2']);
+    expect(conv._testRun).toBe(res.body.testRunId);
+    expect(conv.id).toContain(res.body.testRunId);
+    expect(mockDoc).toHaveBeenCalledWith(`conversations/${conv.id}`);
+
+    // 1 conversation doc + 2 message docs = 3 set calls
+    const convSetCalls = mockDocSet.mock.calls;
+    expect(convSetCalls.length).toBe(3);
+
+    // Messages should be in subcollection
+    expect(mockDoc).toHaveBeenCalledWith(
+      expect.stringContaining(`conversations/${conv.id}/messages/`),
+    );
+  });
+
+  test('creates conversation without messages when none specified', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({
+        conversations: [{ participants: ['uid1'] }],
+      })
+      .expect(200);
+
+    expect(res.body.conversations).toHaveLength(1);
+    // Only 1 conversation doc, no message docs
+    expect(mockDocSet).toHaveBeenCalledTimes(1);
+  });
+
+  test('economy config backup is included in response', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: 'economy',
+      data: () => ({ dailyBonus: 100, spinCost: 50 }),
+    });
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({})
+      .expect(200);
+
+    expect(res.body.economyConfig).toEqual({ dailyBonus: 100, spinCost: 50 });
+    expect(mockDoc).toHaveBeenCalledWith('config/economy');
+  });
+
+  test('economy config defaults to empty object when doc does not exist', async () => {
+    mockDocGet.mockResolvedValue({ exists: false });
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({})
+      .expect(200);
+
+    expect(res.body.economyConfig).toEqual({});
+  });
+
+  test('economy config defaults to empty object when Firestore read fails', async () => {
+    mockDocGet.mockRejectedValue(new Error('Firestore read error'));
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({})
+      .expect(200);
+
+    expect(res.body.economyConfig).toEqual({});
+  });
+
   test('returns 500 when Firestore set throws', async () => {
     mockDocSet.mockRejectedValue(new Error('Firestore write failed'));
 
@@ -564,7 +880,17 @@ describe('POST /api/test/setup', () => {
 // ─── GET /api/test/verify/:collection/:id ───────────────────────
 
 describe('GET /api/test/verify/:collection/:id', () => {
-  const ALLOWED_COLLECTIONS = ['users', 'rooms', 'gifts', 'conversations', 'banners', 'funFacts'];
+  const ALLOWED_COLLECTIONS = [
+    'users',
+    'rooms',
+    'gifts',
+    'conversations',
+    'banners',
+    'funFacts',
+    'reports',
+    'suspensionAppeals',
+    'alerts',
+  ];
 
   test.each(ALLOWED_COLLECTIONS)(
     'returns document data for allowed collection "%s"',
@@ -734,7 +1060,7 @@ describe('POST /api/test/teardown', () => {
       .expect(200);
 
     // New implementation queries: users, deviceBindings, deviceBans (0 users so no ban queries),
-    // then gifts, rooms, banners, funFacts, conversations = 7 collections total
+    // then gifts, rooms, banners, funFacts, conversations, reports, suspensionAppeals, alerts = 10 collections total
     const expectedCollections = [
       'users',
       'deviceBindings',
@@ -743,6 +1069,9 @@ describe('POST /api/test/teardown', () => {
       'banners',
       'funFacts',
       'conversations',
+      'reports',
+      'suspensionAppeals',
+      'alerts',
     ];
     for (const col of expectedCollections) {
       expect(mockCollection).toHaveBeenCalledWith(col);
@@ -832,6 +1161,9 @@ describe('POST /api/test/reset', () => {
       'banners',
       'funFacts',
       'conversations',
+      'reports',
+      'suspensionAppeals',
+      'alerts',
     ];
     for (const col of expectedCollections) {
       expect(mockCollection).toHaveBeenCalledWith(col);

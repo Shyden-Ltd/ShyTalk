@@ -30,7 +30,19 @@ router.post('/test/setup', async (req, res) => {
 
     const testRunId = `${TEST_PREFIX}${generateId()}`;
     const now = Date.now();
-    const created = { testRunId, users: [], rooms: [], gifts: [], conversations: [] };
+    const created = {
+      testRunId,
+      users: [],
+      rooms: [],
+      gifts: [],
+      banners: [],
+      funFacts: [],
+      reports: [],
+      appeals: [],
+      alerts: [],
+      conversations: [],
+      economyConfig: {},
+    };
 
     const spec = req.body || {};
 
@@ -127,6 +139,132 @@ router.post('/test/setup', async (req, res) => {
       created.gifts.push(giftData);
     }
 
+    // Create test banners
+    for (const bannerSpec of spec.banners || []) {
+      const bannerId = `${testRunId}_banner_${generateId()}`;
+      const bannerData = {
+        id: bannerId,
+        title: bannerSpec.title || 'Test Banner',
+        imageUrl: bannerSpec.imageUrl || '',
+        actionType: bannerSpec.actionType || 'NONE',
+        actionValue: bannerSpec.actionValue || '',
+        isActive: bannerSpec.isActive ?? true,
+        sortOrder: bannerSpec.sortOrder ?? 0,
+        createdAt: now,
+        _testRun: testRunId,
+      };
+      await db.doc(`banners/${bannerId}`).set(bannerData);
+      created.banners.push(bannerData);
+    }
+
+    // Create test fun facts
+    for (const factSpec of spec.funFacts || []) {
+      const factId = `${testRunId}_fact_${generateId()}`;
+      const factData = {
+        id: factId,
+        text: factSpec.text || 'Test fact',
+        category: factSpec.category || 'trivia',
+        emoji: factSpec.emoji || '📝',
+        sourceLanguage: factSpec.sourceLanguage || 'English',
+        isActive: factSpec.isActive ?? true,
+        createdAt: now,
+        _testRun: testRunId,
+      };
+      await db.doc(`funFacts/${factId}`).set(factData);
+      created.funFacts.push(factData);
+    }
+
+    // Create test reports (index-based user references)
+    for (const reportSpec of spec.reports || []) {
+      const reportId = `${testRunId}_report_${generateId()}`;
+      const reportedUser = created.users[reportSpec.reportedUserIndex || 0];
+      const reporterUser = created.users[reportSpec.reporterUserIndex || 1];
+      if (!reportedUser || !reporterUser) throw new Error('Report seed requires at least 2 users');
+      const reportData = {
+        id: reportId,
+        reportedUserId: reportedUser.uid,
+        reportedUserUniqueId: reportedUser.uniqueId,
+        reportedUserName: reportedUser.displayName,
+        reporterId: reporterUser.uid,
+        reporterName: reporterUser.displayName,
+        reason: reportSpec.reason || 'Spam',
+        status: reportSpec.status || 'pending',
+        createdAt: now,
+        _testRun: testRunId,
+      };
+      await db.doc(`reports/${reportId}`).set(reportData);
+      created.reports.push(reportData);
+    }
+
+    // Create test suspension appeals (set user suspended first)
+    for (const appealSpec of spec.appeals || []) {
+      const appealId = `${testRunId}_appeal_${generateId()}`;
+      const appealUser = created.users[appealSpec.userIndex || 0];
+      if (!appealUser) throw new Error('Appeal seed requires users to be seeded first');
+      // Set user as suspended with canAppeal
+      await db.doc(`users/${appealUser.uniqueId}`).update({
+        isSuspended: true,
+        suspensionCanAppeal: true,
+      });
+      const appealData = {
+        id: appealId,
+        userId: appealUser.uniqueId,
+        appealText: appealSpec.appealText || 'I did not do this',
+        status: appealSpec.status || 'pending',
+        createdAt: now,
+        _testRun: testRunId,
+      };
+      await db.doc(`suspensionAppeals/${appealId}`).set(appealData);
+      created.appeals.push(appealData);
+    }
+
+    // Create test alerts
+    for (const alertSpec of spec.alerts || []) {
+      const alertId = `${testRunId}_alert_${generateId()}`;
+      const alertData = {
+        id: alertId,
+        type: alertSpec.type || 'error_rate',
+        severity: alertSpec.severity || 'medium',
+        message: alertSpec.message || 'Test alert',
+        status: alertSpec.status || 'new',
+        createdAt: now,
+        _testRun: testRunId,
+      };
+      await db.doc(`alerts/${alertId}`).set(alertData);
+      created.alerts.push(alertData);
+    }
+
+    // Create test conversations with messages subcollection
+    for (const convSpec of spec.conversations || []) {
+      const convId = `${testRunId}_conv_${generateId()}`;
+      const participants = convSpec.participants || [];
+      const convData = {
+        id: convId,
+        participants,
+        createdAt: now,
+        _testRun: testRunId,
+      };
+      await db.doc(`conversations/${convId}`).set(convData);
+      // Seed messages as subcollection
+      for (const msg of convSpec.messages || []) {
+        const msgId = `${testRunId}_msg_${generateId()}`;
+        await db.doc(`conversations/${convId}/messages/${msgId}`).set({
+          text: msg.text || '',
+          senderId: msg.senderId || '',
+          createdAt: now,
+        });
+      }
+      created.conversations.push(convData);
+    }
+
+    // Read current economy config for backup/restore
+    try {
+      const ecoDoc = await db.doc('config/economy').get();
+      created.economyConfig = ecoDoc.exists ? ecoDoc.data() : {};
+    } catch (_err) {
+      created.economyConfig = {};
+    }
+
     log.info('test-helpers', 'Test setup complete', {
       testRunId,
       users: created.users.length,
@@ -145,7 +283,17 @@ router.get('/test/verify/:collection/:id', async (req, res) => {
     if (requireTestApiKey(req, res)) return;
 
     const { collection, id } = req.params;
-    const ALLOWED_COLLECTIONS = ['users', 'rooms', 'gifts', 'conversations', 'banners', 'funFacts'];
+    const ALLOWED_COLLECTIONS = [
+      'users',
+      'rooms',
+      'gifts',
+      'conversations',
+      'banners',
+      'funFacts',
+      'reports',
+      'suspensionAppeals',
+      'alerts',
+    ];
     if (!ALLOWED_COLLECTIONS.includes(collection)) {
       return res.status(400).json({ error: 'Collection not allowed' });
     }
@@ -268,7 +416,16 @@ async function deleteTestData(testRunId) {
 
   // 4. Delete other top-level test docs (gifts, rooms, banners, funFacts, conversations)
   // Note: system PMs created by admin actions won't have _testRun set — accepted trade-off
-  const otherCollections = ['gifts', 'rooms', 'banners', 'funFacts', 'conversations'];
+  const otherCollections = [
+    'gifts',
+    'rooms',
+    'banners',
+    'funFacts',
+    'conversations',
+    'reports',
+    'suspensionAppeals',
+    'alerts',
+  ];
   for (const col of otherCollections) {
     let query;
     if (testRunId) {
