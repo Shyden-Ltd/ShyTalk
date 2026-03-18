@@ -13,6 +13,9 @@
     ],
     "*.feature": [
       "bash .claude/hooks/check-gherkin.sh"
+    ],
+    "*.{kt,kts}": [
+      "bash -c 'if command -v ktlint &>/dev/null; then ktlint --relative; elif [ -f ./gradlew ]; then ./gradlew ktlintCheck --daemon 2>/dev/null || echo \"⚠ ktlint failed — fix before pushing\"; else echo \"⚠ ktlint not available locally — CI will catch issues\"; fi'"
     ]
   },
   "devDependencies": {

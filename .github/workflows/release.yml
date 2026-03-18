@@ -252,9 +252,59 @@ jobs:
   # iOS compilation is verified by the distribute-ios job (archive step)
   # triggered via /deploy comment. No automatic iOS dev deploy on PR push.
 
+  # ──────────────────────────────────────────────
+  # Lint Gate — blocks deploys if linting fails
+  # ──────────────────────────────────────────────
+
+  lint:
+    name: Lint
+    needs: [detect-changes]
+    if: |
+      github.event_name == 'pull_request' &&
+      needs.detect-changes.outputs.workflow_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Kotlin lint (ktlint + detekt)
+        if: needs.detect-changes.outputs.app_changed == 'true'
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle
+        if: needs.detect-changes.outputs.app_changed == 'true'
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
+
+      - name: Decode google-services.json
+        if: needs.detect-changes.outputs.app_changed == 'true'
+        env:
+          GOOGLE_SERVICES_DEV_BASE64: ${{ secrets.GOOGLE_SERVICES_DEV_BASE64 }}
+        run: |
+          mkdir -p app/src/dev app/src/prod
+          echo "$GOOGLE_SERVICES_DEV_BASE64" | base64 -d > app/src/dev/google-services.json
+          echo "$GOOGLE_SERVICES_DEV_BASE64" | base64 -d > app/src/prod/google-services.json
+
+      - name: Run ktlint + detekt
+        if: needs.detect-changes.outputs.app_changed == 'true'
+        run: ./gradlew ktlintCheck detekt
+
+      - name: Express lint (ESLint + Prettier)
+        if: needs.detect-changes.outputs.backend_changed == 'true'
+        run: |
+          cd express-api && npm ci
+          npm run lint
+          npm run format:check
+
+      - name: Gherkin lint
+        if: needs.detect-changes.outputs.app_changed == 'true'
+        run: bash .claude/hooks/check-gherkin.sh
+
   sonarcloud:
     name: SonarCloud Analysis
-    needs: [detect-changes]
+    needs: [detect-changes, lint]
     if: |
       github.event_name == 'pull_request' &&
       needs.detect-changes.outputs.workflow_only != 'true'
@@ -366,10 +416,11 @@ jobs:
 
   deploy-backend-dev:
     name: Deploy Backend to Dev
-    needs: [detect-changes, sonarcloud]
+    needs: [detect-changes, lint, sonarcloud]
     if: |
       always() &&
       needs.detect-changes.outputs.backend_changed == 'true' &&
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
       (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -726,12 +777,13 @@ jobs:
     name: Approve Production Release
     runs-on: ubuntu-latest
     timeout-minutes: 1440
-    needs: [detect-changes, sonarcloud, build-and-test, test-backend, web-tests, deploy-backend-dev, deploy-web-dev]
+    needs: [detect-changes, lint, sonarcloud, build-and-test, test-backend, web-tests, deploy-backend-dev, deploy-web-dev]
     if: |
       always() &&
       github.event_name == 'pull_request' &&
       needs.detect-changes.outputs.workflow_only != 'true' &&
       needs.detect-changes.result == 'success' &&
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
       (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') &&
       (needs.build-and-test.result == 'success' || needs.build-and-test.result == 'skipped') &&
       (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped') &&
