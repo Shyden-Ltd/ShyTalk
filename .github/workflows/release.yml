@@ -324,11 +324,12 @@ jobs:
 
   web-tests:
     name: Web Tests (Playwright)
-    needs: [detect-changes, deploy-web-dev]
+    needs: [detect-changes, deploy-backend-dev, deploy-web-dev]
     if: |
       always() &&
-      needs.detect-changes.outputs.web_changed == 'true' &&
-      needs.deploy-web-dev.result == 'success'
+      (needs.detect-changes.outputs.web_changed == 'true' || needs.detect-changes.outputs.backend_changed == 'true') &&
+      (needs.deploy-web-dev.result == 'success' || needs.deploy-web-dev.result == 'skipped') &&
+      (needs.deploy-backend-dev.result == 'success' || needs.deploy-backend-dev.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -750,7 +751,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: [detect-changes, approve-production]
-    if: needs.detect-changes.outputs.app_changed == 'true'
+    if: needs.detect-changes.outputs.app_changed == 'true' || needs.detect-changes.outputs.backend_changed == 'true'
     strategy:
       fail-fast: true
       matrix:
