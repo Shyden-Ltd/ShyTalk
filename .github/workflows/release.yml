@@ -18,10 +18,71 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 concurrency:
-  group: ${{ github.event_name == 'issue_comment' && format('deploy-{0}', github.event.issue.number) || format('release-{0}', github.event.pull_request.number) }}
+  group: ${{ github.event_name == 'issue_comment' && format('deploy-{0}', github.event.issue.number) || format('release-{0}', github.head_ref || github.event.pull_request.number) }}
   cancel-in-progress: true
 
 jobs:
+  # ──────────────────────────────────────────────
+  # Cancel stale runs stuck at approval gates
+  # ──────────────────────────────────────────────
+
+  cancel-stale:
+    name: Cancel Stale Runs
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Reject pending deployments from older runs
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            // Find all in-progress or waiting runs for this workflow on the same branch
+            const { data: runs } = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'release.yml',
+              branch: context.payload.pull_request.head.ref,
+              status: 'waiting',
+            });
+
+            for (const run of runs.workflow_runs) {
+              if (run.id === context.runId) continue; // skip current run
+
+              // Reject any pending deployments so the run can be cancelled
+              try {
+                const { data: deployments } = await github.rest.actions.getPendingDeploymentsForRun({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  run_id: run.id,
+                });
+                for (const deployment of deployments) {
+                  await github.rest.actions.reviewPendingDeploymentsForRun({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    run_id: run.id,
+                    environment_ids: [deployment.environment.id],
+                    state: 'rejected',
+                    comment: 'Superseded by newer run',
+                  });
+                  console.log(`Rejected deployment for run ${run.id} (env: ${deployment.environment.name})`);
+                }
+              } catch (err) {
+                console.log(`Could not reject deployments for run ${run.id}: ${err.message}`);
+              }
+
+              // Cancel the stale run
+              try {
+                await github.rest.actions.cancelWorkflowRun({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  run_id: run.id,
+                });
+                console.log(`Cancelled stale run ${run.id}`);
+              } catch (err) {
+                console.log(`Could not cancel run ${run.id}: ${err.message}`);
+              }
+            }
+
   # ──────────────────────────────────────────────
   # Detect which paths changed (PR events only)
   # ──────────────────────────────────────────────
