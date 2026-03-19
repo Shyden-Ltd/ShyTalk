@@ -77,13 +77,9 @@ test.describe('Admin Empty States', () => {
       }
     }
 
-    // If all filters have data, the empty state logic is verified
-    // by confirming filter switching works (content changes between filters)
-    const pendingBtn = page.locator('button[data-appeal-filter="pending"]');
-    await pendingBtn.click();
-    await waitForAppealsLoaded(page);
-    // At least verify the tab rendered without error
-    expect(true).toBe(true);
+    // All filters have data — verify the tab rendered correctly
+    const appealsList = page.locator('#appeals-list');
+    await expect(appealsList).toBeVisible();
   });
 
   // ── Test 2: Reports — no reports for archived filter ──
@@ -106,8 +102,9 @@ test.describe('Admin Empty States', () => {
       const text = await reportsList.textContent();
       expect(text).toContain('No reports');
     }
-    // If archived has data, the test still passes (we verified the filter works)
-    expect(true).toBe(true);
+    // If archived has data, verify the reports list rendered
+    const reportsList = page.locator('#reports-list');
+    await expect(reportsList).toBeVisible();
   });
 
   // ── Test 3: Gifts — empty table message (verify table renders) ──
@@ -277,12 +274,8 @@ test.describe('Admin Empty States', () => {
     const txList = page.locator('#tx-list');
     await expect(txList).toBeVisible({ timeout: 15_000 });
 
-    const txItems = txList.locator('div[style*="border-bottom"]');
-    const initialCount = await txItems.count();
-
-    // Before loading, there should be no transaction items visible
-    // (they only appear after clicking "Load")
-    expect(initialCount).toBeGreaterThanOrEqual(0); // May have items from previous tests
+    // Verify the list container is visible and in its initial state before clicking Load
+    await expect(txList).toBeAttached();
   });
 
   // ── Test 12: Backpack — empty grid ──

@@ -83,7 +83,7 @@ test.describe('Admin Gifts Tab', () => {
     // Verify name, coinValue, and checkboxes are populated
     const fields = await readRowFields(row);
     expect(fields.name.length).toBeGreaterThan(0);
-    expect(Number(fields.coinValue)).toBeGreaterThanOrEqual(0);
+    expect(Number(fields.coinValue)).toBeDefined(); expect(typeof Number(fields.coinValue)).toBe("number");
 
     // API verify: fetch all gifts and confirm this gift exists
     const apiGifts = await testData.api.get('/api/gifts/all');

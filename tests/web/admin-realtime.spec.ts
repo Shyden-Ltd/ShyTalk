@@ -99,8 +99,8 @@ test.describe('Admin Realtime Features', () => {
     const listText = await reportsList.textContent();
     expect(listText).toBeTruthy();
 
-    // At minimum, verify the reports list still shows data after seeding
-    expect(updatedCount).toBeGreaterThanOrEqual(1);
+    // The count must have increased — proves the onSnapshot listener delivered the new report
+    expect(updatedCount).toBeGreaterThan(initialCount);
   });
 
   // ── Test 2: Spin monitor live coins update ──
@@ -126,8 +126,8 @@ test.describe('Admin Realtime Features', () => {
     const updatedCoinsText = await page.locator('#monitor-coins').textContent();
     const updatedCoins = Number(updatedCoinsText!.replace(/,/g, ''));
 
-    // Coins should have increased
-    expect(updatedCoins).toBeGreaterThanOrEqual(initialCoins);
+    // Coins must have increased — proves the onSnapshot listener delivered the update
+    expect(updatedCoins).toBeGreaterThan(initialCoins);
 
     // Restore coins
     await testData.api.post(`/api/users/${testData.user.uniqueId}/adjust-balance`, {
@@ -179,8 +179,8 @@ test.describe('Admin Realtime Features', () => {
       await expect(badge).toBeVisible({ timeout: 10_000 });
       const badgeText = await badge.textContent();
       const badgeCount = Number(badgeText);
-      // Badge may be slightly out of sync but should be close
-      expect(badgeCount).toBeGreaterThanOrEqual(0);
+      // Badge must show a positive count since API confirms alerts exist
+      expect(badgeCount).toBeGreaterThan(0);
     } else {
       // Badge may be hidden or show 0
       const isVisible = await badge.isVisible();

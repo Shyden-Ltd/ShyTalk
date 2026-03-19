@@ -580,7 +580,7 @@ test.describe('Admin Reports', () => {
       const auditLog = await testData.api.get('/api/admin/audit-log?limit=5');
       expect(auditLog).toBeTruthy();
       const entries = Array.isArray(auditLog) ? auditLog : (auditLog.entries || auditLog.logs || []);
-      expect(entries.length).toBeGreaterThanOrEqual(0);
+      expect(Array.isArray(entries)).toBe(true);
     } catch (err: any) {
       // If 404, endpoint may not exist yet
       if (err.message?.includes('404')) {

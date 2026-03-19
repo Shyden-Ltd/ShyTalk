@@ -73,7 +73,7 @@ test.describe('Admin Validation', () => {
 
     // Coins should not have gone below the original seeded amount minus 100
     // (the API may reject negative adds, or treat -100 as a deduction)
-    expect(coinsNum).toBeGreaterThanOrEqual(0);
+    expect(coinsNum).toBe(0);
 
     // Restore if coins were deducted
     if (coinsNum < 1000) {
@@ -98,8 +98,8 @@ test.describe('Admin Validation', () => {
     const coinsDisplay = page.locator('#eco-coins-display');
     const coinsText = await coinsDisplay.textContent();
     const coinsNum = Number(coinsText!.replace(/,/g, ''));
-    // Should either be 1000 (rejected) or 0 (NaN treated as 0)
-    expect(coinsNum).toBeGreaterThanOrEqual(0);
+    // Should either be 1000 (input rejected) or 0 (NaN treated as 0) — never negative
+    expect(coinsNum === 1000 || coinsNum === 0).toBe(true);
 
     // Restore if needed
     if (coinsNum !== 1000) {
