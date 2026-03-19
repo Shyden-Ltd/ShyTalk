@@ -56,7 +56,7 @@ actual class CryptoKeyPair {
             )
 
         memScoped {
-            val error = alloc<kotlinx.cinterop.ObjCObjectVar<platform.CoreFoundation.CFErrorRef?>>()
+            val error = alloc<kotlinx.cinterop.CPointerVar<platform.CoreFoundation.CFError>>()
             val key = SecKeyCreateRandomKey(attributes as CFDictionaryRef, error.ptr)
             return key != null
         }
@@ -67,7 +67,7 @@ actual class CryptoKeyPair {
         val privateKey = getPrivateKeyRef(alias) ?: return null
 
         memScoped {
-            val error = alloc<kotlinx.cinterop.ObjCObjectVar<platform.CoreFoundation.CFErrorRef?>>()
+            val error = alloc<kotlinx.cinterop.CPointerVar<platform.CoreFoundation.CFError>>()
             // Get public key from private key
             val publicKey = platform.Security.SecKeyCopyPublicKey(privateKey) ?: return null
             val data = SecKeyCopyExternalRepresentation(publicKey, error.ptr) as? NSData ?: return null
@@ -81,7 +81,7 @@ actual class CryptoKeyPair {
         val nsData = data.toNSData()
 
         memScoped {
-            val error = alloc<kotlinx.cinterop.ObjCObjectVar<platform.CoreFoundation.CFErrorRef?>>()
+            val error = alloc<kotlinx.cinterop.CPointerVar<platform.CoreFoundation.CFError>>()
             val signature =
                 SecKeyCreateSignature(
                     privateKey,
