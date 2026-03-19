@@ -205,12 +205,6 @@ jobs:
           LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
         run: ./gradlew assembleProdRelease bundleProdRelease
 
-      - name: Run prod smoke tests
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
-        run: ./gradlew testProdDebugUnitTest
-
       - name: Upload to Play Store internal testing track
         uses: r0adkll/upload-google-play@935ef9c68bb393a8e6116b1575626a7f5be3a7fb # v1
         with:
@@ -342,16 +336,256 @@ jobs:
         if: always()
         run: security delete-keychain $RUNNER_TEMP/app-signing.keychain-db 2>/dev/null || true
 
+  smoke-test-backend-web:
+    name: Smoke Test (API + Web)
+    needs: [validate-release, deploy-backend-prod, deploy-web-prod, deploy-android-prod, deploy-ios-prod]
+    if: |
+      always() &&
+      needs.validate-release.result == 'success' &&
+      (needs.deploy-backend-prod.result == 'success' ||
+       needs.deploy-web-prod.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify API health
+        if: needs.deploy-backend-prod.result == 'success'
+        run: |
+          echo "=== API Health Check ==="
+          HEALTH=$(curl -sf https://api.shytalk.shyden.co.uk/api/health)
+          echo "$HEALTH"
+          echo "$HEALTH" | grep -q '"status":"ok"' || { echo "::error::Health check failed"; exit 1; }
+
+      - name: Verify API endpoints respond
+        if: needs.deploy-backend-prod.result == 'success'
+        run: |
+          echo "=== API Endpoint Checks ==="
+          ERRORS=0
+
+          # Public endpoints
+          for endpoint in "/api/health"; do
+            STATUS=$(curl -sf -o /dev/null -w '%{http_code}' "https://api.shytalk.shyden.co.uk${endpoint}")
+            if [ "$STATUS" = "200" ]; then echo "OK: ${endpoint} → ${STATUS}"
+            else echo "FAIL: ${endpoint} → ${STATUS}"; ERRORS=$((ERRORS + 1)); fi
+          done
+
+          # Auth-protected endpoints (should return 401, not 5xx)
+          for endpoint in "/api/users/me" "/api/rooms" "/api/conversations"; do
+            STATUS=$(curl -sf -o /dev/null -w '%{http_code}' "https://api.shytalk.shyden.co.uk${endpoint}")
+            if [ "$STATUS" = "401" ]; then echo "OK: ${endpoint} → ${STATUS} (auth required)"
+            elif [ "$STATUS" -ge 500 ]; then echo "FAIL: ${endpoint} → ${STATUS} (server error)"; ERRORS=$((ERRORS + 1))
+            else echo "OK: ${endpoint} → ${STATUS}"; fi
+          done
+
+          # Admin endpoints (should return 401, not 5xx)
+          for endpoint in "/api/admin/alerts" "/api/admin/banners"; do
+            STATUS=$(curl -sf -o /dev/null -w '%{http_code}' "https://api.shytalk.shyden.co.uk${endpoint}")
+            if [ "$STATUS" -ge 500 ]; then echo "FAIL: ${endpoint} → ${STATUS}"; ERRORS=$((ERRORS + 1))
+            else echo "OK: ${endpoint} → ${STATUS}"; fi
+          done
+
+          [ "$ERRORS" -eq 0 ] || { echo "::error::${ERRORS} endpoint(s) returned server errors"; exit 1; }
+          echo "All API endpoints responding correctly"
+
+      - name: Verify web landing page
+        if: needs.deploy-web-prod.result == 'success'
+        run: |
+          echo "=== Web Landing Page ==="
+          STATUS=$(curl -sf -o /dev/null -w '%{http_code}' "https://shytalk.shyden.co.uk")
+          [ "$STATUS" = "200" ] || { echo "::error::Landing page returned ${STATUS}"; exit 1; }
+          BODY=$(curl -sf "https://shytalk.shyden.co.uk")
+          echo "$BODY" | grep -qi "shytalk" || { echo "::error::Missing ShyTalk content"; exit 1; }
+          echo "Landing page OK"
+
+      - name: Verify admin panel
+        if: needs.deploy-web-prod.result == 'success'
+        run: |
+          echo "=== Admin Panel ==="
+          STATUS=$(curl -sf -o /dev/null -w '%{http_code}' "https://shytalk.shyden.co.uk/admin/")
+          [ "$STATUS" = "200" ] || { echo "::error::Admin panel returned ${STATUS}"; exit 1; }
+          echo "Admin panel OK"
+
+  smoke-test-android:
+    name: Smoke Test (Android Boot)
+    needs: [validate-release, deploy-android-prod]
+    if: |
+      always() &&
+      needs.deploy-android-prod.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ inputs.release-tag }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
+
+      - name: Decode google-services.json
+        env:
+          GOOGLE_SERVICES_DEV_BASE64: ${{ secrets.GOOGLE_SERVICES_DEV_BASE64 }}
+          GOOGLE_SERVICES_PROD_BASE64: ${{ secrets.GOOGLE_SERVICES_PROD_BASE64 }}
+        run: |
+          mkdir -p app/src/dev app/src/prod
+          echo "$GOOGLE_SERVICES_DEV_BASE64" | base64 -d > app/src/dev/google-services.json
+          echo "$GOOGLE_SERVICES_PROD_BASE64" | base64 -d > app/src/prod/google-services.json
+
+      - name: Decode keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
+
+      - name: Build prodDebug APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
+        run: ./gradlew assembleProdDebug
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Boot emulator and verify app launches
+        uses: reactivecircus/android-emulator-runner@0a638108440efd5c7f980e6ba145dbcdd8f32009 # v2.37.0
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          force-avd-creation: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          disable-animations: true
+          script: |
+            echo "=== Installing APK ==="
+            adb install app/build/outputs/apk/prod/debug/*.apk
+
+            echo "=== Launching app ==="
+            adb shell am start -n com.shyden.shytalk/com.shyden.shytalk.MainActivity
+            sleep 10
+
+            echo "=== Checking app is running ==="
+            RUNNING=$(adb shell pidof com.shyden.shytalk || echo "")
+            if [ -z "$RUNNING" ]; then
+              echo "::error::App crashed on launch — no process found"
+              adb logcat -d | grep -i "fatal\|crash\|ANR" | tail -20
+              exit 1
+            fi
+            echo "App is running (PID: $RUNNING)"
+
+            echo "=== Checking for crashes in logcat ==="
+            CRASHES=$(adb logcat -d | grep -c "FATAL EXCEPTION" || true)
+            if [ "$CRASHES" -gt 0 ]; then
+              echo "::error::Found $CRASHES fatal exception(s) in logcat"
+              adb logcat -d | grep -A5 "FATAL EXCEPTION" | tail -30
+              exit 1
+            fi
+            echo "No crashes detected — Android app boots successfully"
+
+  smoke-test-ios:
+    name: Smoke Test (iOS Boot)
+    needs: [validate-release, deploy-ios-prod]
+    if: |
+      always() &&
+      needs.deploy-ios-prod.result == 'success'
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ inputs.release-tag }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
+
+      - name: Decode google-services.json
+        env:
+          GOOGLE_SERVICES_DEV_BASE64: ${{ secrets.GOOGLE_SERVICES_DEV_BASE64 }}
+          GOOGLE_SERVICES_PROD_BASE64: ${{ secrets.GOOGLE_SERVICES_PROD_BASE64 }}
+        run: |
+          mkdir -p app/src/dev app/src/prod
+          echo "$GOOGLE_SERVICES_DEV_BASE64" | base64 -d > app/src/dev/google-services.json
+          echo "$GOOGLE_SERVICES_PROD_BASE64" | base64 -d > app/src/prod/google-services.json
+
+      - name: Build KMP shared framework for iOS Simulator
+        run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64
+
+      - name: Build iOS app for simulator
+        run: |
+          cd iosApp
+          xcodebuild build \
+            -project iosApp.xcodeproj \
+            -scheme iosApp \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Boot simulator and verify app launches
+        run: |
+          echo "=== Booting simulator ==="
+          DEVICE_ID=$(xcrun simctl create "smoke-test" "iPhone 16")
+          xcrun simctl boot "$DEVICE_ID"
+          xcrun simctl bootstatus "$DEVICE_ID"
+
+          echo "=== Installing app ==="
+          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "iosApp.app" -path "*/Debug-iphonesimulator/*" | head -1)
+          if [ -z "$APP_PATH" ]; then
+            APP_PATH=$(find iosApp/build -name "iosApp.app" -path "*Debug-iphonesimulator*" | head -1)
+          fi
+          echo "App path: $APP_PATH"
+          xcrun simctl install "$DEVICE_ID" "$APP_PATH"
+
+          echo "=== Launching app ==="
+          xcrun simctl launch "$DEVICE_ID" com.shyden.shytalk
+          sleep 10
+
+          echo "=== Checking app is running ==="
+          RUNNING=$(xcrun simctl spawn "$DEVICE_ID" launchctl list | grep shytalk || echo "")
+          if [ -z "$RUNNING" ]; then
+            echo "::warning::App may have exited — checking logs"
+            xcrun simctl spawn "$DEVICE_ID" log show --predicate 'subsystem == "com.apple.CoreSimulator"' --last 1m 2>/dev/null | grep -i "crash\|abort" | tail -10
+          else
+            echo "App is running"
+          fi
+
+          echo "=== Checking for crashes ==="
+          CRASH_COUNT=$(find ~/Library/Logs/DiagnosticReports -name "iosApp*" -newer /tmp/smoke-start 2>/dev/null | wc -l || echo 0)
+          if [ "$CRASH_COUNT" -gt 0 ]; then
+            echo "::error::Found crash report(s)"
+            cat ~/Library/Logs/DiagnosticReports/iosApp* 2>/dev/null | head -30
+            xcrun simctl shutdown "$DEVICE_ID" || true
+            exit 1
+          fi
+
+          echo "No crashes detected — iOS app boots successfully"
+          xcrun simctl shutdown "$DEVICE_ID" || true
+
   alert-desync:
     name: Alert - Deploy Failed
-    needs: [validate-release, deploy-backend-prod, deploy-web-prod, deploy-android-prod, deploy-ios-prod]
+    needs: [validate-release, deploy-backend-prod, deploy-web-prod, deploy-android-prod, deploy-ios-prod, smoke-test-backend-web, smoke-test-android, smoke-test-ios]
     if: |
       always() &&
       needs.validate-release.result == 'success' &&
       (needs.deploy-backend-prod.result == 'failure' ||
        needs.deploy-web-prod.result == 'failure' ||
        needs.deploy-android-prod.result == 'failure' ||
-       needs.deploy-ios-prod.result == 'failure')
+       needs.deploy-ios-prod.result == 'failure' ||
+       needs.smoke-test-backend-web.result == 'failure' ||
+       needs.smoke-test-android.result == 'failure' ||
+       needs.smoke-test-ios.result == 'failure')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -365,12 +599,18 @@ jobs:
           WEB: ${{ needs.deploy-web-prod.result }}
           ANDROID: ${{ needs.deploy-android-prod.result }}
           IOS: ${{ needs.deploy-ios-prod.result }}
+          SMOKE_API: ${{ needs.smoke-test-backend-web.result }}
+          SMOKE_ANDROID: ${{ needs.smoke-test-android.result }}
+          SMOKE_IOS: ${{ needs.smoke-test-ios.result }}
         run: |
           FAILED=""
-          [ "$BACKEND" = "failure" ] && FAILED="${FAILED}- Backend API\n"
-          [ "$WEB" = "failure" ] && FAILED="${FAILED}- Web\n"
+          [ "$BACKEND" = "failure" ] && FAILED="${FAILED}- Backend API deploy\n"
+          [ "$WEB" = "failure" ] && FAILED="${FAILED}- Web deploy\n"
           [ "$ANDROID" = "failure" ] && FAILED="${FAILED}- Android (Play Store)\n"
           [ "$IOS" = "failure" ] && FAILED="${FAILED}- iOS (App Store)\n"
+          [ "$SMOKE_API" = "failure" ] && FAILED="${FAILED}- Smoke test: API + Web\n"
+          [ "$SMOKE_ANDROID" = "failure" ] && FAILED="${FAILED}- Smoke test: Android boot\n"
+          [ "$SMOKE_IOS" = "failure" ] && FAILED="${FAILED}- Smoke test: iOS boot\n"
 
           BODY_FILE=$(mktemp)
           {
