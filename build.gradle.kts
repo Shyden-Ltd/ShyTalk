@@ -54,21 +54,12 @@ sonar {
         property("sonar.host.url", "https://sonarcloud.io")
         property("sonar.gradle.skipCompile", "true")
 
-        // Kotlin sources (app excluded — see skip above)
-        property("sonar.sources", listOf(
-            "shared/src/commonMain/kotlin",
-            "shared/src/androidMain/kotlin",
-            "express-api/src",
-        ).joinToString(","))
+        // Let the Gradle plugin auto-detect Kotlin sources from shared module.
+        // Only manually specify Express API paths (not managed by Gradle).
+        property("sonar.sources", "express-api/src")
+        property("sonar.tests", "express-api/tests")
 
-        // Test sources (app excluded — see skip above)
-        property("sonar.tests", listOf(
-            "shared/src/commonTest/kotlin",
-            "shared/src/jvmTest/kotlin",
-            "express-api/tests",
-        ).joinToString(","))
-
-        // Kotlin test reports
+        // Kotlin test reports (auto-detected by plugin, but explicit for clarity)
         property("sonar.junit.reportPaths",
             "shared/build/test-results/jvmTest"
         )

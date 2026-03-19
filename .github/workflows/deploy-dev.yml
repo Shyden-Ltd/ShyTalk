@@ -223,33 +223,20 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check if app changed
-        id: check-app
-        run: |
-          CHANGED=$(git diff --name-only origin/main...HEAD -- \
-            app/ shared/ iosApp/ gradle/ '*.gradle.kts' gradle.properties gradlew gradlew.bat 2>/dev/null || echo "")
-          if [ -z "$CHANGED" ]; then
-            echo "app_changed=false" >> "$GITHUB_OUTPUT"
-            echo "No app changes detected — skipping iOS build"
-          else
-            echo "app_changed=true" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Set up JDK 17
-        if: steps.check-app.outputs.app_changed == 'true'
         uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
         with:
           java-version: '17'
           distribution: 'temurin'
 
       - name: Set up Gradle
-        if: steps.check-app.outputs.app_changed == 'true'
+
         uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
         with:
           cache-read-only: false
 
       - name: Install Apple API key
-        if: steps.check-app.outputs.app_changed == 'true'
+
         env:
           APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
@@ -258,7 +245,7 @@ jobs:
           echo "$APP_STORE_CONNECT_KEY" > ~/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8
 
       - name: Decode signing certificate and provisioning profile
-        if: steps.check-app.outputs.app_changed == 'true'
+
         env:
           IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
           IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
@@ -281,7 +268,7 @@ jobs:
           cp "$PROFILE_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/${PROFILE_UUID}.mobileprovision
 
       - name: Select Xcode 26
-        if: steps.check-app.outputs.app_changed == 'true'
+
         run: |
           XCODE_26=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | head -1)
           if [ -z "$XCODE_26" ]; then
@@ -293,7 +280,7 @@ jobs:
           sudo xcode-select -s "$XCODE_26/Contents/Developer"
 
       - name: Decode google-services.json
-        if: steps.check-app.outputs.app_changed == 'true'
+
         env:
           GOOGLE_SERVICES_DEV_BASE64: ${{ secrets.GOOGLE_SERVICES_DEV_BASE64 }}
         run: |
@@ -302,11 +289,11 @@ jobs:
           echo "$GOOGLE_SERVICES_DEV_BASE64" | base64 -d > app/src/prod/google-services.json
 
       - name: Build KMP shared framework for iOS
-        if: steps.check-app.outputs.app_changed == 'true'
+
         run: ./gradlew :shared:linkReleaseFrameworkIosArm64
 
       - name: Build and archive iOS app
-        if: steps.check-app.outputs.app_changed == 'true'
+
         run: |
           cd iosApp
           xcodebuild \
@@ -322,7 +309,7 @@ jobs:
             archive
 
       - name: Export IPA
-        if: steps.check-app.outputs.app_changed == 'true'
+
         env:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
@@ -338,7 +325,7 @@ jobs:
             -authenticationKeyIssuerID $APP_STORE_CONNECT_ISSUER_ID
 
       - name: Upload to TestFlight
-        if: steps.check-app.outputs.app_changed == 'true'
+
         env:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}

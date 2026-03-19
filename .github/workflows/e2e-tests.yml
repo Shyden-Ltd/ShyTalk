@@ -323,12 +323,12 @@ jobs:
         run: |
           DIR="allure-results/${{ matrix.project }}"
           mkdir -p "$DIR"
-          sed 's/^ *//' > "$DIR/environment.properties" <<EOF
+          sed 's/^ *//' > "$DIR/environment.properties" <<'PWEOF'
           platform=Web
           browser=${{ matrix.browser }}
           viewport=${{ matrix.viewport }}
           base_url=dev.shytalk.shyden.co.uk
-          EOF
+          PWEOF
 
       - name: Upload Allure results
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
