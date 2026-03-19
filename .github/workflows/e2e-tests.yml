@@ -205,7 +205,7 @@ jobs:
       - name: Write Android environment.properties
         if: always()
         run: |
-          cat > allure-results-android/environment.properties <<'ENVEOF'
+          sed 's/^ *//' > allure-results-android/environment.properties <<'ENVEOF'
           platform=Android
           api_level=${{ matrix.api-level }}
           device=${{ matrix.profile }}
@@ -323,7 +323,7 @@ jobs:
         run: |
           DIR="allure-results/${{ matrix.project }}"
           mkdir -p "$DIR"
-          cat > "$DIR/environment.properties" <<EOF
+          sed 's/^ *//' > "$DIR/environment.properties" <<EOF
           platform=Web
           browser=${{ matrix.browser }}
           viewport=${{ matrix.viewport }}
