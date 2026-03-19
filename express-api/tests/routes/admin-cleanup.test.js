@@ -13,9 +13,6 @@ const makeBatch = () => ({
   commit: mockBatchCommit,
 });
 
-// Each db.doc() call returns a ref with a delete() method
-const _mockDocRef = { delete: jest.fn().mockResolvedValue(), ref: { path: 'mock/ref' } };
-
 // Flexible collection chain — tests override mockCollectionSnap
 let mockCollectionSnap = { empty: true, docs: [] };
 

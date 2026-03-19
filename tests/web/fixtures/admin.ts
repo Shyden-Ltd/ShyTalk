@@ -110,7 +110,11 @@ export const test = base.extend<{}, { adminContext: BrowserContext; testData: Te
       });
     } finally {
       // Cleanup — always runs even if setup or tests throw
-      if (testRunId) await api.testTeardown(testRunId).catch(() => {});
+      if (testRunId) {
+        await api.testTeardown(testRunId).catch((err) => {
+          console.warn(`[fixture] Teardown failed for ${testRunId}: ${err.message}`);
+        });
+      }
       await page.close();
     }
   }, { scope: 'worker' }],

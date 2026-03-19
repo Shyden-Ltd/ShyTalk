@@ -255,6 +255,17 @@ describe('GET /api/gift-rankings/:giftId', () => {
 });
 
 describe('PUT /api/config/economy', () => {
+  test('returns 403 for non-admin', async () => {
+    const { requireAdmin } = require('../../src/middleware/auth');
+    requireAdmin.mockImplementationOnce((req, res) => {
+      res.status(403).json({ error: 'Admin access required' });
+      return true;
+    });
+    const app = createApp();
+    const res = await request(app).put('/api/config/economy').send({ dailyBase: 100 });
+    expect(res.status).toBe(403);
+  });
+
   test('route is reachable (no double /api prefix)', async () => {
     mockDocGet.mockResolvedValue({
       exists: true,

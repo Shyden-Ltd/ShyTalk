@@ -15,6 +15,10 @@ const log = require('../utils/log');
 const TEST_PREFIX = 'test_';
 
 function requireTestApiKey(req, res) {
+  if (!process.env.TEST_API_KEY) {
+    res.status(500).json({ error: 'TEST_API_KEY not configured on server' });
+    return true;
+  }
   const key = req.headers['x-test-api-key'];
   if (!key || key !== process.env.TEST_API_KEY) {
     res.status(403).json({ error: 'Invalid test API key' });
@@ -363,7 +367,7 @@ router.post('/test/reset', async (req, res) => {
 
 /** Delete all docs in known subcollections, then the parent doc */
 async function deleteDocWithSubcollections(docRef) {
-  const subcollections = ['warnings', 'transactions', 'backpack'];
+  const subcollections = ['warnings', 'transactions', 'backpack', 'stalkers', 'giftWall'];
   for (const sub of subcollections) {
     const snap = await docRef.collection(sub).get();
     const batch = db.batch();
