@@ -1,0 +1,157 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write       # needed by e2e-tests.yml allure-report (gh-pages deploy)
+  checks: write
+  pull-requests: write
+
+concurrency:
+  group: pr-checks-${{ github.head_ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      app_changed: ${{ steps.changes.outputs.app_changed }}
+      backend_changed: ${{ steps.changes.outputs.backend_changed }}
+      web_changed: ${{ steps.changes.outputs.web_changed }}
+      workflow_only: ${{ steps.changes.outputs.workflow_only }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed paths
+        id: changes
+        run: |
+          CHANGED=$(git diff --name-only "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}")
+          APP=false BACKEND=false WEB=false OTHER=false
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            case "$file" in
+              public/*.md) WEB=true ;;
+              public/*) WEB=true ;;
+              app/*|shared/*|iosApp/*|gradle/*|*.gradle.kts|gradle.properties|gradlew|gradlew.bat) APP=true ;;
+              express-api/*|firestore.rules|database.rules.json) BACKEND=true ;;
+              .github/*|.claude/*|.project/*|*.md|.gitignore|.gitattributes) ;;
+              *) OTHER=true ;;
+            esac
+          done <<< "$CHANGED"
+          WORKFLOW_ONLY=false
+          if [ "$APP" = "false" ] && [ "$BACKEND" = "false" ] && [ "$WEB" = "false" ] && [ "$OTHER" = "false" ]; then
+            WORKFLOW_ONLY=true
+          fi
+          for v in app_changed=$APP backend_changed=$BACKEND web_changed=$WEB workflow_only=$WORKFLOW_ONLY; do
+            echo "$v" >> "$GITHUB_OUTPUT"
+          done
+          echo "Detection results: app=$APP backend=$BACKEND web=$WEB workflow_only=$WORKFLOW_ONLY"
+
+  lint:
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.workflow_only != 'true'
+    uses: ./.github/workflows/lint.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+      app_changed: ${{ needs.detect-changes.outputs.app_changed == 'true' }}
+      backend_changed: ${{ needs.detect-changes.outputs.backend_changed == 'true' }}
+    secrets: inherit
+
+  build-and-test:
+    name: Build & Test
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.app_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
+        with:
+          cache-read-only: false
+
+      - name: Decode google-services.json
+        env:
+          GOOGLE_SERVICES_DEV_BASE64: ${{ secrets.GOOGLE_SERVICES_DEV_BASE64 }}
+        run: |
+          mkdir -p app/src/dev app/src/prod
+          echo "$GOOGLE_SERVICES_DEV_BASE64" | base64 -d > app/src/dev/google-services.json
+          echo "$GOOGLE_SERVICES_DEV_BASE64" | base64 -d > app/src/prod/google-services.json
+
+      - name: Decode keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
+
+      - name: Run unit tests and build devRelease APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
+        run: ./gradlew testDevDebugUnitTest assembleDevRelease --parallel
+
+      - name: Publish unit test report
+        uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040 # v2
+        if: always()
+        with:
+          check_name: Unit Tests
+          files: '**/build/test-results/**/TEST-*.xml'
+
+      - name: Upload devRelease APK
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        with:
+          name: dev-release-apk
+          path: app/build/outputs/apk/dev/release/*.apk
+
+  sonarcloud:
+    needs: [detect-changes, build-and-test]
+    if: |
+      always() &&
+      needs.detect-changes.result == 'success' &&
+      needs.detect-changes.outputs.workflow_only != 'true' &&
+      (needs.build-and-test.result == 'success' || needs.build-and-test.result == 'skipped')
+    uses: ./.github/workflows/sonarcloud.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+    secrets: inherit
+
+  test-backend:
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.backend_changed == 'true'
+    uses: ./.github/workflows/test-backend.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+    secrets: inherit
+
+  android-e2e-smoke:
+    needs: [detect-changes, build-and-test]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.app_changed == 'true' &&
+      needs.build-and-test.result == 'success'
+    uses: ./.github/workflows/e2e-tests.yml
+    with:
+      android: '33-phone'
+      ios: 'none'
+      web: 'none'
+      parallel: true
+      ref: ${{ github.event.pull_request.head.sha }}
+    secrets: inherit
