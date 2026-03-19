@@ -155,3 +155,25 @@ jobs:
       parallel: true
       ref: ${{ github.event.pull_request.head.sha }}
     secrets: inherit
+
+  gate:
+    name: PR Gate
+    needs: [detect-changes, lint, build-and-test, sonarcloud, test-backend, android-e2e-smoke]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Evaluate results
+        run: |
+          for result in \
+            "${{ needs.lint.result }}" \
+            "${{ needs.build-and-test.result }}" \
+            "${{ needs.sonarcloud.result }}" \
+            "${{ needs.test-backend.result }}" \
+            "${{ needs.android-e2e-smoke.result }}"; do
+            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+              echo "Required check failed: $result"
+              exit 1
+            fi
+          done
+          echo "All checks passed or were correctly skipped"
