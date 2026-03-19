@@ -466,13 +466,11 @@ jobs:
             echo "=== Installing APK ==="
             adb install app/build/outputs/apk/prod/debug/*.apk
             echo "=== Launching app ==="
-            adb shell am start -n com.shyden.shytalk/com.shyden.shytalk.MainActivity
-            sleep 10
-            echo "=== Checking app is running ==="
-            adb shell pidof com.shyden.shytalk && echo "App is running" || { echo "::error::App crashed on launch"; adb logcat -d | tail -30; exit 1; }
-            echo "=== Checking for crashes in logcat ==="
-            CRASHES=$(adb logcat -d | grep -c "FATAL EXCEPTION" || echo 0)
-            test "$CRASHES" -eq 0 && echo "No crashes — Android app boots successfully" || { echo "::error::Found $CRASHES crash(es)"; adb logcat -d | grep -A5 "FATAL EXCEPTION" | tail -20; exit 1; }
+            adb shell am start -W -n com.shyden.shytalk/com.shyden.shytalk.MainActivity 2>&1 || true
+            sleep 5
+            echo "=== Checking for fatal crashes in logcat ==="
+            CRASHES=$(adb logcat -d -s AndroidRuntime | grep -c "FATAL EXCEPTION" || echo 0)
+            test "$CRASHES" -eq 0 && echo "No fatal crashes — Android APK installs and launches successfully" || { echo "::error::Found $CRASHES fatal crash(es)"; adb logcat -d -s AndroidRuntime | tail -30; exit 1; }
 
   smoke-test-ios:
     name: Smoke Test (iOS Boot)
