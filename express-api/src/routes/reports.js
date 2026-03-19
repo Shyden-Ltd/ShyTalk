@@ -454,7 +454,12 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
       sendSystemPm(
         reporterId,
         'Your report has been reviewed. Thank you for helping keep ShyTalk safe.',
-      ).catch(() => {});
+      ).catch((err) =>
+        log.error('reports', 'Failed to send reporter PM (resolve-all)', {
+          reporterId,
+          error: err.message,
+        }),
+      );
     }
 
     res.json({ success: true, resolved: reports.length });
