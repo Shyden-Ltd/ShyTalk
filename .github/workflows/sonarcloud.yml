@@ -30,6 +30,9 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
+
       - name: Set up Node
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
@@ -40,24 +43,19 @@ jobs:
           cd express-api && npm ci
           npx jest --coverage --coverageReporters=lcov || true
 
-      - name: Install SonarCloud CLI
+      - name: Decode google-services.json
+        env:
+          GOOGLE_SERVICES_DEV_BASE64: ${{ secrets.GOOGLE_SERVICES_DEV_BASE64 }}
         run: |
-          curl -sL https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-6.2.1.4610-linux-x64.zip -o sonar-scanner.zip
-          unzip -q sonar-scanner.zip
-          echo "$PWD/sonar-scanner-6.2.1.4610-linux-x64/bin" >> "$GITHUB_PATH"
+          mkdir -p app/src/dev app/src/prod
+          echo "$GOOGLE_SERVICES_DEV_BASE64" | base64 -d > app/src/dev/google-services.json
+          echo "$GOOGLE_SERVICES_DEV_BASE64" | base64 -d > app/src/prod/google-services.json
+
+      - name: Run Kotlin JVM tests for coverage reports
+        run: ./gradlew :shared:jvmTest || true
 
       - name: Run SonarCloud analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          sonar-scanner \
-            -Dsonar.projectKey=ShydenMcM_ShyTalk \
-            -Dsonar.organization=shydenmcm \
-            -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.token=$SONAR_TOKEN \
-            -Dsonar.sources=shared/src/commonMain/kotlin,shared/src/androidMain/kotlin,express-api/src \
-            -Dsonar.tests=shared/src/commonTest/kotlin,shared/src/jvmTest/kotlin,express-api/tests \
-            -Dsonar.javascript.lcov.reportPaths=express-api/coverage/lcov.info \
-            -Dsonar.exclusions="**/build/**,**/node_modules/**,**/*.json,**/composeResources/**" \
-            -Dsonar.sourceEncoding=UTF-8
+        run: ./gradlew sonar -Dsonar.token=$SONAR_TOKEN -x :app:sonar
