@@ -5970,10 +5970,10 @@
           keysList.innerHTML = authRes.biometricKeys.map(k => `
             <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
               <div>
-                <strong>Device:</strong> ${k.deviceId}<br>
+                <strong>Device:</strong> ${escapeHtml(k.deviceId)}<br>
                 <small style="color:var(--text2)">Registered: ${new Date(k.createdAt).toLocaleString()}</small>
               </div>
-              <button class="btn btn-danger btn-sm" onclick="revokeBiometricKey('${uid}','${k.deviceId}')">Revoke</button>
+              <button class="btn btn-danger btn-sm" onclick="revokeBiometricKey('${escapeHtml(uid)}','${escapeHtml(k.deviceId)}')">Revoke</button>
             </div>
           `).join("");
         }
@@ -6009,6 +6009,10 @@
         showToast("Failed: " + err.message, "error");
       }
     }
+    // Expose functions used by inline onclick attributes (module scope isn't global)
+    window.resetPinLockout = resetPinLockout;
+    window.revokeBiometricKey = revokeBiometricKey;
+
     document.querySelectorAll(".user-subtab").forEach(btn => {
       btn.addEventListener("click", () => switchUserSubtab(btn.dataset.subtab));
     });
