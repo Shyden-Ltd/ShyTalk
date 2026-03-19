@@ -66,7 +66,7 @@ test.describe('Admin Console Error Checks', () => {
           // Give each tab a moment to render and make API calls
           await page.waitForTimeout(1_000);
         } catch {
-          // Tab may not exist — skip without failing
+          console.warn("Tab navigation skipped (may not exist):", tab);
         }
       }
     });

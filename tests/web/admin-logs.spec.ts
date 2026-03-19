@@ -157,7 +157,7 @@ test.describe('Admin Logs', () => {
     // Some results should match (most logs reference API in some way)
     const rowCount = await getLogRowCount(page);
     // Verify the filter executed and returned a valid count
-    expect(typeof rowCount).toBe("number"); expect(rowCount).not.toBeNaN();
+    expect(rowCount).not.toBeNaN();
 
     await clearLogFilters(page);
   });
@@ -175,7 +175,7 @@ test.describe('Admin Logs', () => {
     await searchLogs(page);
 
     const rowCount = await getLogRowCount(page);
-    expect(typeof rowCount).toBe("number"); expect(rowCount).not.toBeNaN();
+    expect(rowCount).not.toBeNaN();
 
     await clearLogFilters(page);
   });
