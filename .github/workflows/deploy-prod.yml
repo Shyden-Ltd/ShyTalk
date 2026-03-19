@@ -219,6 +219,8 @@ jobs:
           releaseFiles: app/build/outputs/bundle/prodRelease/*.aab
           track: internal
           status: draft
+          releaseName: ${{ needs.validate-release.outputs.version }}
+          whatsNewDirectory: app/src/main/play/release-notes
 
   deploy-ios-prod:
     name: Deploy iOS to App Store
