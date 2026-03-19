@@ -371,21 +371,21 @@ jobs:
           [ "$IOS" = "failure" ] && FAILED="${FAILED}- iOS (App Store)\n"
 
           BODY_FILE=$(mktemp)
-          cat > "$BODY_FILE" <<BODYEOF
-## Production Deploy Failed
-
-**Release:** ${TAG}
-**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-### Failed components
-$(echo -e "$FAILED")
-
-### Immediate action required
-1. Check the deploy job logs for the failure reason
-2. Fix the issue and re-run deploy-prod with the same tag
-3. Verify production matches the expected release
-4. Close this issue once resolved
-BODYEOF
+          {
+            echo "## Production Deploy Failed"
+            echo ""
+            echo "**Release:** ${TAG}"
+            echo "**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo ""
+            echo "### Failed components"
+            echo -e "$FAILED"
+            echo ""
+            echo "### Immediate action required"
+            echo "1. Check the deploy job logs for the failure reason"
+            echo "2. Fix the issue and re-run deploy-prod with the same tag"
+            echo "3. Verify production matches the expected release"
+            echo "4. Close this issue once resolved"
+          } > "$BODY_FILE"
           gh issue create \
             --title "CRITICAL: Production deploy failed for ${TAG}" \
             --label "critical,prod-desync" \
