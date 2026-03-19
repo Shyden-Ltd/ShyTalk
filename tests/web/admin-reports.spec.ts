@@ -50,13 +50,13 @@ async function seedReportViaApi(testData: TestData): Promise<string> {
 async function unsuspendAndResetGcs(testData: TestData): Promise<void> {
   try {
     await testData.api.post(`/api/user/${testData.user.uniqueId}/unsuspend`, {});
-  } catch {
-    // May not be suspended
+  } catch (err) {
+    console.warn('unsuspend failed (user may not be suspended):', err);
   }
   try {
     await testData.api.post(`/api/user/${testData.user.uniqueId}/reset-gcs`, {});
-  } catch {
-    // May not have GCS endpoint
+  } catch (err) {
+    console.warn('reset-gcs failed (endpoint may not exist):', err);
   }
 }
 
@@ -207,8 +207,8 @@ test.describe('Admin Reports', () => {
       const warningList = Array.isArray(warnings) ? warnings : (warnings.warnings || []);
       const recentWarning = warningList.find((w: any) => w.severity === 2);
       expect(recentWarning).toBeTruthy();
-    } catch {
-      // Warnings endpoint may not be available — test is still valid from UI perspective
+    } catch (err) {
+      console.warn('Warnings endpoint may not be available:', err);
     }
 
     // Cleanup: reset GCS and re-seed

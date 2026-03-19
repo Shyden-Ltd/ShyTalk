@@ -83,7 +83,7 @@ test.describe('Admin Gifts Tab', () => {
     // Verify name, coinValue, and checkboxes are populated
     const fields = await readRowFields(row);
     expect(fields.name.length).toBeGreaterThan(0);
-    expect(Number(fields.coinValue)).toBeDefined(); expect(typeof Number(fields.coinValue)).toBe("number");
+    expect(Number.isFinite(Number(fields.coinValue))).toBe(true);
 
     // API verify: fetch all gifts and confirm this gift exists
     const apiGifts = await testData.api.get('/api/gifts/all');
@@ -92,8 +92,8 @@ test.describe('Admin Gifts Tab', () => {
     expect(apiGift).toBeTruthy();
     expect(apiGift.name).toBe(fields.name);
     expect(apiGift.coinValue).toBe(Number(fields.coinValue));
-    expect(apiGift.showInStore !== false).toBe(fields.showInStore);
-    expect(apiGift.showOnWheel !== false).toBe(fields.showOnWheel);
+    expect(!!apiGift.showInStore).toBe(fields.showInStore);
+    expect(!!apiGift.showOnWheel).toBe(fields.showOnWheel);
   });
 
   // ── Test 2: Add new gift ──

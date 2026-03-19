@@ -47,11 +47,6 @@ async function reseedAppeal(testData: TestData): Promise<string> {
   return result.id || result.appealId;
 }
 
-/** Unsuspend the test user. */
-async function unsuspendUser(testData: TestData): Promise<void> {
-  await testData.api.post(`/api/user/${testData.user.uniqueId}/unsuspend`, {});
-}
-
 test.describe('Admin Appeals', () => {
   test.describe.configure({ mode: 'serial' });
 

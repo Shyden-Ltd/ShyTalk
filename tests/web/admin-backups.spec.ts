@@ -79,12 +79,12 @@ test.describe('Admin Backups Tab', () => {
     // Verify a new backup appears in the list
     const rows = backupRows(page);
     const countAfter = await rows.count();
-    expect(countAfter).toBeGreaterThanOrEqual(countBefore);
+    expect(countAfter).toBeGreaterThan(countBefore);
 
     // API verify: new backup exists
     const dataAfter = await testData.api.get('/api/admin/backups');
     const backupsAfter = dataAfter.backups || [];
-    expect(backupsAfter.length).toBeGreaterThanOrEqual(countBefore);
+    expect(backupsAfter.length).toBeGreaterThan(countBefore);
   });
 
   // ── Test 3: Refresh list ──

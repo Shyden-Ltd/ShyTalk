@@ -49,7 +49,7 @@ async function reloadAndReturn(page: Page): Promise<void> {
 
 /** Delete a fun fact via the API (for cleanup). */
 async function apiDeleteFact(api: TestData['api'], factId: string): Promise<void> {
-  await api.delete(`/api/admin/fun-facts/${factId}`).catch(() => {});
+  await api.delete(`/api/admin/fun-facts/${factId}`).catch((err) => { console.warn('apiDeleteFact failed:', err); });
 }
 
 /** Create a fun fact via the API (for re-seeding). */

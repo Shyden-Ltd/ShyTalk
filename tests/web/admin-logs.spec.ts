@@ -157,7 +157,7 @@ test.describe('Admin Logs', () => {
     // Some results should match (most logs reference API in some way)
     const rowCount = await getLogRowCount(page);
     // Just verify the filter executed without error
-    expect(typeof rowCount).toBe("number");
+    expect(Number.isFinite(rowCount)).toBe(true);
 
     await clearLogFilters(page);
   });
@@ -175,7 +175,7 @@ test.describe('Admin Logs', () => {
     await searchLogs(page);
 
     const rowCount = await getLogRowCount(page);
-    expect(typeof rowCount).toBe("number");
+    expect(Number.isFinite(rowCount)).toBe(true);
 
     await clearLogFilters(page);
   });
@@ -274,8 +274,8 @@ test.describe('Admin Logs', () => {
     const hasAlerts = await alertsTable.locator('tr').count() > 0;
     const isEmpty = await alertsEmpty.isVisible();
 
-    // One of these must be true
-    expect(hasAlerts || isEmpty).toBe(true);
+    // Exactly one of these must be true (mutually exclusive)
+    expect(hasAlerts !== isEmpty).toBe(true);
 
     if (hasAlerts) {
       // Verify the alerts table has rows with type and title columns
@@ -332,8 +332,8 @@ test.describe('Admin Logs', () => {
     try {
       const alertData = await testData.api.get(`/api/admin/alerts/${ownAlertId}`);
       expect(alertData.status || alertData.alert?.status).toBe('acknowledged');
-    } catch {
-      // Individual alert GET may not exist; the status was verified via toast
+    } catch (err) {
+      console.warn('Individual alert GET failed (may not exist):', err);
     }
   });
 

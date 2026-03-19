@@ -267,12 +267,23 @@ test.describe('Admin Users - Extra Profile Fields', () => {
     const apiData = await testData.api.get(`/api/user/${uid}`);
     expect(apiData.tempUniqueId).toBe(55555555);
 
-    // Clean up in test 11
+    // Clean up: clear the temp ID within this test
+    await page.locator('#temp-id-clear').click();
+    await page.waitForTimeout(2_000);
+    const clearedData = await testData.api.get(`/api/user/${uid}`);
+    expect(clearedData.tempUniqueId).toBeFalsy();
   });
 
   // ── Test 11: Temp ID — clear ──
   test('temp ID clear removes the temporary ID', async ({ page, testData }) => {
     const uid = String(testData.user.uniqueId);
+
+    // Set a temp ID first so this test is self-contained
+    await page.locator('#temp-id-input').fill('55555555');
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 16);
+    await page.locator('#temp-id-expiry').fill(tomorrow);
+    await page.locator('#temp-id-apply').click();
+    await expect(page.locator('#temp-id-current')).toContainText('55555555', { timeout: 10_000 });
 
     // Click Clear
     await page.locator('#temp-id-clear').click();

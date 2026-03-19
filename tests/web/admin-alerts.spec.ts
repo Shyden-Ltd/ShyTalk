@@ -146,8 +146,8 @@ test.describe('Admin Alerts', () => {
     try {
       const alertData = await testData.api.get(`/api/admin/alerts/${ownAlertId}`);
       expect(alertData.status || alertData.alert?.status).toBe('acknowledged');
-    } catch {
-      // Individual alert GET may not exist
+    } catch (err) {
+      console.warn('Individual alert GET failed (may not exist):', err);
     }
   });
 

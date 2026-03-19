@@ -45,9 +45,10 @@ test.describe('Admin Validation', () => {
     // The field should either show validation error, or the API should reject it
     // Either way, verify the name wasn't saved as empty
     const apiData = await testData.api.get(`/api/user/${testData.user.uniqueId}`);
-    // If the backend allows empty names, it should still have something
-    // The assertion is that the UI provides some feedback
-    expect(hasFeedback || hasToast || apiData.displayName === originalName || apiData.displayName === '').toBe(true);
+    // The UI must provide some feedback (inline or toast)
+    expect(hasFeedback || hasToast).toBe(true);
+    // The backend must not save an empty name
+    expect(apiData.displayName).toBe(originalName);
 
     // Restore
     await displayNameInput.fill(originalName);
@@ -98,8 +99,8 @@ test.describe('Admin Validation', () => {
     const coinsDisplay = page.locator('#eco-coins-display');
     const coinsText = await coinsDisplay.textContent();
     const coinsNum = Number(coinsText!.replace(/,/g, ''));
-    // Should either be 1000 (input rejected) or 0 (NaN treated as 0) — never negative
-    expect(coinsNum === 1000 || coinsNum === 0).toBe(true);
+    // NaN input should be rejected — coins should remain at 1000
+    expect(coinsNum).toBe(1000);
 
     // Restore if needed
     if (coinsNum !== 1000) {
@@ -123,7 +124,7 @@ test.describe('Admin Validation', () => {
 
     // Either the input is truncated to 20, or the counter shows the limit exceeded
     const inputValue = await displayNameInput.inputValue();
-    expect(inputValue.length <= 25).toBe(true);
+    expect(inputValue.length).toBeLessThanOrEqual(20);
 
     // If counter shows over-limit, it should have error styling
     if (charCount > 20) {
@@ -154,7 +155,7 @@ test.describe('Admin Validation', () => {
     const wasError = await errorFeedback.isVisible().catch(() => false);
 
     // Either outcome is valid — the important thing is no crash/console error
-    expect(wasSaved || wasError || true).toBe(true);
+    expect(wasSaved || wasError).toBe(true);
 
     // Clear to restore
     await page.locator('.btn-clear[data-clear="profilePhotoUrl"]').click();
@@ -187,7 +188,7 @@ test.describe('Admin Validation', () => {
   // ── Test 7: Unicode/emoji in display name ──
   test('unicode and emoji in display name renders correctly', async ({ page, testData }) => {
     const displayNameInput = page.locator('[data-field="displayName"]');
-    const emojiName = 'Test123';
+    const emojiName = 'Test\u{1F30D}123';
 
     await displayNameInput.fill(emojiName);
     await waitForAutoSave(page, '[data-field="displayName"]');

@@ -459,6 +459,8 @@ test.describe('Admin Banners', () => {
     const relIdx2After = idsAfterReload.indexOf(secondId);
     expect(relIdx1After).not.toBe(-1);
     expect(relIdx2After).not.toBe(-1);
+    // The dragged banner (second) should now be before the target banner (first)
+    expect(relIdx2After).toBeLessThan(relIdx1After);
 
     // Cleanup
     await deleteBannerViaApi(testData, secondId);

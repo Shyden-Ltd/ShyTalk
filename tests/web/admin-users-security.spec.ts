@@ -98,7 +98,7 @@ test.describe('Admin Users - Security Subtab', () => {
       // Just confirm the section exists (already verified above)
       const childCount = await biometricKeysList.locator('*').count();
       // The section rendered but may show "Loading..." or empty text — that's fine
-      expect(typeof childCount).toBe("number");
+      expect(Number.isFinite(childCount)).toBe(true);
     }
   });
 

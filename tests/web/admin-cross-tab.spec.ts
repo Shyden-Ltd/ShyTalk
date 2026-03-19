@@ -40,13 +40,13 @@ async function seedReport(testData: TestData): Promise<string> {
 async function unsuspendAndResetGcs(testData: TestData): Promise<void> {
   try {
     await testData.api.post(`/api/user/${testData.user.uniqueId}/unsuspend`, {});
-  } catch {
-    // May not be suspended
+  } catch (err) {
+    console.warn('unsuspend failed (user may not be suspended):', err);
   }
   try {
     await testData.api.post(`/api/user/${testData.user.uniqueId}/reset-gcs`, {});
-  } catch {
-    // May not have GCS endpoint
+  } catch (err) {
+    console.warn('reset-gcs failed (endpoint may not exist):', err);
   }
 }
 
@@ -377,8 +377,12 @@ test.describe('Admin Cross-Tab Interactions', () => {
       // Should still be visible (errors don't auto-dismiss quickly)
       const stillVisible = await errorToast.isVisible();
       expect(stillVisible).toBe(true);
+    } else {
+      // If no error toast appears, verify some other form of error feedback is shown
+      const noResultsMsg = page.locator('.no-results, .user-not-found, .toast');
+      const hasAnyFeedback = await noResultsMsg.count() > 0;
+      expect(hasAnyFeedback).toBe(true);
     }
-    // If no error toast appears, the UI handles 404 differently — still valid
   });
 
   // ── Test 10: API 500 error handling ──
