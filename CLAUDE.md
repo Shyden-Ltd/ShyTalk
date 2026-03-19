@@ -63,7 +63,7 @@ Before opening or updating a PR, run ALL applicable checks:
 - Update CLAUDE.md if new patterns/conventions introduced
 - Re-run all tests after fixes
 - Only push when all checks pass
-- Comment `/deploy` on PR when ready for internal testers (both Android + iOS)
+- Use **Deploy to Dev** workflow (Actions tab → workflow_dispatch) when ready for internal testers
 - Workflow-only changes (`.github/`, `.claude/`, `*.md`) don't need app testing
 
 ## Debugging
