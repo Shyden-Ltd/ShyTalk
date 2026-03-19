@@ -1,4 +1,5 @@
 name: Deploy To Prod
+# Deploy a specific release tag to production
 
 on:
   workflow_dispatch:
