@@ -10,12 +10,12 @@ async function goToFunFacts(page: Page): Promise<void> {
   // Wait for the list to settle (loader disappears)
   await page.locator('#funfacts-list').waitFor({ state: 'visible', timeout: 15_000 });
   // Give the API call time to populate the list
-  await expect(page.locator('#funfacts-list').locator('.list-loader')).toBeHidden({ timeout: 15_000 }).catch(() => {});
+  await expect(page.locator('#funfacts-list').locator('.list-loader')).toBeHidden({ timeout: 15_000 }).catch((err) => console.warn('Loader wait failed:', err.message));
 }
 
 /** Wait for the fun-facts list to finish loading after a mutation (reload / save / delete). */
 async function waitForListLoaded(page: Page): Promise<void> {
-  await expect(page.locator('#funfacts-list').locator('.list-loader')).toBeHidden({ timeout: 15_000 }).catch(() => {});
+  await expect(page.locator('#funfacts-list').locator('.list-loader')).toBeHidden({ timeout: 15_000 }).catch((err) => console.warn('Loader wait failed:', err.message));
 }
 
 /** Find the card in #funfacts-list whose text content includes the given substring. */

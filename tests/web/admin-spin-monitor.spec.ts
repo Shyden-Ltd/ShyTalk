@@ -253,12 +253,12 @@ test.describe('Admin Spin Monitor', () => {
     const sessionSpins = await page.locator('#session-spins').textContent();
     expect(sessionSpins).toBeTruthy();
     const sessionSpinsNum = Number(sessionSpins!.replace(/,/g, ''));
-    expect(Number.isFinite(sessionSpinsNum)).toBe(true);
+    expect(sessionSpinsNum).toBeGreaterThanOrEqual(0);
 
     const sessionSpent = await page.locator('#session-spent').textContent();
     expect(sessionSpent).toBeTruthy();
     const sessionSpentNum = Number(sessionSpent!.replace(/,/g, ''));
-    expect(Number.isFinite(sessionSpentNum)).toBe(true);
+    expect(sessionSpentNum).toBeGreaterThanOrEqual(0);
 
     // All-time stats should show numeric values (or "?" if load failed)
     const alltimeSpins = await page.locator('#alltime-spins').textContent();
@@ -266,7 +266,7 @@ test.describe('Admin Spin Monitor', () => {
     // Could be a number or "?" — both are valid displays
     if (alltimeSpins !== '?') {
       const alltimeSpinsNum = Number(alltimeSpins!.replace(/,/g, ''));
-      expect(Number.isFinite(alltimeSpinsNum)).toBe(true);
+      expect(alltimeSpinsNum).toBeGreaterThanOrEqual(0);
     }
 
     const alltimeSpent = await page.locator('#alltime-spent').textContent();

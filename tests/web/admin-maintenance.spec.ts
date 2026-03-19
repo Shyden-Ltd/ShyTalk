@@ -21,12 +21,6 @@ async function expectMaintenanceSuccess(page: Page, resultId: string): Promise<v
 /**
  * Helper: verify a maintenance result element is hidden (no action taken).
  */
-async function expectMaintenanceHidden(page: Page, resultId: string): Promise<void> {
-  const result = page.locator(`#${resultId}`);
-  // Either hidden or display:none
-  const display = await result.evaluate((el) => getComputedStyle(el).display);
-  expect(display === 'none' || !await result.isVisible()).toBe(true);
-}
 
 test.describe('Admin Maintenance Tab', () => {
   test.describe.configure({ mode: 'serial' });
