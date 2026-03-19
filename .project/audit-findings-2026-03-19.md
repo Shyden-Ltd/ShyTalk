@@ -2,12 +2,19 @@
 
 Comprehensive audit of the entire ShyTalk project. Items fixed in PR #173 are marked DONE.
 
-## DONE (fixed in PR #173)
-- [x] Test suite: 23 weak assertions eliminated
+## DONE (fixed in PR #173, verified by re-audit)
+- [x] Test suite: 23 + 6 weak assertions eliminated (two audit rounds, zero remaining)
 - [x] Backend: TEST_API_KEY guard when env undefined
 - [x] Backend: stalkers + giftWall added to teardown subcollections
 - [x] Backend: suspensionAppealStatus written to user doc on appeal review
 - [x] Security: pinHash removed from PIN setup response
+- [x] Security: fast-xml-parser CVE-2026-26278 + CVE-2026-33036 resolved
+- [x] Backend: 403 test for both PUT /api/config/economy and PUT /api/config/:key
+- [x] Backend: stalkers + giftWall subcollections asserted in teardown test
+- [x] Backend: suspensionAppealStatus asserted in appeal review tests
+- [x] Admin frontend: releaseLock now clears state on failure
+- [x] Admin frontend: loadDevices re-fetches ban data on every call
+- [x] CLAUDE.md: feature count updated (33 files, 141 scenarios)
 - [x] Backend: config PUT 403 test coverage
 - [x] CI: iOS || true removed from xcodebuild
 - [x] CI: force-cancel workflow uses force-cancel API
