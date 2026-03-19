@@ -209,7 +209,7 @@ jobs:
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
-        run: ./gradlew testProdReleaseUnitTest
+        run: ./gradlew testProdDebugUnitTest
 
       - name: Upload to Play Store internal testing track
         uses: r0adkll/upload-google-play@935ef9c68bb393a8e6116b1575626a7f5be3a7fb # v1
