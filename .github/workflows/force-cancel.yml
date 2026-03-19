@@ -19,7 +19,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           script: |
-            const workflows = ['release.yml', 'e2e-tests.yml'];
+            const workflows = ['release.yml', 'pr-checks.yml', 'deploy-dev.yml', 'deploy-prod.yml', 'e2e-tests.yml'];
 
             for (const wf of workflows) {
               for (const status of ['waiting', 'in_progress', 'queued', 'pending']) {
