@@ -363,14 +363,14 @@ jobs:
 
           # Public endpoints
           for endpoint in "/api/health"; do
-            STATUS=$(curl -sf -o /dev/null -w '%{http_code}' "https://api.shytalk.shyden.co.uk${endpoint}")
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' "https://api.shytalk.shyden.co.uk${endpoint}")
             if [ "$STATUS" = "200" ]; then echo "OK: ${endpoint} → ${STATUS}"
             else echo "FAIL: ${endpoint} → ${STATUS}"; ERRORS=$((ERRORS + 1)); fi
           done
 
           # Auth-protected endpoints (should return 401, not 5xx)
           for endpoint in "/api/users/me" "/api/rooms" "/api/conversations"; do
-            STATUS=$(curl -sf -o /dev/null -w '%{http_code}' "https://api.shytalk.shyden.co.uk${endpoint}")
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' "https://api.shytalk.shyden.co.uk${endpoint}")
             if [ "$STATUS" = "401" ]; then echo "OK: ${endpoint} → ${STATUS} (auth required)"
             elif [ "$STATUS" -ge 500 ]; then echo "FAIL: ${endpoint} → ${STATUS} (server error)"; ERRORS=$((ERRORS + 1))
             else echo "OK: ${endpoint} → ${STATUS}"; fi
@@ -378,7 +378,7 @@ jobs:
 
           # Admin endpoints (should return 401, not 5xx)
           for endpoint in "/api/admin/alerts" "/api/admin/banners"; do
-            STATUS=$(curl -sf -o /dev/null -w '%{http_code}' "https://api.shytalk.shyden.co.uk${endpoint}")
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' "https://api.shytalk.shyden.co.uk${endpoint}")
             if [ "$STATUS" -ge 500 ]; then echo "FAIL: ${endpoint} → ${STATUS}"; ERRORS=$((ERRORS + 1))
             else echo "OK: ${endpoint} → ${STATUS}"; fi
           done
@@ -390,7 +390,7 @@ jobs:
         if: needs.deploy-web-prod.result == 'success'
         run: |
           echo "=== Web Landing Page ==="
-          STATUS=$(curl -sf -o /dev/null -w '%{http_code}' "https://shytalk.shyden.co.uk")
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' "https://shytalk.shyden.co.uk")
           [ "$STATUS" = "200" ] || { echo "::error::Landing page returned ${STATUS}"; exit 1; }
           BODY=$(curl -sf "https://shytalk.shyden.co.uk")
           echo "$BODY" | grep -qi "shytalk" || { echo "::error::Missing ShyTalk content"; exit 1; }
@@ -400,7 +400,7 @@ jobs:
         if: needs.deploy-web-prod.result == 'success'
         run: |
           echo "=== Admin Panel ==="
-          STATUS=$(curl -sf -o /dev/null -w '%{http_code}' "https://shytalk.shyden.co.uk/admin/")
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' "https://shytalk.shyden.co.uk/admin/")
           [ "$STATUS" = "200" ] || { echo "::error::Admin panel returned ${STATUS}"; exit 1; }
           echo "Admin panel OK"
 
@@ -465,28 +465,14 @@ jobs:
           script: |
             echo "=== Installing APK ==="
             adb install app/build/outputs/apk/prod/debug/*.apk
-
             echo "=== Launching app ==="
             adb shell am start -n com.shyden.shytalk/com.shyden.shytalk.MainActivity
             sleep 10
-
             echo "=== Checking app is running ==="
-            RUNNING=$(adb shell pidof com.shyden.shytalk || echo "")
-            if [ -z "$RUNNING" ]; then
-              echo "::error::App crashed on launch — no process found"
-              adb logcat -d | grep -i "fatal\|crash\|ANR" | tail -20
-              exit 1
-            fi
-            echo "App is running (PID: $RUNNING)"
-
+            adb shell pidof com.shyden.shytalk && echo "App is running" || { echo "::error::App crashed on launch"; adb logcat -d | tail -30; exit 1; }
             echo "=== Checking for crashes in logcat ==="
-            CRASHES=$(adb logcat -d | grep -c "FATAL EXCEPTION" || true)
-            if [ "$CRASHES" -gt 0 ]; then
-              echo "::error::Found $CRASHES fatal exception(s) in logcat"
-              adb logcat -d | grep -A5 "FATAL EXCEPTION" | tail -30
-              exit 1
-            fi
-            echo "No crashes detected — Android app boots successfully"
+            CRASHES=$(adb logcat -d | grep -c "FATAL EXCEPTION" || echo 0)
+            test "$CRASHES" -eq 0 && echo "No crashes — Android app boots successfully" || { echo "::error::Found $CRASHES crash(es)"; adb logcat -d | grep -A5 "FATAL EXCEPTION" | tail -20; exit 1; }
 
   smoke-test-ios:
     name: Smoke Test (iOS Boot)

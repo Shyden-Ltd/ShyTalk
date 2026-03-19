@@ -55,24 +55,17 @@ actual class CryptoKeyPair {
                     ),
             )
 
-        memScoped {
-            val error = alloc<kotlinx.cinterop.CPointerVar<platform.CoreFoundation.__CFError>>()
-            val key = SecKeyCreateRandomKey(attributes as CFDictionaryRef, error.ptr)
-            return key != null
-        }
+        val key = SecKeyCreateRandomKey(attributes as CFDictionaryRef, null)
+        return key != null
     }
 
     actual fun getPublicKeyBase64(): String? {
         val alias = currentTag ?: return null
         val privateKey = getPrivateKeyRef(alias) ?: return null
 
-        memScoped {
-            val error = alloc<kotlinx.cinterop.CPointerVar<platform.CoreFoundation.__CFError>>()
-            // Get public key from private key
-            val publicKey = platform.Security.SecKeyCopyPublicKey(privateKey) ?: return null
-            val data = SecKeyCopyExternalRepresentation(publicKey, error.ptr) as? NSData ?: return null
-            return data.base64EncodedStringWithOptions(0u)
-        }
+        val publicKey = platform.Security.SecKeyCopyPublicKey(privateKey) ?: return null
+        val data = SecKeyCopyExternalRepresentation(publicKey, null) as? NSData ?: return null
+        return data.base64EncodedStringWithOptions(0u)
     }
 
     actual fun sign(data: ByteArray): ByteArray? {
@@ -80,17 +73,14 @@ actual class CryptoKeyPair {
         val privateKey = getPrivateKeyRef(alias) ?: return null
         val nsData = data.toNSData()
 
-        memScoped {
-            val error = alloc<kotlinx.cinterop.CPointerVar<platform.CoreFoundation.__CFError>>()
-            val signature =
-                SecKeyCreateSignature(
-                    privateKey,
-                    kSecKeyAlgorithmECDSASignatureMessageX962SHA256,
-                    nsData as platform.CoreFoundation.CFDataRef,
-                    error.ptr,
-                ) as? NSData ?: return null
-            return signature.toByteArray()
-        }
+        val signature =
+            SecKeyCreateSignature(
+                privateKey,
+                kSecKeyAlgorithmECDSASignatureMessageX962SHA256,
+                nsData as platform.CoreFoundation.CFDataRef,
+                null,
+            ) as? NSData ?: return null
+        return signature.toByteArray()
     }
 
     actual fun delete(alias: String) {
