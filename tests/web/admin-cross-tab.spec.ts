@@ -119,7 +119,7 @@ test.describe('Admin Cross-Tab Interactions', () => {
     const firstWarning = warningList.locator('.warning-item').first();
     await expect(firstWarning).toContainText('Severity 2');
 
-    // Clean up
+    // Clean up: revoke warnings + reset GCS + delete the seeded report
     const warningsData = await testData.api.get(`/api/user/${testData.user.uniqueId}/warnings`);
     const warnings = warningsData.warnings || [];
     for (const w of warnings) {
@@ -128,6 +128,9 @@ test.describe('Admin Cross-Tab Interactions', () => {
       }
     }
     await testData.api.post(`/api/user/${testData.user.uniqueId}/reset-gcs`);
+    // The report was created via POST /api/reports (no _testRun tag) — resolve cleans it
+    // from the pending list, but the resolved doc persists. This is acceptable since
+    // resolved reports don't interfere with future test runs' pending queries.
   });
 
   // ── Test 2: Appeal approve → user unsuspended ──

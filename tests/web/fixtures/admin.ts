@@ -83,13 +83,13 @@ export const test = base.extend<{}, { adminContext: BrowserContext; testData: Te
         ],
         banners: [{ title: `e2e-${prefix}-banner` }],
         funFacts: [{ text: `e2e-${prefix}-fact`, category: 'Science', emoji: '🔬' }],
-        reports: [{ reportedUserIndex: 0, reporterUserIndex: 1, reason: 'Spam' }],
-        appeals: [{ userIndex: 0, appealText: 'I did not do this' }],
-        alerts: [{ type: 'error_rate', severity: 'high', message: `e2e-${prefix}-alert` }],
         conversations: [{
           participants: ['placeholder'],
           messages: [{ text: 'test message', senderId: 'placeholder' }],
         }],
+        reports: [{ reportedUserIndex: 0, reporterUserIndex: 1, reason: 'Spam', conversationIndex: 0 }],
+        appeals: [{ userIndex: 0, appealText: 'I did not do this' }],
+        alerts: [{ type: 'error_rate', severity: 'high', message: `e2e-${prefix}-alert` }],
       });
       testRunId = result.testRunId;
 

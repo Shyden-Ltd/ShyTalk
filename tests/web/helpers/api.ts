@@ -35,6 +35,7 @@ export interface SetupFunFactPayload {
 export interface SetupReportPayload {
   reportedUserIndex?: number;
   reporterUserIndex?: number;
+  conversationIndex?: number;
   reason?: string;
   status?: string;
 }

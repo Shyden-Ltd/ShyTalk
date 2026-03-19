@@ -174,12 +174,40 @@ router.post('/test/setup', async (req, res) => {
       created.funFacts.push(factData);
     }
 
+    // Create test conversations with messages subcollection
+    // (seeded BEFORE reports so reports can reference conversationIndex)
+    for (const convSpec of spec.conversations || []) {
+      const convId = `${testRunId}_conv_${generateId()}`;
+      const participants = convSpec.participants || [];
+      const convData = {
+        id: convId,
+        participants,
+        createdAt: now,
+        _testRun: testRunId,
+      };
+      await db.doc(`conversations/${convId}`).set(convData);
+      for (const msg of convSpec.messages || []) {
+        const msgId = `${testRunId}_msg_${generateId()}`;
+        await db.doc(`conversations/${convId}/messages/${msgId}`).set({
+          text: msg.text || '',
+          senderId: msg.senderId || '',
+          createdAt: now,
+        });
+      }
+      created.conversations.push(convData);
+    }
+
     // Create test reports (index-based user references)
     for (const reportSpec of spec.reports || []) {
       const reportId = `${testRunId}_report_${generateId()}`;
       const reportedUser = created.users[reportSpec.reportedUserIndex || 0];
       const reporterUser = created.users[reportSpec.reporterUserIndex || 1];
       if (!reportedUser || !reporterUser) throw new Error('Report seed requires at least 2 users');
+      // Link to a seeded conversation if conversationIndex is provided
+      const linkedConv =
+        reportSpec.conversationIndex !== undefined && reportSpec.conversationIndex !== null
+          ? created.conversations[reportSpec.conversationIndex]
+          : null;
       const reportData = {
         id: reportId,
         reportedUserId: reportedUser.uid,
@@ -189,6 +217,7 @@ router.post('/test/setup', async (req, res) => {
         reporterName: reporterUser.displayName,
         reason: reportSpec.reason || 'Spam',
         status: reportSpec.status || 'pending',
+        ...(linkedConv ? { conversationId: linkedConv.id } : {}),
         createdAt: now,
         _testRun: testRunId,
       };
@@ -229,29 +258,6 @@ router.post('/test/setup', async (req, res) => {
       };
       await db.doc(`alerts/${alertId}`).set(alertData);
       created.alerts.push(alertData);
-    }
-
-    // Create test conversations with messages subcollection
-    for (const convSpec of spec.conversations || []) {
-      const convId = `${testRunId}_conv_${generateId()}`;
-      const participants = convSpec.participants || [];
-      const convData = {
-        id: convId,
-        participants,
-        createdAt: now,
-        _testRun: testRunId,
-      };
-      await db.doc(`conversations/${convId}`).set(convData);
-      // Seed messages as subcollection
-      for (const msg of convSpec.messages || []) {
-        const msgId = `${testRunId}_msg_${generateId()}`;
-        await db.doc(`conversations/${convId}/messages/${msgId}`).set({
-          text: msg.text || '',
-          senderId: msg.senderId || '',
-          createdAt: now,
-        });
-      }
-      created.conversations.push(convData);
     }
 
     // Read current economy config for backup/restore
