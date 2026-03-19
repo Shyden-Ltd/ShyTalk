@@ -408,6 +408,12 @@ describe('PATCH /api/appeals/:id (admin review appeal)', () => {
         suspensionReason: null,
       }),
     );
+    // suspensionAppealStatus should be written to user doc
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        suspensionAppealStatus: 'approved',
+      }),
+    );
     expect(clearSuspensionCache).toHaveBeenCalledWith('suspended-user');
   });
 
@@ -429,6 +435,13 @@ describe('PATCH /api/appeals/:id (admin review appeal)', () => {
       expect.objectContaining({
         status: 'denied',
         reviewedBy: 'admin-firebase-uid',
+      }),
+    );
+    // suspensionAppealStatus should be written to user doc as 'denied'
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        suspensionAppealStatus: 'denied',
+        suspensionCanAppeal: false,
       }),
     );
     // User should NOT be unsuspended — clearSuspensionCache not called

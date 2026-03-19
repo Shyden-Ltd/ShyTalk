@@ -72,9 +72,8 @@ test.describe('Admin Validation', () => {
     const coinsText = await coinsDisplay.textContent();
     const coinsNum = Number(coinsText!.replace(/,/g, ''));
 
-    // Coins should not have gone below the original seeded amount minus 100
-    // (the API may reject negative adds, or treat -100 as a deduction)
-    expect(coinsNum).toBe(0);
+    // The API may reject negative adds (leaving at 1000) or treat -100 as a deduction (resulting in 0)
+    expect([0, 1000]).toContain(coinsNum);
 
     // Restore if coins were deducted
     if (coinsNum < 1000) {

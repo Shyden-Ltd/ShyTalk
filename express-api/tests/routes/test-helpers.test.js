@@ -1045,10 +1045,12 @@ describe('POST /api/test/teardown', () => {
     // User docs themselves should be deleted via deleteDocWithSubcollections
     expect(userRef1.delete).toHaveBeenCalled();
     expect(userRef2.delete).toHaveBeenCalled();
-    // Subcollections should be traversed
+    // Subcollections should be traversed (all 5 from deleteDocWithSubcollections)
     expect(userRef1.collection).toHaveBeenCalledWith('warnings');
     expect(userRef1.collection).toHaveBeenCalledWith('transactions');
     expect(userRef1.collection).toHaveBeenCalledWith('backpack');
+    expect(userRef1.collection).toHaveBeenCalledWith('stalkers');
+    expect(userRef1.collection).toHaveBeenCalledWith('giftWall');
   });
 
   test('queries all expected collections during teardown', async () => {

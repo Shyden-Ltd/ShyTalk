@@ -58,7 +58,7 @@ test.describe('Admin Maintenance Tab', () => {
 
     // API verify: the endpoint works
     const apiData = await testData.api.get('/api/storage/audit');
-    expect(apiData).toBeTruthy();
+    expect(apiData).toHaveProperty('success');
   });
 
   // ── Test 2: Clear device binding (single user) ──

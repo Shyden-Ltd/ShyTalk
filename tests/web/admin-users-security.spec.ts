@@ -96,9 +96,8 @@ test.describe('Admin Users - Security Subtab', () => {
     } else {
       // No keys — the list should show empty state or "No biometric keys"
       // Just confirm the section exists (already verified above)
-      const childCount = await biometricKeysList.locator('*').count();
       // The section rendered but may show "Loading..." or empty text — that's fine
-      expect(Number.isFinite(childCount)).toBe(true);
+      // biometricKeysList attachment already verified above
     }
   });
 

@@ -119,6 +119,17 @@ describe('GET /api/config/:key', () => {
 });
 
 describe('PUT /api/config/:key', () => {
+  test('returns 403 for non-admin', async () => {
+    const { requireAdmin } = require('../../src/middleware/auth');
+    requireAdmin.mockImplementationOnce((req, res) => {
+      res.status(403).json({ error: 'Admin access required' });
+      return true;
+    });
+    const app = createApp();
+    const res = await request(app).put('/api/config/app').send({ minVersionCode: 2 });
+    expect(res.status).toBe(403);
+  });
+
   test('route is reachable (no double /api prefix)', async () => {
     const app = createApp();
     const res = await request(app).put('/api/config/app').send({ minVersionCode: 2 });

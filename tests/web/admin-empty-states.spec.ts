@@ -217,7 +217,7 @@ test.describe('Admin Empty States', () => {
     await expect(backupPanel).toBeVisible({ timeout: 10_000 });
 
     const panelText = await backupPanel.textContent();
-    expect(panelText).toBeTruthy();
+    expect(panelText).toMatch(/backup|no backups|trigger/i);
   });
 
   // ── Test 9: Spin Monitor — no user shows input prompt ──
@@ -293,8 +293,8 @@ test.describe('Admin Empty States', () => {
           giftId: item.giftId, quantity: 0, silent: true,
         });
       }
-    } catch {
-      // Backpack may already be empty
+    } catch (err) {
+      console.warn('Backpack cleanup failed (may already be empty):', err);
     }
 
     // Navigate to economy subtab

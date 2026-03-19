@@ -454,6 +454,7 @@ test.describe('Admin Banners', () => {
     }
 
     // The order should have changed from the original
+    expect(idsAfterReload).not.toEqual(idsBefore);
     // (exact position depends on other banners, but the relative order should differ)
     const relIdx1After = idsAfterReload.indexOf(testData.banner.id);
     const relIdx2After = idsAfterReload.indexOf(secondId);
