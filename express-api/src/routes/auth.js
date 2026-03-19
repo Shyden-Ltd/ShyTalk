@@ -239,7 +239,7 @@ router.post('/auth/pin/setup', authMiddleware, async (req, res) => {
       pinLockoutCount: 0,
     });
 
-    res.json({ message: 'PIN set', pinHash });
+    res.json({ message: 'PIN set' });
   } catch (err) {
     log.error('PIN setup failed', err);
     res.status(500).json({ error: 'Failed to set PIN' });
