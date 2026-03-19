@@ -887,6 +887,12 @@ router.patch('/appeals/:id', async (req, res) => {
       reviewedAt: timestamp,
     });
 
+    // Update user's appeal status on the user document
+    await db.doc(`users/${userId}`).update({
+      suspensionAppealStatus: status, // 'approved' or 'denied'
+      ...(status === 'denied' ? { suspensionCanAppeal: false } : {}),
+    });
+
     // If approved, unsuspend the user
     if (status === 'approved') {
       const user = await getDoc(`users/${userId}`);
