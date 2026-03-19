@@ -111,7 +111,7 @@ router.post('/reports', async (req, res) => {
     // Fire-and-forget: FCM push notification to admin tokens
     (async () => {
       try {
-        const adminUsers = await queryDocs(db.collection('users').where('userType', '==', 'admin'));
+        const adminUsers = await queryDocs(db.collection('users').where('userType', '==', 'ADMIN'));
         const tokens = [];
         for (const u of adminUsers) {
           if (Array.isArray(u.fcmTokens)) tokens.push(...u.fcmTokens);
