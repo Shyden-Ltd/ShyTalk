@@ -43,6 +43,11 @@ async function compressImage(buffer, mimeType) {
     );
   }
 
+  // Animated images: pass through (can't optimise without losing frames)
+  if (metadata.pages && metadata.pages > 1) {
+    return { buffer, mimeType, originalSize, compressedSize: originalSize };
+  }
+
   let pipeline = sharp(buffer, { failOn: 'error' }).rotate();
 
   let outputMime = mimeType;
@@ -74,6 +79,14 @@ async function compressImage(buffer, mimeType) {
   let compressed;
   try {
     compressed = await Promise.race([pipeline.toBuffer(), timeoutPromise]);
+  } catch (err) {
+    clearTimeout(timer);
+    log.warn('imageCompressor', 'Compression failed, returning original', {
+      error: err.message,
+      format: outputMime,
+      originalSize,
+    });
+    return { buffer, mimeType, originalSize, compressedSize: originalSize };
   } finally {
     clearTimeout(timer);
   }
