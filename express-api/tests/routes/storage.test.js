@@ -201,4 +201,65 @@ describe('POST /api/storage/upload', () => {
       });
     expect(res.status).toBe(200);
   });
+
+  test('compressed buffer is stored to R2, not original', async () => {
+    const { compressImage } = require('../../src/utils/imageCompressor');
+    const compressedBuf = Buffer.from('compressed-data');
+    compressImage.mockResolvedValueOnce({
+      buffer: compressedBuf,
+      mimeType: 'image/jpeg',
+      originalSize: 100,
+      compressedSize: compressedBuf.length,
+    });
+    const app = createApp();
+    await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'profiles')
+      .attach('file', Buffer.from('original'), {
+        filename: 'photo.jpg',
+        contentType: 'image/jpeg',
+      });
+
+    expect(r2.putObject).toHaveBeenCalledWith(expect.any(String), compressedBuf, 'image/jpeg');
+  });
+
+  test('compression failure falls back to storing original', async () => {
+    const { compressImage } = require('../../src/utils/imageCompressor');
+    compressImage.mockRejectedValueOnce(new Error('sharp failed'));
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'profiles')
+      .attach('file', Buffer.from('original-data'), {
+        filename: 'photo.jpg',
+        contentType: 'image/jpeg',
+      });
+
+    expect(res.status).toBe(200);
+    expect(r2.putObject).toHaveBeenCalled();
+  });
+
+  test('HEIC upload key uses post-compression extension (.jpg not .heic)', async () => {
+    const { compressImage } = require('../../src/utils/imageCompressor');
+    compressImage.mockResolvedValueOnce({
+      buffer: Buffer.from('converted-jpeg'),
+      mimeType: 'image/jpeg',
+      originalSize: 200,
+      compressedSize: 100,
+    });
+    const app = createApp();
+    await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'profiles')
+      .attach('file', Buffer.from('fake-heic'), {
+        filename: 'photo.heic',
+        contentType: 'image/heic',
+      });
+
+    expect(r2.putObject).toHaveBeenCalledWith(
+      expect.stringMatching(/\.jpg$/),
+      expect.any(Buffer),
+      'image/jpeg',
+    );
+  });
 });

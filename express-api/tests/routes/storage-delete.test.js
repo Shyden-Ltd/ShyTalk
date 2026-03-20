@@ -17,6 +17,8 @@ jest.mock('../../src/utils/helpers', () => ({
       'image/png': 'png',
       'image/webp': 'webp',
       'image/gif': 'gif',
+      'image/heic': 'heic',
+      'image/heif': 'heif',
     };
     return map[mime] || 'bin';
   }),

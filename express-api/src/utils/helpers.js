@@ -28,9 +28,12 @@ function getExtension(contentType) {
     return sub === 'quicktime' ? 'mov' : sub;
   }
   const map = {
+    'image/jpeg': 'jpg',
     'image/png': 'png',
     'image/webp': 'webp',
     'image/gif': 'gif',
+    'image/heic': 'heic',
+    'image/heif': 'heif',
   };
   return map[contentType] ?? 'jpg';
 }

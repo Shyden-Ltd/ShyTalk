@@ -59,7 +59,7 @@ router.post('/storage/upload', upload.single('file'), async (req, res) => {
       log.warn('storage', 'Upload rejected: disallowed MIME type', { uniqueId, contentType });
       return res
         .status(400)
-        .json({ error: 'Only image uploads are allowed (jpeg, png, webp, gif)' });
+        .json({ error: 'Only image uploads are allowed (jpeg, png, webp, gif, heic, heif)' });
     }
     let uploadBuffer = file.buffer;
     let uploadMime = contentType;
