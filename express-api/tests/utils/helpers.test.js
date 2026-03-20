@@ -155,12 +155,20 @@ describe('getExtension()', () => {
     expect(getExtension('image/gif')).toBe('gif');
   });
 
-  it('returns "jpg" for image/jpeg (fallback default)', () => {
+  it('returns "jpg" for image/jpeg', () => {
     expect(getExtension('image/jpeg')).toBe('jpg');
   });
 
   it('returns "jpg" for image/jpg (fallback default)', () => {
     expect(getExtension('image/jpg')).toBe('jpg');
+  });
+
+  it('returns "heic" for image/heic', () => {
+    expect(getExtension('image/heic')).toBe('heic');
+  });
+
+  it('returns "heif" for image/heif', () => {
+    expect(getExtension('image/heif')).toBe('heif');
   });
 
   it('returns "jpg" for unknown image types (default fallback)', () => {
@@ -191,6 +199,8 @@ describe('getExtension()', () => {
       'image/webp',
       'image/gif',
       'image/jpeg',
+      'image/heic',
+      'image/heif',
       'video/mp4',
       'video/quicktime',
       'video/webm',
