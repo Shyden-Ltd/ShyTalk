@@ -5,7 +5,7 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
@@ -67,7 +67,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.shyden.shytalk.data.repository.AppLockRepository
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
 
     private val authRepository: AuthRepository by inject()
     private val userRepository: UserRepository by inject()
@@ -93,7 +93,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        biometricAuth.setActivity(this as androidx.fragment.app.FragmentActivity)
+        biometricAuth.setActivity(this)
         enableEdgeToEdge()
 
         // Track app background/foreground for lock timeout
