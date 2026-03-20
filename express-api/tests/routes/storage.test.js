@@ -8,6 +8,15 @@ jest.mock('../../src/utils/r2', () => ({
   deleteObject: jest.fn().mockResolvedValue(),
 }));
 
+jest.mock('../../src/utils/imageCompressor', () => ({
+  compressImage: jest.fn().mockResolvedValue({
+    buffer: Buffer.from('compressed'),
+    mimeType: 'image/jpeg',
+    originalSize: 100,
+    compressedSize: 50,
+  }),
+}));
+
 jest.mock('../../src/utils/helpers', () => ({
   getExtension: jest.fn((mime) => {
     const map = {
@@ -15,6 +24,8 @@ jest.mock('../../src/utils/helpers', () => ({
       'image/png': 'png',
       'image/webp': 'webp',
       'image/gif': 'gif',
+      'image/heic': 'heic',
+      'image/heif': 'heif',
     };
     return map[mime] || 'bin';
   }),
@@ -147,5 +158,47 @@ describe('POST /api/storage/upload', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/Missing file or path/);
+  });
+
+  test('upload response includes originalSize and compressedSize', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'profiles')
+      .attach('file', Buffer.from('fake-jpeg'), {
+        filename: 'photo.jpg',
+        contentType: 'image/jpeg',
+      });
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('originalSize');
+    expect(res.body).toHaveProperty('compressedSize');
+  });
+
+  test('starting-screens is an allowed upload path', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'starting-screens')
+      .attach('file', Buffer.from('fake'), { filename: 'bg.jpg', contentType: 'image/jpeg' });
+    expect(res.status).toBe(200);
+  });
+
+  test('HEIC upload is allowed', async () => {
+    const { compressImage } = require('../../src/utils/imageCompressor');
+    compressImage.mockResolvedValueOnce({
+      buffer: Buffer.from('converted-jpeg'),
+      mimeType: 'image/jpeg',
+      originalSize: 200,
+      compressedSize: 100,
+    });
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'profiles')
+      .attach('file', Buffer.from('fake-heic'), {
+        filename: 'photo.heic',
+        contentType: 'image/heic',
+      });
+    expect(res.status).toBe(200);
   });
 });
