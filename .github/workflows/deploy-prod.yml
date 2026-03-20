@@ -54,21 +54,78 @@ jobs:
         env:
           TAG: ${{ inputs.release-tag }}
         run: |
-          # Verify tag exists
           if ! git tag -l "$TAG" | grep -q "$TAG"; then
             echo "::error::Tag $TAG does not exist"
             exit 1
           fi
-
-          # Verify tag is reachable from main
           if ! git merge-base --is-ancestor "$TAG" origin/main 2>/dev/null; then
             echo "::warning::Tag $TAG may not be on the main branch"
           fi
-
           VERSION="${TAG#v}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Deploying release $TAG (version $VERSION)"
 
+  # ── Build Android (shared by deploy + smoke test) ──────────
+  build-android:
+    name: Build Android
+    needs: [validate-release]
+    if: inputs.android
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ inputs.release-tag }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
+        with:
+          cache-read-only: false
+
+      - name: Decode google-services.json
+        env:
+          GOOGLE_SERVICES_DEV_BASE64: ${{ secrets.GOOGLE_SERVICES_DEV_BASE64 }}
+          GOOGLE_SERVICES_PROD_BASE64: ${{ secrets.GOOGLE_SERVICES_PROD_BASE64 }}
+        run: |
+          mkdir -p app/src/dev app/src/prod
+          echo "$GOOGLE_SERVICES_DEV_BASE64" | base64 -d > app/src/dev/google-services.json
+          echo "$GOOGLE_SERVICES_PROD_BASE64" | base64 -d > app/src/prod/google-services.json
+
+      - name: Decode keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
+
+      - name: Build prodRelease (AAB + APK) and prodDebug APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
+        run: ./gradlew assembleProdRelease bundleProdRelease assembleProdDebug --parallel
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        with:
+          name: android-prod-release
+          path: |
+            app/build/outputs/bundle/prodRelease/*.aab
+            app/build/outputs/apk/prod/release/*.apk
+            app/src/main/play/release-notes/
+          retention-days: 3
+
+      - name: Upload debug APK for smoke test
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        with:
+          name: android-prod-debug
+          path: app/build/outputs/apk/prod/debug/*.apk
+          retention-days: 3
+
+  # ── Deploy jobs ────────────────────────────────────────────
   deploy-backend-prod:
     name: Deploy Backend to Prod
     needs: [validate-release]
@@ -165,56 +222,27 @@ jobs:
 
   deploy-android-prod:
     name: Deploy Android to Play Store
-    needs: [validate-release]
+    needs: [validate-release, build-android]
     if: inputs.android
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Download release artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          ref: ${{ inputs.release-tag }}
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
-        with:
-          cache-read-only: false
-
-      - name: Decode google-services.json
-        env:
-          GOOGLE_SERVICES_DEV_BASE64: ${{ secrets.GOOGLE_SERVICES_DEV_BASE64 }}
-          GOOGLE_SERVICES_PROD_BASE64: ${{ secrets.GOOGLE_SERVICES_PROD_BASE64 }}
-        run: |
-          mkdir -p app/src/dev app/src/prod
-          echo "$GOOGLE_SERVICES_DEV_BASE64" | base64 -d > app/src/dev/google-services.json
-          echo "$GOOGLE_SERVICES_PROD_BASE64" | base64 -d > app/src/prod/google-services.json
-
-      - name: Decode keystore
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-        run: echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
-
-      - name: Build prodRelease
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
-        run: ./gradlew assembleProdRelease bundleProdRelease
+          name: android-prod-release
+          path: android-release
 
       - name: Upload to Play Store internal testing track
         uses: r0adkll/upload-google-play@935ef9c68bb393a8e6116b1575626a7f5be3a7fb # v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.shyden.shytalk
-          releaseFiles: app/build/outputs/bundle/prodRelease/*.aab
+          releaseFiles: android-release/app/build/outputs/bundle/prodRelease/*.aab
           track: internal
           status: draft
           releaseName: ${{ needs.validate-release.outputs.version }}
-          whatsNewDirectory: app/src/main/play/release-notes
+          whatsNewDirectory: android-release/app/src/main/play/release-notes
 
   deploy-ios-prod:
     name: Deploy iOS to App Store
@@ -261,7 +289,6 @@ jobs:
           security import "$CERTIFICATE_PATH" -P "$IOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple: -k "" "$KEYCHAIN_PATH"
           security list-keychain -d user -s "$KEYCHAIN_PATH"
-
           PROFILE_PATH=$RUNNER_TEMP/profile.mobileprovision
           echo "$IOS_PROVISION_PROFILE_BASE64" | base64 -d > "$PROFILE_PATH"
           PROFILE_UUID=$(/usr/bin/security cms -D -i "$PROFILE_PATH" 2>/dev/null | grep -A1 '<key>UUID</key>' | grep '<string>' | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
@@ -336,6 +363,7 @@ jobs:
         if: always()
         run: security delete-keychain $RUNNER_TEMP/app-signing.keychain-db 2>/dev/null || true
 
+  # ── Smoke tests (after deploys) ────────────────────────────
   smoke-test-backend-web:
     name: Smoke Test (API + Web)
     needs: [validate-release, deploy-backend-prod, deploy-web-prod, deploy-android-prod, deploy-ios-prod]
@@ -360,29 +388,22 @@ jobs:
         run: |
           echo "=== API Endpoint Checks ==="
           ERRORS=0
-
-          # Public endpoints
           for endpoint in "/api/health"; do
             STATUS=$(curl -s -o /dev/null -w '%{http_code}' "https://api.shytalk.shyden.co.uk${endpoint}")
             if [ "$STATUS" = "200" ]; then echo "OK: ${endpoint} → ${STATUS}"
             else echo "FAIL: ${endpoint} → ${STATUS}"; ERRORS=$((ERRORS + 1)); fi
           done
-
-          # Auth-protected endpoints (should return 401, not 5xx)
           for endpoint in "/api/users/me" "/api/rooms" "/api/conversations"; do
             STATUS=$(curl -s -o /dev/null -w '%{http_code}' "https://api.shytalk.shyden.co.uk${endpoint}")
             if [ "$STATUS" = "401" ]; then echo "OK: ${endpoint} → ${STATUS} (auth required)"
             elif [ "$STATUS" -ge 500 ]; then echo "FAIL: ${endpoint} → ${STATUS} (server error)"; ERRORS=$((ERRORS + 1))
             else echo "OK: ${endpoint} → ${STATUS}"; fi
           done
-
-          # Admin endpoints (should return 401, not 5xx)
           for endpoint in "/api/admin/alerts" "/api/admin/banners"; do
             STATUS=$(curl -s -o /dev/null -w '%{http_code}' "https://api.shytalk.shyden.co.uk${endpoint}")
             if [ "$STATUS" -ge 500 ]; then echo "FAIL: ${endpoint} → ${STATUS}"; ERRORS=$((ERRORS + 1))
             else echo "OK: ${endpoint} → ${STATUS}"; fi
           done
-
           [ "$ERRORS" -eq 0 ] || { echo "::error::${ERRORS} endpoint(s) returned server errors"; exit 1; }
           echo "All API endpoints responding correctly"
 
@@ -406,45 +427,18 @@ jobs:
 
   smoke-test-android:
     name: Smoke Test (Android Boot)
-    needs: [validate-release, deploy-android-prod]
+    needs: [validate-release, build-android, deploy-android-prod]
     if: |
       always() &&
       needs.deploy-android-prod.result == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Download debug APK
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          ref: ${{ inputs.release-tag }}
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
-
-      - name: Decode google-services.json
-        env:
-          GOOGLE_SERVICES_DEV_BASE64: ${{ secrets.GOOGLE_SERVICES_DEV_BASE64 }}
-          GOOGLE_SERVICES_PROD_BASE64: ${{ secrets.GOOGLE_SERVICES_PROD_BASE64 }}
-        run: |
-          mkdir -p app/src/dev app/src/prod
-          echo "$GOOGLE_SERVICES_DEV_BASE64" | base64 -d > app/src/dev/google-services.json
-          echo "$GOOGLE_SERVICES_PROD_BASE64" | base64 -d > app/src/prod/google-services.json
-
-      - name: Decode keystore
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-        run: echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
-
-      - name: Build prodDebug APK
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
-        run: ./gradlew assembleProdDebug
+          name: android-prod-debug
+          path: debug-apk
 
       - name: Enable KVM
         run: |
@@ -464,7 +458,7 @@ jobs:
           disable-animations: true
           script: |
             echo "=== Installing APK ==="
-            adb install app/build/outputs/apk/prod/debug/*.apk
+            adb install debug-apk/*.apk
             echo "=== Launching app ==="
             adb shell am start -W -n com.shyden.shytalk/com.shyden.shytalk.MainActivity 2>&1 || true
             sleep 5
@@ -538,15 +532,6 @@ jobs:
           xcrun simctl launch "$DEVICE_ID" com.shyden.shytalk
           sleep 10
 
-          echo "=== Checking app is running ==="
-          RUNNING=$(xcrun simctl spawn "$DEVICE_ID" launchctl list | grep shytalk || echo "")
-          if [ -z "$RUNNING" ]; then
-            echo "::warning::App may have exited — checking logs"
-            xcrun simctl spawn "$DEVICE_ID" log show --predicate 'subsystem == "com.apple.CoreSimulator"' --last 1m 2>/dev/null | grep -i "crash\|abort" | tail -10
-          else
-            echo "App is running"
-          fi
-
           echo "=== Checking for crashes ==="
           CRASH_COUNT=$(find ~/Library/Logs/DiagnosticReports -name "iosApp*" -newer /tmp/smoke-start 2>/dev/null | wc -l || echo 0)
           if [ "$CRASH_COUNT" -gt 0 ]; then
@@ -559,6 +544,7 @@ jobs:
           echo "No crashes detected — iOS app boots successfully"
           xcrun simctl shutdown "$DEVICE_ID" || true
 
+  # ── Alert on failure ───────────────────────────────────────
   alert-desync:
     name: Alert - Deploy Failed
     needs: [validate-release, deploy-backend-prod, deploy-web-prod, deploy-android-prod, deploy-ios-prod, smoke-test-backend-web, smoke-test-android, smoke-test-ios]
