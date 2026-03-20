@@ -2,9 +2,11 @@
 
 package com.shyden.shytalk.core.util
 
+import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
+import kotlinx.cinterop.usePinned
 import kotlinx.cinterop.value
 import platform.CoreFoundation.CFDictionaryRef
 import platform.Foundation.NSData
@@ -113,24 +115,21 @@ actual class CryptoKeyPair {
 }
 
 // Extension helpers
-private fun ByteArray.toNSData(): NSData =
-    memScoped {
-        NSData.create(bytes = kotlinx.cinterop.allocArrayOf(this@toNSData), length = this@toNSData.size.toULong())
+@OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+private fun ByteArray.toNSData(): NSData {
+    if (isEmpty()) return NSData()
+    return this.usePinned { pinned ->
+        NSData.create(bytes = pinned.addressOf(0), length = size.toULong())
     }
+}
 
 @OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
 private fun NSData.toByteArray(): ByteArray {
     val size = this.length.toInt()
+    if (size == 0) return ByteArray(0)
     val bytes = ByteArray(size)
-    if (size > 0) {
-        kotlinx.cinterop.memScoped {
-            val ptr = this@toByteArray.bytes
-            if (ptr != null) {
-                for (i in 0 until size) {
-                    bytes[i] = (ptr as kotlinx.cinterop.CPointer<kotlinx.cinterop.ByteVar>)[i]
-                }
-            }
-        }
+    bytes.usePinned { pinned ->
+        platform.posix.memcpy(pinned.addressOf(0), this@toByteArray.bytes, this@toByteArray.length)
     }
     return bytes
 }

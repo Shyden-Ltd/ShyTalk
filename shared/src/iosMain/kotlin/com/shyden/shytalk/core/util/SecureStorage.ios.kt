@@ -2,16 +2,17 @@
 
 package com.shyden.shytalk.core.util
 
+import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
+import kotlinx.cinterop.usePinned
 import kotlinx.cinterop.value
 import platform.CoreFoundation.CFDictionaryRef
 import platform.Foundation.NSData
 import platform.Foundation.NSString
 import platform.Foundation.NSUTF8StringEncoding
 import platform.Foundation.create
-import platform.Foundation.dataUsingEncoding
 import platform.Security.SecItemAdd
 import platform.Security.SecItemCopyMatching
 import platform.Security.SecItemDelete
@@ -51,7 +52,7 @@ actual class SecureStorage {
                 kSecMatchLimit to kSecMatchLimitOne,
             )
         memScoped {
-            val result = alloc<kotlinx.cinterop.ObjCObjectVar<Any?>>()
+            val result = alloc<platform.CoreFoundation.CFTypeRefVar>()
             val status = SecItemCopyMatching(query as CFDictionaryRef, result.ptr)
             if (status != errSecSuccess) return null
             val data = result.value as? NSData ?: return null
@@ -64,7 +65,11 @@ actual class SecureStorage {
         value: String,
     ) {
         delete(key) // remove existing before adding
-        val data = (value as NSString).dataUsingEncoding(NSUTF8StringEncoding) ?: return
+        val bytes = value.encodeToByteArray()
+        if (bytes.isEmpty()) return
+        val data = bytes.usePinned { pinned ->
+            NSData.create(bytes = pinned.addressOf(0), length = bytes.size.toULong())
+        }
         val query =
             mapOf<Any?, Any?>(
                 kSecClass to kSecClassGenericPassword,
