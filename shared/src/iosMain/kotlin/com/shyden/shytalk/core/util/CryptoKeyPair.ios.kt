@@ -8,8 +8,6 @@ import kotlinx.cinterop.ptr
 import kotlinx.cinterop.value
 import platform.CoreFoundation.CFDictionaryRef
 import platform.Foundation.NSData
-import platform.Foundation.NSString
-import platform.Foundation.NSUTF8StringEncoding
 import platform.Foundation.base64EncodedStringWithOptions
 import platform.Foundation.create
 import platform.Security.SecItemCopyMatching
@@ -43,7 +41,7 @@ actual class CryptoKeyPair {
         if (getPrivateKeyRef(alias) != null) return true
 
         // Generate new keypair
-        val tagData = (alias as NSString).dataUsingEncoding(NSUTF8StringEncoding) ?: return false
+        val tagData = alias.encodeToByteArray().toNSData() ?: return false
         val attributes =
             mapOf<Any?, Any?>(
                 kSecAttrKeyType to kSecAttrKeyTypeECSECPrimeRandom,
@@ -84,7 +82,7 @@ actual class CryptoKeyPair {
     }
 
     actual fun delete(alias: String) {
-        val tagData = (alias as NSString).dataUsingEncoding(NSUTF8StringEncoding) ?: return
+        val tagData = alias.encodeToByteArray().toNSData() ?: return
         val query =
             mapOf<Any?, Any?>(
                 kSecClass to kSecClassKey,
@@ -95,7 +93,7 @@ actual class CryptoKeyPair {
     }
 
     private fun getPrivateKeyRef(alias: String): platform.Security.SecKeyRef? {
-        val tagData = (alias as NSString).dataUsingEncoding(NSUTF8StringEncoding) ?: return null
+        val tagData = alias.encodeToByteArray().toNSData() ?: return null
         val query =
             mapOf<Any?, Any?>(
                 kSecClass to kSecClassKey,
@@ -105,9 +103,10 @@ actual class CryptoKeyPair {
                 kSecMatchLimit to kSecMatchLimitOne,
             )
         memScoped {
-            val result = alloc<kotlinx.cinterop.ObjCObjectVar<Any?>>()
+            val result = alloc<platform.CoreFoundation.CFTypeRefVar>()
             val status = SecItemCopyMatching(query as CFDictionaryRef, result.ptr)
             if (status != errSecSuccess) return null
+            @Suppress("UNCHECKED_CAST")
             return result.value as? platform.Security.SecKeyRef
         }
     }

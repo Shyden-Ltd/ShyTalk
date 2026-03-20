@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 package com.shyden.shytalk.core.util
 
 import kotlinx.coroutines.suspendCancellableCoroutine
