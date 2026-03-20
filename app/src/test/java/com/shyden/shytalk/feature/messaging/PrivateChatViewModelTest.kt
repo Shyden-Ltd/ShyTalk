@@ -71,8 +71,12 @@ class PrivateChatViewModelTest {
 
     @After
     fun tearDown() = runBlocking {
-        activeViewModels.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() }
+        activeViewModels.forEach { vm ->
+            vm.viewModelScope.coroutineContext.job.cancelAndJoin()
+        }
         activeViewModels.clear()
+        // Allow coroutine cleanup to complete, preventing UncaughtExceptionsBeforeTest
+        kotlinx.coroutines.delay(50)
     }
 
     @Before
