@@ -67,9 +67,10 @@ actual class SecureStorage {
         delete(key) // remove existing before adding
         val bytes = value.encodeToByteArray()
         if (bytes.isEmpty()) return
-        val data = bytes.usePinned { pinned ->
-            NSData.create(bytes = pinned.addressOf(0), length = bytes.size.toULong())
-        }
+        val data =
+            bytes.usePinned { pinned ->
+                NSData.create(bytes = pinned.addressOf(0), length = bytes.size.toULong())
+            }
         val query =
             mapOf<Any?, Any?>(
                 kSecClass to kSecClassGenericPassword,
