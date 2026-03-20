@@ -9,6 +9,11 @@ jest.mock('../../src/utils/log', () => ({
 const { compressImage } = require('../../src/utils/imageCompressor');
 
 describe('imageCompressor', () => {
+  afterEach(() => {
+    jest.resetModules();
+    jest.restoreAllMocks();
+  });
+
   test('compresses JPEG — output smaller than input', async () => {
     const sharp = require('sharp');
     const input = await sharp({
@@ -54,11 +59,14 @@ describe('imageCompressor', () => {
   });
 
   test('passes through GIF unchanged', async () => {
-    const gifBuffer = Buffer.from(
-      'GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x00\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;',
-    );
+    const sharp = require('sharp');
+    const gifBuffer = await sharp({
+      create: { width: 200, height: 200, channels: 3, background: { r: 255, g: 0, b: 0 } },
+    })
+      .gif()
+      .toBuffer();
     const result = await compressImage(gifBuffer, 'image/gif');
-    expect(result.buffer).toEqual(gifBuffer);
+    expect(result.buffer).toBe(gifBuffer);
     expect(result.mimeType).toBe('image/gif');
   });
 
@@ -324,12 +332,15 @@ describe('imageCompressor', () => {
     expect(result.compressedSize).toBe(result.buffer.length);
   });
 
-  test('animated GIF passthrough — all GIFs returned unchanged regardless of animation', async () => {
-    // GIF path returns early before the metadata/dimension check,
-    // so all GIFs (animated or not) are passed through unchanged.
-    const gifBuffer = Buffer.from(
-      'GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x00\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;',
-    );
+  test('GIF passthrough — GIFs returned unchanged after dimension validation', async () => {
+    // GIF passthrough happens after metadata read + dimension validation,
+    // so valid GIFs are passed through unchanged but invalid dimensions are rejected.
+    const sharp = require('sharp');
+    const gifBuffer = await sharp({
+      create: { width: 200, height: 200, channels: 3, background: { r: 128, g: 128, b: 128 } },
+    })
+      .gif()
+      .toBuffer();
     const result = await compressImage(gifBuffer, 'image/gif');
     expect(result.buffer).toBe(gifBuffer);
     expect(result.mimeType).toBe('image/gif');
@@ -380,11 +391,21 @@ describe('imageCompressor', () => {
     jest.resetModules();
     const realSharp = jest.requireActual('sharp');
 
-    // Mock sharp so toBuffer delays longer than COMPRESSION_TIMEOUT_MS (10s).
-    // To avoid a real 10s wait, we mock setTimeout to fire instantly for
-    // the compression timeout, while toBuffer takes a bit longer.
+    // Create input buffer before mocking (needs real sharp)
+    const input = await realSharp({
+      create: { width: 200, height: 200, channels: 3, background: { r: 50, g: 50, b: 50 } },
+    })
+      .jpeg({ quality: 100 })
+      .toBuffer();
+
+    // Pre-compute metadata so the mock can return it synchronously
+    const inputMetadata = await realSharp(input).metadata();
+
+    // Mock sharp so metadata resolves instantly and toBuffer never resolves
     const mockSharp = (...args) => {
       const instance = realSharp(...args);
+      // Override metadata to return pre-computed result (avoids needing real timers)
+      instance.metadata = () => Promise.resolve(inputMetadata);
       const origRotate = instance.rotate.bind(instance);
       instance.rotate = () => {
         const rotated = origRotate();
@@ -392,10 +413,7 @@ describe('imageCompressor', () => {
           const handler = {
             get(target, prop) {
               if (prop === 'toBuffer') {
-                // Return a promise that resolves after 500ms —
-                // longer than our accelerated timeout
-                return () =>
-                  new Promise((resolve) => setTimeout(() => resolve(Buffer.from('too late')), 500));
+                return () => new Promise(() => {}); // never resolves
               }
               const val = target[prop];
               if (typeof val === 'function') {
@@ -426,27 +444,22 @@ describe('imageCompressor', () => {
       debug: jest.fn(),
     }));
 
-    // Temporarily patch setTimeout so the timeout fires in 50ms instead of 10s
-    const origSetTimeout = global.setTimeout;
-    global.setTimeout = (fn, ms, ...rest) => {
-      // If it's the 10000ms compression timeout, fire in 50ms instead
-      if (ms === 10000) return origSetTimeout(fn, 50, ...rest);
-      return origSetTimeout(fn, ms, ...rest);
-    };
-
     const { compressImage: compressWithMock } = require('../../src/utils/imageCompressor');
 
-    const input = await realSharp({
-      create: { width: 200, height: 200, channels: 3, background: { r: 50, g: 50, b: 50 } },
-    })
-      .jpeg({ quality: 100 })
-      .toBuffer();
+    // Enable fake timers only for the compression race
+    jest.useFakeTimers();
 
-    const result = await compressWithMock(input, 'image/jpeg');
+    const resultPromise = compressWithMock(input, 'image/jpeg');
+
+    // Flush microtask queue (awaits inside compressImage) then advance timers
+    await Promise.resolve(); // let metadata() resolve
+    await Promise.resolve(); // let pipeline setup complete
+    jest.advanceTimersByTime(10001);
+
+    const result = await resultPromise;
     expect(result.buffer).toBe(input);
     expect(result.compressedSize).toBe(result.originalSize);
 
-    global.setTimeout = origSetTimeout;
-    jest.resetModules();
-  }, 10000);
+    jest.useRealTimers();
+  });
 });

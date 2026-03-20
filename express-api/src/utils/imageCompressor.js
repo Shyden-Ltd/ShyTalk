@@ -20,15 +20,6 @@ async function compressImage(buffer, mimeType) {
     throw new Error('SVG format not supported — XSS risk');
   }
 
-  if (mimeType === 'image/gif') {
-    return {
-      buffer,
-      mimeType,
-      originalSize: buffer.length,
-      compressedSize: buffer.length,
-    };
-  }
-
   const originalSize = buffer.length;
 
   const metadata = await sharp(buffer).metadata();
@@ -48,6 +39,11 @@ async function compressImage(buffer, mimeType) {
     return { buffer, mimeType, originalSize, compressedSize: originalSize };
   }
 
+  // GIF passthrough (after dimension validation)
+  if (mimeType === 'image/gif') {
+    return { buffer, mimeType, originalSize, compressedSize: originalSize };
+  }
+
   let pipeline = sharp(buffer, { failOn: 'error' }).rotate();
 
   let outputMime = mimeType;
@@ -62,6 +58,10 @@ async function compressImage(buffer, mimeType) {
   } else if (mimeType === 'image/webp') {
     pipeline = pipeline.webp({ quality: 95, nearLossless: true });
   } else {
+    log.warn('imageCompressor', 'Unsupported MIME type, returning original', {
+      mimeType,
+      originalSize,
+    });
     return { buffer, mimeType, originalSize, compressedSize: originalSize };
   }
 
@@ -80,7 +80,6 @@ async function compressImage(buffer, mimeType) {
   try {
     compressed = await Promise.race([pipeline.toBuffer(), timeoutPromise]);
   } catch (err) {
-    clearTimeout(timer);
     log.warn('imageCompressor', 'Compression failed, returning original', {
       error: err.message,
       format: outputMime,
