@@ -469,8 +469,10 @@ jobs:
             adb shell am start -W -n com.shyden.shytalk/com.shyden.shytalk.MainActivity 2>&1 || true
             sleep 5
             echo "=== Checking for fatal crashes in logcat ==="
-            CRASHES=$(adb logcat -d -s AndroidRuntime | grep -c "FATAL EXCEPTION" || echo 0)
-            test "$CRASHES" -eq 0 && echo "No fatal crashes — Android APK installs and launches successfully" || { echo "::error::Found $CRASHES fatal crash(es)"; adb logcat -d -s AndroidRuntime | tail -30; exit 1; }
+            adb logcat -d -s AndroidRuntime > /tmp/runtime.log 2>&1
+            CRASHES=$(grep -c "FATAL EXCEPTION" /tmp/runtime.log || true)
+            if [ "$CRASHES" -gt 0 ] 2>/dev/null; then echo "::error::Found $CRASHES fatal crash(es)"; cat /tmp/runtime.log | tail -30; exit 1; fi
+            echo "No fatal crashes — Android APK installs and launches successfully"
 
   smoke-test-ios:
     name: Smoke Test (iOS Boot)
