@@ -296,6 +296,86 @@ describe('imageCompressor', () => {
     jest.resetModules();
   });
 
+  test('HEIC converted to JPEG', async () => {
+    const sharp = require('sharp');
+    // HEIC decoding depends on libvips build; use a valid JPEG as input since
+    // the HEIC branch simply calls .jpeg() on the pipeline.
+    const input = await sharp({
+      create: { width: 200, height: 200, channels: 3, background: { r: 128, g: 64, b: 32 } },
+    })
+      .jpeg({ quality: 100 })
+      .toBuffer();
+    const result = await compressImage(input, 'image/heic');
+    expect(result.mimeType).toBe('image/jpeg');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+    expect(result.compressedSize).toBe(result.buffer.length);
+  });
+
+  test('HEIF converted to JPEG', async () => {
+    const sharp = require('sharp');
+    const input = await sharp({
+      create: { width: 200, height: 200, channels: 3, background: { r: 32, g: 64, b: 128 } },
+    })
+      .jpeg({ quality: 100 })
+      .toBuffer();
+    const result = await compressImage(input, 'image/heif');
+    expect(result.mimeType).toBe('image/jpeg');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+    expect(result.compressedSize).toBe(result.buffer.length);
+  });
+
+  test('animated GIF passthrough — all GIFs returned unchanged regardless of animation', async () => {
+    // GIF path returns early before the metadata/dimension check,
+    // so all GIFs (animated or not) are passed through unchanged.
+    const gifBuffer = Buffer.from(
+      'GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x00\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;',
+    );
+    const result = await compressImage(gifBuffer, 'image/gif');
+    expect(result.buffer).toBe(gifBuffer);
+    expect(result.mimeType).toBe('image/gif');
+    expect(result.originalSize).toBe(gifBuffer.length);
+    expect(result.compressedSize).toBe(gifBuffer.length);
+  });
+
+  test('auto-rotation from EXIF orientation', async () => {
+    const sharp = require('sharp');
+    // Create a 100x200 JPEG with EXIF orientation 6 (90° CW rotation).
+    // After .rotate() in the pipeline, output should be 200x100.
+    const input = await sharp({
+      create: { width: 100, height: 200, channels: 3, background: { r: 200, g: 100, b: 50 } },
+    })
+      .jpeg()
+      .withMetadata({ orientation: 6 })
+      .toBuffer();
+    const result = await compressImage(input, 'image/jpeg');
+    const metadata = await sharp(result.buffer).metadata();
+    expect(metadata.width).toBe(200);
+    expect(metadata.height).toBe(100);
+  });
+
+  test('16-bit PNG converted to 8-bit output', async () => {
+    const sharp = require('sharp');
+    // Create a true 16-bit PNG via raw 16-bit buffer
+    const width = 100,
+      height = 100,
+      channels = 3;
+    const rawBuf = Buffer.alloc(width * height * channels * 2);
+    for (let i = 0; i < rawBuf.length; i += 2) {
+      rawBuf.writeUInt16LE(32768, i);
+    }
+    const input = await sharp(rawBuf, { raw: { width, height, channels, depth: 'ushort' } })
+      .toColourspace('rgb16')
+      .png({ depth: 16 })
+      .toBuffer();
+    // Verify input is actually 16-bit
+    const inputMeta = await sharp(input).metadata();
+    expect(inputMeta.depth).toBe('ushort'); // 16-bit
+    // Compress and verify output is 8-bit
+    const result = await compressImage(input, 'image/png');
+    const outputMeta = await sharp(result.buffer).metadata();
+    expect(outputMeta.depth).toBe('uchar'); // 8-bit
+  });
+
   test('sharp timeout fallback — returns original buffer on timeout', async () => {
     jest.resetModules();
     const realSharp = jest.requireActual('sharp');

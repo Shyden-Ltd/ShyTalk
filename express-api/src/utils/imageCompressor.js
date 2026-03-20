@@ -58,7 +58,7 @@ async function compressImage(buffer, mimeType) {
   } else if (mimeType === 'image/jpeg') {
     pipeline = pipeline.jpeg({ quality: 95, mozjpeg: true });
   } else if (mimeType === 'image/png') {
-    pipeline = pipeline.png({ effort: 10, compressionLevel: 9 });
+    pipeline = pipeline.png({ effort: 10, compressionLevel: 9, depth: 8 });
   } else if (mimeType === 'image/webp') {
     pipeline = pipeline.webp({ quality: 95, nearLossless: true });
   } else {
