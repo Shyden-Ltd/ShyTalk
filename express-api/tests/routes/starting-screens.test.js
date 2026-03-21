@@ -2609,14 +2609,20 @@ describe('PUT /api/config/startingScreens — logging', () => {
   });
 });
 
-// ─── DELETE /api/config/startingScreens/:screenId ───────────────
+// ─── DELETE /api/config/startingScreens/:screenId — soft-delete ──
 
-describe('DELETE /api/config/startingScreens/:screenId', () => {
+describe('DELETE /api/config/startingScreens/:screenId — soft-delete (default)', () => {
   const log = require('../../src/utils/log');
   let app;
   beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-03-20T12:00:00Z'));
     app = createAppWithAuthExemption();
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   test('requires auth', async () => {
@@ -2665,12 +2671,11 @@ describe('DELETE /api/config/startingScreens/:screenId', () => {
     expect(res.body.error).toMatch(/not found/i);
   });
 
-  test('deletes existing screen and saves remaining', async () => {
+  test('soft-deletes screen (sets deleted: true, deletedAt, deletedBy)', async () => {
     const screen1 = makeScreen();
-    const screen2 = makeScreen({ title: 'Screen 2' });
     mockDocGet.mockResolvedValue({
       exists: true,
-      data: () => ({ screen1, screen2 }),
+      data: () => ({ screen1: { ...screen1 } }),
     });
 
     const res = await request(app)
@@ -2680,26 +2685,83 @@ describe('DELETE /api/config/startingScreens/:screenId', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.deleted).toBe('screen1');
+    expect(res.body.permanent).toBe(false);
 
-    // Verify set was called with only screen2
-    expect(mockDocSet).toHaveBeenCalledWith({ screen2 });
+    // Verify the screen still exists but is marked deleted
+    const setCall = mockDocSet.mock.calls[0][0];
+    expect(setCall.screen1).toBeDefined();
+    expect(setCall.screen1.deleted).toBe(true);
+    expect(setCall.screen1.deletedAt).toBe('2026-03-20T12:00:00.000Z');
+    expect(setCall.screen1.deletedBy).toBe('user-A-unique');
   });
 
-  test('deletes last remaining screen leaving empty doc', async () => {
+  test('soft-deleted screen NOT returned by public GET', async () => {
     mockDocGet.mockResolvedValue({
       exists: true,
-      data: () => ({ only_screen: makeScreen() }),
+      data: () => ({
+        active: makeScreen(),
+        deleted_screen: makeScreen({
+          deleted: true,
+          deletedAt: '2026-03-20T00:00:00Z',
+          deletedBy: 'admin-1',
+        }),
+      }),
+    });
+
+    const res = await request(app).get('/api/config/startingScreens');
+
+    expect(res.status).toBe(200);
+    expect(Object.keys(res.body)).toEqual(['active']);
+    expect(res.body.deleted_screen).toBeUndefined();
+  });
+
+  test('soft-deleted screen IS returned by admin GET', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        active: makeScreen(),
+        deleted_screen: makeScreen({
+          deleted: true,
+          deletedAt: '2026-03-20T00:00:00Z',
+          deletedBy: 'admin-1',
+        }),
+      }),
     });
 
     const res = await request(app)
-      .delete('/api/config/startingScreens/only_screen')
+      .get('/api/config/startingScreens/admin')
       .set('Authorization', 'Bearer valid-token');
 
     expect(res.status).toBe(200);
-    expect(mockDocSet).toHaveBeenCalledWith({});
+    expect(res.body.active).toBeDefined();
+    expect(res.body.deleted_screen).toBeDefined();
+    expect(res.body.deleted_screen.deleted).toBe(true);
   });
 
-  test('logs deletion with admin info', async () => {
+  test('multiple soft-deletes do not stack (re-deleting already-deleted is idempotent)', async () => {
+    const screen = makeScreen({
+      deleted: true,
+      deletedAt: '2026-03-19T00:00:00Z',
+      deletedBy: 'admin-old',
+    });
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ s1: { ...screen } }),
+    });
+
+    const res = await request(app)
+      .delete('/api/config/startingScreens/s1')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(res.status).toBe(200);
+    const setCall = mockDocSet.mock.calls[0][0];
+    expect(setCall.s1.deleted).toBe(true);
+    // deletedAt/deletedBy updated to latest
+    expect(setCall.s1.deletedAt).toBe('2026-03-20T12:00:00.000Z');
+    expect(setCall.s1.deletedBy).toBe('user-A-unique');
+  });
+
+  test('logs soft-deletion with admin info', async () => {
     mockDocGet.mockResolvedValue({
       exists: true,
       data: () => ({ s1: makeScreen(), s2: makeScreen() }),
@@ -2709,7 +2771,7 @@ describe('DELETE /api/config/startingScreens/:screenId', () => {
       .delete('/api/config/startingScreens/s1')
       .set('Authorization', 'Bearer valid-token');
 
-    expect(log.info).toHaveBeenCalledWith('config', 'Starting screen deleted', {
+    expect(log.info).toHaveBeenCalledWith('config', 'Starting screen soft-deleted', {
       screenId: 's1',
       remainingScreens: 1,
       admin: 'user-A-unique',
@@ -2739,5 +2801,377 @@ describe('DELETE /api/config/startingScreens/:screenId', () => {
 
     expect(res.status).toBe(500);
     expect(res.body.error).toMatch(/internal server error/i);
+  });
+});
+
+// ─── DELETE with ?permanent=true — hard-delete ───────────────────
+
+describe('DELETE /api/config/startingScreens/:screenId?permanent=true — hard-delete', () => {
+  const log = require('../../src/utils/log');
+  let app;
+  beforeEach(() => {
+    app = createAppWithAuthExemption();
+    jest.clearAllMocks();
+  });
+
+  test('permanently deletes existing screen and saves remaining', async () => {
+    const screen1 = makeScreen();
+    const screen2 = makeScreen({ title: 'Screen 2' });
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ screen1, screen2 }),
+    });
+
+    const res = await request(app)
+      .delete('/api/config/startingScreens/screen1?permanent=true')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.deleted).toBe('screen1');
+    expect(res.body.permanent).toBe(true);
+
+    // Verify set was called with only screen2
+    expect(mockDocSet).toHaveBeenCalledWith({ screen2 });
+  });
+
+  test('permanently deletes last remaining screen leaving empty doc', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ only_screen: makeScreen() }),
+    });
+
+    const res = await request(app)
+      .delete('/api/config/startingScreens/only_screen?permanent=true')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(res.status).toBe(200);
+    expect(mockDocSet).toHaveBeenCalledWith({});
+  });
+
+  test('logs permanent deletion with admin info', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ s1: makeScreen(), s2: makeScreen() }),
+    });
+
+    await request(app)
+      .delete('/api/config/startingScreens/s1?permanent=true')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(log.info).toHaveBeenCalledWith('config', 'Starting screen permanently deleted', {
+      screenId: 's1',
+      remainingScreens: 1,
+      admin: 'user-A-unique',
+    });
+  });
+
+  test('can permanently delete a soft-deleted screen', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        s1: makeScreen({ deleted: true, deletedAt: '2026-03-20T00:00:00Z', deletedBy: 'admin-1' }),
+      }),
+    });
+
+    const res = await request(app)
+      .delete('/api/config/startingScreens/s1?permanent=true')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(res.status).toBe(200);
+    expect(res.body.permanent).toBe(true);
+    expect(mockDocSet).toHaveBeenCalledWith({});
+  });
+});
+
+// ─── POST /api/config/startingScreens/:screenId/restore ─────────
+
+describe('POST /api/config/startingScreens/:screenId/restore', () => {
+  const log = require('../../src/utils/log');
+  let app;
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-03-20T12:00:00Z'));
+    app = createAppWithAuthExemption();
+    jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('requires auth', async () => {
+    const res = await request(app).post('/api/config/startingScreens/screen1/restore');
+    expect(res.status).toBe(401);
+  });
+
+  test('requires admin', async () => {
+    requireAdmin.mockImplementationOnce((req, res) => {
+      res.status(403).json({ error: 'Admin access required' });
+      return true;
+    });
+    const res = await request(app)
+      .post('/api/config/startingScreens/screen1/restore')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(403);
+  });
+
+  test('rejects invalid screen ID', async () => {
+    const res = await request(app)
+      .post('/api/config/startingScreens/invalid screen!/restore')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/invalid screen id/i);
+  });
+
+  test('returns 404 when no screens configured', async () => {
+    mockDocGet.mockResolvedValue({ exists: false });
+    const res = await request(app)
+      .post('/api/config/startingScreens/screen1/restore')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(404);
+  });
+
+  test('returns 404 when screen ID not found', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ other: makeScreen() }),
+    });
+    const res = await request(app)
+      .post('/api/config/startingScreens/nonexistent/restore')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/not found/i);
+  });
+
+  test('returns 400 when screen is not deleted', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ screen1: makeScreen() }),
+    });
+    const res = await request(app)
+      .post('/api/config/startingScreens/screen1/restore')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/not deleted/i);
+  });
+
+  test('restores a soft-deleted screen', async () => {
+    const deletedScreen = makeScreen({
+      deleted: true,
+      deletedAt: '2026-03-19T00:00:00Z',
+      deletedBy: 'admin-old',
+    });
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ screen1: { ...deletedScreen } }),
+    });
+
+    const res = await request(app)
+      .post('/api/config/startingScreens/screen1/restore')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.restored).toBe('screen1');
+
+    const setCall = mockDocSet.mock.calls[0][0];
+    expect(setCall.screen1.deleted).toBe(false);
+    expect(setCall.screen1.deletedAt).toBeUndefined();
+    expect(setCall.screen1.deletedBy).toBeUndefined();
+    expect(setCall.screen1.restoredAt).toBe('2026-03-20T12:00:00.000Z');
+    expect(setCall.screen1.restoredBy).toBe('user-A-unique');
+  });
+
+  test('restored screen appears in public GET again', async () => {
+    // Simulate a restored screen (deleted=false, no deletedAt/deletedBy)
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        screen1: makeScreen({
+          deleted: false,
+          restoredAt: '2026-03-20T12:00:00.000Z',
+          restoredBy: 'admin-1',
+        }),
+      }),
+    });
+
+    const res = await request(app).get('/api/config/startingScreens');
+    expect(res.status).toBe(200);
+    expect(res.body.screen1).toBeDefined();
+  });
+
+  test('logs restoration with admin info', async () => {
+    const deletedScreen = makeScreen({
+      deleted: true,
+      deletedAt: '2026-03-19T00:00:00Z',
+      deletedBy: 'admin-old',
+    });
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ s1: { ...deletedScreen } }),
+    });
+
+    await request(app)
+      .post('/api/config/startingScreens/s1/restore')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(log.info).toHaveBeenCalledWith('config', 'Starting screen restored', {
+      screenId: 's1',
+      admin: 'user-A-unique',
+    });
+  });
+
+  test('returns 500 on Firestore error', async () => {
+    mockDocGet.mockRejectedValue(new Error('Firestore down'));
+
+    const res = await request(app)
+      .post('/api/config/startingScreens/screen1/restore')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/internal server error/i);
+  });
+});
+
+// ─── GET /api/config/startingScreens/admin ──────────────────────
+
+describe('GET /api/config/startingScreens/admin', () => {
+  let app;
+  beforeEach(() => {
+    app = createAppWithAuthExemption();
+    jest.clearAllMocks();
+  });
+
+  test('requires auth', async () => {
+    const res = await request(app).get('/api/config/startingScreens/admin');
+    expect(res.status).toBe(401);
+  });
+
+  test('requires admin', async () => {
+    requireAdmin.mockImplementationOnce((req, res) => {
+      res.status(403).json({ error: 'Admin access required' });
+      return true;
+    });
+    const res = await request(app)
+      .get('/api/config/startingScreens/admin')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(403);
+  });
+
+  test('returns all screens including deleted', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        active: makeScreen(),
+        deleted_one: makeScreen({
+          deleted: true,
+          deletedAt: '2026-03-20T00:00:00Z',
+          deletedBy: 'admin-1',
+        }),
+      }),
+    });
+
+    const res = await request(app)
+      .get('/api/config/startingScreens/admin')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(res.status).toBe(200);
+    expect(res.body.active).toBeDefined();
+    expect(res.body.deleted_one).toBeDefined();
+    expect(res.body.deleted_one.deleted).toBe(true);
+  });
+
+  test('returns allowlist and lastModifiedBy', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        s1: makeScreen({
+          allowlist: { deviceIds: ['dev-1'], networks: ['10.0.0.0/8'] },
+          lastModifiedBy: 'admin-123',
+        }),
+      }),
+    });
+
+    const res = await request(app)
+      .get('/api/config/startingScreens/admin')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(res.status).toBe(200);
+    expect(res.body.s1.allowlist).toBeDefined();
+    expect(res.body.s1.allowlist.deviceIds).toContain('dev-1');
+    expect(res.body.s1.lastModifiedBy).toBe('admin-123');
+  });
+
+  test('returns empty object when no config doc exists', async () => {
+    mockDocGet.mockResolvedValue({ exists: false });
+
+    const res = await request(app)
+      .get('/api/config/startingScreens/admin')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({});
+  });
+});
+
+// ─── Content hash with backgroundImageFit ────────────────────────
+
+describe('GET /api/config/startingScreens — content hash with backgroundImageFit', () => {
+  let app;
+  beforeEach(() => {
+    app = createAppWithAuthExemption();
+  });
+
+  test('contentHash changes when backgroundImageFit changes', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ banner: makeScreen({ backgroundImageFit: 'cover' }) }),
+    });
+    const res1 = await request(app).get('/api/config/startingScreens');
+
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ banner: makeScreen({ backgroundImageFit: 'contain' }) }),
+    });
+    const res2 = await request(app).get('/api/config/startingScreens');
+
+    expect(res1.body.banner.contentHash).not.toBe(res2.body.banner.contentHash);
+  });
+
+  test('contentHash includes backgroundImageFit in hash computation', async () => {
+    const screen = makeScreen({ backgroundImageFit: '100% 100%' });
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ banner: screen }),
+    });
+
+    const res = await request(app).get('/api/config/startingScreens');
+
+    // Compute expected hash manually
+    const expected = expectedContentHash(screen);
+    expect(res.body.banner.contentHash).toBe(expected);
+  });
+
+  test('backgroundImageFit defaults to cover when not set', async () => {
+    const screen = makeScreen();
+    delete screen.backgroundImageFit;
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ banner: screen }),
+    });
+
+    const res = await request(app).get('/api/config/startingScreens');
+    expect(res.body.banner.backgroundImageFit).toBe('cover');
+  });
+
+  test('backgroundImageFit included in GET response', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ banner: makeScreen({ backgroundImageFit: 'contain' }) }),
+    });
+
+    const res = await request(app).get('/api/config/startingScreens');
+    expect(res.body.banner.backgroundImageFit).toBe('contain');
   });
 });

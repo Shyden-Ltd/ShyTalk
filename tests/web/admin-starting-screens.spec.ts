@@ -53,7 +53,7 @@ async function deleteScreenViaApi(page: Page, screenId: string): Promise<void> {
   if (!token) return; // Best-effort cleanup — no token, skip
 
   const res = await page.request.delete(
-    `${API_BASE}/api/config/startingScreens/${encodeURIComponent(screenId)}`,
+    `${API_BASE}/api/config/startingScreens/${encodeURIComponent(screenId)}?permanent=true`,
     { headers: { Authorization: `Bearer ${token}` } },
   );
   // Ignore 404 (already deleted) and other errors — this is best-effort cleanup
@@ -472,7 +472,7 @@ test.describe("Starting Screens Admin Section", () => {
 
   // ── Delete ──
 
-  test("delete button asks for confirmation before deleting", async ({
+  test("delete button asks for confirmation before soft-deleting", async ({
     page,
   }) => {
     let screenId = "";
@@ -495,7 +495,9 @@ test.describe("Starting Screens Admin Section", () => {
     }
   });
 
-  test("confirmed delete removes the screen card", async ({ page }) => {
+  test("confirmed delete soft-deletes the screen (moves to deleted section)", async ({
+    page,
+  }) => {
     let screenId = "";
 
     screenId = await createScreenViaUI(page);
@@ -523,9 +525,13 @@ test.describe("Starting Screens Admin Section", () => {
       .locator(".delete-screen-btn")
       .click();
 
+    // After soft-delete, the screen should appear in the deleted section
     await expect(
-      page.locator(`[data-screen-id="${screenId}"]`),
-    ).not.toBeVisible({ timeout: 15_000 });
+      page.locator(`[data-screen-id="${screenId}"][data-deleted="true"]`),
+    ).toBeVisible({ timeout: 15_000 });
+
+    // Clean up with permanent delete
+    await deleteScreenViaApi(page, screenId);
   });
 
   // ── Deep linking ──
@@ -670,6 +676,292 @@ test.describe("Starting Screens Admin Section", () => {
       const labelCount = await card.locator("label").count();
       expect(labelCount).toBeGreaterThan(0);
     } finally {
+      await deleteScreenViaApi(page, screenId);
+    }
+  });
+
+  // ── Deleted Screens Section ──
+
+  test("deleted screens section is visible when a screen is soft-deleted", async ({
+    page,
+  }) => {
+    let screenId = "";
+    try {
+      screenId = await createScreenViaUI(page);
+
+      const card = page.locator(`[data-screen-id="${screenId}"]`);
+      await card.locator(".title-input").fill("Deleted Section Test");
+      await card
+        .locator(".message-input")
+        .fill("This tests the deleted section visibility.");
+      await card.locator(".save-screen-btn").click();
+      await expect(page.locator("#toast")).toBeVisible({ timeout: 15_000 });
+
+      // Wait for card to re-render
+      await expect(
+        page.locator(`[data-screen-id="${screenId}"]`),
+      ).toBeVisible({ timeout: 15_000 });
+
+      // Soft-delete via the delete button
+      page.once("dialog", async (dialog) => await dialog.accept());
+      await page
+        .locator(`[data-screen-id="${screenId}"]`)
+        .locator(".delete-screen-btn")
+        .click();
+
+      // Deleted screens section should become visible
+      await expect(
+        page.locator("#deleted-screens-section"),
+      ).toBeVisible({ timeout: 15_000 });
+    } finally {
+      await deleteScreenViaApi(page, screenId);
+    }
+  });
+
+  test("deleted screen card is visually distinct (greyed out)", async ({
+    page,
+  }) => {
+    let screenId = "";
+    try {
+      screenId = await createScreenViaUI(page);
+
+      const card = page.locator(`[data-screen-id="${screenId}"]`);
+      await card.locator(".title-input").fill("Grey Out Test Title");
+      await card
+        .locator(".message-input")
+        .fill("This tests the greyed out visual style.");
+      await card.locator(".save-screen-btn").click();
+      await expect(page.locator("#toast")).toBeVisible({ timeout: 15_000 });
+
+      await expect(
+        page.locator(`[data-screen-id="${screenId}"]`),
+      ).toBeVisible({ timeout: 15_000 });
+
+      page.once("dialog", async (dialog) => await dialog.accept());
+      await page
+        .locator(`[data-screen-id="${screenId}"]`)
+        .locator(".delete-screen-btn")
+        .click();
+
+      // Find deleted card
+      const deletedCard = page.locator(
+        `[data-screen-id="${screenId}"][data-deleted="true"]`,
+      );
+      await expect(deletedCard).toBeVisible({ timeout: 15_000 });
+
+      // Check that it has reduced opacity
+      const opacity = await deletedCard.evaluate(
+        (el) => window.getComputedStyle(el).opacity,
+      );
+      expect(parseFloat(opacity)).toBeLessThan(1);
+    } finally {
+      await deleteScreenViaApi(page, screenId);
+    }
+  });
+
+  test("deleted screen card has restore button", async ({ page }) => {
+    let screenId = "";
+    try {
+      screenId = await createScreenViaUI(page);
+
+      const card = page.locator(`[data-screen-id="${screenId}"]`);
+      await card.locator(".title-input").fill("Restore Button Test");
+      await card
+        .locator(".message-input")
+        .fill("This tests that restore button exists.");
+      await card.locator(".save-screen-btn").click();
+      await expect(page.locator("#toast")).toBeVisible({ timeout: 15_000 });
+
+      await expect(
+        page.locator(`[data-screen-id="${screenId}"]`),
+      ).toBeVisible({ timeout: 15_000 });
+
+      page.once("dialog", async (dialog) => await dialog.accept());
+      await page
+        .locator(`[data-screen-id="${screenId}"]`)
+        .locator(".delete-screen-btn")
+        .click();
+
+      const deletedCard = page.locator(
+        `[data-screen-id="${screenId}"][data-deleted="true"]`,
+      );
+      await expect(deletedCard).toBeVisible({ timeout: 15_000 });
+      await expect(
+        deletedCard.locator(".restore-screen-btn"),
+      ).toBeVisible();
+    } finally {
+      await deleteScreenViaApi(page, screenId);
+    }
+  });
+
+  test("deleted screen card has permanently delete button", async ({
+    page,
+  }) => {
+    let screenId = "";
+    try {
+      screenId = await createScreenViaUI(page);
+
+      const card = page.locator(`[data-screen-id="${screenId}"]`);
+      await card.locator(".title-input").fill("Perm Delete Btn Test");
+      await card
+        .locator(".message-input")
+        .fill("This tests permanent delete button.");
+      await card.locator(".save-screen-btn").click();
+      await expect(page.locator("#toast")).toBeVisible({ timeout: 15_000 });
+
+      await expect(
+        page.locator(`[data-screen-id="${screenId}"]`),
+      ).toBeVisible({ timeout: 15_000 });
+
+      page.once("dialog", async (dialog) => await dialog.accept());
+      await page
+        .locator(`[data-screen-id="${screenId}"]`)
+        .locator(".delete-screen-btn")
+        .click();
+
+      const deletedCard = page.locator(
+        `[data-screen-id="${screenId}"][data-deleted="true"]`,
+      );
+      await expect(deletedCard).toBeVisible({ timeout: 15_000 });
+      await expect(
+        deletedCard.locator(".permanent-delete-btn"),
+      ).toBeVisible();
+    } finally {
+      await deleteScreenViaApi(page, screenId);
+    }
+  });
+
+  // ── Background image fit dropdown ──
+
+  test("background image fit dropdown is visible in screen card", async ({
+    page,
+  }) => {
+    let screenId = "";
+    try {
+      screenId = await createScreenViaUI(page);
+
+      const card = page.locator(`[data-screen-id="${screenId}"]`);
+      await expect(card.locator(".bg-image-fit-select")).toBeAttached();
+    } finally {
+      await deleteScreenViaApi(page, screenId);
+    }
+  });
+
+  // ── Frequency toggle ──
+
+  test("frequency toggle: ON = show only once (frequency=once)", async ({
+    page,
+  }) => {
+    let screenId = "";
+    try {
+      screenId = await createScreenViaUI(page);
+
+      const card = page.locator(`[data-screen-id="${screenId}"]`);
+      const freqToggle = card.locator(".frequency-select");
+
+      // Check the toggle (ON = once)
+      if (!(await freqToggle.isChecked())) await freqToggle.check();
+      expect(await freqToggle.isChecked()).toBe(true);
+
+      // Uncheck (OFF = every_launch)
+      await freqToggle.uncheck();
+      expect(await freqToggle.isChecked()).toBe(false);
+    } finally {
+      await deleteScreenViaApi(page, screenId);
+    }
+  });
+
+  // ── Tablet preview toggle ──
+
+  test("tablet preview toggle switches preview to tablet size", async ({
+    page,
+  }) => {
+    let screenId = "";
+    try {
+      screenId = await createScreenViaUI(page);
+
+      const card = page.locator(`[data-screen-id="${screenId}"]`);
+      const tabletBtn = card.locator(".preview-tablet-btn");
+      const phoneBtn = card.locator(".preview-phone-btn");
+      const preview = card.locator(".screen-card-preview");
+
+      // Click tablet
+      await tabletBtn.click();
+      await expect(preview).toHaveClass(/tablet/);
+      await expect(tabletBtn).toHaveClass(/active/);
+
+      // Click phone
+      await phoneBtn.click();
+      await expect(preview).not.toHaveClass(/tablet/);
+      await expect(phoneBtn).toHaveClass(/active/);
+    } finally {
+      await deleteScreenViaApi(page, screenId);
+    }
+  });
+
+  // ── Template icons are images ──
+
+  test("template icons are SVG images (not emoji)", async ({ page }) => {
+    let screenId = "";
+    try {
+      screenId = await createScreenViaUI(page);
+
+      const card = page.locator(`[data-screen-id="${screenId}"]`);
+      const preview = card.locator(".screen-card-preview");
+
+      // Default template should render an SVG icon or police duck image
+      const svgOrImg = preview.locator("svg, img");
+      const count = await svgOrImg.count();
+      // At least the app icon image + template icon
+      expect(count).toBeGreaterThanOrEqual(1);
+    } finally {
+      await deleteScreenViaApi(page, screenId);
+    }
+  });
+
+  // ── Police duck shows as image ──
+
+  test("police duck image type renders an img element (not emoji)", async ({
+    page,
+  }) => {
+    let screenId = "";
+    try {
+      screenId = await createScreenViaUI(page);
+
+      const card = page.locator(`[data-screen-id="${screenId}"]`);
+      // Set image type to police_duck
+      await card.locator(".image-type-select").selectOption("police_duck");
+
+      const preview = card.locator(".screen-card-preview");
+      await expect(
+        preview.locator('img[alt="Police Duck"]'),
+      ).toBeAttached();
+    } finally {
+      await deleteScreenViaApi(page, screenId);
+    }
+  });
+
+  // ── Auto-generated screen ID ──
+
+  test("auto-generated screen ID does not prompt the user", async ({
+    page,
+  }) => {
+    let screenId = "";
+    let dialogSeen = false;
+    const dialogHandler = () => {
+      dialogSeen = true;
+    };
+    try {
+      page.on("dialog", dialogHandler);
+      screenId = await createScreenViaUI(page);
+      page.off("dialog", dialogHandler);
+
+      // No prompt dialog should have been shown
+      expect(dialogSeen).toBe(false);
+      // ID should be auto-generated
+      expect(screenId).toMatch(/^screen-\d+-[a-z0-9]+$/);
+    } finally {
+      page.off("dialog", dialogHandler);
       await deleteScreenViaApi(page, screenId);
     }
   });

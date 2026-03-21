@@ -100,6 +100,7 @@ router.get('/config/startingScreens', async (req, res) => {
     const sortedIds = Object.keys(allScreens).sort((a, b) => a.localeCompare(b));
     for (const id of sortedIds) {
       const screen = allScreens[id];
+      if (screen.deleted) continue;
       if (!isScreenActive(screen, now)) continue;
 
       let dismissable = screen.dismissable;
@@ -186,6 +187,9 @@ const SCREEN_FIELDS = [
   'startDate',
   'endDate',
   'allowlist',
+  'deleted',
+  'deletedAt',
+  'deletedBy',
 ];
 
 /**
@@ -451,9 +455,10 @@ router.put('/config/startingScreens', async (req, res) => {
     }
 
     // Blocking constraint: max 1 non-dismissable screen enabled at a time
+    // Deleted screens don't count toward this constraint
     const nonDismissable = [];
     for (const [id, screen] of Object.entries(merged)) {
-      if (screen.enabled && screen.dismissable === false) {
+      if (screen.enabled && screen.dismissable === false && !screen.deleted) {
         nonDismissable.push(id);
       }
     }
@@ -489,7 +494,53 @@ router.put('/config/startingScreens', async (req, res) => {
   }
 });
 
+// -- Restore a soft-deleted starting screen (admin) --
+router.post('/config/startingScreens/:screenId/restore', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+
+    const { screenId } = req.params;
+    if (!screenId || !/^[a-zA-Z0-9_-]+$/.test(screenId)) {
+      return res.status(400).json({ error: 'Invalid screen ID' });
+    }
+
+    const snap = await db.doc('config/startingScreens').get();
+    if (!snap.exists) {
+      return res.status(404).json({ error: 'No starting screens configured' });
+    }
+
+    const existing = snap.data();
+    if (!(screenId in existing)) {
+      return res.status(404).json({ error: `Screen "${screenId}" not found` });
+    }
+
+    if (!existing[screenId].deleted) {
+      return res.status(400).json({ error: `Screen "${screenId}" is not deleted` });
+    }
+
+    existing[screenId].deleted = false;
+    delete existing[screenId].deletedAt;
+    delete existing[screenId].deletedBy;
+    existing[screenId].restoredAt = new Date().toISOString();
+    existing[screenId].restoredBy = req.auth.uniqueId;
+
+    await db.doc('config/startingScreens').set(existing);
+
+    log.info('config', 'Starting screen restored', {
+      screenId,
+      admin: req.auth.uniqueId,
+    });
+
+    return res.json({ success: true, restored: screenId });
+  } catch (err) {
+    log.error('config', 'Error restoring starting screen', { error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // -- Delete a single starting screen (admin) --
+// Without ?permanent=true: soft-delete (sets deleted: true)
+// With ?permanent=true: hard-delete (removes from Firestore)
 router.delete('/config/startingScreens/:screenId', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
@@ -509,16 +560,38 @@ router.delete('/config/startingScreens/:screenId', async (req, res) => {
       return res.status(404).json({ error: `Screen "${screenId}" not found` });
     }
 
-    delete existing[screenId];
-    await db.doc('config/startingScreens').set(existing);
+    const permanent = req.query.permanent === 'true';
 
-    log.info('config', 'Starting screen deleted', {
-      screenId,
-      remainingScreens: Object.keys(existing).length,
-      admin: req.auth.uniqueId,
-    });
+    if (permanent) {
+      // Hard-delete: remove from Firestore entirely
+      delete existing[screenId];
+      await db.doc('config/startingScreens').set(existing);
 
-    return res.json({ success: true, deleted: screenId });
+      log.info('config', 'Starting screen permanently deleted', {
+        screenId,
+        remainingScreens: Object.keys(existing).length,
+        admin: req.auth.uniqueId,
+      });
+
+      return res.json({ success: true, deleted: screenId, permanent: true });
+    } else {
+      // Soft-delete: mark as deleted
+      existing[screenId].deleted = true;
+      existing[screenId].deletedAt = new Date().toISOString();
+      existing[screenId].deletedBy = req.auth.uniqueId;
+
+      await db.doc('config/startingScreens').set(existing);
+
+      log.info('config', 'Starting screen soft-deleted', {
+        screenId,
+        remainingScreens: Object.keys(existing).filter(
+          (id) => !existing[id] || !existing[id].deleted,
+        ).length,
+        admin: req.auth.uniqueId,
+      });
+
+      return res.json({ success: true, deleted: screenId, permanent: false });
+    }
   } catch (err) {
     log.error('config', 'Error deleting starting screen', { error: err.message });
     return res.status(500).json({ error: 'Internal server error' });

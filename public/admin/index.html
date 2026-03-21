@@ -4339,6 +4339,13 @@
             <div id="starting-screens-empty" style="text-align:center;padding:32px;color:var(--text2);font-size:14px;">
                 No starting screens configured. Click "+ Add Screen" to create one.
             </div>
+            <div id="deleted-screens-section" style="margin-top:24px;display:none;">
+                <div id="deleted-screens-header" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:12px 0;border-top:1px solid var(--border);user-select:none;">
+                    <span id="deleted-screens-arrow" style="font-size:12px;transition:transform 0.2s;">&#9654;</span>
+                    <span id="deleted-screens-title" style="font-size:14px;font-weight:600;color:var(--text2);">Deleted Screens (0)</span>
+                </div>
+                <div id="deleted-screens-list" style="display:none;"></div>
+            </div>
         </div>
 
         <!-- Fun Fact Add/Edit Dialog -->
@@ -5654,11 +5661,75 @@
         return card;
     }
 
+    function renderDeletedScreenCard(screenId, screen) {
+      var card = document.createElement("div");
+      card.className = "screen-card deleted-screen-card";
+      card.setAttribute("data-screen-id", screenId);
+      card.setAttribute("data-deleted", "true");
+      var deletedAt = screen.deletedAt ? new Date(screen.deletedAt).toLocaleString() : "unknown";
+      var deletedBy = screen.deletedBy || "unknown";
+      card.style.cssText = "opacity:0.55;filter:grayscale(0.6);pointer-events:auto;";
+      card.innerHTML =
+        '<div style="padding:16px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);">' +
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">' +
+            '<div>' +
+              '<div style="font-size:15px;font-weight:600;color:var(--text);text-decoration:line-through;">' + escapeHtml(screen.title || "(no title)") + '</div>' +
+              '<div style="font-size:12px;color:var(--text2);margin-top:4px;">ID: <code>' + escapeHtml(screenId) + '</code></div>' +
+              '<div style="font-size:12px;color:var(--text2);">Template: ' + escapeHtml(screen.template || "unknown") + '</div>' +
+              '<div style="font-size:12px;color:var(--text2);">Deleted by <strong>' + escapeHtml(deletedBy) + '</strong> at ' + escapeHtml(deletedAt) + '</div>' +
+            '</div>' +
+            '<span class="status-badge status-expired">Deleted</span>' +
+          '</div>' +
+          '<div style="display:flex;gap:8px;">' +
+            '<button type="button" class="restore-screen-btn" style="padding:6px 16px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">Restore</button>' +
+            '<button type="button" class="permanent-delete-btn" style="padding:6px 16px;background:var(--danger,#e74c3c);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">Permanently Delete</button>' +
+          '</div>' +
+        '</div>';
+      card.querySelector(".restore-screen-btn").addEventListener("click", async function() {
+        try {
+          await apiCall("POST", "/api/config/startingScreens/" + encodeURIComponent(screenId) + "/restore");
+          showToast("Screen restored");
+          loadStartingScreens();
+        } catch (err) {
+          showToast("Failed to restore: " + err.message, "error");
+        }
+      });
+      card.querySelector(".permanent-delete-btn").addEventListener("click", async function() {
+        if (!confirm("Permanently delete screen \"" + screenId + "\"? This cannot be undone.")) return;
+        try {
+          await apiCall("DELETE", "/api/config/startingScreens/" + encodeURIComponent(screenId) + "?permanent=true");
+          showToast("Screen permanently deleted");
+          loadStartingScreens();
+        } catch (err) {
+          showToast("Failed to permanently delete: " + err.message, "error");
+        }
+      });
+      return card;
+    }
+
     function renderScreenCards(data) {
       startingScreensList.innerHTML = "";
-      const enabledNonDismissableIds = [];
-      for (const [id, screen] of Object.entries(data)) { if (screen.enabled && !screen.dismissable) enabledNonDismissableIds.push(id); }
-      for (const [screenId, screen] of Object.entries(data)) { renderScreenCard(screenId, screen, enabledNonDismissableIds, false); }
+      var deletedScreensList = document.getElementById("deleted-screens-list");
+      var deletedScreensSection = document.getElementById("deleted-screens-section");
+      var deletedScreensTitle = document.getElementById("deleted-screens-title");
+      deletedScreensList.innerHTML = "";
+      var activeScreens = {};
+      var deletedScreens = {};
+      for (var id in data) {
+        if (data[id].deleted) { deletedScreens[id] = data[id]; }
+        else { activeScreens[id] = data[id]; }
+      }
+      var enabledNonDismissableIds = [];
+      for (var aid in activeScreens) { if (activeScreens[aid].enabled && !activeScreens[aid].dismissable) enabledNonDismissableIds.push(aid); }
+      for (var sid in activeScreens) { renderScreenCard(sid, activeScreens[sid], enabledNonDismissableIds, false); }
+      var deletedCount = Object.keys(deletedScreens).length;
+      if (deletedCount > 0) {
+        deletedScreensSection.style.display = "block";
+        deletedScreensTitle.textContent = "Deleted Screens (" + deletedCount + ")";
+        for (var did in deletedScreens) { deletedScreensList.appendChild(renderDeletedScreenCard(did, deletedScreens[did])); }
+      } else {
+        deletedScreensSection.style.display = "none";
+      }
     }
 
     async function saveScreen(screenId) {
@@ -5731,11 +5802,11 @@
     }
 
     async function deleteScreen(screenId) {
-      if (!confirm("Delete screen \"" + screenId + "\"? This cannot be undone.")) return;
+      if (!confirm("Delete screen \"" + screenId + "\"? It will be moved to Deleted Screens.")) return;
 
       try {
         await apiCall("DELETE", "/api/config/startingScreens/" + encodeURIComponent(screenId));
-        showToast("Screen deleted");
+        showToast("Screen moved to deleted");
         hasUnsavedScreenChanges = false;
         loadStartingScreens();
       } catch (err) {
@@ -5746,10 +5817,24 @@
     // Wire up add screen button
     document.getElementById("add-screen-btn").addEventListener("click", addScreen);
 
+    // Wire up deleted screens collapsible toggle
+    document.getElementById("deleted-screens-header").addEventListener("click", function() {
+      var list = document.getElementById("deleted-screens-list");
+      var arrow = document.getElementById("deleted-screens-arrow");
+      if (list.style.display === "none") {
+        list.style.display = "block";
+        arrow.style.transform = "rotate(90deg)";
+      } else {
+        list.style.display = "none";
+        arrow.style.transform = "rotate(0deg)";
+      }
+    });
+
     async function loadStartingScreens() {
       try {
         const data = await apiCall("GET", "/api/config/startingScreens/admin");
-        startingScreensEmpty.style.display = Object.keys(data).length === 0 ? "block" : "none";
+        var activeCount = Object.keys(data).filter(function(id) { return !data[id].deleted; }).length;
+        startingScreensEmpty.style.display = activeCount === 0 ? "block" : "none";
         renderScreenCards(data);
       } catch (err) {
         showToast("Failed to load starting screens: " + err.message, "error");

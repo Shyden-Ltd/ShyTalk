@@ -274,6 +274,62 @@ describe('GET /api/config/startingScreens — frozen response shape', () => {
     const res = await request(app).get('/api/config/startingScreens');
     expect('lastModifiedBy' in res.body.screen1).toBe(false);
   });
+
+  it('screen entry: deleted is NOT present in GET response', async () => {
+    const res = await request(app).get('/api/config/startingScreens');
+    expect('deleted' in res.body.screen1).toBe(false);
+  });
+
+  it('screen entry: deletedAt is NOT present in GET response', async () => {
+    const res = await request(app).get('/api/config/startingScreens');
+    expect('deletedAt' in res.body.screen1).toBe(false);
+  });
+
+  it('screen entry: deletedBy is NOT present in GET response', async () => {
+    const res = await request(app).get('/api/config/startingScreens');
+    expect('deletedBy' in res.body.screen1).toBe(false);
+  });
+});
+
+// ─── Public GET excludes deleted screens ────────────────────────────────────
+
+describe('GET /api/config/startingScreens — deleted screens excluded from public response', () => {
+  it('soft-deleted screen does NOT appear in public GET response', async () => {
+    const app = createApp();
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        active: makeScreen(),
+        removed: makeScreen({
+          deleted: true,
+          deletedAt: '2026-03-20T00:00:00Z',
+          deletedBy: 'admin-1',
+        }),
+      }),
+    });
+
+    const res = await request(app).get('/api/config/startingScreens');
+
+    expect(res.status).toBe(200);
+    expect(res.body.active).toBeDefined();
+    expect(res.body.removed).toBeUndefined();
+  });
+
+  it('all screens deleted results in empty response', async () => {
+    const app = createApp();
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        s1: makeScreen({ deleted: true, deletedAt: '2026-03-20T00:00:00Z', deletedBy: 'admin-1' }),
+        s2: makeScreen({ deleted: true, deletedAt: '2026-03-20T00:00:00Z', deletedBy: 'admin-1' }),
+      }),
+    });
+
+    const res = await request(app).get('/api/config/startingScreens');
+
+    expect(res.status).toBe(200);
+    expect(Object.keys(res.body)).toHaveLength(0);
+  });
 });
 
 // ─── GET empty config contract ─────────────────────────────────────────────
