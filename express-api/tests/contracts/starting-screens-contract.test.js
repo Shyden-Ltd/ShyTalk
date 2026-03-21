@@ -233,6 +233,35 @@ describe('GET /api/config/startingScreens — frozen response shape', () => {
     expect(res.body.screen1.endDate).toBeNull();
   });
 
+  it('screen entry: endDate is a string when set', async () => {
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ screen1: makeScreen({ endDate: '2099-01-01T00:00:00Z' }) }),
+    });
+    const res = await request(app).get('/api/config/startingScreens');
+    expect(typeof res.body.screen1.endDate).toBe('string');
+  });
+
+  // ─── Exact field set (catches unexpected additions/removals) ─────────
+
+  it('screen entry: contains exactly the expected set of keys', async () => {
+    const res = await request(app).get('/api/config/startingScreens');
+    expect(Object.keys(res.body.screen1).sort()).toEqual([
+      'backgroundImage',
+      'contentHash',
+      'dismissable',
+      'enabled',
+      'endDate',
+      'frequency',
+      'imageType',
+      'lastModifiedAt',
+      'message',
+      'startDate',
+      'template',
+      'title',
+    ]);
+  });
+
   // ─── Fields that MUST NOT be present ──────────────────────────────────
 
   it('screen entry: allowlist is NOT present in GET response', async () => {
