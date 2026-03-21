@@ -45,6 +45,36 @@ class AndroidAppConfigService(
         }
     }
 
+    @Suppress("UNCHECKED_CAST")
+    override suspend fun getStartingScreens(): Resource<Map<String, StartingScreen>> {
+        return try {
+            // MUST use getPublic — this endpoint is pre-auth, no Firebase user exists yet.
+            val json = api.getPublic("/api/config/startingScreens")
+            val data = json.toMap()
+            val screens = mutableMapOf<String, StartingScreen>()
+            for ((id, value) in data) {
+                val screenMap = (value as? Map<String, Any?>) ?: continue
+                screens[id] = StartingScreen(
+                    screenId = id,
+                    enabled = screenMap["enabled"] as? Boolean ?: false,
+                    dismissable = screenMap["dismissable"] as? Boolean ?: true,
+                    frequency = screenMap["frequency"] as? String ?: "every_launch",
+                    template = screenMap["template"] as? String ?: "info",
+                    title = screenMap["title"] as? String ?: "",
+                    message = screenMap["message"] as? String ?: "",
+                    imageType = screenMap["imageType"] as? String,
+                    backgroundImage = screenMap["backgroundImage"] as? String,
+                    startDate = screenMap["startDate"] as? String,
+                    endDate = screenMap["endDate"] as? String,
+                    contentHash = screenMap["contentHash"] as? String ?: "",
+                )
+            }
+            Resource.Success(screens)
+        } catch (e: Exception) {
+            Resource.Error("Failed to fetch starting screens")
+        }
+    }
+
     override fun getCacheSizeBytes(): Long {
         return context.cacheDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
     }

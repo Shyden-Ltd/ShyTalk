@@ -1,0 +1,131 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "starting_screen_pre_launch_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk is not available yet" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "\u0634\u0627\u064a \u062a\u0648\u0643 \u063a\u064a\u0631 \u0645\u062a\u0627\u062d \u0628\u0639\u062f" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk ist noch nicht verf\u00fcgbar" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk a\u00fan no est\u00e1 disponible" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk n\u2019est pas encore disponible" } },
+        "hi" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk \u0905\u092d\u0940 \u0909\u092a\u0932\u092c\u094d\u0927 \u0928\u0939\u0940\u0902 \u0939\u0948" } },
+        "id" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk belum tersedia" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk non \u00e8 ancora disponibile" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk\u306f\u307e\u3060\u5229\u7528\u3067\u304d\u307e\u305b\u3093" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk\uc740 \uc544\uc9c1 \uc0ac\uc6a9\ud560 \uc218 \uc5c6\uc2b5\ub2c8\ub2e4" } },
+        "nl" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk is nog niet beschikbaar" } },
+        "pl" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk nie jest jeszcze dost\u0119pny" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk ainda n\u00e3o est\u00e1 dispon\u00edvel" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk \u0435\u0449\u0451 \u043d\u0435 \u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d" } },
+        "sv" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk \u00e4r \u00e4nnu inte tillg\u00e4ngligt" } },
+        "th" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk \u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e1e\u0e23\u0e49\u0e2d\u0e21\u0e43\u0e0a\u0e49\u0e07\u0e32\u0e19" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk hen\u00fcz kullan\u0131lam\u0131yor" } },
+        "uk" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk \u0449\u0435 \u043d\u0435 \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0438\u0439" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk ch\u01b0a kh\u1ea3 d\u1ee5ng" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk \u5c1a\u672a\u53ef\u7528" } }
+      }
+    },
+    "starting_screen_pre_launch_message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk has not been released yet. To apply to test the application, contact Shyden. Testing is available for iOS and Android users." } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "\u0644\u0645 \u064a\u062a\u0645 \u0625\u0635\u062f\u0627\u0631 \u0634\u0627\u064a \u062a\u0648\u0643 \u0628\u0639\u062f. \u0644\u0644\u062a\u0642\u062f\u0645 \u0644\u0627\u062e\u062a\u0628\u0627\u0631 \u0627\u0644\u062a\u0637\u0628\u064a\u0642\u060c \u062a\u0648\u0627\u0635\u0644 \u0645\u0639 Shyden. \u0627\u0644\u0627\u062e\u062a\u0628\u0627\u0631 \u0645\u062a\u0627\u062d \u0644\u0645\u0633\u062a\u062e\u062f\u0645\u064a iOS \u0648 Android." } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk wurde noch nicht ver\u00f6ffentlicht. Um die App zu testen, kontaktiere Shyden. Tests sind f\u00fcr iOS- und Android-Nutzer verf\u00fcgbar." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk a\u00fan no se ha lanzado. Para solicitar probar la aplicaci\u00f3n, contacta con Shyden. Las pruebas est\u00e1n disponibles para usuarios de iOS y Android." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk n\u2019a pas encore \u00e9t\u00e9 publi\u00e9. Pour postuler au test de l\u2019application, contactez Shyden. Les tests sont disponibles pour les utilisateurs iOS et Android." } },
+        "hi" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk \u0905\u092d\u0940 \u0930\u093f\u0932\u0940\u091c\u093c \u0928\u0939\u0940\u0902 \u0939\u0941\u0906 \u0939\u0948\u0964 \u0910\u092a \u0915\u093e \u092a\u0930\u0940\u0915\u094d\u0937\u0923 \u0915\u0930\u0928\u0947 \u0915\u0947 \u0932\u093f\u090f Shyden \u0938\u0947 \u0938\u0902\u092a\u0930\u094d\u0915 \u0915\u0930\u0947\u0902\u0964 \u092a\u0930\u0940\u0915\u094d\u0937\u0923 iOS \u0914\u0930 Android \u0909\u092a\u092f\u094b\u0917\u0915\u0930\u094d\u0924\u093e\u0913\u0902 \u0915\u0947 \u0932\u093f\u090f \u0909\u092a\u0932\u092c\u094d\u0927 \u0939\u0948\u0964" } },
+        "id" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk belum dirilis. Untuk mendaftar menguji aplikasi, hubungi Shyden. Pengujian tersedia untuk pengguna iOS dan Android." } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk non \u00e8 stato ancora rilasciato. Per candidarsi a testare l\u2019applicazione, contatta Shyden. I test sono disponibili per utenti iOS e Android." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk\u306f\u307e\u3060\u30ea\u30ea\u30fc\u30b9\u3055\u308c\u3066\u3044\u307e\u305b\u3093\u3002\u30a2\u30d7\u30ea\u306e\u30c6\u30b9\u30c8\u306b\u5fdc\u52df\u3059\u308b\u306b\u306f\u3001Shyden\u306b\u304a\u554f\u3044\u5408\u308f\u305b\u304f\u3060\u3055\u3044\u3002\u30c6\u30b9\u30c8\u306fiOS\u304a\u3088\u3073Android\u30e6\u30fc\u30b6\u30fc\u304c\u5229\u7528\u3067\u304d\u307e\u3059\u3002" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk\uc740 \uc544\uc9c1 \ucd9c\uc2dc\ub418\uc9c0 \uc54a\uc558\uc2b5\ub2c8\ub2e4. \uc571 \ud14c\uc2a4\ud2b8\ub97c \uc2e0\uccad\ud558\ub824\uba74 Shyden\uc5d0 \uc5f0\ub77d\ud558\uc138\uc694. \ud14c\uc2a4\ud2b8\ub294 iOS \ubc0f Android \uc0ac\uc6a9\uc790\uac00 \uc774\uc6a9\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4." } },
+        "nl" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk is nog niet uitgebracht. Om de app te testen, neem contact op met Shyden. Testen is beschikbaar voor iOS- en Android-gebruikers." } },
+        "pl" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk nie zosta\u0142 jeszcze wydany. Aby zg\u0142osi\u0107 si\u0119 do testowania aplikacji, skontaktuj si\u0119 z Shyden. Testy s\u0105 dost\u0119pne dla u\u017cytkownik\u00f3w iOS i Android." } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk ainda n\u00e3o foi lan\u00e7ado. Para se candidatar a testar o aplicativo, entre em contato com Shyden. Os testes est\u00e3o dispon\u00edveis para usu\u00e1rios de iOS e Android." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk \u0435\u0449\u0451 \u043d\u0435 \u0432\u044b\u043f\u0443\u0449\u0435\u043d. \u0427\u0442\u043e\u0431\u044b \u043f\u043e\u0434\u0430\u0442\u044c \u0437\u0430\u044f\u0432\u043a\u0443 \u043d\u0430 \u0442\u0435\u0441\u0442\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435 \u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u044f, \u0441\u0432\u044f\u0436\u0438\u0442\u0435\u0441\u044c \u0441 Shyden. \u0422\u0435\u0441\u0442\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435 \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u043e \u0434\u043b\u044f \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0435\u0439 iOS \u0438 Android." } },
+        "sv" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk har \u00e4nnu inte sl\u00e4ppts. F\u00f6r att ans\u00f6ka om att testa appen, kontakta Shyden. Testning \u00e4r tillg\u00e4nglig f\u00f6r iOS- och Android-anv\u00e4ndare." } },
+        "th" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk \u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e40\u0e1c\u0e22\u0e41\u0e1e\u0e23\u0e48 \u0e2b\u0e32\u0e01\u0e15\u0e49\u0e2d\u0e07\u0e01\u0e32\u0e23\u0e2a\u0e21\u0e31\u0e04\u0e23\u0e17\u0e14\u0e2a\u0e2d\u0e1a\u0e41\u0e2d\u0e1b\u0e1e\u0e25\u0e34\u0e40\u0e04\u0e0a\u0e31\u0e19 \u0e15\u0e34\u0e14\u0e15\u0e48\u0e2d Shyden \u0e01\u0e32\u0e23\u0e17\u0e14\u0e2a\u0e2d\u0e1a\u0e1e\u0e23\u0e49\u0e2d\u0e21\u0e43\u0e0a\u0e49\u0e07\u0e32\u0e19\u0e2a\u0e33\u0e2b\u0e23\u0e31\u0e1a\u0e1c\u0e39\u0e49\u0e43\u0e0a\u0e49 iOS \u0e41\u0e25\u0e30 Android" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk hen\u00fcz yay\u0131nlanmad\u0131. Uygulamay\u0131 test etmek i\u00e7in ba\u015fvurmak i\u00e7in Shyden ile ileti\u015fime ge\u00e7in. Test, iOS ve Android kullan\u0131c\u0131lar\u0131 i\u00e7in mevcuttur." } },
+        "uk" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk \u0449\u0435 \u043d\u0435 \u0432\u0438\u043f\u0443\u0449\u0435\u043d\u043e. \u0429\u043e\u0431 \u043f\u043e\u0434\u0430\u0442\u0438 \u0437\u0430\u044f\u0432\u043a\u0443 \u043d\u0430 \u0442\u0435\u0441\u0442\u0443\u0432\u0430\u043d\u043d\u044f \u0434\u043e\u0434\u0430\u0442\u043a\u0443, \u0437\u0432\u2019\u044f\u0436\u0456\u0442\u044c\u0441\u044f \u0437 Shyden. \u0422\u0435\u0441\u0442\u0443\u0432\u0430\u043d\u043d\u044f \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0435 \u0434\u043b\u044f \u043a\u043e\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0447\u0456\u0432 iOS \u0442\u0430 Android." } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk ch\u01b0a \u0111\u01b0\u1ee3c ph\u00e1t h\u00e0nh. \u0110\u1ec3 \u0111\u0103ng k\u00fd th\u1eed nghi\u1ec7m \u1ee9ng d\u1ee5ng, h\u00e3y li\u00ean h\u1ec7 v\u1edbi Shyden. Th\u1eed nghi\u1ec7m c\u00f3 s\u1eb5n cho ng\u01b0\u1eddi d\u00f9ng iOS v\u00e0 Android." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "ShyTalk \u5c1a\u672a\u53d1\u5e03\u3002\u8981\u7533\u8bf7\u6d4b\u8bd5\u5e94\u7528\u7a0b\u5e8f\uff0c\u8bf7\u8054\u7cfb Shyden\u3002\u6d4b\u8bd5\u9002\u7528\u4e8e iOS \u548c Android \u7528\u6237\u3002" } }
+      }
+    },
+    "starting_screen_dismiss" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Continue" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "\u0645\u062a\u0627\u0628\u0639\u0629" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Weiter" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Continuar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Continuer" } },
+        "hi" : { "stringUnit" : { "state" : "translated", "value" : "\u091c\u093e\u0930\u0940 \u0930\u0916\u0947\u0902" } },
+        "id" : { "stringUnit" : { "state" : "translated", "value" : "Lanjutkan" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Continua" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "\u7d9a\u3051\u308b" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "\uacc4\uc18d" } },
+        "nl" : { "stringUnit" : { "state" : "translated", "value" : "Doorgaan" } },
+        "pl" : { "stringUnit" : { "state" : "translated", "value" : "Kontynuuj" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Continuar" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "\u041f\u0440\u043e\u0434\u043e\u043b\u0436\u0438\u0442\u044c" } },
+        "sv" : { "stringUnit" : { "state" : "translated", "value" : "Forts\u00e4tt" } },
+        "th" : { "stringUnit" : { "state" : "translated", "value" : "\u0e14\u0e33\u0e40\u0e19\u0e34\u0e19\u0e01\u0e32\u0e23\u0e15\u0e48\u0e2d" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Devam et" } },
+        "uk" : { "stringUnit" : { "state" : "translated", "value" : "\u041f\u0440\u043e\u0434\u043e\u0432\u0436\u0438\u0442\u0438" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Ti\u1ebfp t\u1ee5c" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "\u7ee7\u7eed" } }
+      }
+    },
+    "starting_screen_police_duck_description" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Warning illustration" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "\u0631\u0633\u0645 \u062a\u062d\u0630\u064a\u0631\u064a" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Warnungsillustration" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ilustraci\u00f3n de advertencia" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Illustration d\u2019avertissement" } },
+        "hi" : { "stringUnit" : { "state" : "translated", "value" : "\u091a\u0947\u0924\u093e\u0935\u0928\u0940 \u091a\u093f\u0924\u094d\u0930\u0923" } },
+        "id" : { "stringUnit" : { "state" : "translated", "value" : "Ilustrasi peringatan" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Illustrazione di avviso" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "\u8b66\u544a\u30a4\u30e9\u30b9\u30c8" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "\uacbd\uace0 \uc77c\ub7ec\uc2a4\ud2b8" } },
+        "nl" : { "stringUnit" : { "state" : "translated", "value" : "Waarschuwingsillustratie" } },
+        "pl" : { "stringUnit" : { "state" : "translated", "value" : "Ilustracja ostrze\u017cenia" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Ilustra\u00e7\u00e3o de aviso" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "\u0418\u043b\u043b\u044e\u0441\u0442\u0440\u0430\u0446\u0438\u044f \u043f\u0440\u0435\u0434\u0443\u043f\u0440\u0435\u0436\u0434\u0435\u043d\u0438\u044f" } },
+        "sv" : { "stringUnit" : { "state" : "translated", "value" : "Varningsillustration" } },
+        "th" : { "stringUnit" : { "state" : "translated", "value" : "\u0e20\u0e32\u0e1e\u0e1b\u0e23\u0e30\u0e01\u0e2d\u0e1a\u0e04\u0e33\u0e40\u0e15\u0e37\u0e2d\u0e19" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Uyar\u0131 illüstrasyonu" } },
+        "uk" : { "stringUnit" : { "state" : "translated", "value" : "\u0406\u043b\u044e\u0441\u0442\u0440\u0430\u0446\u0456\u044f \u043f\u043e\u043f\u0435\u0440\u0435\u0434\u0436\u0435\u043d\u043d\u044f" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Minh h\u1ecda c\u1ea3nh b\u00e1o" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "\u8b66\u544a\u63d2\u56fe" } }
+      }
+    },
+    "starting_screen_loading" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Loading\u2026" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "\u062c\u0627\u0631\u064d \u0627\u0644\u062a\u062d\u0645\u064a\u0644\u2026" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Laden\u2026" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cargando\u2026" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Chargement\u2026" } },
+        "hi" : { "stringUnit" : { "state" : "translated", "value" : "\u0932\u094b\u0921 \u0939\u094b \u0930\u0939\u093e \u0939\u0948\u2026" } },
+        "id" : { "stringUnit" : { "state" : "translated", "value" : "Memuat\u2026" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Caricamento\u2026" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "\u8aad\u307f\u8fbc\u307f\u4e2d\u2026" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "\ub85c\ub529 \uc911\u2026" } },
+        "nl" : { "stringUnit" : { "state" : "translated", "value" : "Laden\u2026" } },
+        "pl" : { "stringUnit" : { "state" : "translated", "value" : "\u0141adowanie\u2026" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Carregando\u2026" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430\u2026" } },
+        "sv" : { "stringUnit" : { "state" : "translated", "value" : "Laddar\u2026" } },
+        "th" : { "stringUnit" : { "state" : "translated", "value" : "\u0e01\u0e33\u0e25\u0e31\u0e07\u0e42\u0e2b\u0e25\u0e14\u2026" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Y\u00fckleniyor\u2026" } },
+        "uk" : { "stringUnit" : { "state" : "translated", "value" : "\u0417\u0430\u0432\u0430\u043d\u0442\u0430\u0436\u0435\u043d\u043d\u044f\u2026" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "\u0110ang t\u1ea3i\u2026" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "\u52a0\u8f7d\u4e2d\u2026" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

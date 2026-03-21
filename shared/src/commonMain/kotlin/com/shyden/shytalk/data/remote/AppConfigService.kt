@@ -8,6 +8,21 @@ data class BackendHealthStatus(
     val timestamp: Long,
 )
 
+data class StartingScreen(
+    val screenId: String,
+    val enabled: Boolean,
+    val dismissable: Boolean,
+    val frequency: String,
+    val template: String,
+    val title: String,
+    val message: String,
+    val imageType: String? = null,
+    val backgroundImage: String? = null,
+    val startDate: String? = null,
+    val endDate: String? = null,
+    val contentHash: String = "",
+)
+
 interface AppConfigService {
     val currentVersionCode: Int
 
@@ -15,6 +30,8 @@ interface AppConfigService {
     suspend fun getLatestVersionInfo(): Resource<Triple<Int, Int, String>>
 
     suspend fun checkBackendHealth(): Resource<BackendHealthStatus>
+
+    suspend fun getStartingScreens(): Resource<Map<String, StartingScreen>>
 
     fun getCacheSizeBytes(): Long
 
