@@ -29,6 +29,13 @@ jest.mock('../../src/utils/firebase', () => ({
   },
 }));
 
+jest.mock('../../src/utils/log', () => ({
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+  debug: jest.fn(),
+}));
+
 jest.mock('../../src/middleware/auth', () => ({
   requireAdmin: jest.fn(() => false),
   authMiddleware: jest.fn((req, res, next) => {
@@ -1205,6 +1212,33 @@ describe('PUT /api/config/startingScreens — allowlist validation', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.field).toBe('allowlist.deviceIds');
+  });
+
+  test('non-string in networks array returns 400', async () => {
+    const res = await putScreens(app, {
+      s1: makePutScreen({ allowlist: { deviceIds: [], networks: [123] } }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.field).toBe('allowlist.networks');
+  });
+
+  test('object in networks array returns 400', async () => {
+    const res = await putScreens(app, {
+      s1: makePutScreen({ allowlist: { deviceIds: [], networks: [{ cidr: '10.0.0.0/8' }] } }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.field).toBe('allowlist.networks');
+  });
+
+  test('empty string in networks array returns 400', async () => {
+    const res = await putScreens(app, {
+      s1: makePutScreen({ allowlist: { deviceIds: [], networks: [''] } }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.field).toBe('allowlist.networks');
   });
 
   test('CIDR /0 returns 400', async () => {

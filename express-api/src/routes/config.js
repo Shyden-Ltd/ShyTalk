@@ -201,8 +201,9 @@ function isValidIsoDate(str) {
 }
 
 /**
- * Validate a single screen entry. Returns { error, field } or null if valid.
- * Mutates the screen object to apply sanitisation and field filtering.
+ * Validate a single screen entry.
+ * On success: returns { sanitisedTitle, sanitisedMessage }.
+ * On failure: returns { error, field }.
  */
 function validateScreen(id, screen) {
   if (!screen || typeof screen !== 'object' || Array.isArray(screen)) {
@@ -331,7 +332,13 @@ function validateScreen(id, screen) {
         };
       }
       for (const net of networks) {
-        if (typeof net === 'string' && net.includes('/')) {
+        if (typeof net !== 'string' || net === '') {
+          return {
+            error: `Screen "${id}": each allowlist network must be a non-empty string`,
+            field: 'allowlist.networks',
+          };
+        }
+        if (net.includes('/')) {
           const bits = net.split('/')[1];
           if (bits === '0') {
             return {
@@ -344,11 +351,7 @@ function validateScreen(id, screen) {
     }
   }
 
-  // Store sanitised values back
-  screen._sanitisedTitle = sanitisedTitle;
-  screen._sanitisedMessage = sanitisedMessage;
-
-  return null;
+  return { sanitisedTitle, sanitisedMessage };
 }
 
 // -- Update starting screens (admin) --
@@ -372,18 +375,18 @@ router.put('/config/startingScreens', async (req, res) => {
         });
       }
 
-      const validationError = validateScreen(id, screen);
-      if (validationError) {
-        return res.status(400).json(validationError);
+      const result = validateScreen(id, screen);
+      if (result.error) {
+        return res.status(400).json({ error: result.error, field: result.field });
       }
 
       // Build clean screen object (only known fields)
       const clean = {};
       for (const field of SCREEN_FIELDS) {
         if (field === 'title') {
-          clean.title = screen._sanitisedTitle;
+          clean.title = result.sanitisedTitle;
         } else if (field === 'message') {
-          clean.message = screen._sanitisedMessage;
+          clean.message = result.sanitisedMessage;
         } else if (field === 'allowlist') {
           if (screen.allowlist) {
             clean.allowlist = {
@@ -408,7 +411,10 @@ router.put('/config/startingScreens', async (req, res) => {
       validatedScreens[id] = clean;
     }
 
-    // Fetch existing screens for merge and blocking constraint
+    // Fetch existing screens for merge and blocking constraint.
+    // Note: There is a small TOCTOU window between this read and the subsequent write.
+    // For admin-only operations with low concurrency, this is acceptable.
+    // A Firestore transaction would eliminate this race if needed in the future.
     const snap = await db.doc('config/startingScreens').get();
     const existing = snap.exists ? snap.data() : {};
 
