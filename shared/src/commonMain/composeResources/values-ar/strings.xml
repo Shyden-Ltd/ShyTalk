@@ -787,5 +787,5 @@
     <string name="starting_screen_pre_launch_message">لم يتم إطلاق ShyTalk بعد. للتقدم لاختبار التطبيق، تواصل مع Shyden. الاختبار متاح لمستخدمي iOS و Android.</string>
     <string name="starting_screen_dismiss">متابعة</string>
     <string name="starting_screen_police_duck_description">رسم توضيحي تحذيري</string>
-    <string name="starting_screen_loading">جارٍ التحميل2026</string>
+    <string name="starting_screen_loading">جارٍ التحميل…</string>
 </resources>

@@ -787,5 +787,5 @@
     <string name="starting_screen_pre_launch_message">ShyTalk ще не випущено. Щоб подати заявку на тестування додатку, зверніться до Shyden. Тестування доступне для користувачів iOS та Android.</string>
     <string name="starting_screen_dismiss">Продовжити</string>
     <string name="starting_screen_police_duck_description">Попереджувальна ілюстрація</string>
-    <string name="starting_screen_loading">Завантаження2026</string>
+    <string name="starting_screen_loading">Завантаження…</string>
 </resources>

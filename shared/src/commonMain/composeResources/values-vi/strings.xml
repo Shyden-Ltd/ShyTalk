@@ -787,5 +787,5 @@
     <string name="starting_screen_pre_launch_message">ShyTalk chưa được phát hành. Để đăng ký thử nghiệm ứng dụng, hãy liên hệ Shyden. Thử nghiệm có sẵn cho người dùng iOS và Android.</string>
     <string name="starting_screen_dismiss">Tiếp tục</string>
     <string name="starting_screen_police_duck_description">Hình minh họa cảnh báo</string>
-    <string name="starting_screen_loading">Đang tải2026</string>
+    <string name="starting_screen_loading">Đang tải…</string>
 </resources>

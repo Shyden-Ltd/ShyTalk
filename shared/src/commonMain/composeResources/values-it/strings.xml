@@ -787,5 +787,5 @@
     <string name="starting_screen_pre_launch_message">ShyTalk non è ancora stato rilasciato. Per candidarsi come tester dell'applicazione, contatta Shyden. Il test è disponibile per utenti iOS e Android.</string>
     <string name="starting_screen_dismiss">Continua</string>
     <string name="starting_screen_police_duck_description">Illustrazione di avvertimento</string>
-    <string name="starting_screen_loading">Caricamento2026</string>
+    <string name="starting_screen_loading">Caricamento…</string>
 </resources>

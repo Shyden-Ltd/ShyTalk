@@ -787,5 +787,5 @@
     <string name="starting_screen_pre_launch_message">ShyTalkはまだリリースされていません。アプリのテストに応募するには、Shydenにお問い合わせください。テストはiOSとAndroidユーザーが利用できます。</string>
     <string name="starting_screen_dismiss">続ける</string>
     <string name="starting_screen_police_duck_description">警告イラスト</string>
-    <string name="starting_screen_loading">読み込み中2026</string>
+    <string name="starting_screen_loading">読み込み中…</string>
 </resources>
