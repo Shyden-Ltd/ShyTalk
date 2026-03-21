@@ -67,9 +67,9 @@ class StartingScreenCache(private val context: Context) {
                 template = blocker.optString("template", "warning"),
                 title = blocker.optString("title", ""),
                 message = blocker.optString("message", ""),
-                imageType = blocker.optString("imageType", null),
-                backgroundImage = blocker.optString("backgroundImage", null),
-                backgroundImagePath = blocker.optString("backgroundImagePath", null),
+                imageType = blocker.opt("imageType")?.takeIf { it != JSONObject.NULL }?.toString(),
+                backgroundImage = blocker.opt("backgroundImage")?.takeIf { it != JSONObject.NULL }?.toString(),
+                backgroundImagePath = blocker.opt("backgroundImagePath")?.takeIf { it != JSONObject.NULL }?.toString(),
             )
         } catch (_: Exception) {
             cacheFile.delete()
@@ -98,7 +98,9 @@ class StartingScreenCache(private val context: Context) {
             // Atomic write: write to temp file then rename
             val tempFile = File(context.cacheDir, "starting_screens_cache.tmp")
             tempFile.writeText(json.toString())
-            tempFile.renameTo(cacheFile)
+            if (!tempFile.renameTo(cacheFile)) {
+                tempFile.delete()
+            }
         } catch (_: Exception) {
             // Log but don't crash — proceed with API response only
         }

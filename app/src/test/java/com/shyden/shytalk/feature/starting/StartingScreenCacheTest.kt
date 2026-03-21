@@ -210,8 +210,7 @@ class StartingScreenCacheTest {
 
         val cached = cache.getCachedBlocker()
         assertNotNull(cached)
-        // optString returns "null" string for JSONObject.NULL, so we check it's null-like
-        assertTrue(cached!!.imageType == null || cached.imageType == "null")
+        assertNull(cached!!.imageType)
     }
 
     @Test

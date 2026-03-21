@@ -1,5 +1,9 @@
 package com.shyden.shytalk.steps
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.shyden.shytalk.data.remote.StartingScreen
 import com.shyden.shytalk.feature.starting.StartingScreenComposable
 import com.shyden.shytalk.ui.theme.ShyTalkTheme
@@ -37,19 +41,22 @@ class StartingScreenSteps {
     @Given("a dismissable starting screen is configured with title {string} and message {string}")
     fun dismissableScreenConfigured(title: String, message: String) {
         rule.setContent {
+            var dismissed by remember { mutableStateOf(false) }
             ShyTalkTheme(darkTheme = true) {
-                StartingScreenComposable(
-                    screen = StartingScreen(
-                        screenId = "dismissable_test",
-                        enabled = true,
-                        dismissable = true,
-                        frequency = "once",
-                        template = "announcement",
-                        title = title,
-                        message = message,
-                    ),
-                    onDismiss = {}
-                )
+                if (!dismissed) {
+                    StartingScreenComposable(
+                        screen = StartingScreen(
+                            screenId = "dismissable_test",
+                            enabled = true,
+                            dismissable = true,
+                            frequency = "once",
+                            template = "announcement",
+                            title = title,
+                            message = message,
+                        ),
+                        onDismiss = { dismissed = true }
+                    )
+                }
             }
         }
         rule.mainClock.autoAdvance = false
