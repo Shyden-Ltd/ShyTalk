@@ -142,6 +142,326 @@ router.get('/config/startingScreens', async (req, res) => {
   }
 });
 
+// -- Starting screens PUT helpers --
+
+const VALID_FREQUENCIES = ['every_launch', 'once'];
+const VALID_TEMPLATES = ['warning', 'promotional', 'announcement', 'info'];
+const VALID_IMAGE_TYPES = ['police_duck'];
+const SCREEN_ID_REGEX = /^[a-zA-Z0-9_-]+$/;
+
+const SCREEN_FIELDS = [
+  'enabled',
+  'dismissable',
+  'frequency',
+  'template',
+  'title',
+  'message',
+  'imageType',
+  'backgroundImage',
+  'startDate',
+  'endDate',
+  'allowlist',
+];
+
+/**
+ * Strip zero-width chars except ZWJ (U+200D), trim, NFC normalise.
+ */
+function sanitiseTitle(title) {
+  // Remove zero-width chars: U+200B, U+200C, U+200E, U+200F, U+FEFF, U+2060
+  // Keep U+200D (ZWJ)
+  let result = title.replace(/[\u200B\u200C\u200E\u200F\uFEFF\u2060]/g, '');
+  result = result.trim();
+  result = result.normalize('NFC');
+  return result;
+}
+
+/**
+ * Strip control chars except \n \r \t, collapse >2 consecutive newlines to 2, trim, NFC normalise.
+ */
+function sanitiseMessage(message) {
+  // Remove control characters except \n (0x0A), \r (0x0D), \t (0x09)
+  // eslint-disable-next-line no-control-regex
+  let result = message.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  // Collapse >2 consecutive newlines to 2
+  result = result.replace(/\n{3,}/g, '\n\n');
+  result = result.trim();
+  result = result.normalize('NFC');
+  return result;
+}
+
+/**
+ * Validate an ISO 8601 date string with time component ('T' required).
+ * Returns true if valid, false otherwise.
+ */
+function isValidIsoDate(str) {
+  if (typeof str !== 'string') return false;
+  if (!str.includes('T')) return false;
+  const d = new Date(str);
+  return !isNaN(d.getTime());
+}
+
+/**
+ * Validate a single screen entry. Returns { error, field } or null if valid.
+ * Mutates the screen object to apply sanitisation and field filtering.
+ */
+function validateScreen(id, screen) {
+  if (!screen || typeof screen !== 'object' || Array.isArray(screen)) {
+    return { error: `Screen "${id}" must be an object`, field: id };
+  }
+
+  // -- enabled --
+  if (typeof screen.enabled !== 'boolean') {
+    return { error: `Screen "${id}": enabled must be a boolean`, field: 'enabled' };
+  }
+
+  // -- dismissable --
+  if (typeof screen.dismissable !== 'boolean') {
+    return { error: `Screen "${id}": dismissable must be a boolean`, field: 'dismissable' };
+  }
+
+  // -- frequency --
+  if (!VALID_FREQUENCIES.includes(screen.frequency)) {
+    return { error: `Screen "${id}": invalid frequency`, field: 'frequency' };
+  }
+
+  // -- template --
+  if (!VALID_TEMPLATES.includes(screen.template)) {
+    return { error: `Screen "${id}": invalid template`, field: 'template' };
+  }
+
+  // -- title --
+  if (typeof screen.title !== 'string') {
+    return { error: `Screen "${id}": title must be a string`, field: 'title' };
+  }
+  const sanitisedTitle = sanitiseTitle(screen.title);
+  const titleLength = [...sanitisedTitle].length; // char length, not byte length
+  if (titleLength < 3 || titleLength > 100) {
+    return {
+      error: `Screen "${id}": title must be 3-100 characters (got ${titleLength})`,
+      field: 'title',
+    };
+  }
+
+  // -- message --
+  if (typeof screen.message !== 'string') {
+    return { error: `Screen "${id}": message must be a string`, field: 'message' };
+  }
+  const sanitisedMessage = sanitiseMessage(screen.message);
+  const messageLength = [...sanitisedMessage].length;
+  if (messageLength < 10 || messageLength > 500) {
+    return {
+      error: `Screen "${id}": message must be 10-500 characters (got ${messageLength})`,
+      field: 'message',
+    };
+  }
+
+  // -- imageType --
+  if (screen.imageType !== null && screen.imageType !== undefined) {
+    if (!VALID_IMAGE_TYPES.includes(screen.imageType)) {
+      return { error: `Screen "${id}": invalid imageType`, field: 'imageType' };
+    }
+  }
+
+  // -- backgroundImage --
+  if (screen.backgroundImage !== null && screen.backgroundImage !== undefined) {
+    if (typeof screen.backgroundImage !== 'string' || screen.backgroundImage === '') {
+      return {
+        error: `Screen "${id}": backgroundImage must be a non-empty string or null`,
+        field: 'backgroundImage',
+      };
+    }
+  }
+
+  // -- dates --
+  if (screen.startDate !== null && screen.startDate !== undefined) {
+    if (!isValidIsoDate(screen.startDate)) {
+      return {
+        error: `Screen "${id}": startDate must be a valid ISO 8601 string with time`,
+        field: 'startDate',
+      };
+    }
+  }
+  if (screen.endDate !== null && screen.endDate !== undefined) {
+    if (!isValidIsoDate(screen.endDate)) {
+      return {
+        error: `Screen "${id}": endDate must be a valid ISO 8601 string with time`,
+        field: 'endDate',
+      };
+    }
+    // endDate must be in the future
+    if (new Date(screen.endDate).getTime() <= Date.now()) {
+      return { error: `Screen "${id}": endDate must be in the future`, field: 'endDate' };
+    }
+  }
+  if (screen.startDate && screen.endDate) {
+    const start = new Date(screen.startDate).getTime();
+    const end = new Date(screen.endDate).getTime();
+    if (start >= end) {
+      return { error: `Screen "${id}": startDate must be before endDate`, field: 'startDate' };
+    }
+  }
+
+  // -- allowlist --
+  if (screen.allowlist !== null && screen.allowlist !== undefined) {
+    if (typeof screen.allowlist !== 'object' || Array.isArray(screen.allowlist)) {
+      return { error: `Screen "${id}": allowlist must be an object`, field: 'allowlist' };
+    }
+    const { deviceIds, networks } = screen.allowlist;
+    if (deviceIds !== undefined) {
+      if (!Array.isArray(deviceIds)) {
+        return {
+          error: `Screen "${id}": allowlist.deviceIds must be an array`,
+          field: 'allowlist.deviceIds',
+        };
+      }
+      for (const did of deviceIds) {
+        if (typeof did !== 'string' || did === '') {
+          return {
+            error: `Screen "${id}": allowlist.deviceIds must contain non-empty strings`,
+            field: 'allowlist.deviceIds',
+          };
+        }
+      }
+    }
+    if (networks !== undefined) {
+      if (!Array.isArray(networks)) {
+        return {
+          error: `Screen "${id}": allowlist.networks must be an array`,
+          field: 'allowlist.networks',
+        };
+      }
+      for (const net of networks) {
+        if (typeof net === 'string' && net.includes('/')) {
+          const bits = net.split('/')[1];
+          if (bits === '0') {
+            return {
+              error: `Screen "${id}": CIDR /0 not allowed in allowlist.networks`,
+              field: 'allowlist.networks',
+            };
+          }
+        }
+      }
+    }
+  }
+
+  // Store sanitised values back
+  screen._sanitisedTitle = sanitisedTitle;
+  screen._sanitisedMessage = sanitisedMessage;
+
+  return null;
+}
+
+// -- Update starting screens (admin) --
+router.put('/config/startingScreens', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+
+    const body = req.body;
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return res.status(400).json({ error: 'Request body must be a JSON object' });
+    }
+
+    // Validate all screen entries first
+    const validatedScreens = {};
+    for (const [id, screen] of Object.entries(body)) {
+      // Validate screen ID
+      if (!id || !SCREEN_ID_REGEX.test(id)) {
+        return res.status(400).json({
+          error: `Invalid screen ID: "${id}". Must match ${SCREEN_ID_REGEX}`,
+          field: 'screenId',
+        });
+      }
+
+      const validationError = validateScreen(id, screen);
+      if (validationError) {
+        return res.status(400).json(validationError);
+      }
+
+      // Build clean screen object (only known fields)
+      const clean = {};
+      for (const field of SCREEN_FIELDS) {
+        if (field === 'title') {
+          clean.title = screen._sanitisedTitle;
+        } else if (field === 'message') {
+          clean.message = screen._sanitisedMessage;
+        } else if (field === 'allowlist') {
+          if (screen.allowlist) {
+            clean.allowlist = {
+              deviceIds: screen.allowlist.deviceIds || [],
+              networks: screen.allowlist.networks || [],
+            };
+          } else {
+            clean.allowlist = { deviceIds: [], networks: [] };
+          }
+        } else if (field in screen) {
+          clean[field] = screen[field];
+        } else if (
+          field === 'imageType' ||
+          field === 'backgroundImage' ||
+          field === 'startDate' ||
+          field === 'endDate'
+        ) {
+          clean[field] = null;
+        }
+      }
+
+      validatedScreens[id] = clean;
+    }
+
+    // Fetch existing screens for merge and blocking constraint
+    const snap = await db.doc('config/startingScreens').get();
+    const existing = snap.exists ? snap.data() : {};
+
+    // Build merged state (existing + updates)
+    const merged = { ...existing };
+    for (const [id, screen] of Object.entries(validatedScreens)) {
+      merged[id] = screen;
+    }
+
+    // Blocking constraint: max 1 non-dismissable screen enabled at a time
+    const nonDismissable = [];
+    for (const [id, screen] of Object.entries(merged)) {
+      if (screen.enabled && screen.dismissable === false) {
+        nonDismissable.push(id);
+      }
+    }
+    if (nonDismissable.length > 1) {
+      // Find the first existing blocker that is NOT in the current batch
+      const existingBlocker =
+        nonDismissable.find((id) => !(id in validatedScreens)) || nonDismissable[0];
+      return res.status(409).json({
+        error: 'Only one non-dismissable screen can be enabled at a time',
+        existingBlocker,
+      });
+    }
+
+    // Set audit fields
+    const now = new Date().toISOString();
+    for (const id of Object.keys(validatedScreens)) {
+      merged[id].lastModifiedBy = req.auth.uniqueId;
+      merged[id].lastModifiedAt = now;
+    }
+
+    await db.doc('config/startingScreens').set(merged);
+
+    log.info('config', 'Starting screens updated', {
+      updatedIds: Object.keys(validatedScreens),
+      totalScreens: Object.keys(merged).length,
+      admin: req.auth.uniqueId,
+    });
+
+    return res.json({ success: true, updated: Object.keys(validatedScreens) });
+  } catch (err) {
+    log.error('config', 'Error updating starting screens', { error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// -- 405 catch-all for startingScreens --
+router.all('/config/startingScreens', (req, res) => {
+  return res.status(405).json({ error: `Method ${req.method} not allowed` });
+});
+
 // -- Get config value --
 router.get('/config/:key', async (req, res) => {
   try {
