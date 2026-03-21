@@ -782,4 +782,10 @@
     <string name="timeout_15min">15 menit</string>
     <string name="timeout_30min">30 menit</string>
     <string name="timeout_never">Tidak pernah</string>
+    <!-- Starting Screens -->
+    <string name="starting_screen_pre_launch_title">ShyTalk belum tersedia</string>
+    <string name="starting_screen_pre_launch_message">ShyTalk belum dirilis. Untuk mendaftar sebagai penguji aplikasi, hubungi Shyden. Pengujian tersedia untuk pengguna iOS dan Android.</string>
+    <string name="starting_screen_dismiss">Lanjutkan</string>
+    <string name="starting_screen_police_duck_description">Ilustrasi peringatan</string>
+    <string name="starting_screen_loading">Memuat2026</string>
 </resources>

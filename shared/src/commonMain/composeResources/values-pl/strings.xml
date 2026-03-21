@@ -782,4 +782,10 @@
     <string name="timeout_15min">15 minut</string>
     <string name="timeout_30min">30 minut</string>
     <string name="timeout_never">Nigdy</string>
+    <!-- Starting Screens -->
+    <string name="starting_screen_pre_launch_title">ShyTalk nie jest jeszcze dostępny</string>
+    <string name="starting_screen_pre_launch_message">ShyTalk nie został jeszcze wydany. Aby zgłosić się do testowania aplikacji, skontaktuj się z Shyden. Testowanie jest dostępne dla użytkowników iOS i Android.</string>
+    <string name="starting_screen_dismiss">Kontynuuj</string>
+    <string name="starting_screen_police_duck_description">Ilustracja ostrzeżenia</string>
+    <string name="starting_screen_loading">Ładowanie2026</string>
 </resources>
