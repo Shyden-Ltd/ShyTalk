@@ -2310,10 +2310,25 @@
         #devices-panel.visible { display: block; }
         #starting-screens-panel { display: none; }
         #starting-screens-panel.visible { display: block; }
-        .screen-card { border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin: 16px 0; display: grid; grid-template-columns: 1fr 300px; gap: 24px; }
+        .screen-card { border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin: 16px 0; display: grid; grid-template-columns: 1fr auto; gap: 24px; }
         .screen-card-form { display: flex; flex-direction: column; gap: 12px; }
-        .screen-card-preview { border: 2px solid var(--border); border-radius: 24px; width: 260px; height: 520px; overflow: hidden; position: relative; background: var(--bg); }
+        .screen-card-preview-wrapper { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .preview-device-toggle { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+        .preview-device-toggle button { padding: 4px 12px; border: none; background: var(--surface2); color: var(--text2); cursor: pointer; font-size: 12px; font-weight: 600; }
+        .preview-device-toggle button.active { background: var(--accent); color: #fff; }
+        .screen-card-preview { border: 2px solid var(--border); border-radius: 24px; width: 260px; height: 520px; overflow: hidden; position: relative; background: var(--bg); transition: width 0.2s, height 0.2s; }
+        .screen-card-preview.tablet { width: 380px; height: 580px; border-radius: 18px; }
         .preview-content { padding: 24px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px; height: 100%; overflow-y: auto; }
+        .frequency-toggle-wrapper { display: flex; align-items: center; gap: 10px; }
+        .frequency-toggle-switch { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
+        .frequency-toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .frequency-toggle-slider { position: absolute; cursor: pointer; inset: 0; background: #ccc; border-radius: 24px; transition: background 0.2s; }
+        .frequency-toggle-slider::before { content: ""; position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: transform 0.2s; }
+        .frequency-toggle-switch input:checked + .frequency-toggle-slider { background: var(--accent); }
+        .frequency-toggle-switch input:checked + .frequency-toggle-slider::before { transform: translateX(20px); }
+        .upload-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; border-radius: 6px; z-index: 2; }
+        .upload-spinner { width: 24px; height: 24px; border: 3px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
         .char-counter { font-size: 12px; color: var(--text2); }
         .char-counter.over-limit { color: #e74c3c; font-weight: bold; }
         .status-badge { padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
@@ -5392,6 +5407,18 @@
       update();
     }
 
+    function getTemplateIconSvg(template, size) {
+      size = size || 80;
+      var half = size / 2;
+      var icons = {
+        warning: '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '"><circle cx="' + half + '" cy="' + half + '" r="' + half + '" fill="#e74c3c"/><text x="' + half + '" y="' + (half + 10) + '" text-anchor="middle" font-size="' + Math.round(size * 0.5) + '" font-weight="bold" fill="#fff">!</text></svg>',
+        promotional: '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '"><circle cx="' + half + '" cy="' + half + '" r="' + half + '" fill="#9b59b6"/><polygon points="' + half + ',' + Math.round(size * 0.15) + ' ' + Math.round(size * 0.62) + ',' + Math.round(size * 0.38) + ' ' + Math.round(size * 0.82) + ',' + Math.round(size * 0.38) + ' ' + Math.round(size * 0.68) + ',' + Math.round(size * 0.55) + ' ' + Math.round(size * 0.75) + ',' + Math.round(size * 0.82) + ' ' + half + ',' + Math.round(size * 0.65) + ' ' + Math.round(size * 0.25) + ',' + Math.round(size * 0.82) + ' ' + Math.round(size * 0.32) + ',' + Math.round(size * 0.55) + ' ' + Math.round(size * 0.18) + ',' + Math.round(size * 0.38) + ' ' + Math.round(size * 0.38) + ',' + Math.round(size * 0.38) + '" fill="#fff"/></svg>',
+        announcement: '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '"><circle cx="' + half + '" cy="' + half + '" r="' + half + '" fill="#3498db"/><path d="M' + Math.round(size * 0.28) + ' ' + Math.round(size * 0.35) + 'L' + Math.round(size * 0.7) + ' ' + Math.round(size * 0.2) + 'V' + Math.round(size * 0.7) + 'L' + Math.round(size * 0.28) + ' ' + Math.round(size * 0.55) + 'Z" fill="#fff"/><rect x="' + Math.round(size * 0.2) + '" y="' + Math.round(size * 0.35) + '" width="' + Math.round(size * 0.1) + '" height="' + Math.round(size * 0.2) + '" rx="2" fill="#fff"/></svg>',
+        info: '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '"><circle cx="' + half + '" cy="' + half + '" r="' + half + '" fill="#2ecc71"/><text x="' + half + '" y="' + (half + 10) + '" text-anchor="middle" font-size="' + Math.round(size * 0.5) + '" font-weight="bold" font-style="italic" fill="#fff">i</text></svg>'
+      };
+      return icons[template] || icons.info;
+    }
+
     function updatePreview(card) {
       const preview = card.querySelector(".screen-card-preview");
       const template = card.querySelector(".template-select").value;
@@ -5400,6 +5427,8 @@
       const dismissable = card.querySelector(".dismissable-toggle").checked;
       const imageType = card.querySelector(".image-type-select").value;
       const bgImageUrl = card.querySelector(".bg-image-key") ? card.querySelector(".bg-image-key").value : "";
+      const bgFitSelect = card.querySelector(".bg-image-fit-select");
+      const bgFit = bgFitSelect ? bgFitSelect.value : "cover";
 
       const templateColors = {
         warning: "#e74c3c",
@@ -5407,22 +5436,22 @@
         announcement: "#3498db",
         info: "#2ecc71"
       };
-      const templateIcons = {
-        warning: "\u26a0\ufe0f",
-        promotional: "\ud83c\udf89",
-        announcement: "\ud83d\udce2",
-        info: "\u2139\ufe0f"
-      };
       const color = templateColors[template] || "#888";
-      const icon = imageType === "police_duck" ? "\ud83e\udd86" : (templateIcons[template] || "");
+
+      var iconHtml;
+      if (imageType === "police_duck") {
+        iconHtml = '<img src="assets/police_duck.png" width="120" height="120" style="border-radius:16px;object-fit:contain;" alt="Police Duck" />';
+      } else {
+        iconHtml = getTemplateIconSvg(template, 80);
+      }
 
       preview.innerHTML =
-        '<div class="preview-content" style="' + (bgImageUrl ? "background-image:url(" + encodeURI(bgImageUrl) + ");background-size:cover;" : "") + '">' +
+        '<div class="preview-content" style="' + (bgImageUrl ? "background-image:url(" + encodeURI(bgImageUrl) + ");background-size:" + bgFit + ";background-position:center;background-repeat:no-repeat;" : "") + '">' +
           (bgImageUrl ? '<div style="position:absolute;inset:0;background:rgba(0,0,0,0.6);"></div>' : "") +
           '<div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:12px;padding:24px;width:100%;">' +
             '<img src="assets/app-icon.webp" width="48" height="48" style="border-radius:12px;" alt="ShyTalk" />' +
             '<div style="font-size:18px;font-weight:bold;color:' + (bgImageUrl ? "#fff" : "var(--text)") + ';">ShyTalk</div>' +
-            '<div style="font-size:32px;">' + icon + '</div>' +
+            iconHtml +
             '<div style="font-size:14px;font-weight:600;text-align:center;color:' + (bgImageUrl ? "#fff" : color) + ';">' + escapeHtml(title || "Title") + '</div>' +
             '<div style="font-size:12px;color:' + (bgImageUrl ? "#ccc" : "var(--text2)") + ';text-align:center;white-space:pre-wrap;word-break:break-word;">' + escapeHtml(message || "Message") + '</div>' +
             (dismissable ? '<button style="margin-top:12px;padding:8px 24px;border-radius:8px;background:#007AFF;color:white;border:none;font-size:13px;">Continue</button>' : "") +
@@ -5431,6 +5460,16 @@
     }
 
     async function uploadBackgroundImage(card, file) {
+      // Show upload overlay and disable inputs
+      var formArea = card.querySelector(".screen-card-form");
+      var inputs = formArea.querySelectorAll("input, select, textarea, button");
+      for (var i = 0; i < inputs.length; i++) inputs[i].disabled = true;
+      var overlay = document.createElement("div");
+      overlay.className = "upload-overlay";
+      overlay.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;"><div class="upload-spinner"></div><div style="color:#fff;font-size:13px;font-weight:600;">Uploading...</div></div>';
+      formArea.style.position = "relative";
+      formArea.appendChild(overlay);
+
       try {
         const formData = new FormData();
         formData.append("file", file);
@@ -5445,191 +5484,181 @@
         hasUnsavedScreenChanges = true;
       } catch (err) {
         showToast("Image upload failed: " + err.message, "error");
+      } finally {
+        // Remove overlay and re-enable inputs
+        if (overlay.parentElement) overlay.remove();
+        for (var j = 0; j < inputs.length; j++) inputs[j].disabled = false;
       }
     }
 
-    function renderScreenCards(data) {
-      startingScreensList.innerHTML = "";
-
-      // Find if any enabled screen is non-dismissable (for disabling dismissable toggle on others)
-      const enabledNonDismissableIds = [];
-      for (const [id, screen] of Object.entries(data)) {
-        if (screen.enabled && !screen.dismissable) {
-          enabledNonDismissableIds.push(id);
-        }
+    // Bug 11: Device/network allowlist pickers
+    function setupDeviceSearchPicker(card) {
+      var searchInput = card.querySelector(".device-search-input");
+      var searchBtn = card.querySelector(".device-search-btn");
+      var resultsDiv = card.querySelector(".device-search-results");
+      if (!searchInput || !searchBtn) return;
+      async function doSearch() {
+        var q = searchInput.value.trim();
+        if (!q || q.length < 2) { showToast("Enter at least 2 characters to search", "error"); return; }
+        resultsDiv.style.display = "block";
+        resultsDiv.innerHTML = '<div style="padding:10px;color:var(--text2);font-size:13px;">Searching...</div>';
+        try {
+          var result = await apiCall("GET", "/api/admin/devices?q=" + encodeURIComponent(q));
+          var devList = Array.isArray(result) ? result : (result && result.devices ? result.devices : []);
+          if (devList.length === 0) { resultsDiv.innerHTML = '<div style="padding:10px;color:var(--text2);font-size:13px;">No devices found</div>'; return; }
+          var existingIds = getDeviceIdsFromChips(card);
+          resultsDiv.innerHTML = "";
+          devList.forEach(function(dev) {
+            var alreadyAdded = existingIds.includes(dev.id);
+            var row = document.createElement("div");
+            row.style.cssText = "padding:8px 10px;border-bottom:1px solid var(--border);cursor:" + (alreadyAdded ? "default" : "pointer") + ";display:flex;justify-content:space-between;align-items:center;font-size:13px;" + (alreadyAdded ? "opacity:0.5;" : "");
+            row.innerHTML = '<div><strong>' + escapeHtml(dev.id ? dev.id.slice(0, 20) + '...' : '?') + '</strong>' + (dev.uniqueId ? ' <span style="color:var(--text2);">ID: ' + escapeHtml(String(dev.uniqueId)) + '</span>' : '') + (dev.model ? ' <span style="color:var(--text2);">' + escapeHtml(dev.model) + '</span>' : '') + (dev.lastIp ? ' <span style="color:var(--text2);font-size:11px;">IP: ' + escapeHtml(dev.lastIp) + '</span>' : '') + '</div>' + (alreadyAdded ? '<span style="font-size:11px;color:var(--text2);">Added</span>' : '<span style="color:var(--accent);font-weight:600;">+ Add</span>');
+            if (!alreadyAdded) { row.addEventListener("click", function() { addDeviceChip(card, dev.id); syncChipsToTextarea(card, "device"); row.style.opacity = "0.5"; row.style.cursor = "default"; hasUnsavedScreenChanges = true; }); }
+            resultsDiv.appendChild(row);
+          });
+        } catch (err) { resultsDiv.innerHTML = '<div style="padding:10px;color:#e74c3c;font-size:13px;">Search failed</div>'; }
       }
+      searchBtn.addEventListener("click", doSearch);
+      searchInput.addEventListener("keydown", function(e) { if (e.key === "Enter") { e.preventDefault(); doSearch(); } });
+    }
 
-      for (const [screenId, screen] of Object.entries(data)) {
+    function setupNetworkPicker(card) {
+      var addInput = card.querySelector(".network-add-input");
+      var addBtn = card.querySelector(".network-add-btn");
+      if (!addInput || !addBtn) return;
+      function doAdd() {
+        var val = addInput.value.trim();
+        if (!val) return;
+        if (!/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(val)) { showToast("Invalid IP or CIDR format", "error"); return; }
+        addNetworkChip(card, val); syncChipsToTextarea(card, "network"); addInput.value = ""; hasUnsavedScreenChanges = true;
+      }
+      addBtn.addEventListener("click", doAdd);
+      addInput.addEventListener("keydown", function(e) { if (e.key === "Enter") { e.preventDefault(); doAdd(); } });
+    }
+
+    function getDeviceIdsFromChips(card) { var chips = card.querySelectorAll(".allowlist-device-chips .allowlist-chip"); var ids = []; chips.forEach(function(c) { ids.push(c.getAttribute("data-value")); }); return ids; }
+
+    function addDeviceChip(card, deviceId) {
+      var container = card.querySelector(".allowlist-device-chips"); if (!container) return;
+      var existing = container.querySelectorAll(".allowlist-chip"); for (var i = 0; i < existing.length; i++) { if (existing[i].getAttribute("data-value") === deviceId) return; }
+      var chip = document.createElement("span"); chip.className = "allowlist-chip"; chip.setAttribute("data-value", deviceId);
+      chip.style.cssText = "display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;font-size:12px;font-family:monospace;color:var(--text);";
+      chip.innerHTML = escapeHtml(deviceId.length > 24 ? deviceId.slice(0, 24) + '...' : deviceId) + '<button type="button" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:14px;padding:0 2px;line-height:1;" title="Remove">&times;</button>';
+      chip.querySelector("button").addEventListener("click", function() { chip.remove(); syncChipsToTextarea(card, "device"); hasUnsavedScreenChanges = true; });
+      container.appendChild(chip);
+    }
+
+    function addNetworkChip(card, network) {
+      var container = card.querySelector(".allowlist-network-chips"); if (!container) return;
+      var existing = container.querySelectorAll(".allowlist-chip"); for (var i = 0; i < existing.length; i++) { if (existing[i].getAttribute("data-value") === network) return; }
+      var chip = document.createElement("span"); chip.className = "allowlist-chip"; chip.setAttribute("data-value", network);
+      chip.style.cssText = "display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;font-size:12px;font-family:monospace;color:var(--text);";
+      chip.innerHTML = escapeHtml(network) + '<button type="button" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:14px;padding:0 2px;line-height:1;" title="Remove">&times;</button>';
+      chip.querySelector("button").addEventListener("click", function() { chip.remove(); syncChipsToTextarea(card, "network"); hasUnsavedScreenChanges = true; });
+      container.appendChild(chip);
+    }
+
+    function syncChipsToTextarea(card, type) {
+      if (type === "device") { var c = card.querySelectorAll(".allowlist-device-chips .allowlist-chip"); var v = []; c.forEach(function(x) { v.push(x.getAttribute("data-value")); }); card.querySelector(".allowlist-devices").value = v.join("\n"); }
+      else { var c = card.querySelectorAll(".allowlist-network-chips .allowlist-chip"); var v = []; c.forEach(function(x) { v.push(x.getAttribute("data-value")); }); card.querySelector(".allowlist-networks").value = v.join("\n"); }
+    }
+
+    function renderAllowlistChips(card) {
+      var dt = card.querySelector(".allowlist-devices"); var nt = card.querySelector(".allowlist-networks");
+      if (dt && dt.value.trim()) { dt.value.split("\n").map(function(s) { return s.trim(); }).filter(Boolean).forEach(function(id) { addDeviceChip(card, id); }); }
+      if (nt && nt.value.trim()) { nt.value.split("\n").map(function(s) { return s.trim(); }).filter(Boolean).forEach(function(net) { addNetworkChip(card, net); }); }
+    }
+
+    function renderScreenCard(screenId, screen, enabledNonDismissableIds, isLocal) {
         const card = document.createElement("div");
         card.className = "screen-card";
         card.setAttribute("data-screen-id", screenId);
-
+        if (isLocal) card.setAttribute("data-local", "true");
         const startDateLocal = screen.startDate ? new Date(screen.startDate).toISOString().slice(0, 16) : "";
         const endDateLocal = screen.endDate ? new Date(screen.endDate).toISOString().slice(0, 16) : "";
-        const deviceIds = screen.allowlist && screen.allowlist.deviceIds ? screen.allowlist.deviceIds.join("\n") : "";
-        const networks = screen.allowlist && screen.allowlist.networks ? screen.allowlist.networks.join("\n") : "";
         const lastModifiedBy = screen.lastModifiedBy || "unknown";
         const lastModifiedAt = screen.lastModifiedAt ? new Date(screen.lastModifiedAt).toLocaleString() : "unknown";
-
-        // Determine if dismissable toggle should be disabled
+        const bgFit = screen.backgroundImageFit || "cover";
         const otherNonDismissable = enabledNonDismissableIds.filter(function(id) { return id !== screenId; });
         const dismissableDisabled = otherNonDismissable.length > 0 && screen.enabled;
         const dismissableTooltip = dismissableDisabled ? "Another enabled screen is already non-dismissable" : "";
-
         const statusBadge = getStatusBadge(screen);
-
         const inputStyle = "width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;font-family:inherit;";
         const labelStyle = "display:block;margin-bottom:4px;font-size:13px;color:var(--text2);";
         const checkboxLabelStyle = "display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text);cursor:pointer;";
-
+        var frequencyOnce = screen.frequency === "once";
         card.innerHTML =
           '<div class="screen-card-form">' +
-            '<div>' +
-              '<label style="' + labelStyle + '">Screen ID</label>' +
-              '<input type="text" value="' + escapeHtml(screenId) + '" readonly style="' + inputStyle + 'opacity:0.6;cursor:not-allowed;" />' +
-            '</div>' +
             '<div>' + statusBadge + '</div>' +
-            '<div>' +
-              '<label style="' + checkboxLabelStyle + '">' +
-                '<input type="checkbox" class="enabled-toggle" ' + (screen.enabled ? "checked" : "") + ' />' +
-                'Enabled' +
-              '</label>' +
-            '</div>' +
-            '<div>' +
-              '<label style="' + checkboxLabelStyle + '" ' + (dismissableTooltip ? 'title="' + escapeHtml(dismissableTooltip) + '"' : '') + '>' +
-                '<input type="checkbox" class="dismissable-toggle" ' + (screen.dismissable ? "checked" : "") + (dismissableDisabled ? " disabled" : "") + ' />' +
-                'Dismissable' +
-                (dismissableDisabled ? ' <span style="font-size:11px;color:var(--text2);">(locked)</span>' : '') +
-              '</label>' +
-            '</div>' +
-            '<div>' +
-              '<label style="' + labelStyle + '">Frequency</label>' +
-              '<select class="frequency-select" style="' + inputStyle + '">' +
-                '<option value="every_launch"' + (screen.frequency === "every_launch" ? " selected" : "") + '>Every Launch</option>' +
-                '<option value="once"' + (screen.frequency === "once" ? " selected" : "") + '>Once</option>' +
-              '</select>' +
-            '</div>' +
-            '<div>' +
-              '<label style="' + labelStyle + '">Template</label>' +
-              '<select class="template-select" style="' + inputStyle + '">' +
-                '<option value="warning"' + (screen.template === "warning" ? " selected" : "") + '>Warning</option>' +
-                '<option value="promotional"' + (screen.template === "promotional" ? " selected" : "") + '>Promotional</option>' +
-                '<option value="announcement"' + (screen.template === "announcement" ? " selected" : "") + '>Announcement</option>' +
-                '<option value="info"' + (screen.template === "info" ? " selected" : "") + '>Info</option>' +
-              '</select>' +
-            '</div>' +
-            '<div>' +
-              '<label style="' + labelStyle + '">Title</label>' +
-              '<input type="text" class="title-input" value="' + escapeHtml(screen.title || "") + '" placeholder="Screen title (3-100 chars)" maxlength="100" style="' + inputStyle + '" />' +
-              '<span class="title-counter char-counter"></span>' +
-            '</div>' +
-            '<div>' +
-              '<label style="' + labelStyle + '">Message</label>' +
-              '<textarea class="message-input" placeholder="Screen message (10-500 chars)" maxlength="500" rows="4" style="' + inputStyle + 'resize:vertical;">' + escapeHtml(screen.message || "") + '</textarea>' +
-              '<span class="message-counter char-counter"></span>' +
-            '</div>' +
-            '<div>' +
-              '<label style="' + labelStyle + '">Image Type</label>' +
-              '<select class="image-type-select" style="' + inputStyle + '">' +
-                '<option value="none"' + (!screen.imageType || screen.imageType === "none" ? " selected" : "") + '>None</option>' +
-                '<option value="police_duck"' + (screen.imageType === "police_duck" ? " selected" : "") + '>Police Duck</option>' +
-              '</select>' +
-            '</div>' +
-            '<div>' +
-              '<label style="' + labelStyle + '">Background Image</label>' +
-              '<input type="hidden" class="bg-image-key" value="' + escapeHtml(screen.backgroundImage || "") + '" />' +
-              '<div style="display:flex;gap:8px;align-items:center;">' +
-                '<input type="file" class="bg-image-file" accept="image/*" style="font-size:13px;color:var(--text);" />' +
-                (screen.backgroundImage ? '<button type="button" class="remove-bg-btn" style="padding:4px 10px;background:var(--danger,#e74c3c);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Remove</button>' : '') +
+            '<div><label style="' + checkboxLabelStyle + '"><input type="checkbox" class="enabled-toggle" ' + (screen.enabled ? 'checked' : '') + ' />Enabled</label></div>' +
+            '<div><label style="' + checkboxLabelStyle + '" ' + (dismissableTooltip ? 'title="' + escapeHtml(dismissableTooltip) + '"' : '') + '><input type="checkbox" class="dismissable-toggle" ' + (screen.dismissable ? 'checked' : '') + (dismissableDisabled ? ' disabled' : '') + ' />Dismissable' + (dismissableDisabled ? ' <span style="font-size:11px;color:var(--text2);">(locked)</span>' : '') + '</label></div>' +
+            '<div><div class="frequency-toggle-wrapper"><label class="frequency-toggle-switch"><input type="checkbox" class="frequency-select" ' + (frequencyOnce ? 'checked' : '') + ' /><span class="frequency-toggle-slider"></span></label><span style="font-size:14px;color:var(--text);">Show only once</span></div></div>' +
+            '<div><label style="' + labelStyle + '">Template</label><select class="template-select" style="' + inputStyle + '"><option value="warning"' + (screen.template === 'warning' ? ' selected' : '') + '>Warning</option><option value="promotional"' + (screen.template === 'promotional' ? ' selected' : '') + '>Promotional</option><option value="announcement"' + (screen.template === 'announcement' ? ' selected' : '') + '>Announcement</option><option value="info"' + (screen.template === 'info' ? ' selected' : '') + '>Info</option></select></div>' +
+            '<div><label style="' + labelStyle + '">Title</label><input type="text" class="title-input" value="' + escapeHtml(screen.title || '') + '" placeholder="Screen title (3-100 chars)" maxlength="100" style="' + inputStyle + '" /><span class="title-counter char-counter"></span></div>' +
+            '<div><label style="' + labelStyle + '">Message</label><textarea class="message-input" placeholder="Screen message (10-500 chars)" maxlength="500" rows="4" style="' + inputStyle + 'resize:vertical;">' + escapeHtml(screen.message || '') + '</textarea><span class="message-counter char-counter"></span></div>' +
+            '<div><label style="' + labelStyle + '">Image Type</label><select class="image-type-select" style="' + inputStyle + '"><option value="none"' + (!screen.imageType || screen.imageType === 'none' ? ' selected' : '') + '>None</option><option value="police_duck"' + (screen.imageType === 'police_duck' ? ' selected' : '') + '>Police Duck</option></select></div>' +
+            '<div><label style="' + labelStyle + '">Background Image</label><input type="hidden" class="bg-image-key" value="' + escapeHtml(screen.backgroundImage || '') + '" /><div style="display:flex;gap:8px;align-items:center;"><input type="file" class="bg-image-file" accept="image/*" style="font-size:13px;color:var(--text);" />' + (screen.backgroundImage ? '<button type="button" class="remove-bg-btn" style="padding:4px 10px;background:var(--danger,#e74c3c);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Remove</button>' : '') + '</div><span class="compression-info" style="font-size:11px;color:var(--text2);margin-top:4px;display:block;"></span>' + (screen.backgroundImage ? '<img src="' + encodeURI(screen.backgroundImage) + '" style="max-width:120px;max-height:80px;border-radius:6px;margin-top:6px;border:1px solid var(--border);" />' : '') + '</div>' +
+            '<div><label style="' + labelStyle + '">Background Display Mode</label><select class="bg-image-fit-select" style="' + inputStyle + '"><option value="cover"' + (bgFit === 'cover' ? ' selected' : '') + '>Cover (fill, crop)</option><option value="contain"' + (bgFit === 'contain' ? ' selected' : '') + '>Contain (fit, letterbox)</option><option value="100% 100%"' + (bgFit === '100% 100%' ? ' selected' : '') + '>Stretch (fill, distort)</option></select></div>' +
+            '<div><label style="' + labelStyle + '">Start Date</label><input type="datetime-local" class="start-date" value="' + startDateLocal + '" style="' + inputStyle + '" /></div>' +
+            '<div><label style="' + labelStyle + '">End Date</label><input type="datetime-local" class="end-date" value="' + endDateLocal + '" style="' + inputStyle + '" /></div>' +
+            '<div style="border:1px solid var(--border);border-radius:8px;padding:12px;">' +
+              '<label style="' + labelStyle + 'font-weight:600;font-size:14px;margin-bottom:8px;">Testing Allowlist</label>' +
+              '<p style="font-size:12px;color:var(--text2);margin:0 0 10px 0;">Restrict to specific devices or networks for testing. Leave empty to show to all users.</p>' +
+              '<div><label style="' + labelStyle + '">Device IDs <span style="font-size:11px;color:var(--text2);">(search by user ID or device)</span></label>' +
+                '<div style="display:flex;gap:6px;margin-bottom:6px;"><input type="text" class="device-search-input" placeholder="Search by uniqueId, username, or device model..." style="' + inputStyle + 'flex:1;" /><button type="button" class="device-search-btn" style="padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap;">Search</button></div>' +
+                '<div class="device-search-results" style="display:none;max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;margin-bottom:8px;background:var(--surface2);"></div>' +
+                '<div class="allowlist-device-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>' +
+                '<textarea class="allowlist-devices" rows="2" style="' + inputStyle + 'resize:vertical;font-family:monospace;font-size:12px;display:none;">' + escapeHtml(screen.allowlist && screen.allowlist.deviceIds ? screen.allowlist.deviceIds.join('\n') : '') + '</textarea>' +
               '</div>' +
-              '<span class="compression-info" style="font-size:11px;color:var(--text2);margin-top:4px;display:block;"></span>' +
-              (screen.backgroundImage ? '<img src="' + encodeURI(screen.backgroundImage) + '" style="max-width:120px;max-height:80px;border-radius:6px;margin-top:6px;border:1px solid var(--border);" />' : '') +
+              '<div style="margin-top:10px;"><label style="' + labelStyle + '">Networks <span style="font-size:11px;color:var(--text2);">(IP addresses or CIDR ranges, e.g. 192.168.1.0/24)</span></label>' +
+                '<div class="allowlist-network-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>' +
+                '<div style="display:flex;gap:6px;"><input type="text" class="network-add-input" placeholder="Enter IP or CIDR (e.g. 10.0.0.1 or 10.0.0.0/8)" style="' + inputStyle + 'flex:1;" /><button type="button" class="network-add-btn" style="padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap;">Add</button></div>' +
+                '<textarea class="allowlist-networks" rows="2" style="' + inputStyle + 'resize:vertical;font-family:monospace;font-size:12px;display:none;">' + escapeHtml(screen.allowlist && screen.allowlist.networks ? screen.allowlist.networks.join('\n') : '') + '</textarea>' +
+              '</div>' +
             '</div>' +
-            '<div>' +
-              '<label style="' + labelStyle + '">Start Date</label>' +
-              '<input type="datetime-local" class="start-date" value="' + startDateLocal + '" style="' + inputStyle + '" />' +
-            '</div>' +
-            '<div>' +
-              '<label style="' + labelStyle + '">End Date</label>' +
-              '<input type="datetime-local" class="end-date" value="' + endDateLocal + '" style="' + inputStyle + '" />' +
-            '</div>' +
-            '<div>' +
-              '<label style="' + labelStyle + '">Allowlist Device IDs <span style="font-size:11px;">(one per line, blank = all)</span></label>' +
-              '<textarea class="allowlist-devices" rows="3" placeholder="device-id-1&#10;device-id-2" style="' + inputStyle + 'resize:vertical;font-family:monospace;font-size:12px;">' + escapeHtml(deviceIds) + '</textarea>' +
-            '</div>' +
-            '<div>' +
-              '<label style="' + labelStyle + '">Allowlist Networks <span style="font-size:11px;">(one per line, blank = all)</span></label>' +
-              '<textarea class="allowlist-networks" rows="3" placeholder="network-name-1&#10;network-name-2" style="' + inputStyle + 'resize:vertical;font-family:monospace;font-size:12px;">' + escapeHtml(networks) + '</textarea>' +
-            '</div>' +
-            '<div style="font-size:12px;color:var(--text2);padding:8px 0;border-top:1px solid var(--border);">' +
-              'Last modified by <strong>' + escapeHtml(lastModifiedBy) + '</strong> at ' + escapeHtml(lastModifiedAt) +
-            '</div>' +
-            '<div style="display:flex;gap:8px;">' +
-              '<button type="button" class="save-screen-btn" style="padding:8px 20px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;">Save</button>' +
-              '<button type="button" class="delete-screen-btn" style="padding:8px 20px;background:var(--danger,#e74c3c);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;">Delete</button>' +
-            '</div>' +
+            '<div style="font-size:12px;color:var(--text2);padding:8px 0;border-top:1px solid var(--border);">Last modified by <strong>' + escapeHtml(lastModifiedBy) + '</strong> at ' + escapeHtml(lastModifiedAt) + '</div>' +
+            '<div style="display:flex;gap:8px;"><button type="button" class="save-screen-btn" style="padding:8px 20px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;">Save</button><button type="button" class="delete-screen-btn" style="padding:8px 20px;background:var(--danger,#e74c3c);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;">Delete</button></div>' +
           '</div>' +
-          '<div class="screen-card-preview"></div>';
+          '<div class="screen-card-preview-wrapper">' +
+            '<div class="preview-device-toggle"><button type="button" class="preview-phone-btn active">Phone</button><button type="button" class="preview-tablet-btn">Tablet</button></div>' +
+            '<div class="screen-card-preview"></div>' +
+          '</div>';
 
         startingScreensList.appendChild(card);
-
-        // Setup char counters
+        var phoneBtn = card.querySelector(".preview-phone-btn");
+        var tabletBtn = card.querySelector(".preview-tablet-btn");
+        var previewEl = card.querySelector(".screen-card-preview");
+        phoneBtn.addEventListener("click", function() { previewEl.classList.remove("tablet"); phoneBtn.classList.add("active"); tabletBtn.classList.remove("active"); });
+        tabletBtn.addEventListener("click", function() { previewEl.classList.add("tablet"); tabletBtn.classList.add("active"); phoneBtn.classList.remove("active"); });
         setupCharCounter(card.querySelector(".title-input"), 3, 100, card.querySelector(".title-counter"));
         setupCharCounter(card.querySelector(".message-input"), 10, 500, card.querySelector(".message-counter"));
-
-        // Attach input/change listeners for live preview
-        var previewInputs = card.querySelectorAll(".title-input, .message-input, .template-select, .image-type-select, .dismissable-toggle, .enabled-toggle");
+        var previewInputs = card.querySelectorAll(".title-input, .message-input, .template-select, .image-type-select, .dismissable-toggle, .enabled-toggle, .bg-image-fit-select");
         for (var i = 0; i < previewInputs.length; i++) {
           previewInputs[i].addEventListener("input", (function(c) { return function() { updatePreview(c); hasUnsavedScreenChanges = true; }; })(card));
           previewInputs[i].addEventListener("change", (function(c) { return function() { updatePreview(c); hasUnsavedScreenChanges = true; }; })(card));
         }
-
-        // Mark changes on other fields
         var otherInputs = card.querySelectorAll(".frequency-select, .start-date, .end-date, .allowlist-devices, .allowlist-networks");
         for (var j = 0; j < otherInputs.length; j++) {
           otherInputs[j].addEventListener("input", function() { hasUnsavedScreenChanges = true; });
           otherInputs[j].addEventListener("change", function() { hasUnsavedScreenChanges = true; });
         }
-
-        // Background image upload
-        card.querySelector(".bg-image-file").addEventListener("change", (function(c) {
-          return function(e) {
-            if (e.target.files && e.target.files[0]) {
-              uploadBackgroundImage(c, e.target.files[0]);
-            }
-          };
-        })(card));
-
-        // Remove background image
+        card.querySelector(".bg-image-file").addEventListener("change", (function(c) { return function(e) { if (e.target.files && e.target.files[0]) uploadBackgroundImage(c, e.target.files[0]); }; })(card));
         var removeBgBtn = card.querySelector(".remove-bg-btn");
-        if (removeBgBtn) {
-          removeBgBtn.addEventListener("click", (function(c) {
-            return function() {
-              c.querySelector(".bg-image-key").value = "";
-              var info = c.querySelector(".compression-info");
-              if (info) info.textContent = "";
-              updatePreview(c);
-              hasUnsavedScreenChanges = true;
-              var imgPreview = c.querySelector(".bg-image-file").parentElement.parentElement.querySelector("img");
-              if (imgPreview) imgPreview.remove();
-              this.remove();
-            };
-          })(card));
-        }
-
-        // Save button
-        card.querySelector(".save-screen-btn").addEventListener("click", (function(id) {
-          return function() { saveScreen(id); };
-        })(screenId));
-
-        // Delete button
-        card.querySelector(".delete-screen-btn").addEventListener("click", (function(id) {
-          return function() { deleteScreen(id); };
-        })(screenId));
-
-        // Initial preview render
+        if (removeBgBtn) { removeBgBtn.addEventListener("click", (function(c) { return function() { c.querySelector(".bg-image-key").value = ""; var info = c.querySelector(".compression-info"); if (info) info.textContent = ""; updatePreview(c); hasUnsavedScreenChanges = true; var imgP = c.querySelector(".bg-image-file").parentElement.parentElement.querySelector("img"); if (imgP) imgP.remove(); this.remove(); }; })(card)); }
+        setupDeviceSearchPicker(card);
+        setupNetworkPicker(card);
+        renderAllowlistChips(card);
+        card.querySelector(".save-screen-btn").addEventListener("click", (function(id) { return function() { saveScreen(id); }; })(screenId));
+        card.querySelector(".delete-screen-btn").addEventListener("click", (function(id) { return function() { deleteScreen(id); }; })(screenId));
         updatePreview(card);
-      }
+        return card;
+    }
+
+    function renderScreenCards(data) {
+      startingScreensList.innerHTML = "";
+      const enabledNonDismissableIds = [];
+      for (const [id, screen] of Object.entries(data)) { if (screen.enabled && !screen.dismissable) enabledNonDismissableIds.push(id); }
+      for (const [screenId, screen] of Object.entries(data)) { renderScreenCard(screenId, screen, enabledNonDismissableIds, false); }
     }
 
     async function saveScreen(screenId) {
@@ -5654,7 +5683,7 @@
       const screenData = {
         enabled: card.querySelector(".enabled-toggle").checked,
         dismissable: card.querySelector(".dismissable-toggle").checked,
-        frequency: card.querySelector(".frequency-select").value,
+        frequency: card.querySelector(".frequency-select").checked ? "once" : "every_launch",
         template: card.querySelector(".template-select").value,
         title: title,
         message: message,
@@ -5662,6 +5691,7 @@
         backgroundImage: card.querySelector(".bg-image-key").value || null,
         startDate: startDateRaw ? new Date(startDateRaw).toISOString() : null,
         endDate: endDateRaw ? new Date(endDateRaw).toISOString() : null,
+        backgroundImageFit: card.querySelector(".bg-image-fit-select") ? card.querySelector(".bg-image-fit-select").value : "cover",
         allowlist: {
           deviceIds: card.querySelector(".allowlist-devices").value.split("\n").map(function(s) { return s.trim(); }).filter(Boolean),
           networks: card.querySelector(".allowlist-networks").value.split("\n").map(function(s) { return s.trim(); }).filter(Boolean),
@@ -5681,40 +5711,23 @@
       }
     }
 
-    async function addScreen() {
-      const screenId = prompt("Enter a screen ID (letters, numbers, hyphens, underscores only):");
-      if (!screenId) return;
-
-      if (!/^[a-zA-Z0-9_-]+$/.test(screenId)) {
-        showToast("Invalid screen ID. Use only letters, numbers, hyphens, and underscores.", "error");
-        return;
-      }
-
-      const body = {};
-      body[screenId] = {
-        enabled: false,
-        dismissable: true,
-        frequency: "every_launch",
-        template: "info",
-        title: "New Screen",
-        message: "Screen message goes here.",
-        imageType: null,
-        backgroundImage: null,
-        startDate: null,
-        endDate: null,
-        allowlist: {
-          deviceIds: [],
-          networks: [],
-        },
+    function addScreen() {
+      var screenId = "screen-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6);
+      var localScreen = {
+        enabled: false, dismissable: true, frequency: "every_launch", template: "info",
+        title: "", message: "", imageType: null, backgroundImage: null, backgroundImageFit: "cover",
+        startDate: null, endDate: null, allowlist: { deviceIds: [], networks: [] },
+        lastModifiedBy: "you", lastModifiedAt: new Date().toISOString(),
       };
-
-      try {
-        await apiCall("PUT", "/api/config/startingScreens", body);
-        showToast("Screen created");
-        loadStartingScreens();
-      } catch (err) {
-        showToast("Failed to create screen: " + err.message, "error");
-      }
+      var enabledNonDismissableIds = [];
+      startingScreensList.querySelectorAll("[data-screen-id]").forEach(function(c) {
+        var et = c.querySelector(".enabled-toggle"); var dt = c.querySelector(".dismissable-toggle");
+        if (et && et.checked && dt && !dt.checked) enabledNonDismissableIds.push(c.getAttribute("data-screen-id"));
+      });
+      renderScreenCard(screenId, localScreen, enabledNonDismissableIds, true);
+      startingScreensEmpty.style.display = "none";
+      hasUnsavedScreenChanges = true;
+      showToast("New screen added. Fill in the details and click Save.", "info");
     }
 
     async function deleteScreen(screenId) {

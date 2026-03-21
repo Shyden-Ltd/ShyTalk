@@ -248,6 +248,7 @@ describe('GET /api/config/startingScreens — frozen response shape', () => {
     const res = await request(app).get('/api/config/startingScreens');
     expect(Object.keys(res.body.screen1).sort()).toEqual([
       'backgroundImage',
+      'backgroundImageFit',
       'contentHash',
       'dismissable',
       'enabled',

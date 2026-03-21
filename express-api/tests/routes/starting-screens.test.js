@@ -102,6 +102,7 @@ function makeScreen(overrides = {}) {
     message: 'Test message that is long enough.',
     imageType: 'police_duck',
     backgroundImage: null,
+    backgroundImageFit: 'cover',
     startDate: null,
     endDate: null,
     allowlist: { deviceIds: [], networks: [] },
@@ -118,6 +119,7 @@ function expectedContentHash(screen) {
     template: screen.template,
     imageType: screen.imageType || null,
     backgroundImage: screen.backgroundImage || null,
+    backgroundImageFit: screen.backgroundImageFit || 'cover',
     dismissable: screen.dismissable,
     frequency: screen.frequency,
   };
@@ -226,6 +228,7 @@ describe('GET /api/config/startingScreens — core', () => {
     expect(s.message).toBe('Test message that is long enough.');
     expect(s.imageType).toBe('police_duck');
     expect(s.backgroundImage).toBeNull();
+    expect(s.backgroundImageFit).toBe('cover');
     expect(s.startDate).toBeNull();
     expect(s.endDate).toBeNull();
     expect(s.lastModifiedAt).toBe('2026-03-20T12:00:00Z');
@@ -574,7 +577,7 @@ describe('GET /api/config/startingScreens — content hash', () => {
     // Pre-computed SHA-256 of sorted JSON:
     // {"backgroundImage":null,"dismissable":false,"frequency":"every_launch","imageType":"police_duck","message":"This is a golden hash test message.","template":"warning","title":"Golden Test"}
     expect(res.body.golden.contentHash).toBe(
-      '52f993a29fdd316d7e345ec3124a69d997ab0ccf50ae53a0cc27fbd6d160ec8b',
+      '7335f427d736af7d1a5bf56d9fd3acd07c51542506c7e2f8afacacbd4c2d2c81',
     );
   });
 });
@@ -714,6 +717,7 @@ function makePutScreen(overrides = {}) {
     message: 'This is a valid message for testing.',
     imageType: 'police_duck',
     backgroundImage: null,
+    backgroundImageFit: 'cover',
     startDate: null,
     endDate: null,
     ...overrides,
@@ -1018,6 +1022,52 @@ describe('PUT /api/config/startingScreens — enum validation', () => {
     const res = await putScreens(app, { s1: makePutScreen({ imageType: null }) });
 
     expect(res.status).toBe(200);
+  });
+});
+
+// ─── PUT — Validation: backgroundImageFit ─────────────────────────
+
+describe('PUT /api/config/startingScreens — backgroundImageFit validation', () => {
+  let app;
+  beforeEach(() => {
+    app = createAppWithAuthExemption();
+    mockDocGet.mockResolvedValue({ exists: false });
+    mockDocSet.mockResolvedValue();
+  });
+
+  test('"cover" accepted', async () => {
+    const res = await putScreens(app, { s1: makePutScreen({ backgroundImageFit: 'cover' }) });
+    expect(res.status).toBe(200);
+  });
+
+  test('"contain" accepted', async () => {
+    const res = await putScreens(app, { s1: makePutScreen({ backgroundImageFit: 'contain' }) });
+    expect(res.status).toBe(200);
+  });
+
+  test('"100% 100%" accepted', async () => {
+    const res = await putScreens(app, { s1: makePutScreen({ backgroundImageFit: '100% 100%' }) });
+    expect(res.status).toBe(200);
+  });
+
+  test('null accepted (defaults to cover)', async () => {
+    const res = await putScreens(app, { s1: makePutScreen({ backgroundImageFit: null }) });
+    expect(res.status).toBe(200);
+  });
+
+  test('undefined accepted (defaults to cover)', async () => {
+    const screen = makePutScreen();
+    delete screen.backgroundImageFit;
+    const res = await putScreens(app, { s1: screen });
+    expect(res.status).toBe(200);
+    const setCall = mockDocSet.mock.calls[0][0];
+    expect(setCall.s1.backgroundImageFit).toBe('cover');
+  });
+
+  test('invalid value returns 400', async () => {
+    const res = await putScreens(app, { s1: makePutScreen({ backgroundImageFit: 'fill' }) });
+    expect(res.status).toBe(400);
+    expect(res.body.field).toBe('backgroundImageFit');
   });
 });
 

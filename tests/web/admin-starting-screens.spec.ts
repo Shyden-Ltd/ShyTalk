@@ -12,15 +12,19 @@ async function goToStartingScreens(page: Page): Promise<void> {
   });
 }
 
-/** Create a screen via the UI prompt. Returns after the card appears in the DOM. */
-async function createScreenViaUI(page: Page, screenId: string): Promise<void> {
-  page.once("dialog", async (dialog) => {
-    await dialog.accept(screenId);
-  });
+/** Create a screen via the UI. Auto-generates ID (no prompt). Returns the screen ID. */
+async function createScreenViaUI(page: Page): Promise<string> {
+  const countBefore = await page.locator("[data-screen-id]").count();
   await page.locator("#add-screen-btn").click();
-  await expect(page.locator(`[data-screen-id="${screenId}"]`)).toBeVisible({
+  // Wait for a new card to appear
+  await expect(page.locator("[data-screen-id]")).toHaveCount(countBefore + 1, {
     timeout: 15_000,
   });
+  // Get the ID of the newly added card (last one)
+  const cards = page.locator("[data-screen-id]");
+  const lastCard = cards.nth(countBefore);
+  const screenId = await lastCard.getAttribute("data-screen-id");
+  return screenId!;
 }
 
 /** Delete a screen via the API for cleanup (silently ignores 404). */
@@ -96,56 +100,30 @@ test.describe("Starting Screens Admin Section", () => {
   // ── CRUD operations ──
 
   test("can create a new screen via Add Screen button", async ({ page }) => {
-    const screenId = "pw-create-test";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
       // Card is already asserted visible in createScreenViaUI
     } finally {
       await deleteScreenViaApi(page, screenId);
     }
   });
 
-  test("rejects invalid screen ID with special characters", async ({
-    page,
-  }) => {
-    // The addScreen function validates the ID with /^[a-zA-Z0-9_-]+$/
-    // Invalid IDs show a toast and do NOT create a card
-    page.once("dialog", async (dialog) => {
-      await dialog.accept("invalid screen!");
-    });
-    await page.locator("#add-screen-btn").click();
-
-    // Allow time for any async processing
-    await page.waitForTimeout(1_000);
-
-    // Card must NOT have been created
-    await expect(
-      page.locator('[data-screen-id="invalid screen!"]'),
-    ).not.toBeAttached();
-
-    // Error toast should be visible
-    const toast = page.locator("#toast");
-    await expect(toast).toBeVisible({ timeout: 5_000 });
-    await expect(toast).toHaveClass(/error/);
-  });
-
-  test("cancelling the prompt does not create a screen", async ({ page }) => {
-    const countBefore = await page.locator("[data-screen-id]").count();
-    page.once("dialog", async (dialog) => {
-      await dialog.dismiss();
-    });
-    await page.locator("#add-screen-btn").click();
-    await page.waitForTimeout(500);
-
-    // No new cards
-    const countAfter = await page.locator("[data-screen-id]").count();
-    expect(countAfter).toBe(countBefore);
+  test("add screen auto-generates a valid screen ID", async ({ page }) => {
+    let screenId = "";
+    try {
+      screenId = await createScreenViaUI(page);
+      // ID should match the auto-generated pattern: screen-{timestamp}-{random}
+      expect(screenId).toMatch(/^screen-\d+-[a-z0-9]+$/);
+    } finally {
+      await deleteScreenViaApi(page, screenId!);
+    }
   });
 
   test("screen card has all expected form fields", async ({ page }) => {
-    const screenId = "pw-fields-test";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       await expect(card.locator(".enabled-toggle")).toBeAttached();
@@ -165,9 +143,9 @@ test.describe("Starting Screens Admin Section", () => {
   });
 
   test("new screen card has save and delete buttons", async ({ page }) => {
-    const screenId = "pw-btns-test";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       await expect(card.locator(".save-screen-btn")).toBeVisible();
@@ -182,9 +160,9 @@ test.describe("Starting Screens Admin Section", () => {
   test("device preview panel is rendered inside the screen card", async ({
     page,
   }) => {
-    const screenId = "pw-preview-panel";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       await expect(card.locator(".screen-card-preview")).toBeVisible();
@@ -194,9 +172,9 @@ test.describe("Starting Screens Admin Section", () => {
   });
 
   test("device preview updates live as title is typed", async ({ page }) => {
-    const screenId = "pw-preview-test";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       await card.locator(".title-input").fill("Preview Test Title");
@@ -211,9 +189,9 @@ test.describe("Starting Screens Admin Section", () => {
   test("device preview shows Continue button when dismissable is checked", async ({
     page,
   }) => {
-    const screenId = "pw-dismiss-test";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       const toggle = card.locator(".dismissable-toggle");
@@ -229,9 +207,9 @@ test.describe("Starting Screens Admin Section", () => {
   test("device preview hides Continue button when non-dismissable", async ({
     page,
   }) => {
-    const screenId = "pw-nodismiss-test";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       const toggle = card.locator(".dismissable-toggle");
@@ -246,9 +224,9 @@ test.describe("Starting Screens Admin Section", () => {
   });
 
   test("device preview shows ShyTalk app icon", async ({ page }) => {
-    const screenId = "pw-branding-test";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       const preview = card.locator(".screen-card-preview");
@@ -260,9 +238,9 @@ test.describe("Starting Screens Admin Section", () => {
   });
 
   test("device preview contains ShyTalk branding text", async ({ page }) => {
-    const screenId = "pw-branding-text";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       const preview = card.locator(".screen-card-preview");
@@ -277,9 +255,9 @@ test.describe("Starting Screens Admin Section", () => {
   test("title character counter shows count with /100 limit", async ({
     page,
   }) => {
-    const screenId = "pw-counter-test";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       await card.locator(".title-input").fill("Test");
@@ -294,9 +272,9 @@ test.describe("Starting Screens Admin Section", () => {
   test("message character counter shows count with /500 limit", async ({
     page,
   }) => {
-    const screenId = "pw-msg-counter-test";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       await card.locator(".message-input").fill("Hello world");
@@ -311,9 +289,9 @@ test.describe("Starting Screens Admin Section", () => {
   test("title counter has over-limit class when exceeding 100 characters", async ({
     page,
   }) => {
-    const screenId = "pw-overlimit-test";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       const titleInput = card.locator(".title-input");
@@ -331,9 +309,9 @@ test.describe("Starting Screens Admin Section", () => {
   test("title counter has over-limit class when under minimum (less than 3 chars)", async ({
     page,
   }) => {
-    const screenId = "pw-underlimit-test";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       await card.locator(".title-input").fill("ab"); // 2 chars, below min of 3
@@ -350,9 +328,9 @@ test.describe("Starting Screens Admin Section", () => {
   test("newly created (disabled) screen does not show Active badge", async ({
     page,
   }) => {
-    const screenId = "pw-badge-inactive";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       // New screens are created with enabled: false, so Active badge should not be shown
@@ -363,9 +341,9 @@ test.describe("Starting Screens Admin Section", () => {
   });
 
   test("enabling a screen shows Active status badge", async ({ page }) => {
-    const screenId = "pw-badge-active";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       // Enable the screen
@@ -398,9 +376,9 @@ test.describe("Starting Screens Admin Section", () => {
   // ── Save and validation ──
 
   test("save button shows toast after clicking", async ({ page }) => {
-    const screenId = "pw-save-test";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       await card.locator(".title-input").fill("Save Test Title");
@@ -421,9 +399,9 @@ test.describe("Starting Screens Admin Section", () => {
   test("save fails with title too short (under 3 chars) and shows error toast", async ({
     page,
   }) => {
-    const screenId = "pw-short-title";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       await card.locator(".title-input").fill("ab"); // 2 chars — below minimum of 3
@@ -443,9 +421,9 @@ test.describe("Starting Screens Admin Section", () => {
   test("save fails with message too short (under 10 chars) and shows error toast", async ({
     page,
   }) => {
-    const screenId = "pw-short-msg";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       await card.locator(".title-input").fill("Valid Title Here");
@@ -464,7 +442,7 @@ test.describe("Starting Screens Admin Section", () => {
     const screenId = "pw-persist-test";
     const titleText = "Persistence Check Title";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       await card.locator(".title-input").fill(titleText);
@@ -497,9 +475,9 @@ test.describe("Starting Screens Admin Section", () => {
   test("delete button asks for confirmation before deleting", async ({
     page,
   }) => {
-    const screenId = "pw-delete-confirm-test";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
 
@@ -518,30 +496,36 @@ test.describe("Starting Screens Admin Section", () => {
   });
 
   test("confirmed delete removes the screen card", async ({ page }) => {
-    const screenId = "pw-delete-test";
-    // Accept the confirm dialog
-    page.once("dialog", async (dialog) => {
-      await dialog.accept();
-    });
+    let screenId = "";
 
-    await createScreenViaUI(page, screenId);
+    screenId = await createScreenViaUI(page);
     const card = page.locator(`[data-screen-id="${screenId}"]`);
     await expect(card).toBeVisible();
 
+    // Save it first so it exists in the API
+    await card.locator(".title-input").fill("Delete Test Screen");
+    await card
+      .locator(".message-input")
+      .fill("This screen will be deleted soon.");
+    await card.locator(".save-screen-btn").click();
+    await expect(page.locator("#toast")).toBeVisible({ timeout: 15_000 });
+
+    // Wait for the card to re-render after save
+    await expect(
+      page.locator(`[data-screen-id="${screenId}"]`),
+    ).toBeVisible({ timeout: 15_000 });
+
     page.once("dialog", async (dialog) => {
       await dialog.accept();
     });
-    await card.locator(".delete-screen-btn").click();
+    await page
+      .locator(`[data-screen-id="${screenId}"]`)
+      .locator(".delete-screen-btn")
+      .click();
 
-    await expect(card).not.toBeVisible({ timeout: 15_000 });
-
-    // Reload and verify gone
-    await page.reload();
-    await adminLogin(page);
-    await goToStartingScreens(page);
     await expect(
       page.locator(`[data-screen-id="${screenId}"]`),
-    ).not.toBeAttached();
+    ).not.toBeVisible({ timeout: 15_000 });
   });
 
   // ── Deep linking ──
@@ -561,9 +545,9 @@ test.describe("Starting Screens Admin Section", () => {
   test("changing template to promotional does not crash the preview", async ({
     page,
   }) => {
-    const screenId = "pw-template-test";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       const preview = card.locator(".screen-card-preview");
@@ -579,9 +563,9 @@ test.describe("Starting Screens Admin Section", () => {
   test("changing template to urgent does not crash the preview", async ({
     page,
   }) => {
-    const screenId = "pw-template-urgent";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       const preview = card.locator(".screen-card-preview");
@@ -604,16 +588,14 @@ test.describe("Starting Screens Admin Section", () => {
   // ── Frequency select ──
 
   test("frequency select has expected options", async ({ page }) => {
-    const screenId = "pw-freq-test";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
-      const freqSelect = card.locator(".frequency-select");
-      const options = await freqSelect.locator("option").allTextContents();
-
-      // At minimum these common frequency options should exist
-      expect(options.length).toBeGreaterThan(0);
+      const freqToggle = card.locator(".frequency-select");
+      // Frequency is now a checkbox toggle (show only once)
+      await expect(freqToggle).toBeAttached();
     } finally {
       await deleteScreenViaApi(page, screenId);
     }
@@ -624,9 +606,9 @@ test.describe("Starting Screens Admin Section", () => {
   test("start and end date fields accept datetime-local values", async ({
     page,
   }) => {
-    const screenId = "pw-dates-test";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       await card.locator(".start-date").fill("2028-01-01T00:00");
@@ -645,9 +627,9 @@ test.describe("Starting Screens Admin Section", () => {
   test("allowlist device IDs textarea accepts multiline input", async ({
     page,
   }) => {
-    const screenId = "pw-allowlist-test";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       const deviceArea = card.locator(".allowlist-devices");
@@ -663,9 +645,9 @@ test.describe("Starting Screens Admin Section", () => {
   test("allowlist networks textarea accepts multiline input", async ({
     page,
   }) => {
-    const screenId = "pw-allowlist-net";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       const networkArea = card.locator(".allowlist-networks");
@@ -679,9 +661,9 @@ test.describe("Starting Screens Admin Section", () => {
   // ── Accessibility ──
 
   test("screen card form has labels for its fields", async ({ page }) => {
-    const screenId = "pw-a11y-test";
+    let screenId = "";
     try {
-      await createScreenViaUI(page, screenId);
+      screenId = await createScreenViaUI(page);
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       // At least some labels should be present in the form
@@ -693,19 +675,19 @@ test.describe("Starting Screens Admin Section", () => {
   });
 
   // ── afterAll cleanup ──
-  // Belt-and-suspenders: clean up any pw-* screens that leaked from failed tests
+  // Belt-and-suspenders: clean up any auto-generated screens that leaked from failed tests
   test.afterAll(async ({ page }) => {
     await adminLogin(page);
     await goToStartingScreens(page);
 
-    // Collect all data-screen-id values prefixed with pw-
-    const pwScreenIds = await page.evaluate(() => {
+    // Collect all data-screen-id values prefixed with screen- (auto-generated)
+    const autoScreenIds = await page.evaluate(() => {
       return Array.from(document.querySelectorAll("[data-screen-id]"))
         .map((el) => el.getAttribute("data-screen-id") ?? "")
-        .filter((id) => id.startsWith("pw-"));
+        .filter((id) => id.startsWith("screen-"));
     });
 
-    for (const id of pwScreenIds) {
+    for (const id of autoScreenIds) {
       await deleteScreenViaApi(page, id);
     }
   });

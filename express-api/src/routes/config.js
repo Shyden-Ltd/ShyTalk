@@ -28,6 +28,7 @@ function computeContentHash(screen) {
     template: screen.template,
     imageType: screen.imageType || null,
     backgroundImage: screen.backgroundImage || null,
+    backgroundImageFit: screen.backgroundImageFit || 'cover',
     dismissable: screen.dismissable,
     frequency: screen.frequency,
   };
@@ -116,6 +117,7 @@ router.get('/config/startingScreens', async (req, res) => {
         message: screen.message,
         imageType: screen.imageType || null,
         backgroundImage: screen.backgroundImage || null,
+        backgroundImageFit: screen.backgroundImageFit || 'cover',
         startDate: screen.startDate || null,
         endDate: screen.endDate || null,
         contentHash: computeContentHash(screen),
@@ -180,6 +182,7 @@ const SCREEN_FIELDS = [
   'message',
   'imageType',
   'backgroundImage',
+  'backgroundImageFit',
   'startDate',
   'endDate',
   'allowlist',
@@ -355,6 +358,17 @@ function validateScreen(id, screen, existingEndDate) {
       };
     }
   }
+  const VALID_BG_FITS = ['cover', 'contain', '100% 100%'];
+  if (
+    screen.backgroundImageFit !== null &&
+    screen.backgroundImageFit !== undefined &&
+    !VALID_BG_FITS.includes(screen.backgroundImageFit)
+  ) {
+    return {
+      error: `Screen "${id}": backgroundImageFit must be "cover", "contain", or "100% 100%"`,
+      field: 'backgroundImageFit',
+    };
+  }
   const dateErr = validateDates(id, screen, existingEndDate);
   if (dateErr) return dateErr;
   if (screen.allowlist !== null && screen.allowlist !== undefined) {
@@ -413,6 +427,8 @@ router.put('/config/startingScreens', async (req, res) => {
           }
         } else if (field in screen) {
           clean[field] = screen[field];
+        } else if (field === 'backgroundImageFit') {
+          clean[field] = 'cover';
         } else if (
           field === 'imageType' ||
           field === 'backgroundImage' ||
