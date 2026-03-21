@@ -5369,6 +5369,9 @@
     });
 
     function getStatusBadge(screen) {
+      if (!screen.enabled) {
+        return '<span class="status-badge status-expired">Disabled</span>';
+      }
       const now = Date.now();
       if (screen.startDate && new Date(screen.startDate).getTime() > now) {
         return '<span class="status-badge status-scheduled">Scheduled</span>';
@@ -5655,7 +5658,7 @@
         template: card.querySelector(".template-select").value,
         title: title,
         message: message,
-        imageType: card.querySelector(".image-type-select").value || null,
+        imageType: card.querySelector(".image-type-select").value === "none" ? null : (card.querySelector(".image-type-select").value || null),
         backgroundImage: card.querySelector(".bg-image-key").value || null,
         startDate: startDateRaw ? new Date(startDateRaw).toISOString() : null,
         endDate: endDateRaw ? new Date(endDateRaw).toISOString() : null,
@@ -5695,7 +5698,7 @@
         template: "info",
         title: "New Screen",
         message: "Screen message goes here.",
-        imageType: "none",
+        imageType: null,
         backgroundImage: null,
         startDate: null,
         endDate: null,
@@ -5732,7 +5735,7 @@
 
     async function loadStartingScreens() {
       try {
-        const data = await apiCall("GET", "/api/config/startingScreens");
+        const data = await apiCall("GET", "/api/config/startingScreens/admin");
         startingScreensEmpty.style.display = Object.keys(data).length === 0 ? "block" : "none";
         renderScreenCards(data);
       } catch (err) {

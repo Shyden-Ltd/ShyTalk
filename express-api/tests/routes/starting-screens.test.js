@@ -36,6 +36,10 @@ jest.mock('../../src/utils/log', () => ({
   debug: jest.fn(),
 }));
 
+jest.mock('../../src/utils/firestore-helpers', () => ({
+  queryDocs: jest.fn().mockResolvedValue([]),
+}));
+
 jest.mock('../../src/middleware/auth', () => ({
   requireAdmin: jest.fn(() => false),
   authMiddleware: jest.fn((req, res, next) => {
@@ -1113,6 +1117,38 @@ describe('PUT /api/config/startingScreens — date validation', () => {
     });
 
     expect(res.status).toBe(200);
+  });
+
+  test('updating other fields on expired screen accepted (endDate unchanged)', async () => {
+    const pastEndDate = '2025-01-01T00:00:00Z';
+    // Mock existing screen with past endDate
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ s1: makePutScreen({ endDate: pastEndDate, title: 'Old Title' }) }),
+    });
+
+    // PUT same screen with same endDate but different title — should succeed
+    const res = await putScreens(app, {
+      s1: makePutScreen({ endDate: pastEndDate, title: 'Updated Title' }),
+    });
+
+    expect(res.status).toBe(200);
+  });
+
+  test('changing endDate to a past value on existing screen returns 400', async () => {
+    // Mock existing screen with future endDate
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ s1: makePutScreen({ endDate: '2099-01-01T00:00:00Z' }) }),
+    });
+
+    // PUT with a different, past endDate — should reject
+    const res = await putScreens(app, {
+      s1: makePutScreen({ endDate: '2025-01-01T00:00:00Z' }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.field).toBe('endDate');
   });
 
   test('startDate as epoch number returns 400', async () => {

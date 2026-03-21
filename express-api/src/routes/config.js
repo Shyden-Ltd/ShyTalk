@@ -143,6 +143,21 @@ router.get('/config/startingScreens', async (req, res) => {
   }
 });
 
+// -- Get starting screens for admin (includes allowlist + lastModifiedBy) --
+router.get('/config/startingScreens/admin', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+
+    const snap = await db.doc('config/startingScreens').get();
+    if (!snap.exists) return res.json({});
+
+    return res.json(snap.data());
+  } catch (err) {
+    log.error('config', 'Error fetching starting screens (admin)', { error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // -- Starting screens PUT helpers --
 
 const VALID_FREQUENCIES = ['every_launch', 'once'];
@@ -206,7 +221,7 @@ function isValidIsoDate(str) {
  * On success: returns { sanitisedTitle, sanitisedMessage }.
  * On failure: returns { error, field }.
  */
-function validateScreen(id, screen) {
+function validateScreen(id, screen, existingEndDate) {
   if (!screen || typeof screen !== 'object' || Array.isArray(screen)) {
     return { error: `Screen "${id}" must be an object`, field: id };
   }
@@ -290,8 +305,10 @@ function validateScreen(id, screen) {
         field: 'endDate',
       };
     }
-    // endDate must be in the future
-    if (new Date(screen.endDate).getTime() <= Date.now()) {
+    // endDate must be in the future — but only if it changed from the existing value
+    // (admins need to edit other fields on expired screens without changing endDate)
+    const endDateChanged = screen.endDate !== existingEndDate;
+    if (endDateChanged && new Date(screen.endDate).getTime() <= Date.now()) {
       return { error: `Screen "${id}": endDate must be in the future`, field: 'endDate' };
     }
   }
@@ -365,6 +382,10 @@ router.put('/config/startingScreens', async (req, res) => {
       return res.status(400).json({ error: 'Request body must be a JSON object' });
     }
 
+    // Fetch existing screens early so we can pass existing endDate to validateScreen
+    const snap = await db.doc('config/startingScreens').get();
+    const existing = snap.exists ? snap.data() : {};
+
     // Validate all screen entries first
     const validatedScreens = {};
     for (const [id, screen] of Object.entries(body)) {
@@ -376,7 +397,8 @@ router.put('/config/startingScreens', async (req, res) => {
         });
       }
 
-      const result = validateScreen(id, screen);
+      const existingEndDate = existing[id]?.endDate || undefined;
+      const result = validateScreen(id, screen, existingEndDate);
       if (result.error) {
         return res.status(400).json({ error: result.error, field: result.field });
       }
@@ -412,14 +434,9 @@ router.put('/config/startingScreens', async (req, res) => {
       validatedScreens[id] = clean;
     }
 
-    // Fetch existing screens for merge and blocking constraint.
-    // Note: There is a small TOCTOU window between this read and the subsequent write.
-    // For admin-only operations with low concurrency, this is acceptable.
-    // A Firestore transaction would eliminate this race if needed in the future.
-    const snap = await db.doc('config/startingScreens').get();
-    const existing = snap.exists ? snap.data() : {};
-
     // Build merged state (existing + updates)
+    // Note: There is a small TOCTOU window between the read above and the write below.
+    // For admin-only operations with low concurrency, this is acceptable.
     const merged = { ...existing };
     for (const [id, screen] of Object.entries(validatedScreens)) {
       merged[id] = screen;

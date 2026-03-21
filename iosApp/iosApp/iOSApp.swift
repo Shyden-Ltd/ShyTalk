@@ -14,6 +14,9 @@ struct iOSApp: App {
                     // Loading state while checking API
                     ProgressView(NSLocalizedString("starting_screen_loading", comment: "Loading"))
                         .accessibilityIdentifier("startingScreen_loading")
+                } else if let screen = coordinator.dismissableScreens.first {
+                    StartingScreenView(screen: screen,
+                                       onDismiss: { coordinator.dismissDismissableScreen(screen) })
                 } else {
                     ContentView()
                 }
