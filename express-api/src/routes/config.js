@@ -11,11 +11,116 @@
  * PUT /api/config/economy  -> Admin update economy config (merge)
  */
 
+const crypto = require('crypto');
 const router = require('express').Router();
 const { db } = require('../utils/firebase');
 const { requireAdmin } = require('../middleware/auth');
 const { queryDocs } = require('../utils/firestore-helpers');
 const log = require('../utils/log');
+
+// -- Starting screens helpers --
+
+function computeContentHash(screen) {
+  const hashFields = {
+    title: screen.title,
+    message: screen.message,
+    template: screen.template,
+    imageType: screen.imageType || null,
+    backgroundImage: screen.backgroundImage || null,
+    dismissable: screen.dismissable,
+    frequency: screen.frequency,
+  };
+  return crypto
+    .createHash('sha256')
+    .update(JSON.stringify(hashFields, Object.keys(hashFields).sort()))
+    .digest('hex');
+}
+
+function isScreenActive(screen, now) {
+  if (!screen.enabled) return false;
+  if (screen.startDate && new Date(screen.startDate).getTime() > now) return false;
+  if (screen.endDate && new Date(screen.endDate).getTime() <= now) return false;
+  return true;
+}
+
+function cidrMatch(ip, cidr) {
+  const [range, bits] = cidr.split('/');
+  const mask = ~(2 ** (32 - parseInt(bits)) - 1) >>> 0;
+  const ipNum = ip.split('.').reduce((acc, oct) => (acc << 8) + parseInt(oct), 0) >>> 0;
+  const rangeNum = range.split('.').reduce((acc, oct) => (acc << 8) + parseInt(oct), 0) >>> 0;
+  return (ipNum & mask) === (rangeNum & mask);
+}
+
+function normalizeIp(ip) {
+  // Strip IPv6-mapped IPv4 prefix (e.g. ::ffff:127.0.0.1 → 127.0.0.1)
+  if (ip && ip.startsWith('::ffff:')) return ip.slice(7);
+  return ip;
+}
+
+function isAllowlisted(screen, deviceId, ip) {
+  if (!screen.allowlist) return false;
+  const { deviceIds = [], networks = [] } = screen.allowlist;
+  if (deviceId && deviceIds.includes(deviceId)) return true;
+  const normalizedIp = normalizeIp(ip);
+  if (normalizedIp) {
+    for (const network of networks) {
+      if (network.includes('/')) {
+        if (cidrMatch(normalizedIp, network)) return true;
+      } else if (normalizedIp === network) return true;
+    }
+  }
+  return false;
+}
+
+// -- Get starting screens (public, auth-exempt) --
+router.get('/config/startingScreens', async (req, res) => {
+  try {
+    const snap = await db.doc('config/startingScreens').get();
+    if (!snap.exists) return res.json({});
+
+    const allScreens = snap.data();
+    const now = Date.now();
+    const deviceId = req.headers['x-device-id'];
+    const ip = req.ip;
+    const result = {};
+
+    const sortedIds = Object.keys(allScreens).sort();
+    for (const id of sortedIds) {
+      const screen = allScreens[id];
+      if (!isScreenActive(screen, now)) continue;
+
+      const dismissable =
+        screen.dismissable === false && isAllowlisted(screen, deviceId, ip)
+          ? true
+          : screen.dismissable;
+
+      result[id] = {
+        enabled: screen.enabled,
+        dismissable,
+        frequency: screen.frequency,
+        template: screen.template,
+        title: screen.title,
+        message: screen.message,
+        imageType: screen.imageType || null,
+        backgroundImage: screen.backgroundImage || null,
+        startDate: screen.startDate || null,
+        endDate: screen.endDate || null,
+        contentHash: computeContentHash(screen),
+        lastModifiedAt: screen.lastModifiedAt || null,
+      };
+    }
+
+    log.info('config', 'Starting screens fetched', {
+      screenCount: Object.keys(result).length,
+      deviceId: deviceId ? '(present)' : '(absent)',
+    });
+
+    return res.json(result);
+  } catch (err) {
+    log.error('config', 'Error fetching starting screens', { error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 // -- Get config value --
 router.get('/config/:key', async (req, res) => {
