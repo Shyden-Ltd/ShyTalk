@@ -33,7 +33,12 @@ function computeContentHash(screen) {
   };
   return crypto
     .createHash('sha256')
-    .update(JSON.stringify(hashFields, Object.keys(hashFields).sort()))
+    .update(
+      JSON.stringify(
+        hashFields,
+        Object.keys(hashFields).sort((a, b) => a.localeCompare(b)),
+      ),
+    )
     .digest('hex');
 }
 
@@ -58,23 +63,24 @@ function normalizeIp(ip) {
   return ip;
 }
 
+function matchesNetwork(normalizedIp, network) {
+  if (network.includes('/')) {
+    // Only attempt CIDR match if both IP and network are IPv4
+    if (!normalizedIp.includes(':') && !network.includes(':')) {
+      return cidrMatch(normalizedIp, network);
+    }
+    return false; // Skip IPv6 CIDR matching (not implemented)
+  }
+  return normalizedIp === network;
+}
+
 function isAllowlisted(screen, deviceId, ip) {
   if (!screen.allowlist) return false;
   const { deviceIds = [], networks = [] } = screen.allowlist;
   if (deviceId && deviceIds.includes(deviceId)) return true;
   const normalizedIp = normalizeIp(ip);
-  if (normalizedIp) {
-    for (const network of networks) {
-      if (network.includes('/')) {
-        // Only attempt CIDR match if both IP and network are IPv4
-        if (!normalizedIp.includes(':') && !network.includes(':')) {
-          if (cidrMatch(normalizedIp, network)) return true;
-        }
-        // Skip IPv6 CIDR matching (not implemented)
-      } else if (normalizedIp === network) return true;
-    }
-  }
-  return false;
+  if (!normalizedIp) return false;
+  return networks.some((network) => matchesNetwork(normalizedIp, network));
 }
 
 // -- Get starting screens (public, auth-exempt) --
@@ -90,7 +96,7 @@ router.get('/config/startingScreens', async (req, res) => {
     const result = {};
     let hasAllowlistOverride = false;
 
-    const sortedIds = Object.keys(allScreens).sort();
+    const sortedIds = Object.keys(allScreens).sort((a, b) => a.localeCompare(b));
     for (const id of sortedIds) {
       const screen = allScreens[id];
       if (!isScreenActive(screen, now)) continue;
@@ -216,80 +222,7 @@ function isValidIsoDate(str) {
   return !isNaN(d.getTime());
 }
 
-/**
- * Validate a single screen entry.
- * On success: returns { sanitisedTitle, sanitisedMessage }.
- * On failure: returns { error, field }.
- */
-function validateScreen(id, screen, existingEndDate) {
-  if (!screen || typeof screen !== 'object' || Array.isArray(screen)) {
-    return { error: `Screen "${id}" must be an object`, field: id };
-  }
-
-  // -- enabled --
-  if (typeof screen.enabled !== 'boolean') {
-    return { error: `Screen "${id}": enabled must be a boolean`, field: 'enabled' };
-  }
-
-  // -- dismissable --
-  if (typeof screen.dismissable !== 'boolean') {
-    return { error: `Screen "${id}": dismissable must be a boolean`, field: 'dismissable' };
-  }
-
-  // -- frequency --
-  if (!VALID_FREQUENCIES.includes(screen.frequency)) {
-    return { error: `Screen "${id}": invalid frequency`, field: 'frequency' };
-  }
-
-  // -- template --
-  if (!VALID_TEMPLATES.includes(screen.template)) {
-    return { error: `Screen "${id}": invalid template`, field: 'template' };
-  }
-
-  // -- title --
-  if (typeof screen.title !== 'string') {
-    return { error: `Screen "${id}": title must be a string`, field: 'title' };
-  }
-  const sanitisedTitle = sanitiseTitle(screen.title);
-  const titleLength = [...sanitisedTitle].length; // char length, not byte length
-  if (titleLength < 3 || titleLength > 100) {
-    return {
-      error: `Screen "${id}": title must be 3-100 characters (got ${titleLength})`,
-      field: 'title',
-    };
-  }
-
-  // -- message --
-  if (typeof screen.message !== 'string') {
-    return { error: `Screen "${id}": message must be a string`, field: 'message' };
-  }
-  const sanitisedMessage = sanitiseMessage(screen.message);
-  const messageLength = [...sanitisedMessage].length;
-  if (messageLength < 10 || messageLength > 500) {
-    return {
-      error: `Screen "${id}": message must be 10-500 characters (got ${messageLength})`,
-      field: 'message',
-    };
-  }
-
-  // -- imageType --
-  if (screen.imageType !== null && screen.imageType !== undefined) {
-    if (!VALID_IMAGE_TYPES.includes(screen.imageType)) {
-      return { error: `Screen "${id}": invalid imageType`, field: 'imageType' };
-    }
-  }
-
-  // -- backgroundImage --
-  if (screen.backgroundImage !== null && screen.backgroundImage !== undefined) {
-    if (typeof screen.backgroundImage !== 'string' || screen.backgroundImage === '') {
-      return {
-        error: `Screen "${id}": backgroundImage must be a non-empty string or null`,
-        field: 'backgroundImage',
-      };
-    }
-  }
-
-  // -- dates --
+function validateDates(id, screen, existingEndDate) {
   if (screen.startDate !== null && screen.startDate !== undefined) {
     if (!isValidIsoDate(screen.startDate)) {
       return {
@@ -305,70 +238,129 @@ function validateScreen(id, screen, existingEndDate) {
         field: 'endDate',
       };
     }
-    // endDate must be in the future — but only if it changed from the existing value
-    // (admins need to edit other fields on expired screens without changing endDate)
     const endDateChanged = screen.endDate !== existingEndDate;
     if (endDateChanged && new Date(screen.endDate).getTime() <= Date.now()) {
       return { error: `Screen "${id}": endDate must be in the future`, field: 'endDate' };
     }
   }
   if (screen.startDate && screen.endDate) {
-    const start = new Date(screen.startDate).getTime();
-    const end = new Date(screen.endDate).getTime();
-    if (start >= end) {
+    if (new Date(screen.startDate).getTime() >= new Date(screen.endDate).getTime()) {
       return { error: `Screen "${id}": startDate must be before endDate`, field: 'startDate' };
     }
   }
+  return null;
+}
 
-  // -- allowlist --
-  if (screen.allowlist !== null && screen.allowlist !== undefined) {
-    if (typeof screen.allowlist !== 'object' || Array.isArray(screen.allowlist)) {
-      return { error: `Screen "${id}": allowlist must be an object`, field: 'allowlist' };
+function validateAllowlist(id, allowlist) {
+  if (typeof allowlist !== 'object' || Array.isArray(allowlist)) {
+    return { error: `Screen "${id}": allowlist must be an object`, field: 'allowlist' };
+  }
+  const { deviceIds, networks } = allowlist;
+  if (deviceIds !== undefined) {
+    if (!Array.isArray(deviceIds)) {
+      return {
+        error: `Screen "${id}": allowlist.deviceIds must be an array`,
+        field: 'allowlist.deviceIds',
+      };
     }
-    const { deviceIds, networks } = screen.allowlist;
-    if (deviceIds !== undefined) {
-      if (!Array.isArray(deviceIds)) {
+    for (const did of deviceIds) {
+      if (typeof did !== 'string' || did === '') {
         return {
-          error: `Screen "${id}": allowlist.deviceIds must be an array`,
+          error: `Screen "${id}": allowlist.deviceIds must contain non-empty strings`,
           field: 'allowlist.deviceIds',
         };
       }
-      for (const did of deviceIds) {
-        if (typeof did !== 'string' || did === '') {
-          return {
-            error: `Screen "${id}": allowlist.deviceIds must contain non-empty strings`,
-            field: 'allowlist.deviceIds',
-          };
-        }
-      }
     }
-    if (networks !== undefined) {
-      if (!Array.isArray(networks)) {
+  }
+  if (networks !== undefined) {
+    if (!Array.isArray(networks)) {
+      return {
+        error: `Screen "${id}": allowlist.networks must be an array`,
+        field: 'allowlist.networks',
+      };
+    }
+    for (const net of networks) {
+      if (typeof net !== 'string' || net === '') {
         return {
-          error: `Screen "${id}": allowlist.networks must be an array`,
+          error: `Screen "${id}": each allowlist network must be a non-empty string`,
           field: 'allowlist.networks',
         };
       }
-      for (const net of networks) {
-        if (typeof net !== 'string' || net === '') {
-          return {
-            error: `Screen "${id}": each allowlist network must be a non-empty string`,
-            field: 'allowlist.networks',
-          };
-        }
-        if (net.includes('/')) {
-          const bits = net.split('/')[1];
-          if (bits === '0') {
-            return {
-              error: `Screen "${id}": CIDR /0 not allowed in allowlist.networks`,
-              field: 'allowlist.networks',
-            };
-          }
-        }
+      if (net.includes('/') && net.split('/')[1] === '0') {
+        return {
+          error: `Screen "${id}": CIDR /0 not allowed in allowlist.networks`,
+          field: 'allowlist.networks',
+        };
       }
     }
   }
+  return null;
+}
 
+/**
+ * Validate a single screen entry.
+ * On success: returns { sanitisedTitle, sanitisedMessage }.
+ * On failure: returns { error, field }.
+ */
+function validateScreen(id, screen, existingEndDate) {
+  if (!screen || typeof screen !== 'object' || Array.isArray(screen)) {
+    return { error: `Screen "${id}" must be an object`, field: id };
+  }
+  if (typeof screen.enabled !== 'boolean') {
+    return { error: `Screen "${id}": enabled must be a boolean`, field: 'enabled' };
+  }
+  if (typeof screen.dismissable !== 'boolean') {
+    return { error: `Screen "${id}": dismissable must be a boolean`, field: 'dismissable' };
+  }
+  if (!VALID_FREQUENCIES.includes(screen.frequency)) {
+    return { error: `Screen "${id}": invalid frequency`, field: 'frequency' };
+  }
+  if (!VALID_TEMPLATES.includes(screen.template)) {
+    return { error: `Screen "${id}": invalid template`, field: 'template' };
+  }
+  if (typeof screen.title !== 'string') {
+    return { error: `Screen "${id}": title must be a string`, field: 'title' };
+  }
+  const sanitisedTitle = sanitiseTitle(screen.title);
+  const titleLength = [...sanitisedTitle].length;
+  if (titleLength < 3 || titleLength > 100) {
+    return {
+      error: `Screen "${id}": title must be 3-100 characters (got ${titleLength})`,
+      field: 'title',
+    };
+  }
+  if (typeof screen.message !== 'string') {
+    return { error: `Screen "${id}": message must be a string`, field: 'message' };
+  }
+  const sanitisedMessage = sanitiseMessage(screen.message);
+  const messageLength = [...sanitisedMessage].length;
+  if (messageLength < 10 || messageLength > 500) {
+    return {
+      error: `Screen "${id}": message must be 10-500 characters (got ${messageLength})`,
+      field: 'message',
+    };
+  }
+  if (
+    screen.imageType !== null &&
+    screen.imageType !== undefined &&
+    !VALID_IMAGE_TYPES.includes(screen.imageType)
+  ) {
+    return { error: `Screen "${id}": invalid imageType`, field: 'imageType' };
+  }
+  if (screen.backgroundImage !== null && screen.backgroundImage !== undefined) {
+    if (typeof screen.backgroundImage !== 'string' || screen.backgroundImage === '') {
+      return {
+        error: `Screen "${id}": backgroundImage must be a non-empty string or null`,
+        field: 'backgroundImage',
+      };
+    }
+  }
+  const dateErr = validateDates(id, screen, existingEndDate);
+  if (dateErr) return dateErr;
+  if (screen.allowlist !== null && screen.allowlist !== undefined) {
+    const allowlistErr = validateAllowlist(id, screen.allowlist);
+    if (allowlistErr) return allowlistErr;
+  }
   return { sanitisedTitle, sanitisedMessage };
 }
 
