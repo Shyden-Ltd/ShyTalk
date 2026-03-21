@@ -673,9 +673,8 @@ describe('GET /api/config/startingScreens — ETag and caching', () => {
 
     // Our custom strong ETag (SHA-256 hex) should NOT be present
     // Express may still add its own weak ETag (W/"...")
-    if (res.headers.etag) {
-      expect(res.headers.etag).not.toMatch(/^"[a-f0-9]{16}"$/);
-    }
+    // Remove the if guard — assert directly that our custom strong ETag is NOT present
+    expect(res.headers.etag).not.toMatch(/^"[a-f0-9]{16}"$/);
   });
 });
 
@@ -2065,6 +2064,25 @@ describe('GET /api/config/startingScreens — multi-screen', () => {
     expect(res.status).toBe(200);
     expect(Object.keys(res.body)).toEqual(['active']);
   });
+
+  test('2 non-dismissable screens (invalid state) — both returned, API does not crash', async () => {
+    // This tests an invalid state that could exist from manual Firestore edits
+    // The GET endpoint should still return both screens without crashing
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        alpha: makeScreen({ dismissable: false }),
+        beta: makeScreen({ dismissable: false, title: 'Second Blocker' }),
+      }),
+    });
+
+    const res = await request(app).get('/api/config/startingScreens');
+
+    expect(res.status).toBe(200);
+    // Both should be returned — the API serves what's in Firestore
+    expect(res.body.alpha).toBeDefined();
+    expect(res.body.beta).toBeDefined();
+  });
 });
 
 // ─── ETag/conditional — additional ───────────────────────────────
@@ -2443,4 +2461,64 @@ describe('GET /api/config/startingScreens — combinatorial decision table', () 
       }
     },
   );
+});
+
+// ─── PUT logging ─────────────────────────────────────────────────
+
+describe('PUT /api/config/startingScreens — logging', () => {
+  const log = require('../../src/utils/log');
+
+  beforeEach(() => {
+    mockDocGet.mockResolvedValue({ exists: false });
+    mockDocSet.mockResolvedValue();
+  });
+
+  test('log.info called with admin UID and screen IDs on success', async () => {
+    const app = createAppWithAuthExemption();
+    await request(app)
+      .put('/api/config/startingScreens')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ screen1: makePutScreen(), screen2: makePutScreen({ title: 'Second Screen Put' }) });
+
+    expect(log.info).toHaveBeenCalledWith(
+      'config',
+      'Starting screens updated',
+      expect.objectContaining({
+        admin: 'user-A-unique',
+        updatedIds: expect.arrayContaining(['screen1', 'screen2']),
+      }),
+    );
+  });
+
+  test('validation failure does not log success info', async () => {
+    const app = createAppWithAuthExemption();
+    await request(app)
+      .put('/api/config/startingScreens')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ s1: makePutScreen({ title: 'AB' }) }); // title too short → 400
+
+    const infoMessages = log.info.mock.calls.map((call) => call[1]);
+    expect(infoMessages).not.toContain('Starting screens updated');
+  });
+
+  test('no screen content values logged (redacted)', async () => {
+    const app = createAppWithAuthExemption();
+    const screenTitle = 'Sensitive Title Value';
+    const screenMessage = 'Sensitive message content here for testing.';
+
+    await request(app)
+      .put('/api/config/startingScreens')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ s1: makePutScreen({ title: screenTitle, message: screenMessage }) });
+
+    // Verify log.info was called for the success path
+    expect(log.info).toHaveBeenCalledWith('config', 'Starting screens updated', expect.any(Object));
+
+    // Verify that none of the log.info calls include the actual title/message content
+    for (const call of log.info.mock.calls) {
+      const serialised = JSON.stringify(call);
+      expect(serialised).not.toContain(screenTitle);
+      expect(serialised).not.toContain(screenMessage);
+    }
+  });
 });
