@@ -321,6 +321,62 @@ describe('GET /api/config/startingScreens — date filtering', () => {
     expect(res.status).toBe(200);
     expect(res.body.inWindow).toBeDefined();
   });
+
+  test('startDate exactly at frozen time — screen IS active', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        exact: makeScreen({ startDate: '2026-03-20T12:00:00Z' }),
+      }),
+    });
+
+    const res = await request(app).get('/api/config/startingScreens');
+
+    expect(res.status).toBe(200);
+    expect(res.body.exact).toBeDefined();
+  });
+
+  test('endDate exactly at frozen time — screen NOT active', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        expired: makeScreen({ endDate: '2026-03-20T12:00:00Z' }),
+      }),
+    });
+
+    const res = await request(app).get('/api/config/startingScreens');
+
+    expect(res.status).toBe(200);
+    expect(res.body.expired).toBeUndefined();
+  });
+
+  test('startDate 1ms after frozen time — NOT active', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        future: makeScreen({ startDate: '2026-03-20T12:00:00.001Z' }),
+      }),
+    });
+
+    const res = await request(app).get('/api/config/startingScreens');
+
+    expect(res.status).toBe(200);
+    expect(res.body.future).toBeUndefined();
+  });
+
+  test('endDate 1ms after frozen time — active', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        stillActive: makeScreen({ endDate: '2026-03-20T12:00:00.001Z' }),
+      }),
+    });
+
+    const res = await request(app).get('/api/config/startingScreens');
+
+    expect(res.status).toBe(200);
+    expect(res.body.stillActive).toBeDefined();
+  });
 });
 
 // ─── Allowlist ──────────────────────────────────────────────────
@@ -484,6 +540,32 @@ describe('GET /api/config/startingScreens — content hash', () => {
 
     expect(res.body.banner.contentHash).toBe(expectedContentHash(screen));
   });
+
+  test('contentHash matches known golden value', async () => {
+    const screen = makeScreen({
+      title: 'Golden Test',
+      message: 'This is a golden hash test message.',
+      template: 'warning',
+      imageType: 'police_duck',
+      backgroundImage: null,
+      dismissable: false,
+      frequency: 'every_launch',
+    });
+
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ golden: screen }),
+    });
+
+    const app = createAppWithAuthExemption();
+    const res = await request(app).get('/api/config/startingScreens');
+
+    // Pre-computed SHA-256 of sorted JSON:
+    // {"backgroundImage":null,"dismissable":false,"frequency":"every_launch","imageType":"police_duck","message":"This is a golden hash test message.","template":"warning","title":"Golden Test"}
+    expect(res.body.golden.contentHash).toBe(
+      '52f993a29fdd316d7e345ec3124a69d997ab0ccf50ae53a0cc27fbd6d160ec8b',
+    );
+  });
 });
 
 // ─── Absence of internal fields ─────────────────────────────────
@@ -516,6 +598,77 @@ describe('GET /api/config/startingScreens — field exclusion', () => {
     const res = await request(app).get('/api/config/startingScreens');
 
     expect(res.body.banner.lastModifiedBy).toBeUndefined();
+  });
+});
+
+// ─── ETag and caching ───────────────────────────────────────────
+
+describe('GET /api/config/startingScreens — ETag and caching', () => {
+  let app;
+  beforeEach(() => {
+    app = createAppWithAuthExemption();
+  });
+
+  test('response includes ETag header', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ gate: makeScreen() }),
+    });
+
+    const res = await request(app).get('/api/config/startingScreens');
+
+    expect(res.headers.etag).toBeDefined();
+    expect(res.headers.etag).toMatch(/^"[a-f0-9]{16}"$/);
+  });
+
+  test('If-None-Match with matching ETag returns 304', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ gate: makeScreen() }),
+    });
+
+    const res1 = await request(app).get('/api/config/startingScreens');
+    const etag = res1.headers.etag;
+
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ gate: makeScreen() }),
+    });
+
+    const res2 = await request(app).get('/api/config/startingScreens').set('If-None-Match', etag);
+
+    expect(res2.status).toBe(304);
+  });
+
+  test('X-Content-Type-Options header is nosniff', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ gate: makeScreen() }),
+    });
+
+    const res = await request(app).get('/api/config/startingScreens');
+
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+  });
+
+  test('custom ETag not set when allowlist override applies', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        gate: makeScreen({
+          dismissable: false,
+          allowlist: { deviceIds: ['my-dev'], networks: [] },
+        }),
+      }),
+    });
+
+    const res = await request(app).get('/api/config/startingScreens').set('X-Device-Id', 'my-dev');
+
+    // Our custom strong ETag (SHA-256 hex) should NOT be present
+    // Express may still add its own weak ETag (W/"...")
+    if (res.headers.etag) {
+      expect(res.headers.etag).not.toMatch(/^"[a-f0-9]{16}"$/);
+    }
   });
 });
 

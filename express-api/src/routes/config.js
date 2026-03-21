@@ -65,7 +65,11 @@ function isAllowlisted(screen, deviceId, ip) {
   if (normalizedIp) {
     for (const network of networks) {
       if (network.includes('/')) {
-        if (cidrMatch(normalizedIp, network)) return true;
+        // Only attempt CIDR match if both IP and network are IPv4
+        if (!normalizedIp.includes(':') && !network.includes(':')) {
+          if (cidrMatch(normalizedIp, network)) return true;
+        }
+        // Skip IPv6 CIDR matching (not implemented)
       } else if (normalizedIp === network) return true;
     }
   }
@@ -83,16 +87,18 @@ router.get('/config/startingScreens', async (req, res) => {
     const deviceId = req.headers['x-device-id'];
     const ip = req.ip;
     const result = {};
+    let hasAllowlistOverride = false;
 
     const sortedIds = Object.keys(allScreens).sort();
     for (const id of sortedIds) {
       const screen = allScreens[id];
       if (!isScreenActive(screen, now)) continue;
 
-      const dismissable =
-        screen.dismissable === false && isAllowlisted(screen, deviceId, ip)
-          ? true
-          : screen.dismissable;
+      let dismissable = screen.dismissable;
+      if (screen.dismissable === false && isAllowlisted(screen, deviceId, ip)) {
+        hasAllowlistOverride = true;
+        dismissable = true;
+      }
 
       result[id] = {
         enabled: screen.enabled,
@@ -113,7 +119,21 @@ router.get('/config/startingScreens', async (req, res) => {
     log.info('config', 'Starting screens fetched', {
       screenCount: Object.keys(result).length,
       deviceId: deviceId ? '(present)' : '(absent)',
+      allowlistOverride: hasAllowlistOverride,
     });
+
+    res.set('X-Content-Type-Options', 'nosniff');
+
+    if (!hasAllowlistOverride) {
+      const etag =
+        '"' +
+        crypto.createHash('sha256').update(JSON.stringify(result)).digest('hex').slice(0, 16) +
+        '"';
+      res.set('ETag', etag);
+      if (req.headers['if-none-match'] === etag) {
+        return res.status(304).end();
+      }
+    }
 
     return res.json(result);
   } catch (err) {
