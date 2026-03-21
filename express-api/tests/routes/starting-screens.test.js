@@ -2522,3 +2522,136 @@ describe('PUT /api/config/startingScreens — logging', () => {
     }
   });
 });
+
+// ─── DELETE /api/config/startingScreens/:screenId ───────────────
+
+describe('DELETE /api/config/startingScreens/:screenId', () => {
+  const log = require('../../src/utils/log');
+  let app;
+  beforeEach(() => {
+    app = createAppWithAuthExemption();
+    jest.clearAllMocks();
+  });
+
+  test('requires auth', async () => {
+    const res = await request(app).delete('/api/config/startingScreens/screen1');
+    expect(res.status).toBe(401);
+  });
+
+  test('requires admin', async () => {
+    requireAdmin.mockImplementationOnce((req, res) => {
+      res.status(403).json({ error: 'Admin access required' });
+      return true;
+    });
+    const res = await request(app)
+      .delete('/api/config/startingScreens/screen1')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(403);
+    expect(requireAdmin).toHaveBeenCalled();
+  });
+
+  test('rejects invalid screen ID', async () => {
+    const res = await request(app)
+      .delete('/api/config/startingScreens/invalid screen!')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/invalid screen id/i);
+  });
+
+  test('returns 404 when no screens configured', async () => {
+    mockDocGet.mockResolvedValue({ exists: false });
+    const res = await request(app)
+      .delete('/api/config/startingScreens/screen1')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/no starting screens/i);
+  });
+
+  test('returns 404 when screen ID not found', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ other: makeScreen() }),
+    });
+    const res = await request(app)
+      .delete('/api/config/startingScreens/nonexistent')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/not found/i);
+  });
+
+  test('deletes existing screen and saves remaining', async () => {
+    const screen1 = makeScreen();
+    const screen2 = makeScreen({ title: 'Screen 2' });
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ screen1, screen2 }),
+    });
+
+    const res = await request(app)
+      .delete('/api/config/startingScreens/screen1')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.deleted).toBe('screen1');
+
+    // Verify set was called with only screen2
+    expect(mockDocSet).toHaveBeenCalledWith({ screen2 });
+  });
+
+  test('deletes last remaining screen leaving empty doc', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ only_screen: makeScreen() }),
+    });
+
+    const res = await request(app)
+      .delete('/api/config/startingScreens/only_screen')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(res.status).toBe(200);
+    expect(mockDocSet).toHaveBeenCalledWith({});
+  });
+
+  test('logs deletion with admin info', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ s1: makeScreen(), s2: makeScreen() }),
+    });
+
+    await request(app)
+      .delete('/api/config/startingScreens/s1')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(log.info).toHaveBeenCalledWith('config', 'Starting screen deleted', {
+      screenId: 's1',
+      remainingScreens: 1,
+      admin: 'user-A-unique',
+    });
+  });
+
+  test('accepts valid screen IDs with hyphens and underscores', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ 'my-screen_1': makeScreen() }),
+    });
+
+    const res = await request(app)
+      .delete('/api/config/startingScreens/my-screen_1')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(res.status).toBe(200);
+    expect(res.body.deleted).toBe('my-screen_1');
+  });
+
+  test('returns 500 on Firestore error', async () => {
+    mockDocGet.mockRejectedValue(new Error('Firestore down'));
+
+    const res = await request(app)
+      .delete('/api/config/startingScreens/screen1')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/internal server error/i);
+  });
+});

@@ -9,6 +9,7 @@
  * GET /api/broadcasts      -> Get recent broadcasts
  * GET /api/gift-rankings/:giftId -> Get gift rankings
  * PUT /api/config/economy  -> Admin update economy config (merge)
+ * DELETE /api/config/startingScreens/:screenId -> Admin delete a starting screen
  */
 
 const crypto = require('crypto');
@@ -459,6 +460,42 @@ router.put('/config/startingScreens', async (req, res) => {
     return res.json({ success: true, updated: Object.keys(validatedScreens) });
   } catch (err) {
     log.error('config', 'Error updating starting screens', { error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// -- Delete a single starting screen (admin) --
+router.delete('/config/startingScreens/:screenId', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+
+    const { screenId } = req.params;
+    if (!screenId || !/^[a-zA-Z0-9_-]+$/.test(screenId)) {
+      return res.status(400).json({ error: 'Invalid screen ID' });
+    }
+
+    const snap = await db.doc('config/startingScreens').get();
+    if (!snap.exists) {
+      return res.status(404).json({ error: 'No starting screens configured' });
+    }
+
+    const existing = snap.data();
+    if (!(screenId in existing)) {
+      return res.status(404).json({ error: `Screen "${screenId}" not found` });
+    }
+
+    delete existing[screenId];
+    await db.doc('config/startingScreens').set(existing);
+
+    log.info('config', 'Starting screen deleted', {
+      screenId,
+      remainingScreens: Object.keys(existing).length,
+      admin: req.auth.uniqueId,
+    });
+
+    return res.json({ success: true, deleted: screenId });
+  } catch (err) {
+    log.error('config', 'Error deleting starting screen', { error: err.message });
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

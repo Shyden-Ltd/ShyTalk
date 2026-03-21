@@ -5362,13 +5362,379 @@
     const startingScreensList = $("#starting-screens-list");
     const startingScreensEmpty = $("#starting-screens-empty");
 
+    let hasUnsavedScreenChanges = false;
+
+    window.addEventListener("beforeunload", (e) => {
+      if (hasUnsavedScreenChanges) { e.preventDefault(); e.returnValue = ""; }
+    });
+
+    function getStatusBadge(screen) {
+      const now = Date.now();
+      if (screen.startDate && new Date(screen.startDate).getTime() > now) {
+        return '<span class="status-badge status-scheduled">Scheduled</span>';
+      }
+      if (screen.endDate && new Date(screen.endDate).getTime() <= now) {
+        return '<span class="status-badge status-expired">Expired</span>';
+      }
+      return '<span class="status-badge status-active">Active</span>';
+    }
+
+    function setupCharCounter(input, min, max, counterEl) {
+      const update = () => {
+        const len = input.value.length;
+        counterEl.textContent = len + "/" + max;
+        counterEl.className = (len < min || len > max) ? "char-counter over-limit" : "char-counter";
+      };
+      input.addEventListener("input", update);
+      update();
+    }
+
+    function updatePreview(card) {
+      const preview = card.querySelector(".screen-card-preview");
+      const template = card.querySelector(".template-select").value;
+      const title = card.querySelector(".title-input").value;
+      const message = card.querySelector(".message-input").value;
+      const dismissable = card.querySelector(".dismissable-toggle").checked;
+      const imageType = card.querySelector(".image-type-select").value;
+      const bgImageUrl = card.querySelector(".bg-image-key") ? card.querySelector(".bg-image-key").value : "";
+
+      const templateColors = {
+        warning: "#e74c3c",
+        promotional: "#9b59b6",
+        announcement: "#3498db",
+        info: "#2ecc71"
+      };
+      const templateIcons = {
+        warning: "\u26a0\ufe0f",
+        promotional: "\ud83c\udf89",
+        announcement: "\ud83d\udce2",
+        info: "\u2139\ufe0f"
+      };
+      const color = templateColors[template] || "#888";
+      const icon = imageType === "police_duck" ? "\ud83e\udd86" : (templateIcons[template] || "");
+
+      preview.innerHTML =
+        '<div class="preview-content" style="' + (bgImageUrl ? "background-image:url(" + encodeURI(bgImageUrl) + ");background-size:cover;" : "") + '">' +
+          (bgImageUrl ? '<div style="position:absolute;inset:0;background:rgba(0,0,0,0.6);"></div>' : "") +
+          '<div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:12px;padding:24px;width:100%;">' +
+            '<img src="assets/app-icon.webp" width="48" height="48" style="border-radius:12px;" alt="ShyTalk" />' +
+            '<div style="font-size:18px;font-weight:bold;color:' + (bgImageUrl ? "#fff" : "var(--text)") + ';">ShyTalk</div>' +
+            '<div style="font-size:32px;">' + icon + '</div>' +
+            '<div style="font-size:14px;font-weight:600;text-align:center;color:' + (bgImageUrl ? "#fff" : color) + ';">' + escapeHtml(title || "Title") + '</div>' +
+            '<div style="font-size:12px;color:' + (bgImageUrl ? "#ccc" : "var(--text2)") + ';text-align:center;white-space:pre-wrap;word-break:break-word;">' + escapeHtml(message || "Message") + '</div>' +
+            (dismissable ? '<button style="margin-top:12px;padding:8px 24px;border-radius:8px;background:#007AFF;color:white;border:none;font-size:13px;">Continue</button>' : "") +
+          '</div>' +
+        '</div>';
+    }
+
+    async function uploadBackgroundImage(card, file) {
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("path", "starting-screens");
+        const result = await apiCall("POST", "/api/storage/upload", formData);
+        card.querySelector(".bg-image-key").value = result.url;
+        const info = card.querySelector(".compression-info");
+        if (info && result.compressedSize && result.originalSize) {
+          info.textContent = (result.compressedSize / 1024).toFixed(0) + "KB (from " + (result.originalSize / 1024).toFixed(0) + "KB)";
+        }
+        updatePreview(card);
+        hasUnsavedScreenChanges = true;
+      } catch (err) {
+        showToast("Image upload failed: " + err.message, "error");
+      }
+    }
+
+    function renderScreenCards(data) {
+      startingScreensList.innerHTML = "";
+
+      // Find if any enabled screen is non-dismissable (for disabling dismissable toggle on others)
+      const enabledNonDismissableIds = [];
+      for (const [id, screen] of Object.entries(data)) {
+        if (screen.enabled && !screen.dismissable) {
+          enabledNonDismissableIds.push(id);
+        }
+      }
+
+      for (const [screenId, screen] of Object.entries(data)) {
+        const card = document.createElement("div");
+        card.className = "screen-card";
+        card.setAttribute("data-screen-id", screenId);
+
+        const startDateLocal = screen.startDate ? new Date(screen.startDate).toISOString().slice(0, 16) : "";
+        const endDateLocal = screen.endDate ? new Date(screen.endDate).toISOString().slice(0, 16) : "";
+        const deviceIds = screen.allowlist && screen.allowlist.deviceIds ? screen.allowlist.deviceIds.join("\n") : "";
+        const networks = screen.allowlist && screen.allowlist.networks ? screen.allowlist.networks.join("\n") : "";
+        const lastModifiedBy = screen.lastModifiedBy || "unknown";
+        const lastModifiedAt = screen.lastModifiedAt ? new Date(screen.lastModifiedAt).toLocaleString() : "unknown";
+
+        // Determine if dismissable toggle should be disabled
+        const otherNonDismissable = enabledNonDismissableIds.filter(function(id) { return id !== screenId; });
+        const dismissableDisabled = otherNonDismissable.length > 0 && screen.enabled;
+        const dismissableTooltip = dismissableDisabled ? "Another enabled screen is already non-dismissable" : "";
+
+        const statusBadge = getStatusBadge(screen);
+
+        const inputStyle = "width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;font-family:inherit;";
+        const labelStyle = "display:block;margin-bottom:4px;font-size:13px;color:var(--text2);";
+        const checkboxLabelStyle = "display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text);cursor:pointer;";
+
+        card.innerHTML =
+          '<div class="screen-card-form">' +
+            '<div>' +
+              '<label style="' + labelStyle + '">Screen ID</label>' +
+              '<input type="text" value="' + escapeHtml(screenId) + '" readonly style="' + inputStyle + 'opacity:0.6;cursor:not-allowed;" />' +
+            '</div>' +
+            '<div>' + statusBadge + '</div>' +
+            '<div>' +
+              '<label style="' + checkboxLabelStyle + '">' +
+                '<input type="checkbox" class="enabled-toggle" ' + (screen.enabled ? "checked" : "") + ' />' +
+                'Enabled' +
+              '</label>' +
+            '</div>' +
+            '<div>' +
+              '<label style="' + checkboxLabelStyle + '" ' + (dismissableTooltip ? 'title="' + escapeHtml(dismissableTooltip) + '"' : '') + '>' +
+                '<input type="checkbox" class="dismissable-toggle" ' + (screen.dismissable ? "checked" : "") + (dismissableDisabled ? " disabled" : "") + ' />' +
+                'Dismissable' +
+                (dismissableDisabled ? ' <span style="font-size:11px;color:var(--text2);">(locked)</span>' : '') +
+              '</label>' +
+            '</div>' +
+            '<div>' +
+              '<label style="' + labelStyle + '">Frequency</label>' +
+              '<select class="frequency-select" style="' + inputStyle + '">' +
+                '<option value="every_launch"' + (screen.frequency === "every_launch" ? " selected" : "") + '>Every Launch</option>' +
+                '<option value="once"' + (screen.frequency === "once" ? " selected" : "") + '>Once</option>' +
+              '</select>' +
+            '</div>' +
+            '<div>' +
+              '<label style="' + labelStyle + '">Template</label>' +
+              '<select class="template-select" style="' + inputStyle + '">' +
+                '<option value="warning"' + (screen.template === "warning" ? " selected" : "") + '>Warning</option>' +
+                '<option value="promotional"' + (screen.template === "promotional" ? " selected" : "") + '>Promotional</option>' +
+                '<option value="announcement"' + (screen.template === "announcement" ? " selected" : "") + '>Announcement</option>' +
+                '<option value="info"' + (screen.template === "info" ? " selected" : "") + '>Info</option>' +
+              '</select>' +
+            '</div>' +
+            '<div>' +
+              '<label style="' + labelStyle + '">Title</label>' +
+              '<input type="text" class="title-input" value="' + escapeHtml(screen.title || "") + '" placeholder="Screen title (3-100 chars)" maxlength="100" style="' + inputStyle + '" />' +
+              '<span class="title-counter char-counter"></span>' +
+            '</div>' +
+            '<div>' +
+              '<label style="' + labelStyle + '">Message</label>' +
+              '<textarea class="message-input" placeholder="Screen message (10-500 chars)" maxlength="500" rows="4" style="' + inputStyle + 'resize:vertical;">' + escapeHtml(screen.message || "") + '</textarea>' +
+              '<span class="message-counter char-counter"></span>' +
+            '</div>' +
+            '<div>' +
+              '<label style="' + labelStyle + '">Image Type</label>' +
+              '<select class="image-type-select" style="' + inputStyle + '">' +
+                '<option value="none"' + (!screen.imageType || screen.imageType === "none" ? " selected" : "") + '>None</option>' +
+                '<option value="police_duck"' + (screen.imageType === "police_duck" ? " selected" : "") + '>Police Duck</option>' +
+              '</select>' +
+            '</div>' +
+            '<div>' +
+              '<label style="' + labelStyle + '">Background Image</label>' +
+              '<input type="hidden" class="bg-image-key" value="' + escapeHtml(screen.backgroundImage || "") + '" />' +
+              '<div style="display:flex;gap:8px;align-items:center;">' +
+                '<input type="file" class="bg-image-file" accept="image/*" style="font-size:13px;color:var(--text);" />' +
+                (screen.backgroundImage ? '<button type="button" class="remove-bg-btn" style="padding:4px 10px;background:var(--danger,#e74c3c);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Remove</button>' : '') +
+              '</div>' +
+              '<span class="compression-info" style="font-size:11px;color:var(--text2);margin-top:4px;display:block;"></span>' +
+              (screen.backgroundImage ? '<img src="' + encodeURI(screen.backgroundImage) + '" style="max-width:120px;max-height:80px;border-radius:6px;margin-top:6px;border:1px solid var(--border);" />' : '') +
+            '</div>' +
+            '<div>' +
+              '<label style="' + labelStyle + '">Start Date</label>' +
+              '<input type="datetime-local" class="start-date" value="' + startDateLocal + '" style="' + inputStyle + '" />' +
+            '</div>' +
+            '<div>' +
+              '<label style="' + labelStyle + '">End Date</label>' +
+              '<input type="datetime-local" class="end-date" value="' + endDateLocal + '" style="' + inputStyle + '" />' +
+            '</div>' +
+            '<div>' +
+              '<label style="' + labelStyle + '">Allowlist Device IDs <span style="font-size:11px;">(one per line, blank = all)</span></label>' +
+              '<textarea class="allowlist-devices" rows="3" placeholder="device-id-1&#10;device-id-2" style="' + inputStyle + 'resize:vertical;font-family:monospace;font-size:12px;">' + escapeHtml(deviceIds) + '</textarea>' +
+            '</div>' +
+            '<div>' +
+              '<label style="' + labelStyle + '">Allowlist Networks <span style="font-size:11px;">(one per line, blank = all)</span></label>' +
+              '<textarea class="allowlist-networks" rows="3" placeholder="network-name-1&#10;network-name-2" style="' + inputStyle + 'resize:vertical;font-family:monospace;font-size:12px;">' + escapeHtml(networks) + '</textarea>' +
+            '</div>' +
+            '<div style="font-size:12px;color:var(--text2);padding:8px 0;border-top:1px solid var(--border);">' +
+              'Last modified by <strong>' + escapeHtml(lastModifiedBy) + '</strong> at ' + escapeHtml(lastModifiedAt) +
+            '</div>' +
+            '<div style="display:flex;gap:8px;">' +
+              '<button type="button" class="save-screen-btn" style="padding:8px 20px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;">Save</button>' +
+              '<button type="button" class="delete-screen-btn" style="padding:8px 20px;background:var(--danger,#e74c3c);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;">Delete</button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="screen-card-preview"></div>';
+
+        startingScreensList.appendChild(card);
+
+        // Setup char counters
+        setupCharCounter(card.querySelector(".title-input"), 3, 100, card.querySelector(".title-counter"));
+        setupCharCounter(card.querySelector(".message-input"), 10, 500, card.querySelector(".message-counter"));
+
+        // Attach input/change listeners for live preview
+        var previewInputs = card.querySelectorAll(".title-input, .message-input, .template-select, .image-type-select, .dismissable-toggle, .enabled-toggle");
+        for (var i = 0; i < previewInputs.length; i++) {
+          previewInputs[i].addEventListener("input", (function(c) { return function() { updatePreview(c); hasUnsavedScreenChanges = true; }; })(card));
+          previewInputs[i].addEventListener("change", (function(c) { return function() { updatePreview(c); hasUnsavedScreenChanges = true; }; })(card));
+        }
+
+        // Mark changes on other fields
+        var otherInputs = card.querySelectorAll(".frequency-select, .start-date, .end-date, .allowlist-devices, .allowlist-networks");
+        for (var j = 0; j < otherInputs.length; j++) {
+          otherInputs[j].addEventListener("input", function() { hasUnsavedScreenChanges = true; });
+          otherInputs[j].addEventListener("change", function() { hasUnsavedScreenChanges = true; });
+        }
+
+        // Background image upload
+        card.querySelector(".bg-image-file").addEventListener("change", (function(c) {
+          return function(e) {
+            if (e.target.files && e.target.files[0]) {
+              uploadBackgroundImage(c, e.target.files[0]);
+            }
+          };
+        })(card));
+
+        // Remove background image
+        var removeBgBtn = card.querySelector(".remove-bg-btn");
+        if (removeBgBtn) {
+          removeBgBtn.addEventListener("click", (function(c) {
+            return function() {
+              c.querySelector(".bg-image-key").value = "";
+              var info = c.querySelector(".compression-info");
+              if (info) info.textContent = "";
+              updatePreview(c);
+              hasUnsavedScreenChanges = true;
+              var imgPreview = c.querySelector(".bg-image-file").parentElement.parentElement.querySelector("img");
+              if (imgPreview) imgPreview.remove();
+              this.remove();
+            };
+          })(card));
+        }
+
+        // Save button
+        card.querySelector(".save-screen-btn").addEventListener("click", (function(id) {
+          return function() { saveScreen(id); };
+        })(screenId));
+
+        // Delete button
+        card.querySelector(".delete-screen-btn").addEventListener("click", (function(id) {
+          return function() { deleteScreen(id); };
+        })(screenId));
+
+        // Initial preview render
+        updatePreview(card);
+      }
+    }
+
+    async function saveScreen(screenId) {
+      const card = document.querySelector('[data-screen-id="' + screenId + '"]');
+      if (!card) return;
+
+      const title = card.querySelector(".title-input").value;
+      const message = card.querySelector(".message-input").value;
+
+      if (title.length < 3 || title.length > 100) {
+        showToast("Title must be 3-100 characters", "error");
+        return;
+      }
+      if (message.length < 10 || message.length > 500) {
+        showToast("Message must be 10-500 characters", "error");
+        return;
+      }
+
+      const startDateRaw = card.querySelector(".start-date").value;
+      const endDateRaw = card.querySelector(".end-date").value;
+
+      const screenData = {
+        enabled: card.querySelector(".enabled-toggle").checked,
+        dismissable: card.querySelector(".dismissable-toggle").checked,
+        frequency: card.querySelector(".frequency-select").value,
+        template: card.querySelector(".template-select").value,
+        title: title,
+        message: message,
+        imageType: card.querySelector(".image-type-select").value || null,
+        backgroundImage: card.querySelector(".bg-image-key").value || null,
+        startDate: startDateRaw ? new Date(startDateRaw).toISOString() : null,
+        endDate: endDateRaw ? new Date(endDateRaw).toISOString() : null,
+        allowlist: {
+          deviceIds: card.querySelector(".allowlist-devices").value.split("\n").map(function(s) { return s.trim(); }).filter(Boolean),
+          networks: card.querySelector(".allowlist-networks").value.split("\n").map(function(s) { return s.trim(); }).filter(Boolean),
+        },
+      };
+
+      const body = {};
+      body[screenId] = screenData;
+
+      try {
+        await apiCall("PUT", "/api/config/startingScreens", body);
+        showToast("Screen saved");
+        hasUnsavedScreenChanges = false;
+        loadStartingScreens();
+      } catch (err) {
+        showToast(err.message || "Failed to save", "error");
+      }
+    }
+
+    async function addScreen() {
+      const screenId = prompt("Enter a screen ID (letters, numbers, hyphens, underscores only):");
+      if (!screenId) return;
+
+      if (!/^[a-zA-Z0-9_-]+$/.test(screenId)) {
+        showToast("Invalid screen ID. Use only letters, numbers, hyphens, and underscores.", "error");
+        return;
+      }
+
+      const body = {};
+      body[screenId] = {
+        enabled: false,
+        dismissable: true,
+        frequency: "every_launch",
+        template: "info",
+        title: "New Screen",
+        message: "Screen message goes here.",
+        imageType: "none",
+        backgroundImage: null,
+        startDate: null,
+        endDate: null,
+        allowlist: {
+          deviceIds: [],
+          networks: [],
+        },
+      };
+
+      try {
+        await apiCall("PUT", "/api/config/startingScreens", body);
+        showToast("Screen created");
+        loadStartingScreens();
+      } catch (err) {
+        showToast("Failed to create screen: " + err.message, "error");
+      }
+    }
+
+    async function deleteScreen(screenId) {
+      if (!confirm("Delete screen \"" + screenId + "\"? This cannot be undone.")) return;
+
+      try {
+        await apiCall("DELETE", "/api/config/startingScreens/" + encodeURIComponent(screenId));
+        showToast("Screen deleted");
+        hasUnsavedScreenChanges = false;
+        loadStartingScreens();
+      } catch (err) {
+        showToast("Failed to delete screen: " + err.message, "error");
+      }
+    }
+
+    // Wire up add screen button
+    document.getElementById("add-screen-btn").addEventListener("click", addScreen);
+
     async function loadStartingScreens() {
-      // Will be implemented in Task 2
       try {
         const data = await apiCall("GET", "/api/config/startingScreens");
         startingScreensEmpty.style.display = Object.keys(data).length === 0 ? "block" : "none";
-        startingScreensList.innerHTML = "";
-        // TODO: renderScreenCards(data) — Task 2
+        renderScreenCards(data);
       } catch (err) {
         showToast("Failed to load starting screens: " + err.message, "error");
       }
