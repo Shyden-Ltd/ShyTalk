@@ -46,9 +46,9 @@ function isScreenActive(screen, now) {
 
 function cidrMatch(ip, cidr) {
   const [range, bits] = cidr.split('/');
-  const mask = ~(2 ** (32 - parseInt(bits)) - 1) >>> 0;
-  const ipNum = ip.split('.').reduce((acc, oct) => (acc << 8) + parseInt(oct), 0) >>> 0;
-  const rangeNum = range.split('.').reduce((acc, oct) => (acc << 8) + parseInt(oct), 0) >>> 0;
+  const mask = ~(2 ** (32 - parseInt(bits, 10)) - 1) >>> 0;
+  const ipNum = ip.split('.').reduce((acc, oct) => (acc << 8) + parseInt(oct, 10), 0) >>> 0;
+  const rangeNum = range.split('.').reduce((acc, oct) => (acc << 8) + parseInt(oct, 10), 0) >>> 0;
   return (ipNum & mask) === (rangeNum & mask);
 }
 
