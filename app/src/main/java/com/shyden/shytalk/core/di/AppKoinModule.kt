@@ -113,7 +113,7 @@ val appModule = module {
     }
 
     // API client (Express.js on Oracle Cloud)
-    single { WorkerApiClient(get(), BuildConfig.API_BASE_URL, get()) }
+    single { WorkerApiClient(get(), BuildConfig.API_BASE_URL, get(), get(named("deviceId"))) }
 
     // Device ID
     single(named("deviceId")) {

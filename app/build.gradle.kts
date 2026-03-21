@@ -260,6 +260,7 @@ dependencies {
     testImplementation(libs.turbine)
     // Provides real org.json.JSONObject impl (the Android SDK version is a stub in JVM unit tests)
     testImplementation("org.json:json:20231013")
+    testImplementation("com.squareup.okhttp3:okhttp:4.12.0")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
