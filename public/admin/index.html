@@ -2308,6 +2308,18 @@
         /* --- Devices Panel --- */
         #devices-panel { display: none; }
         #devices-panel.visible { display: block; }
+        #starting-screens-panel { display: none; }
+        #starting-screens-panel.visible { display: block; }
+        .screen-card { border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin: 16px 0; display: grid; grid-template-columns: 1fr 300px; gap: 24px; }
+        .screen-card-form { display: flex; flex-direction: column; gap: 12px; }
+        .screen-card-preview { border: 2px solid var(--border); border-radius: 24px; width: 260px; height: 520px; overflow: hidden; position: relative; background: var(--bg); }
+        .preview-content { padding: 24px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px; height: 100%; overflow-y: auto; }
+        .char-counter { font-size: 12px; color: var(--text2); }
+        .char-counter.over-limit { color: #e74c3c; font-weight: bold; }
+        .status-badge { padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .status-active { background: #27ae60; color: white; }
+        .status-scheduled { background: #f39c12; color: white; }
+        .status-expired { background: #95a5a6; color: white; }
         .devices-search { display:flex;gap:10px;margin-bottom:16px; }
         .devices-search input { flex:1;padding:10px 14px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:14px; }
         .devices-search button { padding:10px 20px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px; }
@@ -2903,6 +2915,7 @@
             <button class="tab-btn" id="tab-backups">Backups</button>
             <button class="tab-btn" id="tab-logs">Logs</button>
             <button class="tab-btn" id="tab-devices">Devices</button>
+            <button class="tab-btn" id="tab-starting-screens">Starting Screens</button>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
             <button class="alert-bell" id="alert-bell" title="Alerts" aria-label="Alerts">&#128276;<span class="alert-bell-badge" id="alert-bell-badge" style="display:none;">0</span></button>
@@ -4302,6 +4315,17 @@
             </div>
         </div>
 
+        <!-- Starting Screens Panel -->
+        <div id="starting-screens-panel">
+            <h2 style="margin:0 0 4px 0;font-size:20px;">Starting Screens</h2>
+            <p style="margin:0 0 16px 0;color:var(--text2);font-size:14px;">Manage screens shown to users on app launch</p>
+            <button id="add-screen-btn" style="background:var(--accent);color:white;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:14px;">+ Add Screen</button>
+            <div id="starting-screens-list"></div>
+            <div id="starting-screens-empty" style="text-align:center;padding:32px;color:var(--text2);font-size:14px;">
+                No starting screens configured. Click "+ Add Screen" to create one.
+            </div>
+        </div>
+
         <!-- Fun Fact Add/Edit Dialog -->
         <div id="funfact-dialog-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;">
             <div style="background:var(--card);border-radius:12px;padding:24px;max-width:520px;width:90%;max-height:90vh;overflow-y:auto;">
@@ -4502,7 +4526,7 @@
         // Restore saved tab and report filter
         try {
           const savedTab = sessionStorage.getItem("admin_tab");
-          if (savedTab && ["users", "appeals", "reports", "gifts", "economy", "maintenance", "monitor", "banners", "funfacts", "backups", "logs"].includes(savedTab)) {
+          if (savedTab && ["users", "appeals", "reports", "gifts", "economy", "maintenance", "monitor", "banners", "funfacts", "backups", "logs", "devices", "starting-screens"].includes(savedTab)) {
             switchTab(savedTab);
           }
           const savedUserSearch = sessionStorage.getItem("admin_user_search");
@@ -5263,6 +5287,8 @@
     const tabLogs = $("#tab-logs");
     const devicesPanel = $("#devices-panel");
     const tabDevices = $("#tab-devices");
+    const startingScreensPanel = $("#starting-screens-panel");
+    const tabStartingScreens = $("#tab-starting-screens");
     let currentTab = "users";
 
     function switchTab(tab) {
@@ -5280,6 +5306,7 @@
       tabBackups.classList.toggle("active", tab === "backups");
       tabLogs.classList.toggle("active", tab === "logs");
       tabDevices.classList.toggle("active", tab === "devices");
+      tabStartingScreens.classList.toggle("active", tab === "starting-screens");
       $(".search-bar").style.display = tab === "users" ? "" : "none";
       userForm.style.display = tab === "users" ? "" : "none";
       appealsPanel.classList.toggle("visible", tab === "appeals");
@@ -5293,6 +5320,7 @@
       backupsPanel.classList.toggle("visible", tab === "backups");
       logsPanel.classList.toggle("visible", tab === "logs");
       devicesPanel.classList.toggle("visible", tab === "devices");
+      startingScreensPanel.classList.toggle("visible", tab === "starting-screens");
 
       if (tab === "devices") loadDevices();
       if (tab === "backups") loadBackups();
@@ -5313,6 +5341,7 @@
       }
       if (tab === "banners") loadBanners();
       if (tab === "funfacts") loadFunFacts();
+      if (tab === "starting-screens") loadStartingScreens();
     }
 
     tabUsers.addEventListener("click", () => switchTab("users"));
@@ -5327,6 +5356,23 @@
     tabBackups.addEventListener("click", () => switchTab("backups"));
     tabLogs.addEventListener("click", () => switchTab("logs"));
     tabDevices.addEventListener("click", () => switchTab("devices"));
+    tabStartingScreens.addEventListener("click", () => switchTab("starting-screens"));
+
+    // --- Starting Screens ---
+    const startingScreensList = $("#starting-screens-list");
+    const startingScreensEmpty = $("#starting-screens-empty");
+
+    async function loadStartingScreens() {
+      // Will be implemented in Task 2
+      try {
+        const data = await apiCall("GET", "/api/config/startingScreens");
+        startingScreensEmpty.style.display = Object.keys(data).length === 0 ? "block" : "none";
+        startingScreensList.innerHTML = "";
+        // TODO: renderScreenCards(data) — Task 2
+      } catch (err) {
+        showToast("Failed to load starting screens: " + err.message, "error");
+      }
+    }
 
     // --- Suspension section ---
     const suspensionSection = $("#suspension-section");
