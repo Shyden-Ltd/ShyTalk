@@ -52,7 +52,10 @@ import com.shyden.shytalk.feature.legal.CommunityStandardsScreen
 import com.shyden.shytalk.feature.legal.CyberBullyingPolicyScreen
 import com.shyden.shytalk.feature.legal.TermsAndConditionsScreen
 import com.shyden.shytalk.feature.privacy.PrivacyPolicyScreen
+import com.shyden.shytalk.data.remote.StartingScreen
 import com.shyden.shytalk.feature.security.UnsafeDeviceScreen
+import com.shyden.shytalk.feature.starting.StartingScreenCache
+import com.shyden.shytalk.feature.starting.StartingScreenComposable
 import com.shyden.shytalk.feature.update.DegradedModeScreen
 import com.shyden.shytalk.feature.update.ForceUpdateScreen
 import com.shyden.shytalk.navigation.NavGraph
@@ -106,6 +109,13 @@ class MainActivity : AppCompatActivity() {
 
         setContent {
             ShyTalkTheme(darkTheme = true) {
+                // Starting screen states (checked FIRST, before all other checks)
+                var startingScreenCheckDone by remember { mutableStateOf(false) }
+                var blockingScreen by remember { mutableStateOf<StartingScreen?>(null) }
+                var dismissableScreens by remember { mutableStateOf<List<StartingScreen>>(emptyList()) }
+                var blockingScreenDismissed by remember { mutableStateOf(false) }
+                var dismissableScreenIndex by remember { mutableStateOf(0) }
+
                 var updateRequired by remember { mutableStateOf(false) }
                 var checkComplete by remember { mutableStateOf(false) }
                 var softUpdateAvailable by remember { mutableStateOf<String?>(null) }
@@ -117,7 +127,46 @@ class MainActivity : AppCompatActivity() {
                 }
                 var viewingLegalDoc by remember { mutableStateOf<String?>(null) }
 
+                val cache = remember { StartingScreenCache(this@MainActivity) }
+
+                // Starting screens check — runs FIRST before all other checks
                 LaunchedEffect(Unit) {
+                    // Check cache first for immediate blocking
+                    val cached = cache.getCachedBlocker()
+
+                    when (val result = appConfigService.getStartingScreens()) {
+                        is Resource.Success -> {
+                            val screens = result.data
+                            val enabledScreens = screens.values.filter { it.enabled }
+                            val blocker = enabledScreens.firstOrNull { !it.dismissable }
+                            if (blocker != null) {
+                                if (cached?.contentHash != blocker.contentHash) {
+                                    cache.cacheBlocker(blocker, null)
+                                }
+                                blockingScreen = blocker
+                            } else {
+                                cache.clearBlocker()
+                                dismissableScreens = enabledScreens
+                                    .filter { it.dismissable }
+                                    .filter { it.frequency != "once" || !cache.isDismissed(it.screenId) }
+                            }
+                        }
+                        is Resource.Error -> {
+                            if (cached != null) {
+                                blockingScreen = cached.toStartingScreen()
+                            }
+                        }
+                        is Resource.Loading -> { /* wait */ }
+                    }
+                    startingScreenCheckDone = true
+                }
+
+                // Existing update/health checks — only runs after starting screen check passes
+                LaunchedEffect(startingScreenCheckDone) {
+                    if (!startingScreenCheckDone) return@LaunchedEffect
+                    // Don't run further checks if blocked
+                    if (blockingScreen != null) return@LaunchedEffect
+
                     isUnsafe = DeviceSecurityChecker.isUnsafe()
                     when (val result = appConfigService.getLatestVersionInfo()) {
                         is Resource.Success -> {
@@ -159,6 +208,38 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 when {
+                    !startingScreenCheckDone -> {
+                        // Loading spinner while checking starting screens
+                        Surface(
+                            color = MaterialTheme.colorScheme.background,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = stringResource(Res.string.starting_screen_loading),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                    blockingScreen != null && !blockingScreenDismissed -> {
+                        // Blocking screen — STOPS all further loading
+                        StartingScreenComposable(
+                            screen = blockingScreen!!,
+                            onDismiss = { blockingScreenDismissed = true }
+                        )
+                    }
                     !checkComplete -> {
                         Surface(
                             color = MaterialTheme.colorScheme.background,
@@ -216,6 +297,18 @@ class MainActivity : AppCompatActivity() {
                                 onViewCyberBullyingPolicy = { viewingLegalDoc = "cyberbullying" }
                             )
                         }
+                    }
+                    dismissableScreens.isNotEmpty() && dismissableScreenIndex < dismissableScreens.size -> {
+                        val currentScreen = dismissableScreens[dismissableScreenIndex]
+                        StartingScreenComposable(
+                            screen = currentScreen,
+                            onDismiss = {
+                                if (currentScreen.frequency == "once") {
+                                    cache.markDismissed(currentScreen.screenId)
+                                }
+                                dismissableScreenIndex++
+                            }
+                        )
                     }
                     else -> {
                             val navController = rememberNavController()
