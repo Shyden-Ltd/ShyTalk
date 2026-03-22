@@ -36,8 +36,8 @@ data class Broadcast(
                 recipientName = map["recipientName"] as? String ?: "",
                 giftName = map["giftName"] as? String ?: "",
                 giftIconUrl = map["giftIconUrl"] as? String ?: "",
-                giftCoinValue = (map["giftCoinValue"] as? Long)?.toInt() ?: 0,
-                quantity = (map["quantity"] as? Long)?.toInt() ?: 1,
+                giftCoinValue = (map["giftCoinValue"] as? Number)?.toInt() ?: 0,
+                quantity = (map["quantity"] as? Number)?.toInt() ?: 1,
                 timestamp = map["timestamp"]?.let { timestampToMillis(it) } ?: 0,
             )
     }

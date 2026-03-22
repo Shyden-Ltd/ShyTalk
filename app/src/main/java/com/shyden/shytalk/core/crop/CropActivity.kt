@@ -90,6 +90,7 @@ class CropActivity : AppCompatActivity(), CropImageView.OnCropImageCompleteListe
                 outputFile.outputStream().use { out ->
                     bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)
                 }
+                bitmap.recycle()
                 val data = Intent().apply {
                     putExtra(EXTRA_RESULT_URI, outputFile.toUri().toString())
                 }

@@ -162,7 +162,10 @@ router.get('/conversations/:id/messages', async (req, res) => {
       return res.status(403).json({ error: 'Not a participant of this conversation' });
     }
 
-    const limit = Math.min(parseInt(req.query.limit) || DEFAULT_MESSAGE_LIMIT, MAX_MESSAGE_LIMIT);
+    const limit = Math.min(
+      parseInt(req.query.limit, 10) || DEFAULT_MESSAGE_LIMIT,
+      MAX_MESSAGE_LIMIT,
+    );
 
     const snap = await db
       .collection(`conversations/${req.params.id}/messages`)

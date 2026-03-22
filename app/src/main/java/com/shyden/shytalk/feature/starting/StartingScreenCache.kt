@@ -98,6 +98,7 @@ class StartingScreenCache(private val context: Context) {
             // Atomic write: write to temp file then rename
             val tempFile = File(context.cacheDir, "starting_screens_cache.tmp")
             tempFile.writeText(json.toString())
+            cacheFile.delete()  // delete existing before rename
             if (!tempFile.renameTo(cacheFile)) {
                 tempFile.delete()
             }

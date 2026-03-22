@@ -439,7 +439,7 @@ test.describe("Starting Screens Admin Section", () => {
   });
 
   test("saved changes persist after page reload", async ({ page }) => {
-    const screenId = "pw-persist-test";
+    let screenId = "pw-persist-test";
     const titleText = "Persistence Check Title";
     try {
       screenId = await createScreenViaUI(page);

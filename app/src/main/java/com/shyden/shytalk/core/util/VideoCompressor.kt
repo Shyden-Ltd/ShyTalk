@@ -92,8 +92,8 @@ object VideoCompressor {
     }
 
     private fun alignTo16(w: Int, h: Int): Pair<Int, Int> {
-        // MediaCodec requires dimensions aligned to 16
-        return (w + 15 and 0x7FFFFFF0) to (h + 15 and 0x7FFFFFF0)
+        // MediaCodec requires dimensions aligned to 16; clamp to at least 16 to avoid zero-dimension crashes
+        return ((w + 15) and 0x7FFFFFF0).coerceAtLeast(16) to ((h + 15) and 0x7FFFFFF0).coerceAtLeast(16)
     }
 
     private suspend fun transcode(

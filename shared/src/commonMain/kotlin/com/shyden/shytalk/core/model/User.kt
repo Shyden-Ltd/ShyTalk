@@ -177,7 +177,7 @@ data class User(
                 coverPhotoUrl = map["coverPhotoUrl"] as? String,
                 description = map["description"] as? String,
                 nationality = map["nationality"] as? String,
-                uniqueId = (map["uniqueId"] as? Long) ?: 0L,
+                uniqueId = (map["uniqueId"] as? Number)?.toLong() ?: 0L,
                 firebaseUid = map["firebaseUid"] as? String ?: "",
                 providers =
                     (map["providers"] as? List<*>)
@@ -242,12 +242,12 @@ data class User(
                 pmShowTimestamps = map["pmShowTimestamps"].asBool(true),
                 pmShowDateSeparators = map["pmShowDateSeparators"].asBool(true),
                 pmNotificationPreview = map["pmNotificationPreview"].asBool(true),
-                acceptedLegalVersion = (map["acceptedLegalVersion"] as? Long)?.toInt() ?: 0,
+                acceptedLegalVersion = (map["acceptedLegalVersion"] as? Number)?.toInt() ?: 0,
                 dndEnabled = map["dndEnabled"].asBool(),
-                dndStartHour = (map["dndStartHour"] as? Long)?.toInt() ?: 22,
-                dndStartMinute = (map["dndStartMinute"] as? Long)?.toInt() ?: 0,
-                dndEndHour = (map["dndEndHour"] as? Long)?.toInt() ?: 8,
-                dndEndMinute = (map["dndEndMinute"] as? Long)?.toInt() ?: 0,
+                dndStartHour = (map["dndStartHour"] as? Number)?.toInt() ?: 22,
+                dndStartMinute = (map["dndStartMinute"] as? Number)?.toInt() ?: 0,
+                dndEndHour = (map["dndEndHour"] as? Number)?.toInt() ?: 8,
+                dndEndMinute = (map["dndEndMinute"] as? Number)?.toInt() ?: 0,
                 shyCoins = (map["shyCoins"] as? Number)?.toLong() ?: 0,
                 shyBeans = (map["shyBeans"] as? Number)?.toLong() ?: 0,
                 isSuperShy = map["isSuperShy"].asBool(),
@@ -255,9 +255,9 @@ data class User(
                 superShyTier = map["superShyTier"] as? String,
                 tempUniqueId = (map["tempUniqueId"] as? Number)?.toLong(),
                 tempUniqueIdExpiry = map["tempUniqueIdExpiry"]?.let { timestampToMillis(it) },
-                luckScore = (map["luckScore"] as? Long)?.toInt() ?: 0,
-                pityCounter = (map["pityCounter"] as? Long)?.toInt() ?: 0,
-                loginStreak = (map["loginStreak"] as? Long)?.toInt() ?: 0,
+                luckScore = (map["luckScore"] as? Number)?.toInt() ?: 0,
+                pityCounter = (map["pityCounter"] as? Number)?.toInt() ?: 0,
+                loginStreak = (map["loginStreak"] as? Number)?.toInt() ?: 0,
                 lastLoginDate = map["lastLoginDate"] as? String,
                 lastLoginRewardDate = map["lastLoginRewardDate"] as? String,
                 aliases =
@@ -265,7 +265,7 @@ data class User(
                         ?.entries
                         ?.mapNotNull { (k, v) -> (k as? String)?.let { key -> (v as? String)?.let { value -> key to value } } }
                         ?.toMap() ?: emptyMap(),
-                minGiftAnimationValue = (map["minGiftAnimationValue"] as? Long)?.toInt() ?: 0,
+                minGiftAnimationValue = (map["minGiftAnimationValue"] as? Number)?.toInt() ?: 0,
                 selfDestructAlertEnabled = map["selfDestructAlertEnabled"].asBool(),
                 hasClaimedSuperShyTrial = map["hasClaimedSuperShyTrial"].asBool(),
                 language = map["language"] as? String ?: "en",

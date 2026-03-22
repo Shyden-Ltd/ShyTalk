@@ -608,7 +608,7 @@ router.post('/economy/gift', async (req, res) => {
     const uniqueId = req.auth.uniqueId;
     const body = req.body;
     const { recipientId, giftId } = body || {};
-    const quantity = Math.max(1, Math.min(9999, parseInt(body?.quantity) || 1));
+    const quantity = Math.max(1, Math.min(9999, parseInt(body?.quantity, 10) || 1));
 
     if (!recipientId || !giftId)
       return res.status(400).json({ error: 'recipientId and giftId required' });
@@ -751,7 +751,7 @@ router.post('/economy/gift-direct', async (req, res) => {
     const uniqueId = req.auth.uniqueId;
     const body = req.body;
     const { recipientId, giftId } = body || {};
-    const quantity = Math.max(1, Math.min(9999, parseInt(body?.quantity) || 1));
+    const quantity = Math.max(1, Math.min(9999, parseInt(body?.quantity, 10) || 1));
 
     if (!recipientId || !giftId)
       return res.status(400).json({ error: 'recipientId and giftId required' });
@@ -865,7 +865,7 @@ router.post('/economy/gift-batch', async (req, res) => {
     const uniqueId = req.auth.uniqueId;
     const body = req.body;
     const { recipientIds, giftId, fromBackpack } = body || {};
-    const quantity = Math.max(1, Math.min(9999, parseInt(body?.quantity) || 1));
+    const quantity = Math.max(1, Math.min(9999, parseInt(body?.quantity, 10) || 1));
 
     if (!recipientIds || !Array.isArray(recipientIds) || recipientIds.length === 0 || !giftId) {
       return res.status(400).json({ error: 'recipientIds array and giftId required' });
@@ -1462,7 +1462,7 @@ router.get('/economy/balance', async (req, res) => {
 router.get('/economy/transactions', async (req, res) => {
   try {
     const uniqueId = req.auth.uniqueId;
-    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
     const filterType = req.query.type;
 
     let query = db.collection(`users/${uniqueId}/transactions`);

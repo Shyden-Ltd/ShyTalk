@@ -46,12 +46,12 @@ data class Gift(
             Gift(
                 id = id,
                 name = map["name"] as? String ?: "",
-                coinValue = (map["coinValue"] as? Long)?.toInt() ?: 0,
+                coinValue = (map["coinValue"] as? Number)?.toInt() ?: 0,
                 animationUrl = map["animationUrl"] as? String ?: "",
                 soundUrl = map["soundUrl"] as? String ?: "",
                 iconUrl = map["iconUrl"] as? String ?: "",
-                order = (map["order"] as? Long)?.toInt() ?: 0,
-                expiresAfterDays = (map["expiresAfterDays"] as? Long)?.toInt(),
+                order = (map["order"] as? Number)?.toInt() ?: 0,
+                expiresAfterDays = (map["expiresAfterDays"] as? Number)?.toInt(),
                 showInStore = map["showInStore"].asBool(true),
                 showOnWheel = map["showOnWheel"].asBool(true),
             )

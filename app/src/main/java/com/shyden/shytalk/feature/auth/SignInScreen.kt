@@ -293,8 +293,9 @@ fun SignInScreen(
             AppleSignInButton(
                 onClick = {
                     if (isBusy) return@AppleSignInButton
+                    val activity = context as? android.app.Activity ?: return@AppleSignInButton
                     signingInProvider = "apple"
-                    viewModel.signInWithAppleViaProvider(context as android.app.Activity)
+                    viewModel.signInWithAppleViaProvider(activity)
                 },
                 isLoading = signingInProvider == "apple" || (uiState.isLoading && signingInProvider == "apple"),
                 enabled = !isBusy

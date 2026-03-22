@@ -217,12 +217,12 @@ router.post('/users/:uniqueId/luck', async (req, res) => {
 
     const updates = {};
     if (body.luckScore !== null && body.luckScore !== undefined) {
-      const parsed = parseInt(body.luckScore);
+      const parsed = parseInt(body.luckScore, 10);
       if (isNaN(parsed)) return res.status(400).json({ error: 'luckScore must be a number' });
       updates.luckScore = Math.max(0, Math.min(100, parsed));
     }
     if (body.pityCounter !== null && body.pityCounter !== undefined) {
-      const parsed = parseInt(body.pityCounter);
+      const parsed = parseInt(body.pityCounter, 10);
       if (isNaN(parsed)) return res.status(400).json({ error: 'pityCounter must be a number' });
       updates.pityCounter = Math.max(0, parsed);
     }
@@ -257,7 +257,7 @@ router.get('/users/:uniqueId/transactions', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
-    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
     const filterType = req.query.type;
 
     let query = db.collection(`users/${req.params.uniqueId}/transactions`);

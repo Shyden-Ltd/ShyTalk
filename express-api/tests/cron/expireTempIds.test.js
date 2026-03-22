@@ -17,7 +17,7 @@ jest.mock('../../src/utils/firebase', () => ({
         return {
           where: (...args2) => {
             mockWhere(...args2);
-            return { get: mockCollectionGet };
+            return { limit: () => ({ get: mockCollectionGet }), get: mockCollectionGet };
           },
           get: mockCollectionGet,
         };

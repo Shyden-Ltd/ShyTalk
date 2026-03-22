@@ -147,6 +147,54 @@ describe('logger', () => {
     expect(new Date(doc.timestamp).toISOString()).toBe(doc.timestamp);
   });
 
+  test('circuit breaker stops Firestore writes after consecutive failures', async () => {
+    db._spies.setSpy.mockRejectedValue(new Error('RESOURCE_EXHAUSTED'));
+
+    // Fire 15 logs — all will fail
+    for (let i = 0; i < 15; i++) {
+      await logger.log({ level: 'ERROR', source: 'test', message: `fail ${i}` });
+    }
+
+    // Only the first 10 should have attempted a Firestore write (threshold = 10)
+    expect(db._spies.setSpy).toHaveBeenCalledTimes(10);
+    expect(logger._getConsecutiveFailures()).toBe(10);
+  });
+
+  test('circuit breaker resets after a successful write', async () => {
+    // Fail 5 times
+    db._spies.setSpy.mockRejectedValue(new Error('RESOURCE_EXHAUSTED'));
+    for (let i = 0; i < 5; i++) {
+      await logger.log({ level: 'ERROR', source: 'test', message: `fail ${i}` });
+    }
+    expect(logger._getConsecutiveFailures()).toBe(5);
+
+    // Now succeed
+    db._spies.setSpy.mockResolvedValue(undefined);
+    await logger.log({ level: 'ERROR', source: 'test', message: 'success' });
+    expect(logger._getConsecutiveFailures()).toBe(0);
+  });
+
+  test('circuit breaker blocks even ERROR/FATAL when open', async () => {
+    db._spies.setSpy.mockRejectedValue(new Error('RESOURCE_EXHAUSTED'));
+
+    // Exhaust the circuit breaker
+    for (let i = 0; i < 10; i++) {
+      await logger.log({ level: 'FATAL', source: 'test', message: `fail ${i}` });
+    }
+    expect(db._spies.setSpy).toHaveBeenCalledTimes(10);
+
+    // Even FATAL should be blocked now
+    await logger.log({ level: 'FATAL', source: 'test', message: 'blocked' });
+    expect(db._spies.setSpy).toHaveBeenCalledTimes(10);
+  });
+
+  test('dailyCount increments even on failed writes (throttle still works)', async () => {
+    db._spies.setSpy.mockRejectedValue(new Error('RESOURCE_EXHAUSTED'));
+
+    await logger.log({ level: 'INFO', source: 'test', message: 'fail' });
+    expect(logger.getDailyStats().count).toBe(1);
+  });
+
   test('getDailyStats returns count and cap', async () => {
     const stats = logger.getDailyStats();
     expect(stats).toEqual({ count: 0, hardCap: 15000 });

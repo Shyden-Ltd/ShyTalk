@@ -38,8 +38,8 @@ const PIN_MAX_LENGTH = 8;
 const PIN_MAX_ATTEMPTS = 5;
 const PIN_LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
 
-// Simple email format check
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Simple email format check (atomic groups via possessive-style to prevent ReDoS)
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{1,63}$/;
 
 function generateOtp() {
   return crypto.randomInt(100000, 999999).toString();
@@ -121,7 +121,7 @@ router.post('/auth/otp/send', sensitiveLimiter, async (req, res) => {
     await metricsRef.set({ count: currentCount + 1, date: todayStr });
 
     if (currentCount + 1 >= DAILY_EMAIL_WARN) {
-      log.warn(`Daily email count at ${currentCount + 1}/${DAILY_EMAIL_CAP}`);
+      log.warn('auth', `Daily email count at ${currentCount + 1}/${DAILY_EMAIL_CAP}`);
     }
 
     // Send email
@@ -130,7 +130,7 @@ router.post('/auth/otp/send', sensitiveLimiter, async (req, res) => {
 
     res.json({ message: 'OTP sent' });
   } catch (err) {
-    log.error('OTP send failed', err);
+    log.error('auth', 'OTP send failed', { error: err.message });
     res.status(500).json({ error: 'Failed to send OTP' });
   }
 });
@@ -204,7 +204,7 @@ router.post('/auth/otp/verify', sensitiveLimiter, async (req, res) => {
     const customToken = await auth.createCustomToken(firebaseUid);
     res.json({ customToken });
   } catch (err) {
-    log.error('OTP verify failed', err);
+    log.error('auth', 'OTP verify failed', { error: err.message });
     res.status(500).json({ error: 'Verification failed' });
   }
 });
@@ -241,7 +241,7 @@ router.post('/auth/pin/setup', authMiddleware, async (req, res) => {
 
     res.json({ message: 'PIN set' });
   } catch (err) {
-    log.error('PIN setup failed', err);
+    log.error('auth', 'PIN setup failed', { error: err.message });
     res.status(500).json({ error: 'Failed to set PIN' });
   }
 });
@@ -333,7 +333,7 @@ router.post('/auth/pin/verify', sensitiveLimiter, async (req, res) => {
     const customToken = await auth.createCustomToken(firebaseUid);
     res.json({ customToken });
   } catch (err) {
-    log.error('PIN verify failed', err);
+    log.error('auth', 'PIN verify failed', { error: err.message });
     res.status(500).json({ error: 'Verification failed' });
   }
 });
@@ -366,7 +366,7 @@ router.post('/auth/pin/reset', authMiddleware, async (req, res) => {
 
     res.json({ message: 'PIN reset' });
   } catch (err) {
-    log.error('PIN reset failed', err);
+    log.error('auth', 'PIN reset failed', { error: err.message });
     res.status(500).json({ error: 'Failed to reset PIN' });
   }
 });
@@ -403,7 +403,7 @@ router.post('/auth/biometric/register', authMiddleware, async (req, res) => {
 
     res.json({ message: 'Biometric registered' });
   } catch (err) {
-    log.error('Biometric register failed', err);
+    log.error('auth', 'Biometric register failed', { error: err.message });
     res.status(500).json({ error: 'Failed to register biometric' });
   }
 });
@@ -435,7 +435,7 @@ router.get('/auth/biometric/challenge', sensitiveLimiter, async (req, res) => {
 
     res.json({ challenge: nonce });
   } catch (err) {
-    log.error('Biometric challenge failed', err);
+    log.error('auth', 'Biometric challenge failed', { error: err.message });
     res.status(500).json({ error: 'Failed to generate challenge' });
   }
 });
@@ -481,7 +481,7 @@ router.post('/auth/biometric/verify', sensitiveLimiter, async (req, res) => {
         keyObject = crypto.createPublicKey({ key: derBuffer, format: 'der', type: 'spki' });
       }
     } catch (keyErr) {
-      log.error('Invalid public key format', keyErr);
+      log.error('auth', 'Invalid public key format', { error: keyErr.message });
       return res.status(500).json({ error: 'Invalid biometric key' });
     }
 
@@ -508,7 +508,7 @@ router.post('/auth/biometric/verify', sensitiveLimiter, async (req, res) => {
     const customToken = await auth.createCustomToken(firebaseUid);
     res.json({ customToken });
   } catch (err) {
-    log.error('Biometric verify failed', err);
+    log.error('auth', 'Biometric verify failed', { error: err.message });
     res.status(500).json({ error: 'Verification failed' });
   }
 });
@@ -525,7 +525,7 @@ router.delete('/auth/biometric/:deviceId', authMiddleware, async (req, res) => {
 
     res.json({ message: 'Biometric key revoked' });
   } catch (err) {
-    log.error('Biometric revoke failed', err);
+    log.error('auth', 'Biometric revoke failed', { error: err.message });
     res.status(500).json({ error: 'Failed to revoke biometric key' });
   }
 });

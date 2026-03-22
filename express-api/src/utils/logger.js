@@ -53,6 +53,8 @@ function createLogger(db) {
   let dailyCount = 0;
   let hardCap = DEFAULT_HARD_CAP;
   let currentDay = new Date().toISOString().split('T')[0];
+  let consecutiveFailures = 0;
+  const CIRCUIT_BREAKER_THRESHOLD = 10;
 
   function resetIfNewDay() {
     const today = new Date().toISOString().split('T')[0];
@@ -91,6 +93,9 @@ function createLogger(db) {
       // Quota check
       if (shouldThrottle(level)) return;
 
+      // Circuit breaker — stop attempting Firestore writes after consecutive failures
+      if (consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) return;
+
       // Build log document
       const doc = {
         id: crypto.randomBytes(16).toString('hex'),
@@ -107,15 +112,26 @@ function createLogger(db) {
         }
       }
 
+      // Count attempt before write so throttle works even when Firestore is down
+      dailyCount++;
+
       // Write to Firestore
       await db.collection('logs').doc(doc.id).set(doc);
 
-      dailyCount++;
+      consecutiveFailures = 0;
     } catch (err) {
+      consecutiveFailures++;
       // Logger must never throw
       try {
-        // eslint-disable-next-line no-console
-        console.error('[logger] Failed to write log:', err.message);
+        if (consecutiveFailures <= CIRCUIT_BREAKER_THRESHOLD) {
+          // eslint-disable-next-line no-console
+          console.error('[logger] Failed to write log:', err.message);
+        } else if (consecutiveFailures === CIRCUIT_BREAKER_THRESHOLD + 1) {
+          // eslint-disable-next-line no-console
+          console.error(
+            '[logger] Circuit breaker open — suppressing Firestore writes until next success',
+          );
+        }
       } catch (_) {
         /* swallow */
       }
@@ -137,8 +153,22 @@ function createLogger(db) {
   function _setHardCap(n) {
     hardCap = n;
   }
+  function _resetCircuitBreaker() {
+    consecutiveFailures = 0;
+  }
+  function _getConsecutiveFailures() {
+    return consecutiveFailures;
+  }
 
-  return { log, getDailyStats, _resetDailyCount, _setDailyCount, _setHardCap };
+  return {
+    log,
+    getDailyStats,
+    _resetDailyCount,
+    _setDailyCount,
+    _setHardCap,
+    _resetCircuitBreaker,
+    _getConsecutiveFailures,
+  };
 }
 
 module.exports = { createLogger, sanitize, VALID_LEVELS };

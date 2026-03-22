@@ -19,16 +19,16 @@ data class GiftWallEntry(
         ): GiftWallEntry =
             GiftWallEntry(
                 giftId = giftId,
-                receivedCount = (map["receivedCount"] as? Long)?.toInt() ?: 0,
+                receivedCount = (map["receivedCount"] as? Number)?.toInt() ?: 0,
                 senders =
                     (map["senders"] as? Map<*, *>)
                         ?.mapNotNull { (k, v) ->
                             val key = k as? String ?: return@mapNotNull null
-                            val value = (v as? Long)?.toInt() ?: return@mapNotNull null
+                            val value = (v as? Number)?.toInt() ?: return@mapNotNull null
                             key to value
                         }?.toMap() ?: emptyMap(),
                 topSenderId = map["topSenderId"] as? String,
-                topSenderCount = (map["topSenderCount"] as? Long)?.toInt() ?: 0,
+                topSenderCount = (map["topSenderCount"] as? Number)?.toInt() ?: 0,
             )
     }
 }

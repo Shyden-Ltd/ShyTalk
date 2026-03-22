@@ -346,7 +346,7 @@ router.post('/reports/:id/resolve', async (req, res) => {
     }
 
     // Release lock and write audit log in parallel
-    await Promise.all([auditWrite, db.doc(`reportLocks/${report.reportedUserId}`).delete()]);
+    await Promise.all([auditWrite, db.doc(`reportLocks/${req.params.id}`).delete()]);
 
     res.json({ success: true });
   } catch (err) {
@@ -764,7 +764,7 @@ router.post('/admin/users/:uniqueId/unsuspend', async (req, res) => {
       ),
     ]);
 
-    clearSuspensionCache(req.params.uniqueId);
+    clearSuspensionCache(Number(req.params.uniqueId));
     res.json({ success: true });
   } catch (err) {
     log.error('reports', 'POST /api/admin/users/:uniqueId/unsuspend failed', {
@@ -959,7 +959,7 @@ router.get('/admin/audit-log', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
-    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
 
     const entries = await queryDocs(
       db.collection('adminAuditLog').orderBy('createdAt', 'desc').limit(limit),

@@ -10,13 +10,14 @@ jest.mock('nodemailer', () => {
 });
 
 const nodemailer = require('nodemailer');
-const { sendEmail } = require('../../src/utils/email');
+const { sendEmail, _resetTransport } = require('../../src/utils/email');
 
 describe('Email Sender', () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    _resetTransport();
     process.env = {
       ...originalEnv,
       SMTP_HOST: 'smtp.test.oraclecloud.com',

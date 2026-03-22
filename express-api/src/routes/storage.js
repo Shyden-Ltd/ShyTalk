@@ -8,6 +8,7 @@
  * DELETE /api/storage/delete  → Delete a file from R2 (owner-only)
  */
 
+const crypto = require('crypto');
 const express = require('express');
 const multer = require('multer');
 const r2 = require('../utils/r2');
@@ -80,7 +81,7 @@ router.post('/storage/upload', upload.single('file'), async (req, res) => {
 
     // Compute extension and key AFTER compression (HEIC→JPEG changes MIME)
     const extension = getExtension(uploadMime);
-    const key = `${path}/${uniqueId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
+    const key = `${path}/${uniqueId}/${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${extension}`;
 
     const url = await r2.putObject(key, uploadBuffer, uploadMime);
     log.info('storage', 'File uploaded', { key, uniqueId, contentType: uploadMime });

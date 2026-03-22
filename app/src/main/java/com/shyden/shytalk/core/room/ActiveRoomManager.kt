@@ -56,7 +56,7 @@ class ActiveRoomManager(
     val messages: StateFlow<List<Message>> = _messages.asStateFlow()
     override val activeMessages: StateFlow<List<Message>> = _messages.asStateFlow()
 
-    private val _sharedUserCache = mutableMapOf<String, User>()
+    private val _sharedUserCache = java.util.concurrent.ConcurrentHashMap<String, User>()
     override val sharedUserCache: Map<String, User> get() = _sharedUserCache
 
     override fun updateSharedUserCache(users: Map<String, User>) {
@@ -99,7 +99,7 @@ class ActiveRoomManager(
     private var presenceMonitorJob: Job? = null
     private var isSeated = false
 
-    private val leaveSignals = mutableMapOf<String, CompletableDeferred<Unit>>()
+    private val leaveSignals = java.util.concurrent.ConcurrentHashMap<String, CompletableDeferred<Unit>>()
 
     override fun markLeaveStarted(roomId: String) {
         leaveSignals[roomId] = CompletableDeferred()

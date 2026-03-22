@@ -40,7 +40,7 @@ data class SeatRequest(
                 requestId = requestId,
                 userId = map["userId"] as? String ?: "",
                 userName = map["userName"] as? String ?: "",
-                seatIndex = (map["seatIndex"] as? Long)?.toInt() ?: -1,
+                seatIndex = (map["seatIndex"] as? Number)?.toInt() ?: -1,
                 status =
                     (map["status"] as? String)?.let {
                         try {

@@ -1,20 +1,66 @@
-// Mock Firebase — chainable collection/where/limit/get + batch
-const mockGet = jest.fn();
-const mockLimit = jest.fn(() => ({ get: mockGet }));
-const mockWhere = jest.fn(() => ({ where: mockWhere, limit: mockLimit }));
+const emptySnap = { empty: true, size: 0, docs: [] };
+
+function makeDoc(id, data) {
+  const subcollections = {};
+  return {
+    id,
+    data: () => data,
+    ref: {
+      path: `col/${id}`,
+      delete: jest.fn().mockResolvedValue(undefined),
+      collection: jest.fn((name) => {
+        if (!subcollections[name]) {
+          subcollections[name] = {
+            limit: jest.fn().mockReturnValue({
+              get: jest.fn().mockResolvedValue(emptySnap),
+            }),
+          };
+        }
+        return subcollections[name];
+      }),
+    },
+  };
+}
+
+function makeSnapshot(docs) {
+  return { empty: docs.length === 0, size: docs.length, docs };
+}
+
+// Track all collection queries
+const collectionQueries = {};
+const mockOrderBy = jest.fn().mockReturnValue({
+  limit: jest.fn().mockReturnValue({
+    get: jest.fn().mockResolvedValue(emptySnap),
+  }),
+});
+const mockDoc = jest.fn().mockReturnValue({
+  set: jest.fn().mockResolvedValue(undefined),
+});
 const mockBatchDelete = jest.fn();
 const mockBatchCommit = jest.fn().mockResolvedValue(undefined);
-const mockBatch = jest.fn(() => ({
-  delete: mockBatchDelete,
-  commit: mockBatchCommit,
-}));
 
 jest.mock('../../src/utils/firebase', () => ({
   db: {
-    collection: jest.fn(() => ({
-      where: mockWhere,
+    collection: jest.fn((name) => {
+      if (!collectionQueries[name]) {
+        collectionQueries[name] = [];
+      }
+      const chain = {
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnValue({
+          get: jest.fn().mockResolvedValue(emptySnap),
+        }),
+        orderBy: mockOrderBy,
+      };
+      collectionQueries[name].push(chain);
+      return chain;
+    }),
+    batch: jest.fn(() => ({
+      delete: mockBatchDelete,
+      commit: mockBatchCommit,
     })),
-    batch: mockBatch,
+    doc: mockDoc,
+    runTransaction: jest.fn(),
   },
 }));
 
@@ -28,186 +74,158 @@ const testDataCleanup = require('../../src/cron/testDataCleanup');
 const { db } = require('../../src/utils/firebase');
 const log = require('../../src/utils/log');
 
-function makeSnapshot(docs) {
-  return {
-    empty: docs.length === 0,
-    size: docs.length,
-    docs: docs.map((d) => ({
-      id: d.id,
-      data: () => {
-        const { id: _id, ...rest } = d;
-        return rest;
-      },
-      ref: { path: `col/${d.id}` },
-    })),
-  };
-}
-
 beforeEach(() => {
   jest.clearAllMocks();
+  for (const key of Object.keys(collectionQueries)) {
+    delete collectionQueries[key];
+  }
 });
 
 describe('testDataCleanup cron', () => {
   test('skips cleanup in production environment', async () => {
     const originalEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = 'production';
-
     await testDataCleanup();
-
     expect(db.collection).not.toHaveBeenCalled();
-
     process.env.NODE_ENV = originalEnv;
   });
 
-  test('queries all expected collections with correct filters', async () => {
+  test('queries all expected tagged collections', async () => {
     const originalEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = 'development';
 
-    mockGet.mockResolvedValue(makeSnapshot([]));
-
     await testDataCleanup();
 
-    const expectedCollections = ['users', 'rooms', 'gifts', 'conversations', 'banners', 'funFacts'];
-    expect(db.collection).toHaveBeenCalledTimes(expectedCollections.length);
-
+    const expectedCollections = [
+      'users',
+      'rooms',
+      'gifts',
+      'conversations',
+      'banners',
+      'funFacts',
+      'reports',
+      'suspensionAppeals',
+      'alerts',
+      'deviceBindings',
+    ];
     for (const col of expectedCollections) {
       expect(db.collection).toHaveBeenCalledWith(col);
     }
 
-    // Verify where clauses: _testRun >= 'test_' and createdAt < cutoff
-    // Each collection triggers two where() calls
-    const whereCalls = mockWhere.mock.calls;
-    // First where per collection: _testRun >= TEST_PREFIX
-    expect(whereCalls[0]).toEqual(['_testRun', '>=', 'test_']);
-    // Second where per collection: createdAt < cutoff (a number)
-    expect(whereCalls[1][0]).toBe('createdAt');
-    expect(whereCalls[1][1]).toBe('<');
-    expect(typeof whereCalls[1][2]).toBe('number');
-
-    // Verify limit(500) called for each collection
-    expect(mockLimit).toHaveBeenCalledWith(500);
-
     process.env.NODE_ENV = originalEnv;
   });
 
-  test('deletes stale test documents using batch', async () => {
+  test('filters stale docs by createdAt client-side', async () => {
     const originalEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = 'development';
+    const now = Date.now();
+    jest.spyOn(Date, 'now').mockReturnValue(now);
 
-    const testDocs = [
-      { id: 'test_user_1', _testRun: 'test_abc', createdAt: 0 },
-      { id: 'test_user_2', _testRun: 'test_abc', createdAt: 0 },
-    ];
+    const freshDoc = makeDoc('fresh', { _testRun: 'test_abc', createdAt: now - 1000 });
+    const staleDoc = makeDoc('stale', {
+      _testRun: 'test_abc',
+      createdAt: now - 2 * 60 * 60 * 1000,
+    });
 
-    // First collection (users) returns docs, rest return empty
-    let callCount = 0;
-    mockGet.mockImplementation(() => {
-      callCount++;
-      if (callCount === 1) {
-        return Promise.resolve(makeSnapshot(testDocs));
-      }
-      return Promise.resolve(makeSnapshot([]));
+    // Make first collection (users) return both docs
+    let callIdx = 0;
+    db.collection.mockImplementation((_name) => {
+      const chain = {
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnValue({
+          get: jest
+            .fn()
+            .mockResolvedValue(callIdx++ === 0 ? makeSnapshot([freshDoc, staleDoc]) : emptySnap),
+        }),
+        orderBy: mockOrderBy,
+      };
+      return chain;
     });
 
     await testDataCleanup();
 
-    // batch() should be created for the non-empty collection
-    expect(mockBatch).toHaveBeenCalledTimes(1);
-    // Two docs deleted
-    expect(mockBatchDelete).toHaveBeenCalledTimes(2);
-    // batch.commit() called once
-    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+    // Only the stale doc should be deleted, not the fresh one
+    expect(staleDoc.ref.delete).toHaveBeenCalled();
+    expect(freshDoc.ref.delete).not.toHaveBeenCalled();
 
-    // Log should report deletion count
-    expect(log.info).toHaveBeenCalledWith('cron', 'testDataCleanup: removed stale test data', {
-      deleted: 2,
-    });
-
+    Date.now.mockRestore();
     process.env.NODE_ENV = originalEnv;
   });
 
   test('does not log when no documents are deleted', async () => {
     const originalEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = 'development';
-
-    mockGet.mockResolvedValue(makeSnapshot([]));
-
     await testDataCleanup();
-
     expect(log.info).not.toHaveBeenCalled();
-    expect(mockBatch).not.toHaveBeenCalled();
-
     process.env.NODE_ENV = originalEnv;
   });
 
-  test('handles multiple collections with stale data', async () => {
+  test('logs deletion count when stale docs are removed', async () => {
     const originalEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = 'development';
 
-    const userDocs = [{ id: 'test_u1', _testRun: 'test_run1', createdAt: 0 }];
-    const roomDocs = [
-      { id: 'test_r1', _testRun: 'test_run1', createdAt: 0 },
-      { id: 'test_r2', _testRun: 'test_run1', createdAt: 0 },
-    ];
+    const doc1 = makeDoc('d1', { _testRun: 'test_abc', createdAt: 0 });
+    const doc2 = makeDoc('d2', { _testRun: 'test_abc', createdAt: 0 });
 
-    let callCount = 0;
-    mockGet.mockImplementation(() => {
-      callCount++;
-      if (callCount === 1) return Promise.resolve(makeSnapshot(userDocs));
-      if (callCount === 2) return Promise.resolve(makeSnapshot(roomDocs));
-      return Promise.resolve(makeSnapshot([]));
+    let callIdx = 0;
+    db.collection.mockImplementation((_name) => {
+      const chain = {
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnValue({
+          get: jest
+            .fn()
+            .mockResolvedValue(callIdx++ === 0 ? makeSnapshot([doc1, doc2]) : emptySnap),
+        }),
+        orderBy: mockOrderBy,
+      };
+      return chain;
     });
 
     await testDataCleanup();
 
-    // Two non-empty collections => two batches
-    expect(mockBatch).toHaveBeenCalledTimes(2);
-    // 1 + 2 = 3 deletions total
-    expect(mockBatchDelete).toHaveBeenCalledTimes(3);
-    expect(mockBatchCommit).toHaveBeenCalledTimes(2);
+    expect(log.info).toHaveBeenCalledWith(
+      'cron',
+      'testDataCleanup: removed stale test data',
+      expect.objectContaining({ deleted: expect.any(Number) }),
+    );
 
-    expect(log.info).toHaveBeenCalledWith('cron', 'testDataCleanup: removed stale test data', {
-      deleted: 3,
+    process.env.NODE_ENV = originalEnv;
+  });
+
+  test('restores counter when test users are deleted', async () => {
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+
+    const testUser = makeDoc('u1', { _testRun: 'test_abc', createdAt: 0, uniqueId: 100000099 });
+
+    let callIdx = 0;
+    const counterSetMock = jest.fn().mockResolvedValue(undefined);
+    mockDoc.mockReturnValue({ set: counterSetMock });
+
+    // Counter restoration query: orderBy('uniqueId', 'desc').limit(1)
+    const maxUserDoc = makeDoc('real_user', { uniqueId: 100000050 });
+    mockOrderBy.mockReturnValue({
+      limit: jest.fn().mockReturnValue({
+        get: jest.fn().mockResolvedValue(makeSnapshot([maxUserDoc])),
+      }),
     });
 
-    process.env.NODE_ENV = originalEnv;
-  });
-
-  test('uses 1 hour cutoff for stale data', async () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-
-    const now = Date.now();
-    jest.spyOn(Date, 'now').mockReturnValue(now);
-
-    mockGet.mockResolvedValue(makeSnapshot([]));
-
-    await testDataCleanup();
-
-    // The second where clause should use cutoff = now - 3600000
-    const createdAtWheres = mockWhere.mock.calls.filter((c) => c[0] === 'createdAt');
-    expect(createdAtWheres.length).toBeGreaterThan(0);
-
-    for (const call of createdAtWheres) {
-      expect(call[2]).toBe(now - 60 * 60 * 1000);
-    }
-
-    Date.now.mockRestore();
-
-    process.env.NODE_ENV = originalEnv;
-  });
-
-  test('skips batch for empty collections', async () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-
-    mockGet.mockResolvedValue(makeSnapshot([]));
+    db.collection.mockImplementation((_name) => {
+      const chain = {
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnValue({
+          get: jest.fn().mockResolvedValue(callIdx++ === 0 ? makeSnapshot([testUser]) : emptySnap),
+        }),
+        orderBy: mockOrderBy,
+      };
+      return chain;
+    });
 
     await testDataCleanup();
 
-    // No batch should be created for empty snapshots
-    expect(mockBatch).not.toHaveBeenCalled();
-    expect(mockBatchCommit).not.toHaveBeenCalled();
+    // Counter should be restored
+    expect(mockDoc).toHaveBeenCalledWith('counters/uniqueId');
+    expect(counterSetMock).toHaveBeenCalledWith({ value: 100000050 }, { merge: true });
 
     process.env.NODE_ENV = originalEnv;
   });

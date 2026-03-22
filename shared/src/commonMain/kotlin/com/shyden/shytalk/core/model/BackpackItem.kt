@@ -27,7 +27,7 @@ data class BackpackItem(
         ): BackpackItem =
             BackpackItem(
                 giftId = giftId,
-                quantity = (map["quantity"] as? Long)?.toInt() ?: 0,
+                quantity = (map["quantity"] as? Number)?.toInt() ?: 0,
                 lastAcquired = map["lastAcquired"]?.let { timestampToMillis(it) } ?: 0,
                 expiresAt = map["expiresAt"]?.let { timestampToMillis(it) } ?: 0,
             )

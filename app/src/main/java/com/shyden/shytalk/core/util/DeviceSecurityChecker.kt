@@ -35,7 +35,13 @@ object DeviceSecurityChecker {
         return try {
             val runtime = Runtime.getRuntime()
             packages.any { pkg ->
-                runtime.exec(arrayOf("pm", "path", pkg)).inputStream.bufferedReader().readLine() != null
+                val process = runtime.exec(arrayOf("pm", "path", pkg))
+                try {
+                    process.inputStream.bufferedReader().use { it.readLine() != null }
+                } finally {
+                    process.waitFor()
+                    process.destroy()
+                }
             }
         } catch (_: Exception) {
             false
@@ -47,10 +53,14 @@ object DeviceSecurityChecker {
 
     private fun isSystemWritable(): Boolean = try {
         val mount = Runtime.getRuntime().exec("mount")
-        val output = mount.inputStream.bufferedReader().readText()
-        mount.waitFor()
-        output.lines().any { line ->
-            line.contains(" /system") && line.contains("rw")
+        try {
+            val output = mount.inputStream.bufferedReader().use { it.readText() }
+            mount.waitFor()
+            output.lines().any { line ->
+                line.contains(" /system") && line.contains("rw")
+            }
+        } finally {
+            mount.destroy()
         }
     } catch (_: Exception) {
         false

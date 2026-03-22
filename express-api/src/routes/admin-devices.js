@@ -21,8 +21,8 @@ router.get('/admin/devices', async (req, res) => {
     if (requireAdmin(req, res)) return;
 
     const searchQuery = (req.query.q || '').toLowerCase().trim();
-    const limit = Math.min(Math.max(parseInt(req.query.limit) || 50, 1), 200);
-    const offset = Math.max(parseInt(req.query.offset) || 0, 0);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
 
     const snap = await db.collection('deviceBindings').get();
     let devices = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
@@ -61,7 +61,7 @@ router.get('/admin/devices/user/:uniqueId', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
-    const uniqueId = req.params.uniqueId;
+    const uniqueId = Number(req.params.uniqueId);
     const snap = await db.collection('deviceBindings').where('uniqueId', '==', uniqueId).get();
 
     const devices = snap.docs.map((d) => ({ id: d.id, ...d.data() }));

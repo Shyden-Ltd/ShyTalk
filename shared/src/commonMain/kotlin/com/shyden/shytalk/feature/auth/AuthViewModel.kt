@@ -204,7 +204,7 @@ class AuthViewModel(
                                     if (boundUserId != null && boundUserId != uniqueIdStr) {
                                         logW(TAG, "Device locked for uniqueId=${signInResult.uniqueId}")
                                         authRepository.signOut()
-                                        _uiState.update { it.copy(isLoading = false, isDeviceLocked = true) }
+                                        _uiState.update { it.copy(isLoading = false, isBackendUnreachable = false, isDeviceLocked = true) }
                                         return
                                     }
                                     if (boundUserId == null) {
@@ -230,7 +230,7 @@ class AuthViewModel(
                                     if (boundUserId != null) {
                                         logW(TAG, "Device bound — blocking new account creation")
                                         authRepository.signOut()
-                                        _uiState.update { it.copy(isLoading = false, isDeviceLocked = true) }
+                                        _uiState.update { it.copy(isLoading = false, isBackendUnreachable = false, isDeviceLocked = true) }
                                         return
                                     }
                                 }
@@ -242,6 +242,7 @@ class AuthViewModel(
                         _uiState.update {
                             it.copy(
                                 isLoading = false,
+                                isBackendUnreachable = false,
                                 isAuthenticated = true,
                                 hasProfile = false,
                                 hasDOB = false,
@@ -316,6 +317,7 @@ class AuthViewModel(
                                 _uiState.update {
                                     it.copy(
                                         isLoading = false,
+                                        isBackendUnreachable = false,
                                         isSuspended = true,
                                         suspensionReason = user.suspensionReason,
                                         suspensionEndDate = user.suspensionEndDate,
@@ -343,10 +345,11 @@ class AuthViewModel(
                                 LanguagePreference.setAcceptedLegalVersion(CURRENT_LEGAL_VERSION)
                             }
                             // Check if user needs PIN setup (migration or new device)
-                            val needsPin = appLockRepository != null && !appLockRepository!!.hasCredential
+                            val needsPin = appLockRepository?.hasCredential == false
                             _uiState.update {
                                 it.copy(
                                     isLoading = false,
+                                    isBackendUnreachable = false,
                                     isAuthenticated = true,
                                     hasProfile = true,
                                     hasDOB = user.dateOfBirth != null,
@@ -365,6 +368,7 @@ class AuthViewModel(
                     _uiState.update {
                         it.copy(
                             isLoading = false,
+                            isBackendUnreachable = false,
                             isAuthenticated = true,
                             hasProfile = false,
                             hasDOB = false,
@@ -435,9 +439,14 @@ class AuthViewModel(
     }
 
     fun retryConnection() {
-        if (!authRepository.isAuthenticated) return
+        if (!authRepository.isAuthenticated) {
+            // Session expired — let the user sign in again from scratch
+            _uiState.update { it.copy(isBackendUnreachable = false, isLoading = false) }
+            return
+        }
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, isBackendUnreachable = false) }
+            // Keep isBackendUnreachable = true so the retry spinner shows on that screen
+            _uiState.update { it.copy(isLoading = true) }
             val providerInfo = authRepository.getProviderInfo()
             if (providerInfo != null) {
                 resolveIdentityAndProceed(providerInfo.first, providerInfo.second)

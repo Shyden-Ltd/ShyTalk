@@ -135,7 +135,9 @@ class PrivateChatViewModel(
     private var wsEventsJob: Job? = null
     private val olderMessages = mutableListOf<PrivateMessage>()
     private val pendingMessages = mutableMapOf<String, PrivateMessage>()
-    private val httpClient by lazy { HttpClient() }
+    private var _httpClient: HttpClient? = null
+    private val httpClient: HttpClient
+        get() = _httpClient ?: HttpClient().also { _httpClient = it }
 
     init {
         if (currentUserId.isNotEmpty()) {
@@ -646,7 +648,7 @@ class PrivateChatViewModel(
         super.onCleared()
         clearTyping()
         conversationWs?.disconnect()
-        httpClient.close()
+        _httpClient?.close()
     }
 
     fun reportMessage(

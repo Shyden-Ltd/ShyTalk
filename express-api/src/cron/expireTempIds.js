@@ -7,6 +7,7 @@ async function expireTempIds() {
     .collection('users')
     .where('tempUniqueIdExpiry', '<=', nowMs)
     .where('tempUniqueIdExpiry', '>', 0)
+    .limit(500)
     .get();
 
   if (snap.empty) return;

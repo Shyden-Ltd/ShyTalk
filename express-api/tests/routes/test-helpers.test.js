@@ -24,7 +24,10 @@ const mockBatch = jest.fn(() => ({
 
 const mockQueryGet = jest.fn();
 const mockWhere = jest.fn(() => ({ get: mockQueryGet }));
-const mockCollection = jest.fn(() => ({ where: mockWhere }));
+const mockOrderByLimitGet = jest.fn().mockResolvedValue({ empty: true, docs: [] });
+const mockOrderByLimit = jest.fn(() => ({ get: mockOrderByLimitGet }));
+const mockOrderBy = jest.fn(() => ({ limit: mockOrderByLimit }));
+const mockCollection = jest.fn(() => ({ where: mockWhere, orderBy: mockOrderBy }));
 
 // Transaction mock: calls the callback with a transaction object that has get/set
 let transactionUniqueIdCounter = 100000000;

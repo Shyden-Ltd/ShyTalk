@@ -24,8 +24,8 @@ data class GiftEvent(
                 recipientName = map["recipientName"] as? String ?: "",
                 giftId = map["giftId"] as? String ?: "",
                 giftName = map["giftName"] as? String ?: "",
-                coinValue = (map["coinValue"] as? Long)?.toInt() ?: 0,
-                quantity = (map["quantity"] as? Long)?.toInt() ?: 1,
+                coinValue = (map["coinValue"] as? Number)?.toInt() ?: 0,
+                quantity = (map["quantity"] as? Number)?.toInt() ?: 1,
                 timestamp = map["timestamp"]?.let { timestampToMillis(it) } ?: 0,
             )
     }

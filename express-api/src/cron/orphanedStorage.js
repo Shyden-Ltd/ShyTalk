@@ -133,6 +133,7 @@ async function orphanedStorage() {
     'evidence/',
     'stickers/',
     'banners/',
+    'starting-screens/',
   ];
   let totalDeleted = 0;
 

@@ -191,23 +191,23 @@ describe('GET /api/admin/devices/user/:uniqueId', () => {
   test('returns all devices for a user (200)', async () => {
     mockWhereGet.mockResolvedValue({
       docs: [
-        { id: 'dev-001', data: () => ({ userId: 'user123', model: 'Galaxy S21' }) },
-        { id: 'dev-002', data: () => ({ userId: 'user123', model: 'Pixel 7' }) },
+        { id: 'dev-001', data: () => ({ userId: 10000001, model: 'Galaxy S21' }) },
+        { id: 'dev-002', data: () => ({ userId: 10000001, model: 'Pixel 7' }) },
       ],
     });
 
     const app = createApp();
-    const res = await request(app).get('/api/admin/devices/user/user123').expect(200);
+    const res = await request(app).get('/api/admin/devices/user/10000001').expect(200);
 
     expect(res.body.devices).toHaveLength(2);
-    expect(mockWhere).toHaveBeenCalledWith('uniqueId', '==', 'user123');
+    expect(mockWhere).toHaveBeenCalledWith('uniqueId', '==', 10000001);
   });
 
   test('returns empty array when user has no devices', async () => {
     mockWhereGet.mockResolvedValue({ docs: [] });
 
     const app = createApp();
-    const res = await request(app).get('/api/admin/devices/user/user456').expect(200);
+    const res = await request(app).get('/api/admin/devices/user/10000002').expect(200);
 
     expect(res.body.devices).toHaveLength(0);
   });

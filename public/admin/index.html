@@ -6107,7 +6107,7 @@
             </div>` : `
             <div style="font-size:12px;color:var(--text2);">
               ${appeal.adminNote ? `Note: ${escapeHtml(appeal.adminNote)}` : ""}
-              ${appeal.reviewedAt ? `Reviewed: ${new Date(appeal.reviewedAt).toLocaleString()}` : ""}
+              ${appeal.reviewedAt ? `Reviewed: ${escapeHtml(new Date(appeal.reviewedAt).toLocaleString())}` : ""}
             </div>`}
             ${reportsHtml}
           `;
@@ -6153,8 +6153,9 @@
     }
 
     function escapeHtml(str) {
+      if (str == null) return '';
       const div = document.createElement("div");
-      div.textContent = str;
+      div.textContent = String(str);
       return div.innerHTML;
     }
 
@@ -6239,7 +6240,7 @@
             <strong>${escapeHtml(r.reason || "Unknown")}</strong> — ${escapeHtml(r.resolvedAction || "?")}
             ${r.severity ? `(Severity: ${r.severity})` : ""}
             <br><span style="color:var(--text2)">${r.adminNote ? escapeHtml(r.adminNote) : ""}</span>
-            <br><span style="color:var(--text2);font-size:11px">${r.resolvedAt ? new Date(r.resolvedAt).toLocaleString() : ""}</span>
+            <br><span style="color:var(--text2);font-size:11px">${r.resolvedAt ? escapeHtml(new Date(r.resolvedAt).toLocaleString()) : ""}</span>
           `;
           reportHistoryList.appendChild(div);
         }
@@ -6484,7 +6485,7 @@
             <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
               <div>
                 <strong>Device:</strong> ${escapeHtml(k.deviceId)}<br>
-                <small style="color:var(--text2)">Registered: ${new Date(k.createdAt).toLocaleString()}</small>
+                <small style="color:var(--text2)">Registered: ${escapeHtml(new Date(k.createdAt).toLocaleString())}</small>
               </div>
               <button class="btn btn-danger btn-sm" onclick="revokeBiometricKey('${escapeHtml(uid)}','${escapeHtml(k.deviceId)}')">Revoke</button>
             </div>
@@ -6770,7 +6771,7 @@
             reportsHtml += `<div class="report-item">
               <div class="report-item-header">
                 <span class="report-item-reporter">${reporterDisplay}</span>
-                <span class="report-item-date">${r.timestamp ? new Date(r.timestamp).toLocaleString() : ""}</span>
+                <span class="report-item-date">${r.timestamp ? escapeHtml(new Date(r.timestamp).toLocaleString()) : ""}</span>
               </div>
               <div class="report-item-type">${escapeHtml(r.reason || "Unknown")}</div>
               ${r.description ? `<div class="report-item-text">${escapeHtml(r.description)}</div>` : ""}
@@ -6950,7 +6951,7 @@
             for (const m of msgs) {
               const isHighlighted = m.messageId === highlightMsgId;
               const highlightClass = isHighlighted ? " highlighted" : "";
-              const time = m.timestamp ? new Date(m.timestamp).toLocaleString() : "";
+              const time = m.timestamp ? escapeHtml(new Date(m.timestamp).toLocaleString()) : "";
               let contentHtml = "";
               if (m.type === "IMAGE" && m.imageUrls && m.imageUrls.length > 0) {
                 contentHtml = m.imageUrls.map(url => `<img class="conv-msg-image" src="${escapeHtml(url)}" alt="Message image" onclick="window.open(this.src,'_blank')">`).join("");
@@ -7751,7 +7752,7 @@
           txList.innerHTML = '<p style="color:var(--text2)">No transactions found</p>';
         } else {
           txList.innerHTML = txs.map(tx => {
-            const date = tx.timestamp ? new Date(tx.timestamp).toLocaleString() : "—";
+            const date = tx.timestamp ? escapeHtml(new Date(tx.timestamp).toLocaleString()) : "—";
             const details = tx.details || tx.giftName || "";
             return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
               <div style="display:flex;justify-content:space-between">

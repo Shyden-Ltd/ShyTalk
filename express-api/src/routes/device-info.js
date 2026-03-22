@@ -18,11 +18,12 @@ const log = require('../utils/log');
 function isIpInSubnet(ip, cidr) {
   try {
     const [subnet, bits] = cidr.split('/');
-    const prefixLen = parseInt(bits);
+    const prefixLen = parseInt(bits, 10);
     const mask = prefixLen === 0 ? 0 : (~0 << (32 - prefixLen)) >>> 0;
-    const ipNum = ip.split('.').reduce((acc, oct) => ((acc << 8) >>> 0) + parseInt(oct), 0) >>> 0;
+    const ipNum =
+      ip.split('.').reduce((acc, oct) => ((acc << 8) >>> 0) + parseInt(oct, 10), 0) >>> 0;
     const subNum =
-      subnet.split('.').reduce((acc, oct) => ((acc << 8) >>> 0) + parseInt(oct), 0) >>> 0;
+      subnet.split('.').reduce((acc, oct) => ((acc << 8) >>> 0) + parseInt(oct, 10), 0) >>> 0;
     return (ipNum & mask) === (subNum & mask);
   } catch {
     return false;

@@ -17,7 +17,7 @@ const log = require('../utils/log');
 router.get('/admin/users/check-id/:id', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id, 10);
     if (!id || id < 10000000) return res.status(400).json({ error: 'Invalid ID' });
 
     // Check real uniqueIds

@@ -40,7 +40,7 @@ data class ConversationSettings(
                 isPinned = map["isPinned"].asBool(),
                 lastReadMessageId = map["lastReadMessageId"] as? String ?: "",
                 lastReadAt = map["lastReadAt"]?.let { timestampToMillis(it) } ?: 0,
-                unreadCount = (map["unreadCount"] as? Long) ?: 0,
+                unreadCount = (map["unreadCount"] as? Number)?.toLong() ?: 0,
             )
     }
 }

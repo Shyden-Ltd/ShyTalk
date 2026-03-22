@@ -8,7 +8,8 @@
       "mcp__plugin_playwright_playwright__*",
       "mcp__plugin_context7_context7__*",
       "mcp__plugin_firebase_firebase__*",
-      "mcp__plugin_firebase_firebase__firebase_get_environment"
+      "mcp__plugin_firebase_firebase__firebase_get_environment",
+      "Skill(commit-commands:commit-push-pr)"
     ]
   }
 }

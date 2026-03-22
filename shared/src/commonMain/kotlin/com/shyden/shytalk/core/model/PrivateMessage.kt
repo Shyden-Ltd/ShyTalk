@@ -92,7 +92,7 @@ data class PrivateMessage(
                     } ?: PrivateMessageType.TEXT,
                 createdAt = timestampToMillis(map["createdAt"] ?: map["timestamp"]),
                 editedAt = map["editedAt"]?.let { timestampToMillis(it) },
-                editCount = (map["editCount"] as? Long) ?: 0,
+                editCount = (map["editCount"] as? Number)?.toLong() ?: 0,
                 readBy =
                     (map["readBy"] as? List<*>)
                         ?.filterIsInstance<String>() ?: emptyList(),

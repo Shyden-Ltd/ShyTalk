@@ -445,7 +445,7 @@ router.post('/user/:uniqueId/warn', async (req, res) => {
     const body = req.body;
     if (!body?.reason) return res.status(400).json({ error: 'reason is required' });
 
-    const severity = parseInt(body.severity) || 3;
+    const severity = parseInt(body.severity, 10) || 3;
     if (severity < 1 || severity > 5)
       return res.status(400).json({ error: 'severity must be 1-5' });
 
@@ -491,8 +491,8 @@ router.get('/user/:uniqueId/warnings', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
-    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
-    const startAfter = req.query.startAfter ? parseInt(req.query.startAfter) : null;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
+    const startAfter = req.query.startAfter ? parseInt(req.query.startAfter, 10) : null;
 
     let query = db.collection(`users/${req.params.uniqueId}/warnings`).orderBy('createdAt', 'desc');
 
@@ -629,7 +629,7 @@ router.get('/conversations/:id/messages', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
-    const messageLimit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const messageLimit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
 
     const snapshot = await db
       .collection(`conversations/${req.params.id}/messages`)
@@ -659,7 +659,7 @@ router.get('/search/uniqueId/:id', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
-    const uniqueId = parseInt(req.params.id);
+    const uniqueId = parseInt(req.params.id, 10);
     const snapshot = await db.collection('users').where('uniqueId', '==', uniqueId).limit(1).get();
 
     if (snapshot.empty) {
@@ -933,7 +933,7 @@ router.post('/user/:uniqueId/unsuspend', async (req, res) => {
       log.warn('system-pm', 'Failed to send', { uniqueId: req.params.uniqueId, error: e.message });
     }
 
-    clearSuspensionCache(req.params.uniqueId);
+    clearSuspensionCache(Number(req.params.uniqueId));
     res.json({ success: true });
   } catch (err) {
     log.error('admin-users', 'Unsuspend user failed', {
@@ -1134,7 +1134,7 @@ async function evictSuspendedUser(uid) {
     for (const [index, seat] of Object.entries(seats)) {
       if (seat && (seat.userId === uid || seat.user_id === uid)) {
         seats[index] = {
-          index: parseInt(index),
+          index: parseInt(index, 10),
           status: 'EMPTY',
           userId: null,
           isMuted: false,

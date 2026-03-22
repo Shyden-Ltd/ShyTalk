@@ -2,14 +2,20 @@ const nodemailer = require('nodemailer');
 
 const FROM_ADDRESS = '"ShyTalk" <noreply@shytalk.shyden.co.uk>';
 
-async function sendEmail(to, subject, html) {
+let _transport = null;
+let _transportKey = null;
+
+function getTransport() {
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
 
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
     throw new Error('SMTP not configured');
   }
 
-  const transport = nodemailer.createTransport({
+  const key = `${SMTP_HOST}:${SMTP_PORT}:${SMTP_USER}:${SMTP_PASS}`;
+  if (_transport && _transportKey === key) return _transport;
+
+  _transport = nodemailer.createTransport({
     host: SMTP_HOST,
     port: parseInt(SMTP_PORT || '587', 10),
     secure: false,
@@ -18,6 +24,13 @@ async function sendEmail(to, subject, html) {
       pass: SMTP_PASS,
     },
   });
+  _transportKey = key;
+
+  return _transport;
+}
+
+async function sendEmail(to, subject, html) {
+  const transport = getTransport();
 
   return transport.sendMail({
     from: FROM_ADDRESS,
@@ -27,4 +40,10 @@ async function sendEmail(to, subject, html) {
   });
 }
 
-module.exports = { sendEmail };
+// Exported for test cleanup only
+function _resetTransport() {
+  _transport = null;
+  _transportKey = null;
+}
+
+module.exports = { sendEmail, _resetTransport };

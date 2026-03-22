@@ -437,7 +437,7 @@ async function deleteTestData(testRunId) {
     }
   }
 
-  // 4. Delete other top-level test docs (gifts, rooms, banners, funFacts, conversations)
+  // 4. Delete other top-level test docs (gifts, rooms, banners, funFacts, conversations, etc.)
   // Note: system PMs created by admin actions won't have _testRun set — accepted trade-off
   const otherCollections = [
     'gifts',
@@ -448,6 +448,7 @@ async function deleteTestData(testRunId) {
     'reports',
     'suspensionAppeals',
     'alerts',
+    'reportLocks',
   ];
   for (const col of otherCollections) {
     let query;
@@ -467,6 +468,41 @@ async function deleteTestData(testRunId) {
       }
       await doc.ref.delete();
       deleted++;
+    }
+  }
+
+  // 5. Clean up starting screens config document
+  // Starting screens live as fields in a single doc, not as individual collection docs,
+  // so _testRun-based queries can't find them.
+  try {
+    const ssDoc = await db.doc('config/startingScreens').get();
+    if (ssDoc.exists) {
+      const ssData = ssDoc.data() || {};
+      const testScreenIds = Object.keys(ssData).filter(
+        (key) => key.startsWith('pw-') || key.startsWith('screen-') || key.startsWith('test-'),
+      );
+      if (testScreenIds.length > 0) {
+        const { FieldValue } = require('firebase-admin/firestore');
+        const updates = {};
+        for (const id of testScreenIds) {
+          updates[id] = FieldValue.delete();
+        }
+        await db.doc('config/startingScreens').update(updates);
+        deleted += testScreenIds.length;
+      }
+    }
+  } catch (_err) {
+    // Config cleanup is best-effort
+  }
+
+  // 6. Restore uniqueId counter to the highest remaining real user (best-effort)
+  if (userUniqueIds.length > 0) {
+    try {
+      const maxSnap = await db.collection('users').orderBy('uniqueId', 'desc').limit(1).get();
+      const maxId = maxSnap.empty ? 100000000 : maxSnap.docs[0].data().uniqueId;
+      await db.doc('counters/uniqueId').set({ value: maxId }, { merge: true });
+    } catch (_err) {
+      // Counter restoration is best-effort; cleanup still succeeds
     }
   }
 

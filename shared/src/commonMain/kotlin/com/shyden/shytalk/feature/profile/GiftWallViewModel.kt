@@ -9,6 +9,7 @@ import com.shyden.shytalk.core.model.GiftWallEntry
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.data.repository.GiftRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -72,6 +73,8 @@ class GiftWallViewModel(
                 _uiState.update {
                     it.copy(senders = senders, ranking = ranking, isLoadingDetails = false)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logE(TAG, "Failed to load gift details for giftId=$giftId: ${e.message}")
                 _uiState.update { it.copy(isLoadingDetails = false, error = e.message) }

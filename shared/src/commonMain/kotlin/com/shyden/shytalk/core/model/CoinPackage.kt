@@ -21,10 +21,10 @@ data class CoinPackage(
             CoinPackage(
                 id = id,
                 productId = map["productId"] as? String ?: "",
-                coins = (map["coins"] as? Long)?.toInt() ?: 0,
-                bonusCoins = (map["bonusCoins"] as? Long)?.toInt() ?: 0,
+                coins = (map["coins"] as? Number)?.toInt() ?: 0,
+                bonusCoins = (map["bonusCoins"] as? Number)?.toInt() ?: 0,
                 displayPrice = map["displayPrice"] as? String ?: "",
-                order = (map["order"] as? Long)?.toInt() ?: 0,
+                order = (map["order"] as? Number)?.toInt() ?: 0,
                 isActive = map["isActive"].asBool(true),
             )
     }
