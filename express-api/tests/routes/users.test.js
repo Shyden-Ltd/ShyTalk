@@ -114,6 +114,36 @@ describe('POST /api/users', () => {
     const app = createApp('new-user-uid', null);
     await request(app).post('/api/users').send({ provider: 'google' }).expect(400);
   });
+
+  test('rejects NaN dateOfBirth (non-date string)', async () => {
+    const app = createApp('new-user-uid', null);
+    const res = await request(app)
+      .post('/api/users')
+      .send({ provider: 'google', identifier: 'alice@gmail.com', dateOfBirth: 'not-a-date' })
+      .expect(400);
+
+    expect(res.body.error).toBe('Invalid date of birth format');
+  });
+
+  test('rejects empty string dateOfBirth', async () => {
+    const app = createApp('new-user-uid', null);
+    const res = await request(app)
+      .post('/api/users')
+      .send({ provider: 'google', identifier: 'alice@gmail.com', dateOfBirth: '' })
+      .expect(400);
+
+    expect(res.body.error).toBe('Date of birth is required');
+  });
+
+  test('rejects "undefined" as dateOfBirth string', async () => {
+    const app = createApp('new-user-uid', null);
+    const res = await request(app)
+      .post('/api/users')
+      .send({ provider: 'google', identifier: 'alice@gmail.com', dateOfBirth: 'undefined' })
+      .expect(400);
+
+    expect(res.body.error).toBe('Invalid date of birth format');
+  });
 });
 
 // ─── PATCH /api/users/:uniqueId ─────────────────────────────────

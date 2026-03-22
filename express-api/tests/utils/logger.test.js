@@ -208,4 +208,49 @@ describe('logger', () => {
     logger._setHardCap(500);
     expect(logger.getDailyStats().hardCap).toBe(500);
   });
+
+  describe('circuit breaker half-open recovery', () => {
+    let timerDb, timerLogger;
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+      timerDb = mockDb();
+      timerLogger = createLogger(timerDb);
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    test('allows probe write after cooldown and resets on success', async () => {
+      const { setSpy } = timerDb._spies;
+
+      // 1. Fail 10 writes to open the circuit breaker
+      setSpy.mockRejectedValue(new Error('RESOURCE_EXHAUSTED'));
+      for (let i = 0; i < 10; i++) {
+        await timerLogger.log({ level: 'ERROR', source: 'test', message: `fail ${i}` });
+      }
+      expect(setSpy).toHaveBeenCalledTimes(10);
+      expect(timerLogger._getConsecutiveFailures()).toBe(10);
+
+      // 2. Verify writes are blocked (11th write doesn't call setSpy)
+      await timerLogger.log({ level: 'ERROR', source: 'test', message: 'blocked' });
+      expect(setSpy).toHaveBeenCalledTimes(10);
+
+      // 3. Advance time by 60 seconds to enter half-open state
+      jest.advanceTimersByTime(60000);
+
+      // 4. Probe write should go through — make it succeed
+      setSpy.mockResolvedValue(undefined);
+      await timerLogger.log({ level: 'ERROR', source: 'test', message: 'probe' });
+      expect(setSpy).toHaveBeenCalledTimes(11); // probe write attempted
+
+      // 5. After successful probe, breaker should reset
+      expect(timerLogger._getConsecutiveFailures()).toBe(0);
+
+      // Subsequent writes should also go through normally
+      await timerLogger.log({ level: 'INFO', source: 'test', message: 'normal' });
+      expect(setSpy).toHaveBeenCalledTimes(12);
+    });
+  });
 });

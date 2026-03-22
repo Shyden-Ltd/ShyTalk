@@ -87,6 +87,8 @@ jest.mock('../../src/utils/log', () => ({
   error: jest.fn(),
 }));
 
+const log = require('../../src/utils/log');
+
 // ─── App setup ───────────────────────────────────────────────────
 
 const economyRouter = require('../../src/routes/economy');
@@ -509,5 +511,62 @@ describe('POST /api/economy/backpack-send', () => {
     expect(res.body.totalBeanReward).toBe(18);
     // Batch commit called to delete the backpack items
     expect(mockBatchCommit).toHaveBeenCalled();
+  });
+});
+
+// ─── Gift block audit logging ─────────────────────────────────────────
+
+describe('POST /api/economy/gift — block audit logging', () => {
+  test('logs warning when sender has blocked the recipient', async () => {
+    // gift found, backpack has items, sender has blocked recipient, recipient found
+    mockDocGet
+      .mockResolvedValueOnce(makeGiftDoc()) // gift
+      .mockResolvedValueOnce(makeBackpackDoc(5)) // backpack
+      .mockResolvedValueOnce(makeUserDoc({ blockedUserIds: ['user-B'] })) // sender blocks recipient
+      .mockResolvedValueOnce(makeUserDoc({ displayName: 'Bob' })); // recipient
+
+    const app = createApp('user-A');
+    const res = await request(app)
+      .post('/api/economy/gift')
+      .send({ recipientId: 'user-B', giftId: 'gift-rose', quantity: 1 });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/blocked users/i);
+
+    // Verify log.warn was called with 'economy' source and 'Gift blocked' message
+    expect(log.warn).toHaveBeenCalledWith(
+      'economy',
+      expect.stringContaining('Gift blocked'),
+      expect.objectContaining({
+        senderUniqueId: 'user-A',
+        recipientUniqueId: 'user-B',
+      }),
+    );
+  });
+
+  test('logs warning when recipient has blocked the sender', async () => {
+    // gift found, backpack has items, sender OK, recipient has blocked sender
+    mockDocGet
+      .mockResolvedValueOnce(makeGiftDoc()) // gift
+      .mockResolvedValueOnce(makeBackpackDoc(5)) // backpack
+      .mockResolvedValueOnce(makeUserDoc()) // sender (no blocks)
+      .mockResolvedValueOnce(makeUserDoc({ displayName: 'Bob', blockedUserIds: ['user-A'] })); // recipient blocks sender
+
+    const app = createApp('user-A');
+    const res = await request(app)
+      .post('/api/economy/gift')
+      .send({ recipientId: 'user-B', giftId: 'gift-rose', quantity: 1 });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/blocked users/i);
+
+    expect(log.warn).toHaveBeenCalledWith(
+      'economy',
+      expect.stringContaining('Gift blocked'),
+      expect.objectContaining({
+        senderUniqueId: 'user-A',
+        recipientUniqueId: 'user-B',
+      }),
+    );
   });
 });
