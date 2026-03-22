@@ -208,3 +208,165 @@ describe('POST /api/users/:uniqueId/record-visit', () => {
       .expect(403);
   });
 });
+
+// ─── GET /api/users/:uniqueId — PII stripping ──────────────────
+
+describe('GET /api/users/:uniqueId', () => {
+  test('strips pinHash from response', async () => {
+    getDoc.mockResolvedValueOnce({
+      uniqueId: 10000001,
+      displayName: 'Alice',
+      pinHash: '$2b$10$somehash',
+    });
+
+    const app = createApp('firebase-uid-A', 10000001);
+    const res = await request(app).get('/api/users/10000001').expect(200);
+
+    expect(res.body.displayName).toBe('Alice');
+    expect(res.body).not.toHaveProperty('pinHash');
+  });
+
+  test('strips fcmTokens from response', async () => {
+    getDoc.mockResolvedValueOnce({
+      uniqueId: 10000001,
+      displayName: 'Alice',
+      fcmTokens: ['token1', 'token2'],
+    });
+
+    const app = createApp('firebase-uid-A', 10000001);
+    const res = await request(app).get('/api/users/10000001').expect(200);
+
+    expect(res.body).not.toHaveProperty('fcmTokens');
+  });
+
+  test('strips firebaseUid from response', async () => {
+    getDoc.mockResolvedValueOnce({
+      uniqueId: 10000001,
+      displayName: 'Alice',
+      firebaseUid: 'firebase-uid-A',
+    });
+
+    const app = createApp('firebase-uid-A', 10000001);
+    const res = await request(app).get('/api/users/10000001').expect(200);
+
+    expect(res.body).not.toHaveProperty('firebaseUid');
+  });
+
+  test('strips email from response', async () => {
+    getDoc.mockResolvedValueOnce({
+      uniqueId: 10000001,
+      displayName: 'Alice',
+      email: 'alice@example.com',
+    });
+
+    const app = createApp('firebase-uid-A', 10000001);
+    const res = await request(app).get('/api/users/10000001').expect(200);
+
+    expect(res.body).not.toHaveProperty('email');
+  });
+
+  test('strips dateOfBirth from response', async () => {
+    getDoc.mockResolvedValueOnce({
+      uniqueId: 10000001,
+      displayName: 'Alice',
+      dateOfBirth: '2000-01-15',
+    });
+
+    const app = createApp('firebase-uid-A', 10000001);
+    const res = await request(app).get('/api/users/10000001').expect(200);
+
+    expect(res.body).not.toHaveProperty('dateOfBirth');
+  });
+
+  test('strips providers[].identifier from response', async () => {
+    getDoc.mockResolvedValueOnce({
+      uniqueId: 10000001,
+      displayName: 'Alice',
+      providers: [
+        { type: 'google', identifier: 'alice@gmail.com', active: true, linkedAt: 1700000000000 },
+        { type: 'apple', identifier: 'apple-sub-id-123', active: true, linkedAt: 1700000000000 },
+      ],
+    });
+
+    const app = createApp('firebase-uid-A', 10000001);
+    const res = await request(app).get('/api/users/10000001').expect(200);
+
+    expect(res.body.providers).toHaveLength(2);
+    for (const provider of res.body.providers) {
+      expect(provider).not.toHaveProperty('identifier');
+      expect(provider).toHaveProperty('type');
+      expect(provider).toHaveProperty('active');
+      expect(provider).toHaveProperty('linkedAt');
+    }
+  });
+
+  test('preserves normal public fields (displayName, uniqueId, etc.)', async () => {
+    getDoc.mockResolvedValueOnce({
+      uniqueId: '10000001',
+      displayName: 'Alice',
+      avatarUrl: 'https://example.com/avatar.png',
+      description: 'Hello world',
+      nationality: 'GB',
+      level: 5,
+      followers: 42,
+      blockedUserIds: ['999'],
+      followingIds: ['888'],
+      followerIds: ['777'],
+    });
+
+    const app = createApp('firebase-uid-A', 10000001);
+    const res = await request(app).get('/api/users/10000001').expect(200);
+
+    expect(res.body.displayName).toBe('Alice');
+    expect(res.body.uniqueId).toBe('10000001');
+    expect(res.body.avatarUrl).toBe('https://example.com/avatar.png');
+    expect(res.body.description).toBe('Hello world');
+    expect(res.body.nationality).toBe('GB');
+    expect(res.body.level).toBe(5);
+    expect(res.body.followers).toBe(42);
+  });
+
+  test('strips admin-only fields (gcsScore, warningCount, etc.)', async () => {
+    getDoc.mockResolvedValueOnce({
+      uniqueId: 10000001,
+      displayName: 'Alice',
+      gcsScore: 95,
+      gcsLastDeductionAt: 1700000000000,
+      gcsDisplayScore: 'A+',
+      warningCount: 2,
+      warningIssuedAt: 1700000000000,
+      hasNewWarning: true,
+    });
+
+    const app = createApp('firebase-uid-A', 10000001);
+    const res = await request(app).get('/api/users/10000001').expect(200);
+
+    expect(res.body).not.toHaveProperty('gcsScore');
+    expect(res.body).not.toHaveProperty('gcsLastDeductionAt');
+    expect(res.body).not.toHaveProperty('gcsDisplayScore');
+    expect(res.body).not.toHaveProperty('warningCount');
+    expect(res.body).not.toHaveProperty('warningIssuedAt');
+    expect(res.body).not.toHaveProperty('hasNewWarning');
+  });
+
+  test('defaults blockedUserIds, followingIds, followerIds when missing', async () => {
+    getDoc.mockResolvedValueOnce({
+      uniqueId: 10000001,
+      displayName: 'Bob',
+    });
+
+    const app = createApp('firebase-uid-A', 10000001);
+    const res = await request(app).get('/api/users/10000001').expect(200);
+
+    expect(res.body.blockedUserIds).toEqual([]);
+    expect(res.body.followingIds).toEqual([]);
+    expect(res.body.followerIds).toEqual([]);
+  });
+
+  test('returns 404 when user not found', async () => {
+    getDoc.mockResolvedValueOnce(null);
+
+    const app = createApp('firebase-uid-A', 10000001);
+    await request(app).get('/api/users/99999999').expect(404);
+  });
+});

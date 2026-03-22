@@ -201,6 +201,37 @@ describe('OTP Routes', () => {
 
       expect(res.status).toBe(200);
     });
+
+    it('should reject email with local part > 64 chars', async () => {
+      const longLocal = 'a'.repeat(65);
+      const res = await request(app)
+        .post('/api/auth/otp/send')
+        .send({ email: `${longLocal}@example.com` });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/email/i);
+    });
+
+    it('should reject email with domain > 255 chars', async () => {
+      const longDomain = 'a'.repeat(256) + '.com';
+      const res = await request(app)
+        .post('/api/auth/otp/send')
+        .send({ email: `user@${longDomain}` });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/email/i);
+    });
+
+    it('should accept email with exactly 64-char local part', async () => {
+      const local64 = 'a'.repeat(64);
+      mockDocGet.mockResolvedValueOnce({ exists: false }).mockResolvedValueOnce({ exists: false });
+
+      const res = await request(app)
+        .post('/api/auth/otp/send')
+        .send({ email: `${local64}@example.com` });
+
+      expect(res.status).toBe(200);
+    });
   });
 
   // ─── POST /api/auth/otp/verify ────────────────────────────────
@@ -350,6 +381,78 @@ describe('OTP Routes', () => {
       expect(res.status).toBe(400);
     });
 
+    it('should return 403 for Google-only provider user trying OTP verify', async () => {
+      bcrypt.compare.mockResolvedValueOnce(true);
+      auth.getUserByEmail.mockResolvedValueOnce({
+        uid: 'google-uid-1',
+        providerData: [{ providerId: 'google.com' }],
+      });
+
+      mockDocGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({
+          hashedCode: '$2b$10$hashedcode',
+          expiresAt: Date.now() + 5 * 60 * 1000,
+          attempts: 0,
+        }),
+      });
+
+      const res = await request(app)
+        .post('/api/auth/otp/verify')
+        .send({ email: 'googleuser@gmail.com', code: '482715' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toMatch(/google|apple/i);
+    });
+
+    it('should return 403 for Apple-only provider user trying OTP verify', async () => {
+      bcrypt.compare.mockResolvedValueOnce(true);
+      auth.getUserByEmail.mockResolvedValueOnce({
+        uid: 'apple-uid-1',
+        providerData: [{ providerId: 'apple.com' }],
+      });
+
+      mockDocGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({
+          hashedCode: '$2b$10$hashedcode',
+          expiresAt: Date.now() + 5 * 60 * 1000,
+          attempts: 0,
+        }),
+      });
+
+      const res = await request(app)
+        .post('/api/auth/otp/verify')
+        .send({ email: 'appleuser@icloud.com', code: '482715' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toMatch(/google|apple/i);
+    });
+
+    it('should allow OTP verify for user with password + Google providers', async () => {
+      bcrypt.compare.mockResolvedValueOnce(true);
+      auth.getUserByEmail.mockResolvedValueOnce({
+        uid: 'mixed-uid-1',
+        providerData: [{ providerId: 'password' }, { providerId: 'google.com' }],
+      });
+
+      mockDocGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({
+          hashedCode: '$2b$10$hashedcode',
+          expiresAt: Date.now() + 5 * 60 * 1000,
+          attempts: 0,
+        }),
+      });
+
+      const res = await request(app)
+        .post('/api/auth/otp/verify')
+        .send({ email: 'mixed@example.com', code: '482715' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.customToken).toBe('custom-token-abc');
+    });
+
     it('should create Firebase user if email not yet registered', async () => {
       bcrypt.compare.mockResolvedValueOnce(true);
       auth.getUserByEmail.mockRejectedValueOnce({ code: 'auth/user-not-found' });
@@ -371,6 +474,59 @@ describe('OTP Routes', () => {
       expect(res.status).toBe(200);
       expect(auth.createUser).toHaveBeenCalledWith({ email: 'newuser@example.com' });
       expect(auth.createCustomToken).toHaveBeenCalledWith('new-uid');
+    });
+  });
+
+  // ─── EMAIL_RE boundary tests ──────────────────────────────────
+
+  describe('EMAIL_RE boundary — local part length', () => {
+    it('should accept email with local part exactly 64 chars', async () => {
+      const localPart = 'a'.repeat(64);
+      const email = `${localPart}@example.com`;
+
+      mockDocGet.mockResolvedValueOnce({ exists: false }).mockResolvedValueOnce({ exists: false });
+
+      const res = await request(app).post('/api/auth/otp/send').send({ email });
+
+      expect(res.status).toBe(200);
+      expect(sendEmail).toHaveBeenCalledTimes(1);
+    });
+
+    it('should reject email with local part of 65 chars', async () => {
+      const localPart = 'a'.repeat(65);
+      const email = `${localPart}@example.com`;
+
+      const res = await request(app).post('/api/auth/otp/send').send({ email });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/email/i);
+      expect(sendEmail).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('EMAIL_RE boundary — domain label length (before last dot)', () => {
+    it('should accept email with domain label exactly 255 chars', async () => {
+      // EMAIL_RE: [^\s@]{1,255}\.[^\s@]{1,63} — the part before last dot can be up to 255
+      const domainLabel = 'x'.repeat(255);
+      const email = `user@${domainLabel}.com`;
+
+      mockDocGet.mockResolvedValueOnce({ exists: false }).mockResolvedValueOnce({ exists: false });
+
+      const res = await request(app).post('/api/auth/otp/send').send({ email });
+
+      expect(res.status).toBe(200);
+      expect(sendEmail).toHaveBeenCalledTimes(1);
+    });
+
+    it('should reject email with domain label of 256 chars', async () => {
+      const domainLabel = 'x'.repeat(256);
+      const email = `user@${domainLabel}.com`;
+
+      const res = await request(app).post('/api/auth/otp/send').send({ email });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/email/i);
+      expect(sendEmail).not.toHaveBeenCalled();
     });
   });
 });

@@ -108,4 +108,14 @@ describe('Email Sender', () => {
     mockSendMail.mockRejectedValueOnce(new Error('Connection refused'));
     await expect(sendEmail('a@b.com', 's', 'h')).rejects.toThrow('Connection refused');
   });
+
+  it('should reuse singleton transport across multiple sendEmail calls', async () => {
+    await sendEmail('first@b.com', 'Subject 1', '<p>1</p>');
+    await sendEmail('second@b.com', 'Subject 2', '<p>2</p>');
+
+    // createTransport should only be called once (singleton)
+    expect(nodemailer.createTransport).toHaveBeenCalledTimes(1);
+    // But sendMail should be called twice
+    expect(mockSendMail).toHaveBeenCalledTimes(2);
+  });
 });

@@ -286,6 +286,17 @@ describe('DELETE /api/reports/:id/lock', () => {
     expect(mockDocDelete).toHaveBeenCalled();
   });
 
+  it('deletes lock using reportLocks/${reportId} path (not reportedUserId)', async () => {
+    const { db } = require('../../src/utils/firebase');
+
+    const res = await request(app).delete('/api/reports/report-42/lock');
+
+    expect(res.status).toBe(200);
+    // Verify db.doc was called with the reportId-based path
+    const docPaths = db.doc.mock.calls.map((call) => call[0]);
+    expect(docPaths).toContain('reportLocks/report-42');
+  });
+
   it('returns 403 for non-admin', async () => {
     requireAdmin.mockImplementation((_req, res) => {
       res.status(403).json({ error: 'Forbidden' });
@@ -295,6 +306,41 @@ describe('DELETE /api/reports/:id/lock', () => {
     const res = await request(app).delete('/api/reports/report-1/lock');
 
     expect(res.status).toBe(403);
+  });
+});
+
+describe('POST /api/reports/:id/lock — lock path correctness', () => {
+  let app;
+  let getDoc;
+  let requireAdmin;
+
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+    ({ getDoc } = require('../../src/utils/firestore-helpers'));
+    ({ requireAdmin } = require('../../src/middleware/auth'));
+    requireAdmin.mockReturnValue(false);
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: 'admin-1',
+      data: () => ({ displayName: 'Admin User', uniqueId: 'admin-1' }),
+    });
+  });
+
+  it('writes lock using reportLocks/${reportId} path (not reportedUserId)', async () => {
+    const { db } = require('../../src/utils/firebase');
+    getDoc.mockResolvedValueOnce({
+      id: 'admin-1',
+      displayName: 'Admin User',
+      uniqueId: 'admin-1',
+    });
+
+    const res = await request(app).post('/api/reports/report-99/lock');
+
+    expect(res.status).toBe(200);
+    // Verify db.doc was called with the reportId-based path, not some userId-based path
+    const docPaths = db.doc.mock.calls.map((call) => call[0]);
+    expect(docPaths).toContain('reportLocks/report-99');
   });
 });
 

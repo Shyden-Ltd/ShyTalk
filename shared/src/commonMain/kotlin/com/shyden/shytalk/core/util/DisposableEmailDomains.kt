@@ -39,11 +39,17 @@ object DisposableEmailDomains {
         )
 
     /**
-     * Returns true if the email address uses a known disposable domain.
+     * Returns true if the given email or domain uses a known disposable provider.
+     * Accepts either a full email ("user@mailinator.com") or a bare domain ("mailinator.com").
      * The check is case-insensitive.
      */
-    fun isDisposable(email: String): Boolean {
-        val domain = email.substringAfter("@", "").lowercase()
+    fun isDisposable(emailOrDomain: String): Boolean {
+        val domain =
+            if ('@' in emailOrDomain) {
+                emailOrDomain.substringAfter('@')
+            } else {
+                emailOrDomain
+            }.lowercase()
         return domain in blockedDomains
     }
 }

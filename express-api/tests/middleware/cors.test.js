@@ -151,4 +151,15 @@ describe('CORS middleware', () => {
 
     expect(res.headers['access-control-allow-origin']).toBeUndefined();
   });
+
+  test('x-device-id appears in Access-Control-Allow-Headers', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .options('/test')
+      .set('Origin', 'https://shytalk.shyden.co.uk')
+      .set('Access-Control-Request-Method', 'POST')
+      .set('Access-Control-Request-Headers', 'x-device-id');
+
+    expect(res.headers['access-control-allow-headers']).toMatch(/x-device-id/);
+  });
 });
