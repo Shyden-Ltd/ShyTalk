@@ -256,10 +256,62 @@ describe('GET /api/admin/bans/user/:uniqueId', () => {
     });
 
     const app = createApp();
-    const res = await request(app).get('/api/admin/bans/user/user456').expect(200);
+    const res = await request(app).get('/api/admin/bans/user/456').expect(200);
 
     expect(res.body).toHaveProperty('deviceBans');
     expect(res.body).toHaveProperty('networkBans');
-    expect(mockWhere).toHaveBeenCalledWith('linkedUniqueId', '==', 'user456');
+    // Dual-type query: both string and numeric forms queried
+    expect(mockWhere).toHaveBeenCalledWith('linkedUniqueId', '==', '456');
+    expect(mockWhere).toHaveBeenCalledWith('linkedUniqueId', '==', 456);
+  });
+
+  test('deduplicates bans returned by both string and numeric queries', async () => {
+    // Both queries return the same doc — dedup should keep only one copy
+    mockWhereGet.mockResolvedValue({
+      docs: [{ id: 'dup-ban', data: () => ({ reason: 'Spam', deviceId: 'd1' }) }],
+    });
+
+    const app = createApp();
+    const res = await request(app).get('/api/admin/bans/user/123').expect(200);
+
+    // 4 queries (2 device, 2 network) all return dup-ban,
+    // but dedup keeps 1 in deviceBans and 1 in networkBans
+    expect(res.body.deviceBans).toHaveLength(1);
+    expect(res.body.networkBans).toHaveLength(1);
+    expect(res.body.deviceBans[0].id).toBe('dup-ban');
+    expect(res.body.networkBans[0].id).toBe('dup-ban');
+  });
+});
+
+describe('POST /api/admin/bans/unban-all/:uniqueId — deduplication', () => {
+  test('deduplicates docs from string and numeric queries', async () => {
+    const mockRefDelete = jest.fn().mockResolvedValue();
+    // All 4 queries return the same two docs
+    mockWhereGet.mockResolvedValue({
+      empty: false,
+      docs: [
+        { id: 'ban1', ref: { delete: mockRefDelete }, data: () => ({}) },
+        { id: 'ban2', ref: { delete: mockRefDelete }, data: () => ({}) },
+      ],
+    });
+
+    const app = createApp();
+    const res = await request(app).post('/api/admin/bans/unban-all/12345').expect(200);
+
+    expect(res.body.success).toBe(true);
+    // 4 queries each return ban1+ban2, but dedup keeps only 2 unique docs
+    expect(res.body.removed).toBe(2);
+    // Each unique doc deleted exactly once
+    expect(mockRefDelete).toHaveBeenCalledTimes(2);
+  });
+
+  test('queries both string and numeric forms of uniqueId', async () => {
+    mockWhereGet.mockResolvedValue({ empty: true, docs: [] });
+
+    const app = createApp();
+    await request(app).post('/api/admin/bans/unban-all/789').expect(200);
+
+    expect(mockWhere).toHaveBeenCalledWith('linkedUniqueId', '==', '789');
+    expect(mockWhere).toHaveBeenCalledWith('linkedUniqueId', '==', 789);
   });
 });

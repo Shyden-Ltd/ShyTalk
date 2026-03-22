@@ -75,6 +75,11 @@ function createApp() {
   return app;
 }
 
+// ─── Utility ────────────────────────────────────────────────────
+
+/** Flush micro-task queue so fire-and-forget promises settle. */
+const flushPromises = () => new Promise((r) => setTimeout(r, 50));
+
 // ─── Tests ──────────────────────────────────────────────────────
 
 describe('PATCH /api/user/:uid', () => {
@@ -207,5 +212,335 @@ describe('GET /api/search/uniqueId/:id', () => {
     expect(res.body.id).toBe('user-abc');
     expect(res.body.uniqueId).toBe(99999999);
     expect(res.body.tempUniqueId).toBe(12345678);
+  });
+});
+
+// ─── autoApplyBans (via suspend route) ──────────────────────────
+
+describe('POST /api/user/:uniqueId/suspend — autoApplyBans', () => {
+  let app;
+  const futureDate = new Date(Date.now() + 86400000).toISOString();
+
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+  });
+
+  it('should write device and network bans for all bound devices', async () => {
+    const { db } = require('../../src/utils/firebase');
+
+    const mockBatchSet = jest.fn();
+    const mockBatchCommit = jest.fn().mockResolvedValue();
+    db.batch.mockReturnValue({ set: mockBatchSet, update: jest.fn(), commit: mockBatchCommit });
+
+    // doc() for user get, user update, audit log, warning, gcs update
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: 'user-42',
+      data: () => ({ displayName: 'Test', gcsScore: 80 }),
+    });
+
+    // collection() for deviceBindings query (autoApplyBans) and rooms query (evict)
+    db.collection.mockImplementation((name) => {
+      if (name === 'deviceBindings') {
+        const chain = {
+          where: jest.fn().mockReturnThis(),
+          get: jest.fn().mockResolvedValue({
+            docs: [
+              { id: 'device-A', data: () => ({ lastIp: '10.0.0.1' }) },
+              { id: 'device-B', data: () => ({ ip: '10.0.0.2' }) },
+            ],
+          }),
+        };
+        return chain;
+      }
+      // rooms collection for evictSuspendedUser
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
+      };
+      return chain;
+    });
+
+    const res = await request(app)
+      .post('/api/user/user-42/suspend')
+      .send({ reason: 'Spam', canAppeal: true, endDate: futureDate });
+
+    expect(res.status).toBe(200);
+
+    // Wait for fire-and-forget autoApplyBans to settle
+    await flushPromises();
+
+    // batch.set called for each device + one network ban for the last IP
+    expect(mockBatchSet).toHaveBeenCalledTimes(3);
+
+    // Verify device bans
+    expect(mockBatchSet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        deviceId: 'device-A',
+        reason: 'Auto-applied: user suspended',
+        autoApplied: true,
+        linkedUniqueId: 'user-42',
+      }),
+    );
+    expect(mockBatchSet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        deviceId: 'device-B',
+        reason: 'Auto-applied: user suspended',
+        autoApplied: true,
+      }),
+    );
+
+    // Verify network ban uses last device's IP (device-B's ip)
+    expect(mockBatchSet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        type: 'ip',
+        value: '10.0.0.2',
+        reason: 'Auto-applied: user suspended',
+        autoApplied: true,
+      }),
+    );
+
+    expect(mockBatchCommit).toHaveBeenCalled();
+  });
+
+  it('should skip network ban when no device has an IP', async () => {
+    const { db } = require('../../src/utils/firebase');
+
+    const mockBatchSet = jest.fn();
+    const mockBatchCommit = jest.fn().mockResolvedValue();
+    db.batch.mockReturnValue({ set: mockBatchSet, update: jest.fn(), commit: mockBatchCommit });
+
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: 'user-42',
+      data: () => ({ displayName: 'Test', gcsScore: 80 }),
+    });
+
+    db.collection.mockImplementation((name) => {
+      if (name === 'deviceBindings') {
+        const chain = {
+          where: jest.fn().mockReturnThis(),
+          get: jest.fn().mockResolvedValue({
+            docs: [{ id: 'device-no-ip', data: () => ({}) }],
+          }),
+        };
+        return chain;
+      }
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
+      };
+      return chain;
+    });
+
+    await request(app).post('/api/user/user-42/suspend').send({ reason: 'Spam', canAppeal: true });
+
+    await flushPromises();
+
+    // Only 1 device ban, no network ban
+    expect(mockBatchSet).toHaveBeenCalledTimes(1);
+    expect(mockBatchSet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ deviceId: 'device-no-ip', autoApplied: true }),
+    );
+  });
+
+  it('should set permanent duration when no endDate', async () => {
+    const { db } = require('../../src/utils/firebase');
+
+    const mockBatchSet = jest.fn();
+    const mockBatchCommit = jest.fn().mockResolvedValue();
+    db.batch.mockReturnValue({ set: mockBatchSet, update: jest.fn(), commit: mockBatchCommit });
+
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: 'user-42',
+      data: () => ({ displayName: 'Test', gcsScore: 80 }),
+    });
+
+    db.collection.mockImplementation((name) => {
+      if (name === 'deviceBindings') {
+        const chain = {
+          where: jest.fn().mockReturnThis(),
+          get: jest.fn().mockResolvedValue({
+            docs: [{ id: 'dev-1', data: () => ({ lastIp: '1.2.3.4' }) }],
+          }),
+        };
+        return chain;
+      }
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
+      };
+      return chain;
+    });
+
+    await request(app).post('/api/user/user-42/suspend').send({ reason: 'Spam', canAppeal: false });
+
+    await flushPromises();
+
+    expect(mockBatchSet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ duration: 'permanent', expiresAt: null }),
+    );
+  });
+});
+
+// ─── liftAutoAppliedBans (via unsuspend route) ──────────────────
+
+describe('POST /api/user/:uniqueId/unsuspend — liftAutoAppliedBans', () => {
+  let app;
+
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+  });
+
+  it('should remove auto-applied bans using dual-type query', async () => {
+    const { db } = require('../../src/utils/firebase');
+
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: '42',
+      data: () => ({ isSuspended: true, displayName: 'Suspended Account' }),
+    });
+
+    const mockRefDelete = jest.fn().mockResolvedValue();
+    const whereArgs = [];
+
+    // Track which collections and where clauses are called
+    db.collection.mockImplementation((collName) => {
+      const chain = {
+        where: jest.fn().mockImplementation((...args) => {
+          whereArgs.push({ collection: collName, args });
+          return chain;
+        }),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get: jest.fn().mockResolvedValue({
+          docs: [{ id: `${collName}-ban1`, ref: { delete: mockRefDelete } }],
+        }),
+      };
+      return chain;
+    });
+
+    const res = await request(app).post('/api/user/42/unsuspend');
+
+    expect(res.status).toBe(200);
+
+    // Wait for fire-and-forget liftAutoAppliedBans to settle
+    await flushPromises();
+
+    // Should query both string and numeric forms of the uniqueId
+    const linkedIdQueries = whereArgs.filter((w) => w.args[0] === 'linkedUniqueId');
+    const queriedValues = linkedIdQueries.map((w) => w.args[2]);
+    expect(queriedValues).toContain('42');
+    expect(queriedValues).toContain(42);
+
+    // autoApplied filter applied
+    const autoAppliedQueries = whereArgs.filter((w) => w.args[0] === 'autoApplied');
+    expect(autoAppliedQueries.length).toBeGreaterThanOrEqual(2);
+
+    // Bans were deleted
+    expect(mockRefDelete).toHaveBeenCalled();
+  });
+
+  it('should deduplicate bans across string and numeric queries', async () => {
+    const { db } = require('../../src/utils/firebase');
+
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: '12345',
+      data: () => ({ isSuspended: true }),
+    });
+
+    const mockRefDelete = jest.fn().mockResolvedValue();
+
+    // All 4 queries return the same doc id — dedup should delete it only once
+    db.collection.mockImplementation(() => {
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get: jest.fn().mockResolvedValue({
+          docs: [{ id: 'same-ban', ref: { delete: mockRefDelete } }],
+        }),
+      };
+      return chain;
+    });
+
+    await request(app).post('/api/user/12345/unsuspend');
+    await flushPromises();
+
+    // same-ban appears in all 4 queries, but dedup means deleted only once
+    expect(mockRefDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it('should not delete anything when no auto-applied bans exist', async () => {
+    const { db } = require('../../src/utils/firebase');
+
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: '12345',
+      data: () => ({ isSuspended: true }),
+    });
+
+    db.collection.mockImplementation(() => {
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get: jest.fn().mockResolvedValue({ docs: [] }),
+      };
+      return chain;
+    });
+
+    const res = await request(app).post('/api/user/12345/unsuspend');
+    expect(res.status).toBe(200);
+
+    await flushPromises();
+
+    // No audit log for LIFT_AUTO_BANS since there were none to lift
+    // (the only set calls should be for UNSUSPEND audit log)
+    const liftCalls = mockDocSet.mock.calls.filter((call) => call[0]?.action === 'LIFT_AUTO_BANS');
+    expect(liftCalls).toHaveLength(0);
+  });
+
+  it('should query both deviceBans and networkBans collections', async () => {
+    const { db } = require('../../src/utils/firebase');
+
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: '99',
+      data: () => ({ isSuspended: true }),
+    });
+
+    const queriedCollections = [];
+    db.collection.mockImplementation((collName) => {
+      queriedCollections.push(collName);
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get: jest.fn().mockResolvedValue({ docs: [] }),
+      };
+      return chain;
+    });
+
+    await request(app).post('/api/user/99/unsuspend');
+    await flushPromises();
+
+    expect(queriedCollections).toContain('deviceBans');
+    expect(queriedCollections).toContain('networkBans');
   });
 });

@@ -1073,20 +1073,43 @@ async function autoApplyBans(uniqueId, endDate) {
  * Manually-applied bans are left untouched.
  */
 async function liftAutoAppliedBans(uniqueId, adminUid) {
-  const [deviceSnap, networkSnap] = await Promise.all([
+  const numericId = Number(uniqueId);
+  const stringId = String(uniqueId);
+
+  const [deviceSnapStr, deviceSnapNum, networkSnapStr, networkSnapNum] = await Promise.all([
     db
       .collection('deviceBans')
-      .where('linkedUniqueId', '==', uniqueId)
+      .where('linkedUniqueId', '==', stringId)
+      .where('autoApplied', '==', true)
+      .get(),
+    db
+      .collection('deviceBans')
+      .where('linkedUniqueId', '==', numericId)
       .where('autoApplied', '==', true)
       .get(),
     db
       .collection('networkBans')
-      .where('linkedUniqueId', '==', uniqueId)
+      .where('linkedUniqueId', '==', stringId)
+      .where('autoApplied', '==', true)
+      .get(),
+    db
+      .collection('networkBans')
+      .where('linkedUniqueId', '==', numericId)
       .where('autoApplied', '==', true)
       .get(),
   ]);
 
-  const allDocs = [...deviceSnap.docs, ...networkSnap.docs];
+  // Deduplicate by doc id in case both queries match the same doc
+  const seen = new Set();
+  const allDocs = [];
+  for (const snap of [deviceSnapStr, deviceSnapNum, networkSnapStr, networkSnapNum]) {
+    for (const d of snap.docs) {
+      if (!seen.has(d.id)) {
+        seen.add(d.id);
+        allDocs.push(d);
+      }
+    }
+  }
   if (allDocs.length === 0) return;
 
   await Promise.all(allDocs.map((d) => d.ref.delete()));
