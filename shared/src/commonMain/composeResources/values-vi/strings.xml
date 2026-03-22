@@ -788,4 +788,81 @@
     <string name="starting_screen_dismiss">Tiếp tục</string>
     <string name="starting_screen_police_duck_description">Hình minh họa cảnh báo</string>
     <string name="starting_screen_loading">Đang tải…</string>
+    <!-- Security -->
+    <string name="security_title">Bảo mật</string>
+    <string name="security_app_lock">Khóa ứng dụng</string>
+    <string name="security_app_lock_desc">Yêu cầu mã PIN hoặc sinh trắc học để mở khóa</string>
+    <string name="security_lock_timeout">Thời gian chờ khóa</string>
+    <string name="security_timeout_1min">1 phút</string>
+    <string name="security_timeout_5min">5 phút</string>
+    <string name="security_timeout_15min">15 phút</string>
+    <string name="security_timeout_30min">30 phút</string>
+    <string name="security_timeout_never">Không bao giờ</string>
+    <string name="security_biometric_login">Đăng nhập sinh trắc học</string>
+    <string name="security_biometric_desc">Dùng vân tay hoặc khuôn mặt để mở khóa</string>
+    <string name="security_biometric_unavailable">Không khả dụng trên thiết bị này</string>
+    <string name="security_reset_pin">Đặt lại PIN</string>
+    <string name="security_reset_pin_desc">Xác minh danh tính để đặt mã PIN mới</string>
+    <string name="security_linked_accounts">Tài khoản liên kết</string>
+    <string name="security_linked_accounts_desc">Quản lý phương thức đăng nhập</string>
+    <!-- Email sign-in -->
+    <string name="email_sign_in_title">Đăng nhập bằng email</string>
+    <string name="email_enter_address">Nhập địa chỉ email của bạn</string>
+    <string name="email_label">Email</string>
+    <string name="email_send_code">Gửi mã</string>
+    <string name="email_code_sent_to">Đã gửi mã đến</string>
+    <string name="email_code_label">Mã 6 chữ số</string>
+    <string name="email_verify">Xác minh</string>
+    <string name="email_resend_in">Gửi lại sau %1$ds</string>
+    <string name="email_resend_code">Gửi lại mã</string>
+    <string name="email_code_expires">Mã hết hạn sau 10 phút</string>
+    <string name="email_invalid_address">Nhập địa chỉ email hợp lệ</string>
+    <string name="email_disposable_blocked">Không cho phép sử dụng email dùng một lần</string>
+    <string name="email_send_failed">Gửi mã thất bại</string>
+    <string name="email_enter_code">Nhập mã 6 chữ số</string>
+    <string name="email_invalid_code">Mã không hợp lệ</string>
+    <string name="email_resend_failed">Gửi lại thất bại</string>
+    <!-- PIN -->
+    <string name="pin_create_title">Tạo PIN</string>
+    <string name="pin_confirm_title">Xác nhận PIN</string>
+    <string name="pin_enable_biometric_title">Bật đăng nhập sinh trắc học?</string>
+    <string name="pin_enable_biometric_desc">Dùng vân tay hoặc khuôn mặt để mở khóa ShyTalk nhanh chóng.</string>
+    <string name="pin_enable">Bật</string>
+    <string name="pin_not_now">Để sau</string>
+    <string name="pin_change_hint">Bạn có thể thay đổi hoặc tắt tính năng này trong cài đặt Bảo mật</string>
+    <string name="pin_choose_length">Chọn độ dài PIN</string>
+    <string name="pin_digits">chữ số</string>
+    <string name="pin_confirm">Xác nhận</string>
+    <string name="pin_next">Tiếp</string>
+    <string name="pin_enter_digits">Nhập %1$d chữ số</string>
+    <string name="pin_device_not_registered">Thiết bị chưa đăng ký. Vui lòng đăng nhập lại.</string>
+    <string name="pin_setup_failed">Đặt PIN thất bại</string>
+    <string name="pin_too_short">PIN quá ngắn</string>
+    <string name="pin_verify_title">Xác minh danh tính</string>
+    <string name="pin_verify_subtitle">Nhập PIN để tiếp tục</string>
+    <string name="pin_verifying">Đang xác minh…</string>
+    <string name="pin_wrong_attempts">Sai PIN. Còn %1$d lần thử.</string>
+    <string name="pin_account_locked">Tài khoản bị khóa</string>
+    <string name="pin_verify_failed">Xác minh thất bại</string>
+    <string name="pin_session_expired">Phiên đã hết hạn. Vui lòng đăng nhập lại.</string>
+    <string name="pin_use_biometric">Dùng sinh trắc học</string>
+    <string name="pin_delete">Xóa</string>
+    <!-- Biometric -->
+    <string name="biometric_unlock_title">Mở khóa ShyTalk</string>
+    <string name="biometric_unlock_desc">Dùng vân tay hoặc khuôn mặt để mở khóa</string>
+    <string name="biometric_sign_failed">Ký thất bại</string>
+    <string name="biometric_verify_failed">Xác minh sinh trắc học thất bại</string>
+    <string name="biometric_start_failed">Không thể bắt đầu xác minh sinh trắc học</string>
+    <!-- Auth loading -->
+    <string name="signing_in_loading">Đang đăng nhập…</string>
+    <!-- Time -->
+    <string name="time_just_now">vừa xong</string>
+    <string name="time_minutes_ago">%1$d phút trước</string>
+    <string name="time_hours_ago">%1$d giờ trước</string>
+    <string name="time_days_ago">%1$d ngày trước</string>
+    <string name="time_expired">Đã hết hạn</string>
+    <string name="time_days">%1$d ngày</string>
+    <string name="time_hours">%1$d giờ</string>
+    <string name="time_minutes">%1$d phút</string>
+    <string name="time_less_than_minute">Ít hơn 1 phút</string>
 </resources>

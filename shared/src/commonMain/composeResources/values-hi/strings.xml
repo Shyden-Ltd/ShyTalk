@@ -788,4 +788,81 @@
     <string name="starting_screen_dismiss">जारी रखें</string>
     <string name="starting_screen_police_duck_description">चेतावनी चित्रण</string>
     <string name="starting_screen_loading">लोड हो रहा है…</string>
+    <!-- Security -->
+    <string name="security_title">सुरक्षा</string>
+    <string name="security_app_lock">ऐप लॉक</string>
+    <string name="security_app_lock_desc">अनलॉक करने के लिए PIN या बायोमेट्रिक आवश्यक</string>
+    <string name="security_lock_timeout">लॉक टाइमआउट</string>
+    <string name="security_timeout_1min">1 मिनट</string>
+    <string name="security_timeout_5min">5 मिनट</string>
+    <string name="security_timeout_15min">15 मिनट</string>
+    <string name="security_timeout_30min">30 मिनट</string>
+    <string name="security_timeout_never">कभी नहीं</string>
+    <string name="security_biometric_login">बायोमेट्रिक लॉगिन</string>
+    <string name="security_biometric_desc">अनलॉक करने के लिए फिंगरप्रिंट या चेहरे का उपयोग करें</string>
+    <string name="security_biometric_unavailable">इस डिवाइस पर उपलब्ध नहीं</string>
+    <string name="security_reset_pin">PIN रीसेट करें</string>
+    <string name="security_reset_pin_desc">नया PIN सेट करने के लिए अपनी पहचान सत्यापित करें</string>
+    <string name="security_linked_accounts">लिंक किए गए खाते</string>
+    <string name="security_linked_accounts_desc">साइन-इन विधियाँ प्रबंधित करें</string>
+    <!-- Email sign-in -->
+    <string name="email_sign_in_title">ईमेल से साइन इन करें</string>
+    <string name="email_enter_address">अपना ईमेल पता दर्ज करें</string>
+    <string name="email_label">ईमेल</string>
+    <string name="email_send_code">कोड भेजें</string>
+    <string name="email_code_sent_to">कोड भेजा गया</string>
+    <string name="email_code_label">6-अंकीय कोड</string>
+    <string name="email_verify">सत्यापित करें</string>
+    <string name="email_resend_in">%1$ds में पुनः भेजें</string>
+    <string name="email_resend_code">कोड पुनः भेजें</string>
+    <string name="email_code_expires">कोड 10 मिनट में समाप्त हो जाएगा</string>
+    <string name="email_invalid_address">एक वैध ईमेल पता दर्ज करें</string>
+    <string name="email_disposable_blocked">डिस्पोजेबल ईमेल पते की अनुमति नहीं है</string>
+    <string name="email_send_failed">कोड भेजने में विफल</string>
+    <string name="email_enter_code">6-अंकीय कोड दर्ज करें</string>
+    <string name="email_invalid_code">अमान्य कोड</string>
+    <string name="email_resend_failed">पुनः भेजने में विफल</string>
+    <!-- PIN -->
+    <string name="pin_create_title">PIN बनाएँ</string>
+    <string name="pin_confirm_title">अपना PIN पुष्टि करें</string>
+    <string name="pin_enable_biometric_title">बायोमेट्रिक लॉगिन सक्षम करें?</string>
+    <string name="pin_enable_biometric_desc">ShyTalk को तेज़ी से अनलॉक करने के लिए अपने फिंगरप्रिंट या चेहरे का उपयोग करें।</string>
+    <string name="pin_enable">सक्षम करें</string>
+    <string name="pin_not_now">अभी नहीं</string>
+    <string name="pin_change_hint">आप इसे सुरक्षा सेटिंग्स में बदल या अक्षम कर सकते हैं</string>
+    <string name="pin_choose_length">PIN की लंबाई चुनें</string>
+    <string name="pin_digits">अंक</string>
+    <string name="pin_confirm">पुष्टि करें</string>
+    <string name="pin_next">अगला</string>
+    <string name="pin_enter_digits">%1$d अंक दर्ज करें</string>
+    <string name="pin_device_not_registered">डिवाइस पंजीकृत नहीं है। कृपया फिर से साइन इन करें।</string>
+    <string name="pin_setup_failed">PIN सेट करने में विफल</string>
+    <string name="pin_too_short">PIN बहुत छोटा है</string>
+    <string name="pin_verify_title">अपनी पहचान सत्यापित करें</string>
+    <string name="pin_verify_subtitle">जारी रखने के लिए अपना PIN दर्ज करें</string>
+    <string name="pin_verifying">सत्यापित हो रहा है…</string>
+    <string name="pin_wrong_attempts">गलत PIN। %1$d प्रयास शेष।</string>
+    <string name="pin_account_locked">खाता लॉक है</string>
+    <string name="pin_verify_failed">सत्यापन विफल</string>
+    <string name="pin_session_expired">सत्र समाप्त हो गया। कृपया फिर से साइन इन करें।</string>
+    <string name="pin_use_biometric">बायोमेट्रिक का उपयोग करें</string>
+    <string name="pin_delete">हटाएँ</string>
+    <!-- Biometric -->
+    <string name="biometric_unlock_title">ShyTalk अनलॉक करें</string>
+    <string name="biometric_unlock_desc">अनलॉक करने के लिए अपने फिंगरप्रिंट या चेहरे का उपयोग करें</string>
+    <string name="biometric_sign_failed">साइनिंग विफल</string>
+    <string name="biometric_verify_failed">बायोमेट्रिक सत्यापन विफल</string>
+    <string name="biometric_start_failed">बायोमेट्रिक सत्यापन शुरू नहीं हो सका</string>
+    <!-- Auth loading -->
+    <string name="signing_in_loading">साइन इन हो रहा है…</string>
+    <!-- Time -->
+    <string name="time_just_now">अभी</string>
+    <string name="time_minutes_ago">%1$d मिनट पहले</string>
+    <string name="time_hours_ago">%1$d घंटे पहले</string>
+    <string name="time_days_ago">%1$d दिन पहले</string>
+    <string name="time_expired">समाप्त</string>
+    <string name="time_days">%1$d दिन</string>
+    <string name="time_hours">%1$d घंटे</string>
+    <string name="time_minutes">%1$d मिनट</string>
+    <string name="time_less_than_minute">1 मिनट से कम</string>
 </resources>

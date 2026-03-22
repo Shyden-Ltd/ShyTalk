@@ -788,4 +788,81 @@
     <string name="starting_screen_dismiss">계속</string>
     <string name="starting_screen_police_duck_description">경고 일러스트</string>
     <string name="starting_screen_loading">로딩 중…</string>
+    <!-- Security -->
+    <string name="security_title">보안</string>
+    <string name="security_app_lock">앱 잠금</string>
+    <string name="security_app_lock_desc">잠금 해제에 PIN 또는 생체 인증 필요</string>
+    <string name="security_lock_timeout">잠금 시간 제한</string>
+    <string name="security_timeout_1min">1분</string>
+    <string name="security_timeout_5min">5분</string>
+    <string name="security_timeout_15min">15분</string>
+    <string name="security_timeout_30min">30분</string>
+    <string name="security_timeout_never">사용 안 함</string>
+    <string name="security_biometric_login">생체 인증 로그인</string>
+    <string name="security_biometric_desc">지문 또는 얼굴 인식으로 잠금 해제</string>
+    <string name="security_biometric_unavailable">이 기기에서 사용할 수 없습니다</string>
+    <string name="security_reset_pin">PIN 재설정</string>
+    <string name="security_reset_pin_desc">새 PIN을 설정하려면 본인 인증이 필요합니다</string>
+    <string name="security_linked_accounts">연결된 계정</string>
+    <string name="security_linked_accounts_desc">로그인 방법 관리</string>
+    <!-- Email sign-in -->
+    <string name="email_sign_in_title">이메일로 로그인</string>
+    <string name="email_enter_address">이메일 주소를 입력하세요</string>
+    <string name="email_label">이메일</string>
+    <string name="email_send_code">코드 보내기</string>
+    <string name="email_code_sent_to">코드 전송 완료</string>
+    <string name="email_code_label">6자리 코드</string>
+    <string name="email_verify">인증</string>
+    <string name="email_resend_in">%1$ds 후 재전송</string>
+    <string name="email_resend_code">코드 재전송</string>
+    <string name="email_code_expires">코드는 10분 후 만료됩니다</string>
+    <string name="email_invalid_address">유효한 이메일 주소를 입력하세요</string>
+    <string name="email_disposable_blocked">일회용 이메일 주소는 허용되지 않습니다</string>
+    <string name="email_send_failed">코드 전송 실패</string>
+    <string name="email_enter_code">6자리 코드를 입력하세요</string>
+    <string name="email_invalid_code">잘못된 코드</string>
+    <string name="email_resend_failed">재전송 실패</string>
+    <!-- PIN -->
+    <string name="pin_create_title">PIN 만들기</string>
+    <string name="pin_confirm_title">PIN 확인</string>
+    <string name="pin_enable_biometric_title">생체 인증 로그인을 활성화하시겠습니까?</string>
+    <string name="pin_enable_biometric_desc">지문 또는 얼굴 인식으로 ShyTalk을 빠르게 잠금 해제하세요.</string>
+    <string name="pin_enable">활성화</string>
+    <string name="pin_not_now">나중에</string>
+    <string name="pin_change_hint">보안 설정에서 변경하거나 비활성화할 수 있습니다</string>
+    <string name="pin_choose_length">PIN 길이 선택</string>
+    <string name="pin_digits">자리</string>
+    <string name="pin_confirm">확인</string>
+    <string name="pin_next">다음</string>
+    <string name="pin_enter_digits">%1$d자리 입력</string>
+    <string name="pin_device_not_registered">기기가 등록되지 않았습니다. 다시 로그인해 주세요.</string>
+    <string name="pin_setup_failed">PIN 설정 실패</string>
+    <string name="pin_too_short">PIN이 너무 짧습니다</string>
+    <string name="pin_verify_title">본인 인증</string>
+    <string name="pin_verify_subtitle">계속하려면 PIN을 입력하세요</string>
+    <string name="pin_verifying">확인 중…</string>
+    <string name="pin_wrong_attempts">잘못된 PIN. %1$d회 남음.</string>
+    <string name="pin_account_locked">계정이 잠겼습니다</string>
+    <string name="pin_verify_failed">인증 실패</string>
+    <string name="pin_session_expired">세션이 만료되었습니다. 다시 로그인해 주세요.</string>
+    <string name="pin_use_biometric">생체 인증 사용</string>
+    <string name="pin_delete">삭제</string>
+    <!-- Biometric -->
+    <string name="biometric_unlock_title">ShyTalk 잠금 해제</string>
+    <string name="biometric_unlock_desc">지문 또는 얼굴 인식으로 잠금 해제</string>
+    <string name="biometric_sign_failed">서명 실패</string>
+    <string name="biometric_verify_failed">생체 인증 실패</string>
+    <string name="biometric_start_failed">생체 인증을 시작할 수 없습니다</string>
+    <!-- Auth loading -->
+    <string name="signing_in_loading">로그인 중…</string>
+    <!-- Time -->
+    <string name="time_just_now">방금</string>
+    <string name="time_minutes_ago">%1$d분 전</string>
+    <string name="time_hours_ago">%1$d시간 전</string>
+    <string name="time_days_ago">%1$d일 전</string>
+    <string name="time_expired">만료됨</string>
+    <string name="time_days">%1$d일</string>
+    <string name="time_hours">%1$d시간</string>
+    <string name="time_minutes">%1$d분</string>
+    <string name="time_less_than_minute">1분 미만</string>
 </resources>

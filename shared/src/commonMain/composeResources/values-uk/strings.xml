@@ -788,4 +788,81 @@
     <string name="starting_screen_dismiss">Продовжити</string>
     <string name="starting_screen_police_duck_description">Попереджувальна ілюстрація</string>
     <string name="starting_screen_loading">Завантаження…</string>
+    <!-- Security -->
+    <string name="security_title">Безпека</string>
+    <string name="security_app_lock">Блокування додатку</string>
+    <string name="security_app_lock_desc">Потрібен PIN або біометрія для розблокування</string>
+    <string name="security_lock_timeout">Тайм-аут блокування</string>
+    <string name="security_timeout_1min">1 хвилина</string>
+    <string name="security_timeout_5min">5 хвилин</string>
+    <string name="security_timeout_15min">15 хвилин</string>
+    <string name="security_timeout_30min">30 хвилин</string>
+    <string name="security_timeout_never">Ніколи</string>
+    <string name="security_biometric_login">Біометричний вхід</string>
+    <string name="security_biometric_desc">Використовуйте відбиток пальця або обличчя для розблокування</string>
+    <string name="security_biometric_unavailable">Недоступно на цьому пристрої</string>
+    <string name="security_reset_pin">Скинути PIN</string>
+    <string name="security_reset_pin_desc">Підтвердіть свою особу для встановлення нового PIN</string>
+    <string name="security_linked_accounts">Пов\'язані акаунти</string>
+    <string name="security_linked_accounts_desc">Керування способами входу</string>
+    <!-- Email sign-in -->
+    <string name="email_sign_in_title">Вхід через email</string>
+    <string name="email_enter_address">Введіть вашу адресу email</string>
+    <string name="email_label">Email</string>
+    <string name="email_send_code">Надіслати код</string>
+    <string name="email_code_sent_to">Код надіслано на</string>
+    <string name="email_code_label">6-значний код</string>
+    <string name="email_verify">Підтвердити</string>
+    <string name="email_resend_in">Повторна відправка через %1$ds</string>
+    <string name="email_resend_code">Надіслати код повторно</string>
+    <string name="email_code_expires">Код дійсний 10 хвилин</string>
+    <string name="email_invalid_address">Введіть дійсну адресу email</string>
+    <string name="email_disposable_blocked">Одноразові адреси email не дозволені</string>
+    <string name="email_send_failed">Не вдалося надіслати код</string>
+    <string name="email_enter_code">Введіть 6-значний код</string>
+    <string name="email_invalid_code">Невірний код</string>
+    <string name="email_resend_failed">Не вдалося повторно надіслати</string>
+    <!-- PIN -->
+    <string name="pin_create_title">Створити PIN</string>
+    <string name="pin_confirm_title">Підтвердіть PIN</string>
+    <string name="pin_enable_biometric_title">Увімкнути біометричний вхід?</string>
+    <string name="pin_enable_biometric_desc">Використовуйте відбиток пальця або обличчя для швидкого розблокування ShyTalk.</string>
+    <string name="pin_enable">Увімкнути</string>
+    <string name="pin_not_now">Не зараз</string>
+    <string name="pin_change_hint">Ви можете змінити або вимкнути це в налаштуваннях Безпеки</string>
+    <string name="pin_choose_length">Виберіть довжину PIN</string>
+    <string name="pin_digits">цифр</string>
+    <string name="pin_confirm">Підтвердити</string>
+    <string name="pin_next">Далі</string>
+    <string name="pin_enter_digits">Введіть %1$d цифр</string>
+    <string name="pin_device_not_registered">Пристрій не зареєстровано. Увійдіть знову.</string>
+    <string name="pin_setup_failed">Не вдалося встановити PIN</string>
+    <string name="pin_too_short">PIN занадто короткий</string>
+    <string name="pin_verify_title">Підтвердіть свою особу</string>
+    <string name="pin_verify_subtitle">Введіть PIN для продовження</string>
+    <string name="pin_verifying">Перевірка…</string>
+    <string name="pin_wrong_attempts">Невірний PIN. Залишилось спроб: %1$d.</string>
+    <string name="pin_account_locked">Акаунт заблоковано</string>
+    <string name="pin_verify_failed">Перевірка не вдалася</string>
+    <string name="pin_session_expired">Сесія закінчилася. Увійдіть знову.</string>
+    <string name="pin_use_biometric">Використати біометрію</string>
+    <string name="pin_delete">Видалити</string>
+    <!-- Biometric -->
+    <string name="biometric_unlock_title">Розблокувати ShyTalk</string>
+    <string name="biometric_unlock_desc">Використовуйте відбиток пальця або обличчя для розблокування</string>
+    <string name="biometric_sign_failed">Помилка підпису</string>
+    <string name="biometric_verify_failed">Біометрична перевірка не вдалася</string>
+    <string name="biometric_start_failed">Не вдалося розпочати біометричну перевірку</string>
+    <!-- Auth loading -->
+    <string name="signing_in_loading">Вхід…</string>
+    <!-- Time -->
+    <string name="time_just_now">щойно</string>
+    <string name="time_minutes_ago">%1$d хв тому</string>
+    <string name="time_hours_ago">%1$d год тому</string>
+    <string name="time_days_ago">%1$d днів тому</string>
+    <string name="time_expired">Закінчився</string>
+    <string name="time_days">%1$d днів</string>
+    <string name="time_hours">%1$d годин</string>
+    <string name="time_minutes">%1$d хвилин</string>
+    <string name="time_less_than_minute">Менше 1 хвилини</string>
 </resources>

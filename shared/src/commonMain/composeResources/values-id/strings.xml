@@ -788,4 +788,81 @@
     <string name="starting_screen_dismiss">Lanjutkan</string>
     <string name="starting_screen_police_duck_description">Ilustrasi peringatan</string>
     <string name="starting_screen_loading">Memuat…</string>
+    <!-- Security -->
+    <string name="security_title">Keamanan</string>
+    <string name="security_app_lock">Kunci Aplikasi</string>
+    <string name="security_app_lock_desc">Memerlukan PIN atau biometrik untuk membuka kunci</string>
+    <string name="security_lock_timeout">Batas Waktu Kunci</string>
+    <string name="security_timeout_1min">1 menit</string>
+    <string name="security_timeout_5min">5 menit</string>
+    <string name="security_timeout_15min">15 menit</string>
+    <string name="security_timeout_30min">30 menit</string>
+    <string name="security_timeout_never">Tidak pernah</string>
+    <string name="security_biometric_login">Login Biometrik</string>
+    <string name="security_biometric_desc">Gunakan sidik jari atau wajah untuk membuka kunci</string>
+    <string name="security_biometric_unavailable">Tidak tersedia di perangkat ini</string>
+    <string name="security_reset_pin">Atur Ulang PIN</string>
+    <string name="security_reset_pin_desc">Verifikasi identitas Anda untuk mengatur PIN baru</string>
+    <string name="security_linked_accounts">Akun Tertaut</string>
+    <string name="security_linked_accounts_desc">Kelola metode masuk</string>
+    <!-- Email sign-in -->
+    <string name="email_sign_in_title">Masuk dengan email</string>
+    <string name="email_enter_address">Masukkan alamat email Anda</string>
+    <string name="email_label">Email</string>
+    <string name="email_send_code">Kirim kode</string>
+    <string name="email_code_sent_to">Kode dikirim ke</string>
+    <string name="email_code_label">Kode 6 digit</string>
+    <string name="email_verify">Verifikasi</string>
+    <string name="email_resend_in">Kirim ulang dalam %1$ds</string>
+    <string name="email_resend_code">Kirim ulang kode</string>
+    <string name="email_code_expires">Kode kedaluwarsa dalam 10 menit</string>
+    <string name="email_invalid_address">Masukkan alamat email yang valid</string>
+    <string name="email_disposable_blocked">Alamat email sekali pakai tidak diizinkan</string>
+    <string name="email_send_failed">Gagal mengirim kode</string>
+    <string name="email_enter_code">Masukkan kode 6 digit</string>
+    <string name="email_invalid_code">Kode tidak valid</string>
+    <string name="email_resend_failed">Gagal mengirim ulang</string>
+    <!-- PIN -->
+    <string name="pin_create_title">Buat PIN</string>
+    <string name="pin_confirm_title">Konfirmasi PIN Anda</string>
+    <string name="pin_enable_biometric_title">Aktifkan login biometrik?</string>
+    <string name="pin_enable_biometric_desc">Gunakan sidik jari atau wajah Anda untuk membuka ShyTalk dengan cepat.</string>
+    <string name="pin_enable">Aktifkan</string>
+    <string name="pin_not_now">Nanti saja</string>
+    <string name="pin_change_hint">Anda dapat mengubah atau menonaktifkan ini di pengaturan Keamanan</string>
+    <string name="pin_choose_length">Pilih panjang PIN</string>
+    <string name="pin_digits">digit</string>
+    <string name="pin_confirm">Konfirmasi</string>
+    <string name="pin_next">Berikutnya</string>
+    <string name="pin_enter_digits">Masukkan %1$d digit</string>
+    <string name="pin_device_not_registered">Perangkat tidak terdaftar. Silakan masuk lagi.</string>
+    <string name="pin_setup_failed">Gagal mengatur PIN</string>
+    <string name="pin_too_short">PIN terlalu pendek</string>
+    <string name="pin_verify_title">Verifikasi identitas Anda</string>
+    <string name="pin_verify_subtitle">Masukkan PIN Anda untuk melanjutkan</string>
+    <string name="pin_verifying">Memverifikasi…</string>
+    <string name="pin_wrong_attempts">PIN salah. %1$d percobaan tersisa.</string>
+    <string name="pin_account_locked">Akun terkunci</string>
+    <string name="pin_verify_failed">Verifikasi gagal</string>
+    <string name="pin_session_expired">Sesi berakhir. Silakan masuk lagi.</string>
+    <string name="pin_use_biometric">Gunakan biometrik</string>
+    <string name="pin_delete">Hapus</string>
+    <!-- Biometric -->
+    <string name="biometric_unlock_title">Buka Kunci ShyTalk</string>
+    <string name="biometric_unlock_desc">Gunakan sidik jari atau wajah Anda untuk membuka kunci</string>
+    <string name="biometric_sign_failed">Penandatanganan gagal</string>
+    <string name="biometric_verify_failed">Verifikasi biometrik gagal</string>
+    <string name="biometric_start_failed">Tidak dapat memulai verifikasi biometrik</string>
+    <!-- Auth loading -->
+    <string name="signing_in_loading">Sedang masuk…</string>
+    <!-- Time -->
+    <string name="time_just_now">baru saja</string>
+    <string name="time_minutes_ago">%1$d menit lalu</string>
+    <string name="time_hours_ago">%1$d jam lalu</string>
+    <string name="time_days_ago">%1$d hari lalu</string>
+    <string name="time_expired">Kedaluwarsa</string>
+    <string name="time_days">%1$d hari</string>
+    <string name="time_hours">%1$d jam</string>
+    <string name="time_minutes">%1$d menit</string>
+    <string name="time_less_than_minute">Kurang dari 1 menit</string>
 </resources>

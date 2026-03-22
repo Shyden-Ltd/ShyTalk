@@ -788,4 +788,81 @@
     <string name="starting_screen_dismiss">Devam et</string>
     <string name="starting_screen_police_duck_description">Uyarı illüstrasyonu</string>
     <string name="starting_screen_loading">Yükleniyor…</string>
+    <!-- Security -->
+    <string name="security_title">Güvenlik</string>
+    <string name="security_app_lock">Uygulama Kilidi</string>
+    <string name="security_app_lock_desc">Kilit açmak için PIN veya biyometri gerekir</string>
+    <string name="security_lock_timeout">Kilit Zaman Aşımı</string>
+    <string name="security_timeout_1min">1 dakika</string>
+    <string name="security_timeout_5min">5 dakika</string>
+    <string name="security_timeout_15min">15 dakika</string>
+    <string name="security_timeout_30min">30 dakika</string>
+    <string name="security_timeout_never">Hiçbir zaman</string>
+    <string name="security_biometric_login">Biyometrik Giriş</string>
+    <string name="security_biometric_desc">Kilit açmak için parmak izi veya yüz kullanın</string>
+    <string name="security_biometric_unavailable">Bu cihazda kullanılamıyor</string>
+    <string name="security_reset_pin">PIN\'i Sıfırla</string>
+    <string name="security_reset_pin_desc">Yeni bir PIN belirlemek için kimliğinizi doğrulayın</string>
+    <string name="security_linked_accounts">Bağlı Hesaplar</string>
+    <string name="security_linked_accounts_desc">Giriş yöntemlerini yönet</string>
+    <!-- Email sign-in -->
+    <string name="email_sign_in_title">E-posta ile giriş yap</string>
+    <string name="email_enter_address">E-posta adresinizi girin</string>
+    <string name="email_label">E-posta</string>
+    <string name="email_send_code">Kod gönder</string>
+    <string name="email_code_sent_to">Kod gönderildi</string>
+    <string name="email_code_label">6 haneli kod</string>
+    <string name="email_verify">Doğrula</string>
+    <string name="email_resend_in">%1$ds sonra tekrar gönder</string>
+    <string name="email_resend_code">Kodu tekrar gönder</string>
+    <string name="email_code_expires">Kod 10 dakika içinde sona erer</string>
+    <string name="email_invalid_address">Geçerli bir e-posta adresi girin</string>
+    <string name="email_disposable_blocked">Tek kullanımlık e-posta adreslerine izin verilmiyor</string>
+    <string name="email_send_failed">Kod gönderilemedi</string>
+    <string name="email_enter_code">6 haneli kodu girin</string>
+    <string name="email_invalid_code">Geçersiz kod</string>
+    <string name="email_resend_failed">Tekrar gönderme başarısız</string>
+    <!-- PIN -->
+    <string name="pin_create_title">PIN Oluştur</string>
+    <string name="pin_confirm_title">PIN\'inizi Onaylayın</string>
+    <string name="pin_enable_biometric_title">Biyometrik giriş etkinleştirilsin mi?</string>
+    <string name="pin_enable_biometric_desc">ShyTalk\'ı hızlıca açmak için parmak izinizi veya yüzünüzü kullanın.</string>
+    <string name="pin_enable">Etkinleştir</string>
+    <string name="pin_not_now">Şimdi değil</string>
+    <string name="pin_change_hint">Bunu Güvenlik ayarlarından değiştirebilir veya devre dışı bırakabilirsiniz</string>
+    <string name="pin_choose_length">PIN uzunluğunu seçin</string>
+    <string name="pin_digits">haneli</string>
+    <string name="pin_confirm">Onayla</string>
+    <string name="pin_next">İleri</string>
+    <string name="pin_enter_digits">%1$d hane girin</string>
+    <string name="pin_device_not_registered">Cihaz kayıtlı değil. Lütfen tekrar giriş yapın.</string>
+    <string name="pin_setup_failed">PIN ayarlanamadı</string>
+    <string name="pin_too_short">PIN çok kısa</string>
+    <string name="pin_verify_title">Kimliğinizi doğrulayın</string>
+    <string name="pin_verify_subtitle">Devam etmek için PIN\'inizi girin</string>
+    <string name="pin_verifying">Doğrulanıyor…</string>
+    <string name="pin_wrong_attempts">Yanlış PIN. %1$d deneme kaldı.</string>
+    <string name="pin_account_locked">Hesap kilitli</string>
+    <string name="pin_verify_failed">Doğrulama başarısız</string>
+    <string name="pin_session_expired">Oturum süresi doldu. Lütfen tekrar giriş yapın.</string>
+    <string name="pin_use_biometric">Biyometri kullan</string>
+    <string name="pin_delete">Sil</string>
+    <!-- Biometric -->
+    <string name="biometric_unlock_title">ShyTalk\'ın Kilidini Aç</string>
+    <string name="biometric_unlock_desc">Kilit açmak için parmak izinizi veya yüzünüzü kullanın</string>
+    <string name="biometric_sign_failed">İmzalama başarısız</string>
+    <string name="biometric_verify_failed">Biyometrik doğrulama başarısız</string>
+    <string name="biometric_start_failed">Biyometrik doğrulama başlatılamadı</string>
+    <!-- Auth loading -->
+    <string name="signing_in_loading">Giriş yapılıyor…</string>
+    <!-- Time -->
+    <string name="time_just_now">az önce</string>
+    <string name="time_minutes_ago">%1$d dk önce</string>
+    <string name="time_hours_ago">%1$d sa önce</string>
+    <string name="time_days_ago">%1$d gün önce</string>
+    <string name="time_expired">Süresi doldu</string>
+    <string name="time_days">%1$d gün</string>
+    <string name="time_hours">%1$d saat</string>
+    <string name="time_minutes">%1$d dakika</string>
+    <string name="time_less_than_minute">1 dakikadan az</string>
 </resources>

@@ -788,4 +788,81 @@
     <string name="starting_screen_dismiss">متابعة</string>
     <string name="starting_screen_police_duck_description">رسم توضيحي تحذيري</string>
     <string name="starting_screen_loading">جارٍ التحميل…</string>
+    <!-- Security -->
+    <string name="security_title">الأمان</string>
+    <string name="security_app_lock">قفل التطبيق</string>
+    <string name="security_app_lock_desc">طلب رمز PIN أو المقاييس الحيوية لفتح القفل</string>
+    <string name="security_lock_timeout">مهلة القفل</string>
+    <string name="security_timeout_1min">دقيقة واحدة</string>
+    <string name="security_timeout_5min">5 دقائق</string>
+    <string name="security_timeout_15min">15 دقيقة</string>
+    <string name="security_timeout_30min">30 دقيقة</string>
+    <string name="security_timeout_never">أبدًا</string>
+    <string name="security_biometric_login">تسجيل الدخول بالمقاييس الحيوية</string>
+    <string name="security_biometric_desc">استخدم بصمة الإصبع أو الوجه لفتح القفل</string>
+    <string name="security_biometric_unavailable">غير متوفر على هذا الجهاز</string>
+    <string name="security_reset_pin">إعادة تعيين PIN</string>
+    <string name="security_reset_pin_desc">تحقق من هويتك لتعيين PIN جديد</string>
+    <string name="security_linked_accounts">الحسابات المرتبطة</string>
+    <string name="security_linked_accounts_desc">إدارة طرق تسجيل الدخول</string>
+    <!-- Email sign-in -->
+    <string name="email_sign_in_title">تسجيل الدخول بالبريد الإلكتروني</string>
+    <string name="email_enter_address">أدخل عنوان بريدك الإلكتروني</string>
+    <string name="email_label">البريد الإلكتروني</string>
+    <string name="email_send_code">إرسال الرمز</string>
+    <string name="email_code_sent_to">تم إرسال الرمز إلى</string>
+    <string name="email_code_label">رمز مكون من 6 أرقام</string>
+    <string name="email_verify">تحقق</string>
+    <string name="email_resend_in">إعادة الإرسال خلال %1$ds</string>
+    <string name="email_resend_code">إعادة إرسال الرمز</string>
+    <string name="email_code_expires">تنتهي صلاحية الرمز خلال 10 دقائق</string>
+    <string name="email_invalid_address">أدخل عنوان بريد إلكتروني صالح</string>
+    <string name="email_disposable_blocked">عناوين البريد الإلكتروني المؤقتة غير مسموح بها</string>
+    <string name="email_send_failed">فشل إرسال الرمز</string>
+    <string name="email_enter_code">أدخل الرمز المكون من 6 أرقام</string>
+    <string name="email_invalid_code">رمز غير صالح</string>
+    <string name="email_resend_failed">فشلت إعادة الإرسال</string>
+    <!-- PIN -->
+    <string name="pin_create_title">إنشاء PIN</string>
+    <string name="pin_confirm_title">تأكيد PIN</string>
+    <string name="pin_enable_biometric_title">تفعيل تسجيل الدخول بالمقاييس الحيوية؟</string>
+    <string name="pin_enable_biometric_desc">استخدم بصمة إصبعك أو وجهك لفتح ShyTalk بسرعة.</string>
+    <string name="pin_enable">تفعيل</string>
+    <string name="pin_not_now">ليس الآن</string>
+    <string name="pin_change_hint">يمكنك تغيير أو تعطيل هذا في إعدادات الأمان</string>
+    <string name="pin_choose_length">اختر طول PIN</string>
+    <string name="pin_digits">أرقام</string>
+    <string name="pin_confirm">تأكيد</string>
+    <string name="pin_next">التالي</string>
+    <string name="pin_enter_digits">أدخل %1$d أرقام</string>
+    <string name="pin_device_not_registered">الجهاز غير مسجل. يرجى تسجيل الدخول مرة أخرى.</string>
+    <string name="pin_setup_failed">فشل تعيين PIN</string>
+    <string name="pin_too_short">PIN قصير جدًا</string>
+    <string name="pin_verify_title">تحقق من هويتك</string>
+    <string name="pin_verify_subtitle">أدخل PIN للمتابعة</string>
+    <string name="pin_verifying">جارٍ التحقق…</string>
+    <string name="pin_wrong_attempts">PIN خاطئ. %1$d محاولات متبقية.</string>
+    <string name="pin_account_locked">الحساب مقفل</string>
+    <string name="pin_verify_failed">فشل التحقق</string>
+    <string name="pin_session_expired">انتهت الجلسة. يرجى تسجيل الدخول مرة أخرى.</string>
+    <string name="pin_use_biometric">استخدام المقاييس الحيوية</string>
+    <string name="pin_delete">حذف</string>
+    <!-- Biometric -->
+    <string name="biometric_unlock_title">فتح ShyTalk</string>
+    <string name="biometric_unlock_desc">استخدم بصمة إصبعك أو وجهك لفتح القفل</string>
+    <string name="biometric_sign_failed">فشل التوقيع</string>
+    <string name="biometric_verify_failed">فشل التحقق بالمقاييس الحيوية</string>
+    <string name="biometric_start_failed">تعذر بدء التحقق بالمقاييس الحيوية</string>
+    <!-- Auth loading -->
+    <string name="signing_in_loading">جارٍ تسجيل الدخول…</string>
+    <!-- Time -->
+    <string name="time_just_now">الآن</string>
+    <string name="time_minutes_ago">منذ %1$d د</string>
+    <string name="time_hours_ago">منذ %1$d س</string>
+    <string name="time_days_ago">منذ %1$d أيام</string>
+    <string name="time_expired">منتهي الصلاحية</string>
+    <string name="time_days">%1$d أيام</string>
+    <string name="time_hours">%1$d ساعات</string>
+    <string name="time_minutes">%1$d دقائق</string>
+    <string name="time_less_than_minute">أقل من دقيقة واحدة</string>
 </resources>

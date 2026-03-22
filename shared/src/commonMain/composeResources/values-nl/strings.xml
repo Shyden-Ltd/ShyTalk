@@ -788,4 +788,81 @@
     <string name="starting_screen_dismiss">Doorgaan</string>
     <string name="starting_screen_police_duck_description">Waarschuwingsillustratie</string>
     <string name="starting_screen_loading">Laden…</string>
+    <!-- Security -->
+    <string name="security_title">Beveiliging</string>
+    <string name="security_app_lock">App-vergrendeling</string>
+    <string name="security_app_lock_desc">PIN of biometrie vereist om te ontgrendelen</string>
+    <string name="security_lock_timeout">Vergrendelingstimeout</string>
+    <string name="security_timeout_1min">1 minuut</string>
+    <string name="security_timeout_5min">5 minuten</string>
+    <string name="security_timeout_15min">15 minuten</string>
+    <string name="security_timeout_30min">30 minuten</string>
+    <string name="security_timeout_never">Nooit</string>
+    <string name="security_biometric_login">Biometrische login</string>
+    <string name="security_biometric_desc">Gebruik vingerafdruk of gezicht om te ontgrendelen</string>
+    <string name="security_biometric_unavailable">Niet beschikbaar op dit apparaat</string>
+    <string name="security_reset_pin">PIN resetten</string>
+    <string name="security_reset_pin_desc">Verifieer je identiteit om een nieuwe PIN in te stellen</string>
+    <string name="security_linked_accounts">Gekoppelde accounts</string>
+    <string name="security_linked_accounts_desc">Aanmeldmethoden beheren</string>
+    <!-- Email sign-in -->
+    <string name="email_sign_in_title">Aanmelden met e-mail</string>
+    <string name="email_enter_address">Voer je e-mailadres in</string>
+    <string name="email_label">E-mail</string>
+    <string name="email_send_code">Code verzenden</string>
+    <string name="email_code_sent_to">Code verzonden naar</string>
+    <string name="email_code_label">6-cijferige code</string>
+    <string name="email_verify">Verifiëren</string>
+    <string name="email_resend_in">Opnieuw verzenden over %1$ds</string>
+    <string name="email_resend_code">Code opnieuw verzenden</string>
+    <string name="email_code_expires">Code verloopt over 10 minuten</string>
+    <string name="email_invalid_address">Voer een geldig e-mailadres in</string>
+    <string name="email_disposable_blocked">Wegwerp-e-mailadressen zijn niet toegestaan</string>
+    <string name="email_send_failed">Code verzenden mislukt</string>
+    <string name="email_enter_code">Voer de 6-cijferige code in</string>
+    <string name="email_invalid_code">Ongeldige code</string>
+    <string name="email_resend_failed">Opnieuw verzenden mislukt</string>
+    <!-- PIN -->
+    <string name="pin_create_title">PIN aanmaken</string>
+    <string name="pin_confirm_title">Bevestig je PIN</string>
+    <string name="pin_enable_biometric_title">Biometrische login inschakelen?</string>
+    <string name="pin_enable_biometric_desc">Gebruik je vingerafdruk of gezicht om ShyTalk snel te ontgrendelen.</string>
+    <string name="pin_enable">Inschakelen</string>
+    <string name="pin_not_now">Niet nu</string>
+    <string name="pin_change_hint">Je kunt dit wijzigen of uitschakelen in de Beveiligingsinstellingen</string>
+    <string name="pin_choose_length">Kies PIN-lengte</string>
+    <string name="pin_digits">cijfers</string>
+    <string name="pin_confirm">Bevestigen</string>
+    <string name="pin_next">Volgende</string>
+    <string name="pin_enter_digits">Voer %1$d cijfers in</string>
+    <string name="pin_device_not_registered">Apparaat niet geregistreerd. Meld je opnieuw aan.</string>
+    <string name="pin_setup_failed">PIN instellen mislukt</string>
+    <string name="pin_too_short">PIN te kort</string>
+    <string name="pin_verify_title">Verifieer je identiteit</string>
+    <string name="pin_verify_subtitle">Voer je PIN in om door te gaan</string>
+    <string name="pin_verifying">Verifiëren…</string>
+    <string name="pin_wrong_attempts">Verkeerde PIN. %1$d pogingen over.</string>
+    <string name="pin_account_locked">Account vergrendeld</string>
+    <string name="pin_verify_failed">Verificatie mislukt</string>
+    <string name="pin_session_expired">Sessie verlopen. Meld je opnieuw aan.</string>
+    <string name="pin_use_biometric">Biometrie gebruiken</string>
+    <string name="pin_delete">Verwijderen</string>
+    <!-- Biometric -->
+    <string name="biometric_unlock_title">ShyTalk ontgrendelen</string>
+    <string name="biometric_unlock_desc">Gebruik je vingerafdruk of gezicht om te ontgrendelen</string>
+    <string name="biometric_sign_failed">Ondertekening mislukt</string>
+    <string name="biometric_verify_failed">Biometrische verificatie mislukt</string>
+    <string name="biometric_start_failed">Biometrische verificatie kon niet worden gestart</string>
+    <!-- Auth loading -->
+    <string name="signing_in_loading">Aanmelden…</string>
+    <!-- Time -->
+    <string name="time_just_now">zojuist</string>
+    <string name="time_minutes_ago">%1$d min geleden</string>
+    <string name="time_hours_ago">%1$d uur geleden</string>
+    <string name="time_days_ago">%1$d dagen geleden</string>
+    <string name="time_expired">Verlopen</string>
+    <string name="time_days">%1$d dagen</string>
+    <string name="time_hours">%1$d uur</string>
+    <string name="time_minutes">%1$d minuten</string>
+    <string name="time_less_than_minute">Minder dan 1 minuut</string>
 </resources>

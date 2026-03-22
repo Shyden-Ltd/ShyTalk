@@ -12,6 +12,7 @@
     <string name="delete">Delete</string>
     <string name="done">Done</string>
     <string name="edit">Edit</string>
+    <string name="enable">Enable</string>
     <string name="error_generic">Something went wrong</string>
     <string name="got_it">Got it</string>
     <string name="learn_more">Learn More</string>
@@ -22,6 +23,7 @@
     <string name="ok">OK</string>
     <string name="retry">Retry</string>
     <string name="save">Save</string>
+    <string name="security">Security</string>
     <string name="send">Send</string>
     <string name="sending">Sending...</string>
     <string name="transfer">Transfer</string>
@@ -632,10 +634,6 @@
     <string name="use_different_email">Use a different email</string>
     <string name="email_link_paste_hint">Open the link in your email, then come back and tap Paste Link.</string>
     <string name="error_invalid_email_link">That doesn't look like a valid sign-in link. Please paste the full link from your email.</string>
-    <string name="email_sign_in_description">We'll send you a sign-in link. No password needed.</string>
-    <string name="email_link_sent_to">We sent a sign-in link to %1$s</string>
-    <string name="email_link_step1">Step 1: Open your email and tap the sign-in link</string>
-    <string name="email_link_step2">Link didn't work? Paste it here instead:</string>
     <string name="verify">Verify</string>
 
     <!-- Suspension / Ban -->
@@ -872,5 +870,88 @@
     <string name="starting_screen_dismiss">Continue</string>
     <string name="starting_screen_police_duck_description">Warning illustration</string>
     <string name="starting_screen_loading">Loading\u2026</string>
+
+    <!-- Security Settings Screen -->
+    <string name="security_title">Security</string>
+    <string name="security_app_lock">App Lock</string>
+    <string name="security_app_lock_desc">Require PIN or biometric to unlock</string>
+    <string name="security_lock_timeout">Lock Timeout</string>
+    <string name="security_timeout_1min">1 minute</string>
+    <string name="security_timeout_5min">5 minutes</string>
+    <string name="security_timeout_15min">15 minutes</string>
+    <string name="security_timeout_30min">30 minutes</string>
+    <string name="security_timeout_never">Never</string>
+    <string name="security_biometric_login">Biometric Login</string>
+    <string name="security_biometric_desc">Use fingerprint or face to unlock</string>
+    <string name="security_biometric_unavailable">Not available on this device</string>
+    <string name="security_reset_pin">Reset PIN</string>
+    <string name="security_reset_pin_desc">Verify your identity to set a new PIN</string>
+    <string name="security_linked_accounts">Linked Accounts</string>
+    <string name="security_linked_accounts_desc">Manage sign-in methods</string>
+
+    <!-- Email OTP Screen -->
+    <string name="email_sign_in_title">Sign in with email</string>
+    <string name="email_enter_address">Enter your email address</string>
+    <string name="email_label">Email</string>
+    <string name="email_send_code">Send code</string>
+    <string name="email_code_sent_to">Code sent to</string>
+    <string name="email_code_label">6-digit code</string>
+    <string name="email_verify">Verify</string>
+    <string name="email_resend_in">Resend in %1$ds</string>
+    <string name="email_resend_code">Resend code</string>
+    <string name="email_code_expires">Code expires in 10 minutes</string>
+    <string name="email_invalid_address">Enter a valid email address</string>
+    <string name="email_disposable_blocked">Disposable email addresses are not allowed</string>
+    <string name="email_send_failed">Failed to send code</string>
+    <string name="email_enter_code">Enter the 6-digit code</string>
+    <string name="email_invalid_code">Invalid code</string>
+    <string name="email_resend_failed">Failed to resend</string>
+
+    <!-- PIN Setup Screen -->
+    <string name="pin_create_title">Create a PIN</string>
+    <string name="pin_confirm_title">Confirm your PIN</string>
+    <string name="pin_enable_biometric_title">Enable biometric login?</string>
+    <string name="pin_enable_biometric_desc">Use your fingerprint or face to unlock ShyTalk quickly.</string>
+    <string name="pin_enable">Enable</string>
+    <string name="pin_not_now">Not now</string>
+    <string name="pin_change_hint">You can change or disable this in Security settings</string>
+    <string name="pin_choose_length">Choose PIN length</string>
+    <string name="pin_digits">digits</string>
+    <string name="pin_confirm">Confirm</string>
+    <string name="pin_next">Next</string>
+    <string name="pin_enter_digits">Enter %1$d digits</string>
+    <string name="pin_device_not_registered">Device not registered. Please sign in again.</string>
+    <string name="pin_setup_failed">Failed to set PIN</string>
+    <string name="pin_too_short">PIN too short</string>
+
+    <!-- PIN Verify / Lock Screen -->
+    <string name="pin_verify_title">Verify your identity</string>
+    <string name="pin_verify_subtitle">Enter your PIN to continue</string>
+    <string name="pin_verifying">Verifying\u2026</string>
+    <string name="pin_wrong_attempts">Wrong PIN. %1$d attempts remaining.</string>
+    <string name="pin_account_locked">Account locked</string>
+    <string name="pin_verify_failed">Verification failed</string>
+    <string name="pin_session_expired">Session expired. Please sign in again.</string>
+    <string name="pin_use_biometric">Use biometric</string>
+    <string name="pin_delete">Delete</string>
+    <string name="biometric_unlock_title">Unlock ShyTalk</string>
+    <string name="biometric_unlock_desc">Use your fingerprint or face to unlock</string>
+    <string name="biometric_sign_failed">Signing failed</string>
+    <string name="biometric_verify_failed">Biometric verification failed</string>
+    <string name="biometric_start_failed">Could not start biometric verification</string>
+
+    <!-- Sign-in loading states -->
+    <string name="signing_in_loading">Signing in\u2026</string>
+
+    <!-- Date/Time (DateUtils) -->
+    <string name="time_just_now">just now</string>
+    <string name="time_minutes_ago">%1$d min ago</string>
+    <string name="time_hours_ago">%1$d hr ago</string>
+    <string name="time_days_ago">%1$d days ago</string>
+    <string name="time_expired">Expired</string>
+    <string name="time_days">%1$d days</string>
+    <string name="time_hours">%1$d hours</string>
+    <string name="time_minutes">%1$d minutes</string>
+    <string name="time_less_than_minute">Less than 1 minute</string>
 
 </resources>

@@ -788,4 +788,81 @@
     <string name="starting_screen_dismiss">ดำเนินการต่อ</string>
     <string name="starting_screen_police_duck_description">ภาพประกอบคำเตือน</string>
     <string name="starting_screen_loading">กำลังโหลด…</string>
+    <!-- Security -->
+    <string name="security_title">ความปลอดภัย</string>
+    <string name="security_app_lock">ล็อกแอป</string>
+    <string name="security_app_lock_desc">ต้องใช้ PIN หรือไบโอเมตริกเพื่อปลดล็อก</string>
+    <string name="security_lock_timeout">ระยะเวลาล็อก</string>
+    <string name="security_timeout_1min">1 นาที</string>
+    <string name="security_timeout_5min">5 นาที</string>
+    <string name="security_timeout_15min">15 นาที</string>
+    <string name="security_timeout_30min">30 นาที</string>
+    <string name="security_timeout_never">ไม่เลย</string>
+    <string name="security_biometric_login">เข้าสู่ระบบด้วยไบโอเมตริก</string>
+    <string name="security_biometric_desc">ใช้ลายนิ้วมือหรือใบหน้าเพื่อปลดล็อก</string>
+    <string name="security_biometric_unavailable">ไม่พร้อมใช้งานบนอุปกรณ์นี้</string>
+    <string name="security_reset_pin">รีเซ็ต PIN</string>
+    <string name="security_reset_pin_desc">ยืนยันตัวตนเพื่อตั้ง PIN ใหม่</string>
+    <string name="security_linked_accounts">บัญชีที่เชื่อมต่อ</string>
+    <string name="security_linked_accounts_desc">จัดการวิธีเข้าสู่ระบบ</string>
+    <!-- Email sign-in -->
+    <string name="email_sign_in_title">เข้าสู่ระบบด้วยอีเมล</string>
+    <string name="email_enter_address">ป้อนที่อยู่อีเมลของคุณ</string>
+    <string name="email_label">อีเมล</string>
+    <string name="email_send_code">ส่งรหัส</string>
+    <string name="email_code_sent_to">ส่งรหัสไปที่</string>
+    <string name="email_code_label">รหัส 6 หลัก</string>
+    <string name="email_verify">ยืนยัน</string>
+    <string name="email_resend_in">ส่งอีกครั้งใน %1$ds</string>
+    <string name="email_resend_code">ส่งรหัสอีกครั้ง</string>
+    <string name="email_code_expires">รหัสหมดอายุใน 10 นาที</string>
+    <string name="email_invalid_address">ป้อนที่อยู่อีเมลที่ถูกต้อง</string>
+    <string name="email_disposable_blocked">ไม่อนุญาตให้ใช้ที่อยู่อีเมลชั่วคราว</string>
+    <string name="email_send_failed">ส่งรหัสไม่สำเร็จ</string>
+    <string name="email_enter_code">ป้อนรหัส 6 หลัก</string>
+    <string name="email_invalid_code">รหัสไม่ถูกต้อง</string>
+    <string name="email_resend_failed">ส่งอีกครั้งไม่สำเร็จ</string>
+    <!-- PIN -->
+    <string name="pin_create_title">สร้าง PIN</string>
+    <string name="pin_confirm_title">ยืนยัน PIN ของคุณ</string>
+    <string name="pin_enable_biometric_title">เปิดใช้งานการเข้าสู่ระบบด้วยไบโอเมตริก?</string>
+    <string name="pin_enable_biometric_desc">ใช้ลายนิ้วมือหรือใบหน้าเพื่อปลดล็อก ShyTalk อย่างรวดเร็ว</string>
+    <string name="pin_enable">เปิดใช้งาน</string>
+    <string name="pin_not_now">ไม่ใช่ตอนนี้</string>
+    <string name="pin_change_hint">คุณสามารถเปลี่ยนหรือปิดใช้งานได้ในการตั้งค่าความปลอดภัย</string>
+    <string name="pin_choose_length">เลือกความยาว PIN</string>
+    <string name="pin_digits">หลัก</string>
+    <string name="pin_confirm">ยืนยัน</string>
+    <string name="pin_next">ถัดไป</string>
+    <string name="pin_enter_digits">ป้อน %1$d หลัก</string>
+    <string name="pin_device_not_registered">อุปกรณ์ไม่ได้ลงทะเบียน กรุณาเข้าสู่ระบบอีกครั้ง</string>
+    <string name="pin_setup_failed">ตั้ง PIN ไม่สำเร็จ</string>
+    <string name="pin_too_short">PIN สั้นเกินไป</string>
+    <string name="pin_verify_title">ยืนยันตัวตนของคุณ</string>
+    <string name="pin_verify_subtitle">ป้อน PIN เพื่อดำเนินการต่อ</string>
+    <string name="pin_verifying">กำลังยืนยัน…</string>
+    <string name="pin_wrong_attempts">PIN ผิด เหลือ %1$d ครั้ง</string>
+    <string name="pin_account_locked">บัญชีถูกล็อก</string>
+    <string name="pin_verify_failed">การยืนยันล้มเหลว</string>
+    <string name="pin_session_expired">เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง</string>
+    <string name="pin_use_biometric">ใช้ไบโอเมตริก</string>
+    <string name="pin_delete">ลบ</string>
+    <!-- Biometric -->
+    <string name="biometric_unlock_title">ปลดล็อก ShyTalk</string>
+    <string name="biometric_unlock_desc">ใช้ลายนิ้วมือหรือใบหน้าเพื่อปลดล็อก</string>
+    <string name="biometric_sign_failed">การลงนามล้มเหลว</string>
+    <string name="biometric_verify_failed">การยืนยันไบโอเมตริกล้มเหลว</string>
+    <string name="biometric_start_failed">ไม่สามารถเริ่มการยืนยันไบโอเมตริกได้</string>
+    <!-- Auth loading -->
+    <string name="signing_in_loading">กำลังเข้าสู่ระบบ…</string>
+    <!-- Time -->
+    <string name="time_just_now">เมื่อสักครู่</string>
+    <string name="time_minutes_ago">%1$d นาทีที่แล้ว</string>
+    <string name="time_hours_ago">%1$d ชั่วโมงที่แล้ว</string>
+    <string name="time_days_ago">%1$d วันที่แล้ว</string>
+    <string name="time_expired">หมดอายุ</string>
+    <string name="time_days">%1$d วัน</string>
+    <string name="time_hours">%1$d ชั่วโมง</string>
+    <string name="time_minutes">%1$d นาที</string>
+    <string name="time_less_than_minute">น้อยกว่า 1 นาที</string>
 </resources>

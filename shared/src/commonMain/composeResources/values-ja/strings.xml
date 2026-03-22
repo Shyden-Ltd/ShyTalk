@@ -788,4 +788,81 @@
     <string name="starting_screen_dismiss">続ける</string>
     <string name="starting_screen_police_duck_description">警告イラスト</string>
     <string name="starting_screen_loading">読み込み中…</string>
+    <!-- Security -->
+    <string name="security_title">セキュリティ</string>
+    <string name="security_app_lock">アプリロック</string>
+    <string name="security_app_lock_desc">ロック解除にPINまたは生体認証が必要</string>
+    <string name="security_lock_timeout">ロックのタイムアウト</string>
+    <string name="security_timeout_1min">1分</string>
+    <string name="security_timeout_5min">5分</string>
+    <string name="security_timeout_15min">15分</string>
+    <string name="security_timeout_30min">30分</string>
+    <string name="security_timeout_never">なし</string>
+    <string name="security_biometric_login">生体認証ログイン</string>
+    <string name="security_biometric_desc">指紋または顔認証でロック解除</string>
+    <string name="security_biometric_unavailable">このデバイスでは利用できません</string>
+    <string name="security_reset_pin">PINをリセット</string>
+    <string name="security_reset_pin_desc">新しいPINを設定するには本人確認が必要です</string>
+    <string name="security_linked_accounts">連携済みアカウント</string>
+    <string name="security_linked_accounts_desc">ログイン方法を管理</string>
+    <!-- Email sign-in -->
+    <string name="email_sign_in_title">メールでサインイン</string>
+    <string name="email_enter_address">メールアドレスを入力</string>
+    <string name="email_label">メール</string>
+    <string name="email_send_code">コードを送信</string>
+    <string name="email_code_sent_to">コード送信先</string>
+    <string name="email_code_label">6桁のコード</string>
+    <string name="email_verify">認証する</string>
+    <string name="email_resend_in">%1$ds後に再送信</string>
+    <string name="email_resend_code">コードを再送信</string>
+    <string name="email_code_expires">コードは10分で期限切れになります</string>
+    <string name="email_invalid_address">有効なメールアドレスを入力してください</string>
+    <string name="email_disposable_blocked">使い捨てメールアドレスは使用できません</string>
+    <string name="email_send_failed">コードの送信に失敗しました</string>
+    <string name="email_enter_code">6桁のコードを入力</string>
+    <string name="email_invalid_code">無効なコード</string>
+    <string name="email_resend_failed">再送信に失敗しました</string>
+    <!-- PIN -->
+    <string name="pin_create_title">PINを作成</string>
+    <string name="pin_confirm_title">PINを確認</string>
+    <string name="pin_enable_biometric_title">生体認証ログインを有効にしますか？</string>
+    <string name="pin_enable_biometric_desc">指紋または顔認証を使ってShyTalkをすばやくロック解除できます。</string>
+    <string name="pin_enable">有効にする</string>
+    <string name="pin_not_now">後で</string>
+    <string name="pin_change_hint">セキュリティ設定で変更または無効にできます</string>
+    <string name="pin_choose_length">PINの桁数を選択</string>
+    <string name="pin_digits">桁</string>
+    <string name="pin_confirm">確認</string>
+    <string name="pin_next">次へ</string>
+    <string name="pin_enter_digits">%1$d桁を入力</string>
+    <string name="pin_device_not_registered">デバイスが登録されていません。再度サインインしてください。</string>
+    <string name="pin_setup_failed">PINの設定に失敗しました</string>
+    <string name="pin_too_short">PINが短すぎます</string>
+    <string name="pin_verify_title">本人確認</string>
+    <string name="pin_verify_subtitle">続行するにはPINを入力してください</string>
+    <string name="pin_verifying">確認中…</string>
+    <string name="pin_wrong_attempts">PINが間違っています。残り%1$d回。</string>
+    <string name="pin_account_locked">アカウントがロックされました</string>
+    <string name="pin_verify_failed">認証に失敗しました</string>
+    <string name="pin_session_expired">セッションが期限切れです。再度サインインしてください。</string>
+    <string name="pin_use_biometric">生体認証を使用</string>
+    <string name="pin_delete">削除</string>
+    <!-- Biometric -->
+    <string name="biometric_unlock_title">ShyTalkのロック解除</string>
+    <string name="biometric_unlock_desc">指紋または顔認証でロック解除</string>
+    <string name="biometric_sign_failed">署名に失敗しました</string>
+    <string name="biometric_verify_failed">生体認証に失敗しました</string>
+    <string name="biometric_start_failed">生体認証を開始できませんでした</string>
+    <!-- Auth loading -->
+    <string name="signing_in_loading">サインイン中…</string>
+    <!-- Time -->
+    <string name="time_just_now">たった今</string>
+    <string name="time_minutes_ago">%1$d分前</string>
+    <string name="time_hours_ago">%1$d時間前</string>
+    <string name="time_days_ago">%1$d日前</string>
+    <string name="time_expired">期限切れ</string>
+    <string name="time_days">%1$d日</string>
+    <string name="time_hours">%1$d時間</string>
+    <string name="time_minutes">%1$d分</string>
+    <string name="time_less_than_minute">1分未満</string>
 </resources>

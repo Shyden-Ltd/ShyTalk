@@ -788,4 +788,81 @@
     <string name="starting_screen_dismiss">继续</string>
     <string name="starting_screen_police_duck_description">警告插图</string>
     <string name="starting_screen_loading">加载中…</string>
+    <!-- Security -->
+    <string name="security_title">安全</string>
+    <string name="security_app_lock">应用锁定</string>
+    <string name="security_app_lock_desc">需要 PIN 或生物识别解锁</string>
+    <string name="security_lock_timeout">锁定超时</string>
+    <string name="security_timeout_1min">1 分钟</string>
+    <string name="security_timeout_5min">5 分钟</string>
+    <string name="security_timeout_15min">15 分钟</string>
+    <string name="security_timeout_30min">30 分钟</string>
+    <string name="security_timeout_never">永不</string>
+    <string name="security_biometric_login">生物识别登录</string>
+    <string name="security_biometric_desc">使用指纹或面容解锁</string>
+    <string name="security_biometric_unavailable">此设备不支持</string>
+    <string name="security_reset_pin">重置 PIN</string>
+    <string name="security_reset_pin_desc">验证身份以设置新 PIN</string>
+    <string name="security_linked_accounts">关联账户</string>
+    <string name="security_linked_accounts_desc">管理登录方式</string>
+    <!-- Email sign-in -->
+    <string name="email_sign_in_title">使用邮箱登录</string>
+    <string name="email_enter_address">输入你的邮箱地址</string>
+    <string name="email_label">邮箱</string>
+    <string name="email_send_code">发送验证码</string>
+    <string name="email_code_sent_to">验证码已发送至</string>
+    <string name="email_code_label">6 位验证码</string>
+    <string name="email_verify">验证</string>
+    <string name="email_resend_in">%1$ds 后重新发送</string>
+    <string name="email_resend_code">重新发送验证码</string>
+    <string name="email_code_expires">验证码将在 10 分钟后过期</string>
+    <string name="email_invalid_address">请输入有效的邮箱地址</string>
+    <string name="email_disposable_blocked">不允许使用一次性邮箱地址</string>
+    <string name="email_send_failed">发送验证码失败</string>
+    <string name="email_enter_code">输入 6 位验证码</string>
+    <string name="email_invalid_code">验证码无效</string>
+    <string name="email_resend_failed">重新发送失败</string>
+    <!-- PIN -->
+    <string name="pin_create_title">创建 PIN</string>
+    <string name="pin_confirm_title">确认 PIN</string>
+    <string name="pin_enable_biometric_title">启用生物识别登录？</string>
+    <string name="pin_enable_biometric_desc">使用指纹或面容快速解锁 ShyTalk。</string>
+    <string name="pin_enable">启用</string>
+    <string name="pin_not_now">暂不</string>
+    <string name="pin_change_hint">你可以在安全设置中更改或关闭此功能</string>
+    <string name="pin_choose_length">选择 PIN 长度</string>
+    <string name="pin_digits">位</string>
+    <string name="pin_confirm">确认</string>
+    <string name="pin_next">下一步</string>
+    <string name="pin_enter_digits">输入 %1$d 位数字</string>
+    <string name="pin_device_not_registered">设备未注册。请重新登录。</string>
+    <string name="pin_setup_failed">PIN 设置失败</string>
+    <string name="pin_too_short">PIN 太短</string>
+    <string name="pin_verify_title">验证身份</string>
+    <string name="pin_verify_subtitle">输入 PIN 以继续</string>
+    <string name="pin_verifying">正在验证…</string>
+    <string name="pin_wrong_attempts">PIN 错误。剩余 %1$d 次尝试。</string>
+    <string name="pin_account_locked">账户已锁定</string>
+    <string name="pin_verify_failed">验证失败</string>
+    <string name="pin_session_expired">会话已过期。请重新登录。</string>
+    <string name="pin_use_biometric">使用生物识别</string>
+    <string name="pin_delete">删除</string>
+    <!-- Biometric -->
+    <string name="biometric_unlock_title">解锁 ShyTalk</string>
+    <string name="biometric_unlock_desc">使用指纹或面容解锁</string>
+    <string name="biometric_sign_failed">签名失败</string>
+    <string name="biometric_verify_failed">生物识别验证失败</string>
+    <string name="biometric_start_failed">无法启动生物识别验证</string>
+    <!-- Auth loading -->
+    <string name="signing_in_loading">正在登录…</string>
+    <!-- Time -->
+    <string name="time_just_now">刚刚</string>
+    <string name="time_minutes_ago">%1$d 分钟前</string>
+    <string name="time_hours_ago">%1$d 小时前</string>
+    <string name="time_days_ago">%1$d 天前</string>
+    <string name="time_expired">已过期</string>
+    <string name="time_days">%1$d 天</string>
+    <string name="time_hours">%1$d 小时</string>
+    <string name="time_minutes">%1$d 分钟</string>
+    <string name="time_less_than_minute">不到 1 分钟</string>
 </resources>

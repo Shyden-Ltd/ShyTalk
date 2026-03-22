@@ -788,4 +788,81 @@
     <string name="starting_screen_dismiss">Kontynuuj</string>
     <string name="starting_screen_police_duck_description">Ilustracja ostrzeżenia</string>
     <string name="starting_screen_loading">Ładowanie…</string>
+    <!-- Security -->
+    <string name="security_title">Bezpieczeństwo</string>
+    <string name="security_app_lock">Blokada aplikacji</string>
+    <string name="security_app_lock_desc">Wymagaj PIN-u lub biometrii do odblokowania</string>
+    <string name="security_lock_timeout">Limit czasu blokady</string>
+    <string name="security_timeout_1min">1 minuta</string>
+    <string name="security_timeout_5min">5 minut</string>
+    <string name="security_timeout_15min">15 minut</string>
+    <string name="security_timeout_30min">30 minut</string>
+    <string name="security_timeout_never">Nigdy</string>
+    <string name="security_biometric_login">Logowanie biometryczne</string>
+    <string name="security_biometric_desc">Użyj odcisku palca lub twarzy, aby odblokować</string>
+    <string name="security_biometric_unavailable">Niedostępne na tym urządzeniu</string>
+    <string name="security_reset_pin">Resetuj PIN</string>
+    <string name="security_reset_pin_desc">Zweryfikuj swoją tożsamość, aby ustawić nowy PIN</string>
+    <string name="security_linked_accounts">Powiązane konta</string>
+    <string name="security_linked_accounts_desc">Zarządzaj metodami logowania</string>
+    <!-- Email sign-in -->
+    <string name="email_sign_in_title">Zaloguj się przez e-mail</string>
+    <string name="email_enter_address">Wpisz swój adres e-mail</string>
+    <string name="email_label">E-mail</string>
+    <string name="email_send_code">Wyślij kod</string>
+    <string name="email_code_sent_to">Kod wysłany na</string>
+    <string name="email_code_label">6-cyfrowy kod</string>
+    <string name="email_verify">Zweryfikuj</string>
+    <string name="email_resend_in">Wyślij ponownie za %1$ds</string>
+    <string name="email_resend_code">Wyślij ponownie kod</string>
+    <string name="email_code_expires">Kod wygasa za 10 minut</string>
+    <string name="email_invalid_address">Wpisz prawidłowy adres e-mail</string>
+    <string name="email_disposable_blocked">Jednorazowe adresy e-mail nie są dozwolone</string>
+    <string name="email_send_failed">Nie udało się wysłać kodu</string>
+    <string name="email_enter_code">Wpisz 6-cyfrowy kod</string>
+    <string name="email_invalid_code">Nieprawidłowy kod</string>
+    <string name="email_resend_failed">Ponowne wysłanie nie powiodło się</string>
+    <!-- PIN -->
+    <string name="pin_create_title">Utwórz PIN</string>
+    <string name="pin_confirm_title">Potwierdź swój PIN</string>
+    <string name="pin_enable_biometric_title">Włączyć logowanie biometryczne?</string>
+    <string name="pin_enable_biometric_desc">Użyj odcisku palca lub twarzy, aby szybko odblokować ShyTalk.</string>
+    <string name="pin_enable">Włącz</string>
+    <string name="pin_not_now">Nie teraz</string>
+    <string name="pin_change_hint">Możesz to zmienić lub wyłączyć w ustawieniach Bezpieczeństwa</string>
+    <string name="pin_choose_length">Wybierz długość PIN-u</string>
+    <string name="pin_digits">cyfry</string>
+    <string name="pin_confirm">Potwierdź</string>
+    <string name="pin_next">Dalej</string>
+    <string name="pin_enter_digits">Wpisz %1$d cyfr</string>
+    <string name="pin_device_not_registered">Urządzenie niezarejestrowane. Zaloguj się ponownie.</string>
+    <string name="pin_setup_failed">Nie udało się ustawić PIN-u</string>
+    <string name="pin_too_short">PIN za krótki</string>
+    <string name="pin_verify_title">Zweryfikuj swoją tożsamość</string>
+    <string name="pin_verify_subtitle">Wpisz swój PIN, aby kontynuować</string>
+    <string name="pin_verifying">Weryfikacja…</string>
+    <string name="pin_wrong_attempts">Błędny PIN. Pozostało %1$d prób.</string>
+    <string name="pin_account_locked">Konto zablokowane</string>
+    <string name="pin_verify_failed">Weryfikacja nie powiodła się</string>
+    <string name="pin_session_expired">Sesja wygasła. Zaloguj się ponownie.</string>
+    <string name="pin_use_biometric">Użyj biometrii</string>
+    <string name="pin_delete">Usuń</string>
+    <!-- Biometric -->
+    <string name="biometric_unlock_title">Odblokuj ShyTalk</string>
+    <string name="biometric_unlock_desc">Użyj odcisku palca lub twarzy, aby odblokować</string>
+    <string name="biometric_sign_failed">Podpisywanie nie powiodło się</string>
+    <string name="biometric_verify_failed">Weryfikacja biometryczna nie powiodła się</string>
+    <string name="biometric_start_failed">Nie można rozpocząć weryfikacji biometrycznej</string>
+    <!-- Auth loading -->
+    <string name="signing_in_loading">Logowanie…</string>
+    <!-- Time -->
+    <string name="time_just_now">właśnie teraz</string>
+    <string name="time_minutes_ago">%1$d min temu</string>
+    <string name="time_hours_ago">%1$d godz. temu</string>
+    <string name="time_days_ago">%1$d dni temu</string>
+    <string name="time_expired">Wygasło</string>
+    <string name="time_days">%1$d dni</string>
+    <string name="time_hours">%1$d godzin</string>
+    <string name="time_minutes">%1$d minut</string>
+    <string name="time_less_than_minute">Mniej niż 1 minuta</string>
 </resources>

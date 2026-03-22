@@ -788,4 +788,81 @@
     <string name="starting_screen_dismiss">Fortsätt</string>
     <string name="starting_screen_police_duck_description">Varningsbild</string>
     <string name="starting_screen_loading">Laddar…</string>
+    <!-- Security -->
+    <string name="security_title">Säkerhet</string>
+    <string name="security_app_lock">Applås</string>
+    <string name="security_app_lock_desc">Kräver PIN eller biometri för att låsa upp</string>
+    <string name="security_lock_timeout">Låstimeout</string>
+    <string name="security_timeout_1min">1 minut</string>
+    <string name="security_timeout_5min">5 minuter</string>
+    <string name="security_timeout_15min">15 minuter</string>
+    <string name="security_timeout_30min">30 minuter</string>
+    <string name="security_timeout_never">Aldrig</string>
+    <string name="security_biometric_login">Biometrisk inloggning</string>
+    <string name="security_biometric_desc">Använd fingeravtryck eller ansikte för att låsa upp</string>
+    <string name="security_biometric_unavailable">Inte tillgänglig på denna enhet</string>
+    <string name="security_reset_pin">Återställ PIN</string>
+    <string name="security_reset_pin_desc">Verifiera din identitet för att ange en ny PIN</string>
+    <string name="security_linked_accounts">Länkade konton</string>
+    <string name="security_linked_accounts_desc">Hantera inloggningsmetoder</string>
+    <!-- Email sign-in -->
+    <string name="email_sign_in_title">Logga in med e-post</string>
+    <string name="email_enter_address">Ange din e-postadress</string>
+    <string name="email_label">E-post</string>
+    <string name="email_send_code">Skicka kod</string>
+    <string name="email_code_sent_to">Kod skickad till</string>
+    <string name="email_code_label">6-siffrig kod</string>
+    <string name="email_verify">Verifiera</string>
+    <string name="email_resend_in">Skicka igen om %1$ds</string>
+    <string name="email_resend_code">Skicka koden igen</string>
+    <string name="email_code_expires">Koden går ut om 10 minuter</string>
+    <string name="email_invalid_address">Ange en giltig e-postadress</string>
+    <string name="email_disposable_blocked">Engångs-e-postadresser är inte tillåtna</string>
+    <string name="email_send_failed">Det gick inte att skicka koden</string>
+    <string name="email_enter_code">Ange den 6-siffriga koden</string>
+    <string name="email_invalid_code">Ogiltig kod</string>
+    <string name="email_resend_failed">Det gick inte att skicka igen</string>
+    <!-- PIN -->
+    <string name="pin_create_title">Skapa en PIN</string>
+    <string name="pin_confirm_title">Bekräfta din PIN</string>
+    <string name="pin_enable_biometric_title">Aktivera biometrisk inloggning?</string>
+    <string name="pin_enable_biometric_desc">Använd ditt fingeravtryck eller ansikte för att snabbt låsa upp ShyTalk.</string>
+    <string name="pin_enable">Aktivera</string>
+    <string name="pin_not_now">Inte nu</string>
+    <string name="pin_change_hint">Du kan ändra eller inaktivera detta i Säkerhetsinställningar</string>
+    <string name="pin_choose_length">Välj PIN-längd</string>
+    <string name="pin_digits">siffror</string>
+    <string name="pin_confirm">Bekräfta</string>
+    <string name="pin_next">Nästa</string>
+    <string name="pin_enter_digits">Ange %1$d siffror</string>
+    <string name="pin_device_not_registered">Enheten är inte registrerad. Logga in igen.</string>
+    <string name="pin_setup_failed">Det gick inte att ställa in PIN</string>
+    <string name="pin_too_short">PIN för kort</string>
+    <string name="pin_verify_title">Verifiera din identitet</string>
+    <string name="pin_verify_subtitle">Ange din PIN för att fortsätta</string>
+    <string name="pin_verifying">Verifierar…</string>
+    <string name="pin_wrong_attempts">Fel PIN. %1$d försök kvar.</string>
+    <string name="pin_account_locked">Kontot är låst</string>
+    <string name="pin_verify_failed">Verifiering misslyckades</string>
+    <string name="pin_session_expired">Sessionen har gått ut. Logga in igen.</string>
+    <string name="pin_use_biometric">Använd biometri</string>
+    <string name="pin_delete">Radera</string>
+    <!-- Biometric -->
+    <string name="biometric_unlock_title">Lås upp ShyTalk</string>
+    <string name="biometric_unlock_desc">Använd ditt fingeravtryck eller ansikte för att låsa upp</string>
+    <string name="biometric_sign_failed">Signering misslyckades</string>
+    <string name="biometric_verify_failed">Biometrisk verifiering misslyckades</string>
+    <string name="biometric_start_failed">Det gick inte att starta biometrisk verifiering</string>
+    <!-- Auth loading -->
+    <string name="signing_in_loading">Loggar in…</string>
+    <!-- Time -->
+    <string name="time_just_now">just nu</string>
+    <string name="time_minutes_ago">%1$d min sedan</string>
+    <string name="time_hours_ago">%1$d tim sedan</string>
+    <string name="time_days_ago">%1$d dagar sedan</string>
+    <string name="time_expired">Utgånget</string>
+    <string name="time_days">%1$d dagar</string>
+    <string name="time_hours">%1$d timmar</string>
+    <string name="time_minutes">%1$d minuter</string>
+    <string name="time_less_than_minute">Mindre än 1 minut</string>
 </resources>
