@@ -314,7 +314,7 @@ private fun MembersTab(
         ) {
             items(participants, key = { it.uid }) { user ->
                 val role = conversation?.roleOf(user.uid) ?: GroupRole.MEMBER
-                val isMuted = groupMutes.any { it.odId == user.uid && it.isActive }
+                val isMuted = groupMutes.any { it.mutedUserId == user.uid && it.isActive }
 
                 Row(
                     modifier =

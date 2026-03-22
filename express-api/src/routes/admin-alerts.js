@@ -75,7 +75,7 @@ router.patch('/admin/alerts/:alertId', async (req, res) => {
 
     await ref.update(update);
 
-    res.json({ ok: true, alertId, ...update });
+    res.json({ success: true, alertId, ...update });
   } catch (err) {
     log.error('admin-alerts', 'Error updating alert', {
       alertId: req.params.alertId,
@@ -125,7 +125,7 @@ router.patch('/admin/alert-config', async (req, res) => {
     const snap = await db.collection('alertConfig').doc('settings').get();
     const config = { ...DEFAULT_ALERT_CONFIG, ...snap.data() };
 
-    res.json({ ok: true, config });
+    res.json({ success: true, config });
   } catch (err) {
     log.error('admin-alerts', 'Error updating alert config', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });

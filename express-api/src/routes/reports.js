@@ -228,7 +228,6 @@ router.get('/reports', async (req, res) => {
         const key = r.reportedUserId;
         if (!grouped[key]) {
           grouped[key] = {
-            uid: key,
             reportedUserId: key,
             displayName: r.reportedUser?.displayName ?? r.reportedUser?.display_name ?? null,
             profilePhotoUrl:

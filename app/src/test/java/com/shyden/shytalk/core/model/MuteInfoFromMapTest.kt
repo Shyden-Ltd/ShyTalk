@@ -10,7 +10,7 @@ class MuteInfoFromMapTest {
     @Test
     fun `default values`() {
         val mute = MuteInfo()
-        assertEquals("", mute.odId)
+        assertEquals("", mute.mutedUserId)
         assertEquals("", mute.mutedBy)
         assertEquals("", mute.mutedByName)
         assertNull(mute.reason)
@@ -31,7 +31,7 @@ class MuteInfoFromMapTest {
         )
         val mute = MuteInfo.fromMap(map, "user-42")
 
-        assertEquals("user-42", mute.odId)
+        assertEquals("user-42", mute.mutedUserId)
         assertEquals("admin-1", mute.mutedBy)
         assertEquals("Admin Alice", mute.mutedByName)
         assertEquals("Spamming", mute.reason)
@@ -44,7 +44,7 @@ class MuteInfoFromMapTest {
     fun `fromMap handles empty map with defaults`() {
         val mute = MuteInfo.fromMap(emptyMap(), "user-1")
 
-        assertEquals("user-1", mute.odId)
+        assertEquals("user-1", mute.mutedUserId)
         assertEquals("", mute.mutedBy)
         assertEquals("", mute.mutedByName)
         assertNull(mute.reason)
@@ -99,17 +99,17 @@ class MuteInfoFromMapTest {
     }
 
     @Test
-    fun `toMap does not include odId`() {
-        val mute = MuteInfo(odId = "user-42", mutedBy = "admin-1")
+    fun `toMap does not include mutedUserId`() {
+        val mute = MuteInfo(mutedUserId = "user-42", mutedBy = "admin-1")
         val map = mute.toMap()
-        assertNull(map["odId"])
+        assertNull(map["mutedUserId"])
         assertEquals("admin-1", map["mutedBy"])
     }
 
     @Test
-    fun `toMap includes all non-odId fields`() {
+    fun `toMap includes all non-mutedUserId fields`() {
         val mute = MuteInfo(
-            odId = "user-42",
+            mutedUserId = "user-42",
             mutedBy = "admin-1",
             mutedByName = "Admin",
             reason = "Spam",
@@ -127,9 +127,9 @@ class MuteInfoFromMapTest {
     }
 
     @Test
-    fun `fromMap of toMap round-trip preserves data except odId`() {
+    fun `fromMap of toMap round-trip preserves data except mutedUserId`() {
         val original = MuteInfo(
-            odId = "user-42",
+            mutedUserId = "user-42",
             mutedBy = "admin-1",
             mutedByName = "Admin Alice",
             reason = "Spam",
@@ -144,7 +144,7 @@ class MuteInfoFromMapTest {
     @Test
     fun `fromMap of toMap round-trip with null reason and expiresAt`() {
         val original = MuteInfo(
-            odId = "user-1",
+            mutedUserId = "user-1",
             mutedBy = "mod-1",
             mutedByName = "Mod",
             reason = null,

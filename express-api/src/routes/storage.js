@@ -111,7 +111,7 @@ router.delete('/storage/delete', async (req, res) => {
 
     await r2.deleteObject(key);
     log.info('storage', 'File deleted', { key, uniqueId });
-    res.json({ ok: true });
+    res.json({ success: true });
   } catch (err) {
     log.error('storage', 'Delete failed', {
       uniqueId: req.auth?.uniqueId,

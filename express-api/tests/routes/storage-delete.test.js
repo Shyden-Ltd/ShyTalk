@@ -85,7 +85,7 @@ describe('DELETE /api/storage/delete', () => {
     const res = await request(app).delete('/api/storage/delete').query({ key });
 
     expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
+    expect(res.body.success).toBe(true);
     expect(mockDeleteObject).toHaveBeenCalledWith(key);
   });
 });

@@ -179,10 +179,10 @@ router.post('/auth/otp/verify', sensitiveLimiter, async (req, res) => {
       const userRecord = await auth.getUserByEmail(emailLower);
       // Prevent OTP bypass for Google/Apple accounts — they must use their provider
       const providers = (userRecord.providerData || []).map((p) => p.providerId);
-      const hasPasswordOrEmail = providers.includes('password') || providers.length === 0;
-      const isOtpOnlyOrNew = hasPasswordOrEmail || providers.includes('email');
+      const isNonSocialAccount = providers.includes('password') || providers.length === 0;
+      const canSignInWithOtp = isNonSocialAccount || providers.includes('email');
       if (
-        !isOtpOnlyOrNew &&
+        !canSignInWithOtp &&
         (providers.includes('google.com') || providers.includes('apple.com'))
       ) {
         return res.status(403).json({

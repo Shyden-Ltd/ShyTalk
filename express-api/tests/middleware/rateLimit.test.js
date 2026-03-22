@@ -32,7 +32,7 @@ function createGeneralApp() {
   const { generalLimiter } = freshLimiters();
   const app = express();
   app.use(generalLimiter);
-  app.get('/test', (req, res) => res.json({ ok: true }));
+  app.get('/test', (req, res) => res.json({ success: true }));
   return app;
 }
 
@@ -40,7 +40,7 @@ function createWriteApp() {
   const { writeLimiter } = freshLimiters();
   const app = express();
   app.use(writeLimiter);
-  app.post('/message', (req, res) => res.json({ ok: true }));
+  app.post('/message', (req, res) => res.json({ success: true }));
   return app;
 }
 
@@ -48,7 +48,7 @@ function createSensitiveApp() {
   const { sensitiveLimiter } = freshLimiters();
   const app = express();
   app.use(sensitiveLimiter);
-  app.post('/report', (req, res) => res.json({ ok: true }));
+  app.post('/report', (req, res) => res.json({ success: true }));
   return app;
 }
 
@@ -58,7 +58,7 @@ describe('generalLimiter', () => {
   test('allows requests under the limit', async () => {
     const app = createGeneralApp();
     const res = await request(app).get('/test').expect(200);
-    expect(res.body.ok).toBe(true);
+    expect(res.body.success).toBe(true);
   });
 
   test('returns draft-7 rate limit headers', async () => {
@@ -101,7 +101,7 @@ describe('writeLimiter', () => {
   test('allows requests under the limit', async () => {
     const app = createWriteApp();
     const res = await request(app).post('/message').expect(200);
-    expect(res.body.ok).toBe(true);
+    expect(res.body.success).toBe(true);
   });
 
   test('returns 429 when write limit (30) is exceeded', async () => {
@@ -128,7 +128,7 @@ describe('sensitiveLimiter', () => {
   test('allows requests under the limit', async () => {
     const app = createSensitiveApp();
     const res = await request(app).post('/report').expect(200);
-    expect(res.body.ok).toBe(true);
+    expect(res.body.success).toBe(true);
   });
 
   test('returns 429 when sensitive limit (5) is exceeded', async () => {
@@ -180,7 +180,7 @@ describe('keyGenerator', () => {
       next();
     });
     app.use(sensitiveLimiter);
-    app.post('/report', (req, res) => res.json({ ok: true }));
+    app.post('/report', (req, res) => res.json({ success: true }));
 
     // Exhaust the limit for user-123
     for (let i = 0; i < 5; i++) {
@@ -197,11 +197,11 @@ describe('keyGenerator', () => {
       next();
     });
     app2.use(sensitiveLimiter);
-    app2.post('/report', (req, res) => res.json({ ok: true }));
+    app2.post('/report', (req, res) => res.json({ success: true }));
 
     // user-456 is a different key in the same store, so it should be allowed
     const res = await request(app2).post('/report').expect(200);
-    expect(res.body.ok).toBe(true);
+    expect(res.body.success).toBe(true);
   });
 
   test('falls back to IP when no auth uid', async () => {
@@ -210,7 +210,7 @@ describe('keyGenerator', () => {
     const app = express();
     // No auth middleware — req.auth is undefined, so keyGenerator uses req.ip
     app.use(sensitiveLimiter);
-    app.post('/report', (req, res) => res.json({ ok: true }));
+    app.post('/report', (req, res) => res.json({ success: true }));
 
     // Exhaust limit — all requests from same IP
     for (let i = 0; i < 5; i++) {

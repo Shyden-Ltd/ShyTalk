@@ -49,10 +49,10 @@ function createApp() {
   router.use(authMiddleware);
 
   // Dummy routes for testing
-  router.get('/users/:uniqueId', (req, res) => res.json({ ok: true }));
-  router.post('/users/:uniqueId/appeal', (req, res) => res.json({ ok: true }));
-  router.post('/users/:uniqueId/lift-suspension', (req, res) => res.json({ ok: true }));
-  router.post('/users/:uniqueId/follow', (req, res) => res.json({ ok: true }));
+  router.get('/users/:uniqueId', (req, res) => res.json({ success: true }));
+  router.post('/users/:uniqueId/appeal', (req, res) => res.json({ success: true }));
+  router.post('/users/:uniqueId/lift-suspension', (req, res) => res.json({ success: true }));
+  router.post('/users/:uniqueId/follow', (req, res) => res.json({ success: true }));
 
   app.use('/api', router);
   return app;
@@ -112,7 +112,7 @@ describe('authMiddleware', () => {
       .set('Authorization', 'Bearer valid-token')
       .expect(200);
 
-    expect(res.body.ok).toBe(true);
+    expect(res.body.success).toBe(true);
   });
 
   test('returns 403 for suspended user on normal routes', async () => {
@@ -138,7 +138,7 @@ describe('suspension exemption paths', () => {
       .send({ appealText: 'Please unban me' })
       .expect(200);
 
-    expect(res.body.ok).toBe(true);
+    expect(res.body.success).toBe(true);
   });
 
   test('allows suspended user to POST /users/:uniqueId/lift-suspension', async () => {
@@ -150,7 +150,7 @@ describe('suspension exemption paths', () => {
       .set('Authorization', 'Bearer valid-token')
       .expect(200);
 
-    expect(res.body.ok).toBe(true);
+    expect(res.body.success).toBe(true);
   });
 
   test('blocks suspended user from GET /users/:uniqueId', async () => {

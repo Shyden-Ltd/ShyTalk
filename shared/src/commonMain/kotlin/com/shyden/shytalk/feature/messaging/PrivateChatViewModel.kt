@@ -1167,7 +1167,7 @@ class PrivateChatViewModel(
         viewModelScope.launch {
             when (val result = pmRepository.getGroupMutes(conversationId)) {
                 is Resource.Success -> {
-                    val myMute = result.data.find { it.odId == currentUserId && it.isActive }
+                    val myMute = result.data.find { it.mutedUserId == currentUserId && it.isActive }
                     if (myMute != null) {
                         // Check if expired
                         val now = currentTimeMillis()

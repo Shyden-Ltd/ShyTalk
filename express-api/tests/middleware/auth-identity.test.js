@@ -61,14 +61,14 @@ function createApp() {
   router.use(authMiddleware);
 
   // Dummy routes for testing — capture req.auth
-  router.get('/users/:uniqueId', (req, res) => res.json({ ok: true, auth: req.auth }));
-  router.post('/users', (req, res) => res.json({ ok: true, auth: req.auth }));
-  router.post('/users/sign-in', (req, res) => res.json({ ok: true, auth: req.auth }));
-  router.post('/users/:uniqueId/appeal', (req, res) => res.json({ ok: true, auth: req.auth }));
+  router.get('/users/:uniqueId', (req, res) => res.json({ success: true, auth: req.auth }));
+  router.post('/users', (req, res) => res.json({ success: true, auth: req.auth }));
+  router.post('/users/sign-in', (req, res) => res.json({ success: true, auth: req.auth }));
+  router.post('/users/:uniqueId/appeal', (req, res) => res.json({ success: true, auth: req.auth }));
   router.post('/users/:uniqueId/lift-suspension', (req, res) =>
-    res.json({ ok: true, auth: req.auth }),
+    res.json({ success: true, auth: req.auth }),
   );
-  router.post('/users/:uniqueId/follow', (req, res) => res.json({ ok: true, auth: req.auth }));
+  router.post('/users/:uniqueId/follow', (req, res) => res.json({ success: true, auth: req.auth }));
 
   app.use('/api', router);
   return app;
@@ -140,7 +140,7 @@ describe('authMiddleware — uniqueId resolution', () => {
       .send({ provider: 'google', identifier: 'x@gmail.com' })
       .expect(200);
 
-    expect(res.body.ok).toBe(true);
+    expect(res.body.success).toBe(true);
   });
 
   test('allows POST /users/sign-in through without uniqueId (cross-project)', async () => {
@@ -154,7 +154,7 @@ describe('authMiddleware — uniqueId resolution', () => {
       .send({ provider: 'google', identifier: 'x@gmail.com' })
       .expect(200);
 
-    expect(res.body.ok).toBe(true);
+    expect(res.body.success).toBe(true);
   });
 
   test('checks suspension using uniqueId-based user doc path', async () => {
@@ -220,7 +220,7 @@ describe('authMiddleware — uniqueId resolution', () => {
       .send({ appealText: 'Please reconsider' })
       .expect(200);
 
-    expect(res.body.ok).toBe(true);
+    expect(res.body.success).toBe(true);
   });
 
   test('caches uid → uniqueId resolution (second request skips Firestore query)', async () => {

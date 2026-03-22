@@ -57,7 +57,7 @@ async function getFirebaseAuthInfo(uid) {
 /**
  * Normalize snake_case fields and compute GCS display score.
  */
-function enrichUser(user) {
+function normalizeUser(user) {
   user.displayName = user.displayName ?? user.display_name ?? null;
   user.profilePhotoUrl = user.profilePhotoUrl ?? user.profile_photo_url ?? null;
   user.coverPhotoUrl = user.coverPhotoUrl ?? user.cover_photo_url ?? null;
@@ -122,7 +122,7 @@ router.get('/user/:uniqueId', async (req, res) => {
 
     const snap = await db.doc(`users/${req.params.uniqueId}`).get();
     if (!snap.exists) return res.status(404).json({ error: 'User not found' });
-    const user = enrichUser({ id: snap.id, ...snap.data() });
+    const user = normalizeUser({ id: snap.id, ...snap.data() });
     await backfillAuthInfo(user, req.params.uniqueId, user.uid || snap.id);
 
     res.json(user);
@@ -309,7 +309,7 @@ router.post('/user/:uniqueId/notify-changes', async (req, res) => {
     ]);
     const relevant = fields.filter((f) => NOTIFIABLE.has(f));
     if (relevant.length === 0) {
-      return res.json({ ok: true, notified: false, reason: 'No notifiable fields' });
+      return res.json({ success: true, notified: false, reason: 'No notifiable fields' });
     }
 
     const friendlyNames = {
@@ -331,7 +331,7 @@ router.post('/user/:uniqueId/notify-changes', async (req, res) => {
       fields: relevant,
     });
 
-    res.json({ ok: true, notified: true, fields: relevant });
+    res.json({ success: true, notified: true, fields: relevant });
   } catch (err) {
     log.error('admin-users', 'notify-changes failed', {
       uniqueId: req.params.uniqueId,
@@ -671,13 +671,13 @@ router.get('/search/uniqueId/:id', async (req, res) => {
         .get();
       if (tempSnap.empty) return res.status(404).json({ error: 'User not found' });
       const doc = tempSnap.docs[0];
-      const user = enrichUser({ id: doc.id, ...doc.data() });
+      const user = normalizeUser({ id: doc.id, ...doc.data() });
       await backfillAuthInfo(user, doc.id, user.uid || doc.id);
       return res.json(user);
     }
 
     const doc = snapshot.docs[0];
-    const user = enrichUser({ id: doc.id, ...doc.data() });
+    const user = normalizeUser({ id: doc.id, ...doc.data() });
     await backfillAuthInfo(user, doc.id, user.uid || doc.id);
 
     res.json(user);

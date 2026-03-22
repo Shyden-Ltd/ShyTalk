@@ -141,7 +141,7 @@ describe('PATCH /api/admin/alerts/:alertId', () => {
       .send({ status: 'acknowledged' });
 
     expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
+    expect(res.body.success).toBe(true);
     expect(res.body.status).toBe('acknowledged');
     expect(res.body.acknowledgedBy).toBe('admin1');
     expect(mockUpdate).toHaveBeenCalledWith(
@@ -162,7 +162,7 @@ describe('PATCH /api/admin/alerts/:alertId', () => {
     const res = await request(app).patch('/api/admin/alerts/alert1').send({ status: 'resolved' });
 
     expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
+    expect(res.body.success).toBe(true);
     expect(res.body.status).toBe('resolved');
     expect(res.body.resolvedBy).toBe('admin1');
     expect(res.body.resolvedAt).toBeDefined();
@@ -211,7 +211,7 @@ describe('PATCH /api/admin/alert-config', () => {
       .send({ errorSpikeThreshold: 20 });
 
     expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
+    expect(res.body.success).toBe(true);
     expect(mockSet).toHaveBeenCalled();
   });
 

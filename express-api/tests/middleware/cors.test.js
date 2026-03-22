@@ -35,7 +35,7 @@ function createApp(envOrigins) {
 
   const app = express();
   app.use(corsMiddleware);
-  app.get('/test', (req, res) => res.json({ ok: true }));
+  app.get('/test', (req, res) => res.json({ success: true }));
   return app;
 }
 
@@ -43,7 +43,7 @@ describe('CORS middleware', () => {
   test('allows requests with no Origin header (mobile apps, curl)', async () => {
     const app = createApp();
     const res = await request(app).get('/test').expect(200);
-    expect(res.body.ok).toBe(true);
+    expect(res.body.success).toBe(true);
   });
 
   test('allows default origin https://shytalk.shyden.co.uk', async () => {
@@ -54,7 +54,7 @@ describe('CORS middleware', () => {
       .expect(200);
 
     expect(res.headers['access-control-allow-origin']).toBe('https://shytalk.shyden.co.uk');
-    expect(res.body.ok).toBe(true);
+    expect(res.body.success).toBe(true);
   });
 
   test('allows default origin https://api.shytalk.shyden.co.uk', async () => {

@@ -4,7 +4,7 @@ import com.shyden.shytalk.core.util.asBool
 import com.shyden.shytalk.core.util.timestampToMillis
 
 data class MuteInfo(
-    val odId: String = "",
+    val mutedUserId: String = "",
     val mutedBy: String = "",
     val mutedByName: String = "",
     val reason: String? = null,
@@ -25,10 +25,10 @@ data class MuteInfo(
     companion object {
         fun fromMap(
             map: Map<String, Any?>,
-            odId: String,
+            mutedUserId: String,
         ): MuteInfo =
             MuteInfo(
-                odId = odId,
+                mutedUserId = mutedUserId,
                 mutedBy = map["mutedBy"] as? String ?: "",
                 mutedByName = map["mutedByName"] as? String ?: "",
                 reason = map["reason"] as? String,
