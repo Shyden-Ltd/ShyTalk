@@ -66,6 +66,7 @@ jest.mock('../../src/utils/r2', () => ({
   listObjectsWithMetadata: (...args) => mockListObjectsWithMetadata(...args),
   deleteObjects: (...args) => mockDeleteObjects(...args),
   deleteObject: (...args) => mockDeleteObject(...args),
+  CDN_URL: 'https://images.shytalk.shyden.co.uk',
 }));
 
 // ─── Firestore helpers mock ───────────────────────────────────────

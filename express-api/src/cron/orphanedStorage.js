@@ -9,7 +9,7 @@ const { db } = require('../utils/firebase');
 const r2 = require('../utils/r2');
 const log = require('../utils/log');
 
-const CDN_PREFIX = 'https://images.shytalk.shyden.co.uk/';
+const CDN_PREFIX = r2.CDN_URL + '/';
 
 function extractKey(url) {
   if (!url || !url.startsWith(CDN_PREFIX)) return null;

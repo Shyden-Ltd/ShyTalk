@@ -126,13 +126,9 @@ router.get('/config/startingScreens', async (req, res) => {
       };
     }
 
-    log.info('config', 'Starting screens fetched', {
-      screenCount: Object.keys(result).length,
-      deviceId: deviceId ? '(present)' : '(absent)',
-      allowlistOverride: hasAllowlistOverride,
-    });
-
     res.set('X-Content-Type-Options', 'nosniff');
+
+    res.set('Cache-Control', 'public, max-age=60');
 
     if (!hasAllowlistOverride) {
       const etag =

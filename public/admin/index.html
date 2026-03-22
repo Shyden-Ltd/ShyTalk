@@ -5687,7 +5687,9 @@
             '<button type="button" class="permanent-delete-btn" style="padding:6px 16px;background:var(--danger,#e74c3c);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">Permanently Delete</button>' +
           '</div>' +
         '</div>';
-      card.querySelector(".restore-screen-btn").addEventListener("click", async function() {
+      var restoreBtn = card.querySelector(".restore-screen-btn");
+      restoreBtn.addEventListener("click", async function() {
+        restoreBtn.disabled = true;
         try {
           await apiCall("POST", "/api/config/startingScreens/" + encodeURIComponent(screenId) + "/restore");
           showToast("Screen restored");
@@ -5695,9 +5697,12 @@
         } catch (err) {
           showToast("Failed to restore: " + err.message, "error");
         }
+        restoreBtn.disabled = false;
       });
-      card.querySelector(".permanent-delete-btn").addEventListener("click", async function() {
+      var permDeleteBtn = card.querySelector(".permanent-delete-btn");
+      permDeleteBtn.addEventListener("click", async function() {
         if (!confirm("Permanently delete screen \"" + screenId + "\"? This cannot be undone.")) return;
+        permDeleteBtn.disabled = true;
         try {
           await apiCall("DELETE", "/api/config/startingScreens/" + encodeURIComponent(screenId) + "?permanent=true");
           showToast("Screen permanently deleted");
@@ -5705,6 +5710,7 @@
         } catch (err) {
           showToast("Failed to permanently delete: " + err.message, "error");
         }
+        permDeleteBtn.disabled = false;
       });
       return card;
     }
@@ -5774,6 +5780,8 @@
       const body = {};
       body[screenId] = screenData;
 
+      const saveBtn = card.querySelector(".save-screen-btn");
+      if (saveBtn) saveBtn.disabled = true;
       try {
         await apiCall("PUT", "/api/config/startingScreens", body);
         showToast("Screen saved");
@@ -5782,6 +5790,7 @@
       } catch (err) {
         showToast(err.message || "Failed to save", "error");
       }
+      if (saveBtn) saveBtn.disabled = false;
     }
 
     function addScreen() {
@@ -5806,6 +5815,9 @@
     async function deleteScreen(screenId) {
       if (!confirm("Delete screen \"" + screenId + "\"? It will be moved to Deleted Screens.")) return;
 
+      const card = document.querySelector('[data-screen-id="' + screenId + '"]');
+      const deleteBtn = card ? card.querySelector(".delete-screen-btn") : null;
+      if (deleteBtn) deleteBtn.disabled = true;
       try {
         await apiCall("DELETE", "/api/config/startingScreens/" + encodeURIComponent(screenId));
         showToast("Screen moved to deleted");
@@ -5814,6 +5826,7 @@
       } catch (err) {
         showToast("Failed to delete screen: " + err.message, "error");
       }
+      if (deleteBtn) deleteBtn.disabled = false;
     }
 
     // Wire up add screen button

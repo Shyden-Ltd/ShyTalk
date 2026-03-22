@@ -6,6 +6,7 @@ const mockDeleteObjects = jest.fn().mockResolvedValue();
 jest.mock('../../src/utils/r2', () => ({
   listObjects: (...args) => mockListObjects(...args),
   deleteObjects: (...args) => mockDeleteObjects(...args),
+  CDN_URL: 'https://images.shytalk.shyden.co.uk',
 }));
 
 // ─── Firebase mock ───────────────────────────────────────────────

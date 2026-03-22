@@ -1,4 +1,6 @@
-const LOGO_URL = 'https://images.shytalk.shyden.co.uk/branding/logo.png';
+const CDN_URL = process.env.CDN_URL || 'https://images.shytalk.shyden.co.uk';
+
+const LOGO_URL = `${CDN_URL}/branding/logo.png`;
 
 function wrapTemplate(bodyHtml) {
   return `<!DOCTYPE html>

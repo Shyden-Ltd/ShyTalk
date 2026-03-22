@@ -416,7 +416,11 @@ router.post('/users/:uniqueId/link-provider', async (req, res) => {
 
         await db.doc(`users/${uniqueId}`).update({ providers });
 
-        log.info('users', 'Provider re-linked', { uniqueId, provider, identifier });
+        log.info('users', 'Provider re-linked', {
+          uniqueId,
+          provider,
+          identifier: identifier.includes('@') ? `***@${identifier.split('@')[1]}` : '***',
+        });
         return res.json({ success: true, relinked: true });
       }
       // Already active — no-op
@@ -450,7 +454,11 @@ router.post('/users/:uniqueId/link-provider', async (req, res) => {
     ];
     await db.doc(`users/${uniqueId}`).update({ providers });
 
-    log.info('users', 'Provider linked', { uniqueId, provider, identifier });
+    log.info('users', 'Provider linked', {
+      uniqueId,
+      provider,
+      identifier: identifier.includes('@') ? `***@${identifier.split('@')[1]}` : '***',
+    });
     res.json({ success: true });
   } catch (err) {
     log.error('users', 'Link provider failed', {
@@ -514,7 +522,11 @@ router.delete('/users/:uniqueId/link-provider', async (req, res) => {
     );
     await db.doc(`users/${uniqueId}`).update({ providers });
 
-    log.info('users', 'Provider unlinked', { uniqueId, provider, identifier });
+    log.info('users', 'Provider unlinked', {
+      uniqueId,
+      provider,
+      identifier: identifier.includes('@') ? `***@${identifier.split('@')[1]}` : '***',
+    });
     res.json({ success: true });
   } catch (err) {
     log.error('users', 'Unlink provider failed', {

@@ -55,6 +55,7 @@ jest.mock('../../src/utils/r2', () => ({
     .fn()
     .mockResolvedValue('https://images.shytalk.shyden.co.uk/banners/banner-id_12345.jpg'),
   deleteObject: jest.fn().mockResolvedValue(),
+  CDN_URL: 'https://images.shytalk.shyden.co.uk',
 }));
 
 // Mock firestore-helpers — queryDocs and getDoc return controllable values

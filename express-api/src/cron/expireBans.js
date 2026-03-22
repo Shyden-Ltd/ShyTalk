@@ -32,7 +32,6 @@ async function expireBans() {
   const allExpired = [...expiredDeviceDocs, ...expiredNetworkDocs];
 
   if (allExpired.length === 0) {
-    log.info('cron', 'expireBans: no expired bans');
     return;
   }
 

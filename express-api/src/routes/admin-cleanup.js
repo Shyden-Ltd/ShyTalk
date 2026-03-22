@@ -566,7 +566,7 @@ router.post('/cleanup/all-private-messages', async (req, res) => {
       });
     }
 
-    const CDN_PREFIX = 'https://images.shytalk.shyden.co.uk/';
+    const CDN_PREFIX = r2.CDN_URL + '/';
     let mediaDeleted = 0;
 
     for (const conv of pms) {
@@ -621,7 +621,7 @@ router.post('/cleanup/all-group-chats', async (req, res) => {
       });
     }
 
-    const CDN_PREFIX = 'https://images.shytalk.shyden.co.uk/';
+    const CDN_PREFIX = r2.CDN_URL + '/';
     let mediaDeleted = 0;
 
     for (const conv of allConvs) {
@@ -917,7 +917,7 @@ router.post('/cleanup/orphaned-storage', async (req, res) => {
 
     log.info('admin-cleanup', 'Running orphaned storage cleanup', { adminId: req.auth.uniqueId });
 
-    const CDN_PREFIX = 'https://images.shytalk.shyden.co.uk/';
+    const CDN_PREFIX = r2.CDN_URL + '/';
     const extractKey = (url) => {
       if (!url || !url.startsWith(CDN_PREFIX)) return null;
       return url.slice(CDN_PREFIX.length);

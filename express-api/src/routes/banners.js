@@ -16,7 +16,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 *
 const { db } = require('../utils/firebase');
 const { generateId, now } = require('../utils/helpers');
 const { requireAdmin } = require('../middleware/auth');
-const { putObject, deleteObject } = require('../utils/r2');
+const { putObject, deleteObject, CDN_URL } = require('../utils/r2');
 const { getDoc, queryDocs } = require('../utils/firestore-helpers');
 const log = require('../utils/log');
 
@@ -194,7 +194,7 @@ router.delete('/admin/banners/:id', async (req, res) => {
     if (!banner) return res.status(404).json({ error: 'Banner not found' });
 
     // Delete R2 object if it's our CDN URL
-    const CDN_PREFIX = 'https://images.shytalk.shyden.co.uk/';
+    const CDN_PREFIX = CDN_URL + '/';
     if (banner.imageUrl && banner.imageUrl.startsWith(CDN_PREFIX)) {
       const key = banner.imageUrl.slice(CDN_PREFIX.length);
       await deleteObject(key);
@@ -233,7 +233,7 @@ router.post('/admin/banners/upload', upload.single('file'), async (req, res) => 
 
     await putObject(key, file.buffer, file.mimetype);
 
-    const imageUrl = `https://images.shytalk.shyden.co.uk/${key}`;
+    const imageUrl = `${CDN_URL}/${key}`;
     res.json({ success: true, image_url: imageUrl, imageUrl, key });
   } catch (err) {
     log.error('banners', 'Failed to upload banner image', { error: err.message });

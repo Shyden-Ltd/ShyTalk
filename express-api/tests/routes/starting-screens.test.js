@@ -2404,7 +2404,7 @@ describe('GET /api/config/startingScreens — logging', () => {
     app = createAppWithAuthExemption();
   });
 
-  test('log.info called with screen count and device ID status', async () => {
+  test('per-request log.info removed — no log.info on GET /config/startingScreens', async () => {
     mockDocGet.mockResolvedValue({
       exists: true,
       data: () => ({
@@ -2415,30 +2415,11 @@ describe('GET /api/config/startingScreens — logging', () => {
 
     await request(app).get('/api/config/startingScreens').set('X-Device-Id', 'dev-test');
 
-    expect(log.info).toHaveBeenCalledWith(
+    // The per-request log.info was removed because the request logger middleware already logs it
+    expect(log.info).not.toHaveBeenCalledWith(
       'config',
       expect.any(String),
-      expect.objectContaining({
-        screenCount: 2,
-        deviceId: '(present)',
-      }),
-    );
-  });
-
-  test('log.info reports deviceId as absent when header missing', async () => {
-    mockDocGet.mockResolvedValue({
-      exists: true,
-      data: () => ({ banner: makeScreen() }),
-    });
-
-    await request(app).get('/api/config/startingScreens');
-
-    expect(log.info).toHaveBeenCalledWith(
-      'config',
-      expect.any(String),
-      expect.objectContaining({
-        deviceId: '(absent)',
-      }),
+      expect.objectContaining({ screenCount: expect.any(Number) }),
     );
   });
 
