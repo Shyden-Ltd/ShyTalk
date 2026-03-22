@@ -11,3 +11,6 @@
 
 # Firestore model classes (deserialized via reflection)
 -keep class com.shyden.shytalk.core.model.** { *; }
+
+# Remote data classes that may be serialized/deserialized
+-keep class com.shyden.shytalk.data.remote.** { *; }

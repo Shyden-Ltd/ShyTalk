@@ -8,6 +8,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -15,6 +16,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.util.SecureScreenEffect
 import com.shyden.shytalk.data.repository.AppLockRepository
@@ -52,7 +56,7 @@ fun PinVerifyDialog(
     val deviceId = appLockRepository.storedDeviceId
     if (uniqueId == null || deviceId == null) {
         // Session corrupt — dismiss dialog and let caller handle
-        onDismiss()
+        LaunchedEffect(Unit) { onDismiss() }
         return
     }
 
@@ -83,6 +87,7 @@ fun PinVerifyDialog(
                         text = error!!,
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                     )
                     Spacer(Modifier.height(8.dp))
                 }

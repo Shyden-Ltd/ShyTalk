@@ -27,6 +27,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.data.repository.AppLockRepository
 import com.shyden.shytalk.resources.*
@@ -91,7 +94,12 @@ fun SecuritySettingsScreen(
                         },
                     )
                 },
-                modifier = Modifier.testTag("appLockToggle"),
+                modifier =
+                    Modifier
+                        .clickable {
+                            appLockEnabled = !appLockEnabled
+                            appLockRepository.setAppLockEnabled(appLockEnabled)
+                        }.testTag("appLockToggle"),
             )
 
             // Lock Timeout (only visible when app lock is on)
@@ -123,6 +131,7 @@ fun SecuritySettingsScreen(
                     modifier =
                         Modifier
                             .clickable { showTimeoutMenu = true }
+                            .semantics { role = Role.Button }
                             .testTag("lockTimeoutSetting"),
                 )
             }
@@ -151,7 +160,12 @@ fun SecuritySettingsScreen(
                         enabled = biometricAvailable,
                     )
                 },
-                modifier = Modifier.testTag("biometricToggle"),
+                modifier =
+                    Modifier
+                        .clickable(enabled = biometricAvailable) {
+                            biometricEnabled = !biometricEnabled
+                            appLockRepository.setBiometricEnabled(biometricEnabled)
+                        }.testTag("biometricToggle"),
             )
 
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))

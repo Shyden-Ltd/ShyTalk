@@ -25,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -59,12 +60,14 @@ fun StartingScreenComposable(
     backgroundImagePath: String? = null,
 ) {
     val context = LocalContext.current
-    val templateColor = when (screen.template) {
-        "warning" -> Color(0xFFE74C3C)
-        "promotional" -> Color(0xFF9B59B6)
-        "announcement" -> Color(0xFF3498DB)
-        "info" -> Color(0xFF2ECC71)
-        else -> Color(0xFF2ECC71) // fallback to info
+    val templateColor = remember(screen.template) {
+        when (screen.template) {
+            "warning" -> Color(0xFFE74C3C)
+            "promotional" -> Color(0xFF9B59B6)
+            "announcement" -> Color(0xFF3498DB)
+            "info" -> Color(0xFF2ECC71)
+            else -> Color(0xFF2ECC71) // fallback to info
+        }
     }
 
     Surface(
@@ -97,11 +100,13 @@ fun StartingScreenComposable(
                 verticalArrangement = Arrangement.Center
             ) {
                 // ShyTalk app icon + logo (always present)
-                val appIcon = try {
-                    val drawable = context.packageManager.getApplicationIcon(context.packageName)
-                    BitmapPainter(drawable.toBitmap(128, 128).asImageBitmap())
-                } catch (_: Exception) {
-                    null
+                val appIcon = remember(context) {
+                    try {
+                        val drawable = context.packageManager.getApplicationIcon(context.packageName)
+                        BitmapPainter(drawable.toBitmap(128, 128).asImageBitmap())
+                    } catch (_: Exception) {
+                        null
+                    }
                 }
 
                 if (appIcon != null) {
