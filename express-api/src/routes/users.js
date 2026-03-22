@@ -54,6 +54,18 @@ router.post('/users', async (req, res) => {
         .json({ error: `Invalid provider. Must be one of: ${VALID_PROVIDERS.join(', ')}` });
     }
 
+    // Server-side age validation — UK OSA + COPPA require minimum age 13
+    if (!dateOfBirth) {
+      return res.status(400).json({ error: 'Date of birth is required' });
+    }
+    const dob = new Date(dateOfBirth);
+    const ageDiff = Date.now() - dob.getTime();
+    const ageDate = new Date(ageDiff);
+    const age = Math.abs(ageDate.getUTCFullYear() - 1970);
+    if (age < 13) {
+      return res.status(403).json({ error: 'Must be at least 13 years old' });
+    }
+
     const identityDocId = `${provider}:${identifier}`;
     const counterRef = db.doc('counters/uniqueId');
     const identityRef = db.doc(`identityMap/${identityDocId}`);
@@ -343,6 +355,11 @@ router.patch('/users/:uniqueId', async (req, res) => {
       if (key in updates && (updates[key] < 0 || updates[key] > 59)) {
         return res.status(400).json({ error: `${key} must be between 0 and 59` });
       }
+    }
+
+    // GDPR consent audit trail — store acceptance timestamp
+    if (updates.acceptedLegalVersion !== undefined) {
+      updates.legalAcceptedAt = Date.now();
     }
 
     log.info('users', 'Updating profile', {

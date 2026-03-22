@@ -92,7 +92,12 @@ describe('POST /api/users', () => {
     const app = createApp('new-user-uid', null);
     const res = await request(app)
       .post('/api/users')
-      .send({ provider: 'google', identifier: 'alice@gmail.com', displayName: 'Alice' })
+      .send({
+        provider: 'google',
+        identifier: 'alice@gmail.com',
+        displayName: 'Alice',
+        dateOfBirth: '2000-01-01',
+      })
       .expect(200);
 
     expect(res.body.success).toBe(true);

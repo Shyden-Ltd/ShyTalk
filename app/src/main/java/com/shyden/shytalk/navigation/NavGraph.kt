@@ -630,7 +630,10 @@ fun NavGraph(
                         val userId = authRepository.currentUserId ?: return@launch
                         val result = legalUserRepository.updateProfile(
                             userId,
-                            mapOf("acceptedLegalVersion" to CURRENT_LEGAL_VERSION)
+                            mapOf(
+                                "acceptedLegalVersion" to CURRENT_LEGAL_VERSION,
+                                "legalAcceptedAt" to System.currentTimeMillis(),
+                            )
                         )
                         if (result is Resource.Success) {
                             LanguagePreference.setAcceptedLegalVersion(CURRENT_LEGAL_VERSION)

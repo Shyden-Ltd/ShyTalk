@@ -634,6 +634,16 @@ router.post('/economy/gift', async (req, res) => {
       return res.status(402).json({ error: 'Insufficient items in backpack' });
     if (!recipient) return res.status(404).json({ error: 'Recipient not found' });
 
+    // Check block relationship — UK OSA requires blocking prevents ALL contact
+    const senderBlocked = (sender?.blockedUserIds || []).map(String);
+    const recipientBlocked = (recipient?.blockedUserIds || []).map(String);
+    if (
+      senderBlocked.includes(String(recipientId)) ||
+      recipientBlocked.includes(String(uniqueId))
+    ) {
+      return res.status(403).json({ error: 'Cannot send gifts to or from blocked users' });
+    }
+
     const config = await loadEconomyConfig();
     const coinValue = gift.coinValue || gift.coin_value || 0;
     const beanReward = Math.floor(coinValue * config.beanConversionRate * quantity);
@@ -770,6 +780,16 @@ router.post('/economy/gift-direct', async (req, res) => {
 
     if (!gift) return res.status(404).json({ error: 'Gift not found' });
     if (!recipient) return res.status(404).json({ error: 'Recipient not found' });
+
+    // Check block relationship — UK OSA requires blocking prevents ALL contact
+    const senderBlocked = (sender?.blockedUserIds || []).map(String);
+    const recipientBlocked = (recipient?.blockedUserIds || []).map(String);
+    if (
+      senderBlocked.includes(String(recipientId)) ||
+      recipientBlocked.includes(String(uniqueId))
+    ) {
+      return res.status(403).json({ error: 'Cannot send gifts to or from blocked users' });
+    }
 
     const coinValue = gift.coinValue || gift.coin_value || 0;
     const totalCost = coinValue * quantity;
@@ -913,6 +933,17 @@ router.post('/economy/gift-batch', async (req, res) => {
     const validRecipients = recipientIds.filter((_, i) => recipientSnaps[i].exists);
     if (validRecipients.length === 0) return res.status(404).json({ error: 'No valid recipients' });
 
+    // Check block relationships — UK OSA requires blocking prevents ALL contact
+    const senderBlocked = (sender?.blockedUserIds || []).map(String);
+    for (let i = 0; i < recipientIds.length; i++) {
+      if (!recipientSnaps[i].exists) continue;
+      const rid = String(recipientIds[i]);
+      const recipientBlocked = (recipientSnaps[i].data()?.blockedUserIds || []).map(String);
+      if (senderBlocked.includes(rid) || recipientBlocked.includes(String(uniqueId))) {
+        return res.status(403).json({ error: 'Cannot send gifts to or from blocked users' });
+      }
+    }
+
     // Atomic debit via transaction
     await db.runTransaction(async (t) => {
       if (fromBackpack) {
@@ -1033,6 +1064,16 @@ router.post('/economy/backpack-send', async (req, res) => {
     const recipient = recipientSnap.exists ? recipientSnap.data() : null;
     if (!sender) return res.status(404).json({ error: 'Sender not found' });
     if (!recipient) return res.status(404).json({ error: 'Recipient not found' });
+
+    // Check block relationship — UK OSA requires blocking prevents ALL contact
+    const senderBlocked = (sender?.blockedUserIds || []).map(String);
+    const recipientBlocked = (recipient?.blockedUserIds || []).map(String);
+    if (
+      senderBlocked.includes(String(recipientId)) ||
+      recipientBlocked.includes(String(uniqueId))
+    ) {
+      return res.status(403).json({ error: 'Cannot send gifts to or from blocked users' });
+    }
 
     // Get backpack items (excluding trial items)
     const backpackSnap = await db.collection(`users/${uniqueId}/backpack`).get();

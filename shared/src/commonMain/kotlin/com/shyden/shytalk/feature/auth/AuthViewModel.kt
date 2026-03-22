@@ -6,6 +6,7 @@ import com.shyden.shytalk.core.util.DisposableEmailDomains
 import com.shyden.shytalk.core.util.LanguagePreference
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.UiText
+import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.core.util.logW
@@ -337,7 +338,10 @@ class AuthViewModel(
                             if (needsLegal && LanguagePreference.getAcceptedLegalVersion() >= CURRENT_LEGAL_VERSION) {
                                 userRepository.updateProfile(
                                     userId,
-                                    mapOf("acceptedLegalVersion" to CURRENT_LEGAL_VERSION),
+                                    mapOf(
+                                        "acceptedLegalVersion" to CURRENT_LEGAL_VERSION,
+                                        "legalAcceptedAt" to currentTimeMillis(),
+                                    ),
                                 )
                                 needsLegal = false
                             }

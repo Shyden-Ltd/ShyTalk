@@ -206,6 +206,7 @@ describe('Flow: Create → Same-provider sign-in', () => {
         provider: 'google',
         identifier: 'alice@gmail.com',
         displayName: 'Alice',
+        dateOfBirth: '2000-01-01',
       })
       .expect(200);
 
@@ -238,6 +239,7 @@ describe('Flow: Create → Link → Sign-in with linked provider', () => {
         provider: 'google',
         identifier: 'bob@gmail.com',
         displayName: 'Bob',
+        dateOfBirth: '2000-01-01',
       })
       .expect(200);
 
@@ -276,6 +278,7 @@ describe('Flow: Create → Link → Unlink → Sign-in with unlinked', () => {
         provider: 'google',
         identifier: 'carol@gmail.com',
         displayName: 'Carol',
+        dateOfBirth: '2000-01-01',
       })
       .expect(200);
 
@@ -315,6 +318,7 @@ describe('Flow: Create → Link → Unlink → Sign-in with unlinked', () => {
         provider: 'google',
         identifier: 'dave@gmail.com',
         displayName: 'Dave',
+        dateOfBirth: '2000-01-01',
       })
       .expect(200);
 
@@ -342,6 +346,7 @@ describe('Flow: Create → Link → Unlink → Sign-in with unlinked', () => {
         provider: 'email',
         identifier: 'shared@work.com',
         displayName: 'Eve',
+        dateOfBirth: '2000-01-01',
       })
       .expect(409);
 
@@ -363,6 +368,7 @@ describe('Flow: Create → Link → Unlink → Re-link → Sign-in', () => {
         provider: 'google',
         identifier: 'frank@gmail.com',
         displayName: 'Frank',
+        dateOfBirth: '2000-01-01',
       })
       .expect(200);
 
@@ -415,6 +421,7 @@ describe('Flow: Cross-project sign-in', () => {
         provider: 'google',
         identifier: 'grace@gmail.com',
         displayName: 'Grace',
+        dateOfBirth: '2000-01-01',
       })
       .expect(200);
 
@@ -455,6 +462,7 @@ describe('Flow: Provider linking limit', () => {
         provider: 'google',
         identifier: 'henry@gmail.com',
         displayName: 'Henry',
+        dateOfBirth: '2000-01-01',
       })
       .expect(200);
 
@@ -494,6 +502,7 @@ describe('Flow: Multiple users — identity isolation', () => {
         provider: 'google',
         identifier: 'user1@gmail.com',
         displayName: 'User One',
+        dateOfBirth: '2000-01-01',
       })
       .expect(200);
 
@@ -505,6 +514,7 @@ describe('Flow: Multiple users — identity isolation', () => {
         provider: 'google',
         identifier: 'user2@gmail.com',
         displayName: 'User Two',
+        dateOfBirth: '2000-01-01',
       })
       .expect(200);
 
@@ -521,6 +531,7 @@ describe('Flow: Multiple users — identity isolation', () => {
         provider: 'google',
         identifier: 'owner@gmail.com',
         displayName: 'Owner',
+        dateOfBirth: '2000-01-01',
       })
       .expect(200);
 
@@ -532,6 +543,7 @@ describe('Flow: Multiple users — identity isolation', () => {
         provider: 'google',
         identifier: 'other@gmail.com',
         displayName: 'Other',
+        dateOfBirth: '2000-01-01',
       })
       .expect(200);
 
@@ -560,6 +572,7 @@ describe('Flow: Unlink guard — at least one active provider', () => {
         provider: 'google',
         identifier: 'iris@gmail.com',
         displayName: 'Iris',
+        dateOfBirth: '2000-01-01',
       })
       .expect(200);
 

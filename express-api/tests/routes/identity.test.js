@@ -141,6 +141,7 @@ describe('POST /api/users (identity-based creation)', () => {
         displayName: 'Alice',
         email: 'alice@gmail.com',
         language: 'en',
+        dateOfBirth: '2000-01-01',
       })
       .expect(200);
 
@@ -208,6 +209,7 @@ describe('POST /api/users (identity-based creation)', () => {
         provider: 'google',
         identifier: 'bob@gmail.com',
         displayName: 'Bob',
+        dateOfBirth: '2000-01-01',
       })
       .expect(200);
 
@@ -255,7 +257,12 @@ describe('POST /api/users (identity-based creation)', () => {
     const app = createApp();
     const res = await request(app)
       .post('/api/users')
-      .send({ provider: 'google', identifier: 'taken@gmail.com', displayName: 'Impersonator' })
+      .send({
+        provider: 'google',
+        identifier: 'taken@gmail.com',
+        displayName: 'Impersonator',
+        dateOfBirth: '2000-01-01',
+      })
       .expect(409);
 
     expect(res.body.error).toMatch(/already/i);
@@ -278,7 +285,7 @@ describe('POST /api/users (identity-based creation)', () => {
     const app = createApp();
     const res = await request(app)
       .post('/api/users')
-      .send({ provider: 'google', identifier: 'deactivated@gmail.com' })
+      .send({ provider: 'google', identifier: 'deactivated@gmail.com', dateOfBirth: '2000-01-01' })
       .expect(409);
 
     expect(res.body.error).toMatch(/deactivated/i);
@@ -290,7 +297,12 @@ describe('POST /api/users (identity-based creation)', () => {
     const app = createApp('my-firebase-uid-xyz', null);
     await request(app)
       .post('/api/users')
-      .send({ provider: 'google', identifier: 'new@gmail.com', displayName: 'New' })
+      .send({
+        provider: 'google',
+        identifier: 'new@gmail.com',
+        displayName: 'New',
+        dateOfBirth: '2000-01-01',
+      })
       .expect(200);
 
     expect(mockTransactionSet).toHaveBeenCalledWith(
@@ -305,7 +317,7 @@ describe('POST /api/users (identity-based creation)', () => {
     const app = createApp();
     await request(app)
       .post('/api/users')
-      .send({ provider: 'apple', identifier: '001234.abcdef' })
+      .send({ provider: 'apple', identifier: '001234.abcdef', dateOfBirth: '2000-01-01' })
       .expect(200);
 
     expect(mockTransactionSet).toHaveBeenCalledWith(
