@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.shyden.shytalk.core.util.SecureScreenEffect
 import com.shyden.shytalk.data.repository.AppLockRepository
 import com.shyden.shytalk.data.repository.PinRepository
 import com.shyden.shytalk.feature.auth.components.PinDots
@@ -36,6 +37,8 @@ fun PinVerifyDialog(
     title: String = "Verify your identity",
     subtitle: String = "Enter your PIN to continue",
 ) {
+    SecureScreenEffect()
+
     var pinInput by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }

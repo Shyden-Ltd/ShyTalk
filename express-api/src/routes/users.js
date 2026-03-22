@@ -204,6 +204,16 @@ router.get('/users/:uniqueId', async (req, res) => {
     delete user.warningIssuedAt;
     delete user.hasNewWarning;
 
+    // Strip sensitive / PII fields
+    delete user.pinHash;
+    delete user.fcmTokens;
+    delete user.firebaseUid;
+    delete user.email;
+    delete user.dateOfBirth;
+    if (Array.isArray(user.providers)) {
+      user.providers = user.providers.map(({ identifier: _identifier, ...rest }) => rest);
+    }
+
     res.json(user);
   } catch (err) {
     log.error('users', 'GET /users/:uniqueId failed', {

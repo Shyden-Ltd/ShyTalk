@@ -9,10 +9,10 @@ module.exports = cors({
     // Allow requests with no origin (mobile apps, curl, server-to-server)
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
-    // Allow Cloudflare Pages preview deployments
+    // Allow Cloudflare Pages preview deployments (subdomain.pages.dev)
     if (
-      origin.endsWith('.shytalk-site-dev.pages.dev') ||
-      origin.endsWith('.shytalk-site.pages.dev')
+      /^https:\/\/[a-z0-9][a-z0-9-]*\.shytalk-site-dev\.pages\.dev$/.test(origin) ||
+      /^https:\/\/[a-z0-9][a-z0-9-]*\.shytalk-site\.pages\.dev$/.test(origin)
     ) {
       return callback(null, true);
     }

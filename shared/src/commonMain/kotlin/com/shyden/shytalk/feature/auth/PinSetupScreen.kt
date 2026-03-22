@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.shyden.shytalk.core.util.SecureScreenEffect
 import com.shyden.shytalk.feature.auth.components.PinDots
 import com.shyden.shytalk.feature.auth.components.PinKeypad
 import org.koin.compose.viewmodel.koinViewModel
@@ -36,6 +37,8 @@ fun PinSetupScreen(
     viewModel: PinSetupViewModel = koinViewModel(),
     modifier: Modifier = Modifier,
 ) {
+    SecureScreenEffect()
+
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(state.completed) {

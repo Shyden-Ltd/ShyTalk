@@ -35,7 +35,19 @@ router.post('/translate', async (req, res) => {
     const validMessagePath =
       messagePath &&
       /^(conversations|rooms)\/[a-zA-Z0-9_-]+\/messages\/[a-zA-Z0-9_-]+$/.test(messagePath);
+
+    // Verify the user is a participant of the referenced conversation/room
+    let participantVerified = false;
     if (validMessagePath) {
+      const parentPath = messagePath.split('/').slice(0, 2).join('/');
+      const parentSnap = await db.doc(parentPath).get();
+      if (parentSnap.exists) {
+        const participantIds = parentSnap.data().participantIds || [];
+        participantVerified = participantIds.includes(uniqueId);
+      }
+    }
+
+    if (validMessagePath && participantVerified) {
       const msgSnap = await db.doc(messagePath).get();
       const cached = msgSnap.data()?.translations?.[targetLang];
       if (cached) {
@@ -85,8 +97,8 @@ router.post('/translate', async (req, res) => {
     const translatedText = ltData.translatedText;
     const detectedSourceLang = ltData.detectedLanguage?.language || 'unknown';
 
-    // Cache translation on message doc
-    if (validMessagePath) {
+    // Cache translation on message doc (only if participant verified)
+    if (validMessagePath && participantVerified) {
       db.doc(messagePath)
         .update({
           [`translations.${targetLang}`]: translatedText,

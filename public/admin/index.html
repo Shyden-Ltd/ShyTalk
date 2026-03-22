@@ -5,6 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.shytalk.shyden.co.uk; frame-ancestors 'none';">
     <meta name="theme-color" content="#0f1117">
     <title>ShyTalk Admin</title>
     <style>
@@ -5604,7 +5606,7 @@
             '<div><label style="' + labelStyle + '">Title</label><input type="text" class="title-input" value="' + escapeHtml(screen.title || '') + '" placeholder="Screen title (3-100 chars)" maxlength="100" style="' + inputStyle + '" /><span class="title-counter char-counter"></span></div>' +
             '<div><label style="' + labelStyle + '">Message</label><textarea class="message-input" placeholder="Screen message (10-500 chars)" maxlength="500" rows="4" style="' + inputStyle + 'resize:vertical;">' + escapeHtml(screen.message || '') + '</textarea><span class="message-counter char-counter"></span></div>' +
             '<div><label style="' + labelStyle + '">Image Type</label><select class="image-type-select" style="' + inputStyle + '"><option value="none"' + (!screen.imageType || screen.imageType === 'none' ? ' selected' : '') + '>None</option><option value="police_duck"' + (screen.imageType === 'police_duck' ? ' selected' : '') + '>Police Duck</option></select></div>' +
-            '<div><label style="' + labelStyle + '">Background Image</label><input type="hidden" class="bg-image-key" value="' + escapeHtml(screen.backgroundImage || '') + '" /><div style="display:flex;gap:8px;align-items:center;"><input type="file" class="bg-image-file" accept="image/*" style="font-size:13px;color:var(--text);" />' + (screen.backgroundImage ? '<button type="button" class="remove-bg-btn" style="padding:4px 10px;background:var(--danger,#e74c3c);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Remove</button>' : '') + '</div><span class="compression-info" style="font-size:11px;color:var(--text2);margin-top:4px;display:block;"></span>' + (screen.backgroundImage ? '<img src="' + encodeURI(screen.backgroundImage) + '" style="max-width:120px;max-height:80px;border-radius:6px;margin-top:6px;border:1px solid var(--border);" />' : '') + '</div>' +
+            '<div><label style="' + labelStyle + '">Background Image</label><input type="hidden" class="bg-image-key" value="' + escapeHtml(screen.backgroundImage || '') + '" /><div style="display:flex;gap:8px;align-items:center;"><input type="file" class="bg-image-file" accept="image/*" style="font-size:13px;color:var(--text);" />' + (screen.backgroundImage ? '<button type="button" class="remove-bg-btn" style="padding:4px 10px;background:var(--danger,#e74c3c);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Remove</button>' : '') + '</div><span class="compression-info" style="font-size:11px;color:var(--text2);margin-top:4px;display:block;"></span>' + (screen.backgroundImage ? '<img src="' + escapeHtml(screen.backgroundImage) + '" style="max-width:120px;max-height:80px;border-radius:6px;margin-top:6px;border:1px solid var(--border);" />' : '') + '</div>' +
             '<div><label style="' + labelStyle + '">Background Display Mode</label><select class="bg-image-fit-select" style="' + inputStyle + '"><option value="cover"' + (bgFit === 'cover' ? ' selected' : '') + '>Cover (fill, crop)</option><option value="contain"' + (bgFit === 'contain' ? ' selected' : '') + '>Contain (fit, letterbox)</option><option value="100% 100%"' + (bgFit === '100% 100%' ? ' selected' : '') + '>Stretch (fill, distort)</option></select></div>' +
             '<div><label style="' + labelStyle + '">Start Date</label><input type="datetime-local" class="start-date" value="' + startDateLocal + '" style="' + inputStyle + '" /></div>' +
             '<div><label style="' + labelStyle + '">End Date</label><input type="datetime-local" class="end-date" value="' + endDateLocal + '" style="' + inputStyle + '" /></div>' +
@@ -6101,9 +6103,9 @@
             <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Submitted: ${date}</div>
             ${status === "pending" ? `
             <div class="appeal-actions">
-              <input type="text" placeholder="Admin note (optional)" data-note-for="${appeal.id}">
-              <button class="btn-approve" data-resolve="${appeal.id}" data-status="approved">Approve</button>
-              <button class="btn-deny" data-resolve="${appeal.id}" data-status="denied">Deny</button>
+              <input type="text" placeholder="Admin note (optional)" data-note-for="${escapeHtml(appeal.id)}">
+              <button class="btn-approve" data-resolve="${escapeHtml(appeal.id)}" data-status="approved">Approve</button>
+              <button class="btn-deny" data-resolve="${escapeHtml(appeal.id)}" data-status="denied">Deny</button>
             </div>` : `
             <div style="font-size:12px;color:var(--text2);">
               ${appeal.adminNote ? `Note: ${escapeHtml(appeal.adminNote)}` : ""}
@@ -6753,7 +6755,7 @@
           const canTakeover = lockAge > 2 * 60 * 1000;
           headerHtml += `<span class="review-lock-badge">\u{1F512} ${escapeHtml(user.lock.displayName)}`;
           if (canTakeover) {
-            headerHtml += ` <button class="takeover-btn" data-takeover-uid="${userId}">Take Over</button>`;
+            headerHtml += ` <button class="takeover-btn" data-takeover-uid="${escapeHtml(userId)}">Take Over</button>`;
           }
           headerHtml += `</span>`;
         }
@@ -6778,51 +6780,52 @@
               ${r.messageText ? `<div class="report-item-context">\u{1F4AC} ${escapeHtml(r.messageText)}</div>` : ""}
               ${renderEvidence(r.evidenceUrls)}
               ${r.conversationId ? `<div class="console-links">
-                <a href="#" class="view-conversation-btn" data-conv-id="${r.conversationId}" data-highlight-msg="${r.messageId || ""}">View Conversation</a>
+                <a href="#" class="view-conversation-btn" data-conv-id="${escapeHtml(r.conversationId)}" data-highlight-msg="${escapeHtml(r.messageId || "")}">View Conversation</a>
               </div>` : ""}
             </div>`;
           }
           if (reports.length > maxShow) {
-            reportsHtml += `<button class="show-all-btn" data-show-all="${userId}">Show all ${reports.length} reports</button>`;
+            reportsHtml += `<button class="show-all-btn" data-show-all="${escapeHtml(userId)}">Show all ${reports.length} reports</button>`;
           }
           reportsHtml += '</div>';
 
           // Action form (only for pending)
           let actionHtml = "";
           if (currentReportFilter === "pending") {
-            actionHtml = `<div class="report-action-form" data-form-uid="${userId}">
+            const safeUid = escapeHtml(userId);
+            actionHtml = `<div class="report-action-form" data-form-uid="${safeUid}">
               <div class="action-row">
                 <label>Action</label>
-                <select data-action-select="${userId}">
+                <select data-action-select="${safeUid}">
                   <option value="warn">Warn <span class="shortcut-hint">[W]</span></option>
                   <option value="suspend">Suspend <span class="shortcut-hint">[S]</span></option>
                   <option value="dismiss">Dismiss <span class="shortcut-hint">[D]</span></option>
                 </select>
               </div>
-              <div class="action-row" data-severity-row="${userId}">
+              <div class="action-row" data-severity-row="${safeUid}">
                 <label>Severity</label>
                 <div class="severity-radio">
-                  ${[1,2,3,4,5].map((n) => `<input type="radio" name="sev-${userId}" id="sev-${userId}-${n}" value="${n}" ${n===1?"checked":""}><label for="sev-${userId}-${n}">${n} (-${n*5})</label>`).join("")}
+                  ${[1,2,3,4,5].map((n) => `<input type="radio" name="sev-${safeUid}" id="sev-${safeUid}-${n}" value="${n}" ${n===1?"checked":""}><label for="sev-${safeUid}-${n}">${n} (-${n*5})</label>`).join("")}
                 </div>
               </div>
-              <div class="suspension-fields" data-suspension-fields="${userId}">
+              <div class="suspension-fields" data-suspension-fields="${safeUid}">
                 <label>Duration</label>
-                <select data-suspension-days="${userId}">
+                <select data-suspension-days="${safeUid}">
                   <option value="1">1 Day</option>
                   <option value="3">3 Days</option>
                   <option value="7" selected>7 Days</option>
                   <option value="30">30 Days</option>
                   <option value="0">Permanent</option>
                 </select>
-                <label style="min-width:auto;"><input type="checkbox" data-can-appeal="${userId}"> Can Appeal</label>
+                <label style="min-width:auto;"><input type="checkbox" data-can-appeal="${safeUid}"> Can Appeal</label>
               </div>
               <div class="action-row">
                 <label>Note</label>
-                <textarea data-admin-note="${userId}" placeholder="Admin note (optional)"></textarea>
+                <textarea data-admin-note="${safeUid}" placeholder="Admin note (optional)"></textarea>
               </div>
               <div class="resolve-buttons">
-                <button class="btn-resolve" data-resolve-first="${userId}">Resolve Latest</button>
-                <button class="btn-resolve-all" data-resolve-all="${userId}">Resolve All (${user.reportCount})</button>
+                <button class="btn-resolve" data-resolve-first="${safeUid}">Resolve Latest</button>
+                <button class="btn-resolve-all" data-resolve-all="${safeUid}">Resolve All (${user.reportCount})</button>
               </div>
             </div>`;
           }

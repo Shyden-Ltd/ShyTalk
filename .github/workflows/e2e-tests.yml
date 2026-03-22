@@ -43,6 +43,10 @@ on:
         type: boolean
         default: true
 
+permissions:
+  contents: read
+  checks: write
+
 # Only one E2E run at a time — prevents resource contention and Firestore conflicts
 concurrency:
   group: e2e-tests

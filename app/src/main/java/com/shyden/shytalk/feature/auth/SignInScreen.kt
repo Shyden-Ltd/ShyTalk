@@ -38,6 +38,7 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import org.koin.compose.viewmodel.koinViewModel
+import org.koin.compose.koinInject
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -49,10 +50,10 @@ import com.shyden.shytalk.feature.suspension.SuspensionScreen
 import org.jetbrains.compose.resources.stringResource
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.core.util.SecureStorage
 import com.shyden.shytalk.BuildConfig
 import kotlinx.coroutines.launch
 
-private const val PREFS_NAME = "shytalk_prefs"
 private const val KEY_EMAIL_FOR_LINK = "email_for_sign_in_link"
 
 @Composable
@@ -69,14 +70,14 @@ fun SignInScreen(
     val scope = rememberCoroutineScope()
     val credentialManager = remember { CredentialManager.create(context) }
     val googleSignInFailed = stringResource(Res.string.google_sign_in_failed)
+    val secureStorage: SecureStorage = koinInject()
 
     // Handle incoming email sign-in deep link
     LaunchedEffect(pendingEmailLink) {
         if (pendingEmailLink != null) {
-            val prefs = context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
-            val storedEmail = prefs.getString(KEY_EMAIL_FOR_LINK, null)
+            val storedEmail = secureStorage.getString(KEY_EMAIL_FOR_LINK)
             if (storedEmail != null) {
-                prefs.edit().remove(KEY_EMAIL_FOR_LINK).apply()
+                secureStorage.remove(KEY_EMAIL_FOR_LINK)
                 viewModel.handleEmailLink(storedEmail, pendingEmailLink)
             }
             onEmailLinkConsumed()

@@ -148,6 +148,7 @@ describe('GET /api/users/:uniqueId response contract', () => {
       { type: 'google', identifier: 'google-sub-123', active: true, linkedAt: 1709913600000 },
     ],
     fcmTokens: [],
+    pinHash: '$2b$10$fakehash',
     aliases: {},
     language: 'en',
     stalkerCount: 0,
@@ -185,10 +186,24 @@ describe('GET /api/users/:uniqueId response contract', () => {
     expect(typeof res.body.displayName).toBe('string');
   });
 
-  it('response contains dateOfBirth', async () => {
+  it('response strips sensitive PII fields', async () => {
     const app = createApp();
     const res = await request(app).get('/api/users/10000001');
-    expect('dateOfBirth' in res.body).toBe(true);
+    expect('dateOfBirth' in res.body).toBe(false);
+    expect('pinHash' in res.body).toBe(false);
+    expect('fcmTokens' in res.body).toBe(false);
+    expect('firebaseUid' in res.body).toBe(false);
+    expect('email' in res.body).toBe(false);
+  });
+
+  it('response strips identifier from providers', async () => {
+    const app = createApp();
+    const res = await request(app).get('/api/users/10000001');
+    expect(Array.isArray(res.body.providers)).toBe(true);
+    for (const provider of res.body.providers) {
+      expect('identifier' in provider).toBe(false);
+      expect('type' in provider).toBe(true);
+    }
   });
 
   it('response contains shyCoins as a number', async () => {

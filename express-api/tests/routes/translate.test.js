@@ -133,12 +133,20 @@ describe('POST /api/translate', () => {
   });
 
   test('accepts valid messagePath (conversations)', async () => {
-    // First call: message doc cache check (no translations)
-    // Second call: user doc for quota
+    // First call: parent doc for participant check
+    // Second call: message doc cache check (no translations)
+    // Third call: user doc for quota
     let callCount = 0;
     mockDocGet.mockImplementation(() => {
       callCount++;
       if (callCount === 1) {
+        // Parent conversation doc with participant
+        return Promise.resolve({
+          exists: true,
+          data: () => ({ participantIds: [12345] }),
+        });
+      }
+      if (callCount === 2) {
         return Promise.resolve({
           exists: true,
           data: () => ({ translations: {} }),
@@ -162,6 +170,7 @@ describe('POST /api/translate', () => {
 
     const { db } = require('../../src/utils/firebase');
     const docCalls = db.doc.mock.calls.map((c) => c[0]);
+    expect(docCalls).toContain('conversations/conv-1');
     expect(docCalls).toContain('conversations/conv-1/messages/msg-1');
   });
 
@@ -170,6 +179,13 @@ describe('POST /api/translate', () => {
     mockDocGet.mockImplementation(() => {
       callCount++;
       if (callCount === 1) {
+        // Parent room doc with participant
+        return Promise.resolve({
+          exists: true,
+          data: () => ({ participantIds: [12345] }),
+        });
+      }
+      if (callCount === 2) {
         return Promise.resolve({
           exists: true,
           data: () => ({ translations: {} }),
@@ -193,6 +209,7 @@ describe('POST /api/translate', () => {
 
     const { db } = require('../../src/utils/firebase');
     const docCalls = db.doc.mock.calls.map((c) => c[0]);
+    expect(docCalls).toContain('rooms/room-1');
     expect(docCalls).toContain('rooms/room-1/messages/msg-1');
   });
 

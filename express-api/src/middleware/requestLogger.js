@@ -17,6 +17,8 @@ const SENSITIVE_BODY_KEYS = new Set([
   'refreshtoken',
   'secret',
   'credential',
+  'pin',
+  'code',
 ]);
 
 /**
