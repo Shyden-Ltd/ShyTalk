@@ -831,4 +831,5 @@
     <string name="time_hours">%1$d giờ</string>
     <string name="time_minutes">%1$d phút</string>
     <string name="time_less_than_minute">Ít hơn 1 phút</string>
+    <string name="pin_dots_state">Đã nhập %1$d trong %2$d chữ số</string>
 </resources>

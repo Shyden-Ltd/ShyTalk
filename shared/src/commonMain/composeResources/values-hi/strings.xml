@@ -831,4 +831,5 @@
     <string name="time_hours">%1$d घंटे</string>
     <string name="time_minutes">%1$d मिनट</string>
     <string name="time_less_than_minute">1 मिनट से कम</string>
+    <string name="pin_dots_state">%2$d में से %1$d अंक दर्ज किए गए</string>
 </resources>

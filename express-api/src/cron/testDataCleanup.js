@@ -7,7 +7,7 @@
  * (avoids needing composite Firestore indexes).
  */
 
-const { db } = require('../utils/firebase');
+const { db, FieldValue } = require('../utils/firebase');
 const log = require('../utils/log');
 
 const TEST_PREFIX = 'test_';
@@ -106,7 +106,6 @@ async function testDataCleanup() {
         (key) => key.startsWith('pw-') || key.startsWith('screen-') || key.startsWith('test-'),
       );
       if (testScreenIds.length > 0) {
-        const { FieldValue } = require('firebase-admin/firestore');
         const updates = {};
         for (const id of testScreenIds) {
           updates[id] = FieldValue.delete();

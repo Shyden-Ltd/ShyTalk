@@ -831,4 +831,5 @@
     <string name="time_hours">%1$d годин</string>
     <string name="time_minutes">%1$d хвилин</string>
     <string name="time_less_than_minute">Менше 1 хвилини</string>
+    <string name="pin_dots_state">%1$d з %2$d цифр введено</string>
 </resources>

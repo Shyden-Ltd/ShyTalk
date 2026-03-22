@@ -59,10 +59,14 @@ router.post('/users', async (req, res) => {
       return res.status(400).json({ error: 'Date of birth is required' });
     }
     const dob = new Date(dateOfBirth);
+    if (isNaN(dob.getTime())) {
+      return res.status(400).json({ error: 'Invalid date of birth format' });
+    }
     const ageDiff = Date.now() - dob.getTime();
     const ageDate = new Date(ageDiff);
     const age = Math.abs(ageDate.getUTCFullYear() - 1970);
     if (age < 13) {
+      log.warn('users', 'Age validation rejected', { dateOfBirth });
       return res.status(403).json({ error: 'Must be at least 13 years old' });
     }
 

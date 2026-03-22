@@ -41,10 +41,11 @@ fun PinDots(
     maxLength: Int,
     modifier: Modifier = Modifier,
 ) {
+    val dotsState = stringResource(Res.string.pin_dots_state, length, maxLength)
     Row(
         modifier =
             modifier.semantics {
-                stateDescription = "$length of $maxLength digits entered"
+                stateDescription = dotsState
             },
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {

@@ -831,4 +831,5 @@
     <string name="time_hours">%1$d jam</string>
     <string name="time_minutes">%1$d menit</string>
     <string name="time_less_than_minute">Kurang dari 1 menit</string>
+    <string name="pin_dots_state">%1$d dari %2$d digit dimasukkan</string>
 </resources>

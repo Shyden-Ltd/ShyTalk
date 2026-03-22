@@ -55,6 +55,7 @@ const SUBCOLLECTIONS = [
   ['users', 'giftWall'],
   ['users', 'transactions'],
   ['users', 'stalkers'],
+  ['conversations', 'settings'],
 ];
 
 /**

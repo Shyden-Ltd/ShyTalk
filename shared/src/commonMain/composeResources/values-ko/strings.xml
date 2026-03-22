@@ -831,4 +831,5 @@
     <string name="time_hours">%1$d시간</string>
     <string name="time_minutes">%1$d분</string>
     <string name="time_less_than_minute">1분 미만</string>
+    <string name="pin_dots_state">%2$d자리 중 %1$d자리 입력됨</string>
 </resources>

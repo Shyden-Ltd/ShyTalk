@@ -54,7 +54,9 @@ function createLogger(db) {
   let hardCap = DEFAULT_HARD_CAP;
   let currentDay = new Date().toISOString().split('T')[0];
   let consecutiveFailures = 0;
+  let circuitBreakerOpenedAt = 0;
   const CIRCUIT_BREAKER_THRESHOLD = 10;
+  const CIRCUIT_BREAKER_COOLDOWN = 60000; // 60 seconds
 
   function resetIfNewDay() {
     const today = new Date().toISOString().split('T')[0];
@@ -94,7 +96,10 @@ function createLogger(db) {
       if (shouldThrottle(level)) return;
 
       // Circuit breaker — stop attempting Firestore writes after consecutive failures
-      if (consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) return;
+      if (consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
+        // Half-open: allow one probe write every 60s to check if Firestore recovered
+        if (Date.now() - circuitBreakerOpenedAt < CIRCUIT_BREAKER_COOLDOWN) return;
+      }
 
       // Build log document
       const doc = {
@@ -121,6 +126,9 @@ function createLogger(db) {
       consecutiveFailures = 0;
     } catch (err) {
       consecutiveFailures++;
+      if (consecutiveFailures === CIRCUIT_BREAKER_THRESHOLD) {
+        circuitBreakerOpenedAt = Date.now();
+      }
       // Logger must never throw
       try {
         if (consecutiveFailures <= CIRCUIT_BREAKER_THRESHOLD) {
@@ -155,6 +163,7 @@ function createLogger(db) {
   }
   function _resetCircuitBreaker() {
     consecutiveFailures = 0;
+    circuitBreakerOpenedAt = 0;
   }
   function _getConsecutiveFailures() {
     return consecutiveFailures;

@@ -914,5 +914,6 @@
     <string name="time_hours">%1$d hours</string>
     <string name="time_minutes">%1$d minutes</string>
     <string name="time_less_than_minute">Less than 1 minute</string>
+    <string name="pin_dots_state">%1$d of %2$d digits entered</string>
 
 </resources>

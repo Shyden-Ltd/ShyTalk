@@ -831,4 +831,5 @@
     <string name="time_hours">%1$d godzin</string>
     <string name="time_minutes">%1$d minut</string>
     <string name="time_less_than_minute">Mniej niż 1 minuta</string>
+    <string name="pin_dots_state">%1$d z %2$d cyfr wprowadzonych</string>
 </resources>

@@ -831,4 +831,5 @@
     <string name="time_hours">%1$d ชั่วโมง</string>
     <string name="time_minutes">%1$d นาที</string>
     <string name="time_less_than_minute">น้อยกว่า 1 นาที</string>
+    <string name="pin_dots_state">ป้อนแล้ว %1$d จาก %2$d หลัก</string>
 </resources>

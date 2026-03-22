@@ -831,4 +831,5 @@
     <string name="time_hours">%1$d timmar</string>
     <string name="time_minutes">%1$d minuter</string>
     <string name="time_less_than_minute">Mindre än 1 minut</string>
+    <string name="pin_dots_state">%1$d av %2$d siffror angivna</string>
 </resources>

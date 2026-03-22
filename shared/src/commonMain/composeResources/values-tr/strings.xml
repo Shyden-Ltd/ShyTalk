@@ -831,4 +831,5 @@
     <string name="time_hours">%1$d saat</string>
     <string name="time_minutes">%1$d dakika</string>
     <string name="time_less_than_minute">1 dakikadan az</string>
+    <string name="pin_dots_state">%2$d basamaktan %1$d tanesi girildi</string>
 </resources>

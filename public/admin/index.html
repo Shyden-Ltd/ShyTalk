@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <meta http-equiv="X-Frame-Options" content="DENY">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.shytalk.shyden.co.uk; frame-ancestors 'none';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.google.com https://recaptcha.net; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.shytalk.shyden.co.uk https://recaptcha.net; frame-ancestors 'none';">
     <meta name="theme-color" content="#0f1117">
     <title>ShyTalk Admin</title>
     <style>
@@ -5789,8 +5789,9 @@
         loadStartingScreens();
       } catch (err) {
         showToast(err.message || "Failed to save", "error");
+      } finally {
+        if (saveBtn) saveBtn.disabled = false;
       }
-      if (saveBtn) saveBtn.disabled = false;
     }
 
     function addScreen() {
@@ -5825,8 +5826,9 @@
         loadStartingScreens();
       } catch (err) {
         showToast("Failed to delete screen: " + err.message, "error");
+      } finally {
+        if (deleteBtn) deleteBtn.disabled = false;
       }
-      if (deleteBtn) deleteBtn.disabled = false;
     }
 
     // Wire up add screen button

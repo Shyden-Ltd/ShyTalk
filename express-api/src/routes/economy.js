@@ -641,6 +641,10 @@ router.post('/economy/gift', async (req, res) => {
       senderBlocked.includes(String(recipientId)) ||
       recipientBlocked.includes(String(uniqueId))
     ) {
+      log.warn('economy', 'Gift blocked: sender/recipient blocked', {
+        senderUniqueId: uniqueId,
+        recipientUniqueId: recipientId,
+      });
       return res.status(403).json({ error: 'Cannot send gifts to or from blocked users' });
     }
 
@@ -788,6 +792,10 @@ router.post('/economy/gift-direct', async (req, res) => {
       senderBlocked.includes(String(recipientId)) ||
       recipientBlocked.includes(String(uniqueId))
     ) {
+      log.warn('economy', 'Gift blocked: sender/recipient blocked', {
+        senderUniqueId: uniqueId,
+        recipientUniqueId: recipientId,
+      });
       return res.status(403).json({ error: 'Cannot send gifts to or from blocked users' });
     }
 
@@ -940,6 +948,10 @@ router.post('/economy/gift-batch', async (req, res) => {
       const rid = String(recipientIds[i]);
       const recipientBlocked = (recipientSnaps[i].data()?.blockedUserIds || []).map(String);
       if (senderBlocked.includes(rid) || recipientBlocked.includes(String(uniqueId))) {
+        log.warn('economy', 'Gift blocked: sender/recipient blocked', {
+          senderUniqueId: uniqueId,
+          recipientUniqueId: recipientIds[i],
+        });
         return res.status(403).json({ error: 'Cannot send gifts to or from blocked users' });
       }
     }
@@ -1072,6 +1084,10 @@ router.post('/economy/backpack-send', async (req, res) => {
       senderBlocked.includes(String(recipientId)) ||
       recipientBlocked.includes(String(uniqueId))
     ) {
+      log.warn('economy', 'Gift blocked: sender/recipient blocked', {
+        senderUniqueId: uniqueId,
+        recipientUniqueId: recipientId,
+      });
       return res.status(403).json({ error: 'Cannot send gifts to or from blocked users' });
     }
 
