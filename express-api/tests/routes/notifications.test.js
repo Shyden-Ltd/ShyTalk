@@ -115,6 +115,17 @@ describe('POST /api/notifications/token', () => {
     expect(res.body.error).toMatch(/non-empty string/);
     expect(mockDocUpdate).not.toHaveBeenCalled();
   });
+
+  test('rejects token longer than 500 chars (400)', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/notifications/token')
+      .send({ token: 'a'.repeat(501) });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/non-empty string/);
+    expect(mockDocUpdate).not.toHaveBeenCalled();
+  });
 });
 
 // ─── DELETE /api/notifications/token ────────────────────────────
@@ -158,6 +169,17 @@ describe('DELETE /api/notifications/token', () => {
   test('rejects empty string token (400)', async () => {
     const app = createApp();
     const res = await request(app).delete('/api/notifications/token').send({ token: '' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/non-empty string/);
+    expect(mockDocUpdate).not.toHaveBeenCalled();
+  });
+
+  test('rejects token longer than 500 chars (400)', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .delete('/api/notifications/token')
+      .send({ token: 'a'.repeat(501) });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/non-empty string/);

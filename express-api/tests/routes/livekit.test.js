@@ -61,6 +61,13 @@ describe('POST /api/livekit/token', () => {
     await request(app).post('/api/livekit/token').send({}).expect(400);
   });
 
+  test('returns 400 when roomName is numeric (non-string)', async () => {
+    const app = createApp();
+    const res = await request(app).post('/api/livekit/token').send({ roomName: 123 }).expect(400);
+
+    expect(res.body.error).toBe('roomName is required');
+  });
+
   test('generates token with authenticated uniqueId as identity', async () => {
     const app = createApp(99001);
     const res = await request(app)
