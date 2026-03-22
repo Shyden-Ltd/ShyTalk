@@ -28,6 +28,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shyden.shytalk.core.util.SecureScreenEffect
 import com.shyden.shytalk.feature.auth.components.PinDots
 import com.shyden.shytalk.feature.auth.components.PinKeypad
+import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -63,10 +66,11 @@ fun PinSetupScreen(
 
             PinSetupStep.Enter ->
                 PinEntryStep(
-                    title = "Create a PIN",
+                    title = stringResource(Res.string.pin_create_title),
+                    isConfirmStep = false,
                     pinInput = state.pinInput,
                     pinLength = state.pinLength,
-                    error = state.error,
+                    error = state.error?.resolve(),
                     isLoading = state.isLoading,
                     onDigit = { viewModel.onDigit(it) },
                     onBackspace = { viewModel.onBackspace() },
@@ -75,10 +79,11 @@ fun PinSetupScreen(
 
             PinSetupStep.Confirm ->
                 PinEntryStep(
-                    title = "Confirm your PIN",
+                    title = stringResource(Res.string.pin_confirm_title),
+                    isConfirmStep = true,
                     pinInput = state.pinInput,
                     pinLength = state.pinLength,
-                    error = state.error,
+                    error = state.error?.resolve(),
                     isLoading = state.isLoading,
                     onDigit = { viewModel.onDigit(it) },
                     onBackspace = { viewModel.onBackspace() },
@@ -91,18 +96,18 @@ fun PinSetupScreen(
             if (biometricAvailable) {
                 AlertDialog(
                     onDismissRequest = { viewModel.onBiometricDeclined() },
-                    title = { Text("Enable biometric login?") },
+                    title = { Text(stringResource(Res.string.pin_enable_biometric_title)) },
                     text = {
-                        Text("Use your fingerprint or face to unlock ShyTalk quickly.")
+                        Text(stringResource(Res.string.pin_enable_biometric_desc))
                     },
                     confirmButton = {
                         Button(onClick = { viewModel.onBiometricAccepted() }) {
-                            Text("Enable")
+                            Text(stringResource(Res.string.pin_enable))
                         }
                     },
                     dismissButton = {
                         TextButton(onClick = { viewModel.onBiometricDeclined() }) {
-                            Text("Not now")
+                            Text(stringResource(Res.string.pin_not_now))
                         }
                     },
                 )
@@ -114,7 +119,7 @@ fun PinSetupScreen(
         Spacer(Modifier.height(24.dp))
 
         Text(
-            text = "You can change or disable this in Security settings",
+            text = stringResource(Res.string.pin_change_hint),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -134,7 +139,7 @@ private fun PinLengthChooser(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "Choose PIN length",
+            text = stringResource(Res.string.pin_choose_length),
             style = MaterialTheme.typography.headlineSmall,
         )
 
@@ -156,7 +161,7 @@ private fun PinLengthChooser(
         Spacer(Modifier.height(8.dp))
 
         Text(
-            text = "digits",
+            text = stringResource(Res.string.pin_digits),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -166,6 +171,7 @@ private fun PinLengthChooser(
 @Composable
 private fun PinEntryStep(
     title: String,
+    isConfirmStep: Boolean,
     pinInput: String,
     pinLength: Int,
     error: String?,
@@ -215,7 +221,13 @@ private fun PinEntryStep(
                 onClick = onSubmit,
                 enabled = pinInput.length == pinLength,
             ) {
-                Text(if (title.startsWith("Confirm")) "Confirm" else "Next")
+                Text(
+                    if (isConfirmStep) {
+                        stringResource(Res.string.pin_confirm)
+                    } else {
+                        stringResource(Res.string.pin_next)
+                    },
+                )
             }
         }
     }

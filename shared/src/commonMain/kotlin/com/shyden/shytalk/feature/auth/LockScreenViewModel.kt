@@ -5,21 +5,25 @@ import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.util.BiometricAuth
 import com.shyden.shytalk.core.util.BiometricResult
 import com.shyden.shytalk.core.util.CryptoKeyPair
+import com.shyden.shytalk.core.util.UiText
 import com.shyden.shytalk.data.repository.AppLockRepository
 import com.shyden.shytalk.data.repository.BiometricRepository
 import com.shyden.shytalk.data.repository.PinRepository
 import com.shyden.shytalk.data.repository.PinVerifyResult
+import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.getString
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
 data class LockScreenState(
     val pinInput: String = "",
-    val error: String? = null,
+    val error: UiText? = null,
     val isLoading: Boolean = false,
     val isLocked: Boolean = false,
     val lockedUntil: Long? = null,
@@ -73,14 +77,14 @@ class LockScreenViewModel(
     fun submitPin() {
         val pin = _state.value.pinInput
         if (pin.length < 4) {
-            _state.update { it.copy(error = "PIN too short") }
+            _state.update { it.copy(error = UiText.res(Res.string.pin_too_short)) }
             return
         }
 
         val uniqueId = appLockRepository.storedUniqueId
         val deviceId = appLockRepository.storedDeviceId
         if (uniqueId == null || deviceId == null) {
-            _state.update { it.copy(error = "Session expired. Please sign in again.", requiresReauth = true) }
+            _state.update { it.copy(error = UiText.res(Res.string.pin_session_expired), requiresReauth = true) }
             return
         }
 
@@ -92,7 +96,12 @@ class LockScreenViewModel(
                 .onSuccess { verifyResult ->
                     handlePinResult(verifyResult)
                 }.onFailure { e ->
-                    _state.update { it.copy(isLoading = false, error = e.message ?: "Verification failed") }
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            error = e.message?.let { msg -> UiText.plain(msg) } ?: UiText.res(Res.string.pin_verify_failed),
+                        )
+                    }
                 }
         }
     }
@@ -121,7 +130,7 @@ class LockScreenViewModel(
                     isLoading = false,
                     attemptsRemaining = result.attemptsRemaining,
                     pinInput = "",
-                    error = "Wrong PIN. ${result.attemptsRemaining} attempts remaining.",
+                    error = UiText.res(Res.string.pin_wrong_attempts, result.attemptsRemaining),
                 )
             }
         }
@@ -132,7 +141,9 @@ class LockScreenViewModel(
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
 
-            when (val bioResult = biometricAuth.authenticate("Unlock ShyTalk", "Use your fingerprint or face to unlock")) {
+            val bioTitle = getString(Res.string.biometric_unlock_title)
+            val bioDesc = getString(Res.string.biometric_unlock_desc)
+            when (val bioResult = biometricAuth.authenticate(bioTitle, bioDesc)) {
                 is BiometricResult.Success -> {
                     val uniqueId = appLockRepository.storedUniqueId
                     val deviceId = appLockRepository.storedDeviceId
@@ -140,7 +151,7 @@ class LockScreenViewModel(
                         _state.update {
                             it.copy(
                                 isLoading = false,
-                                error = "Session expired. Please sign in again.",
+                                error = UiText.res(Res.string.pin_session_expired),
                                 requiresReauth = true,
                             )
                         }
@@ -152,7 +163,7 @@ class LockScreenViewModel(
                         .onSuccess { nonce ->
                             val signatureBytes = cryptoKeyPair.sign(nonce.encodeToByteArray())
                             if (signatureBytes == null) {
-                                _state.update { it.copy(isLoading = false, error = "Signing failed") }
+                                _state.update { it.copy(isLoading = false, error = UiText.res(Res.string.biometric_sign_failed)) }
                                 return@launch
                             }
                             val signatureBase64 = Base64.encode(signatureBytes)
@@ -162,17 +173,29 @@ class LockScreenViewModel(
                                     checkBiometricGracePeriod()
                                     _state.update { it.copy(isLoading = false, unlocked = true) }
                                 }.onFailure { e ->
-                                    _state.update { it.copy(isLoading = false, error = e.message ?: "Biometric verification failed") }
+                                    _state.update {
+                                        it.copy(
+                                            isLoading = false,
+                                            error =
+                                                e.message?.let { msg -> UiText.plain(msg) }
+                                                    ?: UiText.res(Res.string.biometric_verify_failed),
+                                        )
+                                    }
                                 }
                         }.onFailure { e ->
-                            _state.update { it.copy(isLoading = false, error = e.message ?: "Could not start biometric verification") }
+                            _state.update {
+                                it.copy(
+                                    isLoading = false,
+                                    error = e.message?.let { msg -> UiText.plain(msg) } ?: UiText.res(Res.string.biometric_start_failed),
+                                )
+                            }
                         }
                 }
                 is BiometricResult.Fallback -> {
                     _state.update { it.copy(isLoading = false) }
                 }
                 is BiometricResult.Error -> {
-                    _state.update { it.copy(isLoading = false, error = bioResult.message) }
+                    _state.update { it.copy(isLoading = false, error = bioResult.message?.let { msg -> UiText.plain(msg) }) }
                 }
             }
         }

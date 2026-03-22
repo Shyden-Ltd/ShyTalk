@@ -21,6 +21,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun PinDots(
@@ -86,7 +89,7 @@ fun PinKeypad(
                 ) {
                     Icon(
                         Icons.Default.Fingerprint,
-                        contentDescription = "Use biometric",
+                        contentDescription = stringResource(Res.string.pin_use_biometric),
                         modifier = Modifier.size(32.dp),
                         tint = MaterialTheme.colorScheme.primary,
                     )
@@ -103,7 +106,7 @@ fun PinKeypad(
             ) {
                 Icon(
                     Icons.Default.Backspace,
-                    contentDescription = "Delete",
+                    contentDescription = stringResource(Res.string.pin_delete),
                     modifier = Modifier.size(24.dp),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )

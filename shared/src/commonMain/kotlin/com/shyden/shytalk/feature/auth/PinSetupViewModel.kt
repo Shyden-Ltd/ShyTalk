@@ -2,8 +2,11 @@ package com.shyden.shytalk.feature.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.shyden.shytalk.core.util.UiText
 import com.shyden.shytalk.data.repository.AppLockRepository
 import com.shyden.shytalk.data.repository.PinRepository
+import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,7 +20,7 @@ data class PinSetupState(
     val pinLength: Int = 4,
     val pinInput: String = "",
     val firstPin: String = "",
-    val error: String? = null,
+    val error: UiText? = null,
     val isLoading: Boolean = false,
     val completed: Boolean = false,
     val showBiometricOffer: Boolean = false,
@@ -56,7 +59,7 @@ class PinSetupViewModel(
         val pin = current.pinInput
 
         if (pin.length != current.pinLength) {
-            _state.update { it.copy(error = "Enter ${current.pinLength} digits") }
+            _state.update { it.copy(error = UiText.res(Res.string.pin_enter_digits, current.pinLength)) }
             return
         }
 
@@ -72,7 +75,7 @@ class PinSetupViewModel(
                             step = PinSetupStep.Enter,
                             pinInput = "",
                             firstPin = "",
-                            error = "PINs don't match. Try again.",
+                            error = UiText.res(Res.string.pin_mismatch),
                         )
                     }
                     return
@@ -93,13 +96,18 @@ class PinSetupViewModel(
                     val uniqueId = appLockRepository.storedUniqueId
                     val deviceId = appLockRepository.storedDeviceId
                     if (uniqueId.isNullOrEmpty() || deviceId.isNullOrEmpty()) {
-                        _state.update { it.copy(isLoading = false, error = "Device not registered. Please sign in again.") }
+                        _state.update { it.copy(isLoading = false, error = UiText.res(Res.string.pin_device_not_registered)) }
                         return@onSuccess
                     }
                     appLockRepository.setCredential(uniqueId, deviceId, pinHash)
                     _state.update { it.copy(isLoading = false, showBiometricOffer = true) }
                 }.onFailure { e ->
-                    _state.update { it.copy(isLoading = false, error = e.message ?: "Failed to set PIN") }
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            error = e.message?.let { msg -> UiText.plain(msg) } ?: UiText.res(Res.string.pin_setup_failed),
+                        )
+                    }
                 }
         }
     }

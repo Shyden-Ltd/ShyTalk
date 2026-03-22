@@ -21,7 +21,11 @@ import com.shyden.shytalk.data.repository.AppLockRepository
 import com.shyden.shytalk.data.repository.PinRepository
 import com.shyden.shytalk.feature.auth.components.PinDots
 import com.shyden.shytalk.feature.auth.components.PinKeypad
+import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Reusable PIN verification dialog for sensitive actions.
@@ -34,8 +38,8 @@ fun PinVerifyDialog(
     appLockRepository: AppLockRepository,
     onVerified: () -> Unit,
     onDismiss: () -> Unit,
-    title: String = "Verify your identity",
-    subtitle: String = "Enter your PIN to continue",
+    title: String = stringResource(Res.string.pin_verify_title),
+    subtitle: String = stringResource(Res.string.pin_verify_subtitle),
 ) {
     SecureScreenEffect()
 
@@ -51,6 +55,11 @@ fun PinVerifyDialog(
         onDismiss()
         return
     }
+
+    // Pre-resolve strings for use inside coroutine lambdas (non-composable scope)
+    val pinTooShortText = stringResource(Res.string.pin_too_short)
+    val accountLockedText = stringResource(Res.string.pin_account_locked)
+    val verifyFailedText = stringResource(Res.string.pin_verify_failed)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -96,7 +105,7 @@ fun PinVerifyDialog(
             TextButton(
                 onClick = {
                     if (pinInput.length < 4) {
-                        error = "PIN too short"
+                        error = pinTooShortText
                         return@TextButton
                     }
                     isLoading = true
@@ -108,27 +117,27 @@ fun PinVerifyDialog(
                                 if (result.customToken != null) {
                                     onVerified()
                                 } else if (result.locked) {
-                                    error = "Account locked"
+                                    error = accountLockedText
                                     pinInput = ""
                                 } else {
-                                    error = "Wrong PIN. ${result.attemptsRemaining} attempts remaining."
+                                    error = getString(Res.string.pin_wrong_attempts, result.attemptsRemaining)
                                     pinInput = ""
                                 }
                             }.onFailure {
                                 isLoading = false
-                                error = "Verification failed"
+                                error = verifyFailedText
                                 pinInput = ""
                             }
                     }
                 },
                 enabled = !isLoading && pinInput.length >= 4,
             ) {
-                Text(if (isLoading) "Verifying..." else "Confirm")
+                Text(if (isLoading) stringResource(Res.string.pin_verifying) else stringResource(Res.string.pin_confirm))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(Res.string.cancel))
             }
         },
     )

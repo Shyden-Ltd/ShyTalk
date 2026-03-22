@@ -3,7 +3,10 @@ package com.shyden.shytalk.feature.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.util.DisposableEmailDomains
+import com.shyden.shytalk.core.util.UiText
 import com.shyden.shytalk.data.repository.OtpRepository
+import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,7 +21,7 @@ data class EmailOtpState(
     val step: EmailOtpStep = EmailOtpStep.EnterEmail,
     val email: String = "",
     val code: String = "",
-    val error: String? = null,
+    val error: UiText? = null,
     val isLoading: Boolean = false,
     val resendCooldown: Int = 0,
     val customToken: String? = null,
@@ -51,13 +54,13 @@ class EmailOtpViewModel(
                 .lowercase()
 
         if (!EMAIL_REGEX.matches(email)) {
-            _state.update { it.copy(error = "Enter a valid email address") }
+            _state.update { it.copy(error = UiText.res(Res.string.email_invalid_address)) }
             return
         }
 
         val domain = email.substringAfter('@')
         if (DisposableEmailDomains.isDisposable(domain)) {
-            _state.update { it.copy(error = "Disposable email addresses are not allowed") }
+            _state.update { it.copy(error = UiText.res(Res.string.email_disposable_blocked)) }
             return
         }
 
@@ -70,8 +73,12 @@ class EmailOtpViewModel(
                     _state.update { it.copy(isLoading = false, step = EmailOtpStep.EnterCode, email = email) }
                     startCooldown()
                 }.onFailure { e ->
-                    val message = e.message ?: "Failed to send code"
-                    _state.update { it.copy(isLoading = false, error = message) }
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            error = e.message?.let { msg -> UiText.plain(msg) } ?: UiText.res(Res.string.email_send_failed),
+                        )
+                    }
                 }
         }
     }
@@ -81,7 +88,7 @@ class EmailOtpViewModel(
         val email = _state.value.email
 
         if (code.length != 6) {
-            _state.update { it.copy(error = "Enter the 6-digit code") }
+            _state.update { it.copy(error = UiText.res(Res.string.email_enter_code)) }
             return
         }
 
@@ -93,7 +100,13 @@ class EmailOtpViewModel(
                 .onSuccess { token ->
                     _state.update { it.copy(isLoading = false, customToken = token) }
                 }.onFailure { e ->
-                    _state.update { it.copy(isLoading = false, error = e.message ?: "Invalid code", code = "") }
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            error = e.message?.let { msg -> UiText.plain(msg) } ?: UiText.res(Res.string.email_invalid_code),
+                            code = "",
+                        )
+                    }
                 }
         }
     }
@@ -118,7 +131,12 @@ class EmailOtpViewModel(
                     _state.update { it.copy(isLoading = false) }
                     startCooldown()
                 }.onFailure { e ->
-                    _state.update { it.copy(isLoading = false, error = e.message ?: "Failed to resend") }
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            error = e.message?.let { msg -> UiText.plain(msg) } ?: UiText.res(Res.string.email_resend_failed),
+                        )
+                    }
                 }
         }
     }

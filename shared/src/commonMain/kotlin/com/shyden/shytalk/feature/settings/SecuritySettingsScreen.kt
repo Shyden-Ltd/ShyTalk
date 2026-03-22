@@ -29,14 +29,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.data.repository.AppLockRepository
+import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.stringResource
 
-private val TIMEOUT_OPTIONS =
+private val TIMEOUT_OPTIONS: List<Pair<Int, StringResource>> =
     listOf(
-        1 to "1 minute",
-        5 to "5 minutes",
-        15 to "15 minutes",
-        30 to "30 minutes",
-        0 to "Never",
+        1 to Res.string.security_timeout_1min,
+        5 to Res.string.security_timeout_5min,
+        15 to Res.string.security_timeout_15min,
+        30 to Res.string.security_timeout_30min,
+        0 to Res.string.security_timeout_never,
     )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -57,10 +61,10 @@ fun SecuritySettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Security") },
+                title = { Text(stringResource(Res.string.security_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.back))
                     }
                 },
             )
@@ -76,8 +80,8 @@ fun SecuritySettingsScreen(
         ) {
             // App Lock
             ListItem(
-                headlineContent = { Text("App Lock") },
-                supportingContent = { Text("Require PIN or biometric to unlock") },
+                headlineContent = { Text(stringResource(Res.string.security_app_lock)) },
+                supportingContent = { Text(stringResource(Res.string.security_app_lock_desc)) },
                 trailingContent = {
                     Switch(
                         checked = appLockEnabled,
@@ -92,19 +96,21 @@ fun SecuritySettingsScreen(
 
             // Lock Timeout (only visible when app lock is on)
             if (appLockEnabled) {
-                val timeoutLabel = TIMEOUT_OPTIONS.firstOrNull { it.first == lockTimeout }?.second ?: "5 minutes"
+                val timeoutLabel =
+                    TIMEOUT_OPTIONS.firstOrNull { it.first == lockTimeout }?.second
+                        ?: Res.string.security_timeout_5min
                 ListItem(
-                    headlineContent = { Text("Lock Timeout") },
-                    supportingContent = { Text(timeoutLabel) },
+                    headlineContent = { Text(stringResource(Res.string.security_lock_timeout)) },
+                    supportingContent = { Text(stringResource(timeoutLabel)) },
                     trailingContent = {
                         Icon(Icons.Default.ChevronRight, contentDescription = null)
                         DropdownMenu(
                             expanded = showTimeoutMenu,
                             onDismissRequest = { showTimeoutMenu = false },
                         ) {
-                            TIMEOUT_OPTIONS.forEach { (minutes, label) ->
+                            TIMEOUT_OPTIONS.forEach { (minutes, labelRes) ->
                                 DropdownMenuItem(
-                                    text = { Text(label) },
+                                    text = { Text(stringResource(labelRes)) },
                                     onClick = {
                                         lockTimeout = minutes
                                         appLockRepository.setLockTimeoutMinutes(minutes)
@@ -125,13 +131,13 @@ fun SecuritySettingsScreen(
 
             // Biometric Login
             ListItem(
-                headlineContent = { Text("Biometric Login") },
+                headlineContent = { Text(stringResource(Res.string.security_biometric_login)) },
                 supportingContent = {
                     Text(
                         if (biometricAvailable) {
-                            "Use fingerprint or face to unlock"
+                            stringResource(Res.string.security_biometric_desc)
                         } else {
-                            "Not available on this device"
+                            stringResource(Res.string.security_biometric_unavailable)
                         },
                     )
                 },
@@ -152,8 +158,8 @@ fun SecuritySettingsScreen(
 
             // Reset PIN
             ListItem(
-                headlineContent = { Text("Reset PIN") },
-                supportingContent = { Text("Verify your identity to set a new PIN") },
+                headlineContent = { Text(stringResource(Res.string.security_reset_pin)) },
+                supportingContent = { Text(stringResource(Res.string.security_reset_pin_desc)) },
                 trailingContent = {
                     Icon(Icons.Default.ChevronRight, contentDescription = null)
                 },
@@ -167,8 +173,8 @@ fun SecuritySettingsScreen(
 
             // Linked Accounts
             ListItem(
-                headlineContent = { Text("Linked Accounts") },
-                supportingContent = { Text("Manage sign-in methods") },
+                headlineContent = { Text(stringResource(Res.string.security_linked_accounts)) },
+                supportingContent = { Text(stringResource(Res.string.security_linked_accounts_desc)) },
                 trailingContent = {
                     Icon(Icons.Default.ChevronRight, contentDescription = null)
                 },

@@ -74,7 +74,7 @@ fun LockScreen(
 
         if (state.error != null) {
             Text(
-                text = state.error!!,
+                text = state.error!!.resolve(),
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,

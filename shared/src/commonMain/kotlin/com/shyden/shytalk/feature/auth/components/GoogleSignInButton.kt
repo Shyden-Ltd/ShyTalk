@@ -17,9 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
-import com.shyden.shytalk.resources.ic_google_logo
-import com.shyden.shytalk.resources.sign_in_with_google
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -53,7 +52,7 @@ fun GoogleSignInButton(
                 color = Color(0xFFE3E3E3),
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Signing in…")
+            Text(stringResource(Res.string.signing_in_loading))
         } else {
             Icon(
                 painter = painterResource(Res.drawable.ic_google_logo),

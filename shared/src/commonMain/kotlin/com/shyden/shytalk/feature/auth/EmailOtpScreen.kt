@@ -41,6 +41,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
+import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -55,7 +58,7 @@ fun EmailOtpScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(state.error) {
-        state.error?.let { snackbarHostState.showSnackbar(it) }
+        state.error?.let { snackbarHostState.showSnackbar(it.resolveAsync()) }
     }
 
     LaunchedEffect(state.customToken) {
@@ -65,7 +68,7 @@ fun EmailOtpScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Sign in with email") },
+                title = { Text(stringResource(Res.string.email_sign_in_title)) },
                 navigationIcon = {
                     IconButton(onClick = {
                         if (state.step == EmailOtpStep.EnterCode) {
@@ -74,7 +77,7 @@ fun EmailOtpScreen(
                             onNavigateBack()
                         }
                     }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.back))
                     }
                 },
             )
@@ -139,7 +142,7 @@ private fun EmailStep(
         Spacer(Modifier.height(16.dp))
 
         Text(
-            text = "Enter your email address",
+            text = stringResource(Res.string.email_enter_address),
             style = MaterialTheme.typography.bodyLarge,
         )
 
@@ -148,7 +151,7 @@ private fun EmailStep(
         OutlinedTextField(
             value = email,
             onValueChange = onEmailChange,
-            label = { Text("Email") },
+            label = { Text(stringResource(Res.string.email_label)) },
             singleLine = true,
             keyboardOptions =
                 KeyboardOptions(
@@ -176,7 +179,7 @@ private fun EmailStep(
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
             } else {
-                Text("Send code")
+                Text(stringResource(Res.string.email_send_code))
             }
         }
     }
@@ -198,7 +201,7 @@ private fun CodeStep(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "Code sent to",
+            text = stringResource(Res.string.email_code_sent_to),
             style = MaterialTheme.typography.bodyLarge,
         )
         Text(
@@ -212,7 +215,7 @@ private fun CodeStep(
         OutlinedTextField(
             value = code,
             onValueChange = onCodeChange,
-            label = { Text("6-digit code") },
+            label = { Text(stringResource(Res.string.email_code_label)) },
             singleLine = true,
             keyboardOptions =
                 KeyboardOptions(
@@ -240,7 +243,7 @@ private fun CodeStep(
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
             } else {
-                Text("Verify")
+                Text(stringResource(Res.string.email_verify))
             }
         }
 
@@ -252,9 +255,9 @@ private fun CodeStep(
         ) {
             Text(
                 if (resendCooldown > 0) {
-                    "Resend in ${resendCooldown}s"
+                    stringResource(Res.string.email_resend_in, resendCooldown)
                 } else {
-                    "Resend code"
+                    stringResource(Res.string.email_resend_code)
                 },
             )
         }
@@ -262,7 +265,7 @@ private fun CodeStep(
         Spacer(Modifier.height(8.dp))
 
         Text(
-            text = "Code expires in 10 minutes",
+            text = stringResource(Res.string.email_code_expires),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

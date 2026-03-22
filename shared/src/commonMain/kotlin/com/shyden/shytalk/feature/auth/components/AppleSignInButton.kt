@@ -17,9 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
-import com.shyden.shytalk.resources.ic_apple_logo
-import com.shyden.shytalk.resources.sign_in_with_apple
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -53,7 +52,7 @@ fun AppleSignInButton(
                 color = Color.White,
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Signing in…")
+            Text(stringResource(Res.string.signing_in_loading))
         } else {
             Icon(
                 painter = painterResource(Res.drawable.ic_apple_logo),
