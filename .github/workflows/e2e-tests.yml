@@ -45,7 +45,6 @@ on:
 
 permissions:
   contents: read
-  checks: write
 
 # Only one E2E run at a time — prevents resource contention and Firestore conflicts
 concurrency:
