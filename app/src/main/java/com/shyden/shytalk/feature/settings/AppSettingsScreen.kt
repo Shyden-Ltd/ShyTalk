@@ -85,7 +85,6 @@ import com.shyden.shytalk.core.model.LinkedProvider
 import com.shyden.shytalk.core.model.PmPrivacy
 import com.shyden.shytalk.core.model.ProviderType
 import com.shyden.shytalk.core.model.User
-import com.shyden.shytalk.core.util.LanguagePreference
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
 import org.jetbrains.compose.resources.stringResource

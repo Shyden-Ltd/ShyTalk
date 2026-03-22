@@ -45,7 +45,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
+import com.shyden.shytalk.core.util.RelativeTimeStrings
 import com.shyden.shytalk.core.util.formatRelativeTime
+import com.shyden.shytalk.core.util.rememberRelativeTimeStrings
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
@@ -60,6 +62,7 @@ fun ReportReviewScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val timeStrings = rememberRelativeTimeStrings()
     var selectedReport by remember { mutableStateOf<Report?>(null) }
 
     LaunchedEffect(uiState.message) {
@@ -111,6 +114,7 @@ fun ReportReviewScreen(
                 items(uiState.reports, key = { it.reportId }) { report ->
                     ReportCard(
                         report = report,
+                        timeStrings = timeStrings,
                         onClick = { selectedReport = report },
                     )
                 }
@@ -137,6 +141,7 @@ fun ReportReviewScreen(
 @Composable
 private fun ReportCard(
     report: Report,
+    timeStrings: RelativeTimeStrings,
     onClick: () -> Unit,
 ) {
     Card(
@@ -162,7 +167,7 @@ private fun ReportCard(
                     color = MaterialTheme.colorScheme.primary,
                 )
                 Text(
-                    text = formatRelativeTime(report.timestamp),
+                    text = formatRelativeTime(report.timestamp, timeStrings),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

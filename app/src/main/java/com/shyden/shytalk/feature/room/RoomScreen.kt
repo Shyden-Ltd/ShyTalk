@@ -95,7 +95,6 @@ import com.shyden.shytalk.feature.gacha.LuckySpinOverlay
 import com.shyden.shytalk.feature.gifting.GiftingViewModel
 import com.shyden.shytalk.feature.messaging.ConversationListViewModel
 import com.shyden.shytalk.feature.messaging.PmBottomSheet
-import com.shyden.shytalk.feature.messaging.PrivateChatViewModel
 import com.shyden.shytalk.feature.room.components.BackpackSheet
 import com.shyden.shytalk.feature.room.components.RoomActionCarousel
 import com.shyden.shytalk.feature.daily.DailyRewardCelebrationDialog

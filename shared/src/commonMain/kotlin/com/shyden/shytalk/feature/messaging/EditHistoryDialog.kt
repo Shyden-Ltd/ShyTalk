@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.model.MessageEdit
 import com.shyden.shytalk.core.util.formatRelativeTime
+import com.shyden.shytalk.core.util.rememberRelativeTimeStrings
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
@@ -26,6 +27,7 @@ fun EditHistoryDialog(
     currentText: String,
     onDismiss: () -> Unit,
 ) {
+    val timeStrings = rememberRelativeTimeStrings()
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(Res.string.edit_history)) },
@@ -55,7 +57,7 @@ fun EditHistoryDialog(
 
                     edits.forEach { edit ->
                         Text(
-                            text = formatRelativeTime(edit.editedAt),
+                            text = formatRelativeTime(edit.editedAt, timeStrings),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

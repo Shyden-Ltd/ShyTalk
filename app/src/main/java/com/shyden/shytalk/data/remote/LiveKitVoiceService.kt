@@ -8,7 +8,6 @@ import android.util.Log
 import com.shyden.shytalk.BuildConfig
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logI
-import com.shyden.shytalk.core.util.logW
 import io.livekit.android.AudioOptions
 import io.livekit.android.AudioType
 import io.livekit.android.LiveKit

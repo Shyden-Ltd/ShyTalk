@@ -36,6 +36,7 @@ import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.formatRelativeTime
+import com.shyden.shytalk.core.util.rememberRelativeTimeStrings
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.ui.theme.SpeakingGreen
@@ -58,6 +59,7 @@ fun ConversationListItem(
     aliases: Map<String, String> = emptyMap(),
     modifier: Modifier = Modifier,
 ) {
+    val timeStrings = rememberRelativeTimeStrings()
     Row(
         modifier =
             modifier
@@ -240,7 +242,7 @@ fun ConversationListItem(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
-                text = formatRelativeTime(lastMessageAt),
+                text = formatRelativeTime(lastMessageAt, timeStrings),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

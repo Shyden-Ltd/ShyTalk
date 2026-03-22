@@ -19,31 +19,62 @@ fun calculateAge(dateOfBirthMillis: Long): Int {
 
 fun isAtLeast13(dateOfBirthMillis: Long): Boolean = calculateAge(dateOfBirthMillis) >= 13
 
-fun formatRelativeTime(timestampMs: Long): String {
+/**
+ * Localized labels for [formatRelativeTime].
+ * In Composable callers, construct via [RelativeTimeStrings.fromResources].
+ * English defaults allow direct use in tests and non-UI code.
+ */
+data class RelativeTimeStrings(
+    val justNow: String = "just now",
+    val minutesAgo: (Long) -> String = { m -> "$m min${if (m != 1L) "s" else ""} ago" },
+    val hoursAgo: (Long) -> String = { h -> "$h hour${if (h != 1L) "s" else ""} ago" },
+    val daysAgo: (Long) -> String = { d -> "$d day${if (d != 1L) "s" else ""} ago" },
+)
+
+/**
+ * Localized labels for [formatSuspensionEnd].
+ * In Composable callers, construct via [SuspensionTimeStrings.fromResources].
+ * English defaults allow direct use in tests and non-UI code.
+ */
+data class SuspensionTimeStrings(
+    val expired: String = "Expired",
+    val days: (Long) -> String = { d -> "$d day${if (d != 1L) "s" else ""}" },
+    val hours: (Long) -> String = { h -> "$h hour${if (h != 1L) "s" else ""}" },
+    val minutes: (Long) -> String = { m -> "$m minute${if (m != 1L) "s" else ""}" },
+    val lessThanMinute: String = "Less than 1 minute",
+)
+
+fun formatRelativeTime(
+    timestampMs: Long,
+    strings: RelativeTimeStrings = RelativeTimeStrings(),
+): String {
     val diffMs = currentTimeMillis() - timestampMs
     val minutes = diffMs / 60_000
     val hours = minutes / 60
     val days = hours / 24
     return when {
-        minutes < 1 -> "just now"
-        minutes < 60 -> "$minutes min${if (minutes != 1L) "s" else ""} ago"
-        hours < 24 -> "$hours hour${if (hours != 1L) "s" else ""} ago"
-        else -> "$days day${if (days != 1L) "s" else ""} ago"
+        minutes < 1 -> strings.justNow
+        minutes < 60 -> strings.minutesAgo(minutes)
+        hours < 24 -> strings.hoursAgo(hours)
+        else -> strings.daysAgo(days)
     }
 }
 
-fun formatSuspensionEnd(endDateMillis: Long): String {
+fun formatSuspensionEnd(
+    endDateMillis: Long,
+    strings: SuspensionTimeStrings = SuspensionTimeStrings(),
+): String {
     val remaining = endDateMillis - currentTimeMillis()
-    if (remaining <= 0) return "Expired"
+    if (remaining <= 0) return strings.expired
     val totalMinutes = remaining / 60_000
     val days = totalMinutes / 1440
     val hours = (totalMinutes % 1440) / 60
     val minutes = totalMinutes % 60
     val parts = mutableListOf<String>()
-    if (days > 0) parts.add("$days day${if (days != 1L) "s" else ""}")
-    if (hours > 0) parts.add("$hours hour${if (hours != 1L) "s" else ""}")
-    if (minutes > 0) parts.add("$minutes minute${if (minutes != 1L) "s" else ""}")
-    return parts.joinToString(", ").ifEmpty { "Less than 1 minute" }
+    if (days > 0) parts.add(strings.days(days))
+    if (hours > 0) parts.add(strings.hours(hours))
+    if (minutes > 0) parts.add(strings.minutes(minutes))
+    return parts.joinToString(", ").ifEmpty { strings.lessThanMinute }
 }
 
 fun formatSuspensionEndDateTime(endDateMillis: Long): String {

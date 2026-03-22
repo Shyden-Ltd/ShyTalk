@@ -48,14 +48,11 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Flag
-import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PersonRemove
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.AccountBalanceWallet
-import android.content.Intent
 import org.jetbrains.compose.resources.stringResource
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
@@ -112,7 +109,6 @@ import com.shyden.shytalk.core.model.BackpackItem
 import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.ui.SuperShyGold
-import com.shyden.shytalk.core.util.UiText
 import com.shyden.shytalk.core.util.calculateAge
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.feature.gifting.GiftingViewModel

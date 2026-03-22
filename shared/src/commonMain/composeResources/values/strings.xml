@@ -815,54 +815,15 @@
     <string name="google_sign_in_failed">Google sign-in failed</string>
 
     <!-- PIN & Security -->
-    <string name="create_pin">Create a PIN</string>
-    <string name="confirm_pin">Confirm your PIN</string>
     <string name="enter_pin">Enter your PIN</string>
     <string name="pin_mismatch">PINs don\'t match. Try again.</string>
-    <string name="pin_info">You can change or disable this in Security settings</string>
-    <string name="wrong_pin">Wrong PIN. %1$d attempts remaining.</string>
     <string name="pin_locked">Too many attempts. Try again in %1$d minutes.</string>
     <string name="pin_locked_reauth">Account locked. Please sign in again to reset your PIN.</string>
     <string name="reset_pin">Reset PIN</string>
-    <string name="choose_pin_length">Choose PIN length</string>
-    <string name="digits">digits</string>
     <string name="account_locked">Account Locked</string>
     <string name="unlock">Unlock</string>
 
-    <!-- Biometric -->
-    <string name="enable_biometric">Enable biometric login?</string>
-    <string name="biometric_title">Unlock ShyTalk</string>
-    <string name="biometric_subtitle">Use your fingerprint or face to unlock</string>
-    <string name="use_pin">Use PIN instead</string>
-    <string name="biometric_not_available">Not available on this device</string>
-
-    <!-- Email OTP -->
-    <string name="email_otp_title">Sign in with email</string>
-    <string name="enter_email">Enter your email address</string>
-    <string name="enter_code">Enter verification code</string>
-    <string name="code_sent">Code sent to %1$s</string>
-    <string name="resend_code">Resend code</string>
-    <string name="resend_in">Resend in %1$ds</string>
-    <string name="invalid_code">Invalid code. Try again.</string>
-    <string name="code_expired">Code expired. Request a new one.</string>
     <string name="too_many_requests">Too many requests. Try again later.</string>
-    <string name="send_code">Send code</string>
-    <string name="six_digit_code">6-digit code</string>
-    <string name="code_expires_info">Code expires in 10 minutes</string>
-
-    <!-- Security Settings -->
-    <string name="app_lock">App Lock</string>
-    <string name="app_lock_description">Require PIN or biometric to unlock</string>
-    <string name="lock_timeout">Lock Timeout</string>
-    <string name="biometric_login">Biometric Login</string>
-    <string name="biometric_login_description">Use fingerprint or face to unlock</string>
-    <string name="linked_accounts_description">Manage sign-in methods</string>
-    <string name="reset_pin_description">Verify your identity to set a new PIN</string>
-    <string name="timeout_1min">1 minute</string>
-    <string name="timeout_5min">5 minutes</string>
-    <string name="timeout_15min">15 minutes</string>
-    <string name="timeout_30min">30 minutes</string>
-    <string name="timeout_never">Never</string>
 
     <!-- Starting Screens -->
     <string name="starting_screen_pre_launch_title">ShyTalk is not available yet</string>

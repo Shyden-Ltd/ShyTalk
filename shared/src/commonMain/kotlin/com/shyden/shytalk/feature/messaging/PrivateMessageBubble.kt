@@ -58,6 +58,7 @@ import com.shyden.shytalk.core.model.SendStatus
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.formatRelativeTime
+import com.shyden.shytalk.core.util.rememberRelativeTimeStrings
 import com.shyden.shytalk.feature.home.RoomListItem
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -91,6 +92,7 @@ fun PrivateMessageBubble(
     isGroupChat: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    val timeStrings = rememberRelativeTimeStrings()
     // System/mod messages: render as centered, non-interactive text
     val isSystemMessage = message.type == PrivateMessageType.MOD_ACTION || message.type == PrivateMessageType.SYSTEM
     if (isSystemMessage) {
@@ -487,7 +489,7 @@ fun PrivateMessageBubble(
                     // Timestamp
                     if (showTimestamp) {
                         Text(
-                            text = formatRelativeTime(message.createdAt),
+                            text = formatRelativeTime(message.createdAt, timeStrings),
                             style = MaterialTheme.typography.labelSmall,
                             color = metaColor,
                         )

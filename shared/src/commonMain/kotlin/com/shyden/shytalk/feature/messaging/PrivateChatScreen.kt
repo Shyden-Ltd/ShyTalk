@@ -77,6 +77,7 @@ import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.formatRelativeTime
 import com.shyden.shytalk.core.util.isKeyboardVisible
+import com.shyden.shytalk.core.util.rememberRelativeTimeStrings
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.ui.theme.SpeakingGreen
@@ -107,6 +108,7 @@ fun PrivateChatScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    val timeStrings = rememberRelativeTimeStrings()
 
     var messageText by remember { mutableStateOf("") }
     var showOverflowMenu by remember { mutableStateOf(false) }
@@ -295,7 +297,12 @@ fun PrivateChatScreen(
                                             if (isOnline) {
                                                 stringResource(Res.string.online)
                                             } else {
-                                                otherUser?.lastSeenAt?.let { stringResource(Res.string.last_seen, formatRelativeTime(it)) }
+                                                otherUser?.lastSeenAt?.let {
+                                                    stringResource(
+                                                        Res.string.last_seen,
+                                                        formatRelativeTime(it, timeStrings),
+                                                    )
+                                                }
                                                     ?: ""
                                             },
                                         style = MaterialTheme.typography.bodySmall,

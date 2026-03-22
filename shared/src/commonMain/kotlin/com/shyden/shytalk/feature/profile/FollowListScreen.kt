@@ -52,6 +52,7 @@ import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.core.util.formatRelativeTime
+import com.shyden.shytalk.core.util.rememberRelativeTimeStrings
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
@@ -464,9 +465,10 @@ private fun StalkerUserRow(
                 isSuperShy = user?.isSuperShy == true,
                 style = MaterialTheme.typography.bodyLarge,
             )
+            val timeStrings = rememberRelativeTimeStrings()
             val agoText =
                 remember(visitor.lastVisitedAt) {
-                    formatRelativeTime(visitor.lastVisitedAt)
+                    formatRelativeTime(visitor.lastVisitedAt, timeStrings)
                 }
             Text(
                 text = stringResource(Res.string.stalker_visit_info, agoText, visitor.visitCount),
