@@ -655,16 +655,16 @@ router.post('/users/:uniqueId/follow', async (req, res) => {
     const targetId = body?.targetUserId;
     if (!targetId) return res.status(400).json({ error: 'targetUserId required' });
     if (requireOwner(req, res)) return;
-    if (req.params.uniqueId === targetId)
+    if (String(req.params.uniqueId) === String(targetId))
       return res.status(400).json({ error: 'Cannot follow yourself' });
 
     const uniqueId = req.params.uniqueId;
     const batch = db.batch();
     batch.update(db.doc(`users/${uniqueId}`), {
-      followingIds: FieldValue.arrayUnion(targetId),
+      followingIds: FieldValue.arrayUnion(Number(targetId)),
     });
     batch.update(db.doc(`users/${targetId}`), {
-      followerIds: FieldValue.arrayUnion(uniqueId),
+      followerIds: FieldValue.arrayUnion(Number(uniqueId)),
     });
     await batch.commit();
     log.info('users', 'User followed', { uniqueId, targetUserId: targetId });
@@ -694,10 +694,10 @@ router.post('/users/:uniqueId/unfollow', async (req, res) => {
     const uniqueId = req.params.uniqueId;
     const batch = db.batch();
     batch.update(db.doc(`users/${uniqueId}`), {
-      followingIds: FieldValue.arrayRemove(targetId),
+      followingIds: FieldValue.arrayRemove(Number(targetId)),
     });
     batch.update(db.doc(`users/${targetId}`), {
-      followerIds: FieldValue.arrayRemove(uniqueId),
+      followerIds: FieldValue.arrayRemove(Number(uniqueId)),
     });
     await batch.commit();
     log.info('users', 'User unfollowed', { uniqueId, targetUserId: targetId });
@@ -727,10 +727,10 @@ router.post('/users/:uniqueId/remove-follower', async (req, res) => {
     const uniqueId = req.params.uniqueId;
     const batch = db.batch();
     batch.update(db.doc(`users/${uniqueId}`), {
-      followerIds: FieldValue.arrayRemove(followerId),
+      followerIds: FieldValue.arrayRemove(Number(followerId)),
     });
     batch.update(db.doc(`users/${followerId}`), {
-      followingIds: FieldValue.arrayRemove(uniqueId),
+      followingIds: FieldValue.arrayRemove(Number(uniqueId)),
     });
     await batch.commit();
     log.info('users', 'Follower removed', { uniqueId, followerUserId: followerId });

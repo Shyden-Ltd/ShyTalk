@@ -45,11 +45,11 @@ router.get('/admin/logs', async (req, res) => {
     if (requestTraceId) query = query.where('requestTraceId', '==', requestTraceId);
 
     // Time range filters
-    if (startTime) query = query.where('timestamp', '>=', startTime);
-    if (endTime) query = query.where('timestamp', '<=', endTime);
+    if (startTime) query = query.where('timestamp', '>=', Number(startTime));
+    if (endTime) query = query.where('timestamp', '<=', Number(endTime));
 
     // Pagination
-    if (cursor) query = query.startAfter(cursor);
+    if (cursor) query = query.startAfter(Number(cursor));
 
     query = query.limit(limit);
 
@@ -84,9 +84,8 @@ router.get('/admin/logs', async (req, res) => {
 
 // GET /admin/logs/trace/:traceId — Get all logs for a session trace
 router.get('/admin/logs/trace/:traceId', async (req, res) => {
-  if (requireAdmin(req, res)) return;
-
   try {
+    if (requireAdmin(req, res)) return;
     const { traceId } = req.params;
 
     const snapshot = await db

@@ -182,17 +182,19 @@ fun BackpackSheet(
 
             // ── Paged Grid ──
             val items =
-                if (state.activeTab == 0) {
-                    state.giftCatalog.filter { it.showInStore }.sortedByDescending { it.coinValue }.map { gift ->
-                        GridItem(gift = gift)
+                remember(state.giftCatalog, state.backpackItems, state.activeTab) {
+                    if (state.activeTab == 0) {
+                        state.giftCatalog.filter { it.showInStore }.sortedByDescending { it.coinValue }.map { gift ->
+                            GridItem(gift = gift)
+                        }
+                    } else {
+                        state.backpackItems
+                            .mapNotNull { item ->
+                                state.giftCatalog.find { it.id == item.giftId }?.let { gift ->
+                                    GridItem(gift = gift, ownedQuantity = item.quantity, backpackItem = item)
+                                }
+                            }.sortedByDescending { it.gift.coinValue }
                     }
-                } else {
-                    state.backpackItems
-                        .mapNotNull { item ->
-                            state.giftCatalog.find { it.id == item.giftId }?.let { gift ->
-                                GridItem(gift = gift, ownedQuantity = item.quantity, backpackItem = item)
-                            }
-                        }.sortedByDescending { it.gift.coinValue }
                 }
 
             Box(modifier = Modifier.weight(1f)) {

@@ -229,6 +229,8 @@ describe('DELETE /api/admin/bans/network/:banId', () => {
 describe('POST /api/admin/bans/unban-all/:uniqueId', () => {
   test('removes all bans for user (200)', async () => {
     const mockRefDelete = jest.fn().mockResolvedValue();
+    // Each query (string + numeric variant per collection) returns the same docs,
+    // but deduplication by id ensures each ban is only counted once.
     mockWhereGet.mockResolvedValue({
       empty: false,
       docs: [
@@ -241,7 +243,8 @@ describe('POST /api/admin/bans/unban-all/:uniqueId', () => {
     const res = await request(app).post('/api/admin/bans/unban-all/user456').expect(200);
 
     expect(res.body.success).toBe(true);
-    expect(res.body.removed).toBe(4); // 2 from deviceBans + 2 from networkBans (same mock)
+    // Mock returns ban1+ban2 for all 4 queries; dedup keeps 2 unique docs
+    expect(res.body.removed).toBe(2);
     expect(mockRefDelete).toHaveBeenCalled();
   });
 });

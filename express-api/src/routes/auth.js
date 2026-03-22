@@ -17,11 +17,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const { db, auth } = require('../utils/firebase');
 const { sendEmail } = require('../utils/email');
-const {
-  buildOtpEmail,
-  buildLockoutEmail: _buildLockoutEmail,
-  buildResetEmail: _buildResetEmail,
-} = require('../utils/email-templates');
+const { buildOtpEmail } = require('../utils/email-templates');
 const log = require('../utils/log');
 const { authMiddleware } = require('../middleware/auth');
 const { sensitiveLimiter } = require('../middleware/rateLimit');

@@ -1014,12 +1014,13 @@ async function autoApplyBans(uniqueId, endDate) {
     .get();
 
   let lastIp = null;
+  const batch = db.batch();
 
   for (const doc of bindingsSnap.docs) {
     const binding = doc.data();
 
     // Create a device ban for each bound device
-    await db.doc(`deviceBans/${doc.id}`).set({
+    batch.set(db.doc(`deviceBans/${doc.id}`), {
       deviceId: doc.id,
       reason: 'Auto-applied: user suspended',
       duration,
@@ -1038,7 +1039,7 @@ async function autoApplyBans(uniqueId, endDate) {
 
   // Create a network ban for the last known IP
   if (lastIp) {
-    await db.doc(`networkBans/${generateId()}`).set({
+    batch.set(db.doc(`networkBans/${generateId()}`), {
       type: 'ip',
       value: lastIp,
       reason: 'Auto-applied: user suspended',
@@ -1050,6 +1051,8 @@ async function autoApplyBans(uniqueId, endDate) {
       createdBy: 'system',
     });
   }
+
+  await batch.commit();
 
   const deviceCount = bindingsSnap.docs.length;
   const networkCount = lastIp ? 1 : 0;

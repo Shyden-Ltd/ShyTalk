@@ -216,6 +216,21 @@ describe('POST /api/conversations/:id/messages', () => {
     expect(convData.lastMessage.type).toBe('TEXT');
   });
 
+  test('returns 403 when sender is not a participant', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ participantIds: ['user-B', 'user-C'], isGroup: false }),
+    });
+
+    const app = createApp('outsider');
+    const res = await request(app)
+      .post('/api/conversations/conv-1/messages')
+      .send({ text: 'Hello', senderName: 'Outsider' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/not a participant/i);
+  });
+
   test('rejects invalid message type with 400', async () => {
     const app = createApp('user-A');
 

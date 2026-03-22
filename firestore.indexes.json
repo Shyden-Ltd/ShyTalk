@@ -187,9 +187,7 @@
     {
       "collectionGroup": "backpack",
       "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "expiresAt", "order": "ASCENDING" }
-      ]
+      "fields": [{ "fieldPath": "expiresAt", "order": "ASCENDING" }]
     },
     {
       "collectionGroup": "conversations",
@@ -197,6 +195,22 @@
       "fields": [
         { "fieldPath": "createdBy", "order": "ASCENDING" },
         { "fieldPath": "isGroup", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "deviceBans",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "linkedUniqueId", "order": "ASCENDING" },
+        { "fieldPath": "autoApplied", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "networkBans",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "linkedUniqueId", "order": "ASCENDING" },
+        { "fieldPath": "autoApplied", "order": "ASCENDING" }
       ]
     }
   ],

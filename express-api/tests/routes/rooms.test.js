@@ -109,6 +109,16 @@ describe('POST /api/rooms/:roomId/invites/send', () => {
       .send({ userId: 'user-B', invitedBy: 'user-A' })
       .expect(404);
   });
+
+  test('returns 403 when invitedBy is spoofed (does not match auth)', async () => {
+    const app = createApp('real-user');
+    const res = await request(app)
+      .post('/api/rooms/room-1/invites/send')
+      .send({ userId: 'user-B', invitedBy: 'impersonated-user' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/another user/i);
+  });
 });
 
 describe('POST /api/rooms/:roomId/seat-requests', () => {

@@ -133,7 +133,7 @@ fun ReportUserDialog(
                                 Box(modifier = Modifier.size(72.dp)) {
                                     AsyncImage(
                                         model = bytes,
-                                        contentDescription = null,
+                                        contentDescription = "Evidence photo ${index + 1}",
                                         modifier =
                                             Modifier
                                                 .size(72.dp)

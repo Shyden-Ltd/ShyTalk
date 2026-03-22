@@ -231,13 +231,27 @@ router.post('/admin/bans/unban-all/:uniqueId', async (req, res) => {
     if (requireAdmin(req, res)) return;
 
     const uniqueId = req.params.uniqueId;
+    const numericId = Number(uniqueId);
+    const stringId = String(uniqueId);
 
-    const [deviceSnap, networkSnap] = await Promise.all([
-      db.collection('deviceBans').where('linkedUniqueId', '==', uniqueId).get(),
-      db.collection('networkBans').where('linkedUniqueId', '==', uniqueId).get(),
+    const [deviceSnapStr, deviceSnapNum, networkSnapStr, networkSnapNum] = await Promise.all([
+      db.collection('deviceBans').where('linkedUniqueId', '==', stringId).get(),
+      db.collection('deviceBans').where('linkedUniqueId', '==', numericId).get(),
+      db.collection('networkBans').where('linkedUniqueId', '==', stringId).get(),
+      db.collection('networkBans').where('linkedUniqueId', '==', numericId).get(),
     ]);
 
-    const allDocs = [...deviceSnap.docs, ...networkSnap.docs];
+    // Deduplicate by doc id in case both queries match the same doc
+    const seen = new Set();
+    const allDocs = [];
+    for (const snap of [deviceSnapStr, deviceSnapNum, networkSnapStr, networkSnapNum]) {
+      for (const d of snap.docs) {
+        if (!seen.has(d.id)) {
+          seen.add(d.id);
+          allDocs.push(d);
+        }
+      }
+    }
 
     await Promise.all(allDocs.map((d) => d.ref.delete()));
 
