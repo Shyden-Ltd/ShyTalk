@@ -213,6 +213,10 @@ router.post('/admin/backups/restore/:date', async (req, res) => {
       return res.status(400).json({ error: 'collection is required when mode is "collection"' });
     }
 
+    if (collection && !RESTORABLE_COLLECTIONS.includes(collection)) {
+      return res.status(400).json({ error: 'Invalid collection name' });
+    }
+
     // Auto-create a fresh backup before any restore
     log.info('admin-backup', 'Creating pre-restore backup', {
       date: req.params.date,

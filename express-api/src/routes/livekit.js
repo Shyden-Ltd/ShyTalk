@@ -13,7 +13,7 @@ router.post('/livekit/token', async (req, res) => {
     const { roomName } = req.body || {};
     const identity = String(req.auth.uniqueId);
 
-    if (!roomName) {
+    if (!roomName || typeof roomName !== 'string') {
       log.warn('livekit', 'Token request missing roomName', { userId: identity });
       return res.status(400).json({ error: 'roomName is required' });
     }

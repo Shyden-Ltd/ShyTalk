@@ -13,7 +13,7 @@ const log = require('../utils/log');
 // -- Save FCM token --
 router.post('/notifications/token', async (req, res) => {
   try {
-    if (!req.body?.token || typeof req.body.token !== 'string') {
+    if (!req.body?.token || typeof req.body.token !== 'string' || req.body.token.length > 500) {
       return res.status(400).json({ error: 'token must be a non-empty string' });
     }
 
@@ -32,7 +32,7 @@ router.post('/notifications/token', async (req, res) => {
 // -- Remove FCM token --
 router.delete('/notifications/token', async (req, res) => {
   try {
-    if (!req.body?.token || typeof req.body.token !== 'string') {
+    if (!req.body?.token || typeof req.body.token !== 'string' || req.body.token.length > 500) {
       return res.status(400).json({ error: 'token must be a non-empty string' });
     }
 

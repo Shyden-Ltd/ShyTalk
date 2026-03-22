@@ -72,7 +72,13 @@ async function testDataCleanup() {
         deletedUserUniqueIds.push(uid);
         await deleteSubcollections(doc.ref, USER_SUBCOLLECTIONS);
       } else if (colName === 'conversations') {
-        await deleteSubcollections(doc.ref, ['messages']);
+        await deleteSubcollections(doc.ref, [
+          'messages',
+          'userSettings',
+          'mutes',
+          'settings',
+          'mod_log',
+        ]);
       }
       await doc.ref.delete();
       totalDeleted++;
