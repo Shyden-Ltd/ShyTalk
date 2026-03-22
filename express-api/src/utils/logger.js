@@ -126,7 +126,7 @@ function createLogger(db) {
       consecutiveFailures = 0;
     } catch (err) {
       consecutiveFailures++;
-      if (consecutiveFailures === CIRCUIT_BREAKER_THRESHOLD) {
+      if (consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
         circuitBreakerOpenedAt = Date.now();
       }
       // Logger must never throw
