@@ -12,20 +12,32 @@ const { db } = require('../utils/firebase');
 const r2 = require('../utils/r2');
 const log = require('../utils/log');
 
-// Top-level collections to back up
+// Top-level collections to back up (must match actual Firestore collections)
 const TOP_LEVEL_COLLECTIONS = [
   'users',
   'rooms',
   'conversations',
+  'config',
+  'identityMap',
+  'counters',
   'deviceBindings',
   'gifts',
-  'giftCatalog',
-  'economyConfig',
+  'giftRankings',
+  'broadcasts',
+  'coinPackages',
   'funFacts',
   'banners',
   'reports',
-  'appeals',
-  'subscriptions',
+  'reportsArchive',
+  'reportLocks',
+  'suspensionAppeals',
+  'alerts',
+  'alertConfig',
+  'adminAuditLog',
+  'otpCodes',
+  'biometricKeys',
+  'emailMetrics',
+  'purchaseReceipts',
   'logConfig',
   'deviceBans',
   'networkBans',
@@ -36,6 +48,13 @@ const SUBCOLLECTIONS = [
   ['rooms', 'messages'],
   ['rooms', 'seatRequests'],
   ['conversations', 'messages'],
+  ['conversations', 'userSettings'],
+  ['conversations', 'mutes'],
+  ['users', 'backpack'],
+  ['users', 'warnings'],
+  ['users', 'giftWall'],
+  ['users', 'transactions'],
+  ['users', 'stalkers'],
 ];
 
 /**
