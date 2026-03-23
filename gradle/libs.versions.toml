@@ -30,7 +30,7 @@ allureKotlin = "2.4.0"
 cucumberAndroid = "7.18.1"
 securityCrypto = "1.1.0"
 biometric = "1.4.0-alpha05"
-ktlint = "12.3.0"
+ktlint = "14.2.0"
 detekt = "1.23.8"
 
 [libraries]
