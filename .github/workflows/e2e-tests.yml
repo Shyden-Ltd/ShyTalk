@@ -256,7 +256,7 @@ jobs:
 
       - name: Cache Playwright browsers
         id: cache
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-browsers-${{ steps.pw.outputs.version }}
@@ -293,13 +293,13 @@ jobs:
         run: npm ci
 
       - name: Restore Playwright browsers from cache
-        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-browsers-${{ needs.prepare-playwright.outputs.pw-version }}
 
       - name: Cache apt packages for Playwright
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v4
         with:
           path: /var/cache/apt/archives
           key: apt-playwright-${{ needs.prepare-playwright.outputs.pw-version }}
