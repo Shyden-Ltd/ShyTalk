@@ -232,7 +232,7 @@ dependencies {
     implementation(libs.google.id)
 
     // OkHttp (explicit dep for StorageRepositoryImpl; also brought transitively by ktor-client-okhttp)
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp:5.3.2")
 
     // Coil (comes transitively from :shared, but app-specific screens still need it)
     implementation(libs.coil3.compose)
