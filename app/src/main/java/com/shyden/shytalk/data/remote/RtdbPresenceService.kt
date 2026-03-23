@@ -29,7 +29,6 @@ class RtdbPresenceService(
     private val httpClient: OkHttpClient,
     private val baseUrl: String,
 ) : PresenceService {
-
     companion object {
         private const val TAG = "RtdbPresenceService"
     }
@@ -51,7 +50,10 @@ class RtdbPresenceService(
     /** Track last-seen event timestamp to deduplicate. */
     private var lastEventTs = 0L
 
-    override fun setPresence(roomId: String, userId: String) {
+    override fun setPresence(
+        roomId: String,
+        userId: String,
+    ) {
         if (currentRoomId != null) {
             removePresence()
         }
@@ -66,77 +68,82 @@ class RtdbPresenceService(
 
         // Re-establish presence on RTDB reconnect (onDisconnect may have fired during a blip)
         val connectedRef = db.getReference(".info/connected")
-        connectedListener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val connected = snapshot.getValue(Boolean::class.java) ?: false
-                if (connected && currentRoomId == roomId && currentUserId == userId) {
-                    presenceRef.setValue(true)
-                    presenceRef.onDisconnect().removeValue()
+        connectedListener =
+            object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    val connected = snapshot.getValue(Boolean::class.java) ?: false
+                    if (connected && currentRoomId == roomId && currentUserId == userId) {
+                        presenceRef.setValue(true)
+                        presenceRef.onDisconnect().removeValue()
+                    }
+                }
+
+                override fun onCancelled(error: DatabaseError) {
+                    Log.w(TAG, "Connected listener cancelled: ${error.message}")
                 }
             }
-            override fun onCancelled(error: DatabaseError) {
-                Log.w(TAG, "Connected listener cancelled: ${error.message}")
-            }
-        }
         connectedListener?.let { connectedRef.addValueEventListener(it) }
 
         // Listen to all presence in this room
         val roomPresenceRef = db.getReference("rooms/$roomId/presence")
-        presenceListener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val userIds = snapshot.children.mapNotNull { it.key }.toSet()
-                presenceFlow.value = userIds
-            }
+        presenceListener =
+            object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    val userIds = snapshot.children.mapNotNull { it.key }.toSet()
+                    presenceFlow.value = userIds
+                }
 
-            override fun onCancelled(error: DatabaseError) {
-                Log.w(TAG, "Presence listener cancelled: ${error.message}")
+                override fun onCancelled(error: DatabaseError) {
+                    Log.w(TAG, "Presence listener cancelled: ${error.message}")
+                }
             }
-        }
         presenceListener?.let { roomPresenceRef.addValueEventListener(it) }
 
         // Listen to room events
         val eventsRef = db.getReference("rooms/$roomId/events/lastEvent")
-        eventsListener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val type = snapshot.child("type").getValue(String::class.java) ?: return
-                val ts = snapshot.child("ts").getValue(Long::class.java) ?: return
+        eventsListener =
+            object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    val type = snapshot.child("type").getValue(String::class.java) ?: return
+                    val ts = snapshot.child("ts").getValue(Long::class.java) ?: return
 
-                // Deduplicate: skip if we've already seen this timestamp
-                if (ts <= lastEventTs) return
-                lastEventTs = ts
+                    // Deduplicate: skip if we've already seen this timestamp
+                    if (ts <= lastEventTs) return
+                    lastEventTs = ts
 
-                val eventUserId = snapshot.child("userId").getValue(String::class.java)
+                    val eventUserId = snapshot.child("userId").getValue(String::class.java)
 
-                val event = when (type) {
-                    "room_updated" -> RoomEvent.RoomUpdated
-                    "new_message" -> RoomEvent.NewMessage
-                    "seat_request_updated" -> RoomEvent.SeatRequestUpdated
-                    "room_closed" -> RoomEvent.RoomClosed
-                    "kicked" -> {
-                        val kickedId = eventUserId ?: return
-                        RoomEvent.UserKicked(kickedId)
+                    val event =
+                        when (type) {
+                            "room_updated" -> RoomEvent.RoomUpdated
+                            "new_message" -> RoomEvent.NewMessage
+                            "seat_request_updated" -> RoomEvent.SeatRequestUpdated
+                            "room_closed" -> RoomEvent.RoomClosed
+                            "kicked" -> {
+                                val kickedId = eventUserId ?: return
+                                RoomEvent.UserKicked(kickedId)
+                            }
+                            else -> {
+                                Log.d(TAG, "Unknown room event type: $type")
+                                return
+                            }
+                        }
+
+                    _roomEvents.tryEmit(event)
+
+                    // If this user was kicked, stop reconnecting
+                    if (event is RoomEvent.UserKicked && event.userId == currentUserId) {
+                        removePresence()
                     }
-                    else -> {
-                        Log.d(TAG, "Unknown room event type: $type")
-                        return
+                    if (event is RoomEvent.RoomClosed) {
+                        removePresence()
                     }
                 }
 
-                _roomEvents.tryEmit(event)
-
-                // If this user was kicked, stop reconnecting
-                if (event is RoomEvent.UserKicked && event.userId == currentUserId) {
-                    removePresence()
-                }
-                if (event is RoomEvent.RoomClosed) {
-                    removePresence()
+                override fun onCancelled(error: DatabaseError) {
+                    Log.w(TAG, "Events listener cancelled: ${error.message}")
                 }
             }
-
-            override fun onCancelled(error: DatabaseError) {
-                Log.w(TAG, "Events listener cancelled: ${error.message}")
-            }
-        }
         eventsListener?.let { eventsRef.addValueEventListener(it) }
 
         Log.d(TAG, "Presence set for room=$roomId user=$userId")
@@ -173,15 +180,17 @@ class RtdbPresenceService(
 
     override fun observeRoomPresence(roomId: String): Flow<Set<String>> = presenceFlow
 
-    override suspend fun isUserPresent(roomId: String, userId: String): Boolean {
-        return try {
+    override suspend fun isUserPresent(
+        roomId: String,
+        userId: String,
+    ): Boolean =
+        try {
             val snapshot = db.getReference("rooms/$roomId/presence/$userId").get().await()
             snapshot.exists() && snapshot.getValue(Boolean::class.java) == true
         } catch (e: Exception) {
             Log.w(TAG, "isUserPresent check failed: ${e.message}")
             false
         }
-    }
 
     /**
      * Detect owner absence from the presence set and call the Worker API.
@@ -190,15 +199,22 @@ class RtdbPresenceService(
     fun notifyOwnerAway(roomId: String) {
         scope.launch(Dispatchers.IO) {
             try {
-                val token = com.google.firebase.auth.FirebaseAuth.getInstance()
-                    .currentUser?.getIdToken(false)?.await()?.token ?: return@launch
+                val token =
+                    com.google.firebase.auth.FirebaseAuth
+                        .getInstance()
+                        .currentUser
+                        ?.getIdToken(false)
+                        ?.await()
+                        ?.token ?: return@launch
 
                 val emptyBody = "".toRequestBody(null)
-                val request = okhttp3.Request.Builder()
-                    .url("$baseUrl/api/rooms/$roomId/owner-away")
-                    .header("Authorization", "Bearer $token")
-                    .post(emptyBody)
-                    .build()
+                val request =
+                    okhttp3.Request
+                        .Builder()
+                        .url("$baseUrl/api/rooms/$roomId/owner-away")
+                        .header("Authorization", "Bearer $token")
+                        .post(emptyBody)
+                        .build()
 
                 httpClient.newCall(request).execute().close()
             } catch (e: Exception) {

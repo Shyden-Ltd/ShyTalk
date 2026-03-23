@@ -5,7 +5,9 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
-class OkHttpWebContentPreloader(private val client: OkHttpClient) : WebContentPreloader {
+class OkHttpWebContentPreloader(
+    private val client: OkHttpClient,
+) : WebContentPreloader {
     override suspend fun preload(url: String) {
         withContext(Dispatchers.IO) {
             val request = Request.Builder().url(url).build()

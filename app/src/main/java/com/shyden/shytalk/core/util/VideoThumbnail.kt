@@ -7,15 +7,18 @@ import android.net.Uri
 import java.io.ByteArrayOutputStream
 
 object VideoThumbnail {
-
-    fun extractVideoThumbnail(context: Context, uri: Uri): ByteArray? {
+    fun extractVideoThumbnail(
+        context: Context,
+        uri: Uri,
+    ): ByteArray? {
         val retriever = MediaMetadataRetriever()
         return try {
             context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
                 retriever.setDataSource(pfd.fileDescriptor)
             }
-            val bitmap = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                ?: return null
+            val bitmap =
+                retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    ?: return null
             val stream = ByteArrayOutputStream()
             bitmap.compress(Bitmap.CompressFormat.JPEG, 75, stream)
             bitmap.recycle()

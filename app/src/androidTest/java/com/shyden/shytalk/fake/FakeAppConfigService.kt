@@ -10,8 +10,7 @@ class FakeAppConfigService : AppConfigService {
 
     var startingScreens: Resource<Map<String, StartingScreen>> = Resource.Success(emptyMap())
 
-    override suspend fun getLatestVersionInfo(): Resource<Triple<Int, Int, String>> =
-        Resource.Success(Triple(1, 40, "0.40"))
+    override suspend fun getLatestVersionInfo(): Resource<Triple<Int, Int, String>> = Resource.Success(Triple(1, 40, "0.40"))
 
     override suspend fun checkBackendHealth(): Resource<BackendHealthStatus> =
         Resource.Success(BackendHealthStatus("ok", true, System.currentTimeMillis()))

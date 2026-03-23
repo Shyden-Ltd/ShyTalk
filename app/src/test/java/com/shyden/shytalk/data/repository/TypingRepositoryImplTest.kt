@@ -12,7 +12,6 @@ import org.junit.Test
  * Full integration testing is done via E2E tests (connectedDebugAndroidTest).
  */
 class TypingRepositoryImplTest {
-
     private lateinit var repo: RtdbTypingRepository
 
     @Before

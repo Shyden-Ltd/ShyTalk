@@ -7,21 +7,22 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ChatRoomTest {
-
     private val baseTimestamp = 1_000_000_000L
 
     @Test
     fun `kickInfo round-trips through toMap and fromMap`() {
-        val room = ChatRoom(
-            roomId = "room-1",
-            name = "Test",
-            ownerId = "owner",
-            createdAt = baseTimestamp,
-            kickInfo = mapOf(
-                "user-1" to mapOf("kickerName" to "Admin", "reason" to "Spamming"),
-                "user-2" to mapOf("kickerName" to "Mod", "reason" to "No reason given")
+        val room =
+            ChatRoom(
+                roomId = "room-1",
+                name = "Test",
+                ownerId = "owner",
+                createdAt = baseTimestamp,
+                kickInfo =
+                    mapOf(
+                        "user-1" to mapOf("kickerName" to "Admin", "reason" to "Spamming"),
+                        "user-2" to mapOf("kickerName" to "Mod", "reason" to "No reason given"),
+                    ),
             )
-        )
 
         val map = room.toMap()
         val restored = ChatRoom.fromMap(map, "room-1")
@@ -35,12 +36,13 @@ class ChatRoomTest {
 
     @Test
     fun `missing kickInfo in map defaults to empty`() {
-        val map = mapOf<String, Any?>(
-            "roomId" to "room-1",
-            "name" to "Test",
-            "ownerId" to "owner",
-            "createdAt" to baseTimestamp
-        )
+        val map =
+            mapOf<String, Any?>(
+                "roomId" to "room-1",
+                "name" to "Test",
+                "ownerId" to "owner",
+                "createdAt" to baseTimestamp,
+            )
 
         val room = ChatRoom.fromMap(map, "room-1")
 
@@ -49,12 +51,13 @@ class ChatRoomTest {
 
     @Test
     fun `bannedUserIds round-trips correctly`() {
-        val room = ChatRoom(
-            roomId = "room-1",
-            ownerId = "owner",
-            bannedUserIds = setOf("banned-1", "banned-2"),
-            createdAt = baseTimestamp
-        )
+        val room =
+            ChatRoom(
+                roomId = "room-1",
+                ownerId = "owner",
+                bannedUserIds = setOf("banned-1", "banned-2"),
+                createdAt = baseTimestamp,
+            )
 
         val map = room.toMap()
         val restored = ChatRoom.fromMap(map, "room-1")
@@ -68,12 +71,13 @@ class ChatRoomTest {
     fun `findUserSeat returns correct entry for seated user`() {
         val seats = ChatRoom.DEFAULT_SEATS.toMutableMap()
         seats["2"] = Seat(userId = "user-A", state = SeatState.OCCUPIED)
-        val room = ChatRoom(
-            roomId = "room-1",
-            ownerId = "owner",
-            seats = seats,
-            createdAt = baseTimestamp
-        )
+        val room =
+            ChatRoom(
+                roomId = "room-1",
+                ownerId = "owner",
+                seats = seats,
+                createdAt = baseTimestamp,
+            )
 
         val entry = room.findUserSeat("user-A")
 
@@ -85,23 +89,25 @@ class ChatRoomTest {
 
     @Test
     fun `findUserSeat returns null for unseated user`() {
-        val room = ChatRoom(
-            roomId = "room-1",
-            ownerId = "owner",
-            createdAt = baseTimestamp
-        )
+        val room =
+            ChatRoom(
+                roomId = "room-1",
+                ownerId = "owner",
+                createdAt = baseTimestamp,
+            )
 
         assertNull(room.findUserSeat("user-A"))
     }
 
     @Test
     fun `findUserSeat returns null for empty room`() {
-        val room = ChatRoom(
-            roomId = "room-1",
-            ownerId = "owner",
-            seats = ChatRoom.DEFAULT_SEATS,
-            createdAt = baseTimestamp
-        )
+        val room =
+            ChatRoom(
+                roomId = "room-1",
+                ownerId = "owner",
+                seats = ChatRoom.DEFAULT_SEATS,
+                createdAt = baseTimestamp,
+            )
 
         assertNull(room.findUserSeat("anyone"))
     }
@@ -110,12 +116,13 @@ class ChatRoomTest {
     fun `findUserSeat ignores non-OCCUPIED seats with matching userId`() {
         val seats = ChatRoom.DEFAULT_SEATS.toMutableMap()
         seats["3"] = Seat(userId = "user-B", state = SeatState.EMPTY)
-        val room = ChatRoom(
-            roomId = "room-1",
-            ownerId = "owner",
-            seats = seats,
-            createdAt = baseTimestamp
-        )
+        val room =
+            ChatRoom(
+                roomId = "room-1",
+                ownerId = "owner",
+                seats = seats,
+                createdAt = baseTimestamp,
+            )
 
         assertNull(room.findUserSeat("user-B"))
     }
@@ -130,9 +137,10 @@ class ChatRoomTest {
         // seat 2 is empty (from DEFAULT_SEATS)
         val room = ChatRoom(roomId = "room-1", ownerId = "owner", seats = seats, createdAt = baseTimestamp)
 
-        val firstEmpty = room.seats.entries
-            .filter { it.value.state == SeatState.EMPTY }
-            .minByOrNull { it.key.toIntOrNull() ?: Int.MAX_VALUE }
+        val firstEmpty =
+            room.seats.entries
+                .filter { it.value.state == SeatState.EMPTY }
+                .minByOrNull { it.key.toIntOrNull() ?: Int.MAX_VALUE }
 
         assertNotNull(firstEmpty)
         assertEquals("2", firstEmpty!!.key)
@@ -140,14 +148,16 @@ class ChatRoomTest {
 
     @Test
     fun `no empty seat when all seats occupied`() {
-        val seats = (0 until 8).associate {
-            it.toString() to Seat(userId = "user-$it", state = SeatState.OCCUPIED)
-        }
+        val seats =
+            (0 until 8).associate {
+                it.toString() to Seat(userId = "user-$it", state = SeatState.OCCUPIED)
+            }
         val room = ChatRoom(roomId = "room-1", ownerId = "owner", seats = seats, createdAt = baseTimestamp)
 
-        val firstEmpty = room.seats.entries
-            .filter { it.value.state == SeatState.EMPTY }
-            .minByOrNull { it.key.toIntOrNull() ?: Int.MAX_VALUE }
+        val firstEmpty =
+            room.seats.entries
+                .filter { it.value.state == SeatState.EMPTY }
+                .minByOrNull { it.key.toIntOrNull() ?: Int.MAX_VALUE }
 
         assertNull(firstEmpty)
     }
@@ -158,10 +168,14 @@ class ChatRoomTest {
     fun `showRequestSeat true when user not seated and seating unlocked`() {
         val seats = ChatRoom.DEFAULT_SEATS.toMutableMap()
         seats["0"] = Seat(userId = "owner", state = SeatState.OCCUPIED)
-        val room = ChatRoom(
-            roomId = "room-1", ownerId = "owner", seats = seats,
-            requireApproval = false, createdAt = baseTimestamp
-        )
+        val room =
+            ChatRoom(
+                roomId = "room-1",
+                ownerId = "owner",
+                seats = seats,
+                requireApproval = false,
+                createdAt = baseTimestamp,
+            )
         val currentUserId = "attendee-1"
 
         val isSeated = room.seats.values.any { it.isOccupiedBy(currentUserId) }
@@ -175,10 +189,14 @@ class ChatRoomTest {
         val seats = ChatRoom.DEFAULT_SEATS.toMutableMap()
         seats["0"] = Seat(userId = "owner", state = SeatState.OCCUPIED)
         seats["3"] = Seat(userId = "attendee-1", state = SeatState.OCCUPIED)
-        val room = ChatRoom(
-            roomId = "room-1", ownerId = "owner", seats = seats,
-            requireApproval = false, createdAt = baseTimestamp
-        )
+        val room =
+            ChatRoom(
+                roomId = "room-1",
+                ownerId = "owner",
+                seats = seats,
+                requireApproval = false,
+                createdAt = baseTimestamp,
+            )
         val currentUserId = "attendee-1"
 
         val isSeated = room.seats.values.any { it.isOccupiedBy(currentUserId) }
@@ -191,10 +209,14 @@ class ChatRoomTest {
     fun `showRequestSeat false when seating is locked`() {
         val seats = ChatRoom.DEFAULT_SEATS.toMutableMap()
         seats["0"] = Seat(userId = "owner", state = SeatState.OCCUPIED)
-        val room = ChatRoom(
-            roomId = "room-1", ownerId = "owner", seats = seats,
-            requireApproval = true, createdAt = baseTimestamp
-        )
+        val room =
+            ChatRoom(
+                roomId = "room-1",
+                ownerId = "owner",
+                seats = seats,
+                requireApproval = true,
+                createdAt = baseTimestamp,
+            )
         val currentUserId = "attendee-1"
 
         val isSeated = room.seats.values.any { it.isOccupiedBy(currentUserId) }

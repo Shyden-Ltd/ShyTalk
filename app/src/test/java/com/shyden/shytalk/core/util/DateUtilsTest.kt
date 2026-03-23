@@ -7,21 +7,22 @@ import org.junit.Test
 import java.util.Calendar
 
 class DateUtilsTest {
-
     // ===== calculateAge edge cases =====
 
     @Test
     fun `calculateAge with leap year birthday Feb 29`() {
         // Person born on Feb 29, 2000 (leap year)
-        val birth = Calendar.getInstance().apply {
-            set(2000, Calendar.FEBRUARY, 29, 0, 0, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
+        val birth =
+            Calendar.getInstance().apply {
+                set(2000, Calendar.FEBRUARY, 29, 0, 0, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
         val age = calculateAge(birth.timeInMillis)
         val today = Calendar.getInstance()
         val expectedYear = today.get(Calendar.YEAR) - 2000
-        val birthdayPassed = today.get(Calendar.MONTH) > Calendar.FEBRUARY ||
-            (today.get(Calendar.MONTH) == Calendar.FEBRUARY && today.get(Calendar.DAY_OF_MONTH) >= 29)
+        val birthdayPassed =
+            today.get(Calendar.MONTH) > Calendar.FEBRUARY ||
+                (today.get(Calendar.MONTH) == Calendar.FEBRUARY && today.get(Calendar.DAY_OF_MONTH) >= 29)
         val expected = if (birthdayPassed) expectedYear else expectedYear - 1
         assertEquals(expected, age)
     }
@@ -38,20 +39,22 @@ class DateUtilsTest {
 
     @Test
     fun `calculateAge with birthday exactly one year ago`() {
-        val birth = Calendar.getInstance().apply {
-            add(Calendar.YEAR, -1)
-        }
+        val birth =
+            Calendar.getInstance().apply {
+                add(Calendar.YEAR, -1)
+            }
         assertEquals(1, calculateAge(birth.timeInMillis))
     }
 
     @Test
     fun `calculateAge returns correct age for past birthday this year`() {
         val today = Calendar.getInstance()
-        val birth = Calendar.getInstance().apply {
-            set(Calendar.YEAR, today.get(Calendar.YEAR) - 25)
-            set(Calendar.MONTH, Calendar.JANUARY)
-            set(Calendar.DAY_OF_MONTH, 1)
-        }
+        val birth =
+            Calendar.getInstance().apply {
+                set(Calendar.YEAR, today.get(Calendar.YEAR) - 25)
+                set(Calendar.MONTH, Calendar.JANUARY)
+                set(Calendar.DAY_OF_MONTH, 1)
+            }
         val age = calculateAge(birth.timeInMillis)
         // If today is after Jan 1, age is 25; if today IS Jan 1, still 25
         assertTrue(age >= 25)
@@ -60,11 +63,12 @@ class DateUtilsTest {
     @Test
     fun `calculateAge returns correct age for future birthday this year`() {
         val today = Calendar.getInstance()
-        val birth = Calendar.getInstance().apply {
-            set(Calendar.YEAR, today.get(Calendar.YEAR) - 20)
-            set(Calendar.MONTH, Calendar.DECEMBER)
-            set(Calendar.DAY_OF_MONTH, 31)
-        }
+        val birth =
+            Calendar.getInstance().apply {
+                set(Calendar.YEAR, today.get(Calendar.YEAR) - 20)
+                set(Calendar.MONTH, Calendar.DECEMBER)
+                set(Calendar.DAY_OF_MONTH, 31)
+            }
         val age = calculateAge(birth.timeInMillis)
         // Birthday hasn't happened yet this year (unless today is Dec 31)
         if (today.get(Calendar.MONTH) == Calendar.DECEMBER && today.get(Calendar.DAY_OF_MONTH) == 31) {
@@ -82,34 +86,38 @@ class DateUtilsTest {
 
     @Test
     fun `isAtLeast13 returns true for 13 year old`() {
-        val cal = Calendar.getInstance().apply {
-            add(Calendar.YEAR, -13)
-            add(Calendar.DAY_OF_YEAR, -1) // One day past 13th birthday
-        }
+        val cal =
+            Calendar.getInstance().apply {
+                add(Calendar.YEAR, -13)
+                add(Calendar.DAY_OF_YEAR, -1) // One day past 13th birthday
+            }
         assertTrue(isAtLeast13(cal.timeInMillis))
     }
 
     @Test
     fun `isAtLeast13 returns true for 25 year old`() {
-        val cal = Calendar.getInstance().apply {
-            add(Calendar.YEAR, -25)
-        }
+        val cal =
+            Calendar.getInstance().apply {
+                add(Calendar.YEAR, -25)
+            }
         assertTrue(isAtLeast13(cal.timeInMillis))
     }
 
     @Test
     fun `isAtLeast13 returns false for 12 year old`() {
-        val cal = Calendar.getInstance().apply {
-            add(Calendar.YEAR, -12)
-        }
+        val cal =
+            Calendar.getInstance().apply {
+                add(Calendar.YEAR, -12)
+            }
         assertFalse(isAtLeast13(cal.timeInMillis))
     }
 
     @Test
     fun `isAtLeast13 returns false for baby`() {
-        val cal = Calendar.getInstance().apply {
-            add(Calendar.YEAR, -1)
-        }
+        val cal =
+            Calendar.getInstance().apply {
+                add(Calendar.YEAR, -1)
+            }
         assertFalse(isAtLeast13(cal.timeInMillis))
     }
 
@@ -223,8 +231,9 @@ class DateUtilsTest {
     @Test
     fun `formatSuspensionEnd - future date returns days hours minutes breakdown`() {
         // 2 days, 3 hours, 15 minutes from now (add 30s buffer to avoid rounding down)
-        val futureMs = System.currentTimeMillis() +
-            (2 * 24 * 60 * 60_000L) + (3 * 60 * 60_000L) + (15 * 60_000L) + 30_000L
+        val futureMs =
+            System.currentTimeMillis() +
+                (2 * 24 * 60 * 60_000L) + (3 * 60 * 60_000L) + (15 * 60_000L) + 30_000L
         val result = formatSuspensionEnd(futureMs)
         assertTrue(result.contains("2 days"))
         assertTrue(result.contains("3 hours"))
@@ -283,9 +292,10 @@ class DateUtilsTest {
     @Test
     fun `formatDateForDisplay - pads single-digit days`() {
         // Use a known date early in month: Jan 5, 2025 UTC
-        val cal = Calendar.getInstance().apply {
-            set(2025, Calendar.JANUARY, 5, 12, 0, 0)
-        }
+        val cal =
+            Calendar.getInstance().apply {
+                set(2025, Calendar.JANUARY, 5, 12, 0, 0)
+            }
         val result = formatDateForDisplay(cal.timeInMillis)
         assertTrue("Result should contain padded day '05': $result", result.contains("05"))
     }
@@ -331,17 +341,18 @@ class DateUtilsTest {
         // Should be a valid-looking date string
         assertTrue(
             "Should contain 1969 or 1970: $result",
-            result.contains("1970") || result.contains("1969")
+            result.contains("1970") || result.contains("1969"),
         )
     }
 
     @Test
     fun `formatSuspensionEndDateTime - midnight formats hours as 00 00`() {
         // Find a timestamp that represents midnight in the local timezone
-        val cal = Calendar.getInstance().apply {
-            set(2025, Calendar.JUNE, 15, 0, 0, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
+        val cal =
+            Calendar.getInstance().apply {
+                set(2025, Calendar.JUNE, 15, 0, 0, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
         val result = formatSuspensionEndDateTime(cal.timeInMillis)
         assertTrue("Expected 'Jun': $result", result.contains("Jun"))
         assertTrue("Expected '2025': $result", result.contains("2025"))
@@ -355,15 +366,16 @@ class DateUtilsTest {
         val result = formatDateForDisplay(0L)
         assertTrue(
             "Should contain 1969 or 1970: $result",
-            result.contains("1970") || result.contains("1969")
+            result.contains("1970") || result.contains("1969"),
         )
     }
 
     @Test
     fun `formatDateForDisplay - double digit day is not padded extra`() {
-        val cal = Calendar.getInstance().apply {
-            set(2025, Calendar.MARCH, 25, 12, 0, 0)
-        }
+        val cal =
+            Calendar.getInstance().apply {
+                set(2025, Calendar.MARCH, 25, 12, 0, 0)
+            }
         val result = formatDateForDisplay(cal.timeInMillis)
         assertTrue("Expected 'Mar 25, 2025': $result", result.contains("Mar 25, 2025"))
     }
@@ -372,19 +384,21 @@ class DateUtilsTest {
 
     @Test
     fun `isAtLeast13 returns true for exactly 13th birthday`() {
-        val cal = Calendar.getInstance().apply {
-            add(Calendar.YEAR, -13)
-        }
+        val cal =
+            Calendar.getInstance().apply {
+                add(Calendar.YEAR, -13)
+            }
         // On exactly the 13th birthday, calculateAge returns 13
         assertTrue(isAtLeast13(cal.timeInMillis))
     }
 
     @Test
     fun `isAtLeast13 returns false for one day before 13th birthday`() {
-        val cal = Calendar.getInstance().apply {
-            add(Calendar.YEAR, -13)
-            add(Calendar.DAY_OF_YEAR, 1) // born one day later -> hasn't turned 13 yet
-        }
+        val cal =
+            Calendar.getInstance().apply {
+                add(Calendar.YEAR, -13)
+                add(Calendar.DAY_OF_YEAR, 1) // born one day later -> hasn't turned 13 yet
+            }
         assertFalse(isAtLeast13(cal.timeInMillis))
     }
 }

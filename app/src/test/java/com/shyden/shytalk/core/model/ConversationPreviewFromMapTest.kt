@@ -8,19 +8,19 @@ import org.junit.Test
 import java.util.Date
 
 class ConversationPreviewFromMapTest {
-
     private val tsMillis = 1_000_000_000L
     private val ts = Timestamp(Date(tsMillis))
 
     @Test
     fun `fromMap parses complete valid map`() {
-        val map = mapOf<String, Any?>(
-            "text" to "Hello!",
-            "senderId" to "user-1",
-            "senderName" to "Alice",
-            "createdAt" to ts,
-            "type" to "IMAGE"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "text" to "Hello!",
+                "senderId" to "user-1",
+                "senderName" to "Alice",
+                "createdAt" to ts,
+                "type" to "IMAGE",
+            )
         val preview = ConversationPreview.fromMap(map)
 
         assertEquals("Hello!", preview.text)
@@ -42,13 +42,14 @@ class ConversationPreviewFromMapTest {
 
     @Test
     fun `fromMap of toMap round-trip`() {
-        val original = ConversationPreview(
-            text = "Last message",
-            senderId = "user-1",
-            senderName = "Alice",
-            createdAt = tsMillis,
-            type = "IMAGE"
-        )
+        val original =
+            ConversationPreview(
+                text = "Last message",
+                senderId = "user-1",
+                senderName = "Alice",
+                createdAt = tsMillis,
+                type = "IMAGE",
+            )
         val roundtripped = ConversationPreview.fromMap(original.toMap())
         assertEquals(original, roundtripped)
     }
@@ -63,13 +64,14 @@ class ConversationPreviewFromMapTest {
     @Test
     fun `fromMap parses Express API format with createdAt (not timestamp)`() {
         // Express API sends: { text, senderId, senderName, type, createdAt }
-        val expressApiFormat = mapOf<String, Any?>(
-            "text" to "Hello",
-            "senderId" to "user-1",
-            "senderName" to "Alice",
-            "type" to "TEXT",
-            "createdAt" to tsMillis
-        )
+        val expressApiFormat =
+            mapOf<String, Any?>(
+                "text" to "Hello",
+                "senderId" to "user-1",
+                "senderName" to "Alice",
+                "type" to "TEXT",
+                "createdAt" to tsMillis,
+            )
         val preview = ConversationPreview.fromMap(expressApiFormat)
         assertEquals(tsMillis, preview.createdAt)
     }
@@ -78,13 +80,14 @@ class ConversationPreviewFromMapTest {
     fun `fromMap ignores old timestamp field (only reads createdAt)`() {
         // Verify that the old "timestamp" field does NOT populate createdAt
         // When "createdAt" is missing, timestampToMillis(null) returns currentTimeMillis()
-        val oldFormat = mapOf<String, Any?>(
-            "text" to "Hello",
-            "senderId" to "user-1",
-            "senderName" to "Alice",
-            "type" to "TEXT",
-            "timestamp" to tsMillis
-        )
+        val oldFormat =
+            mapOf<String, Any?>(
+                "text" to "Hello",
+                "senderId" to "user-1",
+                "senderName" to "Alice",
+                "type" to "TEXT",
+                "timestamp" to tsMillis,
+            )
         val preview = ConversationPreview.fromMap(oldFormat)
         // createdAt should NOT be tsMillis (from "timestamp" key)
         assertTrue(preview.createdAt != tsMillis)
@@ -92,13 +95,14 @@ class ConversationPreviewFromMapTest {
 
     @Test
     fun `toMap uses createdAt key for Express API compatibility`() {
-        val preview = ConversationPreview(
-            text = "Hello",
-            senderId = "user-1",
-            senderName = "Alice",
-            createdAt = tsMillis,
-            type = "TEXT"
-        )
+        val preview =
+            ConversationPreview(
+                text = "Hello",
+                senderId = "user-1",
+                senderName = "Alice",
+                createdAt = tsMillis,
+                type = "TEXT",
+            )
         val map = preview.toMap()
         assertEquals(tsMillis, map["createdAt"])
         assertFalse(map.containsKey("timestamp"))

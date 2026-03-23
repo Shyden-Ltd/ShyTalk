@@ -1,11 +1,9 @@
 package com.shyden.shytalk.navigation
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 class ScreenTest {
-
     @Test
     fun `SignIn has correct route`() {
         assertEquals("sign_in", Screen.SignIn.route)
@@ -50,7 +48,7 @@ class ScreenTest {
     fun `FollowList createRoute substitutes both params`() {
         assertEquals(
             "follow_list/user-42/followers",
-            Screen.FollowList.createRoute("user-42", "followers")
+            Screen.FollowList.createRoute("user-42", "followers"),
         )
     }
 
@@ -111,26 +109,27 @@ class ScreenTest {
 
     @Test
     fun `all static routes are unique`() {
-        val routes = listOf(
-            Screen.SignIn.route,
-            Screen.ProfileSetup.route,
-            Screen.Main.route,
-            Screen.Room.route,
-            Screen.UserProfile.route,
-            Screen.FollowList.route,
-            Screen.RequiredDOB.route,
-            Screen.PrivacyPolicy.route,
-            Screen.Settings.route,
-            Screen.PrivateChat.route,
-            Screen.GroupChat.route,
-            Screen.NewMessage.route,
-            Screen.GroupSetup.route,
-            Screen.CommunityStandards.route,
-            Screen.TermsAndConditions.route,
-            Screen.LegalAcceptance.route,
-            Screen.ReportReview.route,
-            Screen.Warning.route
-        )
+        val routes =
+            listOf(
+                Screen.SignIn.route,
+                Screen.ProfileSetup.route,
+                Screen.Main.route,
+                Screen.Room.route,
+                Screen.UserProfile.route,
+                Screen.FollowList.route,
+                Screen.RequiredDOB.route,
+                Screen.PrivacyPolicy.route,
+                Screen.Settings.route,
+                Screen.PrivateChat.route,
+                Screen.GroupChat.route,
+                Screen.NewMessage.route,
+                Screen.GroupSetup.route,
+                Screen.CommunityStandards.route,
+                Screen.TermsAndConditions.route,
+                Screen.LegalAcceptance.route,
+                Screen.ReportReview.route,
+                Screen.Warning.route,
+            )
         assertEquals(routes.size, routes.toSet().size)
     }
 
@@ -143,7 +142,7 @@ class ScreenTest {
     fun `FollowList createRoute with following tab`() {
         assertEquals(
             "follow_list/user-1/following",
-            Screen.FollowList.createRoute("user-1", "following")
+            Screen.FollowList.createRoute("user-1", "following"),
         )
     }
 }

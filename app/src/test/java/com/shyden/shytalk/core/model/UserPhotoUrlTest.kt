@@ -5,7 +5,6 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class UserPhotoUrlTest {
-
     @Test
     fun `photoUrl is null when both profilePhotoUrl and avatarUrl are null`() {
         val user = User(uid = "u1", profilePhotoUrl = null, avatarUrl = null)
@@ -26,20 +25,22 @@ class UserPhotoUrlTest {
 
     @Test
     fun `photoUrl prefers profilePhotoUrl when both are set`() {
-        val user = User(
-            uid = "u1",
-            profilePhotoUrl = "https://img.com/profile.jpg",
-            avatarUrl = "https://img.com/avatar.jpg"
-        )
+        val user =
+            User(
+                uid = "u1",
+                profilePhotoUrl = "https://img.com/profile.jpg",
+                avatarUrl = "https://img.com/avatar.jpg",
+            )
         assertEquals("https://img.com/profile.jpg", user.photoUrl)
     }
 
     @Test
     fun `fromMap populates avatarUrl from D1 response`() {
-        val map = mapOf<String, Any?>(
-            "avatarUrl" to "https://img.com/avatar.jpg",
-            "profilePhotoUrl" to null
-        )
+        val map =
+            mapOf<String, Any?>(
+                "avatarUrl" to "https://img.com/avatar.jpg",
+                "profilePhotoUrl" to null,
+            )
         val user = User.fromMap(map, "u1")
         assertEquals("https://img.com/avatar.jpg", user.avatarUrl)
         assertEquals("https://img.com/avatar.jpg", user.photoUrl)
@@ -47,10 +48,11 @@ class UserPhotoUrlTest {
 
     @Test
     fun `fromMap populates both fields from D1 response with avatar_url fallback`() {
-        val map = mapOf<String, Any?>(
-            "profilePhotoUrl" to "https://img.com/profile.jpg",
-            "avatarUrl" to "https://img.com/profile.jpg"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "profilePhotoUrl" to "https://img.com/profile.jpg",
+                "avatarUrl" to "https://img.com/profile.jpg",
+            )
         val user = User.fromMap(map, "u1")
         assertEquals("https://img.com/profile.jpg", user.profilePhotoUrl)
         assertEquals("https://img.com/profile.jpg", user.avatarUrl)

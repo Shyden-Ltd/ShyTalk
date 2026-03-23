@@ -11,25 +11,28 @@ import com.shyden.shytalk.util.ComposeTestRuleHolder
 import io.cucumber.java.en.Given
 
 class StartingScreenSteps {
-
     private val rule get() = ComposeTestRuleHolder.rule
 
     @Given("a blocking starting screen is configured with title {string} and message {string}")
-    fun blockingScreenConfigured(title: String, message: String) {
+    fun blockingScreenConfigured(
+        title: String,
+        message: String,
+    ) {
         rule.setContent {
             ShyTalkTheme(darkTheme = true) {
                 StartingScreenComposable(
-                    screen = StartingScreen(
-                        screenId = "blocking_test",
-                        enabled = true,
-                        dismissable = false,
-                        frequency = "every_launch",
-                        template = "warning",
-                        title = title,
-                        message = message,
-                        imageType = "police_duck",
-                    ),
-                    onDismiss = {}
+                    screen =
+                        StartingScreen(
+                            screenId = "blocking_test",
+                            enabled = true,
+                            dismissable = false,
+                            frequency = "every_launch",
+                            template = "warning",
+                            title = title,
+                            message = message,
+                            imageType = "police_duck",
+                        ),
+                    onDismiss = {},
                 )
             }
         }
@@ -39,22 +42,26 @@ class StartingScreenSteps {
     }
 
     @Given("a dismissable starting screen is configured with title {string} and message {string}")
-    fun dismissableScreenConfigured(title: String, message: String) {
+    fun dismissableScreenConfigured(
+        title: String,
+        message: String,
+    ) {
         rule.setContent {
             var dismissed by remember { mutableStateOf(false) }
             ShyTalkTheme(darkTheme = true) {
                 if (!dismissed) {
                     StartingScreenComposable(
-                        screen = StartingScreen(
-                            screenId = "dismissable_test",
-                            enabled = true,
-                            dismissable = true,
-                            frequency = "once",
-                            template = "announcement",
-                            title = title,
-                            message = message,
-                        ),
-                        onDismiss = { dismissed = true }
+                        screen =
+                            StartingScreen(
+                                screenId = "dismissable_test",
+                                enabled = true,
+                                dismissable = true,
+                                frequency = "once",
+                                template = "announcement",
+                                title = title,
+                                message = message,
+                            ),
+                        onDismiss = { dismissed = true },
                     )
                 }
             }
@@ -69,16 +76,17 @@ class StartingScreenSteps {
         rule.setContent {
             ShyTalkTheme(darkTheme = true) {
                 StartingScreenComposable(
-                    screen = StartingScreen(
-                        screenId = "template_test",
-                        enabled = true,
-                        dismissable = true,
-                        frequency = "every_launch",
-                        template = template,
-                        title = "Test Title",
-                        message = "This is a test message for the starting screen",
-                    ),
-                    onDismiss = {}
+                    screen =
+                        StartingScreen(
+                            screenId = "template_test",
+                            enabled = true,
+                            dismissable = true,
+                            frequency = "every_launch",
+                            template = template,
+                            title = "Test Title",
+                            message = "This is a test message for the starting screen",
+                        ),
+                    onDismiss = {},
                 )
             }
         }

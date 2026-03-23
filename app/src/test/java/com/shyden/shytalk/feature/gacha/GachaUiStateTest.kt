@@ -7,7 +7,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GachaUiStateTest {
-
     @Test
     fun `default state has zero balance and pity`() {
         val state = GachaUiState()

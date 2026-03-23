@@ -6,15 +6,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DailyRewardResultFromMapTest {
-
     @Test
     fun `complete valid map parses correctly`() {
-        val map = mapOf<String, Any?>(
-            "coinsAwarded" to 100,
-            "newStreak" to 7,
-            "isMilestone" to true,
-            "newBalance" to 500L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "coinsAwarded" to 100,
+                "newStreak" to 7,
+                "isMilestone" to true,
+                "newBalance" to 500L,
+            )
         val result = DailyRewardResult.fromMap(map)
 
         assertEquals(100, result.coinsAwarded)
@@ -35,11 +35,12 @@ class DailyRewardResultFromMapTest {
 
     @Test
     fun `Long values from Firestore parse correctly`() {
-        val map = mapOf<String, Any?>(
-            "coinsAwarded" to 50L,
-            "newStreak" to 3L,
-            "newBalance" to 1000L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "coinsAwarded" to 50L,
+                "newStreak" to 3L,
+                "newBalance" to 1000L,
+            )
         val result = DailyRewardResult.fromMap(map)
 
         assertEquals(50, result.coinsAwarded)
@@ -49,11 +50,12 @@ class DailyRewardResultFromMapTest {
 
     @Test
     fun `Int values parse correctly`() {
-        val map = mapOf<String, Any?>(
-            "coinsAwarded" to 75,
-            "newStreak" to 5,
-            "newBalance" to 250
-        )
+        val map =
+            mapOf<String, Any?>(
+                "coinsAwarded" to 75,
+                "newStreak" to 5,
+                "newBalance" to 250,
+            )
         val result = DailyRewardResult.fromMap(map)
 
         assertEquals(75, result.coinsAwarded)
@@ -63,11 +65,12 @@ class DailyRewardResultFromMapTest {
 
     @Test
     fun `Double values parse correctly`() {
-        val map = mapOf<String, Any?>(
-            "coinsAwarded" to 50.0,
-            "newStreak" to 3.0,
-            "newBalance" to 1000.0
-        )
+        val map =
+            mapOf<String, Any?>(
+                "coinsAwarded" to 50.0,
+                "newStreak" to 3.0,
+                "newBalance" to 1000.0,
+            )
         val result = DailyRewardResult.fromMap(map)
 
         assertEquals(50, result.coinsAwarded)
@@ -88,14 +91,15 @@ class DailyRewardResultFromMapTest {
 
     @Test
     fun `gift reward fields parse correctly`() {
-        val map = mapOf<String, Any?>(
-            "coinsAwarded" to 0,
-            "newStreak" to 7,
-            "isMilestone" to true,
-            "newBalance" to 100L,
-            "giftId" to "rose",
-            "giftQuantity" to 3
-        )
+        val map =
+            mapOf<String, Any?>(
+                "coinsAwarded" to 0,
+                "newStreak" to 7,
+                "isMilestone" to true,
+                "newBalance" to 100L,
+                "giftId" to "rose",
+                "giftQuantity" to 3,
+            )
         val result = DailyRewardResult.fromMap(map)
 
         assertEquals("rose", result.giftId)
@@ -106,12 +110,13 @@ class DailyRewardResultFromMapTest {
 
     @Test
     fun `coin reward has no gift fields`() {
-        val map = mapOf<String, Any?>(
-            "coinsAwarded" to 100,
-            "newStreak" to 7,
-            "isMilestone" to true,
-            "newBalance" to 500L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "coinsAwarded" to 100,
+                "newStreak" to 7,
+                "isMilestone" to true,
+                "newBalance" to 500L,
+            )
         val result = DailyRewardResult.fromMap(map)
 
         assertFalse(result.isGiftReward)

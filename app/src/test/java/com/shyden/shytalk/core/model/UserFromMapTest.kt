@@ -9,25 +9,25 @@ import org.junit.Test
 import java.util.Date
 
 class UserFromMapTest {
-
     private val tsMillis = 1_000_000_000L
     private val ts = Timestamp(Date(tsMillis))
 
     @Test
     fun `fromMap parses complete valid map`() {
-        val map = mapOf<String, Any?>(
-            "displayName" to "Alice",
-            "avatarUrl" to "https://avatar.png",
-            "profilePhotoUrl" to "https://profile.png",
-            "coverPhotoUrl" to "https://cover.png",
-            "description" to "Hello!",
-            "nationality" to "US",
-            "uniqueId" to 12345L,
-            "blockedUserIds" to listOf("user-2", "user-3"),
-            "email" to "alice@example.com",
-            "createdAt" to ts,
-            "lastSeenAt" to ts
-        )
+        val map =
+            mapOf<String, Any?>(
+                "displayName" to "Alice",
+                "avatarUrl" to "https://avatar.png",
+                "profilePhotoUrl" to "https://profile.png",
+                "coverPhotoUrl" to "https://cover.png",
+                "description" to "Hello!",
+                "nationality" to "US",
+                "uniqueId" to 12345L,
+                "blockedUserIds" to listOf("user-2", "user-3"),
+                "email" to "alice@example.com",
+                "createdAt" to ts,
+                "lastSeenAt" to ts,
+            )
         val user = User.fromMap(map, "user-1")
         assertEquals("user-1", user.uid)
         assertEquals("Alice", user.displayName)
@@ -60,9 +60,10 @@ class UserFromMapTest {
 
     @Test
     fun `fromMap filters non-string items from blockedUserIds`() {
-        val map = mapOf<String, Any?>(
-            "blockedUserIds" to listOf("user-1", 42, null, "user-2")
-        )
+        val map =
+            mapOf<String, Any?>(
+                "blockedUserIds" to listOf("user-1", 42, null, "user-2"),
+            )
         val user = User.fromMap(map, "uid")
         assertEquals(setOf("user-1", "user-2"), user.blockedUserIds)
     }
@@ -107,10 +108,11 @@ class UserFromMapTest {
 
     @Test
     fun `fromMap parses hideFollowing and hideOnlineStatus`() {
-        val map = mapOf<String, Any?>(
-            "hideFollowing" to true,
-            "hideOnlineStatus" to true
-        )
+        val map =
+            mapOf<String, Any?>(
+                "hideFollowing" to true,
+                "hideOnlineStatus" to true,
+            )
         val user = User.fromMap(map, "uid")
         assertTrue(user.hideFollowing)
         assertTrue(user.hideOnlineStatus)
@@ -153,27 +155,28 @@ class UserFromMapTest {
 
     @Test
     fun `fromMap of toMap produces equivalent user`() {
-        val original = User(
-            uid = "user-1",
-            displayName = "Alice",
-            avatarUrl = "https://avatar.png",
-            profilePhotoUrl = "https://profile.png",
-            coverPhotoUrl = "https://cover.png",
-            description = "Hello!",
-            nationality = "US",
-            uniqueId = 12345L,
-            blockedUserIds = setOf("user-2", "user-3"),
-            dateOfBirth = tsMillis,
-            hideFollowing = true,
-            hideOnlineStatus = true,
-            hideAge = true,
-            email = "alice@example.com",
-            createdAt = tsMillis,
-            lastSeenAt = tsMillis,
-            stalkerCount = 5,
-            newStalkerCount = 2,
-            stalkersLastViewedAt = tsMillis
-        )
+        val original =
+            User(
+                uid = "user-1",
+                displayName = "Alice",
+                avatarUrl = "https://avatar.png",
+                profilePhotoUrl = "https://profile.png",
+                coverPhotoUrl = "https://cover.png",
+                description = "Hello!",
+                nationality = "US",
+                uniqueId = 12345L,
+                blockedUserIds = setOf("user-2", "user-3"),
+                dateOfBirth = tsMillis,
+                hideFollowing = true,
+                hideOnlineStatus = true,
+                hideAge = true,
+                email = "alice@example.com",
+                createdAt = tsMillis,
+                lastSeenAt = tsMillis,
+                stalkerCount = 5,
+                newStalkerCount = 2,
+                stalkersLastViewedAt = tsMillis,
+            )
         val roundtripped = User.fromMap(original.toMap(), "user-1")
         assertEquals(original, roundtripped)
     }
@@ -260,15 +263,16 @@ class UserFromMapTest {
     fun `fromMap parses suspension fields`() {
         val startTs = Timestamp(Date(1_500_000_000_000L))
         val endTs = Timestamp(Date(1_600_000_000_000L))
-        val map = mapOf<String, Any?>(
-            "isSuspended" to true,
-            "suspensionReason" to "Spam",
-            "suspensionStartDate" to startTs,
-            "suspensionEndDate" to endTs,
-            "suspensionCanAppeal" to true,
-            "suspendedBy" to "admin-1",
-            "suspensionAppealStatus" to "pending"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "isSuspended" to true,
+                "suspensionReason" to "Spam",
+                "suspensionStartDate" to startTs,
+                "suspensionEndDate" to endTs,
+                "suspensionCanAppeal" to true,
+                "suspendedBy" to "admin-1",
+                "suspensionAppealStatus" to "pending",
+            )
         val user = User.fromMap(map, "uid")
 
         assertTrue(user.isSuspended)
@@ -295,10 +299,11 @@ class UserFromMapTest {
 
     @Test
     fun `fromMap parses permanent suspension (null endDate)`() {
-        val map = mapOf<String, Any?>(
-            "isSuspended" to true,
-            "suspensionEndDate" to null
-        )
+        val map =
+            mapOf<String, Any?>(
+                "isSuspended" to true,
+                "suspensionEndDate" to null,
+            )
         val user = User.fromMap(map, "uid")
 
         assertTrue(user.isSuspended)
@@ -476,20 +481,21 @@ class UserFromMapTest {
 
     @Test
     fun `fromMap of toMap roundtrip preserves suspension fields`() {
-        val original = User(
-            uid = "user-1",
-            displayName = "Test",
-            isSuspended = true,
-            suspensionReason = "Abuse",
-            suspensionStartDate = tsMillis,
-            suspensionEndDate = tsMillis,
-            suspensionCanAppeal = true,
-            suspendedBy = "admin-1",
-            suspensionAppealStatus = "pending",
-            createdAt = tsMillis,
-            lastSeenAt = tsMillis,
-            stalkersLastViewedAt = tsMillis
-        )
+        val original =
+            User(
+                uid = "user-1",
+                displayName = "Test",
+                isSuspended = true,
+                suspensionReason = "Abuse",
+                suspensionStartDate = tsMillis,
+                suspensionEndDate = tsMillis,
+                suspensionCanAppeal = true,
+                suspendedBy = "admin-1",
+                suspensionAppealStatus = "pending",
+                createdAt = tsMillis,
+                lastSeenAt = tsMillis,
+                stalkersLastViewedAt = tsMillis,
+            )
         val roundtripped = User.fromMap(original.toMap(), "user-1")
         assertEquals(original, roundtripped)
     }

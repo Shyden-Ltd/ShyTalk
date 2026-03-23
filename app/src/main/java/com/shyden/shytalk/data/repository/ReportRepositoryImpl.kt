@@ -8,9 +8,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class ReportRepositoryImpl(
-    private val api: WorkerApiClient
+    private val api: WorkerApiClient,
 ) : ReportRepository {
-
     override suspend fun reportMessage(
         reporterId: String,
         reporterName: String,
@@ -22,20 +21,24 @@ class ReportRepositoryImpl(
         messageId: String,
         messageText: String,
         reason: String,
-        description: String
-    ): Resource<Unit> = firebaseCall("Failed to submit report") {
-        api.post("/api/reports", JSONObject().apply {
-            put("reportedUserId", reportedUserId)
-            put("reportedUserName", reportedUserName)
-            put("reportedUserUniqueId", reportedUserUniqueId)
-            put("conversationId", conversationId)
-            put("messageId", messageId)
-            put("messageText", messageText)
-            put("reason", reason)
-            put("description", description)
-        })
-        Unit
-    }
+        description: String,
+    ): Resource<Unit> =
+        firebaseCall("Failed to submit report") {
+            api.post(
+                "/api/reports",
+                JSONObject().apply {
+                    put("reportedUserId", reportedUserId)
+                    put("reportedUserName", reportedUserName)
+                    put("reportedUserUniqueId", reportedUserUniqueId)
+                    put("conversationId", conversationId)
+                    put("messageId", messageId)
+                    put("messageText", messageText)
+                    put("reason", reason)
+                    put("description", description)
+                },
+            )
+            Unit
+        }
 
     override suspend fun reportUser(
         reporterId: String,
@@ -47,21 +50,25 @@ class ReportRepositoryImpl(
         conversationId: String,
         reason: String,
         description: String,
-        evidenceUrls: List<String>
-    ): Resource<Unit> = firebaseCall("Failed to submit report") {
-        api.post("/api/reports", JSONObject().apply {
-            put("reportedUserId", reportedUserId)
-            put("reportedUserName", reportedUserName)
-            put("reportedUserUniqueId", reportedUserUniqueId)
-            put("conversationId", conversationId)
-            put("reason", reason)
-            put("description", description)
-            if (evidenceUrls.isNotEmpty()) {
-                put("evidenceUrls", JSONArray(evidenceUrls))
-            }
-        })
-        Unit
-    }
+        evidenceUrls: List<String>,
+    ): Resource<Unit> =
+        firebaseCall("Failed to submit report") {
+            api.post(
+                "/api/reports",
+                JSONObject().apply {
+                    put("reportedUserId", reportedUserId)
+                    put("reportedUserName", reportedUserName)
+                    put("reportedUserUniqueId", reportedUserUniqueId)
+                    put("conversationId", conversationId)
+                    put("reason", reason)
+                    put("description", description)
+                    if (evidenceUrls.isNotEmpty()) {
+                        put("evidenceUrls", JSONArray(evidenceUrls))
+                    }
+                },
+            )
+            Unit
+        }
 
     override suspend fun getPendingReports(): Resource<List<Report>> =
         firebaseCall("Failed to load reports") {
@@ -83,16 +90,22 @@ class ReportRepositoryImpl(
                     description = obj.optString("description"),
                     type = obj.optString("type", "").lowercase(),
                     timestamp = obj.optLong("createdAt", 0L),
-                    status = obj.optString("status", "pending")
+                    status = obj.optString("status", "pending"),
                 )
             }
         }
 
-    override suspend fun resolveReport(reportId: String, action: String): Resource<Unit> =
+    override suspend fun resolveReport(
+        reportId: String,
+        action: String,
+    ): Resource<Unit> =
         firebaseCall("Failed to resolve report") {
-            api.post("/api/reports/$reportId/resolve", JSONObject().apply {
-                put("action", action)
-            })
+            api.post(
+                "/api/reports/$reportId/resolve",
+                JSONObject().apply {
+                    put("action", action)
+                },
+            )
             Unit
         }
 }

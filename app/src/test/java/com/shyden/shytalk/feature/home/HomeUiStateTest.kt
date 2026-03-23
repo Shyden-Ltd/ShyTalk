@@ -8,7 +8,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HomeUiStateTest {
-
     @Test
     fun `default state has empty rooms`() {
         val state = HomeUiState()

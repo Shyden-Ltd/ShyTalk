@@ -9,15 +9,18 @@ import org.json.JSONObject
 
 class IdentityRepositoryImpl(
     private val workerApiClient: WorkerApiClient,
-    private val firebaseAuth: FirebaseAuth
+    private val firebaseAuth: FirebaseAuth,
 ) : IdentityRepository {
-
-    override suspend fun resolveIdentity(provider: String, identifier: String): Resource<SignInResult> {
-        return try {
-            val body = JSONObject().apply {
-                put("provider", provider)
-                put("identifier", identifier)
-            }
+    override suspend fun resolveIdentity(
+        provider: String,
+        identifier: String,
+    ): Resource<SignInResult> =
+        try {
+            val body =
+                JSONObject().apply {
+                    put("provider", provider)
+                    put("identifier", identifier)
+                }
             val response = workerApiClient.post("/api/users/sign-in", body)
 
             val found = response.optBoolean("found", false)
@@ -36,7 +39,6 @@ class IdentityRepositoryImpl(
             logE("IdentityRepository", "resolveIdentity failed: ${e.message}", e)
             Resource.Error(e.message ?: "Failed to resolve identity", e)
         }
-    }
 
     override suspend fun createUser(
         provider: String,
@@ -45,18 +47,19 @@ class IdentityRepositoryImpl(
         email: String?,
         profilePhotoUrl: String?,
         dateOfBirth: Long?,
-        language: String
-    ): Resource<CreateUserResult> {
-        return try {
-            val body = JSONObject().apply {
-                put("provider", provider)
-                put("identifier", identifier)
-                displayName?.let { put("displayName", it) }
-                email?.let { put("email", it) }
-                profilePhotoUrl?.let { put("profilePhotoUrl", it) }
-                dateOfBirth?.let { put("dateOfBirth", it) }
-                put("language", language)
-            }
+        language: String,
+    ): Resource<CreateUserResult> =
+        try {
+            val body =
+                JSONObject().apply {
+                    put("provider", provider)
+                    put("identifier", identifier)
+                    displayName?.let { put("displayName", it) }
+                    email?.let { put("email", it) }
+                    profilePhotoUrl?.let { put("profilePhotoUrl", it) }
+                    dateOfBirth?.let { put("dateOfBirth", it) }
+                    put("language", language)
+                }
             val response = workerApiClient.post("/api/users", body)
             val uniqueId = response.getLong("uniqueId")
             Resource.Success(CreateUserResult(uniqueId))
@@ -64,38 +67,45 @@ class IdentityRepositoryImpl(
             logE("IdentityRepository", "createUser failed: ${e.message}", e)
             Resource.Error(e.message ?: "Failed to create user", e)
         }
-    }
 
-    override suspend fun linkProvider(uniqueId: Long, provider: String, identifier: String): Resource<Unit> {
-        return try {
-            val body = JSONObject().apply {
-                put("provider", provider)
-                put("identifier", identifier)
-            }
+    override suspend fun linkProvider(
+        uniqueId: Long,
+        provider: String,
+        identifier: String,
+    ): Resource<Unit> =
+        try {
+            val body =
+                JSONObject().apply {
+                    put("provider", provider)
+                    put("identifier", identifier)
+                }
             workerApiClient.post("/api/users/$uniqueId/link-provider", body)
             Resource.Success(Unit)
         } catch (e: Exception) {
             logE("IdentityRepository", "linkProvider failed: ${e.message}", e)
             Resource.Error(e.message ?: "Failed to link provider", e)
         }
-    }
 
-    override suspend fun unlinkProvider(uniqueId: Long, provider: String, identifier: String): Resource<Unit> {
-        return try {
-            val body = JSONObject().apply {
-                put("provider", provider)
-                put("identifier", identifier)
-            }
+    override suspend fun unlinkProvider(
+        uniqueId: Long,
+        provider: String,
+        identifier: String,
+    ): Resource<Unit> =
+        try {
+            val body =
+                JSONObject().apply {
+                    put("provider", provider)
+                    put("identifier", identifier)
+                }
             workerApiClient.delete("/api/users/$uniqueId/link-provider", body)
             Resource.Success(Unit)
         } catch (e: Exception) {
             logE("IdentityRepository", "unlinkProvider failed: ${e.message}", e)
             Resource.Error(e.message ?: "Failed to unlink provider", e)
         }
-    }
 
-    override suspend fun forceRefreshToken(): Resource<Unit> {
-        return try {
+    override suspend fun forceRefreshToken(): Resource<Unit> =
+        try {
             workerApiClient.clearTokenCache()
             firebaseAuth.currentUser?.getIdToken(true)?.await()
             Resource.Success(Unit)
@@ -103,5 +113,4 @@ class IdentityRepositoryImpl(
             logE("IdentityRepository", "forceRefreshToken failed: ${e.message}", e)
             Resource.Error(e.message ?: "Failed to refresh token", e)
         }
-    }
 }

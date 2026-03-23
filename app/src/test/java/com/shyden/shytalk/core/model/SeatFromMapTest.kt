@@ -7,14 +7,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SeatFromMapTest {
-
     @Test
     fun `fromMap parses complete valid map`() {
-        val map = mapOf<String, Any?>(
-            "userId" to "user-1",
-            "state" to "OCCUPIED",
-            "isMuted" to true
-        )
+        val map =
+            mapOf<String, Any?>(
+                "userId" to "user-1",
+                "state" to "OCCUPIED",
+                "isMuted" to true,
+            )
         val seat = Seat.fromMap(map)
         assertEquals("user-1", seat.userId)
         assertEquals(SeatState.OCCUPIED, seat.state)

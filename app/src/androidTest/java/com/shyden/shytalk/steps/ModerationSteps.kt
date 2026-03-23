@@ -7,7 +7,6 @@ import com.shyden.shytalk.util.ComposeTestRuleHolder
 import io.cucumber.java.en.Given
 
 class ModerationSteps {
-
     private val rule get() = ComposeTestRuleHolder.rule
 
     @Given("the ban screen is displayed for a {string} ban")
@@ -18,7 +17,7 @@ class ModerationSteps {
                     banType = banType,
                     reason = "Violation of community standards",
                     expiresAt = "2026-04-01",
-                    onSignOut = {}
+                    onSignOut = {},
                 )
             }
         }
@@ -35,7 +34,7 @@ class ModerationSteps {
                     banType = "device",
                     reason = "Severe violation",
                     expiresAt = null,
-                    onSignOut = {}
+                    onSignOut = {},
                 )
             }
         }
@@ -55,7 +54,7 @@ class ModerationSteps {
                     appealStatus = null,
                     onSubmitAppeal = {},
                     onSignOut = {},
-                    isLoading = false
+                    isLoading = false,
                 )
             }
         }
@@ -75,7 +74,7 @@ class ModerationSteps {
                     appealStatus = null,
                     onSubmitAppeal = {},
                     onSignOut = {},
-                    isLoading = false
+                    isLoading = false,
                 )
             }
         }

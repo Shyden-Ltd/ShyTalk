@@ -8,7 +8,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ResourceTest {
-
     @Test
     fun `Success holds data`() {
         val resource = Resource.Success("hello")
@@ -37,18 +36,20 @@ class ResourceTest {
 
     @Test
     fun `when expression covers all branches`() {
-        val resources: List<Resource<String>> = listOf(
-            Resource.Success("data"),
-            Resource.Error("err"),
-            Resource.Loading
-        )
-        val results = resources.map { resource ->
-            when (resource) {
-                is Resource.Success -> "success"
-                is Resource.Error -> "error"
-                is Resource.Loading -> "loading"
+        val resources: List<Resource<String>> =
+            listOf(
+                Resource.Success("data"),
+                Resource.Error("err"),
+                Resource.Loading,
+            )
+        val results =
+            resources.map { resource ->
+                when (resource) {
+                    is Resource.Success -> "success"
+                    is Resource.Error -> "error"
+                    is Resource.Loading -> "loading"
+                }
             }
-        }
         assertEquals(listOf("success", "error", "loading"), results)
     }
 

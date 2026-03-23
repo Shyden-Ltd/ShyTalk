@@ -8,17 +8,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SpinWheelSegmentTest {
-
-    private val testGifts = listOf(
-        Gift(id = "c1", name = "Rose", coinValue = 8, order = 1),
-        Gift(id = "c2", name = "Heart", coinValue = 10, order = 2),
-        Gift(id = "u1", name = "Gift Box", coinValue = 50, order = 3),
-        Gift(id = "u2", name = "Potion", coinValue = 80, order = 4),
-        Gift(id = "r1", name = "Crown", coinValue = 500, order = 5),
-        Gift(id = "r2", name = "Treasure", coinValue = 800, order = 6),
-        Gift(id = "e1", name = "Mystery", coinValue = 5000, order = 7),
-        Gift(id = "l1", name = "Jackpot", coinValue = 35000, order = 8)
-    )
+    private val testGifts =
+        listOf(
+            Gift(id = "c1", name = "Rose", coinValue = 8, order = 1),
+            Gift(id = "c2", name = "Heart", coinValue = 10, order = 2),
+            Gift(id = "u1", name = "Gift Box", coinValue = 50, order = 3),
+            Gift(id = "u2", name = "Potion", coinValue = 80, order = 4),
+            Gift(id = "r1", name = "Crown", coinValue = 500, order = 5),
+            Gift(id = "r2", name = "Treasure", coinValue = 800, order = 6),
+            Gift(id = "e1", name = "Mystery", coinValue = 5000, order = 7),
+            Gift(id = "l1", name = "Jackpot", coinValue = 35000, order = 8),
+        )
 
     @Test
     fun `buildRingLayout puts low value gifts in outer ring`() {

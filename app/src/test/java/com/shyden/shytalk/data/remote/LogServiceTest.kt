@@ -6,14 +6,15 @@ import org.junit.Test
 class LogServiceTest {
     @Test
     fun `LogEntry has correct defaults`() {
-        val entry = LogEntry(
-            level = "INFO",
-            source = "android",
-            message = "test",
-            sessionTraceId = "trace-123",
-            userId = null,
-            deviceId = null
-        )
+        val entry =
+            LogEntry(
+                level = "INFO",
+                source = "android",
+                message = "test",
+                sessionTraceId = "trace-123",
+                userId = null,
+                deviceId = null,
+            )
         assertEquals("INFO", entry.level)
         assertEquals("android", entry.source)
         assertTrue(entry.context.isEmpty())

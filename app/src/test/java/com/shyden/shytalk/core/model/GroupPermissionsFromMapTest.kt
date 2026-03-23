@@ -6,7 +6,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GroupPermissionsFromMapTest {
-
     @Test
     fun `default values for original fields are EVERYONE`() {
         val perms = GroupPermissions()
@@ -25,14 +24,15 @@ class GroupPermissionsFromMapTest {
 
     @Test
     fun `fromMap parses complete valid map`() {
-        val map = mapOf<String, Any?>(
-            "whoCanSend" to "MODS_AND_ABOVE",
-            "whoCanAddMembers" to "MODS_AND_ABOVE",
-            "whoCanEditInfo" to "EVERYONE",
-            "whoCanDeleteMessages" to "ADMINS_ONLY",
-            "whoCanMuteMembers" to "OWNER_ONLY",
-            "whoCanRemoveMembers" to "MODS_AND_ABOVE"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "whoCanSend" to "MODS_AND_ABOVE",
+                "whoCanAddMembers" to "MODS_AND_ABOVE",
+                "whoCanEditInfo" to "EVERYONE",
+                "whoCanDeleteMessages" to "ADMINS_ONLY",
+                "whoCanMuteMembers" to "OWNER_ONLY",
+                "whoCanRemoveMembers" to "MODS_AND_ABOVE",
+            )
         val perms = GroupPermissions.fromMap(map)
         assertEquals(GroupPermissions.PermissionLevel.MODS_AND_ABOVE, perms.whoCanSend)
         assertEquals(GroupPermissions.PermissionLevel.MODS_AND_ABOVE, perms.whoCanAddMembers)
@@ -55,14 +55,15 @@ class GroupPermissionsFromMapTest {
 
     @Test
     fun `fromMap falls back to defaults for invalid enum values`() {
-        val map = mapOf<String, Any?>(
-            "whoCanSend" to "INVALID_VALUE",
-            "whoCanAddMembers" to "NONSENSE",
-            "whoCanEditInfo" to "",
-            "whoCanDeleteMessages" to "BAD",
-            "whoCanMuteMembers" to "WRONG",
-            "whoCanRemoveMembers" to "NOPE"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "whoCanSend" to "INVALID_VALUE",
+                "whoCanAddMembers" to "NONSENSE",
+                "whoCanEditInfo" to "",
+                "whoCanDeleteMessages" to "BAD",
+                "whoCanMuteMembers" to "WRONG",
+                "whoCanRemoveMembers" to "NOPE",
+            )
         val perms = GroupPermissions.fromMap(map)
         assertEquals(GroupPermissions.PermissionLevel.EVERYONE, perms.whoCanSend)
         assertEquals(GroupPermissions.PermissionLevel.EVERYONE, perms.whoCanAddMembers)
@@ -74,14 +75,15 @@ class GroupPermissionsFromMapTest {
 
     @Test
     fun `fromMap falls back to defaults for null values`() {
-        val map = mapOf<String, Any?>(
-            "whoCanSend" to null,
-            "whoCanAddMembers" to null,
-            "whoCanEditInfo" to null,
-            "whoCanDeleteMessages" to null,
-            "whoCanMuteMembers" to null,
-            "whoCanRemoveMembers" to null
-        )
+        val map =
+            mapOf<String, Any?>(
+                "whoCanSend" to null,
+                "whoCanAddMembers" to null,
+                "whoCanEditInfo" to null,
+                "whoCanDeleteMessages" to null,
+                "whoCanMuteMembers" to null,
+                "whoCanRemoveMembers" to null,
+            )
         val perms = GroupPermissions.fromMap(map)
         assertEquals(GroupPermissions.PermissionLevel.EVERYONE, perms.whoCanSend)
         assertEquals(GroupPermissions.PermissionLevel.EVERYONE, perms.whoCanAddMembers)
@@ -93,11 +95,12 @@ class GroupPermissionsFromMapTest {
 
     @Test
     fun `fromMap falls back to defaults for non-string values`() {
-        val map = mapOf<String, Any?>(
-            "whoCanSend" to 42,
-            "whoCanAddMembers" to true,
-            "whoCanEditInfo" to listOf("EVERYONE")
-        )
+        val map =
+            mapOf<String, Any?>(
+                "whoCanSend" to 42,
+                "whoCanAddMembers" to true,
+                "whoCanEditInfo" to listOf("EVERYONE"),
+            )
         val perms = GroupPermissions.fromMap(map)
         assertEquals(GroupPermissions.PermissionLevel.EVERYONE, perms.whoCanSend)
         assertEquals(GroupPermissions.PermissionLevel.EVERYONE, perms.whoCanAddMembers)
@@ -106,14 +109,15 @@ class GroupPermissionsFromMapTest {
 
     @Test
     fun `toMap serializes all 6 fields`() {
-        val perms = GroupPermissions(
-            whoCanSend = GroupPermissions.PermissionLevel.MODS_AND_ABOVE,
-            whoCanAddMembers = GroupPermissions.PermissionLevel.EVERYONE,
-            whoCanEditInfo = GroupPermissions.PermissionLevel.ADMINS_ONLY,
-            whoCanDeleteMessages = GroupPermissions.PermissionLevel.OWNER_ONLY,
-            whoCanMuteMembers = GroupPermissions.PermissionLevel.MODS_AND_ABOVE,
-            whoCanRemoveMembers = GroupPermissions.PermissionLevel.ADMINS_ONLY
-        )
+        val perms =
+            GroupPermissions(
+                whoCanSend = GroupPermissions.PermissionLevel.MODS_AND_ABOVE,
+                whoCanAddMembers = GroupPermissions.PermissionLevel.EVERYONE,
+                whoCanEditInfo = GroupPermissions.PermissionLevel.ADMINS_ONLY,
+                whoCanDeleteMessages = GroupPermissions.PermissionLevel.OWNER_ONLY,
+                whoCanMuteMembers = GroupPermissions.PermissionLevel.MODS_AND_ABOVE,
+                whoCanRemoveMembers = GroupPermissions.PermissionLevel.ADMINS_ONLY,
+            )
         val map = perms.toMap()
         assertEquals(6, map.size)
         assertEquals("MODS_AND_ABOVE", map["whoCanSend"])
@@ -126,14 +130,15 @@ class GroupPermissionsFromMapTest {
 
     @Test
     fun `fromMap of toMap round-trip`() {
-        val original = GroupPermissions(
-            whoCanSend = GroupPermissions.PermissionLevel.MODS_AND_ABOVE,
-            whoCanAddMembers = GroupPermissions.PermissionLevel.EVERYONE,
-            whoCanEditInfo = GroupPermissions.PermissionLevel.ADMINS_ONLY,
-            whoCanDeleteMessages = GroupPermissions.PermissionLevel.OWNER_ONLY,
-            whoCanMuteMembers = GroupPermissions.PermissionLevel.MODS_AND_ABOVE,
-            whoCanRemoveMembers = GroupPermissions.PermissionLevel.ADMINS_ONLY
-        )
+        val original =
+            GroupPermissions(
+                whoCanSend = GroupPermissions.PermissionLevel.MODS_AND_ABOVE,
+                whoCanAddMembers = GroupPermissions.PermissionLevel.EVERYONE,
+                whoCanEditInfo = GroupPermissions.PermissionLevel.ADMINS_ONLY,
+                whoCanDeleteMessages = GroupPermissions.PermissionLevel.OWNER_ONLY,
+                whoCanMuteMembers = GroupPermissions.PermissionLevel.MODS_AND_ABOVE,
+                whoCanRemoveMembers = GroupPermissions.PermissionLevel.ADMINS_ONLY,
+            )
         val roundtripped = GroupPermissions.fromMap(original.toMap())
         assertEquals(original, roundtripped)
     }
@@ -157,11 +162,12 @@ class GroupPermissionsFromMapTest {
 
     @Test
     fun `backward compat - ADMINS_AND_MODS maps to MODS_AND_ABOVE`() {
-        val map = mapOf<String, Any?>(
-            "whoCanSend" to "ADMINS_AND_MODS",
-            "whoCanAddMembers" to "ADMINS_AND_MODS",
-            "whoCanEditInfo" to "ADMINS_AND_MODS"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "whoCanSend" to "ADMINS_AND_MODS",
+                "whoCanAddMembers" to "ADMINS_AND_MODS",
+                "whoCanEditInfo" to "ADMINS_AND_MODS",
+            )
         val perms = GroupPermissions.fromMap(map)
         assertEquals(GroupPermissions.PermissionLevel.MODS_AND_ABOVE, perms.whoCanSend)
         assertEquals(GroupPermissions.PermissionLevel.MODS_AND_ABOVE, perms.whoCanAddMembers)
@@ -171,11 +177,12 @@ class GroupPermissionsFromMapTest {
     @Test
     fun `backward compat - missing new fields get correct defaults`() {
         // Simulates an old Firestore doc that only has the original 3 fields
-        val map = mapOf<String, Any?>(
-            "whoCanSend" to "EVERYONE",
-            "whoCanAddMembers" to "EVERYONE",
-            "whoCanEditInfo" to "EVERYONE"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "whoCanSend" to "EVERYONE",
+                "whoCanAddMembers" to "EVERYONE",
+                "whoCanEditInfo" to "EVERYONE",
+            )
         val perms = GroupPermissions.fromMap(map)
         assertEquals(GroupPermissions.PermissionLevel.EVERYONE, perms.whoCanSend)
         assertEquals(GroupPermissions.PermissionLevel.EVERYONE, perms.whoCanAddMembers)

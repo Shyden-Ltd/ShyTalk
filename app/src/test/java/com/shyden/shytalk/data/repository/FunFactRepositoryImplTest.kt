@@ -6,13 +6,11 @@ import io.mockk.every
 import io.mockk.mockk
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.io.File
 
 class FunFactRepositoryImplTest {
-
     private lateinit var tempDir: File
     private lateinit var context: Context
 
@@ -20,9 +18,10 @@ class FunFactRepositoryImplTest {
     fun setup() {
         tempDir = File(System.getProperty("java.io.tmpdir"), "funfact_test_${System.nanoTime()}")
         tempDir.mkdirs()
-        context = mockk<Context> {
-            every { filesDir } returns tempDir
-        }
+        context =
+            mockk<Context> {
+                every { filesDir } returns tempDir
+            }
     }
 
     @After
@@ -40,10 +39,12 @@ class FunFactRepositoryImplTest {
     fun `getCachedFacts reads from cache file`() {
         // Write a cache file manually
         val cacheFile = File(tempDir, "fun_facts_cache.json")
-        cacheFile.writeText("""
+        cacheFile.writeText(
+            """
             [{"id":"f1","text":"Fact 1","category":"language","emoji":"🇯🇵","sourceLanguage":"Japanese"},
              {"id":"f2","text":"Fact 2","category":"culture","emoji":"🇰🇷","sourceLanguage":"Korean"}]
-        """.trimIndent())
+            """.trimIndent(),
+        )
 
         val repo = FunFactRepositoryImpl(mockk(), context)
         val facts = repo.getCachedFacts()

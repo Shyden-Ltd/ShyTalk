@@ -12,7 +12,10 @@ class FakeIdentityRepository : IdentityRepository {
     var unlinkResult: Resource<Unit> = Resource.Success(Unit)
     var refreshResult: Resource<Unit> = Resource.Success(Unit)
 
-    override suspend fun resolveIdentity(provider: String, identifier: String) = resolveResult
+    override suspend fun resolveIdentity(
+        provider: String,
+        identifier: String,
+    ) = resolveResult
 
     override suspend fun createUser(
         provider: String,
@@ -21,10 +24,20 @@ class FakeIdentityRepository : IdentityRepository {
         email: String?,
         profilePhotoUrl: String?,
         dateOfBirth: Long?,
-        language: String
+        language: String,
     ) = createResult
 
-    override suspend fun linkProvider(uniqueId: Long, provider: String, identifier: String) = linkResult
-    override suspend fun unlinkProvider(uniqueId: Long, provider: String, identifier: String) = unlinkResult
+    override suspend fun linkProvider(
+        uniqueId: Long,
+        provider: String,
+        identifier: String,
+    ) = linkResult
+
+    override suspend fun unlinkProvider(
+        uniqueId: Long,
+        provider: String,
+        identifier: String,
+    ) = unlinkResult
+
     override suspend fun forceRefreshToken() = refreshResult
 }

@@ -23,7 +23,6 @@ import org.junit.Before
 import org.junit.Test
 
 class AuthRepositoryImplTest {
-
     private lateinit var auth: FirebaseAuth
     private lateinit var repo: AuthRepositoryImpl
 
@@ -66,55 +65,59 @@ class AuthRepositoryImplTest {
     }
 
     @Test
-    fun `signInWithGoogleIdToken returns Success with uid`() = runTest {
-        val user = mockk<FirebaseUser>()
-        every { user.uid } returns "signed-in-uid"
-        val authResult = mockk<AuthResult> { every { this@mockk.user } returns user }
-        val credential = mockk<AuthCredential>()
-        every { GoogleAuthProvider.getCredential("token123", null) } returns credential
-        every { auth.signInWithCredential(credential) } returns Tasks.forResult(authResult)
+    fun `signInWithGoogleIdToken returns Success with uid`() =
+        runTest {
+            val user = mockk<FirebaseUser>()
+            every { user.uid } returns "signed-in-uid"
+            val authResult = mockk<AuthResult> { every { this@mockk.user } returns user }
+            val credential = mockk<AuthCredential>()
+            every { GoogleAuthProvider.getCredential("token123", null) } returns credential
+            every { auth.signInWithCredential(credential) } returns Tasks.forResult(authResult)
 
-        val result = repo.signInWithGoogleIdToken("token123")
+            val result = repo.signInWithGoogleIdToken("token123")
 
-        assertTrue(result is Resource.Success)
-        assertEquals("signed-in-uid", (result as Resource.Success).data)
-    }
-
-    @Test
-    fun `signInWithGoogleIdToken returns Error when user is null`() = runTest {
-        val authResult = mockk<AuthResult> { every { user } returns null }
-        val credential = mockk<AuthCredential>()
-        every { GoogleAuthProvider.getCredential("token123", null) } returns credential
-        every { auth.signInWithCredential(credential) } returns Tasks.forResult(authResult)
-
-        val result = repo.signInWithGoogleIdToken("token123")
-
-        assertTrue(result is Resource.Error)
-        assertEquals("Sign in failed: no user returned", (result as Resource.Error).message)
-    }
+            assertTrue(result is Resource.Success)
+            assertEquals("signed-in-uid", (result as Resource.Success).data)
+        }
 
     @Test
-    fun `signInWithGoogleIdToken returns Error on exception`() = runTest {
-        val credential = mockk<AuthCredential>()
-        every { GoogleAuthProvider.getCredential("token123", null) } returns credential
-        every { auth.signInWithCredential(credential) } returns Tasks.forException(RuntimeException("Network error"))
+    fun `signInWithGoogleIdToken returns Error when user is null`() =
+        runTest {
+            val authResult = mockk<AuthResult> { every { user } returns null }
+            val credential = mockk<AuthCredential>()
+            every { GoogleAuthProvider.getCredential("token123", null) } returns credential
+            every { auth.signInWithCredential(credential) } returns Tasks.forResult(authResult)
 
-        val result = repo.signInWithGoogleIdToken("token123")
+            val result = repo.signInWithGoogleIdToken("token123")
 
-        assertTrue(result is Resource.Error)
-        assertTrue((result as Resource.Error).message.contains("Network error"))
-    }
+            assertTrue(result is Resource.Error)
+            assertEquals("Sign in failed: no user returned", (result as Resource.Error).message)
+        }
 
     @Test
-    fun `signInWithAppleIdToken returns Error on failure`() = runTest {
-        // Mock signInWithCredential for any credential to return a failure,
-        // since OAuthProvider.newCredentialBuilder is a static Firebase call.
-        every { auth.signInWithCredential(any()) } returns Tasks.forException(RuntimeException("Apple sign-in failed"))
+    fun `signInWithGoogleIdToken returns Error on exception`() =
+        runTest {
+            val credential = mockk<AuthCredential>()
+            every { GoogleAuthProvider.getCredential("token123", null) } returns credential
+            every { auth.signInWithCredential(credential) } returns Tasks.forException(RuntimeException("Network error"))
 
-        val result = repo.signInWithAppleIdToken("token", "nonce")
+            val result = repo.signInWithGoogleIdToken("token123")
 
-        assertTrue(result is Resource.Error)
-    }
+            assertTrue(result is Resource.Error)
+            assertTrue((result as Resource.Error).message.contains("Network error"))
+        }
+
+    @Test
+    fun `signInWithAppleIdToken returns Error on failure`() =
+        runTest {
+            // Mock signInWithCredential for any credential to return a failure,
+            // since OAuthProvider.newCredentialBuilder is a static Firebase call.
+            every { auth.signInWithCredential(any()) } returns Tasks.forException(RuntimeException("Apple sign-in failed"))
+
+            val result = repo.signInWithAppleIdToken("token", "nonce")
+
+            assertTrue(result is Resource.Error)
+        }
 
     @Test
     fun `signOut calls auth signOut`() {
@@ -250,45 +253,49 @@ class AuthRepositoryImplTest {
     // ===== Email sign-in =====
 
     @Test
-    fun `sendSignInLink calls Firebase sendSignInLinkToEmail`() = runTest {
-        every { auth.sendSignInLinkToEmail(any(), any()) } returns Tasks.forResult(null)
+    fun `sendSignInLink calls Firebase sendSignInLinkToEmail`() =
+        runTest {
+            every { auth.sendSignInLinkToEmail(any(), any()) } returns Tasks.forResult(null)
 
-        val result = repo.sendSignInLink("user@example.com")
+            val result = repo.sendSignInLink("user@example.com")
 
-        assertTrue(result is Resource.Success)
-        verify { auth.sendSignInLinkToEmail("user@example.com", any()) }
-    }
-
-    @Test
-    fun `sendSignInLink returns Error on exception`() = runTest {
-        every { auth.sendSignInLinkToEmail(any(), any()) } returns
-            Tasks.forException(RuntimeException("Send failed"))
-
-        val result = repo.sendSignInLink("user@example.com")
-
-        assertTrue(result is Resource.Error)
-    }
+            assertTrue(result is Resource.Success)
+            verify { auth.sendSignInLinkToEmail("user@example.com", any()) }
+        }
 
     @Test
-    fun `signInWithEmailLink authenticates and returns uid`() = runTest {
-        val user = mockk<FirebaseUser>()
-        every { user.uid } returns "email-user-uid"
-        val authResult = mockk<AuthResult> { every { this@mockk.user } returns user }
-        every { auth.signInWithEmailLink("user@example.com", "https://link") } returns Tasks.forResult(authResult)
+    fun `sendSignInLink returns Error on exception`() =
+        runTest {
+            every { auth.sendSignInLinkToEmail(any(), any()) } returns
+                Tasks.forException(RuntimeException("Send failed"))
 
-        val result = repo.signInWithEmailLink("user@example.com", "https://link")
+            val result = repo.sendSignInLink("user@example.com")
 
-        assertTrue(result is Resource.Success)
-        assertEquals("email-user-uid", (result as Resource.Success).data)
-    }
+            assertTrue(result is Resource.Error)
+        }
 
     @Test
-    fun `signInWithEmailLink returns Error on failure`() = runTest {
-        every { auth.signInWithEmailLink(any(), any()) } returns
-            Tasks.forException(RuntimeException("Invalid link"))
+    fun `signInWithEmailLink authenticates and returns uid`() =
+        runTest {
+            val user = mockk<FirebaseUser>()
+            every { user.uid } returns "email-user-uid"
+            val authResult = mockk<AuthResult> { every { this@mockk.user } returns user }
+            every { auth.signInWithEmailLink("user@example.com", "https://link") } returns Tasks.forResult(authResult)
 
-        val result = repo.signInWithEmailLink("user@example.com", "bad-link")
+            val result = repo.signInWithEmailLink("user@example.com", "https://link")
 
-        assertTrue(result is Resource.Error)
-    }
+            assertTrue(result is Resource.Success)
+            assertEquals("email-user-uid", (result as Resource.Success).data)
+        }
+
+    @Test
+    fun `signInWithEmailLink returns Error on failure`() =
+        runTest {
+            every { auth.signInWithEmailLink(any(), any()) } returns
+                Tasks.forException(RuntimeException("Invalid link"))
+
+            val result = repo.signInWithEmailLink("user@example.com", "bad-link")
+
+            assertTrue(result is Resource.Error)
+        }
 }

@@ -23,7 +23,6 @@ import org.junit.Test
  * ([getGiftWallSenders] and [getGiftRanking]) are fully unit-testable here.
  */
 class GiftRepositoryImplTest {
-
     private lateinit var api: WorkerApiClient
     private lateinit var firestore: FirebaseFirestore
     private lateinit var repo: GiftRepositoryImpl
@@ -51,95 +50,104 @@ class GiftRepositoryImplTest {
     // ── getGiftWallSenders ────────────────────────────────────────────────
 
     @Test
-    fun `getGiftWallSenders returns Success with gift sender list`() = runTest {
-        val senderList = listOf(
-            mapOf("senderId" to "user-1", "sendCount" to 3L),
-            mapOf("senderId" to "user-2", "sendCount" to 1L)
-        )
-        every { mockDocSnapshot.data } returns mapOf("senders" to senderList)
+    fun `getGiftWallSenders returns Success with gift sender list`() =
+        runTest {
+            val senderList =
+                listOf(
+                    mapOf("senderId" to "user-1", "sendCount" to 3L),
+                    mapOf("senderId" to "user-2", "sendCount" to 1L),
+                )
+            every { mockDocSnapshot.data } returns mapOf("senders" to senderList)
 
-        val result = repo.getGiftWallSenders("target-user", "gift-id-1")
+            val result = repo.getGiftWallSenders("target-user", "gift-id-1")
 
-        assertEquals(2, result.size)
-        assertEquals("user-1", result[0].userId)
-        assertEquals(3, result[0].count)
-        assertEquals("user-2", result[1].userId)
-        assertEquals(1, result[1].count)
-    }
-
-    @Test
-    fun `getGiftWallSenders returns empty list when document has no data`() = runTest {
-        every { mockDocSnapshot.data } returns null
-
-        val result = repo.getGiftWallSenders("target-user", "missing-gift")
-
-        assertTrue(result.isEmpty())
-    }
+            assertEquals(2, result.size)
+            assertEquals("user-1", result[0].userId)
+            assertEquals(3, result[0].count)
+            assertEquals("user-2", result[1].userId)
+            assertEquals(1, result[1].count)
+        }
 
     @Test
-    fun `getGiftWallSenders returns empty list when senders field is missing`() = runTest {
-        every { mockDocSnapshot.data } returns mapOf("someOtherField" to "value")
+    fun `getGiftWallSenders returns empty list when document has no data`() =
+        runTest {
+            every { mockDocSnapshot.data } returns null
 
-        val result = repo.getGiftWallSenders("target-user", "gift-id-1")
+            val result = repo.getGiftWallSenders("target-user", "missing-gift")
 
-        assertTrue(result.isEmpty())
-    }
+            assertTrue(result.isEmpty())
+        }
 
     @Test
-    fun `getGiftWallSenders returns Error on Firestore exception`() = runTest {
-        every { mockDocRef.get() } returns Tasks.forException(RuntimeException("Firestore unavailable"))
+    fun `getGiftWallSenders returns empty list when senders field is missing`() =
+        runTest {
+            every { mockDocSnapshot.data } returns mapOf("someOtherField" to "value")
 
-        val result = runCatching { repo.getGiftWallSenders("target-user", "gift-id-1") }
+            val result = repo.getGiftWallSenders("target-user", "gift-id-1")
 
-        assertTrue("Expected exception but got success", result.isFailure)
-    }
+            assertTrue(result.isEmpty())
+        }
+
+    @Test
+    fun `getGiftWallSenders returns Error on Firestore exception`() =
+        runTest {
+            every { mockDocRef.get() } returns Tasks.forException(RuntimeException("Firestore unavailable"))
+
+            val result = runCatching { repo.getGiftWallSenders("target-user", "gift-id-1") }
+
+            assertTrue("Expected exception but got success", result.isFailure)
+        }
 
     // ── getGiftRanking ────────────────────────────────────────────────────
 
     @Test
-    fun `getGiftRanking returns Success with ranking list`() = runTest {
-        val rankingList = listOf(
-            mapOf(
-                "userId" to "user-1",
-                "count" to 10L,
-                "displayName" to "Alice",
-                "profilePhotoUrl" to "https://img.example.com/alice.jpg"
-            ),
-            mapOf(
-                "userId" to "user-2",
-                "count" to 5L,
-                "displayName" to "Bob",
-                "profilePhotoUrl" to null
-            )
-        )
-        every { mockDocSnapshot.data } returns mapOf("rankings" to rankingList)
+    fun `getGiftRanking returns Success with ranking list`() =
+        runTest {
+            val rankingList =
+                listOf(
+                    mapOf(
+                        "userId" to "user-1",
+                        "count" to 10L,
+                        "displayName" to "Alice",
+                        "profilePhotoUrl" to "https://img.example.com/alice.jpg",
+                    ),
+                    mapOf(
+                        "userId" to "user-2",
+                        "count" to 5L,
+                        "displayName" to "Bob",
+                        "profilePhotoUrl" to null,
+                    ),
+                )
+            every { mockDocSnapshot.data } returns mapOf("rankings" to rankingList)
 
-        val result = repo.getGiftRanking("gift-id-1")
+            val result = repo.getGiftRanking("gift-id-1")
 
-        assertEquals(2, result.size)
-        assertEquals("user-1", result[0].userId)
-        assertEquals(10, result[0].count)
-        assertEquals("Alice", result[0].displayName)
-        assertEquals("https://img.example.com/alice.jpg", result[0].profilePhotoUrl)
-        assertEquals("user-2", result[1].userId)
-        assertEquals("Bob", result[1].displayName)
-    }
-
-    @Test
-    fun `getGiftRanking returns empty list when document has no data`() = runTest {
-        every { mockDocSnapshot.data } returns null
-
-        val result = repo.getGiftRanking("missing-gift")
-
-        assertTrue(result.isEmpty())
-    }
+            assertEquals(2, result.size)
+            assertEquals("user-1", result[0].userId)
+            assertEquals(10, result[0].count)
+            assertEquals("Alice", result[0].displayName)
+            assertEquals("https://img.example.com/alice.jpg", result[0].profilePhotoUrl)
+            assertEquals("user-2", result[1].userId)
+            assertEquals("Bob", result[1].displayName)
+        }
 
     @Test
-    fun `getGiftRanking returns Error on Firestore exception`() = runTest {
-        every { mockDocRef.get() } returns Tasks.forException(RuntimeException("Firestore unavailable"))
+    fun `getGiftRanking returns empty list when document has no data`() =
+        runTest {
+            every { mockDocSnapshot.data } returns null
 
-        val result = runCatching { repo.getGiftRanking("gift-id-1") }
+            val result = repo.getGiftRanking("missing-gift")
 
-        assertTrue("Expected exception but got success", result.isFailure)
-    }
+            assertTrue(result.isEmpty())
+        }
+
+    @Test
+    fun `getGiftRanking returns Error on Firestore exception`() =
+        runTest {
+            every { mockDocRef.get() } returns Tasks.forException(RuntimeException("Firestore unavailable"))
+
+            val result = runCatching { repo.getGiftRanking("gift-id-1") }
+
+            assertTrue("Expected exception but got success", result.isFailure)
+        }
 }

@@ -13,7 +13,6 @@ import org.junit.Before
 import org.junit.Test
 
 class MessageRepositoryImplTest {
-
     private lateinit var firestore: FirebaseFirestore
     private lateinit var repo: MessageRepositoryImpl
     private lateinit var mockDocRef: DocumentReference
@@ -36,56 +35,62 @@ class MessageRepositoryImplTest {
     // region sendMessage
 
     @Test
-    fun `sendMessage returns Success`() = runTest {
-        val result = repo.sendMessage("room-1", "user-1", "Alice", "Hello!")
-        assertTrue(result is Resource.Success)
-    }
+    fun `sendMessage returns Success`() =
+        runTest {
+            val result = repo.sendMessage("room-1", "user-1", "Alice", "Hello!")
+            assertTrue(result is Resource.Success)
+        }
 
     @Test
-    fun `sendMessage returns Error on exception`() = runTest {
-        every { mockDocRef.set(any()) } returns Tasks.forException(RuntimeException("Write failed"))
+    fun `sendMessage returns Error on exception`() =
+        runTest {
+            every { mockDocRef.set(any()) } returns Tasks.forException(RuntimeException("Write failed"))
 
-        val result = repo.sendMessage("room-1", "user-1", "Alice", "Hello!")
-        assertTrue(result is Resource.Error)
-    }
+            val result = repo.sendMessage("room-1", "user-1", "Alice", "Hello!")
+            assertTrue(result is Resource.Error)
+        }
 
     // endregion
 
     // region sendSystemMessage
 
     @Test
-    fun `sendSystemMessage returns Success`() = runTest {
-        val result = repo.sendSystemMessage("room-1", "Room closed")
-        assertTrue(result is Resource.Success)
-    }
+    fun `sendSystemMessage returns Success`() =
+        runTest {
+            val result = repo.sendSystemMessage("room-1", "Room closed")
+            assertTrue(result is Resource.Success)
+        }
 
     // endregion
 
     // region sendJoinMessage
 
     @Test
-    fun `sendJoinMessage returns Success`() = runTest {
-        val result = repo.sendJoinMessage("room-1", "user-2", "Bob", "Bob joined")
-        assertTrue(result is Resource.Success)
-    }
+    fun `sendJoinMessage returns Success`() =
+        runTest {
+            val result = repo.sendJoinMessage("room-1", "user-2", "Bob", "Bob joined")
+            assertTrue(result is Resource.Success)
+        }
 
     // endregion
 
     // region editMessage
 
     @Test
-    fun `editMessage returns Success`() = runTest {
-        val result = repo.editMessage("room-1", "msg-1", "Updated text")
-        assertTrue(result is Resource.Success)
-    }
+    fun `editMessage returns Success`() =
+        runTest {
+            val result = repo.editMessage("room-1", "msg-1", "Updated text")
+            assertTrue(result is Resource.Success)
+        }
 
     @Test
-    fun `editMessage returns Error on exception`() = runTest {
-        every { mockDocRef.update(any<Map<String, Any>>()) } returns Tasks.forException(RuntimeException("Fail"))
+    fun `editMessage returns Error on exception`() =
+        runTest {
+            every { mockDocRef.update(any<Map<String, Any>>()) } returns Tasks.forException(RuntimeException("Fail"))
 
-        val result = repo.editMessage("room-1", "msg-1", "Updated text")
-        assertTrue(result is Resource.Error)
-    }
+            val result = repo.editMessage("room-1", "msg-1", "Updated text")
+            assertTrue(result is Resource.Error)
+        }
 
     // endregion
 }

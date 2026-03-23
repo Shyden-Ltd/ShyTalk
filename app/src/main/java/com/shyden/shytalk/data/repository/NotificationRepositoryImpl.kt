@@ -9,27 +9,41 @@ import org.json.JSONObject
 
 class NotificationRepositoryImpl(
     private val api: WorkerApiClient,
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
 ) : NotificationRepository {
-
-    override suspend fun saveFcmToken(userId: String, token: String): Resource<Unit> =
+    override suspend fun saveFcmToken(
+        userId: String,
+        token: String,
+    ): Resource<Unit> =
         firebaseCall("Failed to save FCM token") {
-            api.post("/api/notifications/token", JSONObject().apply {
-                put("token", token)
-            })
+            api.post(
+                "/api/notifications/token",
+                JSONObject().apply {
+                    put("token", token)
+                },
+            )
             Unit
         }
 
-    override suspend fun removeFcmToken(userId: String, token: String): Resource<Unit> =
+    override suspend fun removeFcmToken(
+        userId: String,
+        token: String,
+    ): Resource<Unit> =
         firebaseCall("Failed to remove FCM token") {
-            api.delete("/api/notifications/token", JSONObject().apply {
-                put("token", token)
-            })
+            api.delete(
+                "/api/notifications/token",
+                JSONObject().apply {
+                    put("token", token)
+                },
+            )
             Unit
         }
 
     // Direct Firestore write — no server-side logic needed
-    override suspend fun setPmNotificationsEnabled(userId: String, enabled: Boolean): Resource<Unit> =
+    override suspend fun setPmNotificationsEnabled(
+        userId: String,
+        enabled: Boolean,
+    ): Resource<Unit> =
         firebaseCall("Failed to update notification setting") {
             firestore.document("users/$userId").update("pmNotificationsEnabled", enabled).await()
         }

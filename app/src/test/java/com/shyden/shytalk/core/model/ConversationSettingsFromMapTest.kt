@@ -9,21 +9,21 @@ import org.junit.Test
 import java.util.Date
 
 class ConversationSettingsFromMapTest {
-
     private val tsMillis = 1_000_000_000L
     private val ts = Timestamp(Date(tsMillis))
 
     @Test
     fun `fromMap parses complete valid map`() {
-        val map = mapOf<String, Any?>(
-            "isMuted" to true,
-            "isHidden" to true,
-            "hiddenAt" to ts,
-            "isPinned" to true,
-            "lastReadMessageId" to "msg-5",
-            "lastReadAt" to ts,
-            "unreadCount" to 3L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "isMuted" to true,
+                "isHidden" to true,
+                "hiddenAt" to ts,
+                "isPinned" to true,
+                "lastReadMessageId" to "msg-5",
+                "lastReadAt" to ts,
+                "unreadCount" to 3L,
+            )
         val settings = ConversationSettings.fromMap(map, "user-1")
 
         assertEquals("user-1", settings.userId)
@@ -72,32 +72,34 @@ class ConversationSettingsFromMapTest {
 
     @Test
     fun `fromMap of toMap round-trip with hiddenAt`() {
-        val original = ConversationSettings(
-            userId = "user-1",
-            isMuted = true,
-            isHidden = true,
-            hiddenAt = tsMillis,
-            isPinned = false,
-            lastReadMessageId = "msg-10",
-            lastReadAt = tsMillis,
-            unreadCount = 5
-        )
+        val original =
+            ConversationSettings(
+                userId = "user-1",
+                isMuted = true,
+                isHidden = true,
+                hiddenAt = tsMillis,
+                isPinned = false,
+                lastReadMessageId = "msg-10",
+                lastReadAt = tsMillis,
+                unreadCount = 5,
+            )
         val roundtripped = ConversationSettings.fromMap(original.toMap(), "user-1")
         assertEquals(original, roundtripped)
     }
 
     @Test
     fun `fromMap of toMap round-trip without hiddenAt`() {
-        val original = ConversationSettings(
-            userId = "user-1",
-            isMuted = false,
-            isHidden = false,
-            hiddenAt = null,
-            isPinned = true,
-            lastReadMessageId = "",
-            lastReadAt = 0,
-            unreadCount = 0
-        )
+        val original =
+            ConversationSettings(
+                userId = "user-1",
+                isMuted = false,
+                isHidden = false,
+                hiddenAt = null,
+                isPinned = true,
+                lastReadMessageId = "",
+                lastReadAt = 0,
+                unreadCount = 0,
+            )
         val roundtripped = ConversationSettings.fromMap(original.toMap(), "user-1")
         assertEquals(original, roundtripped)
     }

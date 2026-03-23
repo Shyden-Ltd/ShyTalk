@@ -9,7 +9,6 @@ import org.junit.Test
  * and the tick band quantization logic that the player uses.
  */
 class GachaSoundPlayerTest {
-
     @Test
     fun `tick band 0 at progress 0`() {
         val band = (0f.coerceIn(0f, 1f) * 7).toInt().coerceIn(0, 7)
@@ -42,10 +41,12 @@ class GachaSoundPlayerTest {
 
     @Test
     fun `tick bands cover all 8 values across progress range`() {
-        val bands = (0..100).map { i ->
-            val progress = i / 100f
-            (progress.coerceIn(0f, 1f) * 7).toInt().coerceIn(0, 7)
-        }.toSet()
+        val bands =
+            (0..100)
+                .map { i ->
+                    val progress = i / 100f
+                    (progress.coerceIn(0f, 1f) * 7).toInt().coerceIn(0, 7)
+                }.toSet()
 
         assertEquals(setOf(0, 1, 2, 3, 4, 5, 6, 7), bands)
     }
@@ -62,25 +63,27 @@ class GachaSoundPlayerTest {
     @Test
     fun `coin value sound tiers have 5 levels`() {
         // Verify the 5 coin-value-based sound tiers
-        val tiers = listOf(
-            10 to 280,     // < 50 → 280ms
-            100 to 420,    // < 200 → 420ms
-            500 to 600,    // < 2000 → 600ms
-            5000 to 800,   // < 10000 → 800ms
-            50000 to 1200  // >= 10000 → 1200ms
-        )
+        val tiers =
+            listOf(
+                10 to 280, // < 50 → 280ms
+                100 to 420, // < 200 → 420ms
+                500 to 600, // < 2000 → 600ms
+                5000 to 800, // < 10000 → 800ms
+                50000 to 1200, // >= 10000 → 1200ms
+            )
         assertEquals(5, tiers.size)
     }
 
     @Test
     fun `win reveal duration increases with coin value`() {
-        val durations = listOf(
-            10 to 280,
-            100 to 420,
-            500 to 600,
-            5000 to 800,
-            50000 to 1200
-        )
+        val durations =
+            listOf(
+                10 to 280,
+                100 to 420,
+                500 to 600,
+                5000 to 800,
+                50000 to 1200,
+            )
 
         var previousDuration = 0
         for ((coinValue, duration) in durations) {
@@ -158,7 +161,8 @@ class GachaSoundPlayerTest {
         val winEpic = sampleRate * 800 / 1000 * bytesPerSample
         val winLegendary = sampleRate * 1200 / 1000 * bytesPerSample
 
-        val totalBytes = spinStart + ticks + blinkClick + coinPurchase + highTierFanfare +
+        val totalBytes =
+            spinStart + ticks + blinkClick + coinPurchase + highTierFanfare +
                 winCommon + winUncommon + winRare + winEpic + winLegendary
 
         assert(totalBytes < 550_000) {

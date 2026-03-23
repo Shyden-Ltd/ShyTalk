@@ -23,7 +23,7 @@ import androidx.compose.ui.test.performTextInput
 fun ComposeTestRule.waitForTag(
     tag: String,
     timeoutMs: Long = 10_000,
-    useUnmergedTree: Boolean = false
+    useUnmergedTree: Boolean = false,
 ) {
     val deadline = System.nanoTime() + timeoutMs * 1_000_000L
     while (true) {
@@ -42,7 +42,10 @@ fun ComposeTestRule.clickTag(tag: String) {
     onNodeWithTag(tag).performClick()
 }
 
-fun ComposeTestRule.typeTextInTag(tag: String, text: String) {
+fun ComposeTestRule.typeTextInTag(
+    tag: String,
+    text: String,
+) {
     onNodeWithTag(tag).performTextInput(text)
 }
 
@@ -61,7 +64,10 @@ fun ComposeTestRule.assertTagDoesNotExist(tag: String) {
  * Uses [onAllNodesWithText] internally so that the wait succeeds even when
  * multiple nodes share the same text (e.g. two "Unlink" buttons for two providers).
  */
-fun ComposeTestRule.waitForText(text: String, timeoutMs: Long = 10_000) {
+fun ComposeTestRule.waitForText(
+    text: String,
+    timeoutMs: Long = 10_000,
+) {
     val deadline = System.nanoTime() + timeoutMs * 1_000_000L
     while (true) {
         mainClock.advanceTimeBy(500)

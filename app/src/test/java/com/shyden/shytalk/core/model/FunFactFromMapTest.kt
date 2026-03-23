@@ -4,15 +4,15 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class FunFactFromMapTest {
-
     @Test
     fun `fromMap with camelCase keys`() {
-        val map = mapOf<String, Any?>(
-            "text" to "Japanese has 3 writing systems.",
-            "category" to "language",
-            "emoji" to "\uD83C\uDDEF\uD83C\uDDF5",
-            "sourceLanguage" to "Japanese"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "text" to "Japanese has 3 writing systems.",
+                "category" to "language",
+                "emoji" to "\uD83C\uDDEF\uD83C\uDDF5",
+                "sourceLanguage" to "Japanese",
+            )
         val fact = FunFact.fromMap(map, "f1")
         assertEquals("f1", fact.id)
         assertEquals("Japanese has 3 writing systems.", fact.text)
@@ -23,12 +23,13 @@ class FunFactFromMapTest {
 
     @Test
     fun `fromMap with snake_case keys`() {
-        val map = mapOf<String, Any?>(
-            "text" to "Finnish has no gender.",
-            "category" to "language",
-            "emoji" to "\uD83C\uDDEB\uD83C\uDDEE",
-            "source_language" to "Finnish"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "text" to "Finnish has no gender.",
+                "category" to "language",
+                "emoji" to "\uD83C\uDDEB\uD83C\uDDEE",
+                "source_language" to "Finnish",
+            )
         val fact = FunFact.fromMap(map, "f2")
         assertEquals("Finnish", fact.sourceLanguage)
     }
@@ -45,12 +46,13 @@ class FunFactFromMapTest {
 
     @Test
     fun `fromMap with null values uses defaults`() {
-        val map = mapOf<String, Any?>(
-            "text" to null,
-            "category" to null,
-            "emoji" to null,
-            "sourceLanguage" to null
-        )
+        val map =
+            mapOf<String, Any?>(
+                "text" to null,
+                "category" to null,
+                "emoji" to null,
+                "sourceLanguage" to null,
+            )
         val fact = FunFact.fromMap(map, "f4")
         assertEquals("", fact.text)
         assertEquals("trivia", fact.category)

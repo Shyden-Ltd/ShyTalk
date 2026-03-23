@@ -18,7 +18,6 @@ import kotlinx.coroutines.flow.MutableSharedFlow
  * Replaces WebSocketConversationService — uses Firebase RTDB for real-time events.
  */
 class RtdbConversationService : ConversationWebSocketService {
-
     companion object {
         private const val TAG = "RtdbConvService"
         private const val TYPING_TIMEOUT_MS = 5_000L
@@ -35,18 +34,22 @@ class RtdbConversationService : ConversationWebSocketService {
 
     /** Handler for auto-clearing typing after timeout. */
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
-    private val clearTypingRunnable = Runnable {
-        currentConversationId?.let { convId ->
-            currentUserId?.let { userId ->
-                db.getReference("conversations/$convId/typing/$userId").removeValue()
+    private val clearTypingRunnable =
+        Runnable {
+            currentConversationId?.let { convId ->
+                currentUserId?.let { userId ->
+                    db.getReference("conversations/$convId/typing/$userId").removeValue()
+                }
             }
         }
-    }
 
     private val _events = MutableSharedFlow<ConversationEvent>(extraBufferCapacity = 16)
     override val events: Flow<ConversationEvent> = _events
 
-    override fun connect(conversationId: String, userId: String) {
+    override fun connect(
+        conversationId: String,
+        userId: String,
+    ) {
         if (currentConversationId != null && currentConversationId != conversationId) {
             disconnect()
         }
@@ -60,40 +63,42 @@ class RtdbConversationService : ConversationWebSocketService {
 
         // Listen to typing indicators from other users
         val allTypingRef = db.getReference("conversations/$conversationId/typing")
-        typingListener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                for (child in snapshot.children) {
-                    val typingUserId = child.key ?: continue
-                    if (typingUserId == userId) continue // skip self
-                    val isTyping = child.getValue(Boolean::class.java) ?: false
-                    _events.tryEmit(ConversationEvent.Typing(typingUserId, isTyping))
+        typingListener =
+            object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    for (child in snapshot.children) {
+                        val typingUserId = child.key ?: continue
+                        if (typingUserId == userId) continue // skip self
+                        val isTyping = child.getValue(Boolean::class.java) ?: false
+                        _events.tryEmit(ConversationEvent.Typing(typingUserId, isTyping))
+                    }
                 }
-            }
 
-            override fun onCancelled(error: DatabaseError) {
-                Log.w(TAG, "Typing listener cancelled: ${error.message}")
-            }
-        }.also { allTypingRef.addValueEventListener(it) }
+                override fun onCancelled(error: DatabaseError) {
+                    Log.w(TAG, "Typing listener cancelled: ${error.message}")
+                }
+            }.also { allTypingRef.addValueEventListener(it) }
 
         // Listen to conversation events
         val eventsRef = db.getReference("conversations/$conversationId/events/lastEvent")
-        eventsListener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val type = snapshot.child("type").getValue(String::class.java) ?: return
-                val ts = snapshot.child("ts").getValue(Long::class.java) ?: return
+        eventsListener =
+            object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    val type = snapshot.child("type").getValue(String::class.java) ?: return
+                    val ts = snapshot.child("ts").getValue(Long::class.java) ?: return
 
-                if (ts <= lastEventTs) return
-                lastEventTs = ts
+                    if (ts <= lastEventTs) return
+                    lastEventTs = ts
 
-                when (type) {
-                    "new_message" -> _events.tryEmit(ConversationEvent.NewMessage)
+                    when (type) {
+                        "new_message" -> _events.tryEmit(ConversationEvent.NewMessage)
+                    }
                 }
-            }
 
-            override fun onCancelled(error: DatabaseError) {
-                Log.w(TAG, "Events listener cancelled: ${error.message}")
-            }
-        }.also { eventsRef.addValueEventListener(it) }
+                override fun onCancelled(error: DatabaseError) {
+                    Log.w(TAG, "Events listener cancelled: ${error.message}")
+                }
+            }.also { eventsRef.addValueEventListener(it) }
 
         Log.d(TAG, "Connected to conversation=$conversationId user=$userId")
     }

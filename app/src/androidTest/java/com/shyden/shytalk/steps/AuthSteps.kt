@@ -9,20 +9,19 @@ import io.cucumber.java.en.Given
 import org.koin.java.KoinJavaComponent.getKoin
 
 class AuthSteps {
-
     @Given("I am not authenticated")
     fun iAmNotAuthenticated() {
         val auth = getKoin().get<AuthRepository>() as FakeAuthRepository
-        auth._isAuthenticated = false
-        auth._currentUserId = null
+        auth.fakeAuthenticated = false
+        auth.fakeUserId = null
     }
 
     @Given("I am authenticated as {string}")
     fun iAmAuthenticatedAs(userId: String) {
         val auth = getKoin().get<AuthRepository>() as FakeAuthRepository
-        auth._isAuthenticated = true
-        auth._currentUserId = userId
-        auth._currentUserEmail = "test@example.com"
+        auth.fakeAuthenticated = true
+        auth.fakeUserId = userId
+        auth.fakeUserEmail = "test@example.com"
     }
 
     @Given("I have default user flags")

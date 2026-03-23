@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -19,7 +20,6 @@ import coil3.request.transformations
 import coil3.target.ImageViewTarget
 import coil3.transform.CircleCropTransformation
 import com.shyden.shytalk.R
-import android.util.Log
 import kotlin.math.abs
 
 private const val TAG = "ChatHeadManager"
@@ -27,7 +27,7 @@ private const val TAG = "ChatHeadManager"
 class ChatHeadManager(
     private val context: Context,
     private val onBubbleTapped: () -> Unit,
-    private val onBubbleDismissed: () -> Unit
+    private val onBubbleDismissed: () -> Unit,
 ) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val handler = Handler(Looper.getMainLooper())
@@ -112,18 +112,20 @@ class ChatHeadManager(
     private fun createBubbleView(ownerPhotoUrl: String?) {
         val view = LayoutInflater.from(context).inflate(R.layout.chathead_bubble, null)
 
-        val params = WindowManager.LayoutParams(
-            bubbleSizePx,
-            bubbleSizePx,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                    or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = getScreenWidth() - bubbleSizePx - edgeMarginPx
-            y = getScreenHeight() / 3
-        }
+        val params =
+            WindowManager
+                .LayoutParams(
+                    bubbleSizePx,
+                    bubbleSizePx,
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                    PixelFormat.TRANSLUCENT,
+                ).apply {
+                    gravity = Gravity.TOP or Gravity.START
+                    x = getScreenWidth() - bubbleSizePx - edgeMarginPx
+                    y = getScreenHeight() / 3
+                }
 
         setupTouchListener(view, params)
         loadPhoto(view, ownerPhotoUrl)
@@ -140,24 +142,29 @@ class ChatHeadManager(
         val view = LayoutInflater.from(context).inflate(R.layout.chathead_close_zone, null)
         view.visibility = View.GONE
 
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            closeZoneHeightPx,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                    or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                    or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.BOTTOM or Gravity.START
-        }
+        val params =
+            WindowManager
+                .LayoutParams(
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    closeZoneHeightPx,
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                        or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                    PixelFormat.TRANSLUCENT,
+                ).apply {
+                    gravity = Gravity.BOTTOM or Gravity.START
+                }
 
         windowManager.addView(view, params)
         closeZoneView = view
         closeZoneParams = params
     }
 
-    private fun loadPhoto(view: View, ownerPhotoUrl: String?) {
+    private fun loadPhoto(
+        view: View,
+        ownerPhotoUrl: String?,
+    ) {
         val photoView = view.findViewById<ImageView>(R.id.ownerPhoto)
         val micIcon = view.findViewById<ImageView>(R.id.micIcon)
 
@@ -167,11 +174,13 @@ class ChatHeadManager(
 
             // Use explicit ImageRequest with the Service context — ImageView.load()
             // doesn't work for overlay views because they have no ViewTreeLifecycleOwner.
-            val request = ImageRequest.Builder(context)
-                .data(ownerPhotoUrl)
-                .transformations(CircleCropTransformation())
-                .target(ImageViewTarget(photoView))
-                .build()
+            val request =
+                ImageRequest
+                    .Builder(context)
+                    .data(ownerPhotoUrl)
+                    .transformations(CircleCropTransformation())
+                    .target(ImageViewTarget(photoView))
+                    .build()
             SingletonImageLoader.get(context).enqueue(request)
         } else {
             photoView.visibility = View.GONE
@@ -180,7 +189,10 @@ class ChatHeadManager(
     }
 
     @Suppress("ClickableViewAccessibility")
-    private fun setupTouchListener(view: View, params: WindowManager.LayoutParams) {
+    private fun setupTouchListener(
+        view: View,
+        params: WindowManager.LayoutParams,
+    ) {
         val tapThreshold = ViewConfiguration.get(context).scaledTouchSlop
         val closeButtonSizePx = (CLOSE_BUTTON_SIZE_DP * density).toInt()
         var initialX = 0
@@ -270,14 +282,18 @@ class ChatHeadManager(
         }
     }
 
-    private fun snapToEdge(params: WindowManager.LayoutParams, view: View) {
+    private fun snapToEdge(
+        params: WindowManager.LayoutParams,
+        view: View,
+    ) {
         val screenWidth = getScreenWidth()
         val bubbleCenterX = params.x + bubbleSizePx / 2
-        val targetX = if (bubbleCenterX < screenWidth / 2) {
-            edgeMarginPx
-        } else {
-            screenWidth - bubbleSizePx - edgeMarginPx
-        }
+        val targetX =
+            if (bubbleCenterX < screenWidth / 2) {
+                edgeMarginPx
+            } else {
+                screenWidth - bubbleSizePx - edgeMarginPx
+            }
 
         ValueAnimator.ofInt(params.x, targetX).apply {
             duration = 250
@@ -318,21 +334,19 @@ class ChatHeadManager(
         closeZoneParams = null
     }
 
-    private fun getScreenWidth(): Int {
-        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+    private fun getScreenWidth(): Int =
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             windowManager.currentWindowMetrics.bounds.width()
         } else {
             context.resources.displayMetrics.widthPixels
         }
-    }
 
-    private fun getScreenHeight(): Int {
-        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+    private fun getScreenHeight(): Int =
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             windowManager.currentWindowMetrics.bounds.height()
         } else {
             context.resources.displayMetrics.heightPixels
         }
-    }
 
     companion object {
         private const val BUBBLE_SIZE_DP = 80

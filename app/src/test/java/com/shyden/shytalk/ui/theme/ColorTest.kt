@@ -6,7 +6,6 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 class ColorTest {
-
     @Test
     fun `SpeakingGreen has correct hex value`() {
         assertEquals(Color(0xFF4CAF50), SpeakingGreen)

@@ -7,19 +7,18 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.shyden.shytalk.navigation.Screen
+import com.shyden.shytalk.util.ResetFakesRule
+import com.shyden.shytalk.util.ScreenshotRule
 import com.shyden.shytalk.util.launchMainScreen
 import com.shyden.shytalk.util.launchNavGraph
 import com.shyden.shytalk.util.waitForTag
 import com.shyden.shytalk.util.waitForText
-import com.shyden.shytalk.util.ResetFakesRule
-import com.shyden.shytalk.util.ScreenshotRule
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class ProfileTest {
-
     @get:Rule(order = 0)
     val resetFakes = ResetFakesRule()
 
@@ -49,7 +48,7 @@ class ProfileTest {
     @Test
     fun viewOtherProfile_showsFollowButton() {
         composeTestRule.launchNavGraph(
-            startDestination = Screen.UserProfile.createRoute("test-user-2")
+            startDestination = Screen.UserProfile.createRoute("test-user-2"),
         )
         composeTestRule.waitForTag("profile_followButton")
         composeTestRule.onNodeWithTag("profile_followButton").assertIsDisplayed()
@@ -58,7 +57,7 @@ class ProfileTest {
     @Test
     fun viewOtherProfile_showsMessageButton() {
         composeTestRule.launchNavGraph(
-            startDestination = Screen.UserProfile.createRoute("test-user-2")
+            startDestination = Screen.UserProfile.createRoute("test-user-2"),
         )
         composeTestRule.waitForTag("profile_messageButton")
         composeTestRule.onNodeWithTag("profile_messageButton").assertIsDisplayed()
@@ -67,7 +66,7 @@ class ProfileTest {
     @Test
     fun followUser_updatesButtonText() {
         composeTestRule.launchNavGraph(
-            startDestination = Screen.UserProfile.createRoute("test-user-2")
+            startDestination = Screen.UserProfile.createRoute("test-user-2"),
         )
         composeTestRule.waitForTag("profile_followButton")
         // Initially shows "Follow" (not following)
@@ -91,7 +90,7 @@ class ProfileTest {
     @Test
     fun followListScreen_navigable() {
         composeTestRule.launchNavGraph(
-            startDestination = Screen.FollowList.createRoute("test-user-1", "followers")
+            startDestination = Screen.FollowList.createRoute("test-user-1", "followers"),
         )
         composeTestRule.waitForTag("followList_followersTab")
         composeTestRule.onNodeWithTag("followList_followersTab").assertIsDisplayed()

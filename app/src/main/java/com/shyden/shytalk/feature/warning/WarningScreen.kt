@@ -28,15 +28,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.R
 import com.shyden.shytalk.core.audio.EmergencyTonePlayer
-import org.jetbrains.compose.resources.stringResource
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun WarningScreen(
     reason: String?,
     onAccept: () -> Unit,
-    onViewCommunityStandards: () -> Unit
+    onViewCommunityStandards: () -> Unit,
 ) {
     DisposableEffect(Unit) {
         EmergencyTonePlayer.play()
@@ -45,19 +45,21 @@ fun WarningScreen(
 
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(32.dp)
-                .verticalScroll(rememberScrollState()),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(32.dp)
+                    .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Center,
         ) {
             Image(
                 painter = painterResource(R.drawable.police_duck),
                 contentDescription = stringResource(Res.string.police_duck_description),
-                modifier = Modifier
-                    .size(160.dp)
-                    .clip(CircleShape)
+                modifier =
+                    Modifier
+                        .size(160.dp)
+                        .clip(CircleShape),
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -66,18 +68,21 @@ fun WarningScreen(
                 text = stringResource(Res.string.official_warning),
                 style = MaterialTheme.typography.headlineMedium,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.testTag("warning_title")
+                modifier = Modifier.testTag("warning_title"),
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                text = if (!reason.isNullOrBlank() && !reason.equals("other", ignoreCase = true))
-                    stringResource(Res.string.warning_reviewed_for_reason, reason)
-                else stringResource(Res.string.warning_reviewed),
+                text =
+                    if (!reason.isNullOrBlank() && !reason.equals("other", ignoreCase = true)) {
+                        stringResource(Res.string.warning_reviewed_for_reason, reason)
+                    } else {
+                        stringResource(Res.string.warning_reviewed)
+                    },
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -86,14 +91,14 @@ fun WarningScreen(
                 text = stringResource(Res.string.warning_consequence),
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             TextButton(
                 onClick = onViewCommunityStandards,
-                modifier = Modifier.testTag("warning_communityStandardsLink")
+                modifier = Modifier.testTag("warning_communityStandardsLink"),
             ) {
                 Text(stringResource(Res.string.view_community_standards))
             }
@@ -102,7 +107,7 @@ fun WarningScreen(
 
             Button(
                 onClick = onAccept,
-                modifier = Modifier.fillMaxWidth().testTag("warning_acceptButton")
+                modifier = Modifier.fillMaxWidth().testTag("warning_acceptButton"),
             ) {
                 Text(stringResource(Res.string.i_understand_and_accept))
             }
@@ -113,7 +118,7 @@ fun WarningScreen(
                 text = stringResource(Res.string.support_contact),
                 style = MaterialTheme.typography.bodySmall,
                 textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

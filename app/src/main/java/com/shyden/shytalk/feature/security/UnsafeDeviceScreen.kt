@@ -21,29 +21,31 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.R
-import org.jetbrains.compose.resources.stringResource
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun UnsafeDeviceScreen() {
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+        color = MaterialTheme.colorScheme.background,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(32.dp),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Center,
         ) {
             Image(
                 painter = painterResource(R.drawable.police_duck),
                 contentDescription = stringResource(Res.string.police_duck_description),
-                modifier = Modifier
-                    .size(160.dp)
-                    .clip(CircleShape)
+                modifier =
+                    Modifier
+                        .size(160.dp)
+                        .clip(CircleShape),
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -52,7 +54,7 @@ fun UnsafeDeviceScreen() {
                 text = stringResource(Res.string.device_not_supported),
                 style = MaterialTheme.typography.headlineMedium,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.testTag("unsafeDevice_title")
+                modifier = Modifier.testTag("unsafeDevice_title"),
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -62,7 +64,7 @@ fun UnsafeDeviceScreen() {
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.testTag("unsafeDevice_description")
+                modifier = Modifier.testTag("unsafeDevice_description"),
             )
         }
     }

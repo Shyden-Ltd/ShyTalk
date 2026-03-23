@@ -24,10 +24,10 @@ import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.job
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.job
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -42,7 +42,6 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ProfileViewModelTest {
-
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
@@ -62,30 +61,36 @@ class ProfileViewModelTest {
     @Before
     fun setup() {
         mockkStatic("com.shyden.shytalk.core.util.ImageCompressor_androidKt")
-        coEvery { com.shyden.shytalk.core.util.compressImage(any(), any(), any()) } answers { firstArg() }
+        coEvery {
+            com.shyden.shytalk.core.util
+                .compressImage(any(), any(), any())
+        } answers { firstArg() }
         every { authRepository.currentUserId } returns currentUserId
         every { authRepository.currentUserEmail } returns "test@example.com"
         every { userRepository.userUpdates } returns MutableSharedFlow()
     }
 
     @After
-    fun tearDown() = runBlocking {
-        activeViewModels.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() }
-        activeViewModels.clear()
-        unmockkStatic("com.shyden.shytalk.core.util.ImageCompressor_androidKt")
-    }
+    fun tearDown() =
+        runBlocking {
+            activeViewModels.forEach {
+                it.viewModelScope.coroutineContext.job
+                    .cancelAndJoin()
+            }
+            activeViewModels.clear()
+            unmockkStatic("com.shyden.shytalk.core.util.ImageCompressor_androidKt")
+        }
 
-    private fun createViewModel(): ProfileViewModel {
-        return ProfileViewModel(
+    private fun createViewModel(): ProfileViewModel =
+        ProfileViewModel(
             authRepository = authRepository,
             userRepository = userRepository,
             storageRepository = storageRepository,
             roomRepository = roomRepository,
             reportRepository = reportRepository,
             economyRepository = economyRepository,
-            identityRepository = identityRepository
+            identityRepository = identityRepository,
         ).also { activeViewModels.add(it) }
-    }
 
     // ===== init =====
 
@@ -105,545 +110,620 @@ class ProfileViewModelTest {
     // ===== loadProfile - own profile =====
 
     @Test
-    fun `loadProfile - own profile loads user`() = runTest {
-        val user = TestData.createTestUser(uid = currentUserId)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+    fun `loadProfile - own profile loads user`() =
+        runTest {
+            val user = TestData.createTestUser(uid = currentUserId)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
 
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.isOwnProfile)
-        assertEquals(user, vm.uiState.value.user)
-        assertFalse(vm.uiState.value.isLoading)
-    }
-
-    @Test
-    fun `loadProfile - own profile with empty string is treated as own`() = runTest {
-        val user = TestData.createTestUser(uid = currentUserId)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
-
-        val vm = createViewModel()
-        vm.loadProfile("")
-        advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.isOwnProfile)
-    }
+            assertTrue(vm.uiState.value.isOwnProfile)
+            assertEquals(user, vm.uiState.value.user)
+            assertFalse(vm.uiState.value.isLoading)
+        }
 
     @Test
-    fun `loadProfile - own profile with currentUid is treated as own`() = runTest {
-        val user = TestData.createTestUser(uid = currentUserId)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+    fun `loadProfile - own profile with empty string is treated as own`() =
+        runTest {
+            val user = TestData.createTestUser(uid = currentUserId)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
 
-        val vm = createViewModel()
-        vm.loadProfile(currentUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile("")
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.isOwnProfile)
-    }
-
-    @Test
-    fun `loadProfile - own profile triggers uniqueId generation when zero`() = runTest {
-        val user = TestData.createTestUser(uid = currentUserId, uniqueId = 0L)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
-        coEvery { userRepository.generateUniqueId(currentUserId) } returns Resource.Success(99999L)
-
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
-
-        coVerify { userRepository.generateUniqueId(currentUserId) }
-        assertEquals(99999L, vm.uiState.value.user?.uniqueId)
-    }
+            assertTrue(vm.uiState.value.isOwnProfile)
+        }
 
     @Test
-    fun `loadProfile - own profile skips uniqueId generation when nonzero`() = runTest {
-        val user = TestData.createTestUser(uid = currentUserId, uniqueId = 12345L)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+    fun `loadProfile - own profile with currentUid is treated as own`() =
+        runTest {
+            val user = TestData.createTestUser(uid = currentUserId)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
 
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(currentUserId)
+            advanceUntilIdle()
 
-        coVerify(exactly = 0) { userRepository.generateUniqueId(any()) }
-    }
+            assertTrue(vm.uiState.value.isOwnProfile)
+        }
 
     @Test
-    fun `loadProfile - uniqueId generation error sets error`() = runTest {
-        val user = TestData.createTestUser(uid = currentUserId, uniqueId = 0L)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
-        coEvery { userRepository.generateUniqueId(currentUserId) } returns Resource.Error("gen failed")
+    fun `loadProfile - own profile triggers uniqueId generation when zero`() =
+        runTest {
+            val user = TestData.createTestUser(uid = currentUserId, uniqueId = 0L)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+            coEvery { userRepository.generateUniqueId(currentUserId) } returns Resource.Success(99999L)
 
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
 
-        assertNotNull(vm.uiState.value.error)
-    }
+            coVerify { userRepository.generateUniqueId(currentUserId) }
+            assertEquals(
+                99999L,
+                vm.uiState.value.user
+                    ?.uniqueId,
+            )
+        }
+
+    @Test
+    fun `loadProfile - own profile skips uniqueId generation when nonzero`() =
+        runTest {
+            val user = TestData.createTestUser(uid = currentUserId, uniqueId = 12345L)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { userRepository.generateUniqueId(any()) }
+        }
+
+    @Test
+    fun `loadProfile - uniqueId generation error sets error`() =
+        runTest {
+            val user = TestData.createTestUser(uid = currentUserId, uniqueId = 0L)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+            coEvery { userRepository.generateUniqueId(currentUserId) } returns Resource.Error("gen failed")
+
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
+
+            assertNotNull(vm.uiState.value.error)
+        }
 
     // ===== loadProfile - other profile =====
 
     @Test
-    fun `loadProfile - other user sets isOwnProfile false`() = runTest {
-        val user = TestData.createTestUser(uid = otherUserId)
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+    fun `loadProfile - other user sets isOwnProfile false`() =
+        runTest {
+            val user = TestData.createTestUser(uid = otherUserId)
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
 
-        assertFalse(vm.uiState.value.isOwnProfile)
-        assertEquals(user, vm.uiState.value.user)
-    }
-
-    @Test
-    fun `loadProfile - detects target blocked viewer`() = runTest {
-        val user = TestData.createTestUser(uid = otherUserId, blockedUserIds = setOf(currentUserId))
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
-
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.isBlockedByTarget)
-        assertFalse(vm.uiState.value.isBlockedByViewer)
-    }
+            assertFalse(vm.uiState.value.isOwnProfile)
+            assertEquals(user, vm.uiState.value.user)
+        }
 
     @Test
-    fun `loadProfile - detects viewer blocked target`() = runTest {
-        val user = TestData.createTestUser(uid = otherUserId)
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(setOf(otherUserId))
+    fun `loadProfile - detects target blocked viewer`() =
+        runTest {
+            val user = TestData.createTestUser(uid = otherUserId, blockedUserIds = setOf(currentUserId))
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
 
-        assertFalse(vm.uiState.value.isBlockedByTarget)
-        assertTrue(vm.uiState.value.isBlockedByViewer)
-    }
+            assertTrue(vm.uiState.value.isBlockedByTarget)
+            assertFalse(vm.uiState.value.isBlockedByViewer)
+        }
 
     @Test
-    fun `loadProfile - blocked list error defaults to not blocked`() = runTest {
-        val user = TestData.createTestUser(uid = otherUserId)
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Error("network")
+    fun `loadProfile - detects viewer blocked target`() =
+        runTest {
+            val user = TestData.createTestUser(uid = otherUserId)
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(setOf(otherUserId))
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
 
-        assertFalse(vm.uiState.value.isBlockedByViewer)
-    }
+            assertFalse(vm.uiState.value.isBlockedByTarget)
+            assertTrue(vm.uiState.value.isBlockedByViewer)
+        }
+
+    @Test
+    fun `loadProfile - blocked list error defaults to not blocked`() =
+        runTest {
+            val user = TestData.createTestUser(uid = otherUserId)
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Error("network")
+
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
+
+            assertFalse(vm.uiState.value.isBlockedByViewer)
+        }
 
     // ===== loadProfile - error =====
 
     @Test
-    fun `loadProfile - error sets error state`() = runTest {
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Error("not found")
+    fun `loadProfile - error sets error state`() =
+        runTest {
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Error("not found")
 
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
 
-        assertEquals(UiText.Plain("not found"), vm.uiState.value.error)
-        assertFalse(vm.uiState.value.isLoading)
-    }
+            assertEquals(UiText.Plain("not found"), vm.uiState.value.error)
+            assertFalse(vm.uiState.value.isLoading)
+        }
 
     @Test
-    fun `loadProfile - no auth user does nothing`() = runTest {
-        every { authRepository.currentUserId } returns null
+    fun `loadProfile - no auth user does nothing`() =
+        runTest {
+            every { authRepository.currentUserId } returns null
 
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
 
-        assertNull(vm.uiState.value.user)
-    }
+            assertNull(vm.uiState.value.user)
+        }
 
     // ===== saveProfile =====
 
     @Test
-    fun `saveProfile - success sets profileSaved`() = runTest {
-        every { authRepository.getProviderInfo() } returns ("google" to "test@example.com")
-        coEvery { identityRepository.createUser(any(), any(), any(), any(), any(), any(), any()) } returns
-            Resource.Success(CreateUserResult(10000042))
-        coEvery { identityRepository.forceRefreshToken() } returns Resource.Success(Unit)
+    fun `saveProfile - success sets profileSaved`() =
+        runTest {
+            every { authRepository.getProviderInfo() } returns ("google" to "test@example.com")
+            coEvery { identityRepository.createUser(any(), any(), any(), any(), any(), any(), any()) } returns
+                Resource.Success(CreateUserResult(10000042))
+            coEvery { identityRepository.forceRefreshToken() } returns Resource.Success(Unit)
 
-        val vm = createViewModel()
-        vm.saveProfile("My Name", 946684800000L)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.saveProfile("My Name", 946684800000L)
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.profileSaved)
-        assertEquals("My Name", vm.uiState.value.user?.displayName)
-        assertEquals(10000042L, vm.uiState.value.user?.uniqueId)
-        assertFalse(vm.uiState.value.isLoading)
-    }
-
-    @Test
-    fun `saveProfile - error sets error`() = runTest {
-        every { authRepository.getProviderInfo() } returns ("google" to "test@example.com")
-        coEvery { identityRepository.createUser(any(), any(), any(), any(), any(), any(), any()) } returns
-            Resource.Error("save failed")
-
-        val vm = createViewModel()
-        vm.saveProfile("My Name", 946684800000L)
-        advanceUntilIdle()
-
-        assertEquals(UiText.Plain("save failed"), vm.uiState.value.error)
-        assertFalse(vm.uiState.value.profileSaved)
-    }
+            assertTrue(vm.uiState.value.profileSaved)
+            assertEquals(
+                "My Name",
+                vm.uiState.value.user
+                    ?.displayName,
+            )
+            assertEquals(
+                10000042L,
+                vm.uiState.value.user
+                    ?.uniqueId,
+            )
+            assertFalse(vm.uiState.value.isLoading)
+        }
 
     @Test
-    fun `saveProfile - no provider info shows error`() = runTest {
-        every { authRepository.getProviderInfo() } returns null
+    fun `saveProfile - error sets error`() =
+        runTest {
+            every { authRepository.getProviderInfo() } returns ("google" to "test@example.com")
+            coEvery { identityRepository.createUser(any(), any(), any(), any(), any(), any(), any()) } returns
+                Resource.Error("save failed")
 
-        val vm = createViewModel()
-        vm.saveProfile("My Name", 946684800000L)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.saveProfile("My Name", 946684800000L)
+            advanceUntilIdle()
 
-        assertNotNull(vm.uiState.value.error)
-        coVerify(exactly = 0) { identityRepository.createUser(any(), any(), any(), any(), any(), any(), any()) }
-    }
-
-    @Test
-    fun `saveProfile sets resolvedUniqueId on authRepository after successful creation`() = runTest {
-        every { authRepository.getProviderInfo() } returns ("google" to "test@example.com")
-        coEvery { identityRepository.createUser(any(), any(), any(), any(), any(), any(), any()) } returns
-            Resource.Success(CreateUserResult(10000042))
-        coEvery { identityRepository.forceRefreshToken() } returns Resource.Success(Unit)
-
-        val vm = createViewModel()
-        vm.saveProfile("My Name", 946684800000L)
-        advanceUntilIdle()
-
-        // After profile creation, resolvedUniqueId must be set so currentUserId returns the uniqueId
-        verify { authRepository.resolvedUniqueId = "10000042" }
-    }
+            assertEquals(UiText.Plain("save failed"), vm.uiState.value.error)
+            assertFalse(vm.uiState.value.profileSaved)
+        }
 
     @Test
-    fun `saveProfile does not set resolvedUniqueId when creation fails`() = runTest {
-        every { authRepository.getProviderInfo() } returns ("google" to "test@example.com")
-        coEvery { identityRepository.createUser(any(), any(), any(), any(), any(), any(), any()) } returns
-            Resource.Error("creation failed")
+    fun `saveProfile - no provider info shows error`() =
+        runTest {
+            every { authRepository.getProviderInfo() } returns null
 
-        val vm = createViewModel()
-        vm.saveProfile("My Name", 946684800000L)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.saveProfile("My Name", 946684800000L)
+            advanceUntilIdle()
 
-        // resolvedUniqueId should NOT be set on failure
-        verify(exactly = 0) { authRepository.resolvedUniqueId = any() }
-    }
+            assertNotNull(vm.uiState.value.error)
+            coVerify(exactly = 0) { identityRepository.createUser(any(), any(), any(), any(), any(), any(), any()) }
+        }
+
+    @Test
+    fun `saveProfile sets resolvedUniqueId on authRepository after successful creation`() =
+        runTest {
+            every { authRepository.getProviderInfo() } returns ("google" to "test@example.com")
+            coEvery { identityRepository.createUser(any(), any(), any(), any(), any(), any(), any()) } returns
+                Resource.Success(CreateUserResult(10000042))
+            coEvery { identityRepository.forceRefreshToken() } returns Resource.Success(Unit)
+
+            val vm = createViewModel()
+            vm.saveProfile("My Name", 946684800000L)
+            advanceUntilIdle()
+
+            // After profile creation, resolvedUniqueId must be set so currentUserId returns the uniqueId
+            verify { authRepository.resolvedUniqueId = "10000042" }
+        }
+
+    @Test
+    fun `saveProfile does not set resolvedUniqueId when creation fails`() =
+        runTest {
+            every { authRepository.getProviderInfo() } returns ("google" to "test@example.com")
+            coEvery { identityRepository.createUser(any(), any(), any(), any(), any(), any(), any()) } returns
+                Resource.Error("creation failed")
+
+            val vm = createViewModel()
+            vm.saveProfile("My Name", 946684800000L)
+            advanceUntilIdle()
+
+            // resolvedUniqueId should NOT be set on failure
+            verify(exactly = 0) { authRepository.resolvedUniqueId = any() }
+        }
 
     // ===== saveProfileEdits =====
 
     @Test
-    fun `saveProfileEdits - success with nationality`() = runTest {
-        val user = TestData.createTestUser(uid = currentUserId)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
-        coEvery { userRepository.updateProfile(any(), any()) } returns Resource.Success(Unit)
+    fun `saveProfileEdits - success with nationality`() =
+        runTest {
+            val user = TestData.createTestUser(uid = currentUserId)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+            coEvery { userRepository.updateProfile(any(), any()) } returns Resource.Success(Unit)
 
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
 
-        vm.toggleEditing()
-        vm.saveProfileEdits("New Name", "New desc", "US")
-        advanceUntilIdle()
+            vm.toggleEditing()
+            vm.saveProfileEdits("New Name", "New desc", "US")
+            advanceUntilIdle()
 
-        assertFalse(vm.uiState.value.isEditing)
-        assertEquals("New Name", vm.uiState.value.user?.displayName)
-        assertEquals("New desc", vm.uiState.value.user?.description)
-        assertEquals("US", vm.uiState.value.user?.nationality)
-    }
-
-    @Test
-    fun `saveProfileEdits - null nationality omits field`() = runTest {
-        val user = TestData.createTestUser(uid = currentUserId)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
-        coEvery { userRepository.updateProfile(eq(currentUserId), any()) } returns Resource.Success(Unit)
-
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
-
-        vm.saveProfileEdits("Name", "Desc", null)
-        advanceUntilIdle()
-
-        coVerify {
-            userRepository.updateProfile(currentUserId, match { fields ->
-                !fields.containsKey("nationality")
-            })
+            assertFalse(vm.uiState.value.isEditing)
+            assertEquals(
+                "New Name",
+                vm.uiState.value.user
+                    ?.displayName,
+            )
+            assertEquals(
+                "New desc",
+                vm.uiState.value.user
+                    ?.description,
+            )
+            assertEquals(
+                "US",
+                vm.uiState.value.user
+                    ?.nationality,
+            )
         }
-    }
 
     @Test
-    fun `saveProfileEdits - error sets error`() = runTest {
-        coEvery { userRepository.updateProfile(any(), any()) } returns Resource.Error("edit failed")
+    fun `saveProfileEdits - null nationality omits field`() =
+        runTest {
+            val user = TestData.createTestUser(uid = currentUserId)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+            coEvery { userRepository.updateProfile(eq(currentUserId), any()) } returns Resource.Success(Unit)
 
-        val vm = createViewModel()
-        vm.saveProfileEdits("Name", "Desc", null)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
 
-        assertEquals(UiText.Plain("edit failed"), vm.uiState.value.error)
-    }
+            vm.saveProfileEdits("Name", "Desc", null)
+            advanceUntilIdle()
+
+            coVerify {
+                userRepository.updateProfile(
+                    currentUserId,
+                    match { fields ->
+                        !fields.containsKey("nationality")
+                    },
+                )
+            }
+        }
+
+    @Test
+    fun `saveProfileEdits - error sets error`() =
+        runTest {
+            coEvery { userRepository.updateProfile(any(), any()) } returns Resource.Error("edit failed")
+
+            val vm = createViewModel()
+            vm.saveProfileEdits("Name", "Desc", null)
+            advanceUntilIdle()
+
+            assertEquals(UiText.Plain("edit failed"), vm.uiState.value.error)
+        }
 
     // ===== updateDisplayName =====
 
     @Test
-    fun `updateDisplayName - success updates user`() = runTest {
-        val user = TestData.createTestUser(uid = currentUserId, displayName = "Old Name")
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
-        coEvery { userRepository.updateDisplayName(currentUserId, "New Name") } returns Resource.Success(Unit)
+    fun `updateDisplayName - success updates user`() =
+        runTest {
+            val user = TestData.createTestUser(uid = currentUserId, displayName = "Old Name")
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+            coEvery { userRepository.updateDisplayName(currentUserId, "New Name") } returns Resource.Success(Unit)
 
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
 
-        vm.updateDisplayName("New Name")
-        advanceUntilIdle()
+            vm.updateDisplayName("New Name")
+            advanceUntilIdle()
 
-        assertEquals("New Name", vm.uiState.value.user?.displayName)
-        assertFalse(vm.uiState.value.isLoading)
-    }
+            assertEquals(
+                "New Name",
+                vm.uiState.value.user
+                    ?.displayName,
+            )
+            assertFalse(vm.uiState.value.isLoading)
+        }
 
     @Test
-    fun `updateDisplayName - error sets error`() = runTest {
-        coEvery { userRepository.updateDisplayName(any(), any()) } returns Resource.Error("name failed")
+    fun `updateDisplayName - error sets error`() =
+        runTest {
+            coEvery { userRepository.updateDisplayName(any(), any()) } returns Resource.Error("name failed")
 
-        val vm = createViewModel()
-        vm.updateDisplayName("New Name")
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.updateDisplayName("New Name")
+            advanceUntilIdle()
 
-        assertEquals(UiText.Plain("name failed"), vm.uiState.value.error)
-    }
+            assertEquals(UiText.Plain("name failed"), vm.uiState.value.error)
+        }
 
     // ===== uploadProfilePhoto =====
 
     @Test
-    fun `uploadProfilePhoto - success updates user`() = runTest {
-        val user = TestData.createTestUser(uid = currentUserId)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
-        coEvery { storageRepository.uploadImage(currentUserId, "profiles", any()) } returns Resource.Success("https://photo.url")
-        coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Success(Unit)
+    fun `uploadProfilePhoto - success updates user`() =
+        runTest {
+            val user = TestData.createTestUser(uid = currentUserId)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+            coEvery { storageRepository.uploadImage(currentUserId, "profiles", any()) } returns Resource.Success("https://photo.url")
+            coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Success(Unit)
 
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
 
-        vm.uploadProfilePhoto(byteArrayOf(1, 2, 3))
+            vm.uploadProfilePhoto(byteArrayOf(1, 2, 3))
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        assertEquals("https://photo.url", vm.uiState.value.user?.profilePhotoUrl)
-        assertFalse(vm.uiState.value.isUploadingPhoto)
-    }
-
-    @Test
-    fun `uploadProfilePhoto - upload error sets error`() = runTest {
-        coEvery { storageRepository.uploadImage(any(), any(), any()) } returns Resource.Error("upload failed")
-
-        val vm = createViewModel()
-        vm.uploadProfilePhoto(byteArrayOf(1))
-
-        advanceUntilIdle()
-
-        assertEquals(UiText.Plain("upload failed"), vm.uiState.value.error)
-        assertFalse(vm.uiState.value.isUploadingPhoto)
-    }
+            assertEquals(
+                "https://photo.url",
+                vm.uiState.value.user
+                    ?.profilePhotoUrl,
+            )
+            assertFalse(vm.uiState.value.isUploadingPhoto)
+        }
 
     @Test
-    fun `uploadProfilePhoto - save url error sets error`() = runTest {
-        coEvery { storageRepository.uploadImage(any(), any(), any()) } returns Resource.Success("https://url")
-        coEvery { userRepository.updateProfile(any(), any()) } returns Resource.Error("save failed")
+    fun `uploadProfilePhoto - upload error sets error`() =
+        runTest {
+            coEvery { storageRepository.uploadImage(any(), any(), any()) } returns Resource.Error("upload failed")
 
-        val vm = createViewModel()
-        vm.uploadProfilePhoto(byteArrayOf(1))
+            val vm = createViewModel()
+            vm.uploadProfilePhoto(byteArrayOf(1))
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        assertNotNull(vm.uiState.value.error)
-        assertFalse(vm.uiState.value.isUploadingPhoto)
-    }
-
-    @Test
-    fun `uploadProfilePhoto - deletes old photo after successful upload`() = runTest {
-        val oldUrl = "https://firebase.storage/old-profile.jpg"
-        val user = TestData.createTestUser(uid = currentUserId, profilePhotoUrl = oldUrl)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
-        coEvery { storageRepository.uploadImage(currentUserId, "profiles", any()) } returns Resource.Success("https://new.url")
-        coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Success(Unit)
-
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
-
-        vm.uploadProfilePhoto(byteArrayOf(1, 2))
-
-        advanceUntilIdle()
-
-        coVerify { storageRepository.deleteImageByUrl(oldUrl) }
-    }
+            assertEquals(UiText.Plain("upload failed"), vm.uiState.value.error)
+            assertFalse(vm.uiState.value.isUploadingPhoto)
+        }
 
     @Test
-    fun `uploadProfilePhoto - no old photo skips delete`() = runTest {
-        val user = TestData.createTestUser(uid = currentUserId, profilePhotoUrl = null)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
-        coEvery { storageRepository.uploadImage(currentUserId, "profiles", any()) } returns Resource.Success("https://new.url")
-        coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Success(Unit)
+    fun `uploadProfilePhoto - save url error sets error`() =
+        runTest {
+            coEvery { storageRepository.uploadImage(any(), any(), any()) } returns Resource.Success("https://url")
+            coEvery { userRepository.updateProfile(any(), any()) } returns Resource.Error("save failed")
 
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.uploadProfilePhoto(byteArrayOf(1))
 
-        vm.uploadProfilePhoto(byteArrayOf(1, 2))
+            advanceUntilIdle()
 
-        advanceUntilIdle()
-
-        coVerify(exactly = 0) { storageRepository.deleteImageByUrl(any()) }
-    }
+            assertNotNull(vm.uiState.value.error)
+            assertFalse(vm.uiState.value.isUploadingPhoto)
+        }
 
     @Test
-    fun `uploadProfilePhoto - upload failure does not delete old photo`() = runTest {
-        val oldUrl = "https://firebase.storage/old-profile.jpg"
-        val user = TestData.createTestUser(uid = currentUserId, profilePhotoUrl = oldUrl)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
-        coEvery { storageRepository.uploadImage(any(), any(), any()) } returns Resource.Error("upload failed")
+    fun `uploadProfilePhoto - deletes old photo after successful upload`() =
+        runTest {
+            val oldUrl = "https://firebase.storage/old-profile.jpg"
+            val user = TestData.createTestUser(uid = currentUserId, profilePhotoUrl = oldUrl)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+            coEvery { storageRepository.uploadImage(currentUserId, "profiles", any()) } returns Resource.Success("https://new.url")
+            coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Success(Unit)
 
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
 
-        vm.uploadProfilePhoto(byteArrayOf(1))
+            vm.uploadProfilePhoto(byteArrayOf(1, 2))
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        coVerify(exactly = 0) { storageRepository.deleteImageByUrl(any()) }
-    }
+            coVerify { storageRepository.deleteImageByUrl(oldUrl) }
+        }
 
     @Test
-    fun `uploadProfilePhoto - save url failure does not delete old photo`() = runTest {
-        val oldUrl = "https://firebase.storage/old-profile.jpg"
-        val user = TestData.createTestUser(uid = currentUserId, profilePhotoUrl = oldUrl)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
-        coEvery { storageRepository.uploadImage(any(), any(), any()) } returns Resource.Success("https://new.url")
-        coEvery { userRepository.updateProfile(any(), any()) } returns Resource.Error("save failed")
+    fun `uploadProfilePhoto - no old photo skips delete`() =
+        runTest {
+            val user = TestData.createTestUser(uid = currentUserId, profilePhotoUrl = null)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+            coEvery { storageRepository.uploadImage(currentUserId, "profiles", any()) } returns Resource.Success("https://new.url")
+            coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Success(Unit)
 
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
 
-        vm.uploadProfilePhoto(byteArrayOf(1))
+            vm.uploadProfilePhoto(byteArrayOf(1, 2))
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        coVerify(exactly = 0) { storageRepository.deleteImageByUrl(any()) }
-    }
+            coVerify(exactly = 0) { storageRepository.deleteImageByUrl(any()) }
+        }
+
+    @Test
+    fun `uploadProfilePhoto - upload failure does not delete old photo`() =
+        runTest {
+            val oldUrl = "https://firebase.storage/old-profile.jpg"
+            val user = TestData.createTestUser(uid = currentUserId, profilePhotoUrl = oldUrl)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+            coEvery { storageRepository.uploadImage(any(), any(), any()) } returns Resource.Error("upload failed")
+
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
+
+            vm.uploadProfilePhoto(byteArrayOf(1))
+
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { storageRepository.deleteImageByUrl(any()) }
+        }
+
+    @Test
+    fun `uploadProfilePhoto - save url failure does not delete old photo`() =
+        runTest {
+            val oldUrl = "https://firebase.storage/old-profile.jpg"
+            val user = TestData.createTestUser(uid = currentUserId, profilePhotoUrl = oldUrl)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+            coEvery { storageRepository.uploadImage(any(), any(), any()) } returns Resource.Success("https://new.url")
+            coEvery { userRepository.updateProfile(any(), any()) } returns Resource.Error("save failed")
+
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
+
+            vm.uploadProfilePhoto(byteArrayOf(1))
+
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { storageRepository.deleteImageByUrl(any()) }
+        }
 
     // ===== uploadCoverPhoto =====
 
     @Test
-    fun `uploadCoverPhoto - success updates user`() = runTest {
-        val user = TestData.createTestUser(uid = currentUserId)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
-        coEvery { storageRepository.uploadImage(currentUserId, "covers", any()) } returns Resource.Success("https://cover.url")
-        coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Success(Unit)
+    fun `uploadCoverPhoto - success updates user`() =
+        runTest {
+            val user = TestData.createTestUser(uid = currentUserId)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+            coEvery { storageRepository.uploadImage(currentUserId, "covers", any()) } returns Resource.Success("https://cover.url")
+            coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Success(Unit)
 
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
 
-        vm.uploadCoverPhoto(byteArrayOf(1, 2))
+            vm.uploadCoverPhoto(byteArrayOf(1, 2))
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        assertEquals("https://cover.url", vm.uiState.value.user?.coverPhotoUrl)
-        assertFalse(vm.uiState.value.isUploadingPhoto)
-    }
-
-    @Test
-    fun `uploadCoverPhoto - deletes old cover after successful upload`() = runTest {
-        val oldUrl = "https://firebase.storage/old-cover.jpg"
-        val user = TestData.createTestUser(uid = currentUserId, coverPhotoUrl = oldUrl)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
-        coEvery { storageRepository.uploadImage(currentUserId, "covers", any()) } returns Resource.Success("https://new-cover.url")
-        coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Success(Unit)
-
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
-
-        vm.uploadCoverPhoto(byteArrayOf(1, 2))
-
-        advanceUntilIdle()
-
-        coVerify { storageRepository.deleteImageByUrl(oldUrl) }
-    }
+            assertEquals(
+                "https://cover.url",
+                vm.uiState.value.user
+                    ?.coverPhotoUrl,
+            )
+            assertFalse(vm.uiState.value.isUploadingPhoto)
+        }
 
     @Test
-    fun `uploadCoverPhoto - upload error sets error`() = runTest {
-        coEvery { storageRepository.uploadImage(any(), any(), any()) } returns Resource.Error("cover upload failed")
+    fun `uploadCoverPhoto - deletes old cover after successful upload`() =
+        runTest {
+            val oldUrl = "https://firebase.storage/old-cover.jpg"
+            val user = TestData.createTestUser(uid = currentUserId, coverPhotoUrl = oldUrl)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+            coEvery { storageRepository.uploadImage(currentUserId, "covers", any()) } returns Resource.Success("https://new-cover.url")
+            coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Success(Unit)
 
-        val vm = createViewModel()
-        vm.uploadCoverPhoto(byteArrayOf(1))
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
 
-        advanceUntilIdle()
+            vm.uploadCoverPhoto(byteArrayOf(1, 2))
 
-        assertEquals(UiText.Plain("cover upload failed"), vm.uiState.value.error)
-    }
+            advanceUntilIdle()
+
+            coVerify { storageRepository.deleteImageByUrl(oldUrl) }
+        }
+
+    @Test
+    fun `uploadCoverPhoto - upload error sets error`() =
+        runTest {
+            coEvery { storageRepository.uploadImage(any(), any(), any()) } returns Resource.Error("cover upload failed")
+
+            val vm = createViewModel()
+            vm.uploadCoverPhoto(byteArrayOf(1))
+
+            advanceUntilIdle()
+
+            assertEquals(UiText.Plain("cover upload failed"), vm.uiState.value.error)
+        }
 
     // ===== blockUser / unblockUser =====
 
     @Test
-    fun `blockUser - success sets isBlockedByViewer`() = runTest {
-        coEvery { userRepository.blockUser(currentUserId, otherUserId) } returns Resource.Success(Unit)
+    fun `blockUser - success sets isBlockedByViewer`() =
+        runTest {
+            coEvery { userRepository.blockUser(currentUserId, otherUserId) } returns Resource.Success(Unit)
 
-        val vm = createViewModel()
-        vm.blockUser(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.blockUser(otherUserId)
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.isBlockedByViewer)
-    }
-
-    @Test
-    fun `blockUser - error sets error`() = runTest {
-        coEvery { userRepository.blockUser(currentUserId, otherUserId) } returns Resource.Error("block failed")
-
-        val vm = createViewModel()
-        vm.blockUser(otherUserId)
-        advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.error is UiText.Res)
-    }
+            assertTrue(vm.uiState.value.isBlockedByViewer)
+        }
 
     @Test
-    fun `unblockUser - success clears isBlockedByViewer`() = runTest {
-        coEvery { userRepository.blockUser(currentUserId, otherUserId) } returns Resource.Success(Unit)
-        coEvery { userRepository.unblockUser(currentUserId, otherUserId) } returns Resource.Success(Unit)
+    fun `blockUser - error sets error`() =
+        runTest {
+            coEvery { userRepository.blockUser(currentUserId, otherUserId) } returns Resource.Error("block failed")
 
-        val vm = createViewModel()
-        vm.blockUser(otherUserId)
-        advanceUntilIdle()
-        assertTrue(vm.uiState.value.isBlockedByViewer)
+            val vm = createViewModel()
+            vm.blockUser(otherUserId)
+            advanceUntilIdle()
 
-        vm.unblockUser(otherUserId)
-        advanceUntilIdle()
-
-        assertFalse(vm.uiState.value.isBlockedByViewer)
-    }
+            assertTrue(vm.uiState.value.error is UiText.Res)
+        }
 
     @Test
-    fun `unblockUser - error sets error`() = runTest {
-        coEvery { userRepository.unblockUser(currentUserId, otherUserId) } returns Resource.Error("unblock failed")
+    fun `unblockUser - success clears isBlockedByViewer`() =
+        runTest {
+            coEvery { userRepository.blockUser(currentUserId, otherUserId) } returns Resource.Success(Unit)
+            coEvery { userRepository.unblockUser(currentUserId, otherUserId) } returns Resource.Success(Unit)
 
-        val vm = createViewModel()
-        vm.unblockUser(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.blockUser(otherUserId)
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.isBlockedByViewer)
 
-        assertTrue(vm.uiState.value.error is UiText.Res)
-    }
+            vm.unblockUser(otherUserId)
+            advanceUntilIdle()
+
+            assertFalse(vm.uiState.value.isBlockedByViewer)
+        }
+
+    @Test
+    fun `unblockUser - error sets error`() =
+        runTest {
+            coEvery { userRepository.unblockUser(currentUserId, otherUserId) } returns Resource.Error("unblock failed")
+
+            val vm = createViewModel()
+            vm.unblockUser(otherUserId)
+            advanceUntilIdle()
+
+            assertTrue(vm.uiState.value.error is UiText.Res)
+        }
 
     // ===== toggleEditing =====
 
@@ -662,841 +742,921 @@ class ProfileViewModelTest {
     // ===== clearError =====
 
     @Test
-    fun `clearError clears error`() = runTest {
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Error("err")
+    fun `clearError clears error`() =
+        runTest {
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Error("err")
 
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
-        assertNotNull(vm.uiState.value.error)
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
+            assertNotNull(vm.uiState.value.error)
 
-        vm.clearError()
-        assertNull(vm.uiState.value.error)
-    }
+            vm.clearError()
+            assertNull(vm.uiState.value.error)
+        }
 
     // ===== online status =====
 
     @Test
-    fun `loadProfile - online when lastSeenAt is recent`() = runTest {
-        val recentTs = System.currentTimeMillis() - 60_000L
-        val user = TestData.createTestUser(uid = currentUserId).copy(lastSeenAt = recentTs)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+    fun `loadProfile - online when lastSeenAt is recent`() =
+        runTest {
+            val recentTs = System.currentTimeMillis() - 60_000L
+            val user = TestData.createTestUser(uid = currentUserId).copy(lastSeenAt = recentTs)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
 
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.isOnline)
-    }
-
-    @Test
-    fun `loadProfile - offline when lastSeenAt is old`() = runTest {
-        val oldTs = System.currentTimeMillis() - 600_000L
-        val user = TestData.createTestUser(uid = currentUserId).copy(lastSeenAt = oldTs)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
-
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
-
-        assertFalse(vm.uiState.value.isOnline)
-    }
+            assertTrue(vm.uiState.value.isOnline)
+        }
 
     @Test
-    fun `loadProfile - hidden online status shows offline`() = runTest {
-        val recentTs = System.currentTimeMillis() - 60_000L
-        val user = TestData.createTestUser(uid = currentUserId).copy(
-            lastSeenAt = recentTs,
-            hideOnlineStatus = true
-        )
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+    fun `loadProfile - offline when lastSeenAt is old`() =
+        runTest {
+            val oldTs = System.currentTimeMillis() - 600_000L
+            val user = TestData.createTestUser(uid = currentUserId).copy(lastSeenAt = oldTs)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
 
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
 
-        assertFalse(vm.uiState.value.isOnline)
-    }
+            assertFalse(vm.uiState.value.isOnline)
+        }
+
+    @Test
+    fun `loadProfile - hidden online status shows offline`() =
+        runTest {
+            val recentTs = System.currentTimeMillis() - 60_000L
+            val user =
+                TestData.createTestUser(uid = currentUserId).copy(
+                    lastSeenAt = recentTs,
+                    hideOnlineStatus = true,
+                )
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
+
+            assertFalse(vm.uiState.value.isOnline)
+        }
 
     // ===== activeRoomId gated by online status =====
 
     @Test
-    fun `loadProfile - offline user with currentRoomId has null activeRoomId`() = runTest {
-        val oldTs = System.currentTimeMillis() - 600_000L
-        val user = TestData.createTestUser(uid = otherUserId).copy(
-            lastSeenAt = oldTs,
-            currentRoomId = "room-123"
-        )
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+    fun `loadProfile - offline user with currentRoomId has null activeRoomId`() =
+        runTest {
+            val oldTs = System.currentTimeMillis() - 600_000L
+            val user =
+                TestData.createTestUser(uid = otherUserId).copy(
+                    lastSeenAt = oldTs,
+                    currentRoomId = "room-123",
+                )
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
 
-        assertFalse(vm.uiState.value.isOnline)
-        assertNull(vm.uiState.value.activeRoomId)
-    }
-
-    @Test
-    fun `loadProfile - online user with currentRoomId and active room has activeRoomId set`() = runTest {
-        val recentTs = System.currentTimeMillis() - 60_000L
-        val user = TestData.createTestUser(uid = otherUserId).copy(
-            lastSeenAt = recentTs,
-            currentRoomId = "room-123"
-        )
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
-        every { roomRepository.getRoomFlow("room-123") } returns flowOf(
-            ChatRoom(roomId = "room-123", state = RoomState.ACTIVE)
-        )
-
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.isOnline)
-        assertEquals("room-123", vm.uiState.value.activeRoomId)
-    }
+            assertFalse(vm.uiState.value.isOnline)
+            assertNull(vm.uiState.value.activeRoomId)
+        }
 
     @Test
-    fun `loadProfile - online user with currentRoomId but closed room has null activeRoomId`() = runTest {
-        val recentTs = System.currentTimeMillis() - 60_000L
-        val user = TestData.createTestUser(uid = otherUserId).copy(
-            lastSeenAt = recentTs,
-            currentRoomId = "room-123"
-        )
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
-        every { roomRepository.getRoomFlow("room-123") } returns flowOf(
-            ChatRoom(roomId = "room-123", state = RoomState.CLOSED)
-        )
+    fun `loadProfile - online user with currentRoomId and active room has activeRoomId set`() =
+        runTest {
+            val recentTs = System.currentTimeMillis() - 60_000L
+            val user =
+                TestData.createTestUser(uid = otherUserId).copy(
+                    lastSeenAt = recentTs,
+                    currentRoomId = "room-123",
+                )
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+            every { roomRepository.getRoomFlow("room-123") } returns
+                flowOf(
+                    ChatRoom(roomId = "room-123", state = RoomState.ACTIVE),
+                )
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.isOnline)
-        assertNull(vm.uiState.value.activeRoomId)
-    }
-
-    @Test
-    fun `loadProfile - online user with currentRoomId but missing room has null activeRoomId`() = runTest {
-        val recentTs = System.currentTimeMillis() - 60_000L
-        val user = TestData.createTestUser(uid = otherUserId).copy(
-            lastSeenAt = recentTs,
-            currentRoomId = "room-123"
-        )
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
-        every { roomRepository.getRoomFlow("room-123") } returns flowOf(null)
-
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.isOnline)
-        assertNull(vm.uiState.value.activeRoomId)
-    }
+            assertTrue(vm.uiState.value.isOnline)
+            assertEquals("room-123", vm.uiState.value.activeRoomId)
+        }
 
     @Test
-    fun `loadProfile - hidden online status with currentRoomId has null activeRoomId`() = runTest {
-        val recentTs = System.currentTimeMillis() - 60_000L
-        val user = TestData.createTestUser(uid = otherUserId).copy(
-            lastSeenAt = recentTs,
-            hideOnlineStatus = true,
-            currentRoomId = "room-123"
-        )
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+    fun `loadProfile - online user with currentRoomId but closed room has null activeRoomId`() =
+        runTest {
+            val recentTs = System.currentTimeMillis() - 60_000L
+            val user =
+                TestData.createTestUser(uid = otherUserId).copy(
+                    lastSeenAt = recentTs,
+                    currentRoomId = "room-123",
+                )
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+            every { roomRepository.getRoomFlow("room-123") } returns
+                flowOf(
+                    ChatRoom(roomId = "room-123", state = RoomState.CLOSED),
+                )
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
 
-        assertFalse(vm.uiState.value.isOnline)
-        assertNull(vm.uiState.value.activeRoomId)
-    }
+            assertTrue(vm.uiState.value.isOnline)
+            assertNull(vm.uiState.value.activeRoomId)
+        }
+
+    @Test
+    fun `loadProfile - online user with currentRoomId but missing room has null activeRoomId`() =
+        runTest {
+            val recentTs = System.currentTimeMillis() - 60_000L
+            val user =
+                TestData.createTestUser(uid = otherUserId).copy(
+                    lastSeenAt = recentTs,
+                    currentRoomId = "room-123",
+                )
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+            every { roomRepository.getRoomFlow("room-123") } returns flowOf(null)
+
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
+
+            assertTrue(vm.uiState.value.isOnline)
+            assertNull(vm.uiState.value.activeRoomId)
+        }
+
+    @Test
+    fun `loadProfile - hidden online status with currentRoomId has null activeRoomId`() =
+        runTest {
+            val recentTs = System.currentTimeMillis() - 60_000L
+            val user =
+                TestData.createTestUser(uid = otherUserId).copy(
+                    lastSeenAt = recentTs,
+                    hideOnlineStatus = true,
+                    currentRoomId = "room-123",
+                )
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
+
+            assertFalse(vm.uiState.value.isOnline)
+            assertNull(vm.uiState.value.activeRoomId)
+        }
 
     // ===== hideFollowing =====
 
     @Test
-    fun `loadProfile - hideFollowing is set from user`() = runTest {
-        val user = TestData.createTestUser(uid = otherUserId).copy(hideFollowing = true)
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+    fun `loadProfile - hideFollowing is set from user`() =
+        runTest {
+            val user = TestData.createTestUser(uid = otherUserId).copy(hideFollowing = true)
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.hideFollowing)
-    }
+            assertTrue(vm.uiState.value.hideFollowing)
+        }
 
     // ===== follow / unfollow =====
 
     @Test
-    fun `followUser - success sets isFollowingTarget and increments count`() = runTest {
-        val user = TestData.createTestUser(uid = otherUserId)
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
-        coEvery { userRepository.followUser(currentUserId, otherUserId) } returns Resource.Success(Unit)
+    fun `followUser - success sets isFollowingTarget and increments count`() =
+        runTest {
+            val user = TestData.createTestUser(uid = otherUserId)
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+            coEvery { userRepository.followUser(currentUserId, otherUserId) } returns Resource.Success(Unit)
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
 
-        val countBefore = vm.uiState.value.followerCount
-        vm.followUser(otherUserId)
-        advanceUntilIdle()
+            val countBefore = vm.uiState.value.followerCount
+            vm.followUser(otherUserId)
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.isFollowingTarget)
-        assertEquals(countBefore + 1, vm.uiState.value.followerCount)
-    }
-
-    @Test
-    fun `unfollowUser - success clears isFollowingTarget and decrements count`() = runTest {
-        val user = TestData.createTestUser(uid = otherUserId).copy(
-            followerIds = setOf(currentUserId)
-        )
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
-        coEvery { userRepository.unfollowUser(currentUserId, otherUserId) } returns Resource.Success(Unit)
-
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
-        assertTrue(vm.uiState.value.isFollowingTarget)
-
-        val countBefore = vm.uiState.value.followerCount
-        vm.unfollowUser(otherUserId)
-        advanceUntilIdle()
-
-        assertFalse(vm.uiState.value.isFollowingTarget)
-        assertEquals(countBefore - 1, vm.uiState.value.followerCount)
-    }
+            assertTrue(vm.uiState.value.isFollowingTarget)
+            assertEquals(countBefore + 1, vm.uiState.value.followerCount)
+        }
 
     @Test
-    fun `followUser - error reverts optimistic update`() = runTest {
-        val user = TestData.createTestUser(uid = otherUserId)
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
-        coEvery { userRepository.followUser(currentUserId, otherUserId) } returns Resource.Error("fail")
+    fun `unfollowUser - success clears isFollowingTarget and decrements count`() =
+        runTest {
+            val user =
+                TestData.createTestUser(uid = otherUserId).copy(
+                    followerIds = setOf(currentUserId),
+                )
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+            coEvery { userRepository.unfollowUser(currentUserId, otherUserId) } returns Resource.Success(Unit)
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.isFollowingTarget)
 
-        vm.followUser(otherUserId)
-        advanceUntilIdle()
+            val countBefore = vm.uiState.value.followerCount
+            vm.unfollowUser(otherUserId)
+            advanceUntilIdle()
 
-        assertFalse(vm.uiState.value.isFollowingTarget)
-        assertTrue(vm.uiState.value.error is UiText.Res)
-    }
+            assertFalse(vm.uiState.value.isFollowingTarget)
+            assertEquals(countBefore - 1, vm.uiState.value.followerCount)
+        }
 
     @Test
-    fun `unfollowUser - error reverts optimistic update`() = runTest {
-        val user = TestData.createTestUser(uid = otherUserId).copy(
-            followerIds = setOf(currentUserId)
-        )
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
-        coEvery { userRepository.unfollowUser(currentUserId, otherUserId) } returns Resource.Error("fail")
+    fun `followUser - error reverts optimistic update`() =
+        runTest {
+            val user = TestData.createTestUser(uid = otherUserId)
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+            coEvery { userRepository.followUser(currentUserId, otherUserId) } returns Resource.Error("fail")
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
 
-        vm.unfollowUser(otherUserId)
-        advanceUntilIdle()
+            vm.followUser(otherUserId)
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.isFollowingTarget)
-        assertTrue(vm.uiState.value.error is UiText.Res)
-    }
+            assertFalse(vm.uiState.value.isFollowingTarget)
+            assertTrue(vm.uiState.value.error is UiText.Res)
+        }
+
+    @Test
+    fun `unfollowUser - error reverts optimistic update`() =
+        runTest {
+            val user =
+                TestData.createTestUser(uid = otherUserId).copy(
+                    followerIds = setOf(currentUserId),
+                )
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+            coEvery { userRepository.unfollowUser(currentUserId, otherUserId) } returns Resource.Error("fail")
+
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
+
+            vm.unfollowUser(otherUserId)
+            advanceUntilIdle()
+
+            assertTrue(vm.uiState.value.isFollowingTarget)
+            assertTrue(vm.uiState.value.error is UiText.Res)
+        }
 
     // ===== follower / following counts =====
 
     @Test
-    fun `loadProfile sets follower and following counts`() = runTest {
-        val user = TestData.createTestUser(uid = currentUserId).copy(
-            followerIds = setOf("a", "b"),
-            followingIds = setOf("c", "d", "e")
-        )
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+    fun `loadProfile sets follower and following counts`() =
+        runTest {
+            val user =
+                TestData.createTestUser(uid = currentUserId).copy(
+                    followerIds = setOf("a", "b"),
+                    followingIds = setOf("c", "d", "e"),
+                )
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
 
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
 
-        assertEquals(2, vm.uiState.value.followerCount)
-        assertEquals(3, vm.uiState.value.followingCount)
-    }
+            assertEquals(2, vm.uiState.value.followerCount)
+            assertEquals(3, vm.uiState.value.followingCount)
+        }
 
     // ===== Stalker tracking =====
 
     @Test
-    fun `loadProfile - own profile sets stalker counts from user`() = runTest {
-        val user = TestData.createTestUser(
-            uid = currentUserId,
-            stalkerCount = 10,
-            newStalkerCount = 3
-        )
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+    fun `loadProfile - own profile sets stalker counts from user`() =
+        runTest {
+            val user =
+                TestData.createTestUser(
+                    uid = currentUserId,
+                    stalkerCount = 10,
+                    newStalkerCount = 3,
+                )
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
 
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
 
-        assertEquals(10, vm.uiState.value.stalkerCount)
-        assertEquals(3, vm.uiState.value.newStalkerCount)
-    }
-
-    @Test
-    fun `loadProfile - own profile with zero stalker counts`() = runTest {
-        val user = TestData.createTestUser(uid = currentUserId)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
-
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
-
-        assertEquals(0, vm.uiState.value.stalkerCount)
-        assertEquals(0, vm.uiState.value.newStalkerCount)
-    }
+            assertEquals(10, vm.uiState.value.stalkerCount)
+            assertEquals(3, vm.uiState.value.newStalkerCount)
+        }
 
     @Test
-    fun `loadProfile - other user records profile visit`() = runTest {
-        val user = TestData.createTestUser(uid = otherUserId)
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
-        coEvery { userRepository.recordProfileVisit(otherUserId, currentUserId) } returns Resource.Success(Unit)
+    fun `loadProfile - own profile with zero stalker counts`() =
+        runTest {
+            val user = TestData.createTestUser(uid = currentUserId)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
 
-        coVerify { userRepository.recordProfileVisit(otherUserId, currentUserId) }
-    }
-
-    @Test
-    fun `loadProfile - own profile does NOT record visit`() = runTest {
-        val user = TestData.createTestUser(uid = currentUserId)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
-
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
-
-        coVerify(exactly = 0) { userRepository.recordProfileVisit(any(), any()) }
-    }
+            assertEquals(0, vm.uiState.value.stalkerCount)
+            assertEquals(0, vm.uiState.value.newStalkerCount)
+        }
 
     @Test
-    fun `loadProfile - blocked by target does NOT record visit`() = runTest {
-        val user = TestData.createTestUser(uid = otherUserId, blockedUserIds = setOf(currentUserId))
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+    fun `loadProfile - other user records profile visit`() =
+        runTest {
+            val user = TestData.createTestUser(uid = otherUserId)
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+            coEvery { userRepository.recordProfileVisit(otherUserId, currentUserId) } returns Resource.Success(Unit)
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
 
-        coVerify(exactly = 0) { userRepository.recordProfileVisit(any(), any()) }
-    }
+            coVerify { userRepository.recordProfileVisit(otherUserId, currentUserId) }
+        }
 
     @Test
-    fun `loadProfile - other user does NOT set stalker counts`() = runTest {
-        val user = TestData.createTestUser(uid = otherUserId, stalkerCount = 5, newStalkerCount = 2)
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+    fun `loadProfile - own profile does NOT record visit`() =
+        runTest {
+            val user = TestData.createTestUser(uid = currentUserId)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
 
-        assertEquals(0, vm.uiState.value.stalkerCount)
-        assertEquals(0, vm.uiState.value.newStalkerCount)
-    }
+            coVerify(exactly = 0) { userRepository.recordProfileVisit(any(), any()) }
+        }
+
+    @Test
+    fun `loadProfile - blocked by target does NOT record visit`() =
+        runTest {
+            val user = TestData.createTestUser(uid = otherUserId, blockedUserIds = setOf(currentUserId))
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { userRepository.recordProfileVisit(any(), any()) }
+        }
+
+    @Test
+    fun `loadProfile - other user does NOT set stalker counts`() =
+        runTest {
+            val user = TestData.createTestUser(uid = otherUserId, stalkerCount = 5, newStalkerCount = 2)
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
+
+            assertEquals(0, vm.uiState.value.stalkerCount)
+            assertEquals(0, vm.uiState.value.newStalkerCount)
+        }
 
     // ===== Suspension =====
 
     @Test
-    fun `loadProfile - suspended other user sets isTargetSuspended`() = runTest {
-        val user = TestData.createTestUser(
-            uid = otherUserId,
-            isSuspended = true,
-            suspensionEndDate = System.currentTimeMillis() + 86_400_000L
-        )
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+    fun `loadProfile - suspended other user sets isTargetSuspended`() =
+        runTest {
+            val user =
+                TestData.createTestUser(
+                    uid = otherUserId,
+                    isSuspended = true,
+                    suspensionEndDate = System.currentTimeMillis() + 86_400_000L,
+                )
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.isTargetSuspended)
-        assertFalse(vm.uiState.value.isOwnProfile)
-    }
-
-    @Test
-    fun `loadProfile - own profile even if suspended loads normally`() = runTest {
-        val user = TestData.createTestUser(
-            uid = currentUserId,
-            isSuspended = true,
-            suspensionEndDate = System.currentTimeMillis() + 86_400_000L
-        )
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
-
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.isOwnProfile)
-        assertFalse(vm.uiState.value.isTargetSuspended)
-        assertEquals(user, vm.uiState.value.user)
-    }
+            assertTrue(vm.uiState.value.isTargetSuspended)
+            assertFalse(vm.uiState.value.isOwnProfile)
+        }
 
     @Test
-    fun `loadProfile - permanently suspended other user sets isTargetSuspended`() = runTest {
-        val user = TestData.createTestUser(
-            uid = otherUserId,
-            isSuspended = true,
-            suspensionEndDate = null
-        )
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+    fun `loadProfile - own profile even if suspended loads normally`() =
+        runTest {
+            val user =
+                TestData.createTestUser(
+                    uid = currentUserId,
+                    isSuspended = true,
+                    suspensionEndDate = System.currentTimeMillis() + 86_400_000L,
+                )
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.isTargetSuspended)
-    }
+            assertTrue(vm.uiState.value.isOwnProfile)
+            assertFalse(vm.uiState.value.isTargetSuspended)
+            assertEquals(user, vm.uiState.value.user)
+        }
 
     @Test
-    fun `loadProfile - expired suspension on other user does NOT set isTargetSuspended`() = runTest {
-        val user = TestData.createTestUser(
-            uid = otherUserId,
-            isSuspended = true,
-            suspensionEndDate = System.currentTimeMillis() - 86_400_000L
-        )
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+    fun `loadProfile - permanently suspended other user sets isTargetSuspended`() =
+        runTest {
+            val user =
+                TestData.createTestUser(
+                    uid = otherUserId,
+                    isSuspended = true,
+                    suspensionEndDate = null,
+                )
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
 
-        assertFalse(vm.uiState.value.isTargetSuspended)
-    }
+            assertTrue(vm.uiState.value.isTargetSuspended)
+        }
+
+    @Test
+    fun `loadProfile - expired suspension on other user does NOT set isTargetSuspended`() =
+        runTest {
+            val user =
+                TestData.createTestUser(
+                    uid = otherUserId,
+                    isSuspended = true,
+                    suspensionEndDate = System.currentTimeMillis() - 86_400_000L,
+                )
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
+
+            assertFalse(vm.uiState.value.isTargetSuspended)
+        }
 
     // ===== Report User =====
 
     @Test
-    fun `reportUser success sets reportSubmitted`() = runTest {
-        val targetUser = TestData.createTestUser(uid = otherUserId)
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(targetUser)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+    fun `reportUser success sets reportSubmitted`() =
+        runTest {
+            val targetUser = TestData.createTestUser(uid = otherUserId)
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(targetUser)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
 
-        val currentUser = TestData.createTestUser(uid = currentUserId)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(currentUser)
-        coEvery { reportRepository.reportUser(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns Resource.Success(Unit)
+            val currentUser = TestData.createTestUser(uid = currentUserId)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(currentUser)
+            coEvery { reportRepository.reportUser(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
+                Resource.Success(Unit)
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
 
-        vm.reportUser("Spam", "Sending spam messages")
-        advanceUntilIdle()
+            vm.reportUser("Spam", "Sending spam messages")
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.reportSubmitted)
-        assertFalse(vm.uiState.value.isSubmittingReport)
-    }
-
-    @Test
-    fun `reportUser failure sets reportError`() = runTest {
-        val targetUser = TestData.createTestUser(uid = otherUserId)
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(targetUser)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
-
-        val currentUser = TestData.createTestUser(uid = currentUserId)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(currentUser)
-        coEvery { reportRepository.reportUser(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns Resource.Error("Failed")
-
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
-
-        vm.reportUser("Spam", "Bad")
-        advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.reportError is UiText.Res)
-        assertFalse(vm.uiState.value.isSubmittingReport)
-    }
+            assertTrue(vm.uiState.value.reportSubmitted)
+            assertFalse(vm.uiState.value.isSubmittingReport)
+        }
 
     @Test
-    fun `reportUser with evidence uploads images first`() = runTest {
-        val targetUser = TestData.createTestUser(uid = otherUserId)
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(targetUser)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+    fun `reportUser failure sets reportError`() =
+        runTest {
+            val targetUser = TestData.createTestUser(uid = otherUserId)
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(targetUser)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
 
-        val currentUser = TestData.createTestUser(uid = currentUserId)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(currentUser)
+            val currentUser = TestData.createTestUser(uid = currentUserId)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(currentUser)
+            coEvery { reportRepository.reportUser(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
+                Resource.Error("Failed")
 
-        val imageData = byteArrayOf(1, 2, 3)
-        coEvery { storageRepository.uploadImage(any(), "report_evidence", imageData, "image/png") } returns Resource.Success("https://img.url")
-        coEvery { reportRepository.reportUser(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns Resource.Success(Unit)
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
+            vm.reportUser("Spam", "Bad")
+            advanceUntilIdle()
 
-        vm.reportUser("Spam", "Bad", listOf(Pair(imageData, "image/png")))
-        advanceUntilIdle()
+            assertTrue(vm.uiState.value.reportError is UiText.Res)
+            assertFalse(vm.uiState.value.isSubmittingReport)
+        }
 
-        coVerify { storageRepository.uploadImage(currentUserId, "report_evidence", imageData, "image/png") }
-        assertTrue(vm.uiState.value.reportSubmitted)
-    }
+    @Test
+    fun `reportUser with evidence uploads images first`() =
+        runTest {
+            val targetUser = TestData.createTestUser(uid = otherUserId)
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(targetUser)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+
+            val currentUser = TestData.createTestUser(uid = currentUserId)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(currentUser)
+
+            val imageData = byteArrayOf(1, 2, 3)
+            coEvery { storageRepository.uploadImage(any(), "report_evidence", imageData, "image/png") } returns
+                Resource.Success("https://img.url")
+            coEvery { reportRepository.reportUser(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
+                Resource.Success(Unit)
+
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
+
+            vm.reportUser("Spam", "Bad", listOf(Pair(imageData, "image/png")))
+            advanceUntilIdle()
+
+            coVerify { storageRepository.uploadImage(currentUserId, "report_evidence", imageData, "image/png") }
+            assertTrue(vm.uiState.value.reportSubmitted)
+        }
 
     // ===== Validate SuperShy Purchase =====
 
     @Test
-    fun `validateSuperShyPurchase success reloads profile`() = runTest {
-        coEvery { economyRepository.purchaseSubscription("sub_gold", "token123") } returns Resource.Success(emptyMap())
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(TestData.createTestUser(uid = currentUserId))
+    fun `validateSuperShyPurchase success reloads profile`() =
+        runTest {
+            coEvery { economyRepository.purchaseSubscription("sub_gold", "token123") } returns Resource.Success(emptyMap())
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(TestData.createTestUser(uid = currentUserId))
 
-        val vm = createViewModel()
-        advanceUntilIdle()
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        vm.validateSuperShyPurchase("sub_gold", "token123")
-        advanceUntilIdle()
+            vm.validateSuperShyPurchase("sub_gold", "token123")
+            advanceUntilIdle()
 
-        coVerify { economyRepository.purchaseSubscription("sub_gold", "token123") }
-    }
+            coVerify { economyRepository.purchaseSubscription("sub_gold", "token123") }
+        }
 
     @Test
-    fun `validateSuperShyPurchase failure sets error`() = runTest {
-        coEvery { economyRepository.purchaseSubscription("sub_gold", "bad") } returns Resource.Error("Invalid token")
+    fun `validateSuperShyPurchase failure sets error`() =
+        runTest {
+            coEvery { economyRepository.purchaseSubscription("sub_gold", "bad") } returns Resource.Error("Invalid token")
 
-        val vm = createViewModel()
-        advanceUntilIdle()
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        vm.validateSuperShyPurchase("sub_gold", "bad")
-        advanceUntilIdle()
+            vm.validateSuperShyPurchase("sub_gold", "bad")
+            advanceUntilIdle()
 
-        assertEquals(UiText.Plain("Invalid token"), vm.uiState.value.error)
-    }
+            assertEquals(UiText.Plain("Invalid token"), vm.uiState.value.error)
+        }
 
     // ===== blockUser clears follow state =====
 
     @Test
-    fun `blockUser clears isFollowingTarget and decrements followerCount`() = runTest {
-        val user = TestData.createTestUser(uid = otherUserId).copy(
-            followerIds = setOf(currentUserId)
-        )
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
-        coEvery { userRepository.blockUser(currentUserId, otherUserId) } returns Resource.Success(Unit)
+    fun `blockUser clears isFollowingTarget and decrements followerCount`() =
+        runTest {
+            val user =
+                TestData.createTestUser(uid = otherUserId).copy(
+                    followerIds = setOf(currentUserId),
+                )
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+            coEvery { userRepository.blockUser(currentUserId, otherUserId) } returns Resource.Success(Unit)
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
-        assertTrue(vm.uiState.value.isFollowingTarget)
-        val countBefore = vm.uiState.value.followerCount
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.isFollowingTarget)
+            val countBefore = vm.uiState.value.followerCount
 
-        vm.blockUser(otherUserId)
-        advanceUntilIdle()
+            vm.blockUser(otherUserId)
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.isBlockedByViewer)
-        assertFalse(vm.uiState.value.isFollowingTarget)
-        assertEquals(countBefore - 1, vm.uiState.value.followerCount)
-    }
+            assertTrue(vm.uiState.value.isBlockedByViewer)
+            assertFalse(vm.uiState.value.isFollowingTarget)
+            assertEquals(countBefore - 1, vm.uiState.value.followerCount)
+        }
 
     // ===== blockUser / unblockUser - auth guard =====
 
     @Test
-    fun `blockUser with null auth user does nothing`() = runTest {
-        every { authRepository.currentUserId } returns null
+    fun `blockUser with null auth user does nothing`() =
+        runTest {
+            every { authRepository.currentUserId } returns null
 
-        val vm = createViewModel()
-        vm.blockUser(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.blockUser(otherUserId)
+            advanceUntilIdle()
 
-        coVerify(exactly = 0) { userRepository.blockUser(any(), any()) }
-    }
+            coVerify(exactly = 0) { userRepository.blockUser(any(), any()) }
+        }
 
     @Test
-    fun `unblockUser with null auth user does nothing`() = runTest {
-        every { authRepository.currentUserId } returns null
+    fun `unblockUser with null auth user does nothing`() =
+        runTest {
+            every { authRepository.currentUserId } returns null
 
-        val vm = createViewModel()
-        vm.unblockUser(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.unblockUser(otherUserId)
+            advanceUntilIdle()
 
-        coVerify(exactly = 0) { userRepository.unblockUser(any(), any()) }
-    }
+            coVerify(exactly = 0) { userRepository.unblockUser(any(), any()) }
+        }
 
     // ===== followUser blocked guards =====
 
     @Test
-    fun `followUser when blocked by target is no-op`() = runTest {
-        val user = TestData.createTestUser(uid = otherUserId, blockedUserIds = setOf(currentUserId))
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+    fun `followUser when blocked by target is no-op`() =
+        runTest {
+            val user = TestData.createTestUser(uid = otherUserId, blockedUserIds = setOf(currentUserId))
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
-        assertTrue(vm.uiState.value.isBlockedByTarget)
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.isBlockedByTarget)
 
-        vm.followUser(otherUserId)
-        advanceUntilIdle()
+            vm.followUser(otherUserId)
+            advanceUntilIdle()
 
-        coVerify(exactly = 0) { userRepository.followUser(any(), any()) }
-        assertFalse(vm.uiState.value.isFollowingTarget)
-    }
-
-    @Test
-    fun `followUser when viewer blocked target is no-op`() = runTest {
-        val user = TestData.createTestUser(uid = otherUserId)
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(setOf(otherUserId))
-
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
-        assertTrue(vm.uiState.value.isBlockedByViewer)
-
-        vm.followUser(otherUserId)
-        advanceUntilIdle()
-
-        coVerify(exactly = 0) { userRepository.followUser(any(), any()) }
-        assertFalse(vm.uiState.value.isFollowingTarget)
-    }
+            coVerify(exactly = 0) { userRepository.followUser(any(), any()) }
+            assertFalse(vm.uiState.value.isFollowingTarget)
+        }
 
     @Test
-    fun `followUser with null auth user does nothing`() = runTest {
-        every { authRepository.currentUserId } returns null
+    fun `followUser when viewer blocked target is no-op`() =
+        runTest {
+            val user = TestData.createTestUser(uid = otherUserId)
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(setOf(otherUserId))
 
-        val vm = createViewModel()
-        vm.followUser(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.isBlockedByViewer)
 
-        coVerify(exactly = 0) { userRepository.followUser(any(), any()) }
-    }
+            vm.followUser(otherUserId)
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { userRepository.followUser(any(), any()) }
+            assertFalse(vm.uiState.value.isFollowingTarget)
+        }
 
     @Test
-    fun `unfollowUser with null auth user does nothing`() = runTest {
-        every { authRepository.currentUserId } returns null
+    fun `followUser with null auth user does nothing`() =
+        runTest {
+            every { authRepository.currentUserId } returns null
 
-        val vm = createViewModel()
-        vm.unfollowUser(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.followUser(otherUserId)
+            advanceUntilIdle()
 
-        coVerify(exactly = 0) { userRepository.unfollowUser(any(), any()) }
-    }
+            coVerify(exactly = 0) { userRepository.followUser(any(), any()) }
+        }
+
+    @Test
+    fun `unfollowUser with null auth user does nothing`() =
+        runTest {
+            every { authRepository.currentUserId } returns null
+
+            val vm = createViewModel()
+            vm.unfollowUser(otherUserId)
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { userRepository.unfollowUser(any(), any()) }
+        }
 
     // ===== claimSuperShyTrial =====
 
     @Test
-    fun `claimSuperShyTrial success updates hasClaimedSuperShyTrial`() = runTest {
-        val user = TestData.createTestUser(uid = currentUserId)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
-        coEvery { economyRepository.claimSuperShyTrial() } returns Resource.Success(emptyMap())
+    fun `claimSuperShyTrial success updates hasClaimedSuperShyTrial`() =
+        runTest {
+            val user = TestData.createTestUser(uid = currentUserId)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+            coEvery { economyRepository.claimSuperShyTrial() } returns Resource.Success(emptyMap())
 
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
-        assertFalse(vm.uiState.value.user!!.hasClaimedSuperShyTrial)
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
+            assertFalse(
+                vm.uiState.value.user!!
+                    .hasClaimedSuperShyTrial,
+            )
 
-        vm.claimSuperShyTrial()
-        advanceUntilIdle()
+            vm.claimSuperShyTrial()
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.user!!.hasClaimedSuperShyTrial)
-        assertFalse(vm.uiState.value.isLoading)
-    }
+            assertTrue(
+                vm.uiState.value.user!!
+                    .hasClaimedSuperShyTrial,
+            )
+            assertFalse(vm.uiState.value.isLoading)
+        }
 
     @Test
-    fun `claimSuperShyTrial error sets error`() = runTest {
-        coEvery { economyRepository.claimSuperShyTrial() } returns Resource.Error("Trial expired")
+    fun `claimSuperShyTrial error sets error`() =
+        runTest {
+            coEvery { economyRepository.claimSuperShyTrial() } returns Resource.Error("Trial expired")
 
-        val vm = createViewModel()
-        vm.claimSuperShyTrial()
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.claimSuperShyTrial()
+            advanceUntilIdle()
 
-        assertEquals(UiText.Plain("Trial expired"), vm.uiState.value.error)
-        assertFalse(vm.uiState.value.isLoading)
-    }
+            assertEquals(UiText.Plain("Trial expired"), vm.uiState.value.error)
+            assertFalse(vm.uiState.value.isLoading)
+        }
 
     // ===== clearReportSubmitted =====
 
     @Test
-    fun `clearReportSubmitted clears report state`() = runTest {
-        val targetUser = TestData.createTestUser(uid = otherUserId)
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(targetUser)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
-        val currentUser = TestData.createTestUser(uid = currentUserId)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(currentUser)
-        coEvery { reportRepository.reportUser(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns Resource.Success(Unit)
+    fun `clearReportSubmitted clears report state`() =
+        runTest {
+            val targetUser = TestData.createTestUser(uid = otherUserId)
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(targetUser)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+            val currentUser = TestData.createTestUser(uid = currentUserId)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(currentUser)
+            coEvery { reportRepository.reportUser(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
+                Resource.Success(Unit)
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
-        vm.reportUser("Spam", "Bad")
-        advanceUntilIdle()
-        assertTrue(vm.uiState.value.reportSubmitted)
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
+            vm.reportUser("Spam", "Bad")
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.reportSubmitted)
 
-        vm.clearReportSubmitted()
+            vm.clearReportSubmitted()
 
-        assertFalse(vm.uiState.value.reportSubmitted)
-        assertNull(vm.uiState.value.reportError)
-    }
+            assertFalse(vm.uiState.value.reportSubmitted)
+            assertNull(vm.uiState.value.reportError)
+        }
 
     // ===== reportUser - reporter fetch fails =====
 
     @Test
-    fun `reportUser when reporter fetch fails sets reportError`() = runTest {
-        val targetUser = TestData.createTestUser(uid = otherUserId)
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(targetUser)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Error("network error")
+    fun `reportUser when reporter fetch fails sets reportError`() =
+        runTest {
+            val targetUser = TestData.createTestUser(uid = otherUserId)
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(targetUser)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Error("network error")
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
 
-        vm.reportUser("Spam", "Bad")
-        advanceUntilIdle()
+            vm.reportUser("Spam", "Bad")
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.reportError is UiText.Res)
-        assertFalse(vm.uiState.value.isSubmittingReport)
-    }
+            assertTrue(vm.uiState.value.reportError is UiText.Res)
+            assertFalse(vm.uiState.value.isSubmittingReport)
+        }
 
     // ===== reportUser - evidence upload fails =====
 
     @Test
-    fun `reportUser evidence upload failure sets reportError`() = runTest {
-        val targetUser = TestData.createTestUser(uid = otherUserId)
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(targetUser)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
-        val currentUser = TestData.createTestUser(uid = currentUserId)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(currentUser)
-        coEvery { storageRepository.uploadImage(any(), eq("report_evidence"), any(), any()) } returns Resource.Error("upload failed")
+    fun `reportUser evidence upload failure sets reportError`() =
+        runTest {
+            val targetUser = TestData.createTestUser(uid = otherUserId)
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(targetUser)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+            val currentUser = TestData.createTestUser(uid = currentUserId)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(currentUser)
+            coEvery { storageRepository.uploadImage(any(), eq("report_evidence"), any(), any()) } returns Resource.Error("upload failed")
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
 
-        vm.reportUser("Spam", "Bad", listOf(Pair(byteArrayOf(1), "image/png")))
-        advanceUntilIdle()
+            vm.reportUser("Spam", "Bad", listOf(Pair(byteArrayOf(1), "image/png")))
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.reportError is UiText.Res)
-        assertFalse(vm.uiState.value.isSubmittingReport)
-        assertFalse(vm.uiState.value.reportSubmitted)
-    }
+            assertTrue(vm.uiState.value.reportError is UiText.Res)
+            assertFalse(vm.uiState.value.isSubmittingReport)
+            assertFalse(vm.uiState.value.reportSubmitted)
+        }
 
     // ===== saveProfileEdits - auth guard =====
 
     @Test
-    fun `saveProfileEdits with null auth user does nothing`() = runTest {
-        every { authRepository.currentUserId } returns null
+    fun `saveProfileEdits with null auth user does nothing`() =
+        runTest {
+            every { authRepository.currentUserId } returns null
 
-        val vm = createViewModel()
-        vm.saveProfileEdits("Name", "Desc", null)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.saveProfileEdits("Name", "Desc", null)
+            advanceUntilIdle()
 
-        coVerify(exactly = 0) { userRepository.updateProfile(any(), any()) }
-    }
+            coVerify(exactly = 0) { userRepository.updateProfile(any(), any()) }
+        }
 
     // ===== updateDisplayName - auth guard =====
 
     @Test
-    fun `updateDisplayName with null auth user does nothing`() = runTest {
-        every { authRepository.currentUserId } returns null
+    fun `updateDisplayName with null auth user does nothing`() =
+        runTest {
+            every { authRepository.currentUserId } returns null
 
-        val vm = createViewModel()
-        vm.updateDisplayName("New Name")
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.updateDisplayName("New Name")
+            advanceUntilIdle()
 
-        coVerify(exactly = 0) { userRepository.updateDisplayName(any(), any()) }
-    }
+            coVerify(exactly = 0) { userRepository.updateDisplayName(any(), any()) }
+        }
 
     // ===== uploadProfilePhoto - auth guard =====
 
     @Test
-    fun `uploadProfilePhoto with null auth user does nothing`() = runTest {
-        every { authRepository.currentUserId } returns null
+    fun `uploadProfilePhoto with null auth user does nothing`() =
+        runTest {
+            every { authRepository.currentUserId } returns null
 
-        val vm = createViewModel()
-        vm.uploadProfilePhoto(byteArrayOf(1, 2, 3))
+            val vm = createViewModel()
+            vm.uploadProfilePhoto(byteArrayOf(1, 2, 3))
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        coVerify(exactly = 0) { storageRepository.uploadImage(any(), any(), any()) }
-    }
+            coVerify(exactly = 0) { storageRepository.uploadImage(any(), any(), any()) }
+        }
 
     // ===== testPurchaseSuperShy =====
 
     @Test
-    fun `testPurchaseSuperShy success reloads profile`() = runTest {
-        coEvery { economyRepository.purchaseSubscription("sub_test", "test_token") } returns Resource.Success(emptyMap())
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(
-            TestData.createTestUser(uid = currentUserId, isSuperShy = true)
-        )
+    fun `testPurchaseSuperShy success reloads profile`() =
+        runTest {
+            coEvery { economyRepository.purchaseSubscription("sub_test", "test_token") } returns Resource.Success(emptyMap())
+            coEvery { userRepository.getUser(currentUserId) } returns
+                Resource.Success(
+                    TestData.createTestUser(uid = currentUserId, isSuperShy = true),
+                )
 
-        val vm = createViewModel()
-        advanceUntilIdle()
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        vm.testPurchaseSuperShy("sub_test")
-        advanceUntilIdle()
+            vm.testPurchaseSuperShy("sub_test")
+            advanceUntilIdle()
 
-        coVerify { economyRepository.purchaseSubscription("sub_test", "test_token") }
-    }
+            coVerify { economyRepository.purchaseSubscription("sub_test", "test_token") }
+        }
 
     @Test
-    fun `testPurchaseSuperShy failure sets error`() = runTest {
-        coEvery { economyRepository.purchaseSubscription("sub_test", "test_token") } returns Resource.Error("Test failed")
+    fun `testPurchaseSuperShy failure sets error`() =
+        runTest {
+            coEvery { economyRepository.purchaseSubscription("sub_test", "test_token") } returns Resource.Error("Test failed")
 
-        val vm = createViewModel()
-        advanceUntilIdle()
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        vm.testPurchaseSuperShy("sub_test")
-        advanceUntilIdle()
+            vm.testPurchaseSuperShy("sub_test")
+            advanceUntilIdle()
 
-        assertEquals(UiText.Plain("Test failed"), vm.uiState.value.error)
-        assertFalse(vm.uiState.value.isPurchasingSuperShy)
-    }
+            assertEquals(UiText.Plain("Test failed"), vm.uiState.value.error)
+            assertFalse(vm.uiState.value.isPurchasingSuperShy)
+        }
 
     // ===== loadProfile - isFollowingTarget set from followerIds =====
 
     @Test
-    fun `loadProfile - other user with currentUser in followerIds sets isFollowingTarget`() = runTest {
-        val user = TestData.createTestUser(uid = otherUserId).copy(
-            followerIds = setOf(currentUserId, "other-follower")
-        )
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+    fun `loadProfile - other user with currentUser in followerIds sets isFollowingTarget`() =
+        runTest {
+            val user =
+                TestData.createTestUser(uid = otherUserId).copy(
+                    followerIds = setOf(currentUserId, "other-follower"),
+                )
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.isFollowingTarget)
-        assertEquals(2, vm.uiState.value.followerCount)
-    }
+            assertTrue(vm.uiState.value.isFollowingTarget)
+            assertEquals(2, vm.uiState.value.followerCount)
+        }
 
     @Test
-    fun `loadProfile - other user without currentUser in followerIds clears isFollowingTarget`() = runTest {
-        val user = TestData.createTestUser(uid = otherUserId).copy(
-            followerIds = setOf("someone-else")
-        )
-        coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
-        coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+    fun `loadProfile - other user without currentUser in followerIds clears isFollowingTarget`() =
+        runTest {
+            val user =
+                TestData.createTestUser(uid = otherUserId).copy(
+                    followerIds = setOf("someone-else"),
+                )
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
 
-        val vm = createViewModel()
-        vm.loadProfile(otherUserId)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
 
-        assertFalse(vm.uiState.value.isFollowingTarget)
-        assertEquals(1, vm.uiState.value.followerCount)
-    }
+            assertFalse(vm.uiState.value.isFollowingTarget)
+            assertEquals(1, vm.uiState.value.followerCount)
+        }
 
     // ===== createProfile (saveProfile) age gating =====
     // Age validation lives in the UI layer (DOBDatePickerDialog). The ViewModel
@@ -1504,108 +1664,122 @@ class ProfileViewModelTest {
     // a minimum-age guard, so both underage and minimum-age DOBs reach the repo.
 
     @Test
-    fun `createProfile rejects underage user`() = runTest {
-        // Age validation happens at the UI layer; ViewModel passes through any DOB.
-        // An underage DOB (e.g. born 2 years ago) still reaches identityRepository —
-        // the observable result here is that identityRepository.createUser is called,
-        // and the outcome depends on the server/API response, not the ViewModel.
-        every { authRepository.getProviderInfo() } returns ("google" to "test@example.com")
-        val underageDob = System.currentTimeMillis() - (2L * 365 * 24 * 60 * 60 * 1000) // ~2 years old
-        coEvery {
-            identityRepository.createUser(any(), any(), any(), any(), any(), eq(underageDob), any())
-        } returns Resource.Error("User must be at least 13 years old")
+    fun `createProfile rejects underage user`() =
+        runTest {
+            // Age validation happens at the UI layer; ViewModel passes through any DOB.
+            // An underage DOB (e.g. born 2 years ago) still reaches identityRepository —
+            // the observable result here is that identityRepository.createUser is called,
+            // and the outcome depends on the server/API response, not the ViewModel.
+            every { authRepository.getProviderInfo() } returns ("google" to "test@example.com")
+            val underageDob = System.currentTimeMillis() - (2L * 365 * 24 * 60 * 60 * 1000) // ~2 years old
+            coEvery {
+                identityRepository.createUser(any(), any(), any(), any(), any(), eq(underageDob), any())
+            } returns Resource.Error("User must be at least 13 years old")
 
-        val vm = createViewModel()
-        vm.saveProfile("Young User", underageDob)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.saveProfile("Young User", underageDob)
+            advanceUntilIdle()
 
-        // The ViewModel propagates the repository error to uiState
-        assertNotNull(vm.uiState.value.error)
-        assertFalse(vm.uiState.value.profileSaved)
-        coVerify { identityRepository.createUser(any(), any(), any(), any(), any(), underageDob, any()) }
-    }
+            // The ViewModel propagates the repository error to uiState
+            assertNotNull(vm.uiState.value.error)
+            assertFalse(vm.uiState.value.profileSaved)
+            coVerify { identityRepository.createUser(any(), any(), any(), any(), any(), underageDob, any()) }
+        }
 
     @Test
-    fun `createProfile accepts user at minimum age boundary`() = runTest {
-        // A user who is exactly 13 years old passes through to the repository successfully
-        every { authRepository.getProviderInfo() } returns ("google" to "test@example.com")
-        val exactly13Dob = System.currentTimeMillis() - (13L * 365 * 24 * 60 * 60 * 1000)
-        coEvery {
-            identityRepository.createUser(any(), any(), any(), any(), any(), eq(exactly13Dob), any())
-        } returns Resource.Success(com.shyden.shytalk.data.repository.CreateUserResult(10000099))
-        coEvery { identityRepository.forceRefreshToken() } returns Resource.Success(Unit)
+    fun `createProfile accepts user at minimum age boundary`() =
+        runTest {
+            // A user who is exactly 13 years old passes through to the repository successfully
+            every { authRepository.getProviderInfo() } returns ("google" to "test@example.com")
+            val exactly13Dob = System.currentTimeMillis() - (13L * 365 * 24 * 60 * 60 * 1000)
+            coEvery {
+                identityRepository.createUser(any(), any(), any(), any(), any(), eq(exactly13Dob), any())
+            } returns
+                Resource.Success(
+                    com.shyden.shytalk.data.repository
+                        .CreateUserResult(10000099),
+                )
+            coEvery { identityRepository.forceRefreshToken() } returns Resource.Success(Unit)
 
-        val vm = createViewModel()
-        vm.saveProfile("Teen User", exactly13Dob)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.saveProfile("Teen User", exactly13Dob)
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.profileSaved)
-        assertNull(vm.uiState.value.error)
-        assertEquals("Teen User", vm.uiState.value.user?.displayName)
-    }
+            assertTrue(vm.uiState.value.profileSaved)
+            assertNull(vm.uiState.value.error)
+            assertEquals(
+                "Teen User",
+                vm.uiState.value.user
+                    ?.displayName,
+            )
+        }
 
     // ===== reportUser - no target user does nothing =====
 
     @Test
-    fun `reportUser with no loaded user does nothing`() = runTest {
-        val vm = createViewModel()
-        advanceUntilIdle()
+    fun `reportUser with no loaded user does nothing`() =
+        runTest {
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        vm.reportUser("Spam", "Bad")
-        advanceUntilIdle()
+            vm.reportUser("Spam", "Bad")
+            advanceUntilIdle()
 
-        assertFalse(vm.uiState.value.reportSubmitted)
-        coVerify(exactly = 0) { reportRepository.reportUser(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
-    }
+            assertFalse(vm.uiState.value.reportSubmitted)
+            coVerify(exactly = 0) { reportRepository.reportUser(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+        }
 
     // ===== reportUser - null auth does nothing =====
 
     @Test
-    fun `reportUser with null auth user does nothing`() = runTest {
-        every { authRepository.currentUserId } returns null
+    fun `reportUser with null auth user does nothing`() =
+        runTest {
+            every { authRepository.currentUserId } returns null
 
-        val vm = createViewModel()
-        vm.reportUser("Spam", "Bad")
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.reportUser("Spam", "Bad")
+            advanceUntilIdle()
 
-        coVerify(exactly = 0) { reportRepository.reportUser(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
-    }
+            coVerify(exactly = 0) { reportRepository.reportUser(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+        }
 
     // ===== Upload folder name verification =====
 
     @Test
-    fun `uploadProfilePhoto uses profiles folder`() = runTest {
-        val user = TestData.createTestUser(uid = currentUserId)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
-        val folderSlot = io.mockk.slot<String>()
-        coEvery { storageRepository.uploadImage(any(), capture(folderSlot), any()) } returns Resource.Success("https://photo.url")
-        coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Success(Unit)
+    fun `uploadProfilePhoto uses profiles folder`() =
+        runTest {
+            val user = TestData.createTestUser(uid = currentUserId)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+            val folderSlot = io.mockk.slot<String>()
+            coEvery { storageRepository.uploadImage(any(), capture(folderSlot), any()) } returns Resource.Success("https://photo.url")
+            coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Success(Unit)
 
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
 
-        vm.uploadProfilePhoto(byteArrayOf(1, 2, 3))
-        advanceUntilIdle()
+            vm.uploadProfilePhoto(byteArrayOf(1, 2, 3))
+            advanceUntilIdle()
 
-        assertEquals("profiles", folderSlot.captured)
-    }
+            assertEquals("profiles", folderSlot.captured)
+        }
 
     @Test
-    fun `uploadCoverPhoto uses covers folder`() = runTest {
-        val user = TestData.createTestUser(uid = currentUserId)
-        coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
-        val folderSlot = io.mockk.slot<String>()
-        coEvery { storageRepository.uploadImage(any(), capture(folderSlot), any()) } returns Resource.Success("https://cover.url")
-        coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Success(Unit)
+    fun `uploadCoverPhoto uses covers folder`() =
+        runTest {
+            val user = TestData.createTestUser(uid = currentUserId)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(user)
+            val folderSlot = io.mockk.slot<String>()
+            coEvery { storageRepository.uploadImage(any(), capture(folderSlot), any()) } returns Resource.Success("https://cover.url")
+            coEvery { userRepository.updateProfile(currentUserId, any()) } returns Resource.Success(Unit)
 
-        val vm = createViewModel()
-        vm.loadProfile(null)
-        advanceUntilIdle()
+            val vm = createViewModel()
+            vm.loadProfile(null)
+            advanceUntilIdle()
 
-        vm.uploadCoverPhoto(byteArrayOf(1, 2, 3))
-        advanceUntilIdle()
+            vm.uploadCoverPhoto(byteArrayOf(1, 2, 3))
+            advanceUntilIdle()
 
-        assertEquals("covers", folderSlot.captured)
-    }
+            assertEquals("covers", folderSlot.captured)
+        }
 }

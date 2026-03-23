@@ -22,102 +22,117 @@ class TranslationRepositoryImplTest {
     }
 
     @Test
-    fun `translate returns parsed result`() = runTest {
-        coEvery { api.post("/api/translate", any()) } returns JSONObject().apply {
-            put("translatedText", "Hello")
-            put("detectedSourceLang", "ko")
-            put("cached", false)
+    fun `translate returns parsed result`() =
+        runTest {
+            coEvery { api.post("/api/translate", any()) } returns
+                JSONObject().apply {
+                    put("translatedText", "Hello")
+                    put("detectedSourceLang", "ko")
+                    put("cached", false)
+                }
+            val result = repo.translate("안녕하세요", "en", null)
+            assertTrue(result is Resource.Success)
+            assertEquals("Hello", (result as Resource.Success).data.translatedText)
+            assertEquals("ko", result.data.detectedSourceLang)
+            assertEquals(false, result.data.cached)
         }
-        val result = repo.translate("안녕하세요", "en", null)
-        assertTrue(result is Resource.Success)
-        assertEquals("Hello", (result as Resource.Success).data.translatedText)
-        assertEquals("ko", result.data.detectedSourceLang)
-        assertEquals(false, result.data.cached)
-    }
 
     @Test
-    fun `translate with messagePath passes it in body`() = runTest {
-        coEvery { api.post("/api/translate", any()) } returns JSONObject().apply {
-            put("translatedText", "Hi")
-            put("detectedSourceLang", "es")
-            put("cached", true)
+    fun `translate with messagePath passes it in body`() =
+        runTest {
+            coEvery { api.post("/api/translate", any()) } returns
+                JSONObject().apply {
+                    put("translatedText", "Hi")
+                    put("detectedSourceLang", "es")
+                    put("cached", true)
+                }
+            val result = repo.translate("Hola", "en", "rooms/abc/messages/123")
+            assertTrue(result is Resource.Success)
+            assertEquals(true, (result as Resource.Success).data.cached)
         }
-        val result = repo.translate("Hola", "en", "rooms/abc/messages/123")
-        assertTrue(result is Resource.Success)
-        assertEquals(true, (result as Resource.Success).data.cached)
-    }
 
     @Test
-    fun `translate returns Error when translatedText is missing from response`() = runTest {
-        coEvery { api.post("/api/translate", any()) } returns JSONObject().apply {
-            put("detectedSourceLang", "ko")
+    fun `translate returns Error when translatedText is missing from response`() =
+        runTest {
+            coEvery { api.post("/api/translate", any()) } returns
+                JSONObject().apply {
+                    put("detectedSourceLang", "ko")
+                }
+            val result = repo.translate("안녕하세요", "en", null)
+            assertTrue(result is Resource.Error)
         }
-        val result = repo.translate("안녕하세요", "en", null)
-        assertTrue(result is Resource.Error)
-    }
 
     @Test
-    fun `translate returns Error when translatedText is empty`() = runTest {
-        coEvery { api.post("/api/translate", any()) } returns JSONObject().apply {
-            put("translatedText", "")
-            put("detectedSourceLang", "ko")
+    fun `translate returns Error when translatedText is empty`() =
+        runTest {
+            coEvery { api.post("/api/translate", any()) } returns
+                JSONObject().apply {
+                    put("translatedText", "")
+                    put("detectedSourceLang", "ko")
+                }
+            val result = repo.translate("안녕하세요", "en", null)
+            assertTrue(result is Resource.Error)
         }
-        val result = repo.translate("안녕하세요", "en", null)
-        assertTrue(result is Resource.Error)
-    }
 
     @Test
-    fun `translate failure returns Error`() = runTest {
-        coEvery { api.post("/api/translate", any()) } throws RuntimeException("Network error")
-        val result = repo.translate("test", "en", null)
-        assertTrue(result is Resource.Error)
-        assertEquals("Network error", (result as Resource.Error).message)
-    }
-
-    @Test
-    fun `getQuota returns parsed quota`() = runTest {
-        coEvery { api.get("/api/translate/quota") } returns JSONObject().apply {
-            put("used", 10)
-            put("limit", 50)
-            put("unlimited", false)
+    fun `translate failure returns Error`() =
+        runTest {
+            coEvery { api.post("/api/translate", any()) } throws RuntimeException("Network error")
+            val result = repo.translate("test", "en", null)
+            assertTrue(result is Resource.Error)
+            assertEquals("Network error", (result as Resource.Error).message)
         }
-        val result = repo.getQuota()
-        assertTrue(result is Resource.Success)
-        val quota = (result as Resource.Success).data
-        assertEquals(10, quota.used)
-        assertEquals(50, quota.limit)
-        assertEquals(false, quota.unlimited)
-    }
 
     @Test
-    fun `getQuota for SuperShy returns unlimited`() = runTest {
-        coEvery { api.get("/api/translate/quota") } returns JSONObject().apply {
-            put("used", 200)
-            put("limit", -1)
-            put("unlimited", true)
+    fun `getQuota returns parsed quota`() =
+        runTest {
+            coEvery { api.get("/api/translate/quota") } returns
+                JSONObject().apply {
+                    put("used", 10)
+                    put("limit", 50)
+                    put("unlimited", false)
+                }
+            val result = repo.getQuota()
+            assertTrue(result is Resource.Success)
+            val quota = (result as Resource.Success).data
+            assertEquals(10, quota.used)
+            assertEquals(50, quota.limit)
+            assertEquals(false, quota.unlimited)
         }
-        val result = repo.getQuota()
-        assertTrue(result is Resource.Success)
-        val quota = (result as Resource.Success).data
-        assertEquals(true, quota.unlimited)
-        assertEquals(-1, quota.limit)
-    }
 
     @Test
-    fun `getQuota returns safe defaults when fields are missing`() = runTest {
-        coEvery { api.get("/api/translate/quota") } returns JSONObject()
-        val result = repo.getQuota()
-        assertTrue(result is Resource.Success)
-        val quota = (result as Resource.Success).data
-        assertEquals(0, quota.used)
-        assertEquals(0, quota.limit)
-        assertEquals(false, quota.unlimited)
-    }
+    fun `getQuota for SuperShy returns unlimited`() =
+        runTest {
+            coEvery { api.get("/api/translate/quota") } returns
+                JSONObject().apply {
+                    put("used", 200)
+                    put("limit", -1)
+                    put("unlimited", true)
+                }
+            val result = repo.getQuota()
+            assertTrue(result is Resource.Success)
+            val quota = (result as Resource.Success).data
+            assertEquals(true, quota.unlimited)
+            assertEquals(-1, quota.limit)
+        }
 
     @Test
-    fun `getQuota failure returns Error`() = runTest {
-        coEvery { api.get("/api/translate/quota") } throws RuntimeException("Server down")
-        val result = repo.getQuota()
-        assertTrue(result is Resource.Error)
-    }
+    fun `getQuota returns safe defaults when fields are missing`() =
+        runTest {
+            coEvery { api.get("/api/translate/quota") } returns JSONObject()
+            val result = repo.getQuota()
+            assertTrue(result is Resource.Success)
+            val quota = (result as Resource.Success).data
+            assertEquals(0, quota.used)
+            assertEquals(0, quota.limit)
+            assertEquals(false, quota.unlimited)
+        }
+
+    @Test
+    fun `getQuota failure returns Error`() =
+        runTest {
+            coEvery { api.get("/api/translate/quota") } throws RuntimeException("Server down")
+            val result = repo.getQuota()
+            assertTrue(result is Resource.Error)
+        }
 }

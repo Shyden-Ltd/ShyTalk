@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.callbackFlow
  * Replaces TypingRepositoryImpl (WebSocket-based).
  */
 class RtdbTypingRepository : TypingRepository {
-
     companion object {
         private const val TAG = "RtdbTypingRepo"
         private const val TYPING_TIMEOUT_MS = 5_000L
@@ -32,7 +31,11 @@ class RtdbTypingRepository : TypingRepository {
     private var activeConversationId: String? = null
     private var activeUserId: String? = null
 
-    override fun setTyping(conversationId: String, userId: String, isTyping: Boolean) {
+    override fun setTyping(
+        conversationId: String,
+        userId: String,
+        isTyping: Boolean,
+    ) {
         val typingRef = db.getReference("conversations/$conversationId/typing/$userId")
 
         // Cancel any pending clear
@@ -55,21 +58,25 @@ class RtdbTypingRepository : TypingRepository {
         }
     }
 
-    override fun observeTyping(conversationId: String, otherUserId: String): Flow<Boolean> =
+    override fun observeTyping(
+        conversationId: String,
+        otherUserId: String,
+    ): Flow<Boolean> =
         callbackFlow {
             val typingRef = db.getReference("conversations/$conversationId/typing/$otherUserId")
 
-            val listener = object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    val isTyping = snapshot.getValue(Boolean::class.java) ?: false
-                    trySend(isTyping)
-                }
+            val listener =
+                object : ValueEventListener {
+                    override fun onDataChange(snapshot: DataSnapshot) {
+                        val isTyping = snapshot.getValue(Boolean::class.java) ?: false
+                        trySend(isTyping)
+                    }
 
-                override fun onCancelled(error: DatabaseError) {
-                    Log.w(TAG, "Typing listener cancelled: ${error.message}")
-                    trySend(false)
+                    override fun onCancelled(error: DatabaseError) {
+                        Log.w(TAG, "Typing listener cancelled: ${error.message}")
+                        trySend(false)
+                    }
                 }
-            }
 
             typingRef.addValueEventListener(listener)
 
@@ -77,7 +84,8 @@ class RtdbTypingRepository : TypingRepository {
                 typingRef.removeEventListener(listener)
                 // Clean up own typing state if we were actively typing
                 if (activeConversationId == conversationId && activeUserId != null) {
-                    db.getReference("conversations/$conversationId/typing/$activeUserId")
+                    db
+                        .getReference("conversations/$conversationId/typing/$activeUserId")
                         .removeValue()
                     clearRunnable?.let { handler.removeCallbacks(it) }
                     activeConversationId = null

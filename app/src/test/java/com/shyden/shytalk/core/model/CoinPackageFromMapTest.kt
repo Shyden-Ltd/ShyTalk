@@ -5,17 +5,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CoinPackageFromMapTest {
-
     @Test
     fun `complete valid map parses correctly`() {
-        val map = mapOf<String, Any?>(
-            "productId" to "com.app.coins100",
-            "coins" to 100L,
-            "bonusCoins" to 20L,
-            "displayPrice" to "$0.99",
-            "order" to 1L,
-            "isActive" to true
-        )
+        val map =
+            mapOf<String, Any?>(
+                "productId" to "com.app.coins100",
+                "coins" to 100L,
+                "bonusCoins" to 20L,
+                "displayPrice" to "$0.99",
+                "order" to 1L,
+                "isActive" to true,
+            )
         val pkg = CoinPackage.fromMap(map, "pkg-1")
 
         assertEquals("pkg-1", pkg.id)
@@ -48,11 +48,12 @@ class CoinPackageFromMapTest {
 
     @Test
     fun `Long-to-Int conversion works for Firestore values`() {
-        val map = mapOf<String, Any?>(
-            "coins" to 999999L,
-            "bonusCoins" to 50000L,
-            "order" to 5L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "coins" to 999999L,
+                "bonusCoins" to 50000L,
+                "order" to 5L,
+            )
         val pkg = CoinPackage.fromMap(map, "pkg-2")
 
         assertEquals(999999, pkg.coins)
@@ -62,18 +63,20 @@ class CoinPackageFromMapTest {
 
     @Test
     fun `isActive defaults to true when missing`() {
-        val map = mapOf<String, Any?>(
-            "coins" to 10L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "coins" to 10L,
+            )
         val pkg = CoinPackage.fromMap(map, "pkg-3")
         assertTrue(pkg.isActive)
     }
 
     @Test
     fun `isActive false parses correctly`() {
-        val map = mapOf<String, Any?>(
-            "isActive" to false
-        )
+        val map =
+            mapOf<String, Any?>(
+                "isActive" to false,
+            )
         val pkg = CoinPackage.fromMap(map, "pkg-4")
         assertEquals(false, pkg.isActive)
     }

@@ -12,6 +12,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.shyden.shytalk.MainActivity
@@ -24,17 +25,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import android.util.Log
-import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.android.ext.android.inject
 
 class RoomService : Service() {
-
     private val activeRoomManager: ActiveRoomManager by inject()
     private val userRepository: UserRepository by inject()
 
@@ -47,10 +46,15 @@ class RoomService : Service() {
 
     companion object {
         private const val TAG = "RoomService"
-        fun start(context: Context, roomId: String) {
-            val intent = Intent(context, RoomService::class.java).apply {
-                putExtra("roomId", roomId)
-            }
+
+        fun start(
+            context: Context,
+            roomId: String,
+        ) {
+            val intent =
+                Intent(context, RoomService::class.java).apply {
+                    putExtra("roomId", roomId)
+                }
             context.startForegroundService(intent)
         }
 
@@ -61,56 +65,67 @@ class RoomService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        chatHeadManager = ChatHeadManager(
-            context = this,
-            onBubbleTapped = {
-                val roomId = activeRoomManager.activeRoomId.value ?: return@ChatHeadManager
-                val intent = Intent(this, MainActivity::class.java).apply {
-                    action = "OPEN_ROOM"
-                    putExtra("roomId", roomId)
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                            Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                            Intent.FLAG_ACTIVITY_CLEAR_TOP
-                }
-                startActivity(intent)
-            },
-            onBubbleDismissed = {
-                // Always ask for confirmation — chathead overlay is still visible,
-                // so SYSTEM_ALERT_WINDOW exemption allows starting the Activity
-                // even when the app is in the background.
-                val confirmIntent = Intent(this, MainActivity::class.java).apply {
-                    action = "CONFIRM_LEAVE_ROOM"
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                            Intent.FLAG_ACTIVITY_SINGLE_TOP
-                }
-                startActivity(confirmIntent)
-            }
-        )
+        chatHeadManager =
+            ChatHeadManager(
+                context = this,
+                onBubbleTapped = {
+                    val roomId = activeRoomManager.activeRoomId.value ?: return@ChatHeadManager
+                    val intent =
+                        Intent(this, MainActivity::class.java).apply {
+                            action = "OPEN_ROOM"
+                            putExtra("roomId", roomId)
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                                Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                                Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        }
+                    startActivity(intent)
+                },
+                onBubbleDismissed = {
+                    // Always ask for confirmation — chathead overlay is still visible,
+                    // so SYSTEM_ALERT_WINDOW exemption allows starting the Activity
+                    // even when the app is in the background.
+                    val confirmIntent =
+                        Intent(this, MainActivity::class.java).apply {
+                            action = "CONFIRM_LEAVE_ROOM"
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                                Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        }
+                    startActivity(confirmIntent)
+                },
+            )
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int,
+    ): Int {
         // Handle confirmed dismiss from MainActivity dialog
         if (intent?.action == "CONFIRM_DISMISS") {
             performDismiss()
             return START_NOT_STICKY
         }
 
-        val roomId = intent?.getStringExtra("roomId") ?: run {
-            stopSelf()
-            return START_NOT_STICKY
-        }
+        val roomId =
+            intent?.getStringExtra("roomId") ?: run {
+                stopSelf()
+                return START_NOT_STICKY
+            }
 
         val notification = buildNotification(roomId, "Voice Room")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val hasMicPermission = ContextCompat.checkSelfPermission(
-                this, Manifest.permission.RECORD_AUDIO
-            ) == PackageManager.PERMISSION_GRANTED
-            val serviceType = if (hasMicPermission) {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
+            val hasMicPermission =
+                ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.RECORD_AUDIO,
+                ) == PackageManager.PERMISSION_GRANTED
+            val serviceType =
+                if (hasMicPermission) {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                } else {
                     ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-            } else {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-            }
+                }
             startForeground(Constants.ROOM_NOTIFICATION_ID, notification, serviceType)
         } else {
             startForeground(Constants.ROOM_NOTIFICATION_ID, notification)
@@ -154,70 +169,74 @@ class RoomService : Service() {
 
     private fun observeRoom() {
         observerJob?.cancel()
-        observerJob = serviceScope.launch {
-            activeRoomManager.activeRoom.collect { room ->
-                if (room == null) {
-                    // Don't stopSelf() immediately — let observeRoomClosed show "Room Closed" on chathead
-                    return@collect
-                }
-                val notification = buildNotification(room.roomId, room.name)
-                getSystemService(NotificationManager::class.java)
-                    ?.notify(Constants.ROOM_NOTIFICATION_ID, notification)
+        observerJob =
+            serviceScope.launch {
+                activeRoomManager.activeRoom.collect { room ->
+                    if (room == null) {
+                        // Don't stopSelf() immediately — let observeRoomClosed show "Room Closed" on chathead
+                        return@collect
+                    }
+                    val notification = buildNotification(room.roomId, room.name)
+                    getSystemService(NotificationManager::class.java)
+                        ?.notify(Constants.ROOM_NOTIFICATION_ID, notification)
 
-                // Keep trying to resolve owner photo until we have one
-                if (ownerPhotoUrl.isNullOrEmpty()) {
-                    resolveOwnerPhoto(room.ownerId)
+                    // Keep trying to resolve owner photo until we have one
+                    if (ownerPhotoUrl.isNullOrEmpty()) {
+                        resolveOwnerPhoto(room.ownerId)
+                    }
                 }
             }
-        }
     }
 
     private fun observeRoomClosed() {
         roomClosedJob?.cancel()
-        roomClosedJob = serviceScope.launch {
-            activeRoomManager.roomClosed.collect { closed ->
-                if (closed) {
-                    Log.d(TAG, "observeRoomClosed: room closed — showing animation")
-                    chatHeadManager?.showRoomClosed()
-                    // Stop service after chathead finishes displaying "Room Closed"
-                    kotlinx.coroutines.delay(3500L)
-                    Log.d(TAG, "observeRoomClosed: animation done — stopping service")
-                    stopSelf()
+        roomClosedJob =
+            serviceScope.launch {
+                activeRoomManager.roomClosed.collect { closed ->
+                    if (closed) {
+                        Log.d(TAG, "observeRoomClosed: room closed — showing animation")
+                        chatHeadManager?.showRoomClosed()
+                        // Stop service after chathead finishes displaying "Room Closed"
+                        kotlinx.coroutines.delay(3500L)
+                        Log.d(TAG, "observeRoomClosed: animation done — stopping service")
+                        stopSelf()
+                    }
                 }
             }
-        }
     }
 
     private fun observeRoomScreenVisibility() {
         chatHeadJob?.cancel()
-        chatHeadJob = serviceScope.launch {
-            activeRoomManager.isRoomScreenVisible.collect { visible ->
-                if (visible) {
-                    chatHeadManager?.hide()
-                } else {
-                    if (Settings.canDrawOverlays(this@RoomService)) {
-                        // Resolve photo before showing — brief wait for room data if needed
-                        if (ownerPhotoUrl.isNullOrEmpty()) {
-                            var room = activeRoomManager.activeRoom.value
-                            if (room == null) {
-                                Log.d(TAG, "observeRoomScreenVisibility: room data not yet available, waiting briefly...")
-                                room = withTimeoutOrNull(1000L) {
-                                    activeRoomManager.activeRoom.filterNotNull().first()
+        chatHeadJob =
+            serviceScope.launch {
+                activeRoomManager.isRoomScreenVisible.collect { visible ->
+                    if (visible) {
+                        chatHeadManager?.hide()
+                    } else {
+                        if (Settings.canDrawOverlays(this@RoomService)) {
+                            // Resolve photo before showing — brief wait for room data if needed
+                            if (ownerPhotoUrl.isNullOrEmpty()) {
+                                var room = activeRoomManager.activeRoom.value
+                                if (room == null) {
+                                    Log.d(TAG, "observeRoomScreenVisibility: room data not yet available, waiting briefly...")
+                                    room =
+                                        withTimeoutOrNull(1000L) {
+                                            activeRoomManager.activeRoom.filterNotNull().first()
+                                        }
+                                }
+                                if (room != null) {
+                                    resolveOwnerPhoto(room.ownerId)
+                                } else {
+                                    Log.d(TAG, "observeRoomScreenVisibility: no room data — showing chathead without photo")
                                 }
                             }
-                            if (room != null) {
-                                resolveOwnerPhoto(room.ownerId)
-                            } else {
-                                Log.d(TAG, "observeRoomScreenVisibility: no room data — showing chathead without photo")
-                            }
+                            val photoToShow = ownerPhotoUrl?.takeIf { it.isNotEmpty() }
+                            Log.d(TAG, "observeRoomScreenVisibility: showing chathead with photo=$photoToShow")
+                            chatHeadManager?.show(photoToShow)
                         }
-                        val photoToShow = ownerPhotoUrl?.takeIf { it.isNotEmpty() }
-                        Log.d(TAG, "observeRoomScreenVisibility: showing chathead with photo=$photoToShow")
-                        chatHeadManager?.show(photoToShow)
                     }
                 }
             }
-        }
     }
 
     private suspend fun resolveOwnerPhoto(ownerId: String) {
@@ -250,18 +269,24 @@ class RoomService : Service() {
         }
     }
 
-    private fun buildNotification(roomId: String, roomName: String): Notification {
-        val contentIntent = PendingIntent.getActivity(
-            this, 0,
-            Intent(this, MainActivity::class.java).apply {
-                action = "OPEN_ROOM"
-                putExtra("roomId", roomId)
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+    private fun buildNotification(
+        roomId: String,
+        roomName: String,
+    ): Notification {
+        val contentIntent =
+            PendingIntent.getActivity(
+                this,
+                0,
+                Intent(this, MainActivity::class.java).apply {
+                    action = "OPEN_ROOM"
+                    putExtra("roomId", roomId)
+                    flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
 
-        return NotificationCompat.Builder(this, Constants.ROOM_NOTIFICATION_CHANNEL_ID)
+        return NotificationCompat
+            .Builder(this, Constants.ROOM_NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(getString(R.string.notification_in_live_room))
             .setContentText(getString(R.string.notification_tap_to_return))

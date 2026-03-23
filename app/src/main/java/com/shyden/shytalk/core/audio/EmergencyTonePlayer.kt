@@ -16,13 +16,12 @@ import kotlin.math.sin
  * 2. Followed by the 8-second attention tone (853 Hz + 960 Hz dual sine)
  */
 object EmergencyTonePlayer {
-
     private const val SAMPLE_RATE = 44100
     private const val AMPLITUDE = 0.30f
 
     // SAME FSK parameters
-    private const val MARK_FREQ = 2083.3   // logical 1
-    private const val SPACE_FREQ = 1562.5  // logical 0
+    private const val MARK_FREQ = 2083.3 // logical 1
+    private const val SPACE_FREQ = 1562.5 // logical 0
     private const val BAUD_RATE = 520.83
 
     // Attention signal
@@ -37,23 +36,25 @@ object EmergencyTonePlayer {
 
         val signal = generateEASSignal()
 
-        val track = AudioTrack.Builder()
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build()
-            )
-            .setAudioFormat(
-                AudioFormat.Builder()
-                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                    .setSampleRate(SAMPLE_RATE)
-                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                    .build()
-            )
-            .setBufferSizeInBytes(signal.size * 2)
-            .setTransferMode(AudioTrack.MODE_STATIC)
-            .build()
+        val track =
+            AudioTrack
+                .Builder()
+                .setAudioAttributes(
+                    AudioAttributes
+                        .Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build(),
+                ).setAudioFormat(
+                    AudioFormat
+                        .Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(SAMPLE_RATE)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build(),
+                ).setBufferSizeInBytes(signal.size * 2)
+                .setTransferMode(AudioTrack.MODE_STATIC)
+                .build()
 
         track.write(signal, 0, signal.size)
         track.play()
@@ -99,16 +100,16 @@ object EmergencyTonePlayer {
      * Each byte is transmitted LSB-first, 8 data bits, per the SAME spec.
      */
     private fun generateFSK(data: ByteArray): ShortArray {
-        val samplesPerBit = (SAMPLE_RATE / BAUD_RATE).toInt()   // ~84.67 → 85
+        val samplesPerBit = (SAMPLE_RATE / BAUD_RATE).toInt() // ~84.67 → 85
         val totalSamples = data.size * 8 * samplesPerBit
         val buffer = ShortArray(totalSamples)
 
         var idx = 0
-        var phase = 0.0   // continuous phase to avoid clicks
+        var phase = 0.0 // continuous phase to avoid clicks
 
         for (byte in data) {
             for (bit in 0 until 8) {
-                val isOne = ((byte.toInt() shr bit) and 1) == 1   // LSB first
+                val isOne = ((byte.toInt() shr bit) and 1) == 1 // LSB first
                 val freq = if (isOne) MARK_FREQ else SPACE_FREQ
                 val phaseInc = 2.0 * PI * freq / SAMPLE_RATE
 
@@ -125,11 +126,14 @@ object EmergencyTonePlayer {
     }
 
     /** Generates silence of the given duration. */
-    private fun silence(seconds: Double): ShortArray =
-        ShortArray((SAMPLE_RATE * seconds).toInt())
+    private fun silence(seconds: Double): ShortArray = ShortArray((SAMPLE_RATE * seconds).toInt())
 
     /** Generates two simultaneous sine waves (the EBS attention tone). */
-    private fun generateDualTone(freq1: Double, freq2: Double, seconds: Double): ShortArray {
+    private fun generateDualTone(
+        freq1: Double,
+        freq2: Double,
+        seconds: Double,
+    ): ShortArray {
         val numSamples = (SAMPLE_RATE * seconds).toInt()
         val buffer = ShortArray(numSamples)
         for (i in 0 until numSamples) {

@@ -19,12 +19,24 @@ class FakeActiveRoomManager : RoomLifecycleManager {
     private var trackedRoomId: String? = null
 
     override fun isInRoom(roomId: String): Boolean = trackedRoomId == roomId
-    override fun trackRoom(roomId: String) { trackedRoomId = roomId }
+
+    override fun trackRoom(roomId: String) {
+        trackedRoomId = roomId
+    }
+
     override fun updateTrackedRoom(room: ChatRoom) { /* no-op */ }
+
     override fun updateSharedUserCache(users: Map<String, User>) { /* no-op */ }
-    override fun untrackRoom() { trackedRoomId = null }
+
+    override fun untrackRoom() {
+        trackedRoomId = null
+    }
+
     override fun setRoomScreenVisible(visible: Boolean) { /* no-op */ }
+
     override fun markLeaveStarted(roomId: String) { /* no-op */ }
+
     override fun markLeaveCompleted(roomId: String) { /* no-op */ }
+
     override suspend fun awaitLeaveCompletion(roomId: String) { /* no-op */ }
 }

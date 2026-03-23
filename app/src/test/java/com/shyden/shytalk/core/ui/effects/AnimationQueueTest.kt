@@ -7,13 +7,15 @@ import org.junit.Before
 import org.junit.Test
 
 class AnimationQueueTest {
-
     private lateinit var queue: AnimationQueue
 
-    private fun event(id: String = "gift", ts: Long = 0) = GiftEvent(
+    private fun event(
+        id: String = "gift",
+        ts: Long = 0,
+    ) = GiftEvent(
         giftId = id,
         giftName = id,
-        timestamp = ts
+        timestamp = ts,
     )
 
     @Before

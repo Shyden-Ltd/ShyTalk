@@ -40,11 +40,11 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import coil3.compose.AsyncImage
 import com.shyden.shytalk.R
-import com.shyden.shytalk.data.remote.StartingScreen as StartingScreenData
+import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.ui.theme.ShyTalkTheme
 import org.jetbrains.compose.resources.stringResource
-import com.shyden.shytalk.resources.Res
-import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.data.remote.StartingScreen as StartingScreenData
 
 /**
  * Full-screen starting screen composable.
@@ -60,19 +60,20 @@ fun StartingScreenComposable(
     backgroundImagePath: String? = null,
 ) {
     val context = LocalContext.current
-    val templateColor = remember(screen.template) {
-        when (screen.template) {
-            "warning" -> Color(0xFFE74C3C)
-            "promotional" -> Color(0xFF9B59B6)
-            "announcement" -> Color(0xFF3498DB)
-            "info" -> Color(0xFF2ECC71)
-            else -> Color(0xFF2ECC71) // fallback to info
+    val templateColor =
+        remember(screen.template) {
+            when (screen.template) {
+                "warning" -> Color(0xFFE74C3C)
+                "promotional" -> Color(0xFF9B59B6)
+                "announcement" -> Color(0xFF3498DB)
+                "info" -> Color(0xFF2ECC71)
+                else -> Color(0xFF2ECC71) // fallback to info
+            }
         }
-    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+        color = MaterialTheme.colorScheme.background,
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             // Background image with overlay if provided
@@ -85,35 +86,38 @@ fun StartingScreenComposable(
                 )
                 // Dark overlay for text readability
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.6f))
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.6f)),
                 )
             }
 
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(32.dp),
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = Arrangement.Center,
             ) {
                 // ShyTalk app icon + logo (always present)
-                val appIcon = remember(context) {
-                    try {
-                        val drawable = context.packageManager.getApplicationIcon(context.packageName)
-                        BitmapPainter(drawable.toBitmap(128, 128).asImageBitmap())
-                    } catch (_: Exception) {
-                        null
+                val appIcon =
+                    remember(context) {
+                        try {
+                            val drawable = context.packageManager.getApplicationIcon(context.packageName)
+                            BitmapPainter(drawable.toBitmap(128, 128).asImageBitmap())
+                        } catch (_: Exception) {
+                            null
+                        }
                     }
-                }
 
                 if (appIcon != null) {
                     Image(
                         painter = appIcon,
                         contentDescription = "ShyTalk",
-                        modifier = Modifier.size(80.dp)
+                        modifier = Modifier.size(80.dp),
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                 }
@@ -121,8 +125,12 @@ fun StartingScreenComposable(
                 Text(
                     text = "ShyTalk",
                     style = MaterialTheme.typography.headlineLarge,
-                    color = if (backgroundImagePath != null) Color.White
-                    else MaterialTheme.colorScheme.onBackground,
+                    color =
+                        if (backgroundImagePath != null) {
+                            Color.White
+                        } else {
+                            MaterialTheme.colorScheme.onBackground
+                        },
                     textAlign = TextAlign.Center,
                 )
 
@@ -132,24 +140,27 @@ fun StartingScreenComposable(
                 when (screen.imageType) {
                     "police_duck" -> {
                         Image(
-                            painter = androidx.compose.ui.res.painterResource(R.drawable.police_duck),
+                            painter =
+                                androidx.compose.ui.res
+                                    .painterResource(R.drawable.police_duck),
                             contentDescription = stringResource(Res.string.starting_screen_police_duck_description),
-                            modifier = Modifier.size(120.dp)
+                            modifier = Modifier.size(120.dp),
                         )
                     }
                     else -> {
                         // Use template default icon
-                        val icon = when (screen.template) {
-                            "warning" -> Icons.Default.Warning
-                            "promotional" -> Icons.Default.CardGiftcard
-                            "announcement" -> Icons.Default.Campaign
-                            else -> Icons.Default.Info
-                        }
+                        val icon =
+                            when (screen.template) {
+                                "warning" -> Icons.Default.Warning
+                                "promotional" -> Icons.Default.CardGiftcard
+                                "announcement" -> Icons.Default.Campaign
+                                else -> Icons.Default.Info
+                            }
                         Icon(
                             imageVector = icon,
                             contentDescription = null,
                             modifier = Modifier.size(80.dp),
-                            tint = templateColor
+                            tint = templateColor,
                         )
                     }
                 }
@@ -157,39 +168,51 @@ fun StartingScreenComposable(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Title
-                val displayTitle = if (screen.screenId == "preLaunchGate") {
-                    stringResource(Res.string.starting_screen_pre_launch_title)
-                } else {
-                    screen.title
-                }
+                val displayTitle =
+                    if (screen.screenId == "preLaunchGate") {
+                        stringResource(Res.string.starting_screen_pre_launch_title)
+                    } else {
+                        screen.title
+                    }
                 Text(
                     text = displayTitle,
                     style = MaterialTheme.typography.headlineMedium,
                     textAlign = TextAlign.Center,
-                    color = if (backgroundImagePath != null) Color.White
-                    else MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("startingScreen_title")
+                    color =
+                        if (backgroundImagePath != null) {
+                            Color.White
+                        } else {
+                            MaterialTheme.colorScheme.onBackground
+                        },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .testTag("startingScreen_title"),
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // Message
-                val displayMessage = if (screen.screenId == "preLaunchGate") {
-                    stringResource(Res.string.starting_screen_pre_launch_message)
-                } else {
-                    screen.message
-                }
+                val displayMessage =
+                    if (screen.screenId == "preLaunchGate") {
+                        stringResource(Res.string.starting_screen_pre_launch_message)
+                    } else {
+                        screen.message
+                    }
                 Text(
                     text = displayMessage,
                     style = MaterialTheme.typography.bodyLarge,
                     textAlign = TextAlign.Center,
-                    color = if (backgroundImagePath != null) Color.White.copy(alpha = 0.9f)
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("startingScreen_message")
+                    color =
+                        if (backgroundImagePath != null) {
+                            Color.White.copy(alpha = 0.9f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .testTag("startingScreen_message"),
                 )
 
                 // Dismiss button (only if dismissable)
@@ -198,13 +221,15 @@ fun StartingScreenComposable(
 
                     Button(
                         onClick = onDismiss,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
-                            .testTag("startingScreen_dismissButton"),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = templateColor
-                        )
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .testTag("startingScreen_dismissButton"),
+                        colors =
+                            ButtonDefaults.buttonColors(
+                                containerColor = templateColor,
+                            ),
                     ) {
                         Text(
                             text = stringResource(Res.string.starting_screen_dismiss),
@@ -222,17 +247,20 @@ fun StartingScreenComposable(
 fun StartingScreenPreview_Warning() {
     ShyTalkTheme(darkTheme = true) {
         StartingScreenComposable(
-            screen = StartingScreenData(
-                screenId = "preLaunchGate",
-                enabled = true,
-                dismissable = false,
-                frequency = "every_launch",
-                template = "warning",
-                title = "ShyTalk is not available yet",
-                message = "ShyTalk has not been released yet. To apply to test the application, contact Shyden. Testing is available for iOS and Android users.",
-                imageType = "police_duck"
-            ),
-            onDismiss = {}
+            screen =
+                StartingScreenData(
+                    screenId = "preLaunchGate",
+                    enabled = true,
+                    dismissable = false,
+                    frequency = "every_launch",
+                    template = "warning",
+                    title = "ShyTalk is not available yet",
+                    message =
+                        "ShyTalk has not been released yet. To apply to test the application, " +
+                            "contact Shyden. Testing is available for iOS and Android users.",
+                    imageType = "police_duck",
+                ),
+            onDismiss = {},
         )
     }
 }
@@ -242,16 +270,17 @@ fun StartingScreenPreview_Warning() {
 fun StartingScreenPreview_Dismissable() {
     ShyTalkTheme(darkTheme = true) {
         StartingScreenComposable(
-            screen = StartingScreenData(
-                screenId = "announcement1",
-                enabled = true,
-                dismissable = true,
-                frequency = "once",
-                template = "announcement",
-                title = "Welcome to ShyTalk!",
-                message = "We are excited to have you here. Explore voice rooms, chat with friends, and more!",
-            ),
-            onDismiss = {}
+            screen =
+                StartingScreenData(
+                    screenId = "announcement1",
+                    enabled = true,
+                    dismissable = true,
+                    frequency = "once",
+                    template = "announcement",
+                    title = "Welcome to ShyTalk!",
+                    message = "We are excited to have you here. Explore voice rooms, chat with friends, and more!",
+                ),
+            onDismiss = {},
         )
     }
 }

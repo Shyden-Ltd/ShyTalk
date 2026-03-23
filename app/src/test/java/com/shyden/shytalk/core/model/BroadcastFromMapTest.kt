@@ -4,18 +4,18 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class BroadcastFromMapTest {
-
     @Test
     fun `fromMap parses GIFT_SEND type`() {
-        val map = mapOf<String, Any?>(
-            "type" to "GIFT_SEND",
-            "senderName" to "Alice",
-            "senderPhotoUrl" to "https://example.com/photo.jpg",
-            "recipientName" to "Bob",
-            "giftName" to "Crown",
-            "giftIconUrl" to "https://example.com/crown.png",
-            "giftCoinValue" to 800L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "type" to "GIFT_SEND",
+                "senderName" to "Alice",
+                "senderPhotoUrl" to "https://example.com/photo.jpg",
+                "recipientName" to "Bob",
+                "giftName" to "Crown",
+                "giftIconUrl" to "https://example.com/crown.png",
+                "giftCoinValue" to 800L,
+            )
 
         val broadcast = Broadcast.fromMap(map, "b1")
 
@@ -31,12 +31,13 @@ class BroadcastFromMapTest {
 
     @Test
     fun `fromMap parses GACHA_WIN type`() {
-        val map = mapOf<String, Any?>(
-            "type" to "GACHA_WIN",
-            "senderName" to "Charlie",
-            "giftName" to "Celestial Throne",
-            "giftCoinValue" to 52000L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "type" to "GACHA_WIN",
+                "senderName" to "Charlie",
+                "giftName" to "Celestial Throne",
+                "giftCoinValue" to 52000L,
+            )
 
         val broadcast = Broadcast.fromMap(map, "b2")
 
@@ -48,11 +49,12 @@ class BroadcastFromMapTest {
 
     @Test
     fun `fromMap defaults to GIFT_SEND when type is missing`() {
-        val map = mapOf<String, Any?>(
-            "senderName" to "Alice",
-            "recipientName" to "Bob",
-            "giftName" to "Rose"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "senderName" to "Alice",
+                "recipientName" to "Bob",
+                "giftName" to "Rose",
+            )
 
         val broadcast = Broadcast.fromMap(map, "b3")
 
@@ -61,10 +63,11 @@ class BroadcastFromMapTest {
 
     @Test
     fun `fromMap defaults to GIFT_SEND for invalid type string`() {
-        val map = mapOf<String, Any?>(
-            "type" to "INVALID_TYPE",
-            "senderName" to "Alice"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "type" to "INVALID_TYPE",
+                "senderName" to "Alice",
+            )
 
         val broadcast = Broadcast.fromMap(map, "b4")
 
@@ -87,12 +90,13 @@ class BroadcastFromMapTest {
 
     @Test
     fun `fromMap GACHA_WIN has empty recipientName`() {
-        val map = mapOf<String, Any?>(
-            "type" to "GACHA_WIN",
-            "senderName" to "Winner",
-            "recipientName" to "",
-            "giftName" to "Dragon"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "type" to "GACHA_WIN",
+                "senderName" to "Winner",
+                "recipientName" to "",
+                "giftName" to "Dragon",
+            )
 
         val broadcast = Broadcast.fromMap(map, "b6")
 
@@ -102,10 +106,11 @@ class BroadcastFromMapTest {
 
     @Test
     fun `fromMap handles null type`() {
-        val map = mapOf<String, Any?>(
-            "type" to null,
-            "senderName" to "Alice"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "type" to null,
+                "senderName" to "Alice",
+            )
 
         val broadcast = Broadcast.fromMap(map, "b7")
 
@@ -116,14 +121,15 @@ class BroadcastFromMapTest {
 
     @Test
     fun `fromMap parses quantity from Long`() {
-        val map = mapOf<String, Any?>(
-            "type" to "GIFT_SEND",
-            "senderName" to "Alice",
-            "recipientName" to "Bob",
-            "giftName" to "Crown",
-            "giftCoinValue" to 800L,
-            "quantity" to 3L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "type" to "GIFT_SEND",
+                "senderName" to "Alice",
+                "recipientName" to "Bob",
+                "giftName" to "Crown",
+                "giftCoinValue" to 800L,
+                "quantity" to 3L,
+            )
 
         val broadcast = Broadcast.fromMap(map, "bq1")
 
@@ -132,10 +138,11 @@ class BroadcastFromMapTest {
 
     @Test
     fun `fromMap defaults quantity to 1 when missing`() {
-        val map = mapOf<String, Any?>(
-            "senderName" to "Alice",
-            "giftName" to "Crown"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "senderName" to "Alice",
+                "giftName" to "Crown",
+            )
 
         val broadcast = Broadcast.fromMap(map, "bq2")
 

@@ -7,27 +7,27 @@ import org.junit.Test
 import java.util.Date
 
 class PrivateMessageFromMapTest {
-
     private val tsMillis = 1_000_000_000L
     private val ts = Timestamp(Date(tsMillis))
 
     @Test
     fun `fromMap parses complete valid map`() {
-        val map = mapOf<String, Any?>(
-            "senderId" to "user-1",
-            "senderName" to "Alice",
-            "text" to "Hello!",
-            "imageUrls" to listOf("https://img1.png", "https://img2.png"),
-            "type" to "IMAGE",
-            "createdAt" to ts,
-            "editedAt" to ts,
-            "editCount" to 2L,
-            "readBy" to listOf("user-2", "user-3"),
-            "replyToMessageId" to "msg-99",
-            "replyToText" to "Original",
-            "replyToSenderName" to "Bob",
-            "reactions" to mapOf("👍" to listOf("user-2"), "❤️" to listOf("user-1", "user-3"))
-        )
+        val map =
+            mapOf<String, Any?>(
+                "senderId" to "user-1",
+                "senderName" to "Alice",
+                "text" to "Hello!",
+                "imageUrls" to listOf("https://img1.png", "https://img2.png"),
+                "type" to "IMAGE",
+                "createdAt" to ts,
+                "editedAt" to ts,
+                "editCount" to 2L,
+                "readBy" to listOf("user-2", "user-3"),
+                "replyToMessageId" to "msg-99",
+                "replyToText" to "Original",
+                "replyToSenderName" to "Bob",
+                "reactions" to mapOf("👍" to listOf("user-2"), "❤️" to listOf("user-1", "user-3")),
+            )
         val msg = PrivateMessage.fromMap(map, "pm-1")
 
         assertEquals("pm-1", msg.messageId)
@@ -82,9 +82,10 @@ class PrivateMessageFromMapTest {
 
     @Test
     fun `fromMap filters non-string items from imageUrls`() {
-        val map = mapOf<String, Any?>(
-            "imageUrls" to listOf("https://img1.png", 42, null, "https://img2.png")
-        )
+        val map =
+            mapOf<String, Any?>(
+                "imageUrls" to listOf("https://img1.png", 42, null, "https://img2.png"),
+            )
         val msg = PrivateMessage.fromMap(map, "pm-1")
         assertEquals(listOf("https://img1.png", "https://img2.png"), msg.imageUrls)
     }
@@ -98,9 +99,10 @@ class PrivateMessageFromMapTest {
 
     @Test
     fun `fromMap filters non-string items from readBy`() {
-        val map = mapOf<String, Any?>(
-            "readBy" to listOf("user-1", 99, null, "user-2")
-        )
+        val map =
+            mapOf<String, Any?>(
+                "readBy" to listOf("user-1", 99, null, "user-2"),
+            )
         val msg = PrivateMessage.fromMap(map, "pm-1")
         assertEquals(listOf("user-1", "user-2"), msg.readBy)
     }
@@ -114,9 +116,10 @@ class PrivateMessageFromMapTest {
 
     @Test
     fun `fromMap parses reactions with valid nested map`() {
-        val map = mapOf<String, Any?>(
-            "reactions" to mapOf("👍" to listOf("user-1", "user-2"), "🔥" to listOf("user-3"))
-        )
+        val map =
+            mapOf<String, Any?>(
+                "reactions" to mapOf("👍" to listOf("user-1", "user-2"), "🔥" to listOf("user-3")),
+            )
         val msg = PrivateMessage.fromMap(map, "pm-1")
         assertEquals(2, msg.reactions.size)
         assertEquals(listOf("user-1", "user-2"), msg.reactions["👍"])
@@ -132,9 +135,10 @@ class PrivateMessageFromMapTest {
 
     @Test
     fun `fromMap skips reaction entries with non-string keys`() {
-        val map = mapOf<String, Any?>(
-            "reactions" to mapOf(42 to listOf("user-1"), "👍" to listOf("user-2"))
-        )
+        val map =
+            mapOf<String, Any?>(
+                "reactions" to mapOf(42 to listOf("user-1"), "👍" to listOf("user-2")),
+            )
         val msg = PrivateMessage.fromMap(map, "pm-1")
         assertEquals(1, msg.reactions.size)
         assertEquals(listOf("user-2"), msg.reactions["👍"])
@@ -142,11 +146,12 @@ class PrivateMessageFromMapTest {
 
     @Test
     fun `fromMap handles nullable reply fields`() {
-        val map = mapOf<String, Any?>(
-            "replyToMessageId" to null,
-            "replyToText" to null,
-            "replyToSenderName" to null
-        )
+        val map =
+            mapOf<String, Any?>(
+                "replyToMessageId" to null,
+                "replyToText" to null,
+                "replyToSenderName" to null,
+            )
         val msg = PrivateMessage.fromMap(map, "pm-1")
         assertNull(msg.replyToMessageId)
         assertNull(msg.replyToText)
@@ -162,22 +167,23 @@ class PrivateMessageFromMapTest {
 
     @Test
     fun `fromMap of toMap produces equivalent message`() {
-        val original = PrivateMessage(
-            messageId = "pm-1",
-            senderId = "user-1",
-            senderName = "Alice",
-            text = "Hello!",
-            imageUrls = listOf("https://img1.png"),
-            type = PrivateMessageType.IMAGE,
-            createdAt = tsMillis,
-            editedAt = tsMillis,
-            editCount = 1,
-            readBy = listOf("user-2"),
-            replyToMessageId = "msg-99",
-            replyToText = "Original",
-            replyToSenderName = "Bob",
-            reactions = mapOf("👍" to listOf("user-2"))
-        )
+        val original =
+            PrivateMessage(
+                messageId = "pm-1",
+                senderId = "user-1",
+                senderName = "Alice",
+                text = "Hello!",
+                imageUrls = listOf("https://img1.png"),
+                type = PrivateMessageType.IMAGE,
+                createdAt = tsMillis,
+                editedAt = tsMillis,
+                editCount = 1,
+                readBy = listOf("user-2"),
+                replyToMessageId = "msg-99",
+                replyToText = "Original",
+                replyToSenderName = "Bob",
+                reactions = mapOf("👍" to listOf("user-2")),
+            )
         val roundtripped = PrivateMessage.fromMap(original.toMap(), "pm-1")
         assertEquals(original, roundtripped)
     }
@@ -200,12 +206,13 @@ class PrivateMessageFromMapTest {
 
     @Test
     fun `toMap includes stickerUrl`() {
-        val msg = PrivateMessage(
-            messageId = "pm-1",
-            type = PrivateMessageType.STICKER,
-            stickerUrl = "https://sticker.png",
-            createdAt = tsMillis
-        )
+        val msg =
+            PrivateMessage(
+                messageId = "pm-1",
+                type = PrivateMessageType.STICKER,
+                stickerUrl = "https://sticker.png",
+                createdAt = tsMillis,
+            )
         val map = msg.toMap()
         assertEquals("STICKER", map["type"])
         assertEquals("https://sticker.png", map["stickerUrl"])
@@ -213,15 +220,16 @@ class PrivateMessageFromMapTest {
 
     @Test
     fun `fromMap of toMap round-trip for STICKER message`() {
-        val original = PrivateMessage(
-            messageId = "pm-s",
-            senderId = "user-1",
-            senderName = "Alice",
-            text = "",
-            type = PrivateMessageType.STICKER,
-            stickerUrl = "https://sticker.png",
-            createdAt = tsMillis
-        )
+        val original =
+            PrivateMessage(
+                messageId = "pm-s",
+                senderId = "user-1",
+                senderName = "Alice",
+                text = "",
+                type = PrivateMessageType.STICKER,
+                stickerUrl = "https://sticker.png",
+                createdAt = tsMillis,
+            )
         val roundtripped = PrivateMessage.fromMap(original.toMap(), "pm-s")
         assertEquals(original, roundtripped)
     }
@@ -230,11 +238,12 @@ class PrivateMessageFromMapTest {
 
     @Test
     fun `fromMap parses ROOM_INVITE type`() {
-        val map = mapOf<String, Any?>(
-            "type" to "ROOM_INVITE",
-            "roomInviteId" to "room-123",
-            "roomInviteName" to "Fun Room"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "type" to "ROOM_INVITE",
+                "roomInviteId" to "room-123",
+                "roomInviteName" to "Fun Room",
+            )
         val msg = PrivateMessage.fromMap(map, "pm-invite")
         assertEquals(PrivateMessageType.ROOM_INVITE, msg.type)
         assertEquals("room-123", msg.roomInviteId)
@@ -243,13 +252,14 @@ class PrivateMessageFromMapTest {
 
     @Test
     fun `toMap includes roomInviteId and roomInviteName`() {
-        val msg = PrivateMessage(
-            messageId = "pm-1",
-            type = PrivateMessageType.ROOM_INVITE,
-            roomInviteId = "room-123",
-            roomInviteName = "Fun Room",
-            createdAt = tsMillis
-        )
+        val msg =
+            PrivateMessage(
+                messageId = "pm-1",
+                type = PrivateMessageType.ROOM_INVITE,
+                roomInviteId = "room-123",
+                roomInviteName = "Fun Room",
+                createdAt = tsMillis,
+            )
         val map = msg.toMap()
         assertEquals("ROOM_INVITE", map["type"])
         assertEquals("room-123", map["roomInviteId"])
@@ -258,16 +268,17 @@ class PrivateMessageFromMapTest {
 
     @Test
     fun `fromMap of toMap round-trip for ROOM_INVITE message`() {
-        val original = PrivateMessage(
-            messageId = "pm-ri",
-            senderId = "user-1",
-            senderName = "Alice",
-            text = "",
-            type = PrivateMessageType.ROOM_INVITE,
-            roomInviteId = "room-123",
-            roomInviteName = "Fun Room",
-            createdAt = tsMillis
-        )
+        val original =
+            PrivateMessage(
+                messageId = "pm-ri",
+                senderId = "user-1",
+                senderName = "Alice",
+                text = "",
+                type = PrivateMessageType.ROOM_INVITE,
+                roomInviteId = "room-123",
+                roomInviteName = "Fun Room",
+                createdAt = tsMillis,
+            )
         val roundtripped = PrivateMessage.fromMap(original.toMap(), "pm-ri")
         assertEquals(original, roundtripped)
     }
@@ -296,14 +307,15 @@ class PrivateMessageFromMapTest {
 
     @Test
     fun `fromMap of toMap round-trip for recalled message`() {
-        val original = PrivateMessage(
-            messageId = "pm-recalled",
-            senderId = "user-1",
-            senderName = "Alice",
-            text = "Original text",
-            isRecalled = true,
-            createdAt = tsMillis
-        )
+        val original =
+            PrivateMessage(
+                messageId = "pm-recalled",
+                senderId = "user-1",
+                senderName = "Alice",
+                text = "Original text",
+                isRecalled = true,
+                createdAt = tsMillis,
+            )
         val roundtripped = PrivateMessage.fromMap(original.toMap(), "pm-recalled")
         assertEquals(original, roundtripped)
     }
@@ -312,11 +324,12 @@ class PrivateMessageFromMapTest {
 
     @Test
     fun `toMap does not include localImageData`() {
-        val msg = PrivateMessage(
-            messageId = "pm-1",
-            localImageData = listOf(byteArrayOf(1, 2, 3)),
-            createdAt = tsMillis
-        )
+        val msg =
+            PrivateMessage(
+                messageId = "pm-1",
+                localImageData = listOf(byteArrayOf(1, 2, 3)),
+                createdAt = tsMillis,
+            )
         val map = msg.toMap()
         assertNull(map["localImageData"])
     }
@@ -344,10 +357,11 @@ class PrivateMessageFromMapTest {
 
     @Test
     fun `fromMap parses hiddenBy`() {
-        val map = mapOf<String, Any?>(
-            "isHidden" to true,
-            "hiddenBy" to "mod-1"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "isHidden" to true,
+                "hiddenBy" to "mod-1",
+            )
         val msg = PrivateMessage.fromMap(map, "pm-1")
         assertEquals(true, msg.isHidden)
         assertEquals("mod-1", msg.hiddenBy)
@@ -361,12 +375,13 @@ class PrivateMessageFromMapTest {
 
     @Test
     fun `toMap includes isHidden and hiddenBy`() {
-        val msg = PrivateMessage(
-            messageId = "pm-1",
-            isHidden = true,
-            hiddenBy = "mod-1",
-            createdAt = tsMillis
-        )
+        val msg =
+            PrivateMessage(
+                messageId = "pm-1",
+                isHidden = true,
+                hiddenBy = "mod-1",
+                createdAt = tsMillis,
+            )
         val map = msg.toMap()
         assertEquals(true, map["isHidden"])
         assertEquals("mod-1", map["hiddenBy"])
@@ -374,15 +389,16 @@ class PrivateMessageFromMapTest {
 
     @Test
     fun `fromMap of toMap round-trip for hidden message`() {
-        val original = PrivateMessage(
-            messageId = "pm-hidden",
-            senderId = "user-1",
-            senderName = "Alice",
-            text = "Bad message",
-            isHidden = true,
-            hiddenBy = "mod-1",
-            createdAt = tsMillis
-        )
+        val original =
+            PrivateMessage(
+                messageId = "pm-hidden",
+                senderId = "user-1",
+                senderName = "Alice",
+                text = "Bad message",
+                isHidden = true,
+                hiddenBy = "mod-1",
+                createdAt = tsMillis,
+            )
         val roundtripped = PrivateMessage.fromMap(original.toMap(), "pm-hidden")
         assertEquals(original, roundtripped)
     }
@@ -405,21 +421,23 @@ class PrivateMessageFromMapTest {
 
     @Test
     fun `toMap serializes MOD_ACTION type`() {
-        val msg = PrivateMessage(
-            messageId = "pm-1",
-            type = PrivateMessageType.MOD_ACTION,
-            createdAt = tsMillis
-        )
+        val msg =
+            PrivateMessage(
+                messageId = "pm-1",
+                type = PrivateMessageType.MOD_ACTION,
+                createdAt = tsMillis,
+            )
         assertEquals("MOD_ACTION", msg.toMap()["type"])
     }
 
     @Test
     fun `toMap serializes SYSTEM type`() {
-        val msg = PrivateMessage(
-            messageId = "pm-1",
-            type = PrivateMessageType.SYSTEM,
-            createdAt = tsMillis
-        )
+        val msg =
+            PrivateMessage(
+                messageId = "pm-1",
+                type = PrivateMessageType.SYSTEM,
+                createdAt = tsMillis,
+            )
         assertEquals("SYSTEM", msg.toMap()["type"])
     }
 

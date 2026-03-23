@@ -1,6 +1,5 @@
 package com.shyden.shytalk.data.remote
 
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -18,7 +17,6 @@ import org.junit.Test
  * and that the flows behave correctly in tests.
  */
 class VoiceServiceContractTest {
-
     private val speakingFlow = MutableStateFlow<Set<String>>(emptySet())
     private val joinedFlow = MutableStateFlow(false)
     private val connectionFlow = MutableStateFlow(VoiceConnectionState.DISCONNECTED)

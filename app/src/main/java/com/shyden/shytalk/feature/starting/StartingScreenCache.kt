@@ -11,8 +11,9 @@ import java.io.File
  * Uses atomic writes (temp file + rename) for the blocking screen cache,
  * and SharedPreferences for dismissed one-time screen IDs.
  */
-class StartingScreenCache(private val context: Context) {
-
+class StartingScreenCache(
+    private val context: Context,
+) {
     private val cacheFile = File(context.cacheDir, "starting_screens_cache.json")
     private val prefs = context.getSharedPreferences("starting_screens", Context.MODE_PRIVATE)
 
@@ -33,18 +34,19 @@ class StartingScreenCache(private val context: Context) {
         val backgroundImage: String?,
         val backgroundImagePath: String?,
     ) {
-        fun toStartingScreen(): StartingScreen = StartingScreen(
-            screenId = screenId,
-            enabled = enabled,
-            dismissable = dismissable,
-            frequency = frequency,
-            template = template,
-            title = title,
-            message = message,
-            imageType = imageType,
-            backgroundImage = backgroundImage,
-            contentHash = contentHash,
-        )
+        fun toStartingScreen(): StartingScreen =
+            StartingScreen(
+                screenId = screenId,
+                enabled = enabled,
+                dismissable = dismissable,
+                frequency = frequency,
+                template = template,
+                title = title,
+                message = message,
+                imageType = imageType,
+                backgroundImage = backgroundImage,
+                contentHash = contentHash,
+            )
     }
 
     fun getCachedBlocker(): CachedScreen? {
@@ -77,28 +79,35 @@ class StartingScreenCache(private val context: Context) {
         }
     }
 
-    fun cacheBlocker(screen: StartingScreen, backgroundImagePath: String?) {
+    fun cacheBlocker(
+        screen: StartingScreen,
+        backgroundImagePath: String?,
+    ) {
         try {
-            val json = JSONObject().apply {
-                put("cacheVersion", CACHE_VERSION)
-                put("blockingScreen", JSONObject().apply {
-                    put("screenId", screen.screenId)
-                    put("contentHash", screen.contentHash)
-                    put("enabled", screen.enabled)
-                    put("dismissable", screen.dismissable)
-                    put("frequency", screen.frequency)
-                    put("template", screen.template)
-                    put("title", screen.title)
-                    put("message", screen.message)
-                    put("imageType", screen.imageType ?: JSONObject.NULL)
-                    put("backgroundImage", screen.backgroundImage ?: JSONObject.NULL)
-                    put("backgroundImagePath", backgroundImagePath ?: JSONObject.NULL)
-                })
-            }
+            val json =
+                JSONObject().apply {
+                    put("cacheVersion", CACHE_VERSION)
+                    put(
+                        "blockingScreen",
+                        JSONObject().apply {
+                            put("screenId", screen.screenId)
+                            put("contentHash", screen.contentHash)
+                            put("enabled", screen.enabled)
+                            put("dismissable", screen.dismissable)
+                            put("frequency", screen.frequency)
+                            put("template", screen.template)
+                            put("title", screen.title)
+                            put("message", screen.message)
+                            put("imageType", screen.imageType ?: JSONObject.NULL)
+                            put("backgroundImage", screen.backgroundImage ?: JSONObject.NULL)
+                            put("backgroundImagePath", backgroundImagePath ?: JSONObject.NULL)
+                        },
+                    )
+                }
             // Atomic write: write to temp file then rename
             val tempFile = File(context.cacheDir, "starting_screens_cache.tmp")
             tempFile.writeText(json.toString())
-            cacheFile.delete()  // delete existing before rename
+            cacheFile.delete() // delete existing before rename
             if (!tempFile.renameTo(cacheFile)) {
                 tempFile.delete()
             }
@@ -111,9 +120,7 @@ class StartingScreenCache(private val context: Context) {
         cacheFile.delete()
     }
 
-    fun isDismissed(screenId: String): Boolean {
-        return prefs.getStringSet("dismissed_once", mutableSetOf())?.contains(screenId) == true
-    }
+    fun isDismissed(screenId: String): Boolean = prefs.getStringSet("dismissed_once", mutableSetOf())?.contains(screenId) == true
 
     fun markDismissed(screenId: String) {
         val current = prefs.getStringSet("dismissed_once", mutableSetOf())?.toMutableSet() ?: mutableSetOf()

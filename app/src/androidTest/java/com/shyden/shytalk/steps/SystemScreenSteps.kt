@@ -1,14 +1,13 @@
 package com.shyden.shytalk.steps
 
-import com.shyden.shytalk.feature.update.ForceUpdateScreen
-import com.shyden.shytalk.feature.update.DegradedModeScreen
 import com.shyden.shytalk.feature.security.UnsafeDeviceScreen
+import com.shyden.shytalk.feature.update.DegradedModeScreen
+import com.shyden.shytalk.feature.update.ForceUpdateScreen
 import com.shyden.shytalk.ui.theme.ShyTalkTheme
 import com.shyden.shytalk.util.ComposeTestRuleHolder
 import io.cucumber.java.en.Given
 
 class SystemScreenSteps {
-
     private val rule get() = ComposeTestRuleHolder.rule
 
     @Given("the force update screen is displayed")

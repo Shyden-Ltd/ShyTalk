@@ -5,15 +5,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EconomyConfigFromMapTest {
-
     @Test
     fun `fromMap parses all fields`() {
-        val map = mapOf<String, Any?>(
-            "beanConversionRate" to 0.5,
-            "pullCosts" to mapOf("1" to 20, "10" to 180, "100" to 1500),
-            "broadcastSendThreshold" to 8000L,
-            "broadcastWinThreshold" to 10000L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "beanConversionRate" to 0.5,
+                "pullCosts" to mapOf("1" to 20, "10" to 180, "100" to 1500),
+                "broadcastSendThreshold" to 8000L,
+                "broadcastWinThreshold" to 10000L,
+            )
 
         val config = EconomyConfig.fromMap(map)
 
@@ -38,9 +38,10 @@ class EconomyConfigFromMapTest {
 
     @Test
     fun `fromMap handles partial threshold override`() {
-        val map = mapOf<String, Any?>(
-            "broadcastSendThreshold" to 3000L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "broadcastSendThreshold" to 3000L,
+            )
 
         val config = EconomyConfig.fromMap(map)
 
@@ -50,10 +51,11 @@ class EconomyConfigFromMapTest {
 
     @Test
     fun `fromMap handles integer thresholds`() {
-        val map = mapOf<String, Any?>(
-            "broadcastSendThreshold" to 1000,
-            "broadcastWinThreshold" to 2000
-        )
+        val map =
+            mapOf<String, Any?>(
+                "broadcastSendThreshold" to 1000,
+                "broadcastWinThreshold" to 2000,
+            )
 
         val config = EconomyConfig.fromMap(map)
 
@@ -63,10 +65,11 @@ class EconomyConfigFromMapTest {
 
     @Test
     fun `fromMap handles null thresholds with defaults`() {
-        val map = mapOf<String, Any?>(
-            "broadcastSendThreshold" to null,
-            "broadcastWinThreshold" to null
-        )
+        val map =
+            mapOf<String, Any?>(
+                "broadcastSendThreshold" to null,
+                "broadcastWinThreshold" to null,
+            )
 
         val config = EconomyConfig.fromMap(map)
 
@@ -85,9 +88,10 @@ class EconomyConfigFromMapTest {
 
     @Test
     fun `fromMap handles non-standard pullCosts format`() {
-        val map = mapOf<String, Any?>(
-            "pullCosts" to "not a map"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "pullCosts" to "not a map",
+            )
 
         val config = EconomyConfig.fromMap(map)
 
@@ -97,10 +101,11 @@ class EconomyConfigFromMapTest {
 
     @Test
     fun `fromMap with partial fields keeps defaults for missing ones`() {
-        val map = mapOf<String, Any?>(
-            "beanConversionRate" to 0.8,
-            "normalSeatCount" to 8L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "beanConversionRate" to 0.8,
+                "normalSeatCount" to 8L,
+            )
 
         val config = EconomyConfig.fromMap(map)
 
@@ -130,11 +135,12 @@ class EconomyConfigFromMapTest {
 
     @Test
     fun `fromMap parses room duration and seat count from Long`() {
-        val map = mapOf<String, Any?>(
-            "maxRoomDurationMinutes" to 120L,
-            "superShyRoomDurationMinutes" to 480L,
-            "normalSeatCount" to 3L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "maxRoomDurationMinutes" to 120L,
+                "superShyRoomDurationMinutes" to 480L,
+                "normalSeatCount" to 3L,
+            )
 
         val config = EconomyConfig.fromMap(map)
 
@@ -145,16 +151,17 @@ class EconomyConfigFromMapTest {
 
     @Test
     fun `fromMap with null values for all fields returns defaults`() {
-        val map = mapOf<String, Any?>(
-            "beanConversionRate" to null,
-            "pullCosts" to null,
-            "broadcastSendThreshold" to null,
-            "broadcastWinThreshold" to null,
-            "maxRoomDurationMinutes" to null,
-            "superShyRoomDurationMinutes" to null,
-            "normalSeatCount" to null,
-            "wheelInnerThreshold" to null
-        )
+        val map =
+            mapOf<String, Any?>(
+                "beanConversionRate" to null,
+                "pullCosts" to null,
+                "broadcastSendThreshold" to null,
+                "broadcastWinThreshold" to null,
+                "maxRoomDurationMinutes" to null,
+                "superShyRoomDurationMinutes" to null,
+                "normalSeatCount" to null,
+                "wheelInnerThreshold" to null,
+            )
 
         val config = EconomyConfig.fromMap(map)
 
@@ -170,15 +177,16 @@ class EconomyConfigFromMapTest {
 
     @Test
     fun `fromMap with wrong types returns defaults`() {
-        val map = mapOf<String, Any?>(
-            "beanConversionRate" to "not a number",
-            "broadcastSendThreshold" to "bad",
-            "broadcastWinThreshold" to true,
-            "maxRoomDurationMinutes" to listOf(1),
-            "superShyRoomDurationMinutes" to mapOf("a" to "b"),
-            "normalSeatCount" to false,
-            "wheelInnerThreshold" to "not a number"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "beanConversionRate" to "not a number",
+                "broadcastSendThreshold" to "bad",
+                "broadcastWinThreshold" to true,
+                "maxRoomDurationMinutes" to listOf(1),
+                "superShyRoomDurationMinutes" to mapOf("a" to "b"),
+                "normalSeatCount" to false,
+                "wheelInnerThreshold" to "not a number",
+            )
 
         val config = EconomyConfig.fromMap(map)
 
@@ -193,9 +201,10 @@ class EconomyConfigFromMapTest {
 
     @Test
     fun `fromMap parses wheelInnerThreshold`() {
-        val map = mapOf<String, Any?>(
-            "wheelInnerThreshold" to 5000L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "wheelInnerThreshold" to 5000L,
+            )
 
         val config = EconomyConfig.fromMap(map)
 
@@ -204,9 +213,10 @@ class EconomyConfigFromMapTest {
 
     @Test
     fun `fromMap parses wheelInnerThreshold from Int`() {
-        val map = mapOf<String, Any?>(
-            "wheelInnerThreshold" to 10000
-        )
+        val map =
+            mapOf<String, Any?>(
+                "wheelInnerThreshold" to 10000,
+            )
 
         val config = EconomyConfig.fromMap(map)
 

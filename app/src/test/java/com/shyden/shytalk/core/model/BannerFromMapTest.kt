@@ -4,16 +4,16 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class BannerFromMapTest {
-
     @Test
     fun `fromMap with camelCase keys from toMap`() {
-        val map = mapOf<String, Any?>(
-            "title" to "Welcome",
-            "imageUrl" to "https://img.com/banner.jpg",
-            "actionType" to "URL",
-            "actionValue" to "https://example.com",
-            "sortOrder" to 1
-        )
+        val map =
+            mapOf<String, Any?>(
+                "title" to "Welcome",
+                "imageUrl" to "https://img.com/banner.jpg",
+                "actionType" to "URL",
+                "actionValue" to "https://example.com",
+                "sortOrder" to 1,
+            )
         val banner = Banner.fromMap(map, "b1")
         assertEquals("b1", banner.id)
         assertEquals("Welcome", banner.title)
@@ -25,13 +25,14 @@ class BannerFromMapTest {
 
     @Test
     fun `fromMap with snake_case keys from raw D1`() {
-        val map = mapOf<String, Any?>(
-            "title" to "Promo",
-            "image_url" to "https://img.com/promo.jpg",
-            "action_type" to "ROOM",
-            "action_value" to "room123",
-            "sort_order" to 2
-        )
+        val map =
+            mapOf<String, Any?>(
+                "title" to "Promo",
+                "image_url" to "https://img.com/promo.jpg",
+                "action_type" to "ROOM",
+                "action_value" to "room123",
+                "sort_order" to 2,
+            )
         val banner = Banner.fromMap(map, "b2")
         assertEquals("https://img.com/promo.jpg", banner.imageUrl)
         assertEquals(BannerActionType.ROOM, banner.actionType)
@@ -51,19 +52,21 @@ class BannerFromMapTest {
 
     @Test
     fun `fromMap with invalid action type defaults to NONE`() {
-        val map = mapOf<String, Any?>(
-            "actionType" to "INVALID_TYPE"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "actionType" to "INVALID_TYPE",
+            )
         val banner = Banner.fromMap(map, "b4")
         assertEquals(BannerActionType.NONE, banner.actionType)
     }
 
     @Test
     fun `fromMap camelCase takes priority over snake_case`() {
-        val map = mapOf<String, Any?>(
-            "imageUrl" to "https://camel.com/img.jpg",
-            "image_url" to "https://snake.com/img.jpg"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "imageUrl" to "https://camel.com/img.jpg",
+                "image_url" to "https://snake.com/img.jpg",
+            )
         val banner = Banner.fromMap(map, "b5")
         assertEquals("https://camel.com/img.jpg", banner.imageUrl)
     }

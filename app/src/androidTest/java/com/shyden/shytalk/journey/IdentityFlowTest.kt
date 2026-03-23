@@ -3,7 +3,6 @@ package com.shyden.shytalk.journey
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.AuthRepository
@@ -14,12 +13,10 @@ import com.shyden.shytalk.data.repository.UserRepository
 import com.shyden.shytalk.fake.FakeAuthRepository
 import com.shyden.shytalk.fake.FakeDeviceRepository
 import com.shyden.shytalk.fake.FakeIdentityRepository
-import com.shyden.shytalk.fake.FakeUserRepository
-import com.shyden.shytalk.util.launchSignIn
-import com.shyden.shytalk.util.waitForTag
-import com.shyden.shytalk.util.waitForText
 import com.shyden.shytalk.util.ResetFakesRule
 import com.shyden.shytalk.util.ScreenshotRule
+import com.shyden.shytalk.util.launchSignIn
+import com.shyden.shytalk.util.waitForTag
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -29,7 +26,6 @@ import org.koin.test.inject
 
 @RunWith(AndroidJUnit4::class)
 class IdentityFlowTest : KoinTest {
-
     @get:Rule(order = 0)
     val resetFakes = ResetFakesRule()
 
@@ -47,9 +43,9 @@ class IdentityFlowTest : KoinTest {
     @Before
     fun setUp() {
         val fakeAuth = authRepository as FakeAuthRepository
-        fakeAuth._isAuthenticated = false
-        fakeAuth._currentUserId = null
-        fakeAuth._currentUserEmail = null
+        fakeAuth.fakeAuthenticated = false
+        fakeAuth.fakeUserId = null
+        fakeAuth.fakeUserEmail = null
         fakeAuth.resolvedUniqueId = null
     }
 
@@ -67,8 +63,8 @@ class IdentityFlowTest : KoinTest {
         fakeIdentity.resolveResult = Resource.Success(SignInResult.Found(10000005))
 
         val fakeAuth = authRepository as FakeAuthRepository
-        fakeAuth._isAuthenticated = false
-        fakeAuth._currentUserId = null
+        fakeAuth.fakeAuthenticated = false
+        fakeAuth.fakeUserId = null
 
         composeTestRule.launchSignIn()
         composeTestRule.waitForTag("signIn_googleButton")

@@ -29,11 +29,11 @@ import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -46,9 +46,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -58,8 +56,8 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -76,7 +74,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
-import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.shyden.shytalk.BuildConfig
@@ -85,9 +82,11 @@ import com.shyden.shytalk.core.model.LinkedProvider
 import com.shyden.shytalk.core.model.PmPrivacy
 import com.shyden.shytalk.core.model.ProviderType
 import com.shyden.shytalk.core.model.User
-import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.viewmodel.koinViewModel
 
 private enum class SettingsPage { Main, BlockedUsers, Account, LinkedAccounts, Privacy, Notifications, Permissions, About }
 
@@ -100,7 +99,7 @@ fun AppSettingsScreen(
     onNavigateToTermsAndConditions: () -> Unit = {},
     onNavigateToCyberBullyingPolicy: () -> Unit = {},
     onSignOut: () -> Unit,
-    viewModel: AppSettingsViewModel = koinViewModel()
+    viewModel: AppSettingsViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -124,7 +123,7 @@ fun AppSettingsScreen(
         SettingsSubPage(
             title = stringResource(Res.string.settings),
             onBack = onNavigateBack,
-            snackbarHostState = snackbarHostState
+            snackbarHostState = snackbarHostState,
         ) { modifier ->
             Box(modifier = modifier, contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
@@ -132,76 +131,84 @@ fun AppSettingsScreen(
         }
     } else {
         when (currentPage) {
-            SettingsPage.Main -> SettingsMainPage(
-                uiState = uiState,
-                onNavigateBack = onNavigateBack,
-                onNavigateToPage = { currentPageName = it.name },
-                onSetLanguage = {
-                    viewModel.setLanguage(it)
-                    activity?.recreate()
-                },
-                onSignOut = { showSignOutDialog = true },
-                snackbarHostState = snackbarHostState
-            )
-            SettingsPage.BlockedUsers -> BlockedUsersPage(
-                uiState = uiState,
-                onBack = { currentPageName = SettingsPage.Main.name },
-                onUnblockUser = { viewModel.unblockUser(it) },
-                snackbarHostState = snackbarHostState
-            )
-            SettingsPage.Account -> AccountPage(
-                uiState = uiState,
-                onBack = { currentPageName = SettingsPage.Main.name },
-                onNavigateToLinkedAccounts = { currentPageName = SettingsPage.LinkedAccounts.name },
-                snackbarHostState = snackbarHostState
-            )
-            SettingsPage.LinkedAccounts -> LinkedAccountsPage(
-                uiState = uiState,
-                onBack = { currentPageName = SettingsPage.Account.name },
-                onUnlinkProvider = { type, identifier -> viewModel.unlinkProvider(type, identifier) },
-                onLinkProvider = { type -> viewModel.linkProvider(type, "") },
-                snackbarHostState = snackbarHostState
-            )
-            SettingsPage.Privacy -> PrivacyPage(
-                uiState = uiState,
-                onBack = { currentPageName = SettingsPage.Main.name },
-                onToggleHideFollowing = { viewModel.toggleHideFollowing() },
-                onToggleHideOnlineStatus = { viewModel.toggleHideOnlineStatus() },
-                onToggleHideAge = { viewModel.toggleHideAge() },
-                onSetPmPrivacy = { viewModel.setPmPrivacy(it) },
-                snackbarHostState = snackbarHostState
-            )
-            SettingsPage.Notifications -> NotificationsPage(
-                uiState = uiState,
-                onBack = { currentPageName = SettingsPage.Main.name },
-                onTogglePmNotifications = { viewModel.togglePmNotifications() },
-                onTogglePmSound = { viewModel.togglePmSound() },
-                onTogglePmPreview = { viewModel.togglePmPreview() },
-                onTogglePmTimestamps = { viewModel.togglePmTimestamps() },
-                onTogglePmDateSeparators = { viewModel.togglePmDateSeparators() },
-                onToggleDnd = { viewModel.toggleDnd() },
-                onSetDndStartHour = { viewModel.setDndStartHour(it) },
-                onSetDndStartMinute = { viewModel.setDndStartMinute(it) },
-                onSetDndEndHour = { viewModel.setDndEndHour(it) },
-                onSetDndEndMinute = { viewModel.setDndEndMinute(it) },
-                onToggleSelfDestructAlert = { viewModel.toggleSelfDestructAlert() },
-                snackbarHostState = snackbarHostState
-            )
-            SettingsPage.Permissions -> PermissionsPage(
-                onBack = { currentPageName = SettingsPage.Main.name },
-                snackbarHostState = snackbarHostState
-            )
-            SettingsPage.About -> AboutPage(
-                uiState = uiState,
-                onBack = { currentPageName = SettingsPage.Main.name },
-                onNavigateToPrivacyPolicy = onNavigateToPrivacyPolicy,
-                onNavigateToCommunityStandards = onNavigateToCommunityStandards,
-                onNavigateToTermsAndConditions = onNavigateToTermsAndConditions,
-                onNavigateToCyberBullyingPolicy = onNavigateToCyberBullyingPolicy,
-                onCheckForUpdates = { viewModel.checkForUpdates() },
-                onClearCache = { viewModel.requestClearCache() },
-                snackbarHostState = snackbarHostState
-            )
+            SettingsPage.Main ->
+                SettingsMainPage(
+                    uiState = uiState,
+                    onNavigateBack = onNavigateBack,
+                    onNavigateToPage = { currentPageName = it.name },
+                    onSetLanguage = {
+                        viewModel.setLanguage(it)
+                        activity?.recreate()
+                    },
+                    onSignOut = { showSignOutDialog = true },
+                    snackbarHostState = snackbarHostState,
+                )
+            SettingsPage.BlockedUsers ->
+                BlockedUsersPage(
+                    uiState = uiState,
+                    onBack = { currentPageName = SettingsPage.Main.name },
+                    onUnblockUser = { viewModel.unblockUser(it) },
+                    snackbarHostState = snackbarHostState,
+                )
+            SettingsPage.Account ->
+                AccountPage(
+                    uiState = uiState,
+                    onBack = { currentPageName = SettingsPage.Main.name },
+                    onNavigateToLinkedAccounts = { currentPageName = SettingsPage.LinkedAccounts.name },
+                    snackbarHostState = snackbarHostState,
+                )
+            SettingsPage.LinkedAccounts ->
+                LinkedAccountsPage(
+                    uiState = uiState,
+                    onBack = { currentPageName = SettingsPage.Account.name },
+                    onUnlinkProvider = { type, identifier -> viewModel.unlinkProvider(type, identifier) },
+                    onLinkProvider = { type -> viewModel.linkProvider(type, "") },
+                    snackbarHostState = snackbarHostState,
+                )
+            SettingsPage.Privacy ->
+                PrivacyPage(
+                    uiState = uiState,
+                    onBack = { currentPageName = SettingsPage.Main.name },
+                    onToggleHideFollowing = { viewModel.toggleHideFollowing() },
+                    onToggleHideOnlineStatus = { viewModel.toggleHideOnlineStatus() },
+                    onToggleHideAge = { viewModel.toggleHideAge() },
+                    onSetPmPrivacy = { viewModel.setPmPrivacy(it) },
+                    snackbarHostState = snackbarHostState,
+                )
+            SettingsPage.Notifications ->
+                NotificationsPage(
+                    uiState = uiState,
+                    onBack = { currentPageName = SettingsPage.Main.name },
+                    onTogglePmNotifications = { viewModel.togglePmNotifications() },
+                    onTogglePmSound = { viewModel.togglePmSound() },
+                    onTogglePmPreview = { viewModel.togglePmPreview() },
+                    onTogglePmTimestamps = { viewModel.togglePmTimestamps() },
+                    onTogglePmDateSeparators = { viewModel.togglePmDateSeparators() },
+                    onToggleDnd = { viewModel.toggleDnd() },
+                    onSetDndStartHour = { viewModel.setDndStartHour(it) },
+                    onSetDndStartMinute = { viewModel.setDndStartMinute(it) },
+                    onSetDndEndHour = { viewModel.setDndEndHour(it) },
+                    onSetDndEndMinute = { viewModel.setDndEndMinute(it) },
+                    onToggleSelfDestructAlert = { viewModel.toggleSelfDestructAlert() },
+                    snackbarHostState = snackbarHostState,
+                )
+            SettingsPage.Permissions ->
+                PermissionsPage(
+                    onBack = { currentPageName = SettingsPage.Main.name },
+                    snackbarHostState = snackbarHostState,
+                )
+            SettingsPage.About ->
+                AboutPage(
+                    uiState = uiState,
+                    onBack = { currentPageName = SettingsPage.Main.name },
+                    onNavigateToPrivacyPolicy = onNavigateToPrivacyPolicy,
+                    onNavigateToCommunityStandards = onNavigateToCommunityStandards,
+                    onNavigateToTermsAndConditions = onNavigateToTermsAndConditions,
+                    onNavigateToCyberBullyingPolicy = onNavigateToCyberBullyingPolicy,
+                    onCheckForUpdates = { viewModel.checkForUpdates() },
+                    onClearCache = { viewModel.requestClearCache() },
+                    snackbarHostState = snackbarHostState,
+                )
         }
     }
 
@@ -223,7 +230,7 @@ fun AppSettingsScreen(
                 TextButton(onClick = { showSignOutDialog = false }) {
                     Text(stringResource(Res.string.cancel))
                 }
-            }
+            },
         )
     }
 
@@ -242,7 +249,7 @@ fun AppSettingsScreen(
                 TextButton(onClick = { viewModel.dismissClearCacheDialog() }) {
                     Text(stringResource(Res.string.cancel))
                 }
-            }
+            },
         )
     }
 
@@ -256,7 +263,7 @@ fun AppSettingsScreen(
                 TextButton(onClick = { viewModel.resetCacheCleared() }) {
                     Text(stringResource(Res.string.ok))
                 }
-            }
+            },
         )
     }
 
@@ -271,7 +278,7 @@ fun AppSettingsScreen(
                         is UpdateCheckResult.UpToDate -> stringResource(Res.string.up_to_date)
                         is UpdateCheckResult.UpdateAvailable -> stringResource(Res.string.update_available)
                         is UpdateCheckResult.Error -> stringResource(Res.string.error_title)
-                    }
+                    },
                 )
             },
             text = {
@@ -280,17 +287,18 @@ fun AppSettingsScreen(
                         is UpdateCheckResult.UpToDate -> stringResource(Res.string.up_to_date_description)
                         is UpdateCheckResult.UpdateAvailable -> stringResource(Res.string.update_available_description, result.versionName)
                         is UpdateCheckResult.Error -> result.message.resolve()
-                    }
+                    },
                 )
             },
             confirmButton = {
                 if (result is UpdateCheckResult.UpdateAvailable) {
                     Button(onClick = {
                         viewModel.dismissUpdateResult()
-                        val intent = Intent(
-                            Intent.ACTION_VIEW,
-                            Uri.parse("https://play.google.com/store/apps/details?id=com.shyden.shytalk")
-                        )
+                        val intent =
+                            Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("https://play.google.com/store/apps/details?id=com.shyden.shytalk"),
+                            )
                         context.startActivity(intent)
                     }) {
                         Text(stringResource(Res.string.download_now))
@@ -307,35 +315,36 @@ fun AppSettingsScreen(
                         Text(stringResource(Res.string.later))
                     }
                 }
-            }
+            },
         )
     }
 }
 
 // ===== Main Settings Menu =====
 
-private val SUPPORTED_LANGUAGES = listOf(
-    "en" to "English",
-    "es" to "Español",
-    "ar" to "العربية",
-    "ja" to "日本語",
-    "ko" to "한국어",
-    "zh" to "中文",
-    "fr" to "Français",
-    "de" to "Deutsch",
-    "pt" to "Português",
-    "ru" to "Русский",
-    "hi" to "हिन्दी",
-    "tr" to "Türkçe",
-    "it" to "Italiano",
-    "th" to "ไทย",
-    "vi" to "Tiếng Việt",
-    "id" to "Bahasa Indonesia",
-    "pl" to "Polski",
-    "nl" to "Nederlands",
-    "sv" to "Svenska",
-    "uk" to "Українська"
-)
+private val SUPPORTED_LANGUAGES =
+    listOf(
+        "en" to "English",
+        "es" to "Español",
+        "ar" to "العربية",
+        "ja" to "日本語",
+        "ko" to "한국어",
+        "zh" to "中文",
+        "fr" to "Français",
+        "de" to "Deutsch",
+        "pt" to "Português",
+        "ru" to "Русский",
+        "hi" to "हिन्दी",
+        "tr" to "Türkçe",
+        "it" to "Italiano",
+        "th" to "ไทย",
+        "vi" to "Tiếng Việt",
+        "id" to "Bahasa Indonesia",
+        "pl" to "Polski",
+        "nl" to "Nederlands",
+        "sv" to "Svenska",
+        "uk" to "Українська",
+    )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -345,7 +354,7 @@ private fun SettingsMainPage(
     onNavigateToPage: (SettingsPage) -> Unit,
     onSetLanguage: (String) -> Unit,
     onSignOut: () -> Unit,
-    snackbarHostState: SnackbarHostState
+    snackbarHostState: SnackbarHostState,
 ) {
     var showLanguageDialog by remember { mutableStateOf(false) }
     Scaffold(
@@ -356,78 +365,82 @@ private fun SettingsMainPage(
                 navigationIcon = {
                     IconButton(
                         onClick = onNavigateBack,
-                        modifier = Modifier.testTag("settings_backButton")
+                        modifier = Modifier.testTag("settings_backButton"),
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.back))
                     }
-                }
+                },
             )
-        }
+        },
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding),
         ) {
             SettingsMenuItem(
                 icon = Icons.Default.Block,
                 title = stringResource(Res.string.blocked_users),
-                onClick = { onNavigateToPage(SettingsPage.BlockedUsers) }
+                onClick = { onNavigateToPage(SettingsPage.BlockedUsers) },
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             SettingsMenuItem(
                 icon = Icons.Default.Person,
                 title = stringResource(Res.string.account),
-                onClick = { onNavigateToPage(SettingsPage.Account) }
+                onClick = { onNavigateToPage(SettingsPage.Account) },
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             SettingsMenuItem(
                 icon = Icons.Default.Lock,
                 title = stringResource(Res.string.privacy),
-                onClick = { onNavigateToPage(SettingsPage.Privacy) }
+                onClick = { onNavigateToPage(SettingsPage.Privacy) },
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             SettingsMenuItem(
                 icon = Icons.Default.Notifications,
                 title = stringResource(Res.string.notifications),
-                onClick = { onNavigateToPage(SettingsPage.Notifications) }
+                onClick = { onNavigateToPage(SettingsPage.Notifications) },
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             SettingsMenuItem(
                 icon = Icons.Default.Language,
                 title = stringResource(Res.string.language),
-                subtitle = SUPPORTED_LANGUAGES.firstOrNull { it.first == uiState.language }?.second ?: stringResource(Res.string.english_language),
-                onClick = { showLanguageDialog = true }
+                subtitle =
+                    SUPPORTED_LANGUAGES.firstOrNull { it.first == uiState.language }?.second ?: stringResource(Res.string.english_language),
+                onClick = { showLanguageDialog = true },
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             SettingsMenuItem(
                 icon = Icons.Default.Security,
                 title = stringResource(Res.string.permissions),
-                onClick = { onNavigateToPage(SettingsPage.Permissions) }
+                onClick = { onNavigateToPage(SettingsPage.Permissions) },
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             SettingsMenuItem(
                 icon = Icons.Default.Info,
                 title = stringResource(Res.string.about),
-                onClick = { onNavigateToPage(SettingsPage.About) }
+                onClick = { onNavigateToPage(SettingsPage.About) },
             )
 
             Spacer(modifier = Modifier.weight(1f))
 
             OutlinedButton(
                 onClick = onSignOut,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .testTag("settings_signOutButton"),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error
-                )
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .testTag("settings_signOutButton"),
+                colors =
+                    ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
             ) {
                 Icon(
                     Icons.AutoMirrored.Filled.Logout,
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(18.dp),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(stringResource(Res.string.sign_out))
@@ -443,30 +456,30 @@ private fun SettingsMainPage(
             title = { Text(stringResource(Res.string.language)) },
             text = {
                 Column(
-                    modifier = Modifier.verticalScroll(rememberScrollState())
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
                 ) {
                     SUPPORTED_LANGUAGES.forEach { (code, name) ->
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    onSetLanguage(code)
-                                    showLanguageDialog = false
-                                }
-                                .padding(vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onSetLanguage(code)
+                                        showLanguageDialog = false
+                                    }.padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             androidx.compose.material3.RadioButton(
                                 selected = uiState.language == code,
                                 onClick = {
                                     onSetLanguage(code)
                                     showLanguageDialog = false
-                                }
+                                },
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = name,
-                                style = MaterialTheme.typography.bodyMedium
+                                style = MaterialTheme.typography.bodyMedium,
                             )
                         }
                     }
@@ -476,7 +489,7 @@ private fun SettingsMainPage(
                 TextButton(onClick = { showLanguageDialog = false }) {
                     Text(stringResource(Res.string.cancel))
                 }
-            }
+            },
         )
     }
 }
@@ -486,38 +499,39 @@ private fun SettingsMenuItem(
     icon: ImageVector,
     title: String,
     subtitle: String? = null,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 16.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyLarge
+                style = MaterialTheme.typography.bodyLarge,
             )
             if (subtitle != null) {
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
         Icon(
             Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -530,7 +544,7 @@ private fun SettingsSubPage(
     title: String,
     onBack: () -> Unit,
     snackbarHostState: SnackbarHostState,
-    content: @Composable (Modifier) -> Unit
+    content: @Composable (Modifier) -> Unit,
 ) {
     Scaffold(
         snackbarHost = { StyledSnackbarHost(snackbarHostState) },
@@ -541,9 +555,9 @@ private fun SettingsSubPage(
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.back))
                     }
-                }
+                },
             )
-        }
+        },
     ) { padding ->
         content(Modifier.fillMaxSize().padding(padding))
     }
@@ -556,31 +570,33 @@ private fun BlockedUsersPage(
     uiState: AppSettingsUiState,
     onBack: () -> Unit,
     onUnblockUser: (String) -> Unit,
-    snackbarHostState: SnackbarHostState
+    snackbarHostState: SnackbarHostState,
 ) {
     var showUnblockDialog by remember { mutableStateOf<User?>(null) }
 
     SettingsSubPage(
         title = stringResource(Res.string.blocked_users),
         onBack = onBack,
-        snackbarHostState = snackbarHostState
+        snackbarHostState = snackbarHostState,
     ) { modifier ->
         Column(
-            modifier = modifier
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
+            modifier =
+                modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
         ) {
             if (uiState.blockedUsers.isEmpty()) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 64.dp),
-                    contentAlignment = Alignment.TopCenter
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 64.dp),
+                    contentAlignment = Alignment.TopCenter,
                 ) {
                     Text(
                         text = stringResource(Res.string.no_blocked_users),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             } else {
@@ -589,7 +605,7 @@ private fun BlockedUsersPage(
                     key(user.uid) {
                         BlockedUserRow(
                             user = user,
-                            onUnblock = { showUnblockDialog = user }
+                            onUnblock = { showUnblockDialog = user },
                         )
                     }
                 }
@@ -614,7 +630,7 @@ private fun BlockedUsersPage(
                 TextButton(onClick = { showUnblockDialog = null }) {
                     Text(stringResource(Res.string.cancel))
                 }
-            }
+            },
         )
     }
 }
@@ -626,18 +642,19 @@ private fun AccountPage(
     uiState: AppSettingsUiState,
     onBack: () -> Unit,
     onNavigateToLinkedAccounts: () -> Unit,
-    snackbarHostState: SnackbarHostState
+    snackbarHostState: SnackbarHostState,
 ) {
     var showDeleteAccountDialog by remember { mutableStateOf(false) }
 
     SettingsSubPage(
         title = stringResource(Res.string.account),
         onBack = onBack,
-        snackbarHostState = snackbarHostState
+        snackbarHostState = snackbarHostState,
     ) { modifier ->
         Column(
-            modifier = modifier
-                .padding(horizontal = 16.dp)
+            modifier =
+                modifier
+                    .padding(horizontal = 16.dp),
         ) {
             Spacer(modifier = Modifier.height(8.dp))
             uiState.user?.let { user ->
@@ -651,7 +668,7 @@ private fun AccountPage(
             uiState.currentSignInProvider?.let { provider ->
                 SettingsRow(
                     stringResource(Res.string.signed_in_with),
-                    provider.replaceFirstChar { it.uppercase() }
+                    provider.replaceFirstChar { it.uppercase() },
                 )
             }
 
@@ -660,10 +677,11 @@ private fun AccountPage(
             SettingsMenuItem(
                 icon = Icons.Default.Link,
                 title = stringResource(Res.string.linked_accounts),
-                subtitle = uiState.user?.let {
-                    "${it.activeProviders.size} ${stringResource(Res.string.linked).lowercase()}"
-                },
-                onClick = onNavigateToLinkedAccounts
+                subtitle =
+                    uiState.user?.let {
+                        "${it.activeProviders.size} ${stringResource(Res.string.linked).lowercase()}"
+                    },
+                onClick = onNavigateToLinkedAccounts,
             )
             HorizontalDivider()
 
@@ -672,9 +690,10 @@ private fun AccountPage(
             OutlinedButton(
                 onClick = { showDeleteAccountDialog = true },
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error
-                )
+                colors =
+                    ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
             ) {
                 Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
@@ -694,7 +713,7 @@ private fun AccountPage(
                 TextButton(onClick = { showDeleteAccountDialog = false }) {
                     Text(stringResource(Res.string.ok))
                 }
-            }
+            },
         )
     }
 }
@@ -707,32 +726,34 @@ private fun LinkedAccountsPage(
     onBack: () -> Unit,
     onUnlinkProvider: (ProviderType, String) -> Unit,
     onLinkProvider: (ProviderType) -> Unit,
-    snackbarHostState: SnackbarHostState
+    snackbarHostState: SnackbarHostState,
 ) {
     var showUnlinkDialog by remember { mutableStateOf<LinkedProvider?>(null) }
 
     SettingsSubPage(
         title = stringResource(Res.string.linked_accounts),
         onBack = onBack,
-        snackbarHostState = snackbarHostState
+        snackbarHostState = snackbarHostState,
     ) { modifier ->
         Column(
-            modifier = modifier
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
+            modifier =
+                modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
         ) {
             val user = uiState.user
             if (user == null || user.providers.isEmpty()) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 64.dp),
-                    contentAlignment = Alignment.TopCenter
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 64.dp),
+                    contentAlignment = Alignment.TopCenter,
                 ) {
                     Text(
                         text = stringResource(Res.string.no_linked_accounts),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             } else {
@@ -743,7 +764,7 @@ private fun LinkedAccountsPage(
                             provider = provider,
                             canUnlink = user.activeProviders.size >= 2 && provider.active,
                             isUnlinking = uiState.isUnlinkingProvider,
-                            onUnlink = { showUnlinkDialog = provider }
+                            onUnlink = { showUnlinkDialog = provider },
                         )
                         HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
                     }
@@ -762,22 +783,23 @@ private fun LinkedAccountsPage(
                         text = stringResource(Res.string.connect_account),
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 8.dp)
+                        modifier = Modifier.padding(vertical = 8.dp),
                     )
                     unlinkedTypes.forEach { type ->
                         OutlinedButton(
                             onClick = { onLinkProvider(type) },
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         ) {
                             Icon(
-                                imageVector = when (type) {
-                                    ProviderType.GOOGLE -> Icons.Default.Person
-                                    ProviderType.APPLE -> Icons.Default.Lock
-                                    ProviderType.EMAIL -> Icons.Default.Link
-                                    else -> Icons.Default.Link
-                                },
+                                imageVector =
+                                    when (type) {
+                                        ProviderType.GOOGLE -> Icons.Default.Person
+                                        ProviderType.APPLE -> Icons.Default.Lock
+                                        ProviderType.EMAIL -> Icons.Default.Link
+                                        else -> Icons.Default.Link
+                                    },
                                 contentDescription = null,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(20.dp),
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(stringResource(Res.string.connect) + " " + providerDisplayName(type))
@@ -805,7 +827,7 @@ private fun LinkedAccountsPage(
                 TextButton(onClick = { showUnlinkDialog = null }) {
                     Text(stringResource(Res.string.cancel))
                 }
-            }
+            },
         )
     }
 }
@@ -815,38 +837,47 @@ private fun ProviderRow(
     provider: LinkedProvider,
     canUnlink: Boolean,
     isUnlinking: Boolean,
-    onUnlink: () -> Unit
+    onUnlink: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Icon(
             imageVector = if (provider.active) Icons.Default.Link else Icons.Default.LinkOff,
             contentDescription = null,
-            tint = if (provider.active) MaterialTheme.colorScheme.primary
-                   else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(24.dp)
+            tint =
+                if (provider.active) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            modifier = Modifier.size(24.dp),
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = providerDisplayName(provider.type),
-                style = MaterialTheme.typography.bodyLarge
+                style = MaterialTheme.typography.bodyLarge,
             )
             Text(
-                text = if (provider.type == ProviderType.APPLE) "Connected"
-                       else censorEmail(provider.identifier),
+                text =
+                    if (provider.type == ProviderType.APPLE) {
+                        "Connected"
+                    } else {
+                        censorEmail(provider.identifier)
+                    },
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (!provider.active) {
                 Text(
                     text = stringResource(Res.string.unlinked),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error
+                    color = MaterialTheme.colorScheme.error,
                 )
             }
         }
@@ -857,7 +888,7 @@ private fun ProviderRow(
                 TextButton(onClick = onUnlink) {
                     Text(
                         text = stringResource(Res.string.unlink),
-                        color = MaterialTheme.colorScheme.error
+                        color = MaterialTheme.colorScheme.error,
                     )
                 }
             }
@@ -866,12 +897,13 @@ private fun ProviderRow(
 }
 
 @Composable
-private fun providerDisplayName(type: ProviderType): String = when (type) {
-    ProviderType.GOOGLE -> stringResource(Res.string.provider_google)
-    ProviderType.APPLE -> stringResource(Res.string.provider_apple)
-    ProviderType.EMAIL -> stringResource(Res.string.provider_email)
-    ProviderType.UNKNOWN -> type.key
-}
+private fun providerDisplayName(type: ProviderType): String =
+    when (type) {
+        ProviderType.GOOGLE -> stringResource(Res.string.provider_google)
+        ProviderType.APPLE -> stringResource(Res.string.provider_apple)
+        ProviderType.EMAIL -> stringResource(Res.string.provider_email)
+        ProviderType.UNKNOWN -> type.key
+    }
 
 // ===== Privacy Page =====
 
@@ -883,37 +915,38 @@ private fun PrivacyPage(
     onToggleHideOnlineStatus: () -> Unit,
     onToggleHideAge: () -> Unit,
     onSetPmPrivacy: (PmPrivacy) -> Unit,
-    snackbarHostState: SnackbarHostState
+    snackbarHostState: SnackbarHostState,
 ) {
     SettingsSubPage(
         title = stringResource(Res.string.privacy),
         onBack = onBack,
-        snackbarHostState = snackbarHostState
+        snackbarHostState = snackbarHostState,
     ) { modifier ->
         Column(
-            modifier = modifier
-                .padding(horizontal = 16.dp)
+            modifier =
+                modifier
+                    .padding(horizontal = 16.dp),
         ) {
             Spacer(modifier = Modifier.height(8.dp))
             SettingsSwitch(
                 title = stringResource(Res.string.hide_following_list),
                 description = stringResource(Res.string.hide_following_description),
                 checked = uiState.hideFollowing,
-                onCheckedChange = { onToggleHideFollowing() }
+                onCheckedChange = { onToggleHideFollowing() },
             )
             Spacer(modifier = Modifier.height(8.dp))
             SettingsSwitch(
                 title = stringResource(Res.string.hide_online_status),
                 description = stringResource(Res.string.hide_online_status_description),
                 checked = uiState.hideOnlineStatus,
-                onCheckedChange = { onToggleHideOnlineStatus() }
+                onCheckedChange = { onToggleHideOnlineStatus() },
             )
             Spacer(modifier = Modifier.height(8.dp))
             SettingsSwitch(
                 title = stringResource(Res.string.hide_age),
                 description = stringResource(Res.string.hide_age_description),
                 checked = uiState.hideAge,
-                onCheckedChange = { onToggleHideAge() }
+                onCheckedChange = { onToggleHideAge() },
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -923,36 +956,38 @@ private fun PrivacyPage(
             // PM Privacy
             Text(
                 text = stringResource(Res.string.who_can_message_me),
-                style = MaterialTheme.typography.bodyLarge
+                style = MaterialTheme.typography.bodyLarge,
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = stringResource(Res.string.who_can_message_description),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(8.dp))
             PmPrivacy.entries.forEach { privacy ->
-                val label = when (privacy) {
-                    PmPrivacy.EVERYONE -> stringResource(Res.string.everyone)
-                    PmPrivacy.FOLLOWERS_ONLY -> stringResource(Res.string.people_i_follow)
-                    PmPrivacy.NO_ONE -> stringResource(Res.string.no_one)
-                }
+                val label =
+                    when (privacy) {
+                        PmPrivacy.EVERYONE -> stringResource(Res.string.everyone)
+                        PmPrivacy.FOLLOWERS_ONLY -> stringResource(Res.string.people_i_follow)
+                        PmPrivacy.NO_ONE -> stringResource(Res.string.no_one)
+                    }
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSetPmPrivacy(privacy) }
-                        .padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onSetPmPrivacy(privacy) }
+                            .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     androidx.compose.material3.RadioButton(
                         selected = uiState.pmPrivacy == privacy,
-                        onClick = { onSetPmPrivacy(privacy) }
+                        onClick = { onSetPmPrivacy(privacy) },
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = label,
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                 }
             }
@@ -978,44 +1013,45 @@ private fun NotificationsPage(
     onSetDndEndHour: (Int) -> Unit,
     onSetDndEndMinute: (Int) -> Unit,
     onToggleSelfDestructAlert: () -> Unit,
-    snackbarHostState: SnackbarHostState
+    snackbarHostState: SnackbarHostState,
 ) {
     SettingsSubPage(
         title = stringResource(Res.string.notifications),
         onBack = onBack,
-        snackbarHostState = snackbarHostState
+        snackbarHostState = snackbarHostState,
     ) { modifier ->
         Column(
-            modifier = modifier
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
+            modifier =
+                modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
         ) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = stringResource(Res.string.private_messages),
                 style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
             )
             Spacer(modifier = Modifier.height(4.dp))
             SettingsSwitch(
                 title = stringResource(Res.string.pm_notifications),
                 description = stringResource(Res.string.pm_notifications_description),
                 checked = uiState.pmNotificationsEnabled,
-                onCheckedChange = { onTogglePmNotifications() }
+                onCheckedChange = { onTogglePmNotifications() },
             )
             Spacer(modifier = Modifier.height(4.dp))
             SettingsSwitch(
                 title = stringResource(Res.string.notification_sound),
                 description = stringResource(Res.string.notification_sound_description),
                 checked = uiState.pmSoundEnabled,
-                onCheckedChange = { onTogglePmSound() }
+                onCheckedChange = { onTogglePmSound() },
             )
             Spacer(modifier = Modifier.height(4.dp))
             SettingsSwitch(
                 title = stringResource(Res.string.message_preview),
                 description = stringResource(Res.string.message_preview_description),
                 checked = uiState.pmNotificationPreview,
-                onCheckedChange = { onTogglePmPreview() }
+                onCheckedChange = { onTogglePmPreview() },
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -1025,21 +1061,21 @@ private fun NotificationsPage(
             Text(
                 text = stringResource(Res.string.chat_display),
                 style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
             )
             Spacer(modifier = Modifier.height(4.dp))
             SettingsSwitch(
                 title = stringResource(Res.string.show_timestamps),
                 description = stringResource(Res.string.show_timestamps_description),
                 checked = uiState.pmShowTimestamps,
-                onCheckedChange = { onTogglePmTimestamps() }
+                onCheckedChange = { onTogglePmTimestamps() },
             )
             Spacer(modifier = Modifier.height(4.dp))
             SettingsSwitch(
                 title = stringResource(Res.string.show_date_separators),
                 description = stringResource(Res.string.show_date_separators_description),
                 checked = uiState.pmShowDateSeparators,
-                onCheckedChange = { onTogglePmDateSeparators() }
+                onCheckedChange = { onTogglePmDateSeparators() },
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -1049,14 +1085,14 @@ private fun NotificationsPage(
             Text(
                 text = stringResource(Res.string.do_not_disturb),
                 style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
             )
             Spacer(modifier = Modifier.height(4.dp))
             SettingsSwitch(
                 title = stringResource(Res.string.enable_dnd),
                 description = stringResource(Res.string.enable_dnd_description),
                 checked = uiState.dndEnabled,
-                onCheckedChange = { onToggleDnd() }
+                onCheckedChange = { onToggleDnd() },
             )
             if (uiState.dndEnabled) {
                 var showStartTimePicker by remember { mutableStateOf(false) }
@@ -1064,46 +1100,49 @@ private fun NotificationsPage(
 
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showStartTimePicker = true },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { showStartTimePicker = true },
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         text = stringResource(Res.string.start),
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
                         text = String.format("%02d:%02d", uiState.dndStartHour, uiState.dndStartMinute),
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showEndTimePicker = true },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { showEndTimePicker = true },
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         text = stringResource(Res.string.end),
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
                         text = String.format("%02d:%02d", uiState.dndEndHour, uiState.dndEndMinute),
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
 
                 if (showStartTimePicker) {
-                    val startState = rememberTimePickerState(
-                        initialHour = uiState.dndStartHour,
-                        initialMinute = uiState.dndStartMinute
-                    )
+                    val startState =
+                        rememberTimePickerState(
+                            initialHour = uiState.dndStartHour,
+                            initialMinute = uiState.dndStartMinute,
+                        )
                     AlertDialog(
                         onDismissRequest = { showStartTimePicker = false },
                         title = { Text(stringResource(Res.string.dnd_start_time)) },
@@ -1117,15 +1156,16 @@ private fun NotificationsPage(
                         },
                         dismissButton = {
                             TextButton(onClick = { showStartTimePicker = false }) { Text(stringResource(Res.string.cancel)) }
-                        }
+                        },
                     )
                 }
 
                 if (showEndTimePicker) {
-                    val endState = rememberTimePickerState(
-                        initialHour = uiState.dndEndHour,
-                        initialMinute = uiState.dndEndMinute
-                    )
+                    val endState =
+                        rememberTimePickerState(
+                            initialHour = uiState.dndEndHour,
+                            initialMinute = uiState.dndEndMinute,
+                        )
                     AlertDialog(
                         onDismissRequest = { showEndTimePicker = false },
                         title = { Text(stringResource(Res.string.dnd_end_time)) },
@@ -1139,7 +1179,7 @@ private fun NotificationsPage(
                         },
                         dismissButton = {
                             TextButton(onClick = { showEndTimePicker = false }) { Text(stringResource(Res.string.cancel)) }
-                        }
+                        },
                     )
                 }
             }
@@ -1151,14 +1191,14 @@ private fun NotificationsPage(
             Text(
                 text = stringResource(Res.string.room_alerts),
                 style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
             )
             Spacer(modifier = Modifier.height(4.dp))
             SettingsSwitch(
                 title = stringResource(Res.string.self_destruct_countdown),
                 description = stringResource(Res.string.self_destruct_description),
                 checked = uiState.selfDestructAlertEnabled,
-                onCheckedChange = { onToggleSelfDestructAlert() }
+                onCheckedChange = { onToggleSelfDestructAlert() },
             )
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -1171,50 +1211,58 @@ private fun NotificationsPage(
 @Composable
 private fun PermissionsPage(
     onBack: () -> Unit,
-    snackbarHostState: SnackbarHostState
+    snackbarHostState: SnackbarHostState,
 ) {
     val context = LocalContext.current
-    val notificationManager = remember {
-        context.getSystemService(android.app.NotificationManager::class.java)
-    }
+    val notificationManager =
+        remember {
+            context.getSystemService(android.app.NotificationManager::class.java)
+        }
 
     // Re-check permission state when returning from system settings
     var refreshKey by remember { mutableStateOf(0) }
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
-        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                refreshKey++
+        val observer =
+            androidx.lifecycle.LifecycleEventObserver { _, event ->
+                if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                    refreshKey++
+                }
             }
-        }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val notificationsEnabled = remember(refreshKey) {
-        notificationManager?.areNotificationsEnabled() == true
-    }
-    val overlayEnabled = remember(refreshKey) {
-        Settings.canDrawOverlays(context)
-    }
-    val microphoneEnabled = remember(refreshKey) {
-        ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-            android.content.pm.PackageManager.PERMISSION_GRANTED
-    }
-    val bluetoothEnabled = remember(refreshKey) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) ==
+    val notificationsEnabled =
+        remember(refreshKey) {
+            notificationManager?.areNotificationsEnabled() == true
+        }
+    val overlayEnabled =
+        remember(refreshKey) {
+            Settings.canDrawOverlays(context)
+        }
+    val microphoneEnabled =
+        remember(refreshKey) {
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
                 android.content.pm.PackageManager.PERMISSION_GRANTED
-        } else true
-    }
+        }
+    val bluetoothEnabled =
+        remember(refreshKey) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) ==
+                    android.content.pm.PackageManager.PERMISSION_GRANTED
+            } else {
+                true
+            }
+        }
 
     SettingsSubPage(
         title = stringResource(Res.string.permissions),
         onBack = onBack,
-        snackbarHostState = snackbarHostState
+        snackbarHostState = snackbarHostState,
     ) { modifier ->
         Column(
-            modifier = modifier.padding(horizontal = 16.dp)
+            modifier = modifier.padding(horizontal = 16.dp),
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -1227,10 +1275,10 @@ private fun PermissionsPage(
                         context.startActivity(
                             Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
                                 putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                            }
+                            },
                         )
                     }
-                }
+                },
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -1243,10 +1291,10 @@ private fun PermissionsPage(
                     context.startActivity(
                         Intent(
                             Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                            Uri.parse("package:${context.packageName}")
-                        )
+                            Uri.parse("package:${context.packageName}"),
+                        ),
                     )
-                }
+                },
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -1259,10 +1307,10 @@ private fun PermissionsPage(
                     context.startActivity(
                         Intent(
                             Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                            Uri.parse("package:${context.packageName}")
-                        )
+                            Uri.parse("package:${context.packageName}"),
+                        ),
                     )
-                }
+                },
             )
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -1276,10 +1324,10 @@ private fun PermissionsPage(
                         context.startActivity(
                             Intent(
                                 Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                Uri.parse("package:${context.packageName}")
-                            )
+                                Uri.parse("package:${context.packageName}"),
+                            ),
                         )
-                    }
+                    },
                 )
             }
         }
@@ -1291,32 +1339,33 @@ private fun PermissionRow(
     title: String,
     description: String,
     enabled: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyLarge
+                style = MaterialTheme.typography.bodyLarge,
             )
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = if (enabled) stringResource(Res.string.allowed) else stringResource(Res.string.denied),
             style = MaterialTheme.typography.labelMedium,
-            color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+            color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
         )
     }
 }
@@ -1333,51 +1382,56 @@ private fun AboutPage(
     onNavigateToCyberBullyingPolicy: () -> Unit,
     onCheckForUpdates: () -> Unit,
     onClearCache: () -> Unit,
-    snackbarHostState: SnackbarHostState
+    snackbarHostState: SnackbarHostState,
 ) {
     val context = LocalContext.current
 
     SettingsSubPage(
         title = stringResource(Res.string.about),
         onBack = onBack,
-        snackbarHostState = snackbarHostState
+        snackbarHostState = snackbarHostState,
     ) { modifier ->
         Column(
-            modifier = modifier
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
+            modifier =
+                modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
         ) {
             // App icon + version
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                val appIcon = remember {
-                    ContextCompat.getDrawable(context, R.mipmap.ic_launcher)
-                        ?.toBitmap(128, 128)
-                        ?.asImageBitmap()
-                }
+                val appIcon =
+                    remember {
+                        ContextCompat
+                            .getDrawable(context, R.mipmap.ic_launcher)
+                            ?.toBitmap(128, 128)
+                            ?.asImageBitmap()
+                    }
                 if (appIcon != null) {
                     androidx.compose.foundation.Image(
                         painter = BitmapPainter(appIcon),
                         contentDescription = stringResource(Res.string.app_name_label),
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
+                        modifier =
+                            Modifier
+                                .size(48.dp)
+                                .clip(CircleShape),
                     )
                 }
                 Column {
                     Text(
                         text = "ShyTalk",
-                        style = MaterialTheme.typography.titleMedium
+                        style = MaterialTheme.typography.titleMedium,
                     )
                     Text(
                         text = "v${BuildConfig.VERSION_NAME}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -1386,82 +1440,87 @@ private fun AboutPage(
 
             // Contact
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        val intent = Intent(Intent.ACTION_SENDTO).apply {
-                            data = Uri.parse("mailto:shytalk.help@gmail.com")
-                        }
-                        context.startActivity(intent)
-                    }
-                    .padding(vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            val intent =
+                                Intent(Intent.ACTION_SENDTO).apply {
+                                    data = Uri.parse("mailto:shytalk.help@gmail.com")
+                                }
+                            context.startActivity(intent)
+                        }.padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = stringResource(Res.string.contact_us),
-                    style = MaterialTheme.typography.bodyLarge
+                    style = MaterialTheme.typography.bodyLarge,
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
                     text = "shytalk.help@gmail.com",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
 
             // Privacy Policy
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onNavigateToPrivacyPolicy() }
-                    .padding(vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onNavigateToPrivacyPolicy() }
+                        .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = stringResource(Res.string.privacy_policy),
-                    style = MaterialTheme.typography.bodyLarge
+                    style = MaterialTheme.typography.bodyLarge,
                 )
             }
 
             // Community Standards
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onNavigateToCommunityStandards() }
-                    .padding(vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onNavigateToCommunityStandards() }
+                        .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = stringResource(Res.string.community_standards),
-                    style = MaterialTheme.typography.bodyLarge
+                    style = MaterialTheme.typography.bodyLarge,
                 )
             }
 
             // Terms & Conditions
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onNavigateToTermsAndConditions() }
-                    .padding(vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onNavigateToTermsAndConditions() }
+                        .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = stringResource(Res.string.terms_and_conditions),
-                    style = MaterialTheme.typography.bodyLarge
+                    style = MaterialTheme.typography.bodyLarge,
                 )
             }
 
             // Cyber Bullying Policy
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onNavigateToCyberBullyingPolicy() }
-                    .padding(vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onNavigateToCyberBullyingPolicy() }
+                        .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = stringResource(Res.string.cyber_bullying_policy),
-                    style = MaterialTheme.typography.bodyLarge
+                    style = MaterialTheme.typography.bodyLarge,
                 )
             }
 
@@ -1470,7 +1529,7 @@ private fun AboutPage(
             OutlinedButton(
                 onClick = onCheckForUpdates,
                 enabled = !uiState.isCheckingUpdate,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 if (uiState.isCheckingUpdate) {
                     CircularProgressIndicator(modifier = Modifier.size(18.dp))
@@ -1486,7 +1545,7 @@ private fun AboutPage(
             // Clear Cache
             OutlinedButton(
                 onClick = onClearCache,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(stringResource(Res.string.clear_cache_with_size, formatCacheSize(uiState.cacheSizeBytes)))
             }
@@ -1499,21 +1558,25 @@ private fun AboutPage(
 // ===== Helper Composables =====
 
 @Composable
-private fun SettingsRow(label: String, value: String) {
+private fun SettingsRow(
+    label: String,
+    value: String,
+) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium,
         )
     }
 }
@@ -1523,30 +1586,31 @@ private fun SettingsSwitch(
     title: String,
     description: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyLarge
+                style = MaterialTheme.typography.bodyLarge,
             )
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Spacer(modifier = Modifier.width(8.dp))
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange
+            onCheckedChange = onCheckedChange,
         )
     }
 }
@@ -1556,46 +1620,49 @@ internal fun censorEmail(email: String): String {
     if (parts.size != 2) return email
     val local = parts[0]
     val domain = parts[1]
-    val censored = when {
-        local.length <= 2 -> "${local.first()}*"
-        else -> "${local.take(2)}${"*".repeat((local.length - 3).coerceAtLeast(1))}${local.last()}"
-    }
+    val censored =
+        when {
+            local.length <= 2 -> "${local.first()}*"
+            else -> "${local.take(2)}${"*".repeat((local.length - 3).coerceAtLeast(1))}${local.last()}"
+        }
     return "$censored@$domain"
 }
 
 @Composable
 private fun BlockedUserRow(
     user: User,
-    onUnblock: () -> Unit
+    onUnblock: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         val photoUrl = user.photoUrl
         if (photoUrl != null) {
             AsyncImage(
                 model = photoUrl,
                 contentDescription = user.displayName,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop
+                modifier =
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape),
+                contentScale = ContentScale.Crop,
             )
         } else {
             Surface(
                 modifier = Modifier.size(40.dp),
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer
+                color = MaterialTheme.colorScheme.primaryContainer,
             ) {
                 Icon(
                     Icons.Default.Person,
                     contentDescription = null,
                     modifier = Modifier.padding(10.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             }
         }
@@ -1603,7 +1670,7 @@ private fun BlockedUserRow(
         Text(
             text = user.displayName.ifEmpty { stringResource(Res.string.unknown) },
             style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
 
         TextButton(onClick = onUnblock) {
@@ -1612,10 +1679,9 @@ private fun BlockedUserRow(
     }
 }
 
-private fun formatCacheSize(bytes: Long): String {
-    return when {
+private fun formatCacheSize(bytes: Long): String =
+    when {
         bytes < 1024 -> "$bytes B"
         bytes < 1024 * 1024 -> "${bytes / 1024} KB"
         else -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
     }
-}

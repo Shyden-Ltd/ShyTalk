@@ -14,7 +14,6 @@ import org.junit.Before
 import org.junit.Test
 
 class CropContractTest {
-
     private val contract = CropContract()
     private val mockUri = mockk<Uri>()
 
@@ -73,14 +72,15 @@ class CropContractTest {
 
     @Test
     fun `CropInput preserves custom values`() {
-        val input = CropInput(
-            uri = mockUri,
-            aspectRatioX = 16,
-            aspectRatioY = 9,
-            cropShape = "oval",
-            quality = 95,
-            title = "Edit Cover"
-        )
+        val input =
+            CropInput(
+                uri = mockUri,
+                aspectRatioX = 16,
+                aspectRatioY = 9,
+                cropShape = "oval",
+                quality = 95,
+                title = "Edit Cover",
+            )
         assertEquals(mockUri, input.uri)
         assertEquals(16, input.aspectRatioX)
         assertEquals(9, input.aspectRatioY)

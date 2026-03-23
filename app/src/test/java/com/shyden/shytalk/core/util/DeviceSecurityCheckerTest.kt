@@ -8,7 +8,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DeviceSecurityCheckerTest {
-
     // In JVM tests without Robolectric, Build fields are empty/default.
     // The checker correctly returns false for all checks in this environment.
 

@@ -4,7 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class CensorEmailTest {
-
     @Test
     fun `standard email censors middle of local part`() {
         assertEquals("jo*****e@gmail.com", censorEmail("john.doe@gmail.com"))

@@ -5,23 +5,24 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GachaResultFromMapTest {
-
     @Test
     fun `fromMap parses complete result`() {
-        val map = mapOf<String, Any?>(
-            "gifts" to listOf(
-                mapOf(
-                    "giftId" to "g1",
-                    "giftName" to "Rose",
-                    "coinValue" to 10L,
-                    "iconUrl" to "https://example.com/rose.png"
-                )
-            ),
-            "coinsSpent" to 100L,
-            "newBalance" to 900L,
-            "newPityCounter" to 1L,
-            "newLuckScore" to 5L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "gifts" to
+                    listOf(
+                        mapOf(
+                            "giftId" to "g1",
+                            "giftName" to "Rose",
+                            "coinValue" to 10L,
+                            "iconUrl" to "https://example.com/rose.png",
+                        ),
+                    ),
+                "coinsSpent" to 100L,
+                "newBalance" to 900L,
+                "newPityCounter" to 1L,
+                "newLuckScore" to 5L,
+            )
 
         val result = GachaResult.fromMap(map)
 
@@ -38,13 +39,14 @@ class GachaResultFromMapTest {
 
     @Test
     fun `fromMap handles empty gifts list`() {
-        val map = mapOf<String, Any?>(
-            "gifts" to emptyList<Any>(),
-            "coinsSpent" to 0L,
-            "newBalance" to 100L,
-            "newPityCounter" to 0L,
-            "newLuckScore" to 0L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "gifts" to emptyList<Any>(),
+                "coinsSpent" to 0L,
+                "newBalance" to 100L,
+                "newPityCounter" to 0L,
+                "newLuckScore" to 0L,
+            )
 
         val result = GachaResult.fromMap(map)
 
@@ -53,11 +55,12 @@ class GachaResultFromMapTest {
 
     @Test
     fun `fromMap handles null gifts`() {
-        val map = mapOf<String, Any?>(
-            "gifts" to null,
-            "coinsSpent" to 0L,
-            "newBalance" to 100L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "gifts" to null,
+                "coinsSpent" to 0L,
+                "newBalance" to 100L,
+            )
 
         val result = GachaResult.fromMap(map)
 
@@ -79,16 +82,18 @@ class GachaResultFromMapTest {
 
     @Test
     fun `fromMap ignores legacy bracket field`() {
-        val map = mapOf<String, Any?>(
-            "gifts" to listOf(
-                mapOf(
-                    "giftId" to "g1",
-                    "giftName" to "Rose",
-                    "bracket" to "COMMON",
-                    "coinValue" to 10L
-                )
+        val map =
+            mapOf<String, Any?>(
+                "gifts" to
+                    listOf(
+                        mapOf(
+                            "giftId" to "g1",
+                            "giftName" to "Rose",
+                            "bracket" to "COMMON",
+                            "coinValue" to 10L,
+                        ),
+                    ),
             )
-        )
 
         val result = GachaResult.fromMap(map)
 
@@ -99,18 +104,20 @@ class GachaResultFromMapTest {
 
     @Test
     fun `fromMap handles multi-pull with many gifts`() {
-        val gifts = (1..100).map { i ->
-            mapOf(
-                "giftId" to "g$i",
-                "giftName" to "Gift $i",
-                "coinValue" to 10L
+        val gifts =
+            (1..100).map { i ->
+                mapOf(
+                    "giftId" to "g$i",
+                    "giftName" to "Gift $i",
+                    "coinValue" to 10L,
+                )
+            }
+        val map =
+            mapOf<String, Any?>(
+                "gifts" to gifts,
+                "coinsSpent" to 1000L,
+                "newBalance" to 0L,
             )
-        }
-        val map = mapOf<String, Any?>(
-            "gifts" to gifts,
-            "coinsSpent" to 1000L,
-            "newBalance" to 0L
-        )
 
         val result = GachaResult.fromMap(map)
 
@@ -120,15 +127,17 @@ class GachaResultFromMapTest {
 
     @Test
     fun `fromMap skips malformed gift entries`() {
-        val map = mapOf<String, Any?>(
-            "gifts" to listOf(
-                mapOf("giftId" to "g1", "giftName" to "Rose"),
-                "not a map",
-                42,
-                null,
-                mapOf("giftId" to "g2", "giftName" to "Crown")
+        val map =
+            mapOf<String, Any?>(
+                "gifts" to
+                    listOf(
+                        mapOf("giftId" to "g1", "giftName" to "Rose"),
+                        "not a map",
+                        42,
+                        null,
+                        mapOf("giftId" to "g2", "giftName" to "Crown"),
+                    ),
             )
-        )
 
         val result = GachaResult.fromMap(map)
 
@@ -139,11 +148,13 @@ class GachaResultFromMapTest {
 
     @Test
     fun `fromMap gift with missing fields uses defaults`() {
-        val map = mapOf<String, Any?>(
-            "gifts" to listOf(
-                mapOf<String, Any?>()  // completely empty gift map
+        val map =
+            mapOf<String, Any?>(
+                "gifts" to
+                    listOf(
+                        mapOf<String, Any?>(), // completely empty gift map
+                    ),
             )
-        )
 
         val result = GachaResult.fromMap(map)
 

@@ -26,52 +26,62 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.R
-import org.jetbrains.compose.resources.stringResource
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun BanScreen(
     banType: String,
     reason: String?,
     expiresAt: String?,
-    onSignOut: () -> Unit
+    onSignOut: () -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(32.dp)
-                .verticalScroll(rememberScrollState()),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(32.dp)
+                    .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Center,
         ) {
             Image(
                 painter = painterResource(R.drawable.police_duck),
                 contentDescription = stringResource(Res.string.police_duck_description),
-                modifier = Modifier
-                    .size(160.dp)
-                    .clip(CircleShape)
+                modifier =
+                    Modifier
+                        .size(160.dp)
+                        .clip(CircleShape),
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = if (banType == "device") stringResource(Res.string.device_banned_title)
-                       else stringResource(Res.string.network_banned_title),
+                text =
+                    if (banType == "device") {
+                        stringResource(Res.string.device_banned_title)
+                    } else {
+                        stringResource(Res.string.network_banned_title)
+                    },
                 style = MaterialTheme.typography.headlineMedium,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.testTag("ban_title")
+                modifier = Modifier.testTag("ban_title"),
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                text = if (banType == "device") stringResource(Res.string.device_banned_description)
-                       else stringResource(Res.string.network_banned_description),
+                text =
+                    if (banType == "device") {
+                        stringResource(Res.string.device_banned_description)
+                    } else {
+                        stringResource(Res.string.network_banned_description)
+                    },
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             if (!reason.isNullOrBlank()) {
@@ -81,7 +91,7 @@ fun BanScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.testTag("ban_reason")
+                    modifier = Modifier.testTag("ban_reason"),
                 )
             }
 
@@ -92,7 +102,7 @@ fun BanScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.testTag("ban_expires")
+                    modifier = Modifier.testTag("ban_expires"),
                 )
             } else {
                 Spacer(modifier = Modifier.height(12.dp))
@@ -101,7 +111,7 @@ fun BanScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.testTag("ban_permanent")
+                    modifier = Modifier.testTag("ban_permanent"),
                 )
             }
 
@@ -110,9 +120,10 @@ fun BanScreen(
             OutlinedButton(
                 onClick = onSignOut,
                 modifier = Modifier.fillMaxWidth().testTag("ban_signOutButton"),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                colors =
+                    ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
             ) {
                 Text(stringResource(Res.string.sign_out))
             }
@@ -123,9 +134,8 @@ fun BanScreen(
                 text = stringResource(Res.string.support_contact),
                 style = MaterialTheme.typography.bodySmall,
                 textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
 }
-

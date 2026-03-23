@@ -10,7 +10,6 @@ import org.junit.Before
 import org.junit.Test
 
 class LiveKitTokenServiceTest {
-
     private lateinit var api: WorkerApiClient
     private lateinit var service: LiveKitTokenService
 
@@ -21,30 +20,35 @@ class LiveKitTokenServiceTest {
     }
 
     @Test
-    fun `fetchToken returns token from successful response`() = runTest {
-        coEvery { api.post("/api/livekit/token", any()) } returns JSONObject().apply {
-            put("token", "test-jwt-token")
+    fun `fetchToken returns token from successful response`() =
+        runTest {
+            coEvery { api.post("/api/livekit/token", any()) } returns
+                JSONObject().apply {
+                    put("token", "test-jwt-token")
+                }
+
+            val token = service.fetchToken("room-1", "user-1")
+
+            assertEquals("test-jwt-token", token)
+            coVerify { api.post("/api/livekit/token", any()) }
         }
-
-        val token = service.fetchToken("room-1", "user-1")
-
-        assertEquals("test-jwt-token", token)
-        coVerify { api.post("/api/livekit/token", any()) }
-    }
 
     @Test(expected = IllegalStateException::class)
-    fun `fetchToken throws when response missing token field`() = runTest {
-        coEvery { api.post("/api/livekit/token", any()) } returns JSONObject().apply {
-            put("error", "no token")
+    fun `fetchToken throws when response missing token field`() =
+        runTest {
+            coEvery { api.post("/api/livekit/token", any()) } returns
+                JSONObject().apply {
+                    put("error", "no token")
+                }
+
+            service.fetchToken("room-1", "user-1")
         }
 
-        service.fetchToken("room-1", "user-1")
-    }
-
     @Test(expected = RuntimeException::class)
-    fun `fetchToken propagates exception from API`() = runTest {
-        coEvery { api.post("/api/livekit/token", any()) } throws RuntimeException("Network error")
+    fun `fetchToken propagates exception from API`() =
+        runTest {
+            coEvery { api.post("/api/livekit/token", any()) } throws RuntimeException("Network error")
 
-        service.fetchToken("room-1", "user-1")
-    }
+            service.fetchToken("room-1", "user-1")
+        }
 }

@@ -5,17 +5,17 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class GiftFromMapTest {
-
     @Test
     fun `fromMap parses complete gift`() {
-        val map = mapOf<String, Any?>(
-            "name" to "Crown",
-            "coinValue" to 800L,
-            "animationUrl" to "https://example.com/anim.json",
-            "soundUrl" to "https://example.com/sound.mp3",
-            "iconUrl" to "https://example.com/crown.png",
-            "order" to 16L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "name" to "Crown",
+                "coinValue" to 800L,
+                "animationUrl" to "https://example.com/anim.json",
+                "soundUrl" to "https://example.com/sound.mp3",
+                "iconUrl" to "https://example.com/crown.png",
+                "order" to 16L,
+            )
 
         val gift = Gift.fromMap(map, "crown")
 
@@ -43,10 +43,11 @@ class GiftFromMapTest {
 
     @Test
     fun `fromMap ignores unknown fields`() {
-        val map = mapOf<String, Any?>(
-            "name" to "Test",
-            "bracket" to "RARE" // legacy field — ignored
-        )
+        val map =
+            mapOf<String, Any?>(
+                "name" to "Test",
+                "bracket" to "RARE", // legacy field — ignored
+            )
 
         val gift = Gift.fromMap(map, "test")
 
@@ -55,11 +56,12 @@ class GiftFromMapTest {
 
     @Test
     fun `fromMap ignores legacy broadcastEnabled field`() {
-        val map = mapOf<String, Any?>(
-            "name" to "Crown",
-            "coinValue" to 800L,
-            "broadcastEnabled" to true
-        )
+        val map =
+            mapOf<String, Any?>(
+                "name" to "Crown",
+                "coinValue" to 800L,
+                "broadcastEnabled" to true,
+            )
 
         val gift = Gift.fromMap(map, "crown")
 
@@ -70,15 +72,16 @@ class GiftFromMapTest {
 
     @Test
     fun `toMap returns correct fields`() {
-        val gift = Gift(
-            id = "rose",
-            name = "Rose",
-            coinValue = 8,
-            animationUrl = "anim",
-            soundUrl = "sound",
-            iconUrl = "icon",
-            order = 1
-        )
+        val gift =
+            Gift(
+                id = "rose",
+                name = "Rose",
+                coinValue = 8,
+                animationUrl = "anim",
+                soundUrl = "sound",
+                iconUrl = "icon",
+                order = 1,
+            )
 
         val map = gift.toMap()
 
@@ -96,11 +99,12 @@ class GiftFromMapTest {
 
     @Test
     fun `fromMap parses expiresAfterDays`() {
-        val map = mapOf<String, Any?>(
-            "name" to "Sparkler",
-            "coinValue" to 50L,
-            "expiresAfterDays" to 7L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "name" to "Sparkler",
+                "coinValue" to 50L,
+                "expiresAfterDays" to 7L,
+            )
 
         val gift = Gift.fromMap(map, "sparkler")
 

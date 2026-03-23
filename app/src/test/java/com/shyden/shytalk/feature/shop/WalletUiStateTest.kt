@@ -8,7 +8,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WalletUiStateTest {
-
     @Test
     fun `default state has zero balances`() {
         val state = WalletUiState()
@@ -71,14 +70,15 @@ class WalletUiStateTest {
 
     @Test
     fun `CoinPackage fromMap parses all fields`() {
-        val map = mapOf<String, Any?>(
-            "productId" to "coins_100",
-            "coins" to 100L,
-            "bonusCoins" to 10L,
-            "displayPrice" to "$0.99",
-            "order" to 1L,
-            "isActive" to true
-        )
+        val map =
+            mapOf<String, Any?>(
+                "productId" to "coins_100",
+                "coins" to 100L,
+                "bonusCoins" to 10L,
+                "displayPrice" to "$0.99",
+                "order" to 1L,
+                "isActive" to true,
+            )
         val pkg = CoinPackage.fromMap(map, "pkg1")
         assertEquals("pkg1", pkg.id)
         assertEquals("coins_100", pkg.productId)

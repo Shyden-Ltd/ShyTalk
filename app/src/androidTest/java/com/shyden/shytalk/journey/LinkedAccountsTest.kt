@@ -15,10 +15,10 @@ import com.shyden.shytalk.data.repository.UserRepository
 import com.shyden.shytalk.fake.FakeAuthRepository
 import com.shyden.shytalk.fake.FakeUserRepository
 import com.shyden.shytalk.navigation.Screen
-import com.shyden.shytalk.util.launchNavGraph
-import com.shyden.shytalk.util.waitForText
 import com.shyden.shytalk.util.ResetFakesRule
 import com.shyden.shytalk.util.ScreenshotRule
+import com.shyden.shytalk.util.launchNavGraph
+import com.shyden.shytalk.util.waitForText
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -28,7 +28,6 @@ import org.koin.test.inject
 
 @RunWith(AndroidJUnit4::class)
 class LinkedAccountsTest : KoinTest {
-
     @get:Rule(order = 0)
     val resetFakes = ResetFakesRule()
 
@@ -44,35 +43,37 @@ class LinkedAccountsTest : KoinTest {
     @Before
     fun setUp() {
         val fakeAuth = authRepository as FakeAuthRepository
-        fakeAuth._isAuthenticated = true
-        fakeAuth._currentUserId = "test-user-1"
+        fakeAuth.fakeAuthenticated = true
+        fakeAuth.fakeUserId = "test-user-1"
         fakeAuth.resolvedUniqueId = "10000001"
-        fakeAuth._currentUserEmail = "test@example.com"
+        fakeAuth.fakeUserEmail = "test@example.com"
 
         // Set up user with linked providers
         val fakeUser = userRepository as FakeUserRepository
-        fakeUser.users["10000001"] = User(
-            uid = "10000001",
-            uniqueId = 10000001L,
-            displayName = "TestUser",
-            email = "test@example.com",
-            dateOfBirth = 946684800000L,
-            acceptedLegalVersion = 999,
-            providers = listOf(
-                LinkedProvider(
-                    type = ProviderType.GOOGLE,
-                    identifier = "test@gmail.com",
-                    active = true,
-                    linkedAt = 1709913600000L
-                ),
-                LinkedProvider(
-                    type = ProviderType.EMAIL,
-                    identifier = "test@work.com",
-                    active = true,
-                    linkedAt = 1709913600000L
-                )
+        fakeUser.users["10000001"] =
+            User(
+                uid = "10000001",
+                uniqueId = 10000001L,
+                displayName = "TestUser",
+                email = "test@example.com",
+                dateOfBirth = 946684800000L,
+                acceptedLegalVersion = 999,
+                providers =
+                    listOf(
+                        LinkedProvider(
+                            type = ProviderType.GOOGLE,
+                            identifier = "test@gmail.com",
+                            active = true,
+                            linkedAt = 1709913600000L,
+                        ),
+                        LinkedProvider(
+                            type = ProviderType.EMAIL,
+                            identifier = "test@work.com",
+                            active = true,
+                            linkedAt = 1709913600000L,
+                        ),
+                    ),
             )
-        )
     }
 
     @Test
@@ -111,16 +112,18 @@ class LinkedAccountsTest : KoinTest {
     fun linkedAccounts_singleProvider_noUnlinkButton() {
         // Set up user with only one provider
         val fakeUser = userRepository as FakeUserRepository
-        fakeUser.users["10000001"] = fakeUser.users["10000001"]!!.copy(
-            providers = listOf(
-                LinkedProvider(
-                    type = ProviderType.GOOGLE,
-                    identifier = "test@gmail.com",
-                    active = true,
-                    linkedAt = 1709913600000L
-                )
+        fakeUser.users["10000001"] =
+            fakeUser.users["10000001"]!!.copy(
+                providers =
+                    listOf(
+                        LinkedProvider(
+                            type = ProviderType.GOOGLE,
+                            identifier = "test@gmail.com",
+                            active = true,
+                            linkedAt = 1709913600000L,
+                        ),
+                    ),
             )
-        )
 
         composeTestRule.launchNavGraph(startDestination = Screen.Settings.route)
 
@@ -158,23 +161,25 @@ class LinkedAccountsTest : KoinTest {
     fun linkedAccounts_showsDeactivatedProvider() {
         // Set up user with one active and one deactivated provider
         val fakeUser = userRepository as FakeUserRepository
-        fakeUser.users["10000001"] = fakeUser.users["10000001"]!!.copy(
-            providers = listOf(
-                LinkedProvider(
-                    type = ProviderType.GOOGLE,
-                    identifier = "test@gmail.com",
-                    active = true,
-                    linkedAt = 1709913600000L
-                ),
-                LinkedProvider(
-                    type = ProviderType.EMAIL,
-                    identifier = "old@work.com",
-                    active = false,
-                    linkedAt = 1709913600000L,
-                    unlinkedAt = 1709999999000L
-                )
+        fakeUser.users["10000001"] =
+            fakeUser.users["10000001"]!!.copy(
+                providers =
+                    listOf(
+                        LinkedProvider(
+                            type = ProviderType.GOOGLE,
+                            identifier = "test@gmail.com",
+                            active = true,
+                            linkedAt = 1709913600000L,
+                        ),
+                        LinkedProvider(
+                            type = ProviderType.EMAIL,
+                            identifier = "old@work.com",
+                            active = false,
+                            linkedAt = 1709913600000L,
+                            unlinkedAt = 1709999999000L,
+                        ),
+                    ),
             )
-        )
 
         composeTestRule.launchNavGraph(startDestination = Screen.Settings.route)
 

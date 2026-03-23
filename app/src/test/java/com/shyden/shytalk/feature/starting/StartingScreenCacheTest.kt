@@ -5,7 +5,6 @@ import android.content.SharedPreferences
 import com.shyden.shytalk.data.remote.StartingScreen
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -17,7 +16,6 @@ import org.junit.Test
 import java.io.File
 
 class StartingScreenCacheTest {
-
     private lateinit var tempDir: File
     private lateinit var mockContext: Context
     private lateinit var storedPrefs: MutableMap<String, Any?>
@@ -195,17 +193,18 @@ class StartingScreenCacheTest {
 
     @Test
     fun `null imageType is handled`() {
-        val screen = StartingScreen(
-            screenId = "test",
-            enabled = true,
-            dismissable = false,
-            frequency = "every_launch",
-            template = "info",
-            title = "Test",
-            message = "Test message here",
-            imageType = null,
-            backgroundImage = null,
-        )
+        val screen =
+            StartingScreen(
+                screenId = "test",
+                enabled = true,
+                dismissable = false,
+                frequency = "every_launch",
+                template = "info",
+                title = "Test",
+                message = "Test message here",
+                imageType = null,
+                backgroundImage = null,
+            )
         cache.cacheBlocker(screen, null)
 
         val cached = cache.getCachedBlocker()

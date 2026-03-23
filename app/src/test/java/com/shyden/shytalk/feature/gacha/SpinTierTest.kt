@@ -6,7 +6,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SpinTierTest {
-
     @Test
     fun `buildSpinTiers returns three tiers`() {
         val tiers = buildSpinTiers(emptyMap())
@@ -34,9 +33,9 @@ class SpinTierTest {
     fun `buildSpinTiers partial map uses defaults for missing`() {
         val costs = mapOf(10 to 200)
         val tiers = buildSpinTiers(costs)
-        assertEquals(10, tiers[0].cost)    // default
-        assertEquals(200, tiers[1].cost)   // custom
-        assertEquals(1000, tiers[2].cost)  // default
+        assertEquals(10, tiers[0].cost) // default
+        assertEquals(200, tiers[1].cost) // custom
+        assertEquals(1000, tiers[2].cost) // default
     }
 
     @Test
@@ -96,8 +95,8 @@ class SpinTierTest {
         val burstCounts = values.map { rarityConfigForCoinValue(it).burstCount }
         for (i in 0 until burstCounts.size - 1) {
             assertTrue(
-                "burst at ${values[i]} (${burstCounts[i]}) should be < burst at ${values[i+1]} (${burstCounts[i+1]})",
-                burstCounts[i] < burstCounts[i + 1]
+                "burst at ${values[i]} (${burstCounts[i]}) should be < burst at ${values[i + 1]} (${burstCounts[i + 1]})",
+                burstCounts[i] < burstCounts[i + 1],
             )
         }
     }
@@ -108,8 +107,8 @@ class SpinTierTest {
         val shakes = values.map { rarityConfigForCoinValue(it).shakeIntensity }
         for (i in 0 until shakes.size - 1) {
             assertTrue(
-                "shake at ${values[i]} (${shakes[i]}) should be <= shake at ${values[i+1]} (${shakes[i+1]})",
-                shakes[i] <= shakes[i + 1]
+                "shake at ${values[i]} (${shakes[i]}) should be <= shake at ${values[i + 1]} (${shakes[i + 1]})",
+                shakes[i] <= shakes[i + 1],
             )
         }
     }

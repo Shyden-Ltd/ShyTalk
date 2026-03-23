@@ -12,13 +12,15 @@ data class CropInput(
     val aspectRatioY: Int,
     val cropShape: String = "rectangle",
     val quality: Int = 80,
-    val title: String = "Crop"
+    val title: String = "Crop",
 )
 
 class CropContract : ActivityResultContract<CropInput, Uri?>() {
-
-    override fun createIntent(context: Context, input: CropInput): Intent {
-        return Intent(context, CropActivity::class.java).apply {
+    override fun createIntent(
+        context: Context,
+        input: CropInput,
+    ): Intent =
+        Intent(context, CropActivity::class.java).apply {
             putExtra(CropActivity.EXTRA_IMAGE_URI, input.uri.toString())
             putExtra(CropActivity.EXTRA_ASPECT_X, input.aspectRatioX)
             putExtra(CropActivity.EXTRA_ASPECT_Y, input.aspectRatioY)
@@ -27,9 +29,11 @@ class CropContract : ActivityResultContract<CropInput, Uri?>() {
             putExtra(CropActivity.EXTRA_TITLE, input.title)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-    }
 
-    override fun parseResult(resultCode: Int, intent: Intent?): Uri? {
+    override fun parseResult(
+        resultCode: Int,
+        intent: Intent?,
+    ): Uri? {
         if (resultCode != Activity.RESULT_OK) return null
         val uriString = intent?.getStringExtra(CropActivity.EXTRA_RESULT_URI) ?: return null
         return Uri.parse(uriString)

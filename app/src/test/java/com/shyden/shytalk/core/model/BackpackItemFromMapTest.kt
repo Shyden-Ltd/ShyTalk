@@ -6,14 +6,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BackpackItemFromMapTest {
-
     @Test
     fun `complete valid map parses correctly`() {
-        val map = mapOf<String, Any?>(
-            "quantity" to 5L,
-            "lastAcquired" to 1000L,
-            "expiresAt" to 9999999999999L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "quantity" to 5L,
+                "lastAcquired" to 1000L,
+                "expiresAt" to 9999999999999L,
+            )
         val item = BackpackItem.fromMap(map, "rose")
 
         assertEquals("rose", item.giftId)
@@ -80,11 +80,12 @@ class BackpackItemFromMapTest {
 
     @Test
     fun `unknown fields are ignored`() {
-        val map = mapOf<String, Any?>(
-            "quantity" to 2L,
-            "unknownField" to "value",
-            "anotherField" to 42L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "quantity" to 2L,
+                "unknownField" to "value",
+                "anotherField" to 42L,
+            )
         val item = BackpackItem.fromMap(map, "rose")
 
         assertEquals(2, item.quantity)

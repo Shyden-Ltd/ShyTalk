@@ -2,13 +2,13 @@ package com.shyden.shytalk.util
 
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.navigation.compose.rememberNavController
-import com.shyden.shytalk.ui.theme.ShyTalkTheme
 import com.shyden.shytalk.navigation.NavGraph
 import com.shyden.shytalk.navigation.Screen
+import com.shyden.shytalk.ui.theme.ShyTalkTheme
 
 fun ComposeContentTestRule.launchNavGraph(
     startDestination: String = Screen.Main.route,
-    onSignOut: () -> Unit = {}
+    onSignOut: () -> Unit = {},
 ) {
     setContent {
         ShyTalkTheme {
@@ -16,7 +16,7 @@ fun ComposeContentTestRule.launchNavGraph(
             NavGraph(
                 navController = navController,
                 startDestination = startDestination,
-                onSignOut = onSignOut
+                onSignOut = onSignOut,
             )
         }
     }
@@ -31,14 +31,10 @@ fun ComposeContentTestRule.launchNavGraph(
     waitForIdle()
 }
 
-fun ComposeContentTestRule.launchMainScreen(
-    onSignOut: () -> Unit = {}
-) {
+fun ComposeContentTestRule.launchMainScreen(onSignOut: () -> Unit = {}) {
     launchNavGraph(startDestination = Screen.Main.route, onSignOut = onSignOut)
 }
 
-fun ComposeContentTestRule.launchSignIn(
-    onSignOut: () -> Unit = {}
-) {
+fun ComposeContentTestRule.launchSignIn(onSignOut: () -> Unit = {}) {
     launchNavGraph(startDestination = Screen.SignIn.route, onSignOut = onSignOut)
 }

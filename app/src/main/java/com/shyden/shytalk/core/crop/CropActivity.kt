@@ -16,14 +16,15 @@ import com.canhub.cropper.CropImageView
 import com.shyden.shytalk.R
 import java.io.File
 
-class CropActivity : AppCompatActivity(), CropImageView.OnCropImageCompleteListener {
-
+class CropActivity :
+    AppCompatActivity(),
+    CropImageView.OnCropImageCompleteListener {
     private lateinit var cropImageView: CropImageView
     private var quality: Int = 80
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(Color.parseColor("#FF444444"))
+            statusBarStyle = SystemBarStyle.dark(Color.parseColor("#FF444444")),
         )
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_crop)
@@ -48,11 +49,12 @@ class CropActivity : AppCompatActivity(), CropImageView.OnCropImageCompleteListe
         cropImageView.setAspectRatio(aspectX, aspectY)
         cropImageView.setFixedAspectRatio(true)
         cropImageView.guidelines = CropImageView.Guidelines.ON
-        cropImageView.cropShape = if (cropShape == "oval") {
-            CropImageView.CropShape.OVAL
-        } else {
-            CropImageView.CropShape.RECTANGLE
-        }
+        cropImageView.cropShape =
+            if (cropShape == "oval") {
+                CropImageView.CropShape.OVAL
+            } else {
+                CropImageView.CropShape.RECTANGLE
+            }
 
         if (imageUri != null) {
             cropImageView.setImageUriAsync(imageUri)
@@ -82,7 +84,10 @@ class CropActivity : AppCompatActivity(), CropImageView.OnCropImageCompleteListe
         cropImageView.setOnCropImageCompleteListener(null)
     }
 
-    override fun onCropImageComplete(view: CropImageView, result: CropImageView.CropResult) {
+    override fun onCropImageComplete(
+        view: CropImageView,
+        result: CropImageView.CropResult,
+    ) {
         if (result.isSuccessful) {
             val bitmap = result.bitmap
             if (bitmap != null) {
@@ -91,9 +96,10 @@ class CropActivity : AppCompatActivity(), CropImageView.OnCropImageCompleteListe
                     bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)
                 }
                 bitmap.recycle()
-                val data = Intent().apply {
-                    putExtra(EXTRA_RESULT_URI, outputFile.toUri().toString())
-                }
+                val data =
+                    Intent().apply {
+                        putExtra(EXTRA_RESULT_URI, outputFile.toUri().toString())
+                    }
                 setResult(Activity.RESULT_OK, data)
             } else {
                 setResult(Activity.RESULT_CANCELED)

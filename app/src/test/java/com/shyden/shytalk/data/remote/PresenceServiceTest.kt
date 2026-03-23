@@ -15,7 +15,6 @@ import org.junit.Test
  * Full integration testing is done via E2E tests (connectedDebugAndroidTest).
  */
 class PresenceServiceTest {
-
     private lateinit var httpClient: OkHttpClient
     private lateinit var presenceService: RtdbPresenceService
 

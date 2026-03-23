@@ -15,26 +15,32 @@ private fun JSONObject.optStringOrNull(key: String): String? {
 
 class DeviceRepositoryImpl(
     private val firestore: FirebaseFirestore,
-    private val workerApiClient: WorkerApiClient
+    private val workerApiClient: WorkerApiClient,
 ) : DeviceRepository {
+    override suspend fun getDeviceBinding(deviceId: String): Resource<String?> =
+        firebaseCall("Failed to check device binding") {
+            val doc = firestore.document("deviceBindings/$deviceId").get().await()
+            val data = doc.data ?: return@firebaseCall null
+            (data["uniqueId"] ?: data["userId"])?.toString()
+        }
 
-    override suspend fun getDeviceBinding(deviceId: String): Resource<String?> = firebaseCall("Failed to check device binding") {
-        val doc = firestore.document("deviceBindings/$deviceId").get().await()
-        val data = doc.data ?: return@firebaseCall null
-        (data["uniqueId"] ?: data["userId"])?.toString()
-    }
+    override suspend fun bindDevice(
+        deviceId: String,
+        userId: String,
+    ): Resource<Unit> =
+        firebaseCall("Failed to bind device") {
+            firestore
+                .document("deviceBindings/$deviceId")
+                .set(
+                    mapOf(
+                        "userId" to userId,
+                        "boundAt" to System.currentTimeMillis(),
+                    ),
+                ).await()
+        }
 
-    override suspend fun bindDevice(deviceId: String, userId: String): Resource<Unit> = firebaseCall("Failed to bind device") {
-        firestore.document("deviceBindings/$deviceId").set(
-            mapOf(
-                "userId" to userId,
-                "boundAt" to System.currentTimeMillis()
-            )
-        ).await()
-    }
-
-    override suspend fun checkBanStatus(deviceId: String): Resource<BanStatus> {
-        return try {
+    override suspend fun checkBanStatus(deviceId: String): Resource<BanStatus> =
+        try {
             val body = JSONObject().apply { put("deviceId", deviceId) }
             val response = workerApiClient.post("/api/device-info", body)
             val banObj = response.optJSONObject("banStatus")
@@ -44,8 +50,8 @@ class DeviceRepositoryImpl(
                         isBanned = true,
                         banType = banObj.optStringOrNull("banType"),
                         reason = banObj.optStringOrNull("reason"),
-                        expiresAt = banObj.optStringOrNull("expiresAt")
-                    )
+                        expiresAt = banObj.optStringOrNull("expiresAt"),
+                    ),
                 )
             } else {
                 Resource.Success(BanStatus())
@@ -55,5 +61,4 @@ class DeviceRepositoryImpl(
             logW("DeviceRepository", "Ban check failed, allowing through: ${e.message}")
             Resource.Success(BanStatus())
         }
-    }
 }

@@ -5,6 +5,14 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 
 class FakeTypingRepository : TypingRepository {
-    override fun setTyping(conversationId: String, userId: String, isTyping: Boolean) { /* no-op */ }
-    override fun observeTyping(conversationId: String, otherUserId: String): Flow<Boolean> = flowOf(false)
+    override fun setTyping(
+        conversationId: String,
+        userId: String,
+        isTyping: Boolean,
+    ) { /* no-op */ }
+
+    override fun observeTyping(
+        conversationId: String,
+        otherUserId: String,
+    ): Flow<Boolean> = flowOf(false)
 }

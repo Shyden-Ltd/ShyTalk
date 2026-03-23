@@ -15,12 +15,11 @@ import com.shyden.shytalk.util.waitForTag
 import com.shyden.shytalk.util.waitForText
 import io.cucumber.java.Before
 import io.cucumber.java.en.Given
-import io.cucumber.java.en.When
 import io.cucumber.java.en.Then
+import io.cucumber.java.en.When
 import org.koin.java.KoinJavaComponent.getKoin
 
 class CommonSteps {
-
     private val rule get() = ComposeTestRuleHolder.rule
 
     @Before
@@ -39,8 +38,8 @@ class CommonSteps {
     @Given("I am on the sign-in screen")
     fun iAmOnTheSignInScreen() {
         val fakeAuth = getKoin().get<AuthRepository>() as FakeAuthRepository
-        fakeAuth._isAuthenticated = false
-        fakeAuth._currentUserId = null
+        fakeAuth.fakeAuthenticated = false
+        fakeAuth.fakeUserId = null
         rule.launchSignIn()
     }
 
@@ -52,12 +51,13 @@ class CommonSteps {
     // ── Tab Navigation ────────────────────────────────────────
     @When("I tap the {string} tab")
     fun iTapTheTab(tabName: String) {
-        val tag = when (tabName.lowercase()) {
-            "rooms" -> "main_roomsTab"
-            "messages" -> "main_messagesTab"
-            "profile" -> "main_profileTab"
-            else -> error("Unknown tab: $tabName")
-        }
+        val tag =
+            when (tabName.lowercase()) {
+                "rooms" -> "main_roomsTab"
+                "messages" -> "main_messagesTab"
+                "profile" -> "main_profileTab"
+                else -> error("Unknown tab: $tabName")
+            }
         rule.waitForTag(tag)
         rule.onNodeWithTag(tag).performClick()
     }
@@ -76,7 +76,10 @@ class CommonSteps {
     }
 
     @When("I type {string} into the field with tag {string}")
-    fun iTypeIntoField(text: String, tag: String) {
+    fun iTypeIntoField(
+        text: String,
+        tag: String,
+    ) {
         rule.waitForTag(tag)
         rule.onNodeWithTag(tag).performTextInput(text)
     }

@@ -7,22 +7,22 @@ import org.junit.Test
 import java.util.Date
 
 class GiftEventFromMapTest {
-
     private val tsMillis = 1_000_000_000L
     private val ts = Timestamp(Date(tsMillis))
 
     @Test
     fun `fromMap parses complete valid map`() {
-        val map = mapOf<String, Any?>(
-            "senderId" to "sender-1",
-            "senderName" to "Alice",
-            "recipientId" to "recipient-1",
-            "recipientName" to "Bob",
-            "giftId" to "crown",
-            "giftName" to "Crown",
-            "coinValue" to 800L,
-            "timestamp" to ts
-        )
+        val map =
+            mapOf<String, Any?>(
+                "senderId" to "sender-1",
+                "senderName" to "Alice",
+                "recipientId" to "recipient-1",
+                "recipientName" to "Bob",
+                "giftId" to "crown",
+                "giftName" to "Crown",
+                "coinValue" to 800L,
+                "timestamp" to ts,
+            )
 
         val event = GiftEvent.fromMap(map)
 
@@ -52,16 +52,17 @@ class GiftEventFromMapTest {
 
     @Test
     fun `fromMap handles null values with defaults`() {
-        val map = mapOf<String, Any?>(
-            "senderId" to null,
-            "senderName" to null,
-            "recipientId" to null,
-            "recipientName" to null,
-            "giftId" to null,
-            "giftName" to null,
-            "coinValue" to null,
-            "timestamp" to null
-        )
+        val map =
+            mapOf<String, Any?>(
+                "senderId" to null,
+                "senderName" to null,
+                "recipientId" to null,
+                "recipientName" to null,
+                "giftId" to null,
+                "giftName" to null,
+                "coinValue" to null,
+                "timestamp" to null,
+            )
 
         val event = GiftEvent.fromMap(map)
 
@@ -107,21 +108,23 @@ class GiftEventFromMapTest {
 
     @Test
     fun `fromMap ignores extra fields`() {
-        val map = mapOf<String, Any?>(
-            "senderId" to "sender-1",
-            "unknownField" to "whatever",
-            "anotherField" to 42L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "senderId" to "sender-1",
+                "unknownField" to "whatever",
+                "anotherField" to 42L,
+            )
         val event = GiftEvent.fromMap(map)
         assertEquals("sender-1", event.senderId)
     }
 
     @Test
     fun `fromMap with missing fields returns defaults for absent keys`() {
-        val map = mapOf<String, Any?>(
-            "senderId" to "sender-1",
-            "giftId" to "crown"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "senderId" to "sender-1",
+                "giftId" to "crown",
+            )
         val event = GiftEvent.fromMap(map)
 
         assertEquals("sender-1", event.senderId)
@@ -136,15 +139,16 @@ class GiftEventFromMapTest {
 
     @Test
     fun `fromMap with wrong types returns defaults for string and numeric fields`() {
-        val map = mapOf<String, Any?>(
-            "senderId" to 12345L,
-            "senderName" to true,
-            "recipientId" to listOf("a"),
-            "recipientName" to 99.9,
-            "giftId" to mapOf("nested" to "value"),
-            "giftName" to 0,
-            "coinValue" to "not a number"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "senderId" to 12345L,
+                "senderName" to true,
+                "recipientId" to listOf("a"),
+                "recipientName" to 99.9,
+                "giftId" to mapOf("nested" to "value"),
+                "giftName" to 0,
+                "coinValue" to "not a number",
+            )
         val event = GiftEvent.fromMap(map)
 
         assertEquals("", event.senderId)
@@ -160,9 +164,10 @@ class GiftEventFromMapTest {
     fun `fromMap with unrecognized timestamp type falls back to current time`() {
         // timestampToMillis returns currentTimeMillis() for unrecognized types
         val before = System.currentTimeMillis()
-        val map = mapOf<String, Any?>(
-            "timestamp" to "not a timestamp"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "timestamp" to "not a timestamp",
+            )
         val event = GiftEvent.fromMap(map)
         val after = System.currentTimeMillis()
 
@@ -180,10 +185,11 @@ class GiftEventFromMapTest {
 
     @Test
     fun `fromMap defaults quantity to 1 when missing`() {
-        val map = mapOf<String, Any?>(
-            "senderId" to "sender-1",
-            "giftId" to "crown"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "senderId" to "sender-1",
+                "giftId" to "crown",
+            )
         val event = GiftEvent.fromMap(map)
         assertEquals(1, event.quantity)
     }
@@ -210,17 +216,18 @@ class GiftEventFromMapTest {
 
     @Test
     fun `fromMap parses complete map including quantity`() {
-        val map = mapOf<String, Any?>(
-            "senderId" to "sender-1",
-            "senderName" to "Alice",
-            "recipientId" to "recipient-1",
-            "recipientName" to "Bob",
-            "giftId" to "crown",
-            "giftName" to "Crown",
-            "coinValue" to 800L,
-            "quantity" to 3L,
-            "timestamp" to ts
-        )
+        val map =
+            mapOf<String, Any?>(
+                "senderId" to "sender-1",
+                "senderName" to "Alice",
+                "recipientId" to "recipient-1",
+                "recipientName" to "Bob",
+                "giftId" to "crown",
+                "giftName" to "Crown",
+                "coinValue" to 800L,
+                "quantity" to 3L,
+                "timestamp" to ts,
+            )
 
         val event = GiftEvent.fromMap(map)
 

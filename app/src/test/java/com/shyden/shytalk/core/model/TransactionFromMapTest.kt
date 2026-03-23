@@ -5,22 +5,22 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class TransactionFromMapTest {
-
     @Test
     fun `complete valid map parses correctly`() {
-        val map = mapOf<String, Any?>(
-            "type" to "GIFT_SENT",
-            "amount" to 100L,
-            "currency" to "COINS",
-            "balanceAfter" to 900L,
-            "giftId" to "rose",
-            "giftName" to "Rose",
-            "recipientId" to "user-2",
-            "senderId" to "user-1",
-            "pullCount" to 1,
-            "details" to "Sent a gift",
-            "timestamp" to 1000L
-        )
+        val map =
+            mapOf<String, Any?>(
+                "type" to "GIFT_SENT",
+                "amount" to 100L,
+                "currency" to "COINS",
+                "balanceAfter" to 900L,
+                "giftId" to "rose",
+                "giftName" to "Rose",
+                "recipientId" to "user-2",
+                "senderId" to "user-1",
+                "pullCount" to 1,
+                "details" to "Sent a gift",
+                "timestamp" to 1000L,
+            )
         val tx = Transaction.fromMap(map, "tx-1")
 
         assertEquals("tx-1", tx.id)

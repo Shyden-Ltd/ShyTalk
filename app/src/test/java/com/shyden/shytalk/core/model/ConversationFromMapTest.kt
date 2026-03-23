@@ -9,7 +9,6 @@ import org.junit.Test
 import java.util.Date
 
 class ConversationFromMapTest {
-
     private val tsMillis = 1_000_000_000L
     private val ts = Timestamp(Date(tsMillis))
 
@@ -17,12 +16,13 @@ class ConversationFromMapTest {
 
     @Test
     fun `fromMap parses 1-on-1 conversation`() {
-        val map = mapOf<String, Any?>(
-            "participantIds" to listOf("user-1", "user-2"),
-            "lastMessageAt" to ts,
-            "createdAt" to ts,
-            "isGroup" to false
-        )
+        val map =
+            mapOf<String, Any?>(
+                "participantIds" to listOf("user-1", "user-2"),
+                "lastMessageAt" to ts,
+                "createdAt" to ts,
+                "isGroup" to false,
+            )
         val conv = Conversation.fromMap(map, "conv-1")
 
         assertEquals("conv-1", conv.conversationId)
@@ -39,16 +39,17 @@ class ConversationFromMapTest {
 
     @Test
     fun `fromMap parses group conversation`() {
-        val map = mapOf<String, Any?>(
-            "participantIds" to listOf("user-1", "user-2", "user-3"),
-            "lastMessageAt" to ts,
-            "createdAt" to ts,
-            "isGroup" to true,
-            "groupName" to "Cool Group",
-            "groupPhotoUrl" to "https://group.png",
-            "groupAdminIds" to listOf("user-1"),
-            "createdBy" to "user-1"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "participantIds" to listOf("user-1", "user-2", "user-3"),
+                "lastMessageAt" to ts,
+                "createdAt" to ts,
+                "isGroup" to true,
+                "groupName" to "Cool Group",
+                "groupPhotoUrl" to "https://group.png",
+                "groupAdminIds" to listOf("user-1"),
+                "createdBy" to "user-1",
+            )
         val conv = Conversation.fromMap(map, "conv-1")
 
         assertTrue(conv.isGroup)
@@ -74,18 +75,20 @@ class ConversationFromMapTest {
 
     @Test
     fun `fromMap parses lastMessage sub-map`() {
-        val lastMsgMap = mapOf<String, Any?>(
-            "text" to "Hey!",
-            "senderId" to "user-1",
-            "senderName" to "Alice",
-            "createdAt" to ts,
-            "type" to "TEXT"
-        )
-        val map = mapOf<String, Any?>(
-            "lastMessage" to lastMsgMap,
-            "lastMessageAt" to ts,
-            "createdAt" to ts
-        )
+        val lastMsgMap =
+            mapOf<String, Any?>(
+                "text" to "Hey!",
+                "senderId" to "user-1",
+                "senderName" to "Alice",
+                "createdAt" to ts,
+                "type" to "TEXT",
+            )
+        val map =
+            mapOf<String, Any?>(
+                "lastMessage" to lastMsgMap,
+                "lastMessageAt" to ts,
+                "createdAt" to ts,
+            )
         val conv = Conversation.fromMap(map, "conv-1")
 
         val lm = conv.lastMessage
@@ -105,9 +108,10 @@ class ConversationFromMapTest {
 
     @Test
     fun `fromMap converts all participantIds to strings and filters nulls`() {
-        val map = mapOf<String, Any?>(
-            "participantIds" to listOf("user-1", 42L, null, "user-2")
-        )
+        val map =
+            mapOf<String, Any?>(
+                "participantIds" to listOf("user-1", 42L, null, "user-2"),
+            )
         val conv = Conversation.fromMap(map, "conv-1")
         // Numeric IDs are converted to String; nulls are filtered out
         assertEquals(listOf("user-1", "42", "user-2"), conv.participantIds)
@@ -115,25 +119,27 @@ class ConversationFromMapTest {
 
     @Test
     fun `fromMap filters non-string items from groupAdminIds`() {
-        val map = mapOf<String, Any?>(
-            "groupAdminIds" to listOf("user-1", 99, null)
-        )
+        val map =
+            mapOf<String, Any?>(
+                "groupAdminIds" to listOf("user-1", 99, null),
+            )
         val conv = Conversation.fromMap(map, "conv-1")
         assertEquals(listOf("user-1"), conv.groupAdminIds)
     }
 
     @Test
     fun `toMap includes group fields only for group conversations`() {
-        val group = Conversation(
-            conversationId = "conv-1",
-            isGroup = true,
-            groupName = "Group",
-            groupPhotoUrl = "https://photo.png",
-            groupAdminIds = listOf("user-1"),
-            createdBy = "user-1",
-            lastMessageAt = tsMillis,
-            createdAt = tsMillis
-        )
+        val group =
+            Conversation(
+                conversationId = "conv-1",
+                isGroup = true,
+                groupName = "Group",
+                groupPhotoUrl = "https://photo.png",
+                groupAdminIds = listOf("user-1"),
+                createdBy = "user-1",
+                lastMessageAt = tsMillis,
+                createdAt = tsMillis,
+            )
         val groupMap = group.toMap()
         assertTrue(groupMap.containsKey("groupName"))
         assertTrue(groupMap.containsKey("groupPhotoUrl"))
@@ -143,12 +149,13 @@ class ConversationFromMapTest {
 
     @Test
     fun `toMap omits group fields for 1-on-1 conversations`() {
-        val oneOnOne = Conversation(
-            conversationId = "conv-1",
-            isGroup = false,
-            lastMessageAt = tsMillis,
-            createdAt = tsMillis
-        )
+        val oneOnOne =
+            Conversation(
+                conversationId = "conv-1",
+                isGroup = false,
+                lastMessageAt = tsMillis,
+                createdAt = tsMillis,
+            )
         val map = oneOnOne.toMap()
         assertFalse(map.containsKey("groupName"))
         assertFalse(map.containsKey("groupPhotoUrl"))
@@ -158,38 +165,41 @@ class ConversationFromMapTest {
 
     @Test
     fun `fromMap of toMap round-trip for 1-on-1`() {
-        val original = Conversation(
-            conversationId = "conv-1",
-            participantIds = listOf("user-1", "user-2"),
-            lastMessage = ConversationPreview(
-                text = "Hi",
-                senderId = "user-1",
-                senderName = "Alice",
+        val original =
+            Conversation(
+                conversationId = "conv-1",
+                participantIds = listOf("user-1", "user-2"),
+                lastMessage =
+                    ConversationPreview(
+                        text = "Hi",
+                        senderId = "user-1",
+                        senderName = "Alice",
+                        createdAt = tsMillis,
+                        type = "TEXT",
+                    ),
+                lastMessageAt = tsMillis,
                 createdAt = tsMillis,
-                type = "TEXT"
-            ),
-            lastMessageAt = tsMillis,
-            createdAt = tsMillis,
-            isGroup = false
-        )
+                isGroup = false,
+            )
         val roundtripped = Conversation.fromMap(original.toMap(), "conv-1")
         assertEquals(original, roundtripped)
     }
 
     @Test
     fun `fromMap of toMap round-trip for group`() {
-        val original = Conversation(
-            conversationId = "conv-g",
-            participantIds = listOf("user-1", "user-2", "user-3"),
-            lastMessage = null,
-            lastMessageAt = tsMillis,
-            createdAt = tsMillis,
-            isGroup = true,
-            groupName = "Test Group",
-            groupPhotoUrl = "https://group.png",
-            groupAdminIds = listOf("user-1"),
-            createdBy = "user-1"
-        )
+        val original =
+            Conversation(
+                conversationId = "conv-g",
+                participantIds = listOf("user-1", "user-2", "user-3"),
+                lastMessage = null,
+                lastMessageAt = tsMillis,
+                createdAt = tsMillis,
+                isGroup = true,
+                groupName = "Test Group",
+                groupPhotoUrl = "https://group.png",
+                groupAdminIds = listOf("user-1"),
+                createdBy = "user-1",
+            )
         val roundtripped = Conversation.fromMap(original.toMap(), "conv-g")
         assertEquals(original, roundtripped)
     }
@@ -225,11 +235,12 @@ class ConversationFromMapTest {
 
     @Test
     fun `isAdmin checks groupAdminIds and createdBy`() {
-        val conv = Conversation(
-            isGroup = true,
-            groupAdminIds = listOf("admin-1"),
-            createdBy = "creator-1"
-        )
+        val conv =
+            Conversation(
+                isGroup = true,
+                groupAdminIds = listOf("admin-1"),
+                createdBy = "creator-1",
+            )
         assertTrue(conv.isAdmin("admin-1"))
         assertTrue(conv.isAdmin("creator-1"))
         assertFalse(conv.isAdmin("user-99"))
@@ -268,27 +279,30 @@ class ConversationFromMapTest {
 
     @Test
     fun `fromMap parses group with new fields`() {
-        val permissionsMap = mapOf<String, Any?>(
-            "whoCanSend" to "MODS_AND_ABOVE",
-            "whoCanAddMembers" to "EVERYONE",
-            "whoCanEditInfo" to "MODS_AND_ABOVE"
-        )
-        val sysConfigMap = mapOf<String, Any?>(
-            "showJoins" to false,
-            "showLeaves" to true,
-            "showRoleChanges" to false,
-            "showPermissionChanges" to true
-        )
-        val map = mapOf<String, Any?>(
-            "isGroup" to true,
-            "groupModIds" to listOf("mod-1", "mod-2"),
-            "groupDescription" to "A cool group",
-            "permissions" to permissionsMap,
-            "systemMessageConfig" to sysConfigMap,
-            "modNotifyMode" to "OWNER_ONLY",
-            "lastMessageAt" to ts,
-            "createdAt" to ts
-        )
+        val permissionsMap =
+            mapOf<String, Any?>(
+                "whoCanSend" to "MODS_AND_ABOVE",
+                "whoCanAddMembers" to "EVERYONE",
+                "whoCanEditInfo" to "MODS_AND_ABOVE",
+            )
+        val sysConfigMap =
+            mapOf<String, Any?>(
+                "showJoins" to false,
+                "showLeaves" to true,
+                "showRoleChanges" to false,
+                "showPermissionChanges" to true,
+            )
+        val map =
+            mapOf<String, Any?>(
+                "isGroup" to true,
+                "groupModIds" to listOf("mod-1", "mod-2"),
+                "groupDescription" to "A cool group",
+                "permissions" to permissionsMap,
+                "systemMessageConfig" to sysConfigMap,
+                "modNotifyMode" to "OWNER_ONLY",
+                "lastMessageAt" to ts,
+                "createdAt" to ts,
+            )
         val conv = Conversation.fromMap(map, "conv-g")
 
         assertEquals(listOf("mod-1", "mod-2"), conv.groupModIds)
@@ -313,28 +327,31 @@ class ConversationFromMapTest {
 
     @Test
     fun `fromMap filters non-string items from groupModIds`() {
-        val map = mapOf<String, Any?>(
-            "groupModIds" to listOf("mod-1", 42, null, "mod-2")
-        )
+        val map =
+            mapOf<String, Any?>(
+                "groupModIds" to listOf("mod-1", 42, null, "mod-2"),
+            )
         val conv = Conversation.fromMap(map, "conv-1")
         assertEquals(listOf("mod-1", "mod-2"), conv.groupModIds)
     }
 
     @Test
     fun `toMap includes new group fields for group conversations`() {
-        val group = Conversation(
-            conversationId = "conv-g",
-            isGroup = true,
-            groupModIds = listOf("mod-1"),
-            groupDescription = "Description",
-            permissions = GroupPermissions(
-                whoCanSend = GroupPermissions.PermissionLevel.MODS_AND_ABOVE
-            ),
-            systemMessageConfig = SystemMessageConfig(showJoins = false),
-            modNotifyMode = "OWNER_ONLY",
-            lastMessageAt = tsMillis,
-            createdAt = tsMillis
-        )
+        val group =
+            Conversation(
+                conversationId = "conv-g",
+                isGroup = true,
+                groupModIds = listOf("mod-1"),
+                groupDescription = "Description",
+                permissions =
+                    GroupPermissions(
+                        whoCanSend = GroupPermissions.PermissionLevel.MODS_AND_ABOVE,
+                    ),
+                systemMessageConfig = SystemMessageConfig(showJoins = false),
+                modNotifyMode = "OWNER_ONLY",
+                lastMessageAt = tsMillis,
+                createdAt = tsMillis,
+            )
         val map = group.toMap()
         assertEquals(listOf("mod-1"), map["groupModIds"])
         assertEquals("Description", map["groupDescription"])
@@ -345,12 +362,13 @@ class ConversationFromMapTest {
 
     @Test
     fun `toMap omits new group fields for 1-on-1`() {
-        val oneOnOne = Conversation(
-            conversationId = "conv-1",
-            isGroup = false,
-            lastMessageAt = tsMillis,
-            createdAt = tsMillis
-        )
+        val oneOnOne =
+            Conversation(
+                conversationId = "conv-1",
+                isGroup = false,
+                lastMessageAt = tsMillis,
+                createdAt = tsMillis,
+            )
         val map = oneOnOne.toMap()
         assertFalse(map.containsKey("groupModIds"))
         assertFalse(map.containsKey("groupDescription"))
@@ -361,30 +379,33 @@ class ConversationFromMapTest {
 
     @Test
     fun `fromMap of toMap round-trip for group with all new fields`() {
-        val original = Conversation(
-            conversationId = "conv-g",
-            participantIds = listOf("user-1", "user-2", "user-3"),
-            lastMessageAt = tsMillis,
-            createdAt = tsMillis,
-            isGroup = true,
-            groupName = "Full Group",
-            groupAdminIds = listOf("user-1"),
-            groupModIds = listOf("user-2"),
-            groupDescription = "A test group",
-            createdBy = "user-1",
-            permissions = GroupPermissions(
-                whoCanSend = GroupPermissions.PermissionLevel.MODS_AND_ABOVE,
-                whoCanAddMembers = GroupPermissions.PermissionLevel.EVERYONE,
-                whoCanEditInfo = GroupPermissions.PermissionLevel.MODS_AND_ABOVE
-            ),
-            systemMessageConfig = SystemMessageConfig(
-                showJoins = false,
-                showLeaves = true,
-                showRoleChanges = false,
-                showPermissionChanges = true
-            ),
-            modNotifyMode = "OWNER_ONLY"
-        )
+        val original =
+            Conversation(
+                conversationId = "conv-g",
+                participantIds = listOf("user-1", "user-2", "user-3"),
+                lastMessageAt = tsMillis,
+                createdAt = tsMillis,
+                isGroup = true,
+                groupName = "Full Group",
+                groupAdminIds = listOf("user-1"),
+                groupModIds = listOf("user-2"),
+                groupDescription = "A test group",
+                createdBy = "user-1",
+                permissions =
+                    GroupPermissions(
+                        whoCanSend = GroupPermissions.PermissionLevel.MODS_AND_ABOVE,
+                        whoCanAddMembers = GroupPermissions.PermissionLevel.EVERYONE,
+                        whoCanEditInfo = GroupPermissions.PermissionLevel.MODS_AND_ABOVE,
+                    ),
+                systemMessageConfig =
+                    SystemMessageConfig(
+                        showJoins = false,
+                        showLeaves = true,
+                        showRoleChanges = false,
+                        showPermissionChanges = true,
+                    ),
+                modNotifyMode = "OWNER_ONLY",
+            )
         val roundtripped = Conversation.fromMap(original.toMap(), "conv-g")
         assertEquals(original, roundtripped)
     }
@@ -393,10 +414,11 @@ class ConversationFromMapTest {
 
     @Test
     fun `isMod checks groupModIds`() {
-        val conv = Conversation(
-            isGroup = true,
-            groupModIds = listOf("mod-1", "mod-2")
-        )
+        val conv =
+            Conversation(
+                isGroup = true,
+                groupModIds = listOf("mod-1", "mod-2"),
+            )
         assertTrue(conv.isMod("mod-1"))
         assertTrue(conv.isMod("mod-2"))
         assertFalse(conv.isMod("user-99"))
@@ -404,12 +426,13 @@ class ConversationFromMapTest {
 
     @Test
     fun `isModOrAbove returns true for mods admins and owner`() {
-        val conv = Conversation(
-            isGroup = true,
-            groupAdminIds = listOf("admin-1"),
-            groupModIds = listOf("mod-1"),
-            createdBy = "owner-1"
-        )
+        val conv =
+            Conversation(
+                isGroup = true,
+                groupAdminIds = listOf("admin-1"),
+                groupModIds = listOf("mod-1"),
+                createdBy = "owner-1",
+            )
         assertTrue(conv.isModOrAbove("owner-1"))
         assertTrue(conv.isModOrAbove("admin-1"))
         assertTrue(conv.isModOrAbove("mod-1"))
@@ -418,12 +441,13 @@ class ConversationFromMapTest {
 
     @Test
     fun `roleOf returns correct role for each participant type`() {
-        val conv = Conversation(
-            isGroup = true,
-            groupAdminIds = listOf("admin-1"),
-            groupModIds = listOf("mod-1"),
-            createdBy = "owner-1"
-        )
+        val conv =
+            Conversation(
+                isGroup = true,
+                groupAdminIds = listOf("admin-1"),
+                groupModIds = listOf("mod-1"),
+                createdBy = "owner-1",
+            )
         assertEquals(GroupRole.OWNER, conv.roleOf("owner-1"))
         assertEquals(GroupRole.ADMIN, conv.roleOf("admin-1"))
         assertEquals(GroupRole.MOD, conv.roleOf("mod-1"))
@@ -433,11 +457,12 @@ class ConversationFromMapTest {
     @Test
     fun `roleOf prioritises owner over admin`() {
         // owner is also in groupAdminIds
-        val conv = Conversation(
-            isGroup = true,
-            groupAdminIds = listOf("user-1"),
-            createdBy = "user-1"
-        )
+        val conv =
+            Conversation(
+                isGroup = true,
+                groupAdminIds = listOf("user-1"),
+                createdBy = "user-1",
+            )
         assertEquals(GroupRole.OWNER, conv.roleOf("user-1"))
     }
 

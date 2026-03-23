@@ -5,12 +5,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ConstantsLegalUrlsTest {
-
     @Test
     fun `LEGAL_BASE_URL points to Cloudflare Pages`() {
         assertEquals(
             "https://shytalk.shyden.co.uk",
-            Constants.LEGAL_BASE_URL
+            Constants.LEGAL_BASE_URL,
         )
     }
 
@@ -19,7 +18,7 @@ class ConstantsLegalUrlsTest {
         assertTrue(Constants.PRIVACY_POLICY_URL.startsWith(Constants.LEGAL_BASE_URL))
         assertEquals(
             "${Constants.LEGAL_BASE_URL}/privacy.html",
-            Constants.PRIVACY_POLICY_URL
+            Constants.PRIVACY_POLICY_URL,
         )
     }
 
@@ -28,7 +27,7 @@ class ConstantsLegalUrlsTest {
         assertTrue(Constants.TERMS_URL.startsWith(Constants.LEGAL_BASE_URL))
         assertEquals(
             "${Constants.LEGAL_BASE_URL}/terms.html",
-            Constants.TERMS_URL
+            Constants.TERMS_URL,
         )
     }
 
@@ -37,7 +36,7 @@ class ConstantsLegalUrlsTest {
         assertTrue(Constants.COMMUNITY_GUIDELINES_URL.startsWith(Constants.LEGAL_BASE_URL))
         assertEquals(
             "${Constants.LEGAL_BASE_URL}/community-guidelines.html",
-            Constants.COMMUNITY_GUIDELINES_URL
+            Constants.COMMUNITY_GUIDELINES_URL,
         )
     }
 
@@ -46,7 +45,7 @@ class ConstantsLegalUrlsTest {
         assertTrue(Constants.CYBER_BULLYING_URL.startsWith(Constants.LEGAL_BASE_URL))
         assertEquals(
             "${Constants.LEGAL_BASE_URL}/cyber-bullying.html",
-            Constants.CYBER_BULLYING_URL
+            Constants.CYBER_BULLYING_URL,
         )
     }
 
@@ -68,12 +67,13 @@ class ConstantsLegalUrlsTest {
 
     @Test
     fun `all legal URLs are unique`() {
-        val urls = setOf(
-            Constants.PRIVACY_POLICY_URL,
-            Constants.TERMS_URL,
-            Constants.COMMUNITY_GUIDELINES_URL,
-            Constants.CYBER_BULLYING_URL
-        )
+        val urls =
+            setOf(
+                Constants.PRIVACY_POLICY_URL,
+                Constants.TERMS_URL,
+                Constants.COMMUNITY_GUIDELINES_URL,
+                Constants.CYBER_BULLYING_URL,
+            )
         assertEquals(4, urls.size)
     }
 }

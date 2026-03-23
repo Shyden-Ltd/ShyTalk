@@ -6,19 +6,19 @@ import org.junit.Test
 import java.util.Date
 
 class MessageFromMapTest {
-
     private val tsMillis = 1_000_000_000L
     private val ts = Timestamp(Date(tsMillis))
 
     @Test
     fun `fromMap parses complete valid map`() {
-        val map = mapOf<String, Any?>(
-            "senderId" to "user-1",
-            "senderName" to "Alice",
-            "text" to "Hello",
-            "createdAt" to ts,
-            "type" to "TEXT"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "senderId" to "user-1",
+                "senderName" to "Alice",
+                "text" to "Hello",
+                "createdAt" to ts,
+                "type" to "TEXT",
+            )
         val msg = Message.fromMap(map, "msg-1")
         assertEquals("msg-1", msg.messageId)
         assertEquals("user-1", msg.senderId)
@@ -57,11 +57,12 @@ class MessageFromMapTest {
 
     @Test
     fun `fromMap parses GIFT type`() {
-        val map = mapOf<String, Any?>(
-            "type" to "GIFT",
-            "giftId" to "rose",
-            "giftIconUrl" to "https://example.com/rose.png"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "type" to "GIFT",
+                "giftId" to "rose",
+                "giftIconUrl" to "https://example.com/rose.png",
+            )
         val msg = Message.fromMap(map, "msg-1")
         assertEquals(MessageType.GIFT, msg.type)
         assertEquals("rose", msg.giftId)
@@ -89,14 +90,15 @@ class MessageFromMapTest {
 
     @Test
     fun `toMap produces correct map`() {
-        val msg = Message(
-            messageId = "msg-1",
-            senderId = "user-1",
-            senderName = "Alice",
-            text = "Hello",
-            createdAt = tsMillis,
-            type = MessageType.SYSTEM
-        )
+        val msg =
+            Message(
+                messageId = "msg-1",
+                senderId = "user-1",
+                senderName = "Alice",
+                text = "Hello",
+                createdAt = tsMillis,
+                type = MessageType.SYSTEM,
+            )
         val map = msg.toMap()
         assertEquals("msg-1", map["messageId"])
         assertEquals("user-1", map["senderId"])
@@ -108,16 +110,17 @@ class MessageFromMapTest {
 
     @Test
     fun `toMap includes giftId and giftIconUrl for GIFT type`() {
-        val msg = Message(
-            messageId = "msg-1",
-            senderId = "user-1",
-            senderName = "Alice",
-            text = "Alice sent Rose to Bob",
-            createdAt = tsMillis,
-            type = MessageType.GIFT,
-            giftId = "rose",
-            giftIconUrl = "https://example.com/rose.png"
-        )
+        val msg =
+            Message(
+                messageId = "msg-1",
+                senderId = "user-1",
+                senderName = "Alice",
+                text = "Alice sent Rose to Bob",
+                createdAt = tsMillis,
+                type = MessageType.GIFT,
+                giftId = "rose",
+                giftIconUrl = "https://example.com/rose.png",
+            )
         val map = msg.toMap()
         assertEquals("GIFT", map["type"])
         assertEquals("rose", map["giftId"])

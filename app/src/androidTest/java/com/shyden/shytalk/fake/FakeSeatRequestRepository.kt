@@ -9,17 +9,35 @@ import kotlinx.coroutines.flow.flowOf
 
 class FakeSeatRequestRepository : SeatRequestRepository {
     override fun getPendingRequests(roomId: String): Flow<List<SeatRequest>> = flowOf(emptyList())
-    override fun getRequestsByUser(roomId: String, userId: String): Flow<List<SeatRequest>> = flowOf(emptyList())
 
-    override suspend fun createRequest(roomId: String, userId: String, userName: String, seatIndex: Int): Resource<Unit> =
-        Resource.Success(Unit)
+    override fun getRequestsByUser(
+        roomId: String,
+        userId: String,
+    ): Flow<List<SeatRequest>> = flowOf(emptyList())
 
-    override suspend fun approveRequest(roomId: String, requestId: String, resolvedBy: String): Resource<SeatRequest> =
+    override suspend fun createRequest(
+        roomId: String,
+        userId: String,
+        userName: String,
+        seatIndex: Int,
+    ): Resource<Unit> = Resource.Success(Unit)
+
+    override suspend fun approveRequest(
+        roomId: String,
+        requestId: String,
+        resolvedBy: String,
+    ): Resource<SeatRequest> =
         Resource.Success(SeatRequest(requestId = requestId, status = SeatRequestStatus.APPROVED, resolvedBy = resolvedBy))
 
-    override suspend fun denyRequest(roomId: String, requestId: String, resolvedBy: String): Resource<Unit> =
-        Resource.Success(Unit)
+    override suspend fun denyRequest(
+        roomId: String,
+        requestId: String,
+        resolvedBy: String,
+    ): Resource<Unit> = Resource.Success(Unit)
 
-    override suspend fun cancelApprovedRequest(roomId: String, requestId: String, userId: String): Resource<Unit> =
-        Resource.Success(Unit)
+    override suspend fun cancelApprovedRequest(
+        roomId: String,
+        requestId: String,
+        userId: String,
+    ): Resource<Unit> = Resource.Success(Unit)
 }

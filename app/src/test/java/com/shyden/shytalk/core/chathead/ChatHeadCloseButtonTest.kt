@@ -9,19 +9,19 @@ import org.junit.Test
  * The close button occupies the top-right corner of the bubble overlay.
  */
 class ChatHeadCloseButtonTest {
-
     // Matches ChatHeadManager constants
     private val bubbleSizeDp = 72
     private val closeButtonSizeDp = 20
     private val density = 2.0f // common xxhdpi density
 
-    private val viewWidth = (bubbleSizeDp * density).toInt()   // 144px
+    private val viewWidth = (bubbleSizeDp * density).toInt() // 144px
     private val closeButtonSizePx = (closeButtonSizeDp * density).toInt() // 40px
 
     /** Returns true if the given local coordinates land on the close button region. */
-    private fun isCloseButtonHit(x: Float, y: Float): Boolean {
-        return x >= viewWidth - closeButtonSizePx && y <= closeButtonSizePx
-    }
+    private fun isCloseButtonHit(
+        x: Float,
+        y: Float,
+    ): Boolean = x >= viewWidth - closeButtonSizePx && y <= closeButtonSizePx
 
     @Test
     fun `tap in top-right corner hits close button`() {

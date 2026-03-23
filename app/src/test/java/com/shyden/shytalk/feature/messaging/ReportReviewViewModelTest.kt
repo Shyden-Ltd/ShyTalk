@@ -25,7 +25,6 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReportReviewViewModelTest {
-
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
@@ -34,204 +33,227 @@ class ReportReviewViewModelTest {
 
     private val activeViewModels = mutableListOf<ReportReviewViewModel>()
 
-    private val sampleReports = listOf(
-        TestData.createTestReport(reportId = "r1", reason = "Spam"),
-        TestData.createTestReport(reportId = "r2", reason = "Harassment"),
-        TestData.createTestReport(reportId = "r3", reason = "Inappropriate")
-    )
+    private val sampleReports =
+        listOf(
+            TestData.createTestReport(reportId = "r1", reason = "Spam"),
+            TestData.createTestReport(reportId = "r2", reason = "Harassment"),
+            TestData.createTestReport(reportId = "r3", reason = "Inappropriate"),
+        )
 
-    private fun createViewModel(): ReportReviewViewModel {
-        return ReportReviewViewModel(reportRepository, userRepository)
+    private fun createViewModel(): ReportReviewViewModel =
+        ReportReviewViewModel(reportRepository, userRepository)
             .also { activeViewModels.add(it) }
-    }
 
     @After
-    fun tearDown() = runBlocking {
-        activeViewModels.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() }
-        activeViewModels.clear()
-    }
+    fun tearDown() =
+        runBlocking {
+            activeViewModels.forEach {
+                it.viewModelScope.coroutineContext.job
+                    .cancelAndJoin()
+            }
+            activeViewModels.clear()
+        }
 
     @Test
-    fun `init loads pending reports`() = runTest {
-        coEvery { reportRepository.getPendingReports() } returns Resource.Success(sampleReports)
+    fun `init loads pending reports`() =
+        runTest {
+            coEvery { reportRepository.getPendingReports() } returns Resource.Success(sampleReports)
 
-        val vm = createViewModel()
-        advanceUntilIdle()
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        val state = vm.uiState.value
-        assertEquals(3, state.reports.size)
-        assertFalse(state.isLoading)
-        assertNull(state.message)
-    }
-
-    @Test
-    fun `init failure sets message`() = runTest {
-        coEvery { reportRepository.getPendingReports() } returns Resource.Error("Failed to load")
-
-        val vm = createViewModel()
-        advanceUntilIdle()
-
-        val state = vm.uiState.value
-        assertEquals(UiText.Plain("Failed to load"), state.message)
-        assertFalse(state.isLoading)
-    }
+            val state = vm.uiState.value
+            assertEquals(3, state.reports.size)
+            assertFalse(state.isLoading)
+            assertNull(state.message)
+        }
 
     @Test
-    fun `resolveReport success removes report from list`() = runTest {
-        coEvery { reportRepository.getPendingReports() } returns Resource.Success(sampleReports)
-        coEvery { reportRepository.resolveReport("r2", "dismiss") } returns Resource.Success(Unit)
+    fun `init failure sets message`() =
+        runTest {
+            coEvery { reportRepository.getPendingReports() } returns Resource.Error("Failed to load")
 
-        val vm = createViewModel()
-        advanceUntilIdle()
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        vm.resolveReport("r2", "dismiss")
-        advanceUntilIdle()
-
-        val state = vm.uiState.value
-        assertEquals(2, state.reports.size)
-        assertFalse(state.reports.any { it.reportId == "r2" })
-    }
+            val state = vm.uiState.value
+            assertEquals(UiText.Plain("Failed to load"), state.message)
+            assertFalse(state.isLoading)
+        }
 
     @Test
-    fun `resolveReport success sets Report resolved message`() = runTest {
-        coEvery { reportRepository.getPendingReports() } returns Resource.Success(sampleReports)
-        coEvery { reportRepository.resolveReport("r1", "warn") } returns Resource.Success(Unit)
+    fun `resolveReport success removes report from list`() =
+        runTest {
+            coEvery { reportRepository.getPendingReports() } returns Resource.Success(sampleReports)
+            coEvery { reportRepository.resolveReport("r2", "dismiss") } returns Resource.Success(Unit)
 
-        val vm = createViewModel()
-        advanceUntilIdle()
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        vm.resolveReport("r1", "warn")
-        advanceUntilIdle()
+            vm.resolveReport("r2", "dismiss")
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.message is UiText.Res)
-    }
-
-    @Test
-    fun `resolveReport failure sets error message`() = runTest {
-        coEvery { reportRepository.getPendingReports() } returns Resource.Success(sampleReports)
-        coEvery { reportRepository.resolveReport("r1", "warn") } returns Resource.Error("Server error")
-
-        val vm = createViewModel()
-        advanceUntilIdle()
-
-        vm.resolveReport("r1", "warn")
-        advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.message is UiText.Res)
-        // Reports list unchanged
-        assertEquals(3, vm.uiState.value.reports.size)
-    }
+            val state = vm.uiState.value
+            assertEquals(2, state.reports.size)
+            assertFalse(state.reports.any { it.reportId == "r2" })
+        }
 
     @Test
-    fun `clearMessage clears message`() = runTest {
-        coEvery { reportRepository.getPendingReports() } returns Resource.Success(sampleReports)
-        coEvery { reportRepository.resolveReport("r1", "warn") } returns Resource.Success(Unit)
+    fun `resolveReport success sets Report resolved message`() =
+        runTest {
+            coEvery { reportRepository.getPendingReports() } returns Resource.Success(sampleReports)
+            coEvery { reportRepository.resolveReport("r1", "warn") } returns Resource.Success(Unit)
 
-        val vm = createViewModel()
-        advanceUntilIdle()
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        vm.resolveReport("r1", "warn")
-        advanceUntilIdle()
-        assertTrue(vm.uiState.value.message is UiText.Res)
+            vm.resolveReport("r1", "warn")
+            advanceUntilIdle()
 
-        vm.clearMessage()
-        assertNull(vm.uiState.value.message)
-    }
-
-    @Test
-    fun `init with no reports sets empty list`() = runTest {
-        coEvery { reportRepository.getPendingReports() } returns Resource.Success(emptyList())
-
-        val vm = createViewModel()
-        advanceUntilIdle()
-
-        val state = vm.uiState.value
-        assertTrue(state.reports.isEmpty())
-        assertFalse(state.isLoading)
-    }
+            assertTrue(vm.uiState.value.message is UiText.Res)
+        }
 
     @Test
-    fun `resolveReport dismiss removes report from list`() = runTest {
-        coEvery { reportRepository.getPendingReports() } returns Resource.Success(sampleReports)
-        coEvery { reportRepository.resolveReport("r1", "dismiss") } returns Resource.Success(Unit)
+    fun `resolveReport failure sets error message`() =
+        runTest {
+            coEvery { reportRepository.getPendingReports() } returns Resource.Success(sampleReports)
+            coEvery { reportRepository.resolveReport("r1", "warn") } returns Resource.Error("Server error")
 
-        val vm = createViewModel()
-        advanceUntilIdle()
-        assertEquals(3, vm.uiState.value.reports.size)
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        vm.resolveReport("r1", "dismiss")
-        advanceUntilIdle()
+            vm.resolveReport("r1", "warn")
+            advanceUntilIdle()
 
-        val state = vm.uiState.value
-        assertEquals(2, state.reports.size)
-        assertFalse(state.reports.any { it.reportId == "r1" })
-        assertTrue(state.message is UiText.Res)
-    }
-
-    @Test
-    fun `resolveReport warn removes report and shows confirmation`() = runTest {
-        coEvery { reportRepository.getPendingReports() } returns Resource.Success(sampleReports)
-        coEvery { reportRepository.resolveReport("r3", "warn") } returns Resource.Success(Unit)
-
-        val vm = createViewModel()
-        advanceUntilIdle()
-        assertEquals(3, vm.uiState.value.reports.size)
-
-        vm.resolveReport("r3", "warn")
-        advanceUntilIdle()
-
-        val state = vm.uiState.value
-        assertEquals(2, state.reports.size)
-        assertFalse(state.reports.any { it.reportId == "r3" })
-        assertTrue(state.message is UiText.Res)
-    }
+            assertTrue(vm.uiState.value.message is UiText.Res)
+            // Reports list unchanged
+            assertEquals(3, vm.uiState.value.reports.size)
+        }
 
     @Test
-    fun `resolveReport multiple reports sequentially reduces list correctly`() = runTest {
-        coEvery { reportRepository.getPendingReports() } returns Resource.Success(sampleReports)
-        coEvery { reportRepository.resolveReport(any(), any()) } returns Resource.Success(Unit)
+    fun `clearMessage clears message`() =
+        runTest {
+            coEvery { reportRepository.getPendingReports() } returns Resource.Success(sampleReports)
+            coEvery { reportRepository.resolveReport("r1", "warn") } returns Resource.Success(Unit)
 
-        val vm = createViewModel()
-        advanceUntilIdle()
-        assertEquals(3, vm.uiState.value.reports.size)
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        vm.resolveReport("r1", "dismiss")
-        advanceUntilIdle()
-        assertEquals(2, vm.uiState.value.reports.size)
+            vm.resolveReport("r1", "warn")
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.message is UiText.Res)
 
-        vm.resolveReport("r2", "warn")
-        advanceUntilIdle()
-        assertEquals(1, vm.uiState.value.reports.size)
-        assertEquals("r3", vm.uiState.value.reports[0].reportId)
-    }
+            vm.clearMessage()
+            assertNull(vm.uiState.value.message)
+        }
 
     @Test
-    fun `resolveReport last remaining report results in empty list`() = runTest {
-        val singleReport = listOf(TestData.createTestReport(reportId = "r1", reason = "Spam"))
-        coEvery { reportRepository.getPendingReports() } returns Resource.Success(singleReport)
-        coEvery { reportRepository.resolveReport("r1", "dismiss") } returns Resource.Success(Unit)
+    fun `init with no reports sets empty list`() =
+        runTest {
+            coEvery { reportRepository.getPendingReports() } returns Resource.Success(emptyList())
 
-        val vm = createViewModel()
-        advanceUntilIdle()
-        assertEquals(1, vm.uiState.value.reports.size)
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        vm.resolveReport("r1", "dismiss")
-        advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.reports.isEmpty())
-        assertTrue(vm.uiState.value.message is UiText.Res)
-    }
+            val state = vm.uiState.value
+            assertTrue(state.reports.isEmpty())
+            assertFalse(state.isLoading)
+        }
 
     @Test
-    fun `init error sets message and stops loading`() = runTest {
-        coEvery { reportRepository.getPendingReports() } returns Resource.Error("Connection timeout")
+    fun `resolveReport dismiss removes report from list`() =
+        runTest {
+            coEvery { reportRepository.getPendingReports() } returns Resource.Success(sampleReports)
+            coEvery { reportRepository.resolveReport("r1", "dismiss") } returns Resource.Success(Unit)
 
-        val vm = createViewModel()
-        advanceUntilIdle()
+            val vm = createViewModel()
+            advanceUntilIdle()
+            assertEquals(3, vm.uiState.value.reports.size)
 
-        val state = vm.uiState.value
-        assertEquals(UiText.Plain("Connection timeout"), state.message)
-        assertFalse(state.isLoading)
-        assertTrue(state.reports.isEmpty())
-    }
+            vm.resolveReport("r1", "dismiss")
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertEquals(2, state.reports.size)
+            assertFalse(state.reports.any { it.reportId == "r1" })
+            assertTrue(state.message is UiText.Res)
+        }
+
+    @Test
+    fun `resolveReport warn removes report and shows confirmation`() =
+        runTest {
+            coEvery { reportRepository.getPendingReports() } returns Resource.Success(sampleReports)
+            coEvery { reportRepository.resolveReport("r3", "warn") } returns Resource.Success(Unit)
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+            assertEquals(3, vm.uiState.value.reports.size)
+
+            vm.resolveReport("r3", "warn")
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertEquals(2, state.reports.size)
+            assertFalse(state.reports.any { it.reportId == "r3" })
+            assertTrue(state.message is UiText.Res)
+        }
+
+    @Test
+    fun `resolveReport multiple reports sequentially reduces list correctly`() =
+        runTest {
+            coEvery { reportRepository.getPendingReports() } returns Resource.Success(sampleReports)
+            coEvery { reportRepository.resolveReport(any(), any()) } returns Resource.Success(Unit)
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+            assertEquals(3, vm.uiState.value.reports.size)
+
+            vm.resolveReport("r1", "dismiss")
+            advanceUntilIdle()
+            assertEquals(2, vm.uiState.value.reports.size)
+
+            vm.resolveReport("r2", "warn")
+            advanceUntilIdle()
+            assertEquals(1, vm.uiState.value.reports.size)
+            assertEquals(
+                "r3",
+                vm.uiState.value.reports[0]
+                    .reportId,
+            )
+        }
+
+    @Test
+    fun `resolveReport last remaining report results in empty list`() =
+        runTest {
+            val singleReport = listOf(TestData.createTestReport(reportId = "r1", reason = "Spam"))
+            coEvery { reportRepository.getPendingReports() } returns Resource.Success(singleReport)
+            coEvery { reportRepository.resolveReport("r1", "dismiss") } returns Resource.Success(Unit)
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+            assertEquals(1, vm.uiState.value.reports.size)
+
+            vm.resolveReport("r1", "dismiss")
+            advanceUntilIdle()
+
+            assertTrue(
+                vm.uiState.value.reports
+                    .isEmpty(),
+            )
+            assertTrue(vm.uiState.value.message is UiText.Res)
+        }
+
+    @Test
+    fun `init error sets message and stops loading`() =
+        runTest {
+            coEvery { reportRepository.getPendingReports() } returns Resource.Error("Connection timeout")
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertEquals(UiText.Plain("Connection timeout"), state.message)
+            assertFalse(state.isLoading)
+            assertTrue(state.reports.isEmpty())
+        }
 }

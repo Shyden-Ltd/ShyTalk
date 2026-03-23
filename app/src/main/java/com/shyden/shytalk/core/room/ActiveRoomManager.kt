@@ -10,9 +10,9 @@ import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
+import com.shyden.shytalk.data.remote.PresenceService
 import com.shyden.shytalk.data.remote.VoiceConnectionState
 import com.shyden.shytalk.data.remote.VoiceService
-import com.shyden.shytalk.data.remote.PresenceService
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.MessageRepository
 import com.shyden.shytalk.data.repository.RoomRepository
@@ -38,7 +38,7 @@ class ActiveRoomManager(
     private val seatRequestRepository: SeatRequestRepository,
     val voiceService: VoiceService,
     private val presenceService: PresenceService,
-    private val context: Context
+    private val context: Context,
 ) : RoomLifecycleManager {
     companion object {
         private const val TAG = "ActiveRoomManager"
@@ -79,12 +79,18 @@ class ActiveRoomManager(
     val isRoomScreenVisible: StateFlow<Boolean> = _isRoomScreenVisible.asStateFlow()
 
     /** Signals RoomScreen to open PmBottomSheet for a specific user or group. */
-    data class PendingPmOpen(val userId: String? = null, val groupConversationId: String? = null)
+    data class PendingPmOpen(
+        val userId: String? = null,
+        val groupConversationId: String? = null,
+    )
 
     private val _pendingPmOpen = MutableStateFlow<PendingPmOpen?>(null)
     val pendingPmOpen: StateFlow<PendingPmOpen?> = _pendingPmOpen.asStateFlow()
 
-    fun requestOpenPm(userId: String? = null, groupConversationId: String? = null) {
+    fun requestOpenPm(
+        userId: String? = null,
+        groupConversationId: String? = null,
+    ) {
         _pendingPmOpen.value = PendingPmOpen(userId, groupConversationId)
     }
 
@@ -122,6 +128,7 @@ class ActiveRoomManager(
         get() = authRepository.currentUserId ?: ""
 
     override fun isInRoom(roomId: String): Boolean = _activeRoomId.value == roomId
+
     fun isInAnyRoom(): Boolean = _activeRoomId.value != null
 
     override fun setRoomScreenVisible(visible: Boolean) {
@@ -174,26 +181,28 @@ class ActiveRoomManager(
         roomRepository.joinRoom(roomId, currentUserId)
         messageRepository.sendSystemMessage(
             roomId,
-            "${currentUserName.ifEmpty { "Someone" }} joined the room"
+            "${currentUserName.ifEmpty { "Someone" }} joined the room",
         )
 
         RoomService.start(context, roomId)
     }
 
     suspend fun leaveRoom() {
-        val roomId = _activeRoomId.value ?: run {
-            Log.d(TAG, "leaveRoom: no activeRoomId, returning")
-            return
-        }
-        val room = _activeRoom.value ?: run {
-            // Room data lost but we still have the ID — close as safest option
-            Log.w(TAG, "leaveRoom: no activeRoom (data lost), forcing close for roomId=$roomId")
-            presenceService.removePresence()
-            voiceService.leaveChannel()
-            roomRepository.closeRoom(roomId)
-            cleanup()
-            return
-        }
+        val roomId =
+            _activeRoomId.value ?: run {
+                Log.d(TAG, "leaveRoom: no activeRoomId, returning")
+                return
+            }
+        val room =
+            _activeRoom.value ?: run {
+                // Room data lost but we still have the ID — close as safest option
+                Log.w(TAG, "leaveRoom: no activeRoom (data lost), forcing close for roomId=$roomId")
+                presenceService.removePresence()
+                voiceService.leaveChannel()
+                roomRepository.closeRoom(roomId)
+                cleanup()
+                return
+            }
         val userId = currentUserId
         val isOwner = room.ownerId == userId
         Log.d(TAG, "leaveRoom: roomId=$roomId userId=$userId isOwner=$isOwner")
@@ -203,9 +212,10 @@ class ActiveRoomManager(
         // Vacate seat — owner keeps seat 0 for reconnection
         val mySeatEntry = room.findUserSeat(userId)
         if (isOwner) {
-            val anyoneOnMic = room.seats.any { (_, seat) ->
-                seat.userId != null && seat.userId != userId && seat.state == SeatState.OCCUPIED
-            }
+            val anyoneOnMic =
+                room.seats.any { (_, seat) ->
+                    seat.userId != null && seat.userId != userId && seat.state == SeatState.OCCUPIED
+                }
             if (anyoneOnMic) {
                 Log.d(TAG, "leaveRoom: owner → setOwnerAway (others present, seat preserved)")
                 roomRepository.setOwnerAway(roomId)
@@ -227,11 +237,13 @@ class ActiveRoomManager(
             // If no non-owner seats remain in an OWNER_AWAY room, close it —
             // don't count unseated visitors, only seated users matter.
             if (room.state == RoomState.OWNER_AWAY) {
-                val othersStillSeated = room.seats.any { (_, seat) ->
-                    seat.userId != null && seat.userId != userId
-                        && seat.userId != room.ownerId
-                        && seat.state == SeatState.OCCUPIED
-                }
+                val othersStillSeated =
+                    room.seats.any { (_, seat) ->
+                        seat.userId != null &&
+                            seat.userId != userId &&
+                            seat.userId != room.ownerId &&
+                            seat.state == SeatState.OCCUPIED
+                    }
                 if (!othersStillSeated) {
                     Log.d(TAG, "leaveRoom: no seated non-owners left in OWNER_AWAY room → closeRoom")
                     roomRepository.closeRoom(roomId)
@@ -255,8 +267,10 @@ class ActiveRoomManager(
         }
     }
 
-    private fun findMySeat(room: ChatRoom, userId: String = currentUserId) =
-        room.findUserSeat(userId)?.value
+    private fun findMySeat(
+        room: ChatRoom,
+        userId: String = currentUserId,
+    ) = room.findUserSeat(userId)?.value
 
     private fun cleanup(stopService: Boolean = true) {
         roomObserverJob?.cancel()
@@ -290,211 +304,227 @@ class ActiveRoomManager(
 
     private fun startRoomObservation(roomId: String) {
         roomObserverJob?.cancel()
-        roomObserverJob = scope.launch {
-            roomRepository.getRoomFlow(roomId)
-                .catch { e -> _error.value = e.message }
-                .collect { room ->
-                    if (room == null || room.state == RoomState.CLOSED) {
-                        Log.d(TAG, "Room observation: room=${room?.roomId} state=${room?.state} — closing")
-                        voiceService.leaveChannel()
-                        presenceService.removePresence()
-                        _roomClosed.value = true
-                        // Don't stop service — let RoomService.observeRoomClosed() show animation first
-                        cleanup(stopService = false)
-                        return@collect
-                    }
+        roomObserverJob =
+            scope.launch {
+                roomRepository
+                    .getRoomFlow(roomId)
+                    .catch { e -> _error.value = e.message }
+                    .collect { room ->
+                        if (room == null || room.state == RoomState.CLOSED) {
+                            Log.d(TAG, "Room observation: room=${room?.roomId} state=${room?.state} — closing")
+                            voiceService.leaveChannel()
+                            presenceService.removePresence()
+                            _roomClosed.value = true
+                            // Don't stop service — let RoomService.observeRoomClosed() show animation first
+                            cleanup(stopService = false)
+                            return@collect
+                        }
 
-                    val userId = currentUserId
+                        val userId = currentUserId
 
-                    // Detect if user was kicked
-                    if (userId !in room.participantIds || userId in room.bannedUserIds) {
-                        Log.d(TAG, "Room observation: user kicked from room=${room.roomId}")
-                        voiceService.leaveChannel()
-                        presenceService.removePresence()
-                        _roomClosed.value = true
-                        cleanup(stopService = false)
-                        return@collect
-                    }
+                        // Detect if user was kicked
+                        if (userId !in room.participantIds || userId in room.bannedUserIds) {
+                            Log.d(TAG, "Room observation: user kicked from room=${room.roomId}")
+                            voiceService.leaveChannel()
+                            presenceService.removePresence()
+                            _roomClosed.value = true
+                            cleanup(stopService = false)
+                            return@collect
+                        }
 
-                    // Switch mic based on seat status (single lookup)
-                    val mySeat = findMySeat(room, userId)
-                    val currentlySeated = mySeat != null
-                    if (currentlySeated != isSeated && !currentlySeated) {
-                        voiceService.setMicrophoneEnabled(false)
-                        voiceService.setAudioMode(false)
-                    }
-                    // When becoming seated: do NOT enable mic. User starts muted (Bug #6).
-                    isSeated = currentlySeated
+                        // Switch mic based on seat status (single lookup)
+                        val mySeat = findMySeat(room, userId)
+                        val currentlySeated = mySeat != null
+                        if (currentlySeated != isSeated && !currentlySeated) {
+                            voiceService.setMicrophoneEnabled(false)
+                            voiceService.setAudioMode(false)
+                        }
+                        // When becoming seated: do NOT enable mic. User starts muted (Bug #6).
+                        isSeated = currentlySeated
 
-                    if (mySeat != null) {
-                        // Sync mute state and audio mode
-                        val shouldUnmute = !mySeat.isMuted
-                        voiceService.setMicrophoneEnabled(shouldUnmute)
-                        voiceService.setAudioMode(shouldUnmute)
-
-                        // Ensure connected to voice room
-                        if (!voiceService.isJoined.value && room.voiceRoomName.isNotEmpty()) {
-                            voiceService.joinRoom(room.voiceRoomName, currentUserId)
+                        if (mySeat != null) {
+                            // Sync mute state and audio mode
+                            val shouldUnmute = !mySeat.isMuted
                             voiceService.setMicrophoneEnabled(shouldUnmute)
                             voiceService.setAudioMode(shouldUnmute)
+
+                            // Ensure connected to voice room
+                            if (!voiceService.isJoined.value && room.voiceRoomName.isNotEmpty()) {
+                                voiceService.joinRoom(room.voiceRoomName, currentUserId)
+                                voiceService.setMicrophoneEnabled(shouldUnmute)
+                                voiceService.setAudioMode(shouldUnmute)
+                            }
                         }
+
+                        _activeRoom.value = room
+
+                        // Close OWNER_AWAY room immediately if no non-owner seats remain
+                        if (room.state == RoomState.OWNER_AWAY && !room.hasSeatedNonOwners()) {
+                            Log.d(TAG, "Room observation: OWNER_AWAY with no seated non-owners → closeRoom")
+                            ownerAwayCountdownJob?.cancel()
+                            roomRepository.closeRoom(room.roomId)
+                            return@collect
+                        }
+
+                        handleOwnerAwayCountdown(room)
                     }
-
-                    _activeRoom.value = room
-
-                    // Close OWNER_AWAY room immediately if no non-owner seats remain
-                    if (room.state == RoomState.OWNER_AWAY && !room.hasSeatedNonOwners()) {
-                        Log.d(TAG, "Room observation: OWNER_AWAY with no seated non-owners → closeRoom")
-                        ownerAwayCountdownJob?.cancel()
-                        roomRepository.closeRoom(room.roomId)
-                        return@collect
-                    }
-
-                    handleOwnerAwayCountdown(room)
-                }
-        }
+            }
     }
 
     private fun startMessageObservation(roomId: String) {
         messageObserverJob?.cancel()
-        messageObserverJob = scope.launch {
-            messageRepository.getMessages(roomId)
-                .catch { e -> Log.w(TAG, "Message observation error", e) }
-                .collect { messages -> _messages.value = messages }
-        }
+        messageObserverJob =
+            scope.launch {
+                messageRepository
+                    .getMessages(roomId)
+                    .catch { e -> Log.w(TAG, "Message observation error", e) }
+                    .collect { messages -> _messages.value = messages }
+            }
     }
 
     private fun startConnectionMonitor() {
         connectionMonitorJob?.cancel()
-        connectionMonitorJob = scope.launch {
-            var graceJob: Job? = null
-            var wasEverConnected = false
+        connectionMonitorJob =
+            scope.launch {
+                var graceJob: Job? = null
+                var wasEverConnected = false
 
-            voiceService.connectionState.collect { state ->
-                val room = _activeRoom.value ?: return@collect
-                val userId = currentUserId
-                val currentlySeated = room.findUserSeat(userId) != null
-                Log.d(TAG, "connectionMonitor: state=$state userId=$userId ownerId=${room.ownerId} seated=$currentlySeated wasEver=$wasEverConnected")
+                voiceService.connectionState.collect { state ->
+                    val room = _activeRoom.value ?: return@collect
+                    val userId = currentUserId
+                    val currentlySeated = room.findUserSeat(userId) != null
+                    Log.d(
+                        TAG,
+                        "connectionMonitor: state=$state userId=$userId ownerId=${room.ownerId} seated=$currentlySeated wasEver=$wasEverConnected",
+                    )
 
-                // Only monitor when user is seated (has a voice connection)
-                if (!currentlySeated) {
-                    graceJob?.cancel()
-                    wasEverConnected = false
-                    return@collect
-                }
-
-                when (state) {
-                    VoiceConnectionState.CONNECTED -> {
-                        wasEverConnected = true
+                    // Only monitor when user is seated (has a voice connection)
+                    if (!currentlySeated) {
                         graceJob?.cancel()
+                        wasEverConnected = false
+                        return@collect
                     }
-                    VoiceConnectionState.DISCONNECTED -> {
-                        if (!wasEverConnected) return@collect
 
-                        // Owner must NOT leave from their own device on network loss.
-                        val isOwner = room.ownerId == userId
-                        if (isOwner) {
-                            Log.d(TAG, "connectionMonitor: owner disconnected — skipping leaveRoom, presence system will handle")
-                            return@collect
+                    when (state) {
+                        VoiceConnectionState.CONNECTED -> {
+                            wasEverConnected = true
+                            graceJob?.cancel()
                         }
+                        VoiceConnectionState.DISCONNECTED -> {
+                            if (!wasEverConnected) return@collect
 
-                        graceJob?.cancel()
-                        graceJob = scope.launch {
-                            delay(Constants.VOICE_DISCONNECT_GRACE_PERIOD_MS)
-                            val currentRoom = _activeRoom.value ?: return@launch
-                            val seatEntry = currentRoom.findUserSeat(currentUserId)
-                            val roomId = _activeRoomId.value
-                            if (seatEntry != null && roomId != null) {
-                                Log.d(TAG, "connectionMonitor: non-owner voice disconnect timeout — removing from seat ${seatEntry.key}")
-                                roomRepository.leaveSeat(roomId, seatEntry.key.toInt())
+                            // Owner must NOT leave from their own device on network loss.
+                            val isOwner = room.ownerId == userId
+                            if (isOwner) {
+                                Log.d(TAG, "connectionMonitor: owner disconnected — skipping leaveRoom, presence system will handle")
+                                return@collect
                             }
+
+                            graceJob?.cancel()
+                            graceJob =
+                                scope.launch {
+                                    delay(Constants.VOICE_DISCONNECT_GRACE_PERIOD_MS)
+                                    val currentRoom = _activeRoom.value ?: return@launch
+                                    val seatEntry = currentRoom.findUserSeat(currentUserId)
+                                    val roomId = _activeRoomId.value
+                                    if (seatEntry != null && roomId != null) {
+                                        Log.d(
+                                            TAG,
+                                            "connectionMonitor: non-owner voice disconnect timeout — removing from seat ${seatEntry.key}",
+                                        )
+                                        roomRepository.leaveSeat(roomId, seatEntry.key.toInt())
+                                    }
+                                }
                         }
-                    }
-                    VoiceConnectionState.RECONNECTING -> {
-                        // Wait — LiveKit is trying to reconnect
+                        VoiceConnectionState.RECONNECTING -> {
+                            // Wait — LiveKit is trying to reconnect
+                        }
                     }
                 }
             }
-        }
     }
 
     private fun startPresenceMonitor() {
         val roomId = _activeRoomId.value ?: return
         presenceMonitorJob?.cancel()
-        presenceMonitorJob = scope.launch {
-            val graceTimers = mutableMapOf<String, Job>()
+        presenceMonitorJob =
+            scope.launch {
+                val graceTimers = mutableMapOf<String, Job>()
 
-            fun emitDisconnectedIds() {
-                val newSet = graceTimers.keys.toSet()
-                if (newSet != _disconnectedUserIds.value) {
-                    _disconnectedUserIds.value = newSet
-                }
-            }
-
-            presenceService.observeRoomPresence(roomId)
-                .catch { e -> Log.w(TAG, "Presence monitor error", e) }
-                .collect { presentUserIds ->
-                    val room = _activeRoom.value ?: return@collect
-                    val participantIds = room.participantIds
-
-                    // Users in room but not present in RTDB (include seated users for dimming)
-                    val absentUsers = participantIds - presentUserIds - currentUserId
-
-                    // Cancel timers for users who reappeared
-                    val reappeared = graceTimers.keys - absentUsers
-                    for (userId in reappeared) {
-                        graceTimers.remove(userId)?.cancel()
+                fun emitDisconnectedIds() {
+                    val newSet = graceTimers.keys.toSet()
+                    if (newSet != _disconnectedUserIds.value) {
+                        _disconnectedUserIds.value = newSet
                     }
+                }
 
-                    // Start grace timers for newly absent users
-                    for (userId in absentUsers) {
-                        if (userId in graceTimers) continue
-                        graceTimers[userId] = scope.launch {
-                            delay(Constants.PRESENCE_TIMEOUT_MS)
+                presenceService
+                    .observeRoomPresence(roomId)
+                    .catch { e -> Log.w(TAG, "Presence monitor error", e) }
+                    .collect { presentUserIds ->
+                        val room = _activeRoom.value ?: return@collect
+                        val participantIds = room.participantIds
 
-                            // Re-check presence before taking action (avoids false positives from network blips)
-                            val stillAbsent = !presenceService.isUserPresent(roomId, userId)
-                            if (!stillAbsent) {
-                                graceTimers.remove(userId)
-                                emitDisconnectedIds()
-                                return@launch
-                            }
+                        // Users in room but not present in RTDB (include seated users for dimming)
+                        val absentUsers = participantIds - presentUserIds - currentUserId
 
-                            // Owner disconnect → transition to OWNER_AWAY instead of removing
-                            val latestRoom = _activeRoom.value
-                            if (userId == latestRoom?.ownerId && latestRoom.state == RoomState.ACTIVE) {
-                                Log.d(TAG, "presenceMonitor: owner absent → setOwnerAway")
-                                roomRepository.setOwnerAway(roomId)
-                            } else {
-                                roomRepository.removeDisconnectedUser(roomId, userId)
-                            }
-                            graceTimers.remove(userId)
-                            emitDisconnectedIds()
+                        // Cancel timers for users who reappeared
+                        val reappeared = graceTimers.keys - absentUsers
+                        for (userId in reappeared) {
+                            graceTimers.remove(userId)?.cancel()
                         }
-                    }
 
-                    emitDisconnectedIds()
-                }
-        }
+                        // Start grace timers for newly absent users
+                        for (userId in absentUsers) {
+                            if (userId in graceTimers) continue
+                            graceTimers[userId] =
+                                scope.launch {
+                                    delay(Constants.PRESENCE_TIMEOUT_MS)
+
+                                    // Re-check presence before taking action (avoids false positives from network blips)
+                                    val stillAbsent = !presenceService.isUserPresent(roomId, userId)
+                                    if (!stillAbsent) {
+                                        graceTimers.remove(userId)
+                                        emitDisconnectedIds()
+                                        return@launch
+                                    }
+
+                                    // Owner disconnect → transition to OWNER_AWAY instead of removing
+                                    val latestRoom = _activeRoom.value
+                                    if (userId == latestRoom?.ownerId && latestRoom.state == RoomState.ACTIVE) {
+                                        Log.d(TAG, "presenceMonitor: owner absent → setOwnerAway")
+                                        roomRepository.setOwnerAway(roomId)
+                                    } else {
+                                        roomRepository.removeDisconnectedUser(roomId, userId)
+                                    }
+                                    graceTimers.remove(userId)
+                                    emitDisconnectedIds()
+                                }
+                        }
+
+                        emitDisconnectedIds()
+                    }
+            }
     }
 
     private fun handleOwnerAwayCountdown(room: ChatRoom) {
         val leftAt = room.ownerLeftAt
         if (room.state == RoomState.OWNER_AWAY && leftAt != null) {
             ownerAwayCountdownJob?.cancel()
-            ownerAwayCountdownJob = scope.launch {
-                while (true) {
-                    val elapsed = System.currentTimeMillis() - leftAt
-                    val remaining = Constants.OWNER_LEAVE_TIMEOUT_MS - elapsed
-                    if (remaining <= 0) {
-                        // Any remaining participant can close an expired OWNER_AWAY room
-                        roomRepository.closeRoom(room.roomId)
-                        break
+            ownerAwayCountdownJob =
+                scope.launch {
+                    while (true) {
+                        val elapsed = System.currentTimeMillis() - leftAt
+                        val remaining = Constants.OWNER_LEAVE_TIMEOUT_MS - elapsed
+                        if (remaining <= 0) {
+                            // Any remaining participant can close an expired OWNER_AWAY room
+                            roomRepository.closeRoom(room.roomId)
+                            break
+                        }
+                        _ownerAwayRemainingMs.value = remaining
+                        delay(1000L)
                     }
-                    _ownerAwayRemainingMs.value = remaining
-                    delay(1000L)
                 }
-            }
         } else {
             ownerAwayCountdownJob?.cancel()
             _ownerAwayRemainingMs.value = 0L
@@ -582,7 +612,10 @@ class ActiveRoomManager(
         roomRepository.toggleMute(roomId, seatIndex, true)
     }
 
-    suspend fun moveSeat(fromIndex: Int, toIndex: Int) {
+    suspend fun moveSeat(
+        fromIndex: Int,
+        toIndex: Int,
+    ) {
         val roomId = _activeRoomId.value ?: return
         val room = _activeRoom.value ?: return
         val role = room.resolveRole(currentUserId)
@@ -597,7 +630,11 @@ class ActiveRoomManager(
         roomRepository.moveSeat(roomId, fromIndex, toIndex, targetUserId)
     }
 
-    suspend fun kickUser(targetUserId: String, seatIndex: Int?, reason: String = "") {
+    suspend fun kickUser(
+        targetUserId: String,
+        seatIndex: Int?,
+        reason: String = "",
+    ) {
         val roomId = _activeRoomId.value ?: return
         val room = _activeRoom.value ?: return
         val role = room.resolveRole(currentUserId)
@@ -611,7 +648,10 @@ class ActiveRoomManager(
         messageRepository.sendSystemMessage(roomId, "A user was kicked from the room. Reason: $displayReason")
     }
 
-    suspend fun inviteUser(userId: String, userName: String) {
+    suspend fun inviteUser(
+        userId: String,
+        userName: String,
+    ) {
         val roomId = _activeRoomId.value ?: return
         val room = _activeRoom.value ?: return
         val role = room.resolveRole(currentUserId)
@@ -626,10 +666,11 @@ class ActiveRoomManager(
         val room = _activeRoom.value ?: return
         if (room.pendingInvites[currentUserId] == null) return
 
-        val emptySeatIndex = (1 until Constants.MAX_SEATS).firstOrNull { i ->
-            val seat = room.seats[i.toString()]
-            seat != null && seat.state != SeatState.OCCUPIED
-        } ?: return
+        val emptySeatIndex =
+            (1 until Constants.MAX_SEATS).firstOrNull { i ->
+                val seat = room.seats[i.toString()]
+                seat != null && seat.state != SeatState.OCCUPIED
+            } ?: return
 
         roomRepository.acceptInvite(roomId, currentUserId, emptySeatIndex)
     }

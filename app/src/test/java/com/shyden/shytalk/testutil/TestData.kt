@@ -1,10 +1,10 @@
 package com.shyden.shytalk.testutil
 
 import com.shyden.shytalk.core.model.ChatRoom
-import com.shyden.shytalk.core.model.CurrencyType
 import com.shyden.shytalk.core.model.Conversation
 import com.shyden.shytalk.core.model.ConversationPreview
 import com.shyden.shytalk.core.model.ConversationSettings
+import com.shyden.shytalk.core.model.CurrencyType
 import com.shyden.shytalk.core.model.DailyRewardResult
 import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.model.GiftRankEntry
@@ -27,7 +27,6 @@ import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.feature.messaging.Report
 
 object TestData {
-
     val BASE_TIMESTAMP = 1_000_000_000L
     val LATER_TIMESTAMP = 2_000_000_000L
 
@@ -54,7 +53,7 @@ object TestData {
         suspendedBy: String? = null,
         suspensionAppealStatus: String? = null,
         isSuperShy: Boolean = false,
-        language: String = "en"
+        language: String = "en",
     ) = User(
         uid = uid,
         displayName = displayName,
@@ -80,25 +79,25 @@ object TestData {
         suspendedBy = suspendedBy,
         suspensionAppealStatus = suspensionAppealStatus,
         isSuperShy = isSuperShy,
-        language = language
+        language = language,
     )
 
     fun createTestProfileVisitor(
         visitorId: String = "visitor-1",
         visitCount: Long = 1,
         lastVisitedAt: Long = LATER_TIMESTAMP,
-        firstVisitedAt: Long = BASE_TIMESTAMP
+        firstVisitedAt: Long = BASE_TIMESTAMP,
     ) = ProfileVisitor(
         visitorId = visitorId,
         visitCount = visitCount,
         lastVisitedAt = lastVisitedAt,
-        firstVisitedAt = firstVisitedAt
+        firstVisitedAt = firstVisitedAt,
     )
 
     fun createTestSeat(
         userId: String? = null,
         state: SeatState = if (userId != null) SeatState.OCCUPIED else SeatState.EMPTY,
-        isMuted: Boolean = false
+        isMuted: Boolean = false,
     ) = Seat(userId = userId, state = state, isMuted = isMuted)
 
     fun createDefaultSeats(): Map<String, Seat> = ChatRoom.DEFAULT_SEATS
@@ -127,7 +126,7 @@ object TestData {
         ownerLeftAt: Long? = null,
         closedAt: Long? = null,
         allTimeHostIds: Set<String> = emptySet(),
-        allTimeSeatUserIds: Set<String> = emptySet()
+        allTimeSeatUserIds: Set<String> = emptySet(),
     ) = ChatRoom(
         roomId = roomId,
         name = name,
@@ -146,7 +145,7 @@ object TestData {
         ownerLeftAt = ownerLeftAt,
         closedAt = closedAt,
         allTimeHostIds = allTimeHostIds,
-        allTimeSeatUserIds = allTimeSeatUserIds
+        allTimeSeatUserIds = allTimeSeatUserIds,
     )
 
     fun createTestMessage(
@@ -155,14 +154,14 @@ object TestData {
         senderName: String = "Test User",
         text: String = "Hello",
         type: MessageType = MessageType.TEXT,
-        createdAt: Long = BASE_TIMESTAMP
+        createdAt: Long = BASE_TIMESTAMP,
     ) = Message(
         messageId = messageId,
         senderId = senderId,
         senderName = senderName,
         text = text,
         type = type,
-        createdAt = createdAt
+        createdAt = createdAt,
     )
 
     fun createTestSeatRequest(
@@ -173,7 +172,7 @@ object TestData {
         status: SeatRequestStatus = SeatRequestStatus.PENDING,
         createdAt: Long = BASE_TIMESTAMP,
         resolvedBy: String? = null,
-        resolvedAt: Long? = null
+        resolvedAt: Long? = null,
     ) = SeatRequest(
         requestId = requestId,
         userId = userId,
@@ -182,7 +181,7 @@ object TestData {
         status = status,
         createdAt = createdAt,
         resolvedBy = resolvedBy,
-        resolvedAt = resolvedAt
+        resolvedAt = resolvedAt,
     )
 
     fun createTestPrivateMessage(
@@ -201,7 +200,7 @@ object TestData {
         replyToSenderName: String? = null,
         reactions: Map<String, List<String>> = emptyMap(),
         roomInviteId: String? = null,
-        roomInviteName: String? = null
+        roomInviteName: String? = null,
     ) = PrivateMessage(
         messageId = messageId,
         senderId = senderId,
@@ -218,7 +217,7 @@ object TestData {
         replyToSenderName = replyToSenderName,
         reactions = reactions,
         roomInviteId = roomInviteId,
-        roomInviteName = roomInviteName
+        roomInviteName = roomInviteName,
     )
 
     fun createTestConversation(
@@ -237,7 +236,7 @@ object TestData {
         isClosed: Boolean = false,
         permissions: GroupPermissions = GroupPermissions(),
         modNotifyMode: String = "ALL_ADMINS",
-        settings: ConversationSettings? = null
+        settings: ConversationSettings? = null,
     ) = Conversation(
         conversationId = conversationId,
         participantIds = participantIds,
@@ -254,7 +253,7 @@ object TestData {
         isClosed = isClosed,
         permissions = permissions,
         modNotifyMode = modNotifyMode,
-        settings = settings
+        settings = settings,
     )
 
     fun createTestConversationPreview(
@@ -262,13 +261,13 @@ object TestData {
         senderId: String = "user-1",
         senderName: String = "Test User",
         createdAt: Long = BASE_TIMESTAMP,
-        type: String = "TEXT"
+        type: String = "TEXT",
     ) = ConversationPreview(
         text = text,
         senderId = senderId,
         senderName = senderName,
         createdAt = createdAt,
-        type = type
+        type = type,
     )
 
     fun createTestConversationSettings(
@@ -279,7 +278,7 @@ object TestData {
         isPinned: Boolean = false,
         lastReadMessageId: String = "",
         lastReadAt: Long = 0,
-        unreadCount: Long = 0
+        unreadCount: Long = 0,
     ) = ConversationSettings(
         userId = userId,
         isMuted = isMuted,
@@ -288,7 +287,7 @@ object TestData {
         isPinned = isPinned,
         lastReadMessageId = lastReadMessageId,
         lastReadAt = lastReadAt,
-        unreadCount = unreadCount
+        unreadCount = unreadCount,
     )
 
     fun createTestGift(
@@ -298,7 +297,7 @@ object TestData {
         animationUrl: String = "",
         soundUrl: String = "",
         iconUrl: String = "",
-        order: Int = 1
+        order: Int = 1,
     ) = Gift(
         id = id,
         name = name,
@@ -306,7 +305,7 @@ object TestData {
         animationUrl = animationUrl,
         soundUrl = soundUrl,
         iconUrl = iconUrl,
-        order = order
+        order = order,
     )
 
     fun createTestGiftWallEntry(
@@ -314,13 +313,13 @@ object TestData {
         receivedCount: Int = 5,
         senders: Map<String, Int> = emptyMap(),
         topSenderId: String? = null,
-        topSenderCount: Int = 0
+        topSenderCount: Int = 0,
     ) = GiftWallEntry(
         giftId = giftId,
         receivedCount = receivedCount,
         senders = senders,
         topSenderId = topSenderId,
-        topSenderCount = topSenderCount
+        topSenderCount = topSenderCount,
     )
 
     fun createTestTransaction(
@@ -335,7 +334,7 @@ object TestData {
         senderId: String? = null,
         pullCount: Int? = null,
         details: String? = null,
-        timestamp: Long = BASE_TIMESTAMP
+        timestamp: Long = BASE_TIMESTAMP,
     ) = Transaction(
         id = id,
         type = type,
@@ -348,19 +347,19 @@ object TestData {
         senderId = senderId,
         pullCount = pullCount,
         details = details,
-        timestamp = timestamp
+        timestamp = timestamp,
     )
 
     fun createTestDailyRewardResult(
         coinsAwarded: Int = 50,
         newStreak: Int = 1,
         isMilestone: Boolean = false,
-        newBalance: Long = 150
+        newBalance: Long = 150,
     ) = DailyRewardResult(
         coinsAwarded = coinsAwarded,
         newStreak = newStreak,
         isMilestone = isMilestone,
-        newBalance = newBalance
+        newBalance = newBalance,
     )
 
     fun createTestReport(
@@ -373,7 +372,7 @@ object TestData {
         description: String = "Spamming messages",
         type: String = "message",
         status: String = "pending",
-        timestamp: Long = BASE_TIMESTAMP
+        timestamp: Long = BASE_TIMESTAMP,
     ) = Report(
         reportId = reportId,
         reporterId = reporterId,
@@ -384,23 +383,23 @@ object TestData {
         description = description,
         type = type,
         status = status,
-        timestamp = timestamp
+        timestamp = timestamp,
     )
 
     fun createTestGiftSender(
         userId: String = "sender-1",
-        count: Int = 3
+        count: Int = 3,
     ) = GiftSender(userId = userId, count = count)
 
     fun createTestGiftRankEntry(
         userId: String = "user-1",
         count: Int = 10,
         displayName: String = "Test User",
-        profilePhotoUrl: String? = null
+        profilePhotoUrl: String? = null,
     ) = GiftRankEntry(
         userId = userId,
         count = count,
         displayName = displayName,
-        profilePhotoUrl = profilePhotoUrl
+        profilePhotoUrl = profilePhotoUrl,
     )
 }

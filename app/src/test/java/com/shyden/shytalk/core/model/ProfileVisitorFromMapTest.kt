@@ -6,18 +6,18 @@ import org.junit.Test
 import java.util.Date
 
 class ProfileVisitorFromMapTest {
-
     private val tsMillis = 1_000_000_000L
     private val ts = Timestamp(Date(tsMillis))
 
     @Test
     fun `fromMap parses complete valid map`() {
-        val map = mapOf<String, Any?>(
-            "visitorId" to "visitor-1",
-            "visitCount" to 5L,
-            "lastVisitedAt" to ts,
-            "firstVisitedAt" to ts
-        )
+        val map =
+            mapOf<String, Any?>(
+                "visitorId" to "visitor-1",
+                "visitCount" to 5L,
+                "lastVisitedAt" to ts,
+                "firstVisitedAt" to ts,
+            )
         val visitor = ProfileVisitor.fromMap(map)
         assertEquals("visitor-1", visitor.visitorId)
         assertEquals(5L, visitor.visitCount)
@@ -47,12 +47,13 @@ class ProfileVisitorFromMapTest {
 
     @Test
     fun `toMap produces correct map`() {
-        val visitor = ProfileVisitor(
-            visitorId = "visitor-1",
-            visitCount = 3,
-            lastVisitedAt = tsMillis,
-            firstVisitedAt = tsMillis
-        )
+        val visitor =
+            ProfileVisitor(
+                visitorId = "visitor-1",
+                visitCount = 3,
+                lastVisitedAt = tsMillis,
+                firstVisitedAt = tsMillis,
+            )
         val map = visitor.toMap()
         assertEquals("visitor-1", map["visitorId"])
         assertEquals(3L, map["visitCount"])
@@ -76,12 +77,13 @@ class ProfileVisitorFromMapTest {
 
     @Test
     fun `fromMap of toMap produces equivalent visitor`() {
-        val original = ProfileVisitor(
-            visitorId = "visitor-1",
-            visitCount = 7,
-            lastVisitedAt = tsMillis,
-            firstVisitedAt = tsMillis
-        )
+        val original =
+            ProfileVisitor(
+                visitorId = "visitor-1",
+                visitCount = 7,
+                lastVisitedAt = tsMillis,
+                firstVisitedAt = tsMillis,
+            )
         val roundtripped = ProfileVisitor.fromMap(original.toMap())
         assertEquals(original, roundtripped)
     }

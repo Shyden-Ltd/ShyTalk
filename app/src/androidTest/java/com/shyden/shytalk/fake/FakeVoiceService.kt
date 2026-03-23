@@ -13,16 +13,27 @@ class FakeVoiceService : VoiceService {
     override val connectionState: StateFlow<VoiceConnectionState> = _connectionState
     override val error: StateFlow<String?> = MutableStateFlow(null)
 
-    override suspend fun joinRoom(roomName: String, userId: String) {
+    override suspend fun joinRoom(
+        roomName: String,
+        userId: String,
+    ) {
         _connectionState.value = VoiceConnectionState.CONNECTED
         _isJoined.value = true
     }
+
     override fun leaveChannel() {
         _connectionState.value = VoiceConnectionState.DISCONNECTED
         _isJoined.value = false
     }
+
     override fun setMicrophoneEnabled(enabled: Boolean) { /* no-op */ }
+
     override fun setAudioMode(voiceMode: Boolean) { /* no-op */ }
+
     override fun clearError() { /* no-op */ }
-    override fun prewarmToken(roomName: String, userId: String) { /* no-op */ }
+
+    override fun prewarmToken(
+        roomName: String,
+        userId: String,
+    ) { /* no-op */ }
 }

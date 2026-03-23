@@ -30,9 +30,8 @@ import kotlinx.coroutines.sync.withLock
 
 class LiveKitVoiceService(
     private val context: Context,
-    private val tokenService: TokenService
+    private val tokenService: TokenService,
 ) : VoiceService {
-
     companion object {
         private const val TAG = "LiveKitVoiceService"
     }
@@ -73,7 +72,9 @@ class LiveKitVoiceService(
     private val _error = MutableStateFlow<String?>(null)
     override val error: StateFlow<String?> = _error.asStateFlow()
 
-    override fun clearError() { _error.value = null }
+    override fun clearError() {
+        _error.value = null
+    }
 
     init {
         Log.d(TAG, "LiveKit Room pre-initialized (MediaAudioType)")
@@ -83,8 +84,9 @@ class LiveKitVoiceService(
     private fun setSpeakerphoneEnabled(enabled: Boolean) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (enabled) {
-                val speaker = audioManager.availableCommunicationDevices
-                    .firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                val speaker =
+                    audioManager.availableCommunicationDevices
+                        .firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
                 if (speaker != null) {
                     audioManager.setCommunicationDevice(speaker)
                 }
@@ -108,70 +110,78 @@ class LiveKitVoiceService(
         val audioType = if (voiceMode) AudioType.CallAudioType() else AudioType.MediaAudioType()
         return LiveKit.create(
             appContext = context,
-            overrides = LiveKitOverrides(
-                audioOptions = AudioOptions(
-                    audioOutputType = audioType,
-                    audioHandler = NoAudioHandler()
-                )
-            )
+            overrides =
+                LiveKitOverrides(
+                    audioOptions =
+                        AudioOptions(
+                            audioOutputType = audioType,
+                            audioHandler = NoAudioHandler(),
+                        ),
+                ),
         )
     }
 
     private fun setupEventCollection() {
         eventCollectionJob?.cancel()
-        eventCollectionJob = scope.launch {
-            room.events.collect { event ->
-                when (event) {
-                    is RoomEvent.Connected -> {
-                        Log.d(TAG, "Connected to room=$currentRoomName")
-                        _isJoined.value = true
-                        _connectionState.value = VoiceConnectionState.CONNECTED
-                        isSwitchingAudioType = false
-                    }
-                    is RoomEvent.Disconnected -> {
-                        Log.d(TAG, "Disconnected from room")
-                        if (!isSwitchingAudioType) {
-                            _isJoined.value = false
+        eventCollectionJob =
+            scope.launch {
+                room.events.collect { event ->
+                    when (event) {
+                        is RoomEvent.Connected -> {
+                            Log.d(TAG, "Connected to room=$currentRoomName")
+                            _isJoined.value = true
+                            _connectionState.value = VoiceConnectionState.CONNECTED
+                            isSwitchingAudioType = false
+                        }
+                        is RoomEvent.Disconnected -> {
+                            Log.d(TAG, "Disconnected from room")
+                            if (!isSwitchingAudioType) {
+                                _isJoined.value = false
+                                _connectionState.value = VoiceConnectionState.DISCONNECTED
+                                _speakingUsers.value = emptySet()
+                            }
+                        }
+                        is RoomEvent.Reconnecting -> {
+                            Log.d(TAG, "Reconnecting...")
+                            _connectionState.value = VoiceConnectionState.RECONNECTING
+                        }
+                        is RoomEvent.Reconnected -> {
+                            Log.d(TAG, "Reconnected")
+                            _connectionState.value = VoiceConnectionState.CONNECTED
+                        }
+                        is RoomEvent.ActiveSpeakersChanged -> {
+                            val speakers =
+                                event.speakers
+                                    .asSequence()
+                                    .mapNotNull { it.identity?.value }
+                                    .toSet()
+                            if (speakers != _speakingUsers.value) {
+                                _speakingUsers.value = speakers
+                            }
+                        }
+                        is RoomEvent.FailedToConnect -> {
+                            Log.e(TAG, "Failed to connect: ${event.error}")
+                            _error.value = "Voice is temporarily unavailable"
                             _connectionState.value = VoiceConnectionState.DISCONNECTED
-                            _speakingUsers.value = emptySet()
+                            _isJoined.value = false
+                            isSwitchingAudioType = false
                         }
-                    }
-                    is RoomEvent.Reconnecting -> {
-                        Log.d(TAG, "Reconnecting...")
-                        _connectionState.value = VoiceConnectionState.RECONNECTING
-                    }
-                    is RoomEvent.Reconnected -> {
-                        Log.d(TAG, "Reconnected")
-                        _connectionState.value = VoiceConnectionState.CONNECTED
-                    }
-                    is RoomEvent.ActiveSpeakersChanged -> {
-                        val speakers = event.speakers.asSequence()
-                            .mapNotNull { it.identity?.value }
-                            .toSet()
-                        if (speakers != _speakingUsers.value) {
-                            _speakingUsers.value = speakers
+                        is RoomEvent.ParticipantDisconnected -> {
+                            val identity = event.participant.identity?.value
+                            if (identity != null) {
+                                _speakingUsers.value = _speakingUsers.value - identity
+                            }
                         }
+                        else -> {}
                     }
-                    is RoomEvent.FailedToConnect -> {
-                        Log.e(TAG, "Failed to connect: ${event.error}")
-                        _error.value = "Voice is temporarily unavailable"
-                        _connectionState.value = VoiceConnectionState.DISCONNECTED
-                        _isJoined.value = false
-                        isSwitchingAudioType = false
-                    }
-                    is RoomEvent.ParticipantDisconnected -> {
-                        val identity = event.participant.identity?.value
-                        if (identity != null) {
-                            _speakingUsers.value = _speakingUsers.value - identity
-                        }
-                    }
-                    else -> {}
                 }
             }
-        }
     }
 
-    override suspend fun joinRoom(roomName: String, userId: String) = joinMutex.withLock {
+    override suspend fun joinRoom(
+        roomName: String,
+        userId: String,
+    ) = joinMutex.withLock {
         // Already in this room — no-op
         if (_isJoined.value && currentRoomName == roomName) {
             Log.d(TAG, "Already joined room=$roomName, skipping rejoin")
@@ -191,21 +201,22 @@ class LiveKitVoiceService(
 
         // Use prewarmed token if available for this room, otherwise fetch
         prewarmJob?.join() // Wait for in-flight prewarm if running
-        val token: String? = if (prewarmedRoomName == roomName && prewarmedToken != null) {
-            Log.d(TAG, "Using prewarmed token for room=$roomName")
-            prewarmedToken.also {
-                prewarmedToken = null
-                prewarmedRoomName = null
+        val token: String? =
+            if (prewarmedRoomName == roomName && prewarmedToken != null) {
+                Log.d(TAG, "Using prewarmed token for room=$roomName")
+                prewarmedToken.also {
+                    prewarmedToken = null
+                    prewarmedRoomName = null
+                }
+            } else {
+                try {
+                    tokenService.fetchToken(roomName, userId)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Token fetch failed", e)
+                    _error.value = "Voice is temporarily unavailable"
+                    null
+                }
             }
-        } else {
-            try {
-                tokenService.fetchToken(roomName, userId)
-            } catch (e: Exception) {
-                Log.w(TAG, "Token fetch failed", e)
-                _error.value = "Voice is temporarily unavailable"
-                null
-            }
-        }
 
         if (token == null) {
             currentRoomName = null
@@ -299,71 +310,77 @@ class LiveKitVoiceService(
      * and reconnects using the cached token. This switches between
      * STREAM_VOICE_CALL (communication/loudspeaker) and STREAM_MUSIC (media channel).
      */
-    private suspend fun switchAudioType() = joinMutex.withLock {
-        val roomName = currentRoomName ?: return@withLock
-        val userId = currentUserId ?: return@withLock
+    private suspend fun switchAudioType() =
+        joinMutex.withLock {
+            val roomName = currentRoomName ?: return@withLock
+            val userId = currentUserId ?: return@withLock
 
-        // If another switch already set the room to our desired mode, skip
-        if (isVoiceMode == roomIsVoiceMode) {
-            Log.d(TAG, "Room already has desired audio type (voiceMode=$isVoiceMode), skipping")
-            return@withLock
+            // If another switch already set the room to our desired mode, skip
+            if (isVoiceMode == roomIsVoiceMode) {
+                Log.d(TAG, "Room already has desired audio type (voiceMode=$isVoiceMode), skipping")
+                return@withLock
+            }
+
+            val token =
+                cachedToken ?: try {
+                    Log.w(TAG, "No cached token for audio switch, fetching new one")
+                    tokenService.fetchToken(roomName, userId)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Token fetch failed during audio switch", e)
+                    _error.value = "Voice is temporarily unavailable"
+                    return@withLock
+                }
+
+            Log.d(TAG, "Switching audio type: voiceMode=$isVoiceMode")
+            isSwitchingAudioType = true
+
+            try {
+                // Disconnect and release old room
+                room.disconnect()
+                room.release()
+
+                // Create new room with appropriate audio type
+                val targetVoiceMode = isVoiceMode
+                room = createRoom(targetVoiceMode)
+                roomIsVoiceMode = targetVoiceMode
+                setupEventCollection()
+
+                // Reconnect
+                val serverUrl = BuildConfig.LIVEKIT_SERVER_URL
+                room.connect(serverUrl, token)
+                cachedToken = token
+
+                // Restore mic state
+                room.localParticipant.setMicrophoneEnabled(desiredMicEnabled)
+                Log.d(TAG, "Audio type switched successfully (voiceMode=$targetVoiceMode)")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to switch audio type", e)
+                _error.value = "Voice is temporarily unavailable"
+                isSwitchingAudioType = false
+                _isJoined.value = false
+                _connectionState.value = VoiceConnectionState.DISCONNECTED
+            }
         }
 
-        val token = cachedToken ?: try {
-            Log.w(TAG, "No cached token for audio switch, fetching new one")
-            tokenService.fetchToken(roomName, userId)
-        } catch (e: Exception) {
-            Log.e(TAG, "Token fetch failed during audio switch", e)
-            _error.value = "Voice is temporarily unavailable"
-            return@withLock
-        }
-
-        Log.d(TAG, "Switching audio type: voiceMode=$isVoiceMode")
-        isSwitchingAudioType = true
-
-        try {
-            // Disconnect and release old room
-            room.disconnect()
-            room.release()
-
-            // Create new room with appropriate audio type
-            val targetVoiceMode = isVoiceMode
-            room = createRoom(targetVoiceMode)
-            roomIsVoiceMode = targetVoiceMode
-            setupEventCollection()
-
-            // Reconnect
-            val serverUrl = BuildConfig.LIVEKIT_SERVER_URL
-            room.connect(serverUrl, token)
-            cachedToken = token
-
-            // Restore mic state
-            room.localParticipant.setMicrophoneEnabled(desiredMicEnabled)
-            Log.d(TAG, "Audio type switched successfully (voiceMode=$targetVoiceMode)")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to switch audio type", e)
-            _error.value = "Voice is temporarily unavailable"
-            isSwitchingAudioType = false
-            _isJoined.value = false
-            _connectionState.value = VoiceConnectionState.DISCONNECTED
-        }
-    }
-
-    override fun prewarmToken(roomName: String, userId: String) {
+    override fun prewarmToken(
+        roomName: String,
+        userId: String,
+    ) {
         prewarmJob?.cancel()
         prewarmedToken = null
         prewarmedRoomName = null
-        prewarmJob = scope.launch {
-            try {
-                Log.d(TAG, "Pre-warming token for room=$roomName")
-                val token = tokenService.fetchToken(roomName, userId)
-                prewarmedToken = token
-                prewarmedRoomName = roomName
-                Log.d(TAG, "Token pre-warmed for room=$roomName")
-            } catch (e: Exception) {
-                Log.w(TAG, "Token pre-warm failed (joinRoom will retry)", e)
+        prewarmJob =
+            scope.launch {
+                try {
+                    Log.d(TAG, "Pre-warming token for room=$roomName")
+                    val token = tokenService.fetchToken(roomName, userId)
+                    prewarmedToken = token
+                    prewarmedRoomName = roomName
+                    Log.d(TAG, "Token pre-warmed for room=$roomName")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Token pre-warm failed (joinRoom will retry)", e)
+                }
             }
-        }
     }
 
     fun destroy() {

@@ -11,7 +11,6 @@ import org.junit.Test
 import java.io.File
 
 class StickerStorageTest {
-
     private lateinit var tempDir: File
     private lateinit var storage: StickerStorage
 
@@ -20,9 +19,10 @@ class StickerStorageTest {
         tempDir = File(System.getProperty("java.io.tmpdir"), "sticker_test_${System.nanoTime()}")
         tempDir.mkdirs()
 
-        val context = mockk<Context> {
-            every { filesDir } returns tempDir
-        }
+        val context =
+            mockk<Context> {
+                every { filesDir } returns tempDir
+            }
         storage = StickerStorage(context)
     }
 
@@ -162,12 +162,25 @@ class StickerStorageTest {
     @Test
     fun `addSticker saves WebP with webp extension`() {
         // WebP magic: RIFF....WEBP
-        val webpData = byteArrayOf(
-            0x52, 0x49, 0x46, 0x46, // RIFF
-            0x00, 0x00, 0x00, 0x00, // size
-            0x57, 0x45, 0x42, 0x50, // WEBP
-            1, 2, 3, 4
-        )
+        val webpData =
+            byteArrayOf(
+                0x52,
+                0x49,
+                0x46,
+                0x46, // RIFF
+                0x00,
+                0x00,
+                0x00,
+                0x00, // size
+                0x57,
+                0x45,
+                0x42,
+                0x50, // WEBP
+                1,
+                2,
+                3,
+                4,
+            )
         val sticker = storage.addSticker("webp1", webpData)
         assertTrue(sticker.localPath!!.endsWith(".webp"))
     }

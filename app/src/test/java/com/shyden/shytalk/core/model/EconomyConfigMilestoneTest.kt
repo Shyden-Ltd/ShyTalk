@@ -6,18 +6,19 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EconomyConfigMilestoneTest {
-
     // ── EconomyConfig.fromMap — milestoneRewards parsing ──────────────────
 
     @Test
     fun `milestoneRewards parses numeric-string keys correctly`() {
-        val map = mapOf<String, Any?>(
-            "milestoneRewards" to mapOf(
-                "7" to mapOf("amount" to 100L, "type" to "coins"),
-                "14" to mapOf("amount" to 200L, "type" to "coins"),
-                "30" to mapOf("amount" to 500L, "type" to "coins")
+        val map =
+            mapOf<String, Any?>(
+                "milestoneRewards" to
+                    mapOf(
+                        "7" to mapOf("amount" to 100L, "type" to "coins"),
+                        "14" to mapOf("amount" to 200L, "type" to "coins"),
+                        "30" to mapOf("amount" to 500L, "type" to "coins"),
+                    ),
             )
-        )
 
         val config = EconomyConfig.fromMap(map)
 
@@ -30,12 +31,14 @@ class EconomyConfigMilestoneTest {
     @Test
     fun `milestoneRewards handles malformed inner objects`() {
         // One valid entry and one where the value is not a Map (malformed)
-        val map = mapOf<String, Any?>(
-            "milestoneRewards" to mapOf(
-                "7" to mapOf("amount" to 100L),
-                "14" to "not-a-map"  // malformed: value is a String, not a Map
+        val map =
+            mapOf<String, Any?>(
+                "milestoneRewards" to
+                    mapOf(
+                        "7" to mapOf("amount" to 100L),
+                        "14" to "not-a-map", // malformed: value is a String, not a Map
+                    ),
             )
-        )
 
         val config = EconomyConfig.fromMap(map)
 
@@ -47,9 +50,10 @@ class EconomyConfigMilestoneTest {
 
     @Test
     fun `milestoneRewards with non-Map value defaults to empty`() {
-        val map = mapOf<String, Any?>(
-            "milestoneRewards" to "not-a-map"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "milestoneRewards" to "not-a-map",
+            )
 
         val config = EconomyConfig.fromMap(map)
 
@@ -65,12 +69,14 @@ class EconomyConfigMilestoneTest {
 
     @Test
     fun `milestoneRewards skips entries with non-integer string keys`() {
-        val map = mapOf<String, Any?>(
-            "milestoneRewards" to mapOf(
-                "seven" to mapOf("amount" to 100L),   // non-parseable key
-                "7" to mapOf("amount" to 200L)
+        val map =
+            mapOf<String, Any?>(
+                "milestoneRewards" to
+                    mapOf(
+                        "seven" to mapOf("amount" to 100L), // non-parseable key
+                        "7" to mapOf("amount" to 200L),
+                    ),
             )
-        )
 
         val config = EconomyConfig.fromMap(map)
 
@@ -81,9 +87,10 @@ class EconomyConfigMilestoneTest {
 
     @Test
     fun `milestoneRewards with null value defaults to empty`() {
-        val map = mapOf<String, Any?>(
-            "milestoneRewards" to null
-        )
+        val map =
+            mapOf<String, Any?>(
+                "milestoneRewards" to null,
+            )
 
         val config = EconomyConfig.fromMap(map)
 
@@ -108,14 +115,15 @@ class EconomyConfigMilestoneTest {
 
     @Test
     fun `MilestoneReward fromMap parses type gift with giftId`() {
-        val reward = MilestoneReward.fromMap(
-            mapOf(
-                "type" to "gift",
-                "amount" to 0,
-                "giftId" to "gift-abc",
-                "quantity" to 2
+        val reward =
+            MilestoneReward.fromMap(
+                mapOf(
+                    "type" to "gift",
+                    "amount" to 0,
+                    "giftId" to "gift-abc",
+                    "quantity" to 2,
+                ),
             )
-        )
 
         assertEquals("gift", reward.type)
         assertEquals("gift-abc", reward.giftId)
@@ -169,11 +177,13 @@ class EconomyConfigMilestoneTest {
 
     @Test
     fun `milestoneRewards with empty inner map uses MilestoneReward defaults`() {
-        val map = mapOf<String, Any?>(
-            "milestoneRewards" to mapOf(
-                "7" to emptyMap<String, Any?>()
+        val map =
+            mapOf<String, Any?>(
+                "milestoneRewards" to
+                    mapOf(
+                        "7" to emptyMap<String, Any?>(),
+                    ),
             )
-        )
 
         val config = EconomyConfig.fromMap(map)
 

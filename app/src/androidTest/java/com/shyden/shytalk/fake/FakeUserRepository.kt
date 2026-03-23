@@ -14,10 +14,11 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.emptyFlow
 
 class FakeUserRepository : UserRepository {
-    val users = mutableMapOf(
-        "test-user-1" to TestData.currentUser,
-        "test-user-2" to TestData.otherUser
-    )
+    val users =
+        mutableMapOf(
+            "test-user-1" to TestData.currentUser,
+            "test-user-2" to TestData.otherUser,
+        )
 
     private val _userUpdates = MutableSharedFlow<User>(replay = 1, extraBufferCapacity = 5)
     override val userUpdates: SharedFlow<User> = _userUpdates.asSharedFlow()
@@ -35,44 +36,61 @@ class FakeUserRepository : UserRepository {
         return Resource.Success(user)
     }
 
-    override suspend fun userExists(userId: String): Resource<Boolean> =
-        Resource.Success(users.containsKey(userId))
+    override suspend fun userExists(userId: String): Resource<Boolean> = Resource.Success(users.containsKey(userId))
 
-    override suspend fun updateDisplayName(userId: String, displayName: String): Resource<Unit> {
+    override suspend fun updateDisplayName(
+        userId: String,
+        displayName: String,
+    ): Resource<Unit> {
         users[userId] = users[userId]?.copy(displayName = displayName) ?: return Resource.Error("User not found")
         return Resource.Success(Unit)
     }
 
-    override suspend fun updateAvatar(userId: String, avatarUrl: String): Resource<Unit> {
+    override suspend fun updateAvatar(
+        userId: String,
+        avatarUrl: String,
+    ): Resource<Unit> {
         users[userId] = users[userId]?.copy(avatarUrl = avatarUrl) ?: return Resource.Error("User not found")
         return Resource.Success(Unit)
     }
 
     override suspend fun updateLastSeen(userId: String): Resource<Unit> = Resource.Success(Unit)
 
-    override suspend fun updateProfile(userId: String, fields: Map<String, Any?>): Resource<Unit> =
-        Resource.Success(Unit)
+    override suspend fun updateProfile(
+        userId: String,
+        fields: Map<String, Any?>,
+    ): Resource<Unit> = Resource.Success(Unit)
 
-    override suspend fun generateUniqueId(userId: String): Resource<Long> =
-        Resource.Success(10000001L)
+    override suspend fun generateUniqueId(userId: String): Resource<Long> = Resource.Success(10000001L)
 
-    override suspend fun blockUser(userId: String, blockedUserId: String): Resource<Unit> =
-        Resource.Success(Unit)
+    override suspend fun blockUser(
+        userId: String,
+        blockedUserId: String,
+    ): Resource<Unit> = Resource.Success(Unit)
 
-    override suspend fun unblockUser(userId: String, blockedUserId: String): Resource<Unit> =
-        Resource.Success(Unit)
+    override suspend fun unblockUser(
+        userId: String,
+        blockedUserId: String,
+    ): Resource<Unit> = Resource.Success(Unit)
 
-    override suspend fun getBlockedUserIds(userId: String): Resource<Set<String>> =
-        Resource.Success(emptySet())
+    override suspend fun getBlockedUserIds(userId: String): Resource<Set<String>> = Resource.Success(emptySet())
 
-    override suspend fun checkBlockedBy(userIds: List<String>, targetUserId: String): Resource<Set<String>> {
-        val blockers = userIds.filter { uid ->
-            users[uid]?.blockedUserIds?.contains(targetUserId) == true
-        }.toSet()
+    override suspend fun checkBlockedBy(
+        userIds: List<String>,
+        targetUserId: String,
+    ): Resource<Set<String>> {
+        val blockers =
+            userIds
+                .filter { uid ->
+                    users[uid]?.blockedUserIds?.contains(targetUserId) == true
+                }.toSet()
         return Resource.Success(blockers)
     }
 
-    override suspend fun followUser(currentUserId: String, targetUserId: String): Resource<Unit> {
+    override suspend fun followUser(
+        currentUserId: String,
+        targetUserId: String,
+    ): Resource<Unit> {
         val current = users[currentUserId] ?: return Resource.Error("User not found")
         val target = users[targetUserId] ?: return Resource.Error("Target not found")
         users[currentUserId] = current.copy(followingIds = current.followingIds + targetUserId)
@@ -80,7 +98,10 @@ class FakeUserRepository : UserRepository {
         return Resource.Success(Unit)
     }
 
-    override suspend fun unfollowUser(currentUserId: String, targetUserId: String): Resource<Unit> {
+    override suspend fun unfollowUser(
+        currentUserId: String,
+        targetUserId: String,
+    ): Resource<Unit> {
         val current = users[currentUserId] ?: return Resource.Error("User not found")
         val target = users[targetUserId] ?: return Resource.Error("Target not found")
         users[currentUserId] = current.copy(followingIds = current.followingIds - targetUserId)
@@ -88,37 +109,43 @@ class FakeUserRepository : UserRepository {
         return Resource.Success(Unit)
     }
 
-    override suspend fun getUsers(userIds: List<String>): Resource<List<User>> =
-        Resource.Success(userIds.mapNotNull { users[it] })
+    override suspend fun getUsers(userIds: List<String>): Resource<List<User>> = Resource.Success(userIds.mapNotNull { users[it] })
 
-    override suspend fun removeFollower(userId: String, followerId: String): Resource<Unit> =
-        Resource.Success(Unit)
+    override suspend fun removeFollower(
+        userId: String,
+        followerId: String,
+    ): Resource<Unit> = Resource.Success(Unit)
 
-    override suspend fun recordProfileVisit(profileUserId: String, visitorId: String): Resource<Unit> =
-        Resource.Success(Unit)
+    override suspend fun recordProfileVisit(
+        profileUserId: String,
+        visitorId: String,
+    ): Resource<Unit> = Resource.Success(Unit)
 
-    override suspend fun getStalkers(profileUserId: String): Resource<List<ProfileVisitor>> =
-        Resource.Success(emptyList())
+    override suspend fun getStalkers(profileUserId: String): Resource<List<ProfileVisitor>> = Resource.Success(emptyList())
 
-    override suspend fun markStalkersViewed(userId: String): Resource<Unit> =
-        Resource.Success(Unit)
+    override suspend fun markStalkersViewed(userId: String): Resource<Unit> = Resource.Success(Unit)
 
     override fun observeUsers(userIds: Set<String>): Flow<User> = emptyFlow()
 
-    override suspend fun submitSuspensionAppeal(userId: String, appealText: String): Resource<Unit> =
-        Resource.Success(Unit)
+    override suspend fun submitSuspensionAppeal(
+        userId: String,
+        appealText: String,
+    ): Resource<Unit> = Resource.Success(Unit)
 
-    override suspend fun liftExpiredSuspension(userId: String): Resource<Unit> =
-        Resource.Success(Unit)
+    override suspend fun liftExpiredSuspension(userId: String): Resource<Unit> = Resource.Success(Unit)
 
-    override suspend fun getAliases(userId: String): Resource<Map<String, String>> =
-        Resource.Success(emptyMap())
+    override suspend fun getAliases(userId: String): Resource<Map<String, String>> = Resource.Success(emptyMap())
 
-    override suspend fun setAlias(userId: String, targetUserId: String, alias: String): Resource<Unit> =
-        Resource.Success(Unit)
+    override suspend fun setAlias(
+        userId: String,
+        targetUserId: String,
+        alias: String,
+    ): Resource<Unit> = Resource.Success(Unit)
 
-    override suspend fun removeAlias(userId: String, targetUserId: String): Resource<Unit> =
-        Resource.Success(Unit)
+    override suspend fun removeAlias(
+        userId: String,
+        targetUserId: String,
+    ): Resource<Unit> = Resource.Success(Unit)
 
     override fun observeUserFlags(userId: String): Flow<UserFlags> = userFlagsFlow
 
@@ -127,6 +154,5 @@ class FakeUserRepository : UserRepository {
         return Resource.Success(Unit)
     }
 
-    override suspend fun getWarningReason(userId: String): Resource<String?> =
-        Resource.Success(userFlagsFlow.value.warningReason)
+    override suspend fun getWarningReason(userId: String): Resource<String?> = Resource.Success(userFlagsFlow.value.warningReason)
 }

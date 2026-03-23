@@ -10,26 +10,27 @@ import org.junit.Test
 import java.util.Date
 
 class ChatRoomFromMapTest {
-
     private val tsMillis = 1_000_000_000L
     private val ts = Timestamp(Date(tsMillis))
 
     @Test
     fun `fromMap parses complete valid map`() {
-        val map = mapOf<String, Any?>(
-            "name" to "My Room",
-            "ownerId" to "owner-1",
-            "state" to "ACTIVE",
-            "createdAt" to ts,
-            "participantIds" to listOf("owner-1", "user-2"),
-            "hostIds" to listOf("user-2"),
-            "requireApproval" to true,
-            "bannedUserIds" to listOf("banned-1"),
-            "voiceRoomName" to "channel-1",
-            "seats" to mapOf(
-                "0" to mapOf("userId" to "owner-1", "state" to "OCCUPIED", "isMuted" to false)
+        val map =
+            mapOf<String, Any?>(
+                "name" to "My Room",
+                "ownerId" to "owner-1",
+                "state" to "ACTIVE",
+                "createdAt" to ts,
+                "participantIds" to listOf("owner-1", "user-2"),
+                "hostIds" to listOf("user-2"),
+                "requireApproval" to true,
+                "bannedUserIds" to listOf("banned-1"),
+                "voiceRoomName" to "channel-1",
+                "seats" to
+                    mapOf(
+                        "0" to mapOf("userId" to "owner-1", "state" to "OCCUPIED", "isMuted" to false),
+                    ),
             )
-        )
         val room = ChatRoom.fromMap(map, "room-1")
         assertEquals("room-1", room.roomId)
         assertEquals("My Room", room.name)
@@ -78,9 +79,10 @@ class ChatRoomFromMapTest {
 
     @Test
     fun `fromMap filters non-string items from participantIds`() {
-        val map = mapOf<String, Any?>(
-            "participantIds" to listOf("user-1", 42, null, "user-2")
-        )
+        val map =
+            mapOf<String, Any?>(
+                "participantIds" to listOf("user-1", 42, null, "user-2"),
+            )
         val room = ChatRoom.fromMap(map, "room-1")
         assertEquals(setOf("user-1", "user-2"), room.participantIds)
     }
@@ -93,9 +95,10 @@ class ChatRoomFromMapTest {
 
     @Test
     fun `fromMap creates all MAX_SEATS seats even when map has partial data`() {
-        val map = mapOf<String, Any?>(
-            "seats" to mapOf("0" to mapOf("userId" to "owner-1", "state" to "OCCUPIED"))
-        )
+        val map =
+            mapOf<String, Any?>(
+                "seats" to mapOf("0" to mapOf("userId" to "owner-1", "state" to "OCCUPIED")),
+            )
         val room = ChatRoom.fromMap(map, "room-1")
         assertEquals(Constants.MAX_SEATS, room.seats.size)
         assertEquals("owner-1", room.seats["0"]?.userId)
@@ -119,9 +122,10 @@ class ChatRoomFromMapTest {
 
     @Test
     fun `fromMap parses pendingInvites with string values`() {
-        val map = mapOf<String, Any?>(
-            "pendingInvites" to mapOf("user-1" to "inviter-1", "user-2" to "inviter-2")
-        )
+        val map =
+            mapOf<String, Any?>(
+                "pendingInvites" to mapOf("user-1" to "inviter-1", "user-2" to "inviter-2"),
+            )
         val room = ChatRoom.fromMap(map, "room-1")
         assertEquals("inviter-1", room.pendingInvites["user-1"])
         assertEquals("inviter-2", room.pendingInvites["user-2"])
@@ -135,16 +139,17 @@ class ChatRoomFromMapTest {
 
     @Test
     fun `toMap produces correct map`() {
-        val room = ChatRoom(
-            roomId = "room-1",
-            name = "My Room",
-            ownerId = "owner-1",
-            state = RoomState.ACTIVE,
-            createdAt = tsMillis,
-            participantIds = setOf("owner-1"),
-            requireApproval = true,
-            voiceRoomName = "ch-1"
-        )
+        val room =
+            ChatRoom(
+                roomId = "room-1",
+                name = "My Room",
+                ownerId = "owner-1",
+                state = RoomState.ACTIVE,
+                createdAt = tsMillis,
+                participantIds = setOf("owner-1"),
+                requireApproval = true,
+                voiceRoomName = "ch-1",
+            )
         val map = room.toMap()
         assertEquals("room-1", map["roomId"])
         assertEquals("My Room", map["name"])
@@ -156,12 +161,14 @@ class ChatRoomFromMapTest {
 
     @Test
     fun `toMap seats are serialized as nested maps`() {
-        val room = ChatRoom(
-            roomId = "room-1",
-            createdAt = tsMillis,
-            seats = mapOf("0" to Seat(userId = "owner-1", state = SeatState.OCCUPIED))
-        )
+        val room =
+            ChatRoom(
+                roomId = "room-1",
+                createdAt = tsMillis,
+                seats = mapOf("0" to Seat(userId = "owner-1", state = SeatState.OCCUPIED)),
+            )
         val map = room.toMap()
+
         @Suppress("UNCHECKED_CAST")
         val seatsMap = map["seats"] as Map<String, Map<String, Any?>>
         assertEquals("owner-1", seatsMap["0"]?.get("userId"))
@@ -170,25 +177,31 @@ class ChatRoomFromMapTest {
 
     @Test
     fun `fromMap of toMap produces equivalent room`() {
-        val seats = (0 until Constants.MAX_SEATS).associate { i ->
-            i.toString() to if (i == 0) Seat(userId = "owner-1", state = SeatState.OCCUPIED)
-            else Seat()
-        }
-        val original = ChatRoom(
-            roomId = "room-1",
-            name = "Test Room",
-            ownerId = "owner-1",
-            state = RoomState.ACTIVE,
-            createdAt = tsMillis,
-            participantIds = setOf("owner-1", "user-2"),
-            hostIds = setOf("user-2"),
-            requireApproval = true,
-            bannedUserIds = setOf("banned-1"),
-            pendingInvites = mapOf("user-3" to "owner-1"),
-            seats = seats,
-            voiceRoomName = "channel-1",
-            firstJoinTimestamps = mapOf("owner-1" to tsMillis)
-        )
+        val seats =
+            (0 until Constants.MAX_SEATS).associate { i ->
+                i.toString() to
+                    if (i == 0) {
+                        Seat(userId = "owner-1", state = SeatState.OCCUPIED)
+                    } else {
+                        Seat()
+                    }
+            }
+        val original =
+            ChatRoom(
+                roomId = "room-1",
+                name = "Test Room",
+                ownerId = "owner-1",
+                state = RoomState.ACTIVE,
+                createdAt = tsMillis,
+                participantIds = setOf("owner-1", "user-2"),
+                hostIds = setOf("user-2"),
+                requireApproval = true,
+                bannedUserIds = setOf("banned-1"),
+                pendingInvites = mapOf("user-3" to "owner-1"),
+                seats = seats,
+                voiceRoomName = "channel-1",
+                firstJoinTimestamps = mapOf("owner-1" to tsMillis),
+            )
         val roundtripped = ChatRoom.fromMap(original.toMap(), "room-1")
         assertEquals(original, roundtripped)
     }
@@ -223,19 +236,21 @@ class ChatRoomFromMapTest {
 
     @Test
     fun `fromMap reads legacy agoraChannelName key for backward compat`() {
-        val map = mapOf<String, Any?>(
-            "agoraChannelName" to "legacy-channel"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "agoraChannelName" to "legacy-channel",
+            )
         val room = ChatRoom.fromMap(map, "room-1")
         assertEquals("legacy-channel", room.voiceRoomName)
     }
 
     @Test
     fun `fromMap prefers voiceRoomName over agoraChannelName`() {
-        val map = mapOf<String, Any?>(
-            "voiceRoomName" to "new-room",
-            "agoraChannelName" to "old-channel"
-        )
+        val map =
+            mapOf<String, Any?>(
+                "voiceRoomName" to "new-room",
+                "agoraChannelName" to "old-channel",
+            )
         val room = ChatRoom.fromMap(map, "room-1")
         assertEquals("new-room", room.voiceRoomName)
     }
@@ -273,18 +288,20 @@ class ChatRoomFromMapTest {
 
     @Test
     fun `fromMap parses lastGiftEvent`() {
-        val map = mapOf<String, Any?>(
-            "lastGiftEvent" to mapOf(
-                "senderId" to "sender-1",
-                "senderName" to "Alice",
-                "recipientId" to "recipient-1",
-                "recipientName" to "Bob",
-                "giftId" to "crown",
-                "giftName" to "Crown",
-                "coinValue" to 800L,
-                "timestamp" to ts
+        val map =
+            mapOf<String, Any?>(
+                "lastGiftEvent" to
+                    mapOf(
+                        "senderId" to "sender-1",
+                        "senderName" to "Alice",
+                        "recipientId" to "recipient-1",
+                        "recipientName" to "Bob",
+                        "giftId" to "crown",
+                        "giftName" to "Crown",
+                        "coinValue" to 800L,
+                        "timestamp" to ts,
+                    ),
             )
-        )
         val room = ChatRoom.fromMap(map, "room-1")
         val event = room.lastGiftEvent
         assertEquals("sender-1", event?.senderId)
@@ -312,18 +329,20 @@ class ChatRoomFromMapTest {
 
     @Test
     fun `toMap serializes lastGiftEvent`() {
-        val event = GiftEvent(
-            senderId = "s1",
-            senderName = "Alice",
-            recipientId = "r1",
-            recipientName = "Bob",
-            giftId = "rose",
-            giftName = "Rose",
-            coinValue = 10,
-            timestamp = tsMillis
-        )
+        val event =
+            GiftEvent(
+                senderId = "s1",
+                senderName = "Alice",
+                recipientId = "r1",
+                recipientName = "Bob",
+                giftId = "rose",
+                giftName = "Rose",
+                coinValue = 10,
+                timestamp = tsMillis,
+            )
         val room = ChatRoom(roomId = "room-1", createdAt = tsMillis, lastGiftEvent = event)
         val map = room.toMap()
+
         @Suppress("UNCHECKED_CAST")
         val eventMap = map["lastGiftEvent"] as Map<String, Any?>
         assertEquals("s1", eventMap["senderId"])
@@ -346,9 +365,10 @@ class ChatRoomFromMapTest {
 
     @Test
     fun `fromMap with empty seats map produces all default seats`() {
-        val map = mapOf<String, Any?>(
-            "seats" to emptyMap<String, Any>()
-        )
+        val map =
+            mapOf<String, Any?>(
+                "seats" to emptyMap<String, Any>(),
+            )
         val room = ChatRoom.fromMap(map, "room-1")
         assertEquals(Constants.MAX_SEATS, room.seats.size)
         room.seats.values.forEach { seat ->
@@ -360,21 +380,24 @@ class ChatRoomFromMapTest {
 
     @Test
     fun `fromMap with null participantIds defaults to empty set`() {
-        val map = mapOf<String, Any?>(
-            "participantIds" to null
-        )
+        val map =
+            mapOf<String, Any?>(
+                "participantIds" to null,
+            )
         val room = ChatRoom.fromMap(map, "room-1")
         assertEquals(emptySet<String>(), room.participantIds)
     }
 
     @Test
     fun `fromMap with lastGiftEvent partial map populates known fields with defaults for rest`() {
-        val map = mapOf<String, Any?>(
-            "lastGiftEvent" to mapOf(
-                "senderId" to "sender-1",
-                "giftId" to "rose"
+        val map =
+            mapOf<String, Any?>(
+                "lastGiftEvent" to
+                    mapOf(
+                        "senderId" to "sender-1",
+                        "giftId" to "rose",
+                    ),
             )
-        )
         val room = ChatRoom.fromMap(map, "room-1")
         val event = room.lastGiftEvent
 
@@ -390,27 +413,30 @@ class ChatRoomFromMapTest {
 
     @Test
     fun `fromMap with null hostIds defaults to empty set`() {
-        val map = mapOf<String, Any?>(
-            "hostIds" to null
-        )
+        val map =
+            mapOf<String, Any?>(
+                "hostIds" to null,
+            )
         val room = ChatRoom.fromMap(map, "room-1")
         assertEquals(emptySet<String>(), room.hostIds)
     }
 
     @Test
     fun `fromMap with null bannedUserIds defaults to empty set`() {
-        val map = mapOf<String, Any?>(
-            "bannedUserIds" to null
-        )
+        val map =
+            mapOf<String, Any?>(
+                "bannedUserIds" to null,
+            )
         val room = ChatRoom.fromMap(map, "room-1")
         assertEquals(emptySet<String>(), room.bannedUserIds)
     }
 
     @Test
     fun `fromMap with null seats produces all default seats`() {
-        val map = mapOf<String, Any?>(
-            "seats" to null
-        )
+        val map =
+            mapOf<String, Any?>(
+                "seats" to null,
+            )
         val room = ChatRoom.fromMap(map, "room-1")
         assertEquals(Constants.MAX_SEATS, room.seats.size)
         room.seats.values.forEach { seat ->
@@ -421,11 +447,13 @@ class ChatRoomFromMapTest {
 
     @Test
     fun `fromMap with kickInfo map parses correctly`() {
-        val map = mapOf<String, Any?>(
-            "kickInfo" to mapOf(
-                "user-1" to mapOf("reason" to "spam", "kickedBy" to "owner-1")
+        val map =
+            mapOf<String, Any?>(
+                "kickInfo" to
+                    mapOf(
+                        "user-1" to mapOf("reason" to "spam", "kickedBy" to "owner-1"),
+                    ),
             )
-        )
         val room = ChatRoom.fromMap(map, "room-1")
         assertEquals("spam", room.kickInfo["user-1"]?.get("reason"))
         assertEquals("owner-1", room.kickInfo["user-1"]?.get("kickedBy"))
@@ -433,9 +461,10 @@ class ChatRoomFromMapTest {
 
     @Test
     fun `fromMap with null kickInfo defaults to empty map`() {
-        val map = mapOf<String, Any?>(
-            "kickInfo" to null
-        )
+        val map =
+            mapOf<String, Any?>(
+                "kickInfo" to null,
+            )
         val room = ChatRoom.fromMap(map, "room-1")
         assertEquals(emptyMap<String, Map<String, String>>(), room.kickInfo)
     }

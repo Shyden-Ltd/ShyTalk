@@ -7,21 +7,21 @@ import org.junit.Test
 import java.util.Date
 
 class SeatRequestFromMapTest {
-
     private val tsMillis = 1_000_000_000L
     private val ts = Timestamp(Date(tsMillis))
 
     @Test
     fun `fromMap parses complete valid map`() {
-        val map = mapOf<String, Any?>(
-            "userId" to "user-1",
-            "userName" to "Alice",
-            "seatIndex" to 3L,
-            "status" to "PENDING",
-            "createdAt" to ts,
-            "resolvedBy" to "admin",
-            "resolvedAt" to ts
-        )
+        val map =
+            mapOf<String, Any?>(
+                "userId" to "user-1",
+                "userName" to "Alice",
+                "seatIndex" to 3L,
+                "status" to "PENDING",
+                "createdAt" to ts,
+                "resolvedBy" to "admin",
+                "resolvedAt" to ts,
+            )
         val req = SeatRequest.fromMap(map, "req-1")
         assertEquals("req-1", req.requestId)
         assertEquals("user-1", req.userId)

@@ -30,7 +30,6 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class WalletViewModelTest {
-
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
@@ -40,20 +39,22 @@ class WalletViewModelTest {
 
     private val activeViewModels = mutableListOf<WalletViewModel>()
 
-    private val samplePackages = listOf(
-        CoinPackage(id = "p1", productId = "coins_100", coins = 100, bonusCoins = 0, displayPrice = "$0.99"),
-        CoinPackage(id = "p2", productId = "coins_500", coins = 500, bonusCoins = 50, displayPrice = "$4.99")
-    )
+    private val samplePackages =
+        listOf(
+            CoinPackage(id = "p1", productId = "coins_100", coins = 100, bonusCoins = 0, displayPrice = "$0.99"),
+            CoinPackage(id = "p2", productId = "coins_500", coins = 500, bonusCoins = 50, displayPrice = "$4.99"),
+        )
 
-    private val sampleUser = User(
-        uid = "u1",
-        displayName = "Alice",
-        shyCoins = 250,
-        shyBeans = 1000,
-        isSuperShy = true,
-        superShyTier = "gold",
-        superShyExpiry = 9999999999L
-    )
+    private val sampleUser =
+        User(
+            uid = "u1",
+            displayName = "Alice",
+            shyCoins = 250,
+            shyBeans = 1000,
+            isSuperShy = true,
+            superShyTier = "gold",
+            superShyExpiry = 9999999999L,
+        )
 
     @Before
     fun setup() {
@@ -63,307 +64,336 @@ class WalletViewModelTest {
     }
 
     @After
-    fun tearDown() = runBlocking {
-        activeViewModels.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() }
-        activeViewModels.clear()
-    }
+    fun tearDown() =
+        runBlocking {
+            activeViewModels.forEach {
+                it.viewModelScope.coroutineContext.job
+                    .cancelAndJoin()
+            }
+            activeViewModels.clear()
+        }
 
-    private fun createViewModel(): WalletViewModel {
-        return WalletViewModel(economyRepository, userRepository, authRepository).also { activeViewModels.add(it) }
-    }
-
-    @Test
-    fun `init loads packages and user balance`() = runTest {
-        val vm = createViewModel()
-        advanceUntilIdle()
-
-        val state = vm.uiState.value
-        assertEquals(2, state.coinPackages.size)
-        assertEquals(250L, state.coinBalance)
-        assertEquals(1000L, state.beanBalance)
-        assertTrue(state.isSuperShy)
-        assertEquals("gold", state.superShyTier)
-        assertFalse(state.isLoading)
-    }
+    private fun createViewModel(): WalletViewModel =
+        WalletViewModel(economyRepository, userRepository, authRepository).also {
+            activeViewModels.add(it)
+        }
 
     @Test
-    fun `init sets error when packages fail`() = runTest {
-        coEvery { economyRepository.getCoinPackages() } returns Resource.Error("Network error")
+    fun `init loads packages and user balance`() =
+        runTest {
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        val vm = createViewModel()
-        advanceUntilIdle()
-
-        assertEquals(UiText.Plain("Network error"), vm.uiState.value.error)
-    }
-
-    @Test
-    fun `init sets error when user fetch fails`() = runTest {
-        coEvery { userRepository.getUser("u1") } returns Resource.Error("User not found")
-
-        val vm = createViewModel()
-        advanceUntilIdle()
-
-        assertEquals(UiText.Plain("User not found"), vm.uiState.value.error)
-        assertFalse(vm.uiState.value.isLoading)
-    }
+            val state = vm.uiState.value
+            assertEquals(2, state.coinPackages.size)
+            assertEquals(250L, state.coinBalance)
+            assertEquals(1000L, state.beanBalance)
+            assertTrue(state.isSuperShy)
+            assertEquals("gold", state.superShyTier)
+            assertFalse(state.isLoading)
+        }
 
     @Test
-    fun `init with null userId does not crash`() = runTest {
-        every { authRepository.currentUserId } returns null
+    fun `init sets error when packages fail`() =
+        runTest {
+            coEvery { economyRepository.getCoinPackages() } returns Resource.Error("Network error")
 
-        val vm = createViewModel()
-        advanceUntilIdle()
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        // Should still load packages but not user data
-        assertEquals(2, vm.uiState.value.coinPackages.size)
-        assertEquals(0L, vm.uiState.value.coinBalance)
-    }
-
-    @Test
-    fun `testPurchaseCoins adds coins on success`() = runTest {
-        coEvery { economyRepository.addTestCoins(500) } returns Resource.Success(emptyMap())
-
-        val vm = createViewModel()
-        advanceUntilIdle()
-
-        vm.testPurchaseCoins(500)
-        advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.successMessage is UiText.Res)
-        assertFalse(vm.uiState.value.isPurchasing)
-    }
+            assertEquals(UiText.Plain("Network error"), vm.uiState.value.error)
+        }
 
     @Test
-    fun `testPurchaseCoins sets error on failure`() = runTest {
-        coEvery { economyRepository.addTestCoins(500) } returns Resource.Error("Server error")
+    fun `init sets error when user fetch fails`() =
+        runTest {
+            coEvery { userRepository.getUser("u1") } returns Resource.Error("User not found")
 
-        val vm = createViewModel()
-        advanceUntilIdle()
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        vm.testPurchaseCoins(500)
-        advanceUntilIdle()
-
-        assertEquals(UiText.Plain("Server error"), vm.uiState.value.error)
-        assertFalse(vm.uiState.value.isPurchasing)
-    }
+            assertEquals(UiText.Plain("User not found"), vm.uiState.value.error)
+            assertFalse(vm.uiState.value.isLoading)
+        }
 
     @Test
-    fun `redeemBeans with insufficient beans sets error`() = runTest {
-        val vm = createViewModel()
-        advanceUntilIdle()
+    fun `init with null userId does not crash`() =
+        runTest {
+            every { authRepository.currentUserId } returns null
 
-        vm.redeemBeans(5000) // balance is 1000
-        advanceUntilIdle()
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.error is UiText.Res)
-    }
-
-    @Test
-    fun `redeemBeans with zero amount is ignored`() = runTest {
-        val vm = createViewModel()
-        advanceUntilIdle()
-
-        vm.redeemBeans(0)
-        advanceUntilIdle()
-
-        assertNull(vm.uiState.value.error)
-        assertNull(vm.uiState.value.successMessage)
-    }
+            // Should still load packages but not user data
+            assertEquals(2, vm.uiState.value.coinPackages.size)
+            assertEquals(0L, vm.uiState.value.coinBalance)
+        }
 
     @Test
-    fun `redeemBeans success shows message without bonus`() = runTest {
-        coEvery { economyRepository.redeemBeans(500) } returns Resource.Success(emptyMap())
+    fun `testPurchaseCoins adds coins on success`() =
+        runTest {
+            coEvery { economyRepository.addTestCoins(500) } returns Resource.Success(emptyMap())
 
-        val vm = createViewModel()
-        advanceUntilIdle()
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        vm.redeemBeans(500)
-        advanceUntilIdle()
+            vm.testPurchaseCoins(500)
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.successMessage is UiText.Res)
-    }
-
-    @Test
-    fun `redeemBeans 2000 or more shows bonus message`() = runTest {
-        // Set balance high enough
-        coEvery { userRepository.getUser("u1") } returns Resource.Success(sampleUser.copy(shyBeans = 5000))
-        coEvery { economyRepository.redeemBeans(2000) } returns Resource.Success(emptyMap())
-
-        val vm = createViewModel()
-        advanceUntilIdle()
-
-        vm.redeemBeans(2000)
-        advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.successMessage is UiText.Res)
-    }
+            assertTrue(vm.uiState.value.successMessage is UiText.Res)
+            assertFalse(vm.uiState.value.isPurchasing)
+        }
 
     @Test
-    fun `redeemBeans failure sets error`() = runTest {
-        coEvery { economyRepository.redeemBeans(500) } returns Resource.Error("Failed")
+    fun `testPurchaseCoins sets error on failure`() =
+        runTest {
+            coEvery { economyRepository.addTestCoins(500) } returns Resource.Error("Server error")
 
-        val vm = createViewModel()
-        advanceUntilIdle()
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        vm.redeemBeans(500)
-        advanceUntilIdle()
+            vm.testPurchaseCoins(500)
+            advanceUntilIdle()
 
-        assertEquals(UiText.Plain("Failed"), vm.uiState.value.error)
-        assertFalse(vm.uiState.value.isPurchasing)
-    }
-
-    @Test
-    fun `onPurchaseCompleted coin purchase success`() = runTest {
-        coEvery {
-            economyRepository.purchaseCoins("coins_100", "token123")
-        } returns Resource.Success(emptyMap())
-
-        val vm = createViewModel()
-        advanceUntilIdle()
-
-        vm.onPurchaseCompleted("coins_100", "token123", isSubscription = false)
-        advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.successMessage is UiText.Res)
-        assertFalse(vm.uiState.value.isPurchasing)
-    }
+            assertEquals(UiText.Plain("Server error"), vm.uiState.value.error)
+            assertFalse(vm.uiState.value.isPurchasing)
+        }
 
     @Test
-    fun `onPurchaseCompleted subscription purchase success`() = runTest {
-        coEvery {
-            economyRepository.purchaseSubscription("sub_gold", "token456")
-        } returns Resource.Success(emptyMap())
+    fun `redeemBeans with insufficient beans sets error`() =
+        runTest {
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        val vm = createViewModel()
-        advanceUntilIdle()
+            vm.redeemBeans(5000) // balance is 1000
+            advanceUntilIdle()
 
-        vm.onPurchaseCompleted("sub_gold", "token456", isSubscription = true)
-        advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.successMessage is UiText.Res)
-    }
+            assertTrue(vm.uiState.value.error is UiText.Res)
+        }
 
     @Test
-    fun `onPurchaseCompleted failure sets error`() = runTest {
-        coEvery {
-            economyRepository.purchaseCoins("coins_100", "bad_token")
-        } returns Resource.Error("Payment failed")
+    fun `redeemBeans with zero amount is ignored`() =
+        runTest {
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        val vm = createViewModel()
-        advanceUntilIdle()
+            vm.redeemBeans(0)
+            advanceUntilIdle()
 
-        vm.onPurchaseCompleted("coins_100", "bad_token", isSubscription = false)
-        advanceUntilIdle()
+            assertNull(vm.uiState.value.error)
+            assertNull(vm.uiState.value.successMessage)
+        }
 
-        assertEquals(UiText.Plain("Payment failed"), vm.uiState.value.error)
-        assertFalse(vm.uiState.value.isPurchasing)
-    }
+    @Test
+    fun `redeemBeans success shows message without bonus`() =
+        runTest {
+            coEvery { economyRepository.redeemBeans(500) } returns Resource.Success(emptyMap())
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.redeemBeans(500)
+            advanceUntilIdle()
+
+            assertTrue(vm.uiState.value.successMessage is UiText.Res)
+        }
+
+    @Test
+    fun `redeemBeans 2000 or more shows bonus message`() =
+        runTest {
+            // Set balance high enough
+            coEvery { userRepository.getUser("u1") } returns Resource.Success(sampleUser.copy(shyBeans = 5000))
+            coEvery { economyRepository.redeemBeans(2000) } returns Resource.Success(emptyMap())
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.redeemBeans(2000)
+            advanceUntilIdle()
+
+            assertTrue(vm.uiState.value.successMessage is UiText.Res)
+        }
+
+    @Test
+    fun `redeemBeans failure sets error`() =
+        runTest {
+            coEvery { economyRepository.redeemBeans(500) } returns Resource.Error("Failed")
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.redeemBeans(500)
+            advanceUntilIdle()
+
+            assertEquals(UiText.Plain("Failed"), vm.uiState.value.error)
+            assertFalse(vm.uiState.value.isPurchasing)
+        }
+
+    @Test
+    fun `onPurchaseCompleted coin purchase success`() =
+        runTest {
+            coEvery {
+                economyRepository.purchaseCoins("coins_100", "token123")
+            } returns Resource.Success(emptyMap())
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.onPurchaseCompleted("coins_100", "token123", isSubscription = false)
+            advanceUntilIdle()
+
+            assertTrue(vm.uiState.value.successMessage is UiText.Res)
+            assertFalse(vm.uiState.value.isPurchasing)
+        }
+
+    @Test
+    fun `onPurchaseCompleted subscription purchase success`() =
+        runTest {
+            coEvery {
+                economyRepository.purchaseSubscription("sub_gold", "token456")
+            } returns Resource.Success(emptyMap())
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.onPurchaseCompleted("sub_gold", "token456", isSubscription = true)
+            advanceUntilIdle()
+
+            assertTrue(vm.uiState.value.successMessage is UiText.Res)
+        }
+
+    @Test
+    fun `onPurchaseCompleted failure sets error`() =
+        runTest {
+            coEvery {
+                economyRepository.purchaseCoins("coins_100", "bad_token")
+            } returns Resource.Error("Payment failed")
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.onPurchaseCompleted("coins_100", "bad_token", isSubscription = false)
+            advanceUntilIdle()
+
+            assertEquals(UiText.Plain("Payment failed"), vm.uiState.value.error)
+            assertFalse(vm.uiState.value.isPurchasing)
+        }
 
     // ===== Coin packages order preserved =====
 
     @Test
-    fun `coin packages preserve order from repository`() = runTest {
-        val packages = listOf(
-            CoinPackage(id = "p3", productId = "coins_1000", coins = 1000, bonusCoins = 100, displayPrice = "$9.99", order = 3),
-            CoinPackage(id = "p1", productId = "coins_100", coins = 100, bonusCoins = 0, displayPrice = "$0.99", order = 1),
-            CoinPackage(id = "p2", productId = "coins_500", coins = 500, bonusCoins = 50, displayPrice = "$4.99", order = 2)
-        )
-        coEvery { economyRepository.getCoinPackages() } returns Resource.Success(packages)
+    fun `coin packages preserve order from repository`() =
+        runTest {
+            val packages =
+                listOf(
+                    CoinPackage(id = "p3", productId = "coins_1000", coins = 1000, bonusCoins = 100, displayPrice = "$9.99", order = 3),
+                    CoinPackage(id = "p1", productId = "coins_100", coins = 100, bonusCoins = 0, displayPrice = "$0.99", order = 1),
+                    CoinPackage(id = "p2", productId = "coins_500", coins = 500, bonusCoins = 50, displayPrice = "$4.99", order = 2),
+                )
+            coEvery { economyRepository.getCoinPackages() } returns Resource.Success(packages)
 
-        val vm = createViewModel()
-        advanceUntilIdle()
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        val ids = vm.uiState.value.coinPackages.map { it.id }
-        assertEquals(listOf("p3", "p1", "p2"), ids)
-    }
+            val ids =
+                vm.uiState.value.coinPackages
+                    .map { it.id }
+            assertEquals(listOf("p3", "p1", "p2"), ids)
+        }
 
     // ===== Purchase success updates balance =====
 
     @Test
-    fun `onPurchaseCompleted success reloads user balance`() = runTest {
-        coEvery {
-            economyRepository.purchaseCoins("coins_100", "token123")
-        } returns Resource.Success(emptyMap())
+    fun `onPurchaseCompleted success reloads user balance`() =
+        runTest {
+            coEvery {
+                economyRepository.purchaseCoins("coins_100", "token123")
+            } returns Resource.Success(emptyMap())
 
-        // After purchase, loadData will re-fetch user with updated balance
-        val updatedUser = sampleUser.copy(shyCoins = 350)
-        coEvery { userRepository.getUser("u1") } returnsMany listOf(
-            Resource.Success(sampleUser),
-            Resource.Success(updatedUser)
-        )
+            // After purchase, loadData will re-fetch user with updated balance
+            val updatedUser = sampleUser.copy(shyCoins = 350)
+            coEvery { userRepository.getUser("u1") } returnsMany
+                listOf(
+                    Resource.Success(sampleUser),
+                    Resource.Success(updatedUser),
+                )
 
-        val vm = createViewModel()
-        advanceUntilIdle()
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        assertEquals(250L, vm.uiState.value.coinBalance)
+            assertEquals(250L, vm.uiState.value.coinBalance)
 
-        vm.onPurchaseCompleted("coins_100", "token123", isSubscription = false)
-        advanceUntilIdle()
+            vm.onPurchaseCompleted("coins_100", "token123", isSubscription = false)
+            advanceUntilIdle()
 
-        assertEquals(350L, vm.uiState.value.coinBalance)
-        assertTrue(vm.uiState.value.successMessage is UiText.Res)
-    }
+            assertEquals(350L, vm.uiState.value.coinBalance)
+            assertTrue(vm.uiState.value.successMessage is UiText.Res)
+        }
 
     // ===== Purchase error shows error message =====
 
     @Test
-    fun `onPurchaseCompleted coin purchase failure shows error and clears purchasing`() = runTest {
-        coEvery {
-            economyRepository.purchaseCoins("coins_100", "bad")
-        } returns Resource.Error("Insufficient funds")
+    fun `onPurchaseCompleted coin purchase failure shows error and clears purchasing`() =
+        runTest {
+            coEvery {
+                economyRepository.purchaseCoins("coins_100", "bad")
+            } returns Resource.Error("Insufficient funds")
 
-        val vm = createViewModel()
-        advanceUntilIdle()
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        vm.onPurchaseCompleted("coins_100", "bad", isSubscription = false)
-        advanceUntilIdle()
+            vm.onPurchaseCompleted("coins_100", "bad", isSubscription = false)
+            advanceUntilIdle()
 
-        assertEquals(UiText.Plain("Insufficient funds"), vm.uiState.value.error)
-        assertFalse(vm.uiState.value.isPurchasing)
-    }
-
-    @Test
-    fun `clearError clears error`() = runTest {
-        coEvery { economyRepository.getCoinPackages() } returns Resource.Error("fail")
-
-        val vm = createViewModel()
-        advanceUntilIdle()
-
-        assertNotNull(vm.uiState.value.error)
-        vm.clearError()
-        assertNull(vm.uiState.value.error)
-    }
+            assertEquals(UiText.Plain("Insufficient funds"), vm.uiState.value.error)
+            assertFalse(vm.uiState.value.isPurchasing)
+        }
 
     @Test
-    fun `redeemBeans supports large Long values`() = runTest {
-        val largeBalance = 5_000_000_000L
-        coEvery { userRepository.getUser("u1") } returns Resource.Success(sampleUser.copy(shyBeans = largeBalance))
-        coEvery { economyRepository.redeemBeans(largeBalance) } returns Resource.Success(emptyMap())
+    fun `clearError clears error`() =
+        runTest {
+            coEvery { economyRepository.getCoinPackages() } returns Resource.Error("fail")
 
-        val vm = createViewModel()
-        advanceUntilIdle()
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        assertEquals(largeBalance, vm.uiState.value.beanBalance)
-
-        vm.redeemBeans(largeBalance)
-        advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.successMessage is UiText.Res)
-        assertFalse(vm.uiState.value.isPurchasing)
-    }
+            assertNotNull(vm.uiState.value.error)
+            vm.clearError()
+            assertNull(vm.uiState.value.error)
+        }
 
     @Test
-    fun `clearSuccess clears success message`() = runTest {
-        coEvery { economyRepository.addTestCoins(100) } returns Resource.Success(emptyMap())
+    fun `redeemBeans supports large Long values`() =
+        runTest {
+            val largeBalance = 5_000_000_000L
+            coEvery { userRepository.getUser("u1") } returns Resource.Success(sampleUser.copy(shyBeans = largeBalance))
+            coEvery { economyRepository.redeemBeans(largeBalance) } returns Resource.Success(emptyMap())
 
-        val vm = createViewModel()
-        advanceUntilIdle()
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        vm.testPurchaseCoins(100)
-        advanceUntilIdle()
+            assertEquals(largeBalance, vm.uiState.value.beanBalance)
 
-        assertNotNull(vm.uiState.value.successMessage)
-        vm.clearSuccess()
-        assertNull(vm.uiState.value.successMessage)
-    }
+            vm.redeemBeans(largeBalance)
+            advanceUntilIdle()
+
+            assertTrue(vm.uiState.value.successMessage is UiText.Res)
+            assertFalse(vm.uiState.value.isPurchasing)
+        }
+
+    @Test
+    fun `clearSuccess clears success message`() =
+        runTest {
+            coEvery { economyRepository.addTestCoins(100) } returns Resource.Success(emptyMap())
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.testPurchaseCoins(100)
+            advanceUntilIdle()
+
+            assertNotNull(vm.uiState.value.successMessage)
+            vm.clearSuccess()
+            assertNull(vm.uiState.value.successMessage)
+        }
 }

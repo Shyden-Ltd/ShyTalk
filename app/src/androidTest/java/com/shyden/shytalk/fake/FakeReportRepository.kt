@@ -8,19 +8,36 @@ class FakeReportRepository : ReportRepository {
     val reports = mutableListOf<Report>()
 
     override suspend fun reportMessage(
-        reporterId: String, reporterName: String, reporterUniqueId: Long,
-        reportedUserId: String, reportedUserName: String, reportedUserUniqueId: Long,
-        conversationId: String, messageId: String, messageText: String,
-        reason: String, description: String
+        reporterId: String,
+        reporterName: String,
+        reporterUniqueId: Long,
+        reportedUserId: String,
+        reportedUserName: String,
+        reportedUserUniqueId: Long,
+        conversationId: String,
+        messageId: String,
+        messageText: String,
+        reason: String,
+        description: String,
     ): Resource<Unit> = Resource.Success(Unit)
 
     override suspend fun reportUser(
-        reporterId: String, reporterName: String, reporterUniqueId: Long,
-        reportedUserId: String, reportedUserName: String, reportedUserUniqueId: Long,
-        conversationId: String, reason: String, description: String,
-        evidenceUrls: List<String>
+        reporterId: String,
+        reporterName: String,
+        reporterUniqueId: Long,
+        reportedUserId: String,
+        reportedUserName: String,
+        reportedUserUniqueId: Long,
+        conversationId: String,
+        reason: String,
+        description: String,
+        evidenceUrls: List<String>,
     ): Resource<Unit> = Resource.Success(Unit)
 
     override suspend fun getPendingReports(): Resource<List<Report>> = Resource.Success(reports)
-    override suspend fun resolveReport(reportId: String, action: String): Resource<Unit> = Resource.Success(Unit)
+
+    override suspend fun resolveReport(
+        reportId: String,
+        action: String,
+    ): Resource<Unit> = Resource.Success(Unit)
 }

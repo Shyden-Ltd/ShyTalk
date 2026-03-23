@@ -7,7 +7,6 @@ import com.shyden.shytalk.util.waitForText
 import io.cucumber.java.en.When
 
 class PinSteps {
-
     private val rule get() = ComposeTestRuleHolder.rule
 
     @When("I enter PIN {string}")

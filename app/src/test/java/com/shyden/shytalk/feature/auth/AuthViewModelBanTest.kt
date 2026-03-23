@@ -29,7 +29,6 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AuthViewModelBanTest {
-
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
@@ -48,10 +47,14 @@ class AuthViewModelBanTest {
     private val activeViewModels = mutableListOf<AuthViewModel>()
 
     @After
-    fun tearDown() = runBlocking {
-        activeViewModels.forEach { it.viewModelScope.coroutineContext.job.cancelAndJoin() }
-        activeViewModels.clear()
-    }
+    fun tearDown() =
+        runBlocking {
+            activeViewModels.forEach {
+                it.viewModelScope.coroutineContext.job
+                    .cancelAndJoin()
+            }
+            activeViewModels.clear()
+        }
 
     /** Sets up mocks for explicit Google sign-in that resolves identity. */
     private fun setupSignInIdentity() {
@@ -64,135 +67,148 @@ class AuthViewModelBanTest {
         coEvery { identityRepository.forceRefreshToken() } returns Resource.Success(Unit)
     }
 
-    private fun createViewModel() = AuthViewModel(
-        authRepository = authRepository,
-        userRepository = userRepository,
-        deviceRepository = deviceRepository,
-        identityRepository = identityRepository,
-        deviceId = deviceId
-    ).also { activeViewModels.add(it) }
+    private fun createViewModel() =
+        AuthViewModel(
+            authRepository = authRepository,
+            userRepository = userRepository,
+            deviceRepository = deviceRepository,
+            identityRepository = identityRepository,
+            deviceId = deviceId,
+        ).also { activeViewModels.add(it) }
 
     @Test
-    fun `signInWithGoogle - device banned blocks authentication`() = runTest {
-        setupSignInIdentity()
-        coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
-        coEvery { deviceRepository.checkBanStatus(deviceId) } returns Resource.Success(
-            BanStatus(isBanned = true, banType = "device", reason = "Spam", expiresAt = "2099-01-01T00:00:00Z")
-        )
+    fun `signInWithGoogle - device banned blocks authentication`() =
+        runTest {
+            setupSignInIdentity()
+            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.checkBanStatus(deviceId) } returns
+                Resource.Success(
+                    BanStatus(isBanned = true, banType = "device", reason = "Spam", expiresAt = "2099-01-01T00:00:00Z"),
+                )
 
-        val vm = createViewModel()
-        advanceUntilIdle()
-        vm.signInWithGoogle("token")
-        advanceUntilIdle()
+            val vm = createViewModel()
+            advanceUntilIdle()
+            vm.signInWithGoogle("token")
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.isDeviceBanned)
-        assertFalse(vm.uiState.value.isNetworkBanned)
-        assertFalse(vm.uiState.value.isAuthenticated)
-        assertEquals("Spam", vm.uiState.value.banReason)
-        assertEquals("2099-01-01T00:00:00Z", vm.uiState.value.banExpiresAt)
-    }
-
-    @Test
-    fun `signInWithGoogle - network banned blocks authentication`() = runTest {
-        setupSignInIdentity()
-        coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
-        coEvery { deviceRepository.checkBanStatus(deviceId) } returns Resource.Success(
-            BanStatus(isBanned = true, banType = "network_ip", reason = "VPN abuse", expiresAt = null)
-        )
-
-        val vm = createViewModel()
-        advanceUntilIdle()
-        vm.signInWithGoogle("token")
-        advanceUntilIdle()
-
-        assertFalse(vm.uiState.value.isDeviceBanned)
-        assertTrue(vm.uiState.value.isNetworkBanned)
-        assertFalse(vm.uiState.value.isAuthenticated)
-        assertEquals("VPN abuse", vm.uiState.value.banReason)
-        assertNull(vm.uiState.value.banExpiresAt)
-    }
+            assertTrue(vm.uiState.value.isDeviceBanned)
+            assertFalse(vm.uiState.value.isNetworkBanned)
+            assertFalse(vm.uiState.value.isAuthenticated)
+            assertEquals("Spam", vm.uiState.value.banReason)
+            assertEquals("2099-01-01T00:00:00Z", vm.uiState.value.banExpiresAt)
+        }
 
     @Test
-    fun `signInWithGoogle - not banned proceeds to profile resolution`() = runTest {
-        setupSignInIdentity()
-        coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
-        coEvery { deviceRepository.checkBanStatus(deviceId) } returns Resource.Success(BanStatus())
-        coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
-        coEvery { userRepository.getUser(uniqueIdStr) } returns Resource.Success(
-            TestData.createTestUser(uid = uniqueIdStr, dateOfBirth = testDob)
-        )
+    fun `signInWithGoogle - network banned blocks authentication`() =
+        runTest {
+            setupSignInIdentity()
+            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.checkBanStatus(deviceId) } returns
+                Resource.Success(
+                    BanStatus(isBanned = true, banType = "network_ip", reason = "VPN abuse", expiresAt = null),
+                )
 
-        val vm = createViewModel()
-        advanceUntilIdle()
-        vm.signInWithGoogle("token")
-        advanceUntilIdle()
+            val vm = createViewModel()
+            advanceUntilIdle()
+            vm.signInWithGoogle("token")
+            advanceUntilIdle()
 
-        assertFalse(vm.uiState.value.isDeviceBanned)
-        assertFalse(vm.uiState.value.isNetworkBanned)
-        assertTrue(vm.uiState.value.isAuthenticated)
-    }
-
-    @Test
-    fun `signInWithGoogle - ban check error is lenient`() = runTest {
-        setupSignInIdentity()
-        coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
-        coEvery { deviceRepository.checkBanStatus(deviceId) } returns Resource.Error("network error")
-        coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
-        coEvery { userRepository.getUser(uniqueIdStr) } returns Resource.Success(
-            TestData.createTestUser(uid = uniqueIdStr, dateOfBirth = testDob)
-        )
-
-        val vm = createViewModel()
-        advanceUntilIdle()
-        vm.signInWithGoogle("token")
-        advanceUntilIdle()
-
-        assertFalse(vm.uiState.value.isDeviceBanned)
-        assertFalse(vm.uiState.value.isNetworkBanned)
-        assertTrue(vm.uiState.value.isAuthenticated)
-    }
+            assertFalse(vm.uiState.value.isDeviceBanned)
+            assertTrue(vm.uiState.value.isNetworkBanned)
+            assertFalse(vm.uiState.value.isAuthenticated)
+            assertEquals("VPN abuse", vm.uiState.value.banReason)
+            assertNull(vm.uiState.value.banExpiresAt)
+        }
 
     @Test
-    fun `signInWithApple - network banned after sign-in`() = runTest {
-        every { authRepository.isAuthenticated } returns false
-        every { authRepository.currentUserId } returns null
-        coEvery { authRepository.signInWithAppleIdToken("token", "nonce") } returns Resource.Success("firebase-uid")
-        every { authRepository.getProviderInfo() } returns ("apple" to "001234.abcdef")
-        coEvery { identityRepository.resolveIdentity("apple", "001234.abcdef") } returns
-            Resource.Success(SignInResult.Found(uniqueId))
-        coEvery { identityRepository.forceRefreshToken() } returns Resource.Success(Unit)
-        coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
-        coEvery { deviceRepository.checkBanStatus(deviceId) } returns Resource.Success(
-            BanStatus(isBanned = true, banType = "network_asn", reason = "Datacenter IP")
-        )
+    fun `signInWithGoogle - not banned proceeds to profile resolution`() =
+        runTest {
+            setupSignInIdentity()
+            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.checkBanStatus(deviceId) } returns Resource.Success(BanStatus())
+            coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
+            coEvery { userRepository.getUser(uniqueIdStr) } returns
+                Resource.Success(
+                    TestData.createTestUser(uid = uniqueIdStr, dateOfBirth = testDob),
+                )
 
-        val vm = createViewModel()
-        advanceUntilIdle()
-        vm.signInWithApple("token", "nonce")
-        advanceUntilIdle()
+            val vm = createViewModel()
+            advanceUntilIdle()
+            vm.signInWithGoogle("token")
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.isNetworkBanned)
-        assertFalse(vm.uiState.value.isAuthenticated)
-    }
+            assertFalse(vm.uiState.value.isDeviceBanned)
+            assertFalse(vm.uiState.value.isNetworkBanned)
+            assertTrue(vm.uiState.value.isAuthenticated)
+        }
 
     @Test
-    fun `signOut clears ban state`() = runTest {
-        setupSignInIdentity()
-        coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
-        coEvery { deviceRepository.checkBanStatus(deviceId) } returns Resource.Success(
-            BanStatus(isBanned = true, banType = "device", reason = "Spam")
-        )
+    fun `signInWithGoogle - ban check error is lenient`() =
+        runTest {
+            setupSignInIdentity()
+            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.checkBanStatus(deviceId) } returns Resource.Error("network error")
+            coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
+            coEvery { userRepository.getUser(uniqueIdStr) } returns
+                Resource.Success(
+                    TestData.createTestUser(uid = uniqueIdStr, dateOfBirth = testDob),
+                )
 
-        val vm = createViewModel()
-        advanceUntilIdle()
-        vm.signInWithGoogle("token")
-        advanceUntilIdle()
-        assertTrue(vm.uiState.value.isDeviceBanned)
+            val vm = createViewModel()
+            advanceUntilIdle()
+            vm.signInWithGoogle("token")
+            advanceUntilIdle()
 
-        vm.signOut()
+            assertFalse(vm.uiState.value.isDeviceBanned)
+            assertFalse(vm.uiState.value.isNetworkBanned)
+            assertTrue(vm.uiState.value.isAuthenticated)
+        }
 
-        assertFalse(vm.uiState.value.isDeviceBanned)
-        assertFalse(vm.uiState.value.isNetworkBanned)
-        assertNull(vm.uiState.value.banReason)
-    }
+    @Test
+    fun `signInWithApple - network banned after sign-in`() =
+        runTest {
+            every { authRepository.isAuthenticated } returns false
+            every { authRepository.currentUserId } returns null
+            coEvery { authRepository.signInWithAppleIdToken("token", "nonce") } returns Resource.Success("firebase-uid")
+            every { authRepository.getProviderInfo() } returns ("apple" to "001234.abcdef")
+            coEvery { identityRepository.resolveIdentity("apple", "001234.abcdef") } returns
+                Resource.Success(SignInResult.Found(uniqueId))
+            coEvery { identityRepository.forceRefreshToken() } returns Resource.Success(Unit)
+            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.checkBanStatus(deviceId) } returns
+                Resource.Success(
+                    BanStatus(isBanned = true, banType = "network_asn", reason = "Datacenter IP"),
+                )
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+            vm.signInWithApple("token", "nonce")
+            advanceUntilIdle()
+
+            assertTrue(vm.uiState.value.isNetworkBanned)
+            assertFalse(vm.uiState.value.isAuthenticated)
+        }
+
+    @Test
+    fun `signOut clears ban state`() =
+        runTest {
+            setupSignInIdentity()
+            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.checkBanStatus(deviceId) } returns
+                Resource.Success(
+                    BanStatus(isBanned = true, banType = "device", reason = "Spam"),
+                )
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+            vm.signInWithGoogle("token")
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.isDeviceBanned)
+
+            vm.signOut()
+
+            assertFalse(vm.uiState.value.isDeviceBanned)
+            assertFalse(vm.uiState.value.isNetworkBanned)
+            assertNull(vm.uiState.value.banReason)
+        }
 }

@@ -7,14 +7,14 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.shyden.shytalk.fake.FakeRoomRepository
 import com.shyden.shytalk.data.repository.RoomRepository
-import com.shyden.shytalk.util.launchMainScreen
-import com.shyden.shytalk.util.waitForTag
-import com.shyden.shytalk.util.waitForText
+import com.shyden.shytalk.fake.FakeRoomRepository
 import com.shyden.shytalk.testdata.TestData
 import com.shyden.shytalk.util.ResetFakesRule
 import com.shyden.shytalk.util.ScreenshotRule
+import com.shyden.shytalk.util.launchMainScreen
+import com.shyden.shytalk.util.waitForTag
+import com.shyden.shytalk.util.waitForText
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -25,7 +25,6 @@ import org.koin.test.inject
 
 @RunWith(AndroidJUnit4::class)
 class RoomBrowsingTest : KoinTest {
-
     @get:Rule(order = 0)
     val resetFakes = ResetFakesRule()
 
@@ -38,7 +37,9 @@ class RoomBrowsingTest : KoinTest {
     @Before
     fun grantAudioPermission() {
         val packageName = InstrumentationRegistry.getInstrumentation().targetContext.packageName
-        InstrumentationRegistry.getInstrumentation().uiAutomation
+        InstrumentationRegistry
+            .getInstrumentation()
+            .uiAutomation
             .executeShellCommand("pm grant $packageName android.permission.RECORD_AUDIO")
             .close()
     }

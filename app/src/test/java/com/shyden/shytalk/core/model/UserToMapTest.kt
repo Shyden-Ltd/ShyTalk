@@ -6,17 +6,17 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class UserToMapTest {
-
     @Test
     fun `toMap contains all fields`() {
-        val user = TestData.createTestUser(
-            uid = "u1",
-            displayName = "Alice",
-            blockedUserIds = setOf("b1", "b2"),
-            profilePhotoUrl = "https://example.com/photo.jpg",
-            coverPhotoUrl = "https://example.com/cover.jpg",
-            uniqueId = 99999L
-        )
+        val user =
+            TestData.createTestUser(
+                uid = "u1",
+                displayName = "Alice",
+                blockedUserIds = setOf("b1", "b2"),
+                profilePhotoUrl = "https://example.com/photo.jpg",
+                coverPhotoUrl = "https://example.com/cover.jpg",
+                uniqueId = 99999L,
+            )
         val map = user.toMap()
 
         assertEquals("u1", map["uid"])
@@ -29,12 +29,13 @@ class UserToMapTest {
 
     @Test
     fun `toMap includes null optional fields`() {
-        val user = User(
-            uid = "u1",
-            displayName = "Bob",
-            createdAt = TestData.BASE_TIMESTAMP,
-            lastSeenAt = TestData.BASE_TIMESTAMP
-        )
+        val user =
+            User(
+                uid = "u1",
+                displayName = "Bob",
+                createdAt = TestData.BASE_TIMESTAMP,
+                lastSeenAt = TestData.BASE_TIMESTAMP,
+            )
         val map = user.toMap()
 
         assertNull(map["avatarUrl"])
@@ -71,28 +72,72 @@ class UserToMapTest {
 
     @Test
     fun `toMap keys match expected field names`() {
-        val expectedKeys = setOf(
-            "uid", "displayName", "avatarUrl", "profilePhotoUrl", "coverPhotoUrl",
-            "description", "nationality", "uniqueId", "firebaseUid", "providers",
-            "blockedUserIds",
-            "followingIds", "followerIds", "dateOfBirth", "hideFollowing",
-            "hideOnlineStatus", "hideAge", "email",
-            "currentRoomId", "lastRoomName", "userType", "createdAt", "lastSeenAt",
-            "stalkerCount", "newStalkerCount", "stalkersLastViewedAt",
-            "isSuspended", "suspensionReason", "suspensionStartDate",
-            "suspensionEndDate", "suspensionCanAppeal", "suspendedBy",
-            "suspensionAppealStatus",
-            "fcmTokens", "pmNotificationsEnabled", "pmPrivacy",
-            "pmSoundEnabled", "pmShowTimestamps", "pmShowDateSeparators",
-            "pmNotificationPreview", "acceptedLegalVersion",
-            "dndEnabled", "dndStartHour", "dndStartMinute",
-            "dndEndHour", "dndEndMinute",
-            "shyCoins", "shyBeans", "isSuperShy", "superShyExpiry", "superShyTier",
-            "tempUniqueId", "tempUniqueIdExpiry",
-            "luckScore", "pityCounter", "loginStreak", "lastLoginDate", "lastLoginRewardDate",
-            "aliases", "minGiftAnimationValue", "selfDestructAlertEnabled", "hasClaimedSuperShyTrial",
-            "language"
-        )
+        val expectedKeys =
+            setOf(
+                "uid",
+                "displayName",
+                "avatarUrl",
+                "profilePhotoUrl",
+                "coverPhotoUrl",
+                "description",
+                "nationality",
+                "uniqueId",
+                "firebaseUid",
+                "providers",
+                "blockedUserIds",
+                "followingIds",
+                "followerIds",
+                "dateOfBirth",
+                "hideFollowing",
+                "hideOnlineStatus",
+                "hideAge",
+                "email",
+                "currentRoomId",
+                "lastRoomName",
+                "userType",
+                "createdAt",
+                "lastSeenAt",
+                "stalkerCount",
+                "newStalkerCount",
+                "stalkersLastViewedAt",
+                "isSuspended",
+                "suspensionReason",
+                "suspensionStartDate",
+                "suspensionEndDate",
+                "suspensionCanAppeal",
+                "suspendedBy",
+                "suspensionAppealStatus",
+                "fcmTokens",
+                "pmNotificationsEnabled",
+                "pmPrivacy",
+                "pmSoundEnabled",
+                "pmShowTimestamps",
+                "pmShowDateSeparators",
+                "pmNotificationPreview",
+                "acceptedLegalVersion",
+                "dndEnabled",
+                "dndStartHour",
+                "dndStartMinute",
+                "dndEndHour",
+                "dndEndMinute",
+                "shyCoins",
+                "shyBeans",
+                "isSuperShy",
+                "superShyExpiry",
+                "superShyTier",
+                "tempUniqueId",
+                "tempUniqueIdExpiry",
+                "luckScore",
+                "pityCounter",
+                "loginStreak",
+                "lastLoginDate",
+                "lastLoginRewardDate",
+                "aliases",
+                "minGiftAnimationValue",
+                "selfDestructAlertEnabled",
+                "hasClaimedSuperShyTrial",
+                "language",
+            )
         val user = TestData.createTestUser()
         assertEquals(expectedKeys, user.toMap().keys)
     }
@@ -178,20 +223,21 @@ class UserToMapTest {
 
     @Test
     fun `toMap roundtrip preserves non-null optional fields`() {
-        val user = User(
-            uid = "u1",
-            displayName = "Test",
-            avatarUrl = "avatar.png",
-            profilePhotoUrl = "profile.png",
-            coverPhotoUrl = "cover.png",
-            description = "Hello world",
-            nationality = "US",
-            uniqueId = 42L,
-            blockedUserIds = setOf("x"),
-            email = "test@example.com",
-            createdAt = TestData.BASE_TIMESTAMP,
-            lastSeenAt = TestData.LATER_TIMESTAMP
-        )
+        val user =
+            User(
+                uid = "u1",
+                displayName = "Test",
+                avatarUrl = "avatar.png",
+                profilePhotoUrl = "profile.png",
+                coverPhotoUrl = "cover.png",
+                description = "Hello world",
+                nationality = "US",
+                uniqueId = 42L,
+                blockedUserIds = setOf("x"),
+                email = "test@example.com",
+                createdAt = TestData.BASE_TIMESTAMP,
+                lastSeenAt = TestData.LATER_TIMESTAMP,
+            )
         val map = user.toMap()
 
         assertEquals(user.uid, map["uid"])
@@ -214,14 +260,15 @@ class UserToMapTest {
     fun `toMap includes suspension fields when suspended`() {
         val startMillis = 1_500_000_000_000L
         val endMillis = 1_600_000_000_000L
-        val user = User(
-            isSuspended = true,
-            suspensionReason = "Spam",
-            suspensionStartDate = startMillis,
-            suspensionEndDate = endMillis,
-            suspensionCanAppeal = true,
-            suspendedBy = "admin-1"
-        )
+        val user =
+            User(
+                isSuspended = true,
+                suspensionReason = "Spam",
+                suspensionStartDate = startMillis,
+                suspensionEndDate = endMillis,
+                suspensionCanAppeal = true,
+                suspendedBy = "admin-1",
+            )
         val map = user.toMap()
 
         assertEquals(true, map["isSuspended"])
@@ -248,73 +295,75 @@ class UserToMapTest {
 
     @Test
     fun `toMap then fromMap roundtrip preserves all fields`() {
-        val original = User(
-            uid = "user-1",
-            displayName = "Alice",
-            avatarUrl = "https://avatar.png",
-            profilePhotoUrl = "https://profile.png",
-            coverPhotoUrl = "https://cover.png",
-            description = "Hello world",
-            nationality = "GB",
-            uniqueId = 99999L,
-            blockedUserIds = setOf("b1", "b2"),
-            followingIds = setOf("f1"),
-            followerIds = setOf("f2"),
-            dateOfBirth = TestData.BASE_TIMESTAMP,
-            hideFollowing = true,
-            hideOnlineStatus = true,
-            hideAge = true,
-            email = "alice@example.com",
-            currentRoomId = "room-1",
-            lastRoomName = "My Room",
-            userType = UserType.MEMBER,
-            createdAt = TestData.BASE_TIMESTAMP,
-            lastSeenAt = TestData.LATER_TIMESTAMP,
-            stalkerCount = 10,
-            newStalkerCount = 3,
-            stalkersLastViewedAt = TestData.BASE_TIMESTAMP,
-            isSuspended = true,
-            suspensionReason = "Spam",
-            suspensionStartDate = TestData.BASE_TIMESTAMP,
-            suspensionEndDate = TestData.LATER_TIMESTAMP,
-            suspensionCanAppeal = true,
-            suspendedBy = "admin-1",
-            suspensionAppealStatus = "pending",
-            fcmTokens = listOf("token-1", "token-2"),
-            pmNotificationsEnabled = false,
-            pmPrivacy = PmPrivacy.FOLLOWERS_ONLY,
-            pmSoundEnabled = false,
-            pmShowTimestamps = false,
-            pmShowDateSeparators = false,
-            pmNotificationPreview = false,
-            acceptedLegalVersion = 2,
-            dndEnabled = true,
-            dndStartHour = 23,
-            dndStartMinute = 30,
-            dndEndHour = 7,
-            dndEndMinute = 15,
-            shyCoins = 5000,
-            shyBeans = 1200,
-            isSuperShy = true,
-            superShyExpiry = TestData.LATER_TIMESTAMP,
-            superShyTier = "monthly",
-            luckScore = 42,
-            pityCounter = 7,
-            loginStreak = 5,
-            lastLoginDate = "2020-01-15",
-            lastLoginRewardDate = "2020-01-14",
-            aliases = mapOf("room-1" to "DJ Alice"),
-            minGiftAnimationValue = 500,
-            hasClaimedSuperShyTrial = true
-        )
+        val original =
+            User(
+                uid = "user-1",
+                displayName = "Alice",
+                avatarUrl = "https://avatar.png",
+                profilePhotoUrl = "https://profile.png",
+                coverPhotoUrl = "https://cover.png",
+                description = "Hello world",
+                nationality = "GB",
+                uniqueId = 99999L,
+                blockedUserIds = setOf("b1", "b2"),
+                followingIds = setOf("f1"),
+                followerIds = setOf("f2"),
+                dateOfBirth = TestData.BASE_TIMESTAMP,
+                hideFollowing = true,
+                hideOnlineStatus = true,
+                hideAge = true,
+                email = "alice@example.com",
+                currentRoomId = "room-1",
+                lastRoomName = "My Room",
+                userType = UserType.MEMBER,
+                createdAt = TestData.BASE_TIMESTAMP,
+                lastSeenAt = TestData.LATER_TIMESTAMP,
+                stalkerCount = 10,
+                newStalkerCount = 3,
+                stalkersLastViewedAt = TestData.BASE_TIMESTAMP,
+                isSuspended = true,
+                suspensionReason = "Spam",
+                suspensionStartDate = TestData.BASE_TIMESTAMP,
+                suspensionEndDate = TestData.LATER_TIMESTAMP,
+                suspensionCanAppeal = true,
+                suspendedBy = "admin-1",
+                suspensionAppealStatus = "pending",
+                fcmTokens = listOf("token-1", "token-2"),
+                pmNotificationsEnabled = false,
+                pmPrivacy = PmPrivacy.FOLLOWERS_ONLY,
+                pmSoundEnabled = false,
+                pmShowTimestamps = false,
+                pmShowDateSeparators = false,
+                pmNotificationPreview = false,
+                acceptedLegalVersion = 2,
+                dndEnabled = true,
+                dndStartHour = 23,
+                dndStartMinute = 30,
+                dndEndHour = 7,
+                dndEndMinute = 15,
+                shyCoins = 5000,
+                shyBeans = 1200,
+                isSuperShy = true,
+                superShyExpiry = TestData.LATER_TIMESTAMP,
+                superShyTier = "monthly",
+                luckScore = 42,
+                pityCounter = 7,
+                loginStreak = 5,
+                lastLoginDate = "2020-01-15",
+                lastLoginRewardDate = "2020-01-14",
+                aliases = mapOf("room-1" to "DJ Alice"),
+                minGiftAnimationValue = 500,
+                hasClaimedSuperShyTrial = true,
+            )
 
         // Simulate Firestore type coercion: Firestore returns all numbers as Long
-        val firestoreMap = original.toMap().mapValues { (_, v) ->
-            when (v) {
-                is Int -> v.toLong()
-                else -> v
+        val firestoreMap =
+            original.toMap().mapValues { (_, v) ->
+                when (v) {
+                    is Int -> v.toLong()
+                    else -> v
+                }
             }
-        }
         val roundtripped = User.fromMap(firestoreMap, "user-1")
 
         assertEquals(original, roundtripped)
@@ -322,15 +371,16 @@ class UserToMapTest {
 
     @Test
     fun `fromMap with extra unexpected fields ignores them`() {
-        val map = mapOf<String, Any?>(
-            "displayName" to "Bob",
-            "createdAt" to TestData.BASE_TIMESTAMP,
-            "lastSeenAt" to TestData.BASE_TIMESTAMP,
-            "unexpectedField1" to "should be ignored",
-            "unexpectedField2" to 999L,
-            "anotherExtra" to listOf("a", "b"),
-            "randomBool" to true
-        )
+        val map =
+            mapOf<String, Any?>(
+                "displayName" to "Bob",
+                "createdAt" to TestData.BASE_TIMESTAMP,
+                "lastSeenAt" to TestData.BASE_TIMESTAMP,
+                "unexpectedField1" to "should be ignored",
+                "unexpectedField2" to 999L,
+                "anotherExtra" to listOf("a", "b"),
+                "randomBool" to true,
+            )
 
         val user = User.fromMap(map, "user-1")
 

@@ -6,7 +6,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CountryDataTest {
-
     @Test
     fun `flagEmojiForCode returns correct emoji for US`() {
         val result = flagEmojiForCode("US")

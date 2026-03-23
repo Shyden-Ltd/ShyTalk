@@ -4,7 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class GiftEffectRegistryTest {
-
     // ===== durationForValue =====
 
     @Test
@@ -107,13 +106,36 @@ class GiftEffectRegistryTest {
 
     @Test
     fun `all 27 known gift IDs are mapped`() {
-        val allIds = listOf(
-            "rose", "heart", "thumbs_up", "star", "smiley", "coffee", "candy", "balloon",
-            "teddy_bear", "perfume", "diamond_ring", "bouquet", "fireworks", "music_box",
-            "treasure_chest", "crown", "sports_car", "yacht", "dragon", "phoenix",
-            "crystal_ball", "castle", "spaceship", "aurora", "galaxy_unicorn",
-            "shytalk_emblem", "celestial_throne"
-        )
+        val allIds =
+            listOf(
+                "rose",
+                "heart",
+                "thumbs_up",
+                "star",
+                "smiley",
+                "coffee",
+                "candy",
+                "balloon",
+                "teddy_bear",
+                "perfume",
+                "diamond_ring",
+                "bouquet",
+                "fireworks",
+                "music_box",
+                "treasure_chest",
+                "crown",
+                "sports_car",
+                "yacht",
+                "dragon",
+                "phoenix",
+                "crystal_ball",
+                "castle",
+                "spaceship",
+                "aurora",
+                "galaxy_unicorn",
+                "shytalk_emblem",
+                "celestial_throne",
+            )
         assertEquals(27, allIds.size)
         for (id in allIds) {
             val coinValue = GiftEffectRegistry.coinValueForGiftId(id)

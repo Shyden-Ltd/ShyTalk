@@ -5,9 +5,9 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -28,31 +28,29 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.navigation.compose.rememberNavController
+import com.google.firebase.auth.FirebaseAuth
 import com.shyden.shytalk.core.room.ActiveRoomManager
 import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.core.room.RoomService
-import com.shyden.shytalk.data.remote.WorkerApiClient
-import com.google.firebase.auth.FirebaseAuth
-import com.shyden.shytalk.data.repository.AuthRepository
-import com.shyden.shytalk.data.repository.UserRepository
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import com.shyden.shytalk.core.util.DeviceSecurityChecker
 import com.shyden.shytalk.core.util.LanguagePreference
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.remote.AppConfigService
+import com.shyden.shytalk.data.remote.StartingScreen
+import com.shyden.shytalk.data.remote.WorkerApiClient
+import com.shyden.shytalk.data.repository.AppLockRepository
+import com.shyden.shytalk.data.repository.AuthRepository
+import com.shyden.shytalk.data.repository.UserRepository
 import com.shyden.shytalk.feature.legal.CURRENT_LEGAL_VERSION
-import com.shyden.shytalk.feature.legal.LegalAcceptanceScreen
 import com.shyden.shytalk.feature.legal.CommunityStandardsScreen
 import com.shyden.shytalk.feature.legal.CyberBullyingPolicyScreen
+import com.shyden.shytalk.feature.legal.LegalAcceptanceScreen
 import com.shyden.shytalk.feature.legal.TermsAndConditionsScreen
 import com.shyden.shytalk.feature.privacy.PrivacyPolicyScreen
-import com.shyden.shytalk.data.remote.StartingScreen
 import com.shyden.shytalk.feature.security.UnsafeDeviceScreen
 import com.shyden.shytalk.feature.starting.StartingScreenCache
 import com.shyden.shytalk.feature.starting.StartingScreenComposable
@@ -60,18 +58,19 @@ import com.shyden.shytalk.feature.update.DegradedModeScreen
 import com.shyden.shytalk.feature.update.ForceUpdateScreen
 import com.shyden.shytalk.navigation.NavGraph
 import com.shyden.shytalk.navigation.Screen
-import com.shyden.shytalk.ui.theme.ShyTalkTheme
-import org.jetbrains.compose.resources.stringResource
-import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.*
+import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.ui.theme.ShyTalkTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
 import org.koin.android.ext.android.inject
-import androidx.lifecycle.DefaultLifecycleObserver
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.ProcessLifecycleOwner
-import com.shyden.shytalk.data.repository.AppLockRepository
 
 class MainActivity : AppCompatActivity() {
-
     private val authRepository: AuthRepository by inject()
     private val userRepository: UserRepository by inject()
     private val workerApiClient: WorkerApiClient by inject()
@@ -80,10 +79,10 @@ class MainActivity : AppCompatActivity() {
     private val biometricAuth: com.shyden.shytalk.core.util.BiometricAuth by inject()
     private val appLockRepository: AppLockRepository by inject()
 
-    private val _navigateToRoom = mutableStateOf<String?>(null)
-    private val _navigateToChat = mutableStateOf<Pair<String, Boolean>?>(null) // (id, isGroup)
-    private val _pendingEmailLink = mutableStateOf<String?>(null)
-    private val _showLeaveConfirmation = mutableStateOf(false)
+    private val navigateToRoomState = mutableStateOf<String?>(null)
+    private val navigateToChatState = mutableStateOf<Pair<String, Boolean>?>(null) // (id, isGroup)
+    private val pendingEmailLinkState = mutableStateOf<String?>(null)
+    private val showLeaveConfirmationState = mutableStateOf(false)
     private var lastSeenJob: Job? = null
 
     override fun attachBaseContext(newBase: Context) {
@@ -100,12 +99,14 @@ class MainActivity : AppCompatActivity() {
         enableEdgeToEdge()
 
         // Track app background/foreground for lock timeout
-        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
-            override fun onStop(owner: LifecycleOwner) {
-                // App went to background — record timestamp
-                appLockRepository.updateLastActiveTimestamp()
-            }
-        })
+        ProcessLifecycleOwner.get().lifecycle.addObserver(
+            object : DefaultLifecycleObserver {
+                override fun onStop(owner: LifecycleOwner) {
+                    // App went to background — record timestamp
+                    appLockRepository.updateLastActiveTimestamp()
+                }
+            },
+        )
 
         setContent {
             ShyTalkTheme(darkTheme = true) {
@@ -146,9 +147,10 @@ class MainActivity : AppCompatActivity() {
                                 blockingScreen = blocker
                             } else {
                                 cache.clearBlocker()
-                                dismissableScreens = enabledScreens
-                                    .filter { it.dismissable }
-                                    .filter { it.frequency != "once" || !cache.isDismissed(it.screenId) }
+                                dismissableScreens =
+                                    enabledScreens
+                                        .filter { it.dismissable }
+                                        .filter { it.frequency != "once" || !cache.isDismissed(it.screenId) }
                             }
                         }
                         is Resource.Error -> {
@@ -212,23 +214,23 @@ class MainActivity : AppCompatActivity() {
                         // Loading spinner while checking starting screens
                         Surface(
                             color = MaterialTheme.colorScheme.background,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
                         ) {
                             Column(
                                 modifier = Modifier.fillMaxSize(),
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
+                                verticalArrangement = Arrangement.Center,
                             ) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(24.dp),
                                     strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = MaterialTheme.colorScheme.primary,
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(
                                     text = stringResource(Res.string.starting_screen_loading),
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
@@ -237,65 +239,74 @@ class MainActivity : AppCompatActivity() {
                         // Blocking screen — STOPS all further loading
                         StartingScreenComposable(
                             screen = blockingScreen!!,
-                            onDismiss = { blockingScreenDismissed = true }
+                            onDismiss = { blockingScreenDismissed = true },
                         )
                     }
                     !checkComplete -> {
                         Surface(
                             color = MaterialTheme.colorScheme.background,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
                         ) {
                             Column(
                                 modifier = Modifier.fillMaxSize(),
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
+                                verticalArrangement = Arrangement.Center,
                             ) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(24.dp),
                                     strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = MaterialTheme.colorScheme.primary,
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(
                                     text = stringResource(Res.string.checking_for_updates),
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
                     }
-                    isUnsafe -> { UnsafeDeviceScreen() }
-                    updateRequired -> { ForceUpdateScreen() }
+                    isUnsafe -> {
+                        UnsafeDeviceScreen()
+                    }
+                    updateRequired -> {
+                        ForceUpdateScreen()
+                    }
                     backendDegraded && !degradedAcknowledged -> {
                         DegradedModeScreen(onAcknowledge = { degradedAcknowledged = true })
                     }
                     !legalAccepted -> {
                         when (viewingLegalDoc) {
-                            "privacy" -> PrivacyPolicyScreen(
-                                onAccept = {},
-                                onDecline = {},
-                                onNavigateBack = { viewingLegalDoc = null },
-                                showActions = false
-                            )
-                            "community" -> CommunityStandardsScreen(
-                                onNavigateBack = { viewingLegalDoc = null }
-                            )
-                            "terms" -> TermsAndConditionsScreen(
-                                onNavigateBack = { viewingLegalDoc = null }
-                            )
-                            "cyberbullying" -> CyberBullyingPolicyScreen(
-                                onNavigateBack = { viewingLegalDoc = null }
-                            )
-                            else -> LegalAcceptanceScreen(
-                                onAccept = {
-                                    LanguagePreference.setAcceptedLegalVersion(CURRENT_LEGAL_VERSION)
-                                    legalAccepted = true
-                                },
-                                onViewPrivacyPolicy = { viewingLegalDoc = "privacy" },
-                                onViewCommunityStandards = { viewingLegalDoc = "community" },
-                                onViewTerms = { viewingLegalDoc = "terms" },
-                                onViewCyberBullyingPolicy = { viewingLegalDoc = "cyberbullying" }
-                            )
+                            "privacy" ->
+                                PrivacyPolicyScreen(
+                                    onAccept = {},
+                                    onDecline = {},
+                                    onNavigateBack = { viewingLegalDoc = null },
+                                    showActions = false,
+                                )
+                            "community" ->
+                                CommunityStandardsScreen(
+                                    onNavigateBack = { viewingLegalDoc = null },
+                                )
+                            "terms" ->
+                                TermsAndConditionsScreen(
+                                    onNavigateBack = { viewingLegalDoc = null },
+                                )
+                            "cyberbullying" ->
+                                CyberBullyingPolicyScreen(
+                                    onNavigateBack = { viewingLegalDoc = null },
+                                )
+                            else ->
+                                LegalAcceptanceScreen(
+                                    onAccept = {
+                                        LanguagePreference.setAcceptedLegalVersion(CURRENT_LEGAL_VERSION)
+                                        legalAccepted = true
+                                    },
+                                    onViewPrivacyPolicy = { viewingLegalDoc = "privacy" },
+                                    onViewCommunityStandards = { viewingLegalDoc = "community" },
+                                    onViewTerms = { viewingLegalDoc = "terms" },
+                                    onViewCyberBullyingPolicy = { viewingLegalDoc = "cyberbullying" },
+                                )
                         }
                     }
                     dismissableScreens.isNotEmpty() && dismissableScreenIndex < dismissableScreens.size -> {
@@ -307,106 +318,123 @@ class MainActivity : AppCompatActivity() {
                                     cache.markDismissed(currentScreen.screenId)
                                 }
                                 dismissableScreenIndex++
-                            }
+                            },
                         )
                     }
                     else -> {
-                            val navController = rememberNavController()
-                            val navigateToRoomId by _navigateToRoom
+                        val navController = rememberNavController()
+                        val navigateToRoomId by navigateToRoomState
 
-                            LaunchedEffect(navigateToRoomId) {
-                                val roomId = navigateToRoomId
-                                if (roomId != null) {
-                                    navController.navigate(Screen.Room.createRoute(roomId)) {
-                                        launchSingleTop = true
-                                    }
-                                    _navigateToRoom.value = null
+                        LaunchedEffect(navigateToRoomId) {
+                            val roomId = navigateToRoomId
+                            if (roomId != null) {
+                                navController.navigate(Screen.Room.createRoute(roomId)) {
+                                    launchSingleTop = true
                                 }
+                                navigateToRoomState.value = null
                             }
+                        }
 
-                            val navigateToChatInfo by _navigateToChat
+                        val navigateToChatInfo by navigateToChatState
 
-                            LaunchedEffect(navigateToChatInfo) {
-                                val chatInfo = navigateToChatInfo
-                                if (chatInfo != null) {
-                                    val (id, isGroup) = chatInfo
-                                    val route = if (isGroup) {
+                        LaunchedEffect(navigateToChatInfo) {
+                            val chatInfo = navigateToChatInfo
+                            if (chatInfo != null) {
+                                val (id, isGroup) = chatInfo
+                                val route =
+                                    if (isGroup) {
                                         Screen.GroupChat.createRoute(id)
                                     } else {
                                         Screen.PrivateChat.createRoute(id)
                                     }
-                                    navController.navigate(route) {
-                                        launchSingleTop = true
-                                    }
-                                    _navigateToChat.value = null
+                                navController.navigate(route) {
+                                    launchSingleTop = true
                                 }
+                                navigateToChatState.value = null
                             }
+                        }
 
-                            val pendingEmailLink by _pendingEmailLink
+                        val pendingEmailLink by pendingEmailLinkState
 
-                            NavGraph(
-                                navController = navController,
-                                startDestination = Screen.SignIn.route,
-                                isBackendDegraded = backendDegraded,
-                                pendingEmailLink = pendingEmailLink,
-                                onEmailLinkConsumed = { _pendingEmailLink.value = null },
-                                onSignOut = {
-                                    workerApiClient.clearTokenCache()
-                                    authRepository.signOut()
-                                }
+                        NavGraph(
+                            navController = navController,
+                            startDestination = Screen.SignIn.route,
+                            isBackendDegraded = backendDegraded,
+                            pendingEmailLink = pendingEmailLink,
+                            onEmailLinkConsumed = { pendingEmailLinkState.value = null },
+                            onSignOut = {
+                                workerApiClient.clearTokenCache()
+                                authRepository.signOut()
+                            },
+                        )
+
+                        softUpdateAvailable?.let { version ->
+                            AlertDialog(
+                                onDismissRequest = { softUpdateAvailable = null },
+                                title = { Text(stringResource(Res.string.update_available)) },
+                                text = { Text(stringResource(Res.string.update_available_soft, version)) },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        softUpdateAvailable = null
+                                        startActivity(
+                                            Intent(
+                                                Intent.ACTION_VIEW,
+                                                Uri.parse("https://play.google.com/store/apps/details?id=com.shyden.shytalk"),
+                                            ),
+                                        )
+                                    }) { Text(stringResource(Res.string.update_now)) }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { softUpdateAvailable = null }) {
+                                        Text(stringResource(Res.string.later))
+                                    }
+                                },
                             )
-
-                            softUpdateAvailable?.let { version ->
-                                AlertDialog(
-                                    onDismissRequest = { softUpdateAvailable = null },
-                                    title = { Text(stringResource(Res.string.update_available)) },
-                                    text = { Text(stringResource(Res.string.update_available_soft, version)) },
-                                    confirmButton = {
-                                        TextButton(onClick = {
-                                            softUpdateAvailable = null
-                                            startActivity(
-                                                Intent(
-                                                    Intent.ACTION_VIEW,
-                                                    Uri.parse("https://play.google.com/store/apps/details?id=com.shyden.shytalk")
-                                                )
-                                            )
-                                        }) { Text(stringResource(Res.string.update_now)) }
-                                    },
-                                    dismissButton = {
-                                        TextButton(onClick = { softUpdateAvailable = null }) {
-                                            Text(stringResource(Res.string.later))
-                                        }
-                                    }
-                                )
-                            }
+                        }
                     }
                 }
 
                 // Leave room confirmation dialog (triggered by chathead X tap)
-                val showLeaveDialog by _showLeaveConfirmation
+                val showLeaveDialog by showLeaveConfirmationState
                 if (showLeaveDialog) {
                     val isOwner = activeRoomManager.activeRoom.value?.ownerId == activeRoomManager.currentUserId
                     AlertDialog(
-                        onDismissRequest = { _showLeaveConfirmation.value = false },
-                        title = { Text(if (isOwner) stringResource(Res.string.close_room_question) else stringResource(Res.string.leave_room_question)) },
-                        text = { Text(
-                            if (isOwner) stringResource(Res.string.close_room_description)
-                            else stringResource(Res.string.leave_room_description)
-                        ) },
+                        onDismissRequest = { showLeaveConfirmationState.value = false },
+                        title = {
+                            Text(
+                                if (isOwner) {
+                                    stringResource(
+                                        Res.string.close_room_question,
+                                    )
+                                } else {
+                                    stringResource(Res.string.leave_room_question)
+                                },
+                            )
+                        },
+                        text = {
+                            Text(
+                                if (isOwner) {
+                                    stringResource(Res.string.close_room_description)
+                                } else {
+                                    stringResource(Res.string.leave_room_description)
+                                },
+                            )
+                        },
                         confirmButton = {
                             TextButton(onClick = {
-                                _showLeaveConfirmation.value = false
-                                val intent = Intent(this@MainActivity, RoomService::class.java).apply {
-                                    action = "CONFIRM_DISMISS"
-                                }
+                                showLeaveConfirmationState.value = false
+                                val intent =
+                                    Intent(this@MainActivity, RoomService::class.java).apply {
+                                        action = "CONFIRM_DISMISS"
+                                    }
                                 startService(intent)
                             }) { Text(stringResource(Res.string.leave)) }
                         },
                         dismissButton = {
-                            TextButton(onClick = { _showLeaveConfirmation.value = false }) {
+                            TextButton(onClick = { showLeaveConfirmationState.value = false }) {
                                 Text(stringResource(Res.string.cancel))
                             }
-                        }
+                        },
                     )
                 }
             }
@@ -431,14 +459,15 @@ class MainActivity : AppCompatActivity() {
 
     private fun startLastSeenUpdates() {
         lastSeenJob?.cancel()
-        lastSeenJob = CoroutineScope(Dispatchers.IO).launch {
-            while (isActive) {
-                authRepository.currentUserId?.let { uid ->
-                    userRepository.updateLastSeen(uid)
+        lastSeenJob =
+            CoroutineScope(Dispatchers.IO).launch {
+                while (isActive) {
+                    authRepository.currentUserId?.let { uid ->
+                        userRepository.updateLastSeen(uid)
+                    }
+                    delay(LAST_SEEN_INTERVAL_MS)
                 }
-                delay(LAST_SEEN_INTERVAL_MS)
             }
-        }
     }
 
     companion object {
@@ -456,7 +485,7 @@ class MainActivity : AppCompatActivity() {
         // Handle email sign-in deep link
         val data = intent.data?.toString()
         if (data != null && FirebaseAuth.getInstance().isSignInWithEmailLink(data)) {
-            _pendingEmailLink.value = data
+            pendingEmailLinkState.value = data
             return
         }
 
@@ -480,12 +509,12 @@ class MainActivity : AppCompatActivity() {
                 if (isGroup) {
                     val conversationId = intent.getStringExtra("conversationId")
                     if (conversationId != null) {
-                        _navigateToChat.value = conversationId to true
+                        navigateToChatState.value = conversationId to true
                     }
                 } else {
                     val otherUserId = intent.getStringExtra("otherUserId")
                     if (otherUserId != null) {
-                        _navigateToChat.value = otherUserId to false
+                        navigateToChatState.value = otherUserId to false
                     }
                 }
             }
@@ -496,11 +525,11 @@ class MainActivity : AppCompatActivity() {
             "OPEN_ROOM" -> {
                 val roomId = intent.getStringExtra("roomId")
                 if (roomId != null) {
-                    _navigateToRoom.value = roomId
+                    navigateToRoomState.value = roomId
                 }
             }
             "CONFIRM_LEAVE_ROOM" -> {
-                _showLeaveConfirmation.value = true
+                showLeaveConfirmationState.value = true
             }
         }
     }
