@@ -199,16 +199,53 @@ The fastest way to get started. Uses Firebase Emulators and a local LiveKit Dock
    ```
    The API starts on `http://localhost:3000`. Test: `curl http://localhost:3000/api/health`
 
-4. **Build and run the Android app**
+4. **Run on Android Emulator**
    ```bash
    ./gradlew installLocalDebug
    ```
-   The `local` build flavor connects to `10.0.2.2` (Android emulator loopback to host).
+   The `local` build flavor connects to `10.0.2.2` (Android emulator's loopback to your machine). It just works — no extra config needed.
 
-5. **Sign in**
-   - Open the app in the Android emulator
+5. **Run on a Physical Device**
+
+   Your phone must be on the **same Wi-Fi network** as your development machine.
+
+   a. Find your machine's local IP:
+   ```bash
+   # Windows
+   ipconfig    # Look for "IPv4 Address" under your Wi-Fi adapter (e.g. 192.168.1.42)
+
+   # macOS / Linux
+   ifconfig | grep "inet "    # or: ip addr show
+   ```
+
+   b. Update the local build flavor to use your IP instead of `10.0.2.2`. In `app/build.gradle.kts`, find the `local` flavor and change:
+   ```kotlin
+   // Replace 10.0.2.2 with your machine's local IP
+   buildConfigField("String", "API_BASE_URL", "\"http://192.168.1.42:3000\"")
+   buildConfigField("String", "WORKER_URL", "\"http://192.168.1.42:3000\"")
+   buildConfigField("String", "LIVEKIT_SERVER_URL", "\"ws://192.168.1.42:7880\"")
+   buildConfigField("String", "RTDB_URL", "\"http://192.168.1.42:9000\"")
+   ```
+
+   c. Connect your device via USB and enable USB debugging, then:
+   ```bash
+   ./gradlew installLocalDebug
+   ```
+
+   d. Alternatively, use **adb reverse** to avoid changing any code (device routes localhost to your machine):
+   ```bash
+   adb reverse tcp:3000 tcp:3000   # Express API
+   adb reverse tcp:8080 tcp:8080   # Firestore emulator
+   adb reverse tcp:9099 tcp:9099   # Auth emulator
+   adb reverse tcp:9000 tcp:9000   # RTDB emulator
+   adb reverse tcp:7880 tcp:7880   # LiveKit
+   ```
+   With `adb reverse`, the default `10.0.2.2` addresses in the local flavor will work on a physical device too — no build config changes needed.
+
+6. **Sign in**
    - Use the email sign-in flow with the seeded test account: `claude-test@shytalk.dev` / `localdev123`
    - Or create a new account — it will use the local emulators
+   - Google/Apple sign-in won't work locally (no real OAuth) — use email OTP instead
 
 6. **Stop local services**
    ```bash
