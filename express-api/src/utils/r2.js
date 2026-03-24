@@ -1,14 +1,9 @@
 /**
- * R2 storage client via S3-compatible API.
+ * R2 / MinIO storage client via S3-compatible API.
  *
- * Cloudflare R2 exposes an S3-compatible endpoint. We use the AWS SDK
- * to interact with it from outside Cloudflare Workers.
- *
- * Required env vars:
- *   R2_ACCOUNT_ID        — Cloudflare account ID
- *   R2_ACCESS_KEY_ID     — R2 API token access key
- *   R2_SECRET_ACCESS_KEY — R2 API token secret key
- *   R2_BUCKET_NAME       — Bucket name (default: shytalk-media)
+ * In local mode (NODE_ENV=local), connects to MinIO.
+ * In production/dev, connects to Cloudflare R2.
+ * All endpoints configurable via env vars.
  */
 
 const {
@@ -20,19 +15,37 @@ const {
   ListObjectsV2Command,
 } = require('@aws-sdk/client-s3');
 
-const accountId = process.env.R2_ACCOUNT_ID;
+const isLocal = process.env.NODE_ENV === 'local';
 const bucketName = process.env.R2_BUCKET_NAME || 'shytalk-media';
 
-const s3 = new S3Client({
-  region: 'auto',
-  endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-  },
-});
+let s3;
+if (isLocal) {
+  const minioEndpoint = process.env.MINIO_ENDPOINT || 'http://localhost:9002';
+  const minioUser = process.env.MINIO_ROOT_USER || 'minioadmin';
+  const minioPass = process.env.MINIO_ROOT_PASSWORD || 'minioadmin';
+  s3 = new S3Client({
+    endpoint: minioEndpoint,
+    region: 'us-east-1',
+    credentials: { accessKeyId: minioUser, secretAccessKey: minioPass },
+    forcePathStyle: true,
+  });
+} else {
+  const accountId = process.env.R2_ACCOUNT_ID;
+  s3 = new S3Client({
+    region: 'auto',
+    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId: process.env.R2_ACCESS_KEY_ID,
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+    },
+  });
+}
 
-const CDN_URL = process.env.CDN_URL || 'https://images.shytalk.shyden.co.uk';
+const CDN_URL =
+  process.env.CDN_URL ||
+  (isLocal
+    ? `${process.env.MINIO_ENDPOINT || 'http://localhost:9002'}/${bucketName}`
+    : 'https://images.shytalk.shyden.co.uk');
 
 async function putObject(key, body, contentType, metadata = {}) {
   await s3.send(
