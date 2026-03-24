@@ -6,6 +6,17 @@ let _transport = null;
 let _transportKey = null;
 
 function getTransport() {
+  if (process.env.NODE_ENV === 'local') {
+    if (!_transport) {
+      _transport = nodemailer.createTransport({
+        host: process.env.SMTP_HOST || 'localhost',
+        port: parseInt(process.env.SMTP_PORT || '1025', 10),
+      });
+      _transportKey = 'local';
+    }
+    return _transport;
+  }
+
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
 
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
