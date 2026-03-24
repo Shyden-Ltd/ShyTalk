@@ -175,11 +175,36 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      - name: Start local services
+        run: |
+          docker run -d --name minio -p 9002:9000 -p 9001:9001 \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio server /data --console-address ":9001"
+          docker run -d --name mailhog -p 1025:1025 -p 8025:8025 mailhog/mailhog
+
+      - name: Start Firebase Emulators
+        run: |
+          npx firebase emulators:start --project=demo-shytalk &
+          echo "Waiting for emulators..."
+          until curl -s http://localhost:4000 > /dev/null 2>&1; do sleep 1; done
+          echo "Emulators ready"
+
+      - name: Seed local data
+        run: |
+          cd express-api && npm ci
+          NODE_ENV=local node ../local/seed.js
+
+      - name: Start Express API
+        run: |
+          cd express-api
+          NODE_ENV=local node src/index.js &
+          until curl -s http://localhost:3000/api/health > /dev/null 2>&1; do sleep 1; done
+          echo "API ready"
+
       - name: Run E2E tests on emulator
         uses: reactivecircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a # v2.37.0
         env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
+          LIVEKIT_URL: ws://10.0.2.2:7880
         with:
           api-level: ${{ matrix.api-level }}
           target: google_apis
@@ -188,13 +213,13 @@ jobs:
           force-avd-creation: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
-          script: ./gradlew connectedDevDebugAndroidTest --no-parallel 2>&1 | tee test-output.log
+          script: ./gradlew connectedLocalDebugAndroidTest --no-parallel 2>&1 | tee test-output.log
 
       - name: Collect Allure results from JUnit XML
         if: always()
         run: |
           mkdir -p allure-results-android
-          PACKAGE="com.shyden.shytalk.dev"
+          PACKAGE="com.shyden.shytalk.local"
           adb exec-out run-as $PACKAGE sh -c 'cd files/allure-results && tar cf - .' 2>/dev/null | \
             tar xf - -C allure-results-android/ 2>/dev/null || true
           NATIVE_COUNT=$(find allure-results-android -name "*-result.json" 2>/dev/null | wc -l)
@@ -212,7 +237,7 @@ jobs:
           platform=Android
           api_level=${{ matrix.api-level }}
           device=${{ matrix.profile }}
-          environment=dev
+          environment=local
           ENVEOF
 
       - name: Upload Allure results
@@ -278,7 +303,6 @@ jobs:
     if: always() && needs.prepare-playwright.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    environment: dev
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.resolve-inputs.outputs.web_matrix) }}
@@ -310,13 +334,39 @@ jobs:
       - name: Install system dependencies
         run: npx playwright install-deps
 
+      - name: Start local services
+        run: |
+          docker run -d --name minio -p 9002:9000 -p 9001:9001 \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio server /data --console-address ":9001"
+          docker run -d --name mailhog -p 1025:1025 -p 8025:8025 mailhog/mailhog
+
+      - name: Start Firebase Emulators
+        run: |
+          npx firebase emulators:start --project=demo-shytalk &
+          until curl -s http://localhost:4000 > /dev/null 2>&1; do sleep 1; done
+
+      - name: Install Express API and seed data
+        run: |
+          cd express-api && npm ci
+          NODE_ENV=local node ../local/seed.js
+
+      - name: Start Express API
+        run: |
+          cd express-api
+          NODE_ENV=local node src/index.js &
+          until curl -s http://localhost:3000/api/health > /dev/null 2>&1; do sleep 1; done
+
+      - name: Serve admin panel
+        run: npx serve public -l 8080 &
+
       - name: Run Playwright tests (${{ matrix.project }})
         env:
-          WEB_BASE_URL: https://dev.shytalk.shyden.co.uk
-          API_BASE_URL: https://dev-api.shytalk.shyden.co.uk
-          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-          TEST_API_KEY: ${{ secrets.TEST_API_KEY }}
+          WEB_BASE_URL: http://localhost:8080
+          API_BASE_URL: http://localhost:3000
+          ADMIN_EMAIL: claude-test@shytalk.dev
+          ADMIN_PASSWORD: localdev123
+          TEST_API_KEY: local-test-key
           ALLURE_ENABLED: 'true'
           ALLURE_PROJECT: ${{ matrix.project }}
         run: npx playwright test --project=${{ matrix.project }} --reporter=list,allure-playwright,html
@@ -330,7 +380,7 @@ jobs:
           platform=Web
           browser=${{ matrix.browser }}
           viewport=${{ matrix.viewport }}
-          base_url=dev.shytalk.shyden.co.uk
+          base_url=localhost:8080
           PWEOF
 
       - name: Upload Allure results
