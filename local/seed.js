@@ -96,7 +96,7 @@ async function seed() {
 
   // Counter
   console.log("\nCounter:");
-  await seedIfMissing("counters/uniqueId", { value: 100000000 });
+  await seedIfMissing("counters/uniqueId", { value: 100000002 });
 
   // Admin user
   console.log("\nAdmin user:");
@@ -170,9 +170,9 @@ async function seed() {
     unlinkedAt: null,
   });
 
-  // Update counter only if it's still at the initial value (don't overwrite if users were created)
+  // Ensure counter is at least past the seeded user IDs
   const counterDoc = await db.doc("counters/uniqueId").get();
-  if (counterDoc.exists && counterDoc.data().value <= 100000000) {
+  if (counterDoc.exists && counterDoc.data().value < 100000002) {
     await db.doc("counters/uniqueId").set({ value: 100000002 });
   }
 

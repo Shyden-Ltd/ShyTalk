@@ -12,21 +12,21 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = $PSScriptRoot
 $ProjectRoot = Split-Path -Parent $ScriptDir
 
+# Resolve npx to its full path (.cmd file on Windows — Start-Process cannot run .cmd directly)
+$npxCmd = Get-Command npx -ErrorAction SilentlyContinue
+if (-not $npxCmd) {
+    Write-Host "ERROR: npx not found. Install Node.js and ensure it is on your PATH." -ForegroundColor Red
+    exit 1
+}
+
 # --- Start LiveKit ---
 Write-Host "Starting LiveKit..."
 docker compose -f "$ScriptDir\docker-compose.yml" up -d
 
 # --- Start Firebase Emulators ---
 Write-Host "Starting Firebase Emulators..."
-$emulatorArgs = @(
-    "firebase", "emulators:start",
-    "--project=demo-shytalk",
-    "--import=local/firebase-emulator-data",
-    "--export-on-exit=local/firebase-emulator-data"
-)
-
-$emulatorProcess = Start-Process -FilePath "npx" `
-    -ArgumentList $emulatorArgs `
+$emulatorProcess = Start-Process -FilePath "cmd.exe" `
+    -ArgumentList "/c", "npx firebase emulators:start --project=demo-shytalk --import=local/firebase-emulator-data --export-on-exit=local/firebase-emulator-data" `
     -WorkingDirectory $ProjectRoot `
     -PassThru `
     -NoNewWindow
@@ -37,8 +37,10 @@ $maxAttempts = 120
 $attempt = 0
 while ($attempt -lt $maxAttempts) {
     try {
-        $null = Invoke-WebRequest -Uri "http://localhost:4000" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
-        break
+        $resp = Invoke-WebRequest -Uri "http://localhost:4000" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+        if ($resp.StatusCode -eq 200) { break }
+        $attempt++
+        Start-Sleep -Seconds 1
     } catch {
         $attempt++
         Start-Sleep -Seconds 1
@@ -83,29 +85,29 @@ Write-Host ""
 
 # --- Wait for Ctrl+C and clean up ---
 try {
-    # Register Ctrl+C handler
-    [Console]::TreatControlCAsInput = $false
-    $null = Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action {
-        # Cleanup on PowerShell exit
-    }
-
     Write-Host "Press Ctrl+C to stop..." -ForegroundColor Cyan
-    # Wait for the emulator process to exit (or Ctrl+C)
     $emulatorProcess.WaitForExit()
 } finally {
     Write-Host "Shutting down..."
 
-    # Stop Firebase emulator process
+    # Kill the emulator process tree using parent PID
     if (-not $emulatorProcess.HasExited) {
+        # Kill child processes first (Java emulators spawned by npx/firebase)
+        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+            $_.ParentProcessId -eq $emulatorProcess.Id
+        } | ForEach-Object {
+            # Also kill grandchildren (java processes)
+            Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+                $_.ParentProcessId -eq $_.ProcessId
+            } | ForEach-Object {
+                Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+            }
+            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+        }
         Stop-Process -Id $emulatorProcess.Id -Force -ErrorAction SilentlyContinue
     }
-    # Also kill any child processes (java spawned by Firebase emulators)
-    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-        $_.CommandLine -match "firebase" -and $_.Name -match "java"
-    } | ForEach-Object {
-        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
-    }
-    # Kill any remaining Firebase emulator node processes
+
+    # Fallback: kill any remaining firebase emulator processes
     Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
         $_.CommandLine -match "firebase.*emulators"
     } | ForEach-Object {

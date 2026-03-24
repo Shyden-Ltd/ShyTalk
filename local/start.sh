@@ -39,5 +39,5 @@ echo "Build Android:  ./gradlew installLocalDebug"
 echo ""
 
 # Keep running until Ctrl+C — clean shutdown exports emulator data
-trap "echo 'Shutting down...'; kill $FIREBASE_PID 2>/dev/null; wait $FIREBASE_PID 2>/dev/null; docker compose -f $SCRIPT_DIR/docker-compose.yml down; exit 0" INT TERM
+trap "echo 'Shutting down...'; kill $FIREBASE_PID 2>/dev/null; wait $FIREBASE_PID 2>/dev/null; docker compose -f \"$SCRIPT_DIR/docker-compose.yml\" down; exit 0" INT TERM
 wait $FIREBASE_PID

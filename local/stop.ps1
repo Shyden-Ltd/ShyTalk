@@ -24,9 +24,9 @@ $allProcesses | Where-Object {
     Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
 }
 
-# Kill any java processes spawned by Firebase emulators
+# Kill any Java processes spawned by Firebase emulators (jar name in command line)
 $allProcesses | Where-Object {
-    $_.CommandLine -match "firebase" -and $_.Name -match "java"
+    $_.Name -match "java" -and ($_.CommandLine -match "cloud-firestore-emulator|cloud-datastore-emulator|firebase")
 } | ForEach-Object {
     Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
 }
