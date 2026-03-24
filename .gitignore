@@ -42,6 +42,7 @@ replay_pid*.log
 .playwright-mcp/
 playwright-report/
 playwright-results.xml
+playwright-errors.log
 
 # Migration scripts (one-time use)
 scripts/migrate-*.mjs

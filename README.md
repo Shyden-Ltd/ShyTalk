@@ -3,8 +3,10 @@
 **Voice chat rooms, reimagined.**
 
 [![Android](https://img.shields.io/badge/Platform-Android%20%7C%20iOS-green.svg)](https://play.google.com/store/apps/details?id=com.shyden.shytalk)
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-blue.svg)](https://kotlinlang.org)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.3.20-blue.svg)](https://kotlinlang.org)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
+🌍 [العربية](README.ar.md) | [Deutsch](README.de.md) | [Español](README.es.md) | [Français](README.fr.md) | [हिन्दी](README.hi.md) | [Bahasa Indonesia](README.id.md) | [Italiano](README.it.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Nederlands](README.nl.md) | [Polski](README.pl.md) | [Português](README.pt.md) | [Русский](README.ru.md) | [Svenska](README.sv.md) | [ไทย](README.th.md) | [Türkçe](README.tr.md) | [Українська](README.uk.md) | [Tiếng Việt](README.vi.md) | [中文](README.zh.md)
 
 ## About
 
@@ -55,6 +57,29 @@ ShyTalk is a social voice chat app where users can create and join real-time voi
 - Community standards, privacy policy, and terms of service screens
 - Legal acceptance flow for new users
 - Force update enforcement for outdated app versions
+
+### Starting Screens
+- Configurable launch screens shown on app startup
+- Admin-managed content with scheduling and targeting options
+
+### Security
+- PIN code protection for app access
+- Biometric authentication -- fingerprint and face recognition
+- OTP (one-time password) verification for sensitive actions
+
+### Admin Panel
+- Web-based moderation dashboard at the project's static site
+- User management, content moderation, and configuration
+- Template and gift management with live preview
+- Real-time log streaming and alerting
+
+### Image Compression
+- Automatic image compression on upload via the Express API
+- Reduces storage and bandwidth costs while preserving quality
+
+### Internationalization
+- 19 languages supported out of the box
+- Full localization for all user-facing strings
 
 ### Logging & Monitoring
 - Structured logging across Express API, mobile apps, and admin panel
@@ -148,6 +173,10 @@ ShyTalk/
 |       +-- utils/                    # Firebase Admin, R2, logger
 |       +-- cron/                     # Scheduled jobs
 +-- public/                           # Static site & admin panel
++-- local/                            # Local development environment (emulators, seed data)
++-- tests/web/                        # Playwright browser tests
++-- scripts/                          # Utility scripts
++-- .github/workflows/                # CI/CD (PR Checks, Deploy to Dev/Prod, E2E, lint)
 +-- firestore.rules                   # Firestore security rules
 +-- database.rules.json               # RTDB security rules
 +-- firestore.indexes.json            # Firestore composite indexes
@@ -176,9 +205,17 @@ The fastest way to get started. Uses Firebase Emulators and a local LiveKit Dock
    ```
 
 2. **Start local services**
+
+   **Linux / macOS / Git Bash:**
    ```bash
    bash local/start.sh
    ```
+
+   **Windows PowerShell:**
+   ```powershell
+   .\local\start.ps1
+   ```
+
    This starts Firebase Emulators (Firestore, Auth, RTDB) and a LiveKit Docker container. On first run it automatically seeds test data (admin user, sample gifts, config).
 
    You'll see:
@@ -247,11 +284,19 @@ The fastest way to get started. Uses Firebase Emulators and a local LiveKit Dock
    - Or create a new account — it will use the local emulators
    - Google/Apple sign-in won't work locally (no real OAuth) — use email OTP instead
 
-6. **Stop local services**
+7. **Stop local services**
+
+   **Linux / macOS / Git Bash:**
    ```bash
    bash local/stop.sh
    ```
-   Or press `Ctrl+C` in the `start.sh` terminal. Emulator data is saved automatically and restored on next start.
+
+   **Windows PowerShell:**
+   ```powershell
+   .\local\stop.ps1
+   ```
+
+   Or press `Ctrl+C` in the start script terminal. Emulator data is saved automatically and restored on next start.
 
 ### Useful Local Dev URLs
 
@@ -305,22 +350,43 @@ If you need to test against real cloud services (e.g., real push notifications, 
 
 ## Testing
 
+| Suite | Command | Count |
+|-------|---------|-------|
+| Kotlin unit tests | `./gradlew test` | 100+ tests |
+| Express API tests | `cd express-api && npm test` | 1,540+ tests |
+| E2E Gherkin (Android) | `./gradlew connectedDevDebugAndroidTest` | 34 feature files |
+| Playwright web tests | `npx playwright test` | 28 specs |
+
 ```bash
-# Android/KMP unit tests
+# Kotlin/KMP unit tests
 ./gradlew test
 
 # Express API tests
 cd express-api && npm test
 
 # E2E tests (requires connected device or emulator)
-./gradlew connectedDebugAndroidTest
+./gradlew connectedDevDebugAndroidTest
+
+# Playwright browser tests (requires admin panel running)
+npx playwright test
 ```
 
 ## Deployment
 
-- **Express API:** Deploy to Oracle Cloud VM via `scp` + PM2
-- **Android:** `./gradlew bundleRelease` then upload to Google Play
-- **Admin panel:** `npx wrangler pages deploy public --project-name shytalk-site`
+Deployments are managed through GitHub Actions workflows (`.github/workflows/`):
+
+| Workflow | Trigger | What it does |
+|----------|---------|-------------|
+| **PR Checks** | Automatic on PRs to `main` | Runs lint, Kotlin tests, Express API tests, Playwright tests (based on changed files) |
+| **Deploy to Dev** | Manual (`workflow_dispatch`) | Deploys Express API + web to dev, distributes APK to testers, optionally runs Playwright tests |
+| **Deploy to Prod** | Manual (`workflow_dispatch`) | Deploys a tagged release to prod -- Express API, web, Play Store, and App Store |
+
+Additional workflows: **E2E Tests** (Android emulator matrix), **SonarCloud** (static analysis), **Lint**, **Backend Tests**, **Dependabot Auto-merge**.
+
+- **Express API:** Deployed to Oracle Cloud VMs via SSH + PM2 (dev: London, prod: Singapore)
+- **Android:** Bundled and uploaded to Google Play via CI
+- **iOS:** Built and uploaded to App Store Connect / TestFlight via CI
+- **Admin panel / web:** Deployed to Cloudflare Pages
 
 ## Contributing
 

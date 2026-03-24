@@ -1,12 +1,12 @@
-> **注意：** 本文档由英文版自动翻译而来，可能包含翻译错误。如需最准确的信息，请参阅 [README.md](README.md)。
-
 # ShyTalk
 
-**语音聊天室，重新定义。**
+**语音聊天室，全新体验。**
 
 [![Android](https://img.shields.io/badge/Platform-Android%20%7C%20iOS-green.svg)](https://play.google.com/store/apps/details?id=com.shyden.shytalk)
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-blue.svg)](https://kotlinlang.org)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.3.20-blue.svg)](https://kotlinlang.org)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
+🌍 [English](README.md) | [العربية](README.ar.md) | [Deutsch](README.de.md) | [Español](README.es.md) | [Français](README.fr.md) | [हिन्दी](README.hi.md) | [Bahasa Indonesia](README.id.md) | [Italiano](README.it.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Nederlands](README.nl.md) | [Polski](README.pl.md) | [Português](README.pt.md) | [Русский](README.ru.md) | [Svenska](README.sv.md) | [ไทย](README.th.md) | [Türkçe](README.tr.md) | [Українська](README.uk.md) | [Tiếng Việt](README.vi.md) | **中文**
 
 ## 关于
 
@@ -58,6 +58,29 @@ ShyTalk 是一款社交语音聊天应用，用户可以创建和加入实时语
 - 新用户法律条款确认流程
 - 强制更新机制，确保用户使用最新版本
 
+### 启动页面
+- 可配置的应用启动画面
+- 管理员管理内容，支持定时和定向投放
+
+### 安全性
+- PIN 码保护应用访问
+- 生物识别认证——指纹和面部识别
+- 一次性密码（OTP）验证敏感操作
+
+### 管理面板
+- 基于 Web 的管理后台，部署在项目静态站点
+- 用户管理、内容审核和配置
+- 模板和礼物管理，支持实时预览
+- 实时日志流和告警
+
+### 图片压缩
+- 通过 Express API 上传时自动压缩图片
+- 降低存储和带宽成本，同时保持画质
+
+### 国际化
+- 开箱即用支持 19 种语言
+- 所有面向用户的字符串完全本地化
+
 ### 日志与监控
 - 横跨 Express API、移动应用和管理面板的结构化日志
 - 管理后台支持实时日志流
@@ -104,9 +127,9 @@ ShyTalk 遵循 **MVVM** 架构，采用清晰的 **Repository 模式**：
 ```
 
 - **shared 模块**（`commonMain`）——跨平台共享的模型、Repository 接口、ViewModel 和 UI
-- **app 模块** ——Android 特定的界面、Repository 实现和入口
-- **iosApp 模块** ——iOS 特定的入口
-- **express-api** ——运行在 Oracle Cloud 免费层上的 Express.js 后端
+- **app 模块**——Android 特定的界面、Repository 实现和入口
+- **iosApp 模块**——iOS 特定的入口
+- **express-api**——运行在 Oracle Cloud 免费层上的 Express.js 后端
 
 ## 项目结构
 
@@ -150,6 +173,10 @@ ShyTalk/
 |       +-- utils/                    # Firebase Admin、R2、日志工具
 |       +-- cron/                     # 定时任务
 +-- public/                           # 静态网站和管理面板
++-- local/                            # 本地开发环境（模拟器、种子数据）
++-- tests/web/                        # Playwright 浏览器测试
++-- scripts/                          # 工具脚本
++-- .github/workflows/                # CI/CD（PR 检查、部署到 Dev/Prod、E2E、代码检查）
 +-- firestore.rules                   # Firestore 安全规则
 +-- database.rules.json               # RTDB 安全规则
 +-- firestore.indexes.json            # Firestore 复合索引
@@ -161,49 +188,156 @@ ShyTalk/
 ### 前置条件
 
 - **Android Studio** Ladybug 或更新版本
-- **Firebase 项目**（Spark 免费计划）——Auth、Firestore、RTDB、FCM
-- **LiveKit Cloud 账号**（免费层）
-- **Cloudflare 账号**（免费）——R2 存储、Pages 托管
-- **Oracle Cloud 账号**（免费层）——Express API 托管
-- **Node.js 18+**，用于 Express API
 - **JDK 17+**
+- **Node.js 24+**
+- **Docker**（用于本地 LiveKit 服务器）
+- **Firebase CLI**（`npm install -g firebase-tools`）
 
-### 配置步骤
+### 本地开发（推荐）
 
-1. **克隆仓库**
+最快的入门方式。使用 Firebase 模拟器和本地 LiveKit Docker 容器——无需云账号，零成本，无配额限制。
+
+1. **克隆并安装**
    ```bash
    git clone https://github.com/ShydenMcM/ShyTalk.git
    cd ShyTalk
+   cd express-api && npm install && cd ..
    ```
 
-2. **Firebase 配置**
+2. **启动本地服务**
+
+   **Linux / macOS / Git Bash：**
+   ```bash
+   bash local/start.sh
+   ```
+
+   **Windows PowerShell：**
+   ```powershell
+   .\local\start.ps1
+   ```
+
+   这将启动 Firebase 模拟器（Firestore、Auth、RTDB）和 LiveKit Docker 容器。首次运行时会自动填充测试数据（管理员账户、示例礼物、配置）。
+
+   你将看到：
+   ```
+   Local environment ready:
+     Firebase UI:  http://localhost:4000
+     Firestore:    localhost:8080
+     Auth:         localhost:9099
+     RTDB:         localhost:9000
+     LiveKit:      localhost:7880
+   ```
+
+3. **启动 Express API**（在新终端窗口中）
+   ```bash
+   cd express-api
+   cp .env.local.example .env.local   # 按需编辑 R2/SMTP 值
+   npm run local
+   ```
+   API 将在 `http://localhost:3000` 启动。测试：`curl http://localhost:3000/api/health`
+
+4. **在 Android 模拟器上运行**
+   ```bash
+   ./gradlew installLocalDebug
+   ```
+   `local` 构建变体连接到 `10.0.2.2`（Android 模拟器的回环地址）。无需额外配置即可运行。
+
+5. **在真机上运行**
+
+   你的手机必须与开发机在**同一个 Wi-Fi 网络**上。
+
+   a. 查找你的机器本地 IP：
+   ```bash
+   # Windows
+   ipconfig    # 查找 Wi-Fi 适配器下的 "IPv4 Address"（例如 192.168.1.42）
+
+   # macOS / Linux
+   ifconfig | grep "inet "    # 或：ip addr show
+   ```
+
+   b. 更新本地构建变体以使用你的 IP 替代 `10.0.2.2`。在 `app/build.gradle.kts` 中找到 `local` 变体并修改：
+   ```kotlin
+   // 将 10.0.2.2 替换为你的本地 IP
+   buildConfigField("String", "API_BASE_URL", "\"http://192.168.1.42:3000\"")
+   buildConfigField("String", "WORKER_URL", "\"http://192.168.1.42:3000\"")
+   buildConfigField("String", "LIVEKIT_SERVER_URL", "\"ws://192.168.1.42:7880\"")
+   buildConfigField("String", "RTDB_URL", "\"http://192.168.1.42:9000\"")
+   ```
+
+   c. 通过 USB 连接设备并启用 USB 调试，然后：
+   ```bash
+   ./gradlew installLocalDebug
+   ```
+
+   d. 或者，使用 **adb reverse** 避免修改代码（设备将 localhost 路由到你的机器）：
+   ```bash
+   adb reverse tcp:3000 tcp:3000   # Express API
+   adb reverse tcp:8080 tcp:8080   # Firestore 模拟器
+   adb reverse tcp:9099 tcp:9099   # Auth 模拟器
+   adb reverse tcp:9000 tcp:9000   # RTDB 模拟器
+   adb reverse tcp:7880 tcp:7880   # LiveKit
+   ```
+   使用 `adb reverse` 后，本地变体中默认的 `10.0.2.2` 地址在真机上也能正常工作——无需修改构建配置。
+
+6. **登录**
+   - 使用邮箱登录流程和预设测试账户：`claude-test@shytalk.dev` / `localdev123`
+   - 或创建新账户——将使用本地模拟器
+   - Google/Apple 登录在本地不可用（无真实 OAuth）——请使用邮箱 OTP
+
+7. **停止本地服务**
+
+   **Linux / macOS / Git Bash：**
+   ```bash
+   bash local/stop.sh
+   ```
+
+   **Windows PowerShell：**
+   ```powershell
+   .\local\stop.ps1
+   ```
+
+   或在启动脚本终端中按 `Ctrl+C`。模拟器数据会自动保存，下次启动时恢复。
+
+### 常用本地开发 URL
+
+| 服务 | URL | 用途 |
+|------|-----|------|
+| Firebase Emulator UI | http://localhost:4000 | 浏览 Firestore 数据、Auth 用户、RTDB |
+| Express API | http://localhost:3000 | 后端 API |
+| 健康检查 | http://localhost:3000/api/health | 验证 API 是否运行 |
+
+### 云端开发（可选）
+
+如果你需要使用真实云服务进行测试（例如真实推送通知、真实 Google 登录）：
+
+1. **Firebase 设置**
    - 在 [console.firebase.google.com](https://console.firebase.google.com) 创建 Firebase 项目
    - 在认证部分启用 **Google 登录** 和 **Apple 登录**
    - 启用 **Firestore**、**Realtime Database** 和 **Cloud Messaging**
-   - 下载 `google-services.json` 并放置于 `app/` 目录
+   - 下载 `google-services.json` 并放置于 `app/src/dev/`
 
-3. **Express API 配置**
+2. **Express API 设置**
    ```bash
    cd express-api
-   cp .env.example .env  # 编辑并填入你的凭据
+   cp .env.example .env  # 填入你的云端凭据
    npm install
    npm start
    ```
 
-4. **部署 Firestore 安全规则**
+3. **部署 Firestore 规则**
    ```bash
    npx firebase deploy --only firestore:rules
    ```
 
-5. **构建 Android 应用**
+4. **构建 Android 应用**（dev 变体）
    ```bash
-   ./gradlew assembleDebug
+   ./gradlew assembleDevDebug
    ```
 
 ### 环境变量
 
-| 变量 | 说明 | 使用位置 |
-|------|------|----------|
+| 变量 | 说明 | 位置 |
+|------|------|------|
 | `FIREBASE_SERVICE_ACCOUNT` | Firebase Admin SDK 服务账号 JSON | Express API |
 | `R2_ACCOUNT_ID` | Cloudflare R2 账号 ID | Express API |
 | `R2_ACCESS_KEY_ID` | R2 访问密钥 | Express API |
@@ -216,22 +350,43 @@ ShyTalk/
 
 ## 测试
 
+| 套件 | 命令 | 数量 |
+|------|------|------|
+| Kotlin 单元测试 | `./gradlew test` | 100+ 测试 |
+| Express API 测试 | `cd express-api && npm test` | 1,540+ 测试 |
+| E2E Gherkin（Android） | `./gradlew connectedDevDebugAndroidTest` | 34 个特性文件 |
+| Playwright Web 测试 | `npx playwright test` | 28 个测试规范 |
+
 ```bash
-# Android/KMP 单元测试
+# Kotlin/KMP 单元测试
 ./gradlew test
 
 # Express API 测试
 cd express-api && npm test
 
-# 端到端测试（需要连接设备或模拟器）
-./gradlew connectedDebugAndroidTest
+# E2E 测试（需要连接设备或模拟器）
+./gradlew connectedDevDebugAndroidTest
+
+# Playwright 浏览器测试（需要管理面板运行）
+npx playwright test
 ```
 
 ## 部署
 
-- **Express API：** 通过 `scp` + PM2 部署到 Oracle Cloud 虚拟机
-- **Android：** 执行 `./gradlew bundleRelease`，然后上传至 Google Play
-- **管理面板：** `npx wrangler pages deploy public --project-name shytalk-site`
+部署通过 GitHub Actions 工作流管理（`.github/workflows/`）：
+
+| 工作流 | 触发方式 | 功能 |
+|--------|----------|------|
+| **PR Checks** | PR 到 `main` 时自动触发 | 运行代码检查、Kotlin 测试、Express API 测试、Playwright 测试（根据变更文件） |
+| **Deploy to Dev** | 手动（`workflow_dispatch`） | 部署 Express API + Web 到 dev，分发 APK 给测试人员，可选运行 Playwright 测试 |
+| **Deploy to Prod** | 手动（`workflow_dispatch`） | 部署标记版本到 prod——Express API、Web、Play Store 和 App Store |
+
+其他工作流：**E2E Tests**（Android 模拟器矩阵）、**SonarCloud**（静态分析）、**Lint**、**Backend Tests**、**Dependabot Auto-merge**。
+
+- **Express API：** 通过 SSH + PM2 部署到 Oracle Cloud 虚拟机（dev：伦敦，prod：新加坡）
+- **Android：** 通过 CI 打包上传到 Google Play
+- **iOS：** 通过 CI 构建上传到 App Store Connect / TestFlight
+- **管理面板 / Web：** 部署到 Cloudflare Pages
 
 ## 参与贡献
 
