@@ -23,7 +23,7 @@ echo "Emulators ready."
 # Seed data on first run
 if [ ! -d "local/firebase-emulator-data/firestore_export" ]; then
   echo "First run - seeding data..."
-  node local/seed.js
+  cd express-api && node ../local/seed.js && cd "$PROJECT_ROOT"
 fi
 
 echo ""

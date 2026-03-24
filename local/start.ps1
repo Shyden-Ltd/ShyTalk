@@ -62,9 +62,9 @@ Write-Host "Emulators ready."
 $firestoreExportDir = Join-Path $ProjectRoot "local\firebase-emulator-data\firestore_export"
 if (-not (Test-Path $firestoreExportDir)) {
     Write-Host "First run - seeding data..."
-    Push-Location $ProjectRoot
+    Push-Location (Join-Path $ProjectRoot "express-api")
     try {
-        node local/seed.js
+        node ..\local\seed.js
     } finally {
         Pop-Location
     }
