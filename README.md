@@ -12,6 +12,8 @@
 
 ShyTalk is a social voice chat app where users can create and join real-time voice chat rooms. Built with Kotlin Multiplatform (KMP), it targets both Android and iOS with a shared codebase. Whether you want to host a conversation, listen in, or connect with people around the world, ShyTalk makes it easy.
 
+iOS is a supported platform but this guide focuses on Android development, which is the primary development target.
+
 ## Features
 
 ### Voice Chat Rooms
@@ -190,12 +192,14 @@ ShyTalk/
 - **Android Studio** Ladybug or newer
 - **JDK 17+**
 - **Node.js 24+**
-- **Docker** (for LiveKit local server)
+- **Docker** (for LiveKit voice server, MinIO storage, MailHog email)
 - **Firebase CLI** (`npm install -g firebase-tools`)
+
+No cloud accounts are needed to get started -- the local environment runs entirely offline.
 
 ### Local Development (Recommended)
 
-The fastest way to get started. Uses Firebase Emulators and a local LiveKit Docker container — no cloud accounts needed, no costs, no quota limits.
+The fastest way to get started. One command starts everything -- Firebase Emulators, Docker containers, Express API, and builds the Android app. No cloud accounts needed, no costs, no quota limits.
 
 1. **Clone and install**
    ```bash
@@ -204,7 +208,7 @@ The fastest way to get started. Uses Firebase Emulators and a local LiveKit Dock
    cd express-api && npm install && cd ..
    ```
 
-2. **Start local services**
+2. **Start everything**
 
    **Linux / macOS / Git Bash:**
    ```bash
@@ -216,33 +220,37 @@ The fastest way to get started. Uses Firebase Emulators and a local LiveKit Dock
    .\local\start.ps1
    ```
 
-   This starts Firebase Emulators (Firestore, Auth, RTDB) and a LiveKit Docker container. On first run it automatically seeds test data (admin user, sample gifts, config).
+   This single command:
+   - Starts Docker containers (LiveKit voice server, MinIO storage, MailHog email)
+   - Starts Firebase Emulators (Firestore, Auth, RTDB)
+   - Seeds test data and creates the MinIO storage bucket
+   - Starts the Express API
+   - Builds and installs the Android app (if a device is connected)
 
-   You'll see:
+   When ready, you'll see:
    ```
-   Local environment ready:
-     Firebase UI:  http://localhost:4000
-     Firestore:    localhost:8080
-     Auth:         localhost:9099
-     RTDB:         localhost:9000
-     LiveKit:      localhost:7880
+   Local environment ready (fully offline):
+
+     Services:
+       Firebase UI:    http://localhost:4000
+       Express API:    http://localhost:3000
+       MailHog UI:     http://localhost:8025
+       MinIO Console:  http://localhost:9001
+       LiveKit:        localhost:7880
+
+     Credentials:
+       Test admin:     claude-test@shytalk.dev / localdev123
+       Test user:      user@test.com / localdev123
+       MinIO:          minioadmin / minioadmin
    ```
 
-3. **Start the Express API** (in a new terminal)
-   ```bash
-   cd express-api
-   cp .env.local.example .env.local   # Edit R2/SMTP values if needed
-   npm run local
-   ```
-   The API starts on `http://localhost:3000`. Test: `curl http://localhost:3000/api/health`
+3. **Sign in**
+   - Use the email sign-in flow with the seeded test account: `claude-test@shytalk.dev` / `localdev123`
+   - Or create a new account -- it will use the local emulators
+   - Google/Apple sign-in won't work locally (no real OAuth) -- use email OTP instead
+   - OTP codes are captured by MailHog -- check http://localhost:8025
 
-4. **Run on Android Emulator**
-   ```bash
-   ./gradlew installLocalDebug
-   ```
-   The `local` build flavor connects to `10.0.2.2` (Android emulator's loopback to your machine). It just works — no extra config needed.
-
-5. **Run on a Physical Device**
+4. **Run on a Physical Device**
 
    Your phone must be on the **same Wi-Fi network** as your development machine.
 
@@ -276,15 +284,11 @@ The fastest way to get started. Uses Firebase Emulators and a local LiveKit Dock
    adb reverse tcp:9099 tcp:9099   # Auth emulator
    adb reverse tcp:9000 tcp:9000   # RTDB emulator
    adb reverse tcp:7880 tcp:7880   # LiveKit
+   adb reverse tcp:9002 tcp:9002   # MinIO (image storage)
    ```
-   With `adb reverse`, the default `10.0.2.2` addresses in the local flavor will work on a physical device too — no build config changes needed.
+   With `adb reverse`, the default `10.0.2.2` addresses in the local flavor will work on a physical device too -- no build config changes needed.
 
-6. **Sign in**
-   - Use the email sign-in flow with the seeded test account: `claude-test@shytalk.dev` / `localdev123`
-   - Or create a new account — it will use the local emulators
-   - Google/Apple sign-in won't work locally (no real OAuth) — use email OTP instead
-
-7. **Stop local services**
+5. **Stop local services**
 
    **Linux / macOS / Git Bash:**
    ```bash
@@ -305,6 +309,18 @@ The fastest way to get started. Uses Firebase Emulators and a local LiveKit Dock
 | Firebase Emulator UI | http://localhost:4000 | Browse Firestore data, Auth users, RTDB |
 | Express API | http://localhost:3000 | Backend API |
 | Health check | http://localhost:3000/api/health | Verify API is running |
+| MailHog | http://localhost:8025 | View captured emails and OTP codes |
+| MinIO Console | http://localhost:9001 | Browse uploaded images and files |
+
+### Optional Services
+
+**LibreTranslate (Message Translation)**
+
+Optional 6GB+ Docker image for testing the translation feature locally:
+```bash
+docker run -d -p 5000:5000 libretranslate/libretranslate
+```
+Not included in the default setup due to large image size. Translation works without it -- messages just stay untranslated.
 
 ### Cloud Development (Optional)
 
@@ -350,6 +366,25 @@ If you need to test against real cloud services (e.g., real push notifications, 
 
 ## Testing
 
+### Running Tests Locally
+
+```bash
+# Interactive test menu (choose what to run):
+bash local/test.sh        # Linux / macOS / Git Bash
+.\local\test.ps1          # Windows PowerShell
+
+# Or run individual suites:
+bash local/test-unit.sh       # Kotlin + Express API unit tests
+bash local/test-playwright.sh # Playwright web tests (needs local env)
+bash local/test-e2e.sh        # Android E2E tests (needs local env + device)
+bash local/test-lint.sh       # ktlint + ESLint
+
+# View Allure test report:
+npx allure serve allure-results
+```
+
+### Test Suites
+
 | Suite | Command | Count |
 |-------|---------|-------|
 | Kotlin unit tests | `./gradlew test` | 100+ tests |
@@ -370,6 +405,22 @@ cd express-api && npm test
 # Playwright browser tests (requires admin panel running)
 npx playwright test
 ```
+
+### Testing in CI
+
+In CI, Playwright and Android E2E tests run against the same local environment (emulators + Docker) -- no cloud services are used. This ensures tests never interfere with live testers.
+
+## Troubleshooting
+
+- **Port already in use**: `lsof -i :<port>` (Linux/macOS) or `netstat -ano | findstr :<port>` (Windows) to find what's using the port.
+- **Docker not running**: Ensure Docker Desktop is started. Run `docker ps` to verify.
+- **Firebase emulators fail to start**: Requires Java 11+. Check with `java -version`.
+- **Android build fails**: Ensure JDK 17+ and Android SDK are installed. Try `./gradlew clean`.
+- **adb device not detected**: Enable USB debugging. Run `adb devices` to check.
+- **Images not loading**: MinIO bucket may not be created. Run `cd express-api && NODE_ENV=local node ../local/seed.js`. For physical devices, run `adb reverse tcp:9002 tcp:9002`.
+- **OTP not arriving**: Check console output for `[OTP-LOCAL]` lines. Also check MailHog UI at http://localhost:8025.
+- **Reset emulator data**: Delete `local/firebase-emulator-data/` directory and restart.
+- **Reset MinIO data**: Run `docker compose -f local/docker-compose.yml down -v` to remove volumes.
 
 ## Deployment
 
