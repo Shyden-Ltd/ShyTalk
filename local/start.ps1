@@ -12,7 +12,7 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = $PSScriptRoot
 $ProjectRoot = Split-Path -Parent $ScriptDir
 
-# Resolve npx to its full path (.cmd file on Windows — Start-Process cannot run .cmd directly)
+# Resolve npx to its full path (.cmd file on Windows -- Start-Process cannot run .cmd directly)
 $npxCmd = Get-Command npx -ErrorAction SilentlyContinue
 if (-not $npxCmd) {
     Write-Host "ERROR: npx not found. Install Node.js and ensure it is on your PATH." -ForegroundColor Red
@@ -90,14 +90,14 @@ try {
 } finally {
     Write-Host "Shutting down..."
 
-    # Ctrl+C was sent to all console processes — the emulators are already
+    # Ctrl+C was sent to all console processes -- the emulators are already
     # shutting down gracefully (exporting data, stopping each emulator).
     # Give them up to 30 seconds to finish before force-killing.
     if (-not $emulatorProcess.HasExited) {
         Write-Host "Waiting for emulators to finish graceful shutdown..."
         $exited = $emulatorProcess.WaitForExit(30000)
         if (-not $exited) {
-            Write-Host "Grace period expired — force-killing remaining processes..." -ForegroundColor Yellow
+            Write-Host "Grace period expired -- force-killing remaining processes..." -ForegroundColor Yellow
             # Kill child processes (Java emulators spawned by npx/firebase)
             Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
                 $_.CommandLine -match "firebase.*emulators|cloud-firestore-emulator|cloud-datastore-emulator"
