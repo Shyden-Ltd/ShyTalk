@@ -7,6 +7,11 @@
  */
 
 const admin = require("firebase-admin");
+const {
+  S3Client,
+  CreateBucketCommand,
+  PutBucketPolicyCommand,
+} = require("@aws-sdk/client-s3");
 
 // Point at emulators
 process.env.FIRESTORE_EMULATOR_HOST =
@@ -226,6 +231,57 @@ async function seed() {
     text: "ShyTalk was built with Kotlin Multiplatform!",
     isActive: true,
   });
+
+  // MinIO bucket (only when MinIO is available)
+  const minioEndpoint = process.env.MINIO_ENDPOINT || "http://localhost:9002";
+  try {
+    console.log("\nMinIO bucket:");
+    const minioClient = new S3Client({
+      endpoint: minioEndpoint,
+      region: "us-east-1",
+      credentials: {
+        accessKeyId: process.env.MINIO_ROOT_USER || "minioadmin",
+        secretAccessKey: process.env.MINIO_ROOT_PASSWORD || "minioadmin",
+      },
+      forcePathStyle: true,
+    });
+    const bucket = process.env.R2_BUCKET_NAME || "shytalk-media";
+    try {
+      await minioClient.send(new CreateBucketCommand({ Bucket: bucket }));
+      console.log(`  Created: ${bucket}`);
+    } catch (err) {
+      if (
+        err.name === "BucketAlreadyOwnedByYou" ||
+        err.name === "BucketAlreadyExists"
+      ) {
+        console.log(`  Exists:  ${bucket}`);
+      } else {
+        throw err;
+      }
+    }
+    await minioClient.send(
+      new PutBucketPolicyCommand({
+        Bucket: bucket,
+        Policy: JSON.stringify({
+          Version: "2012-10-17",
+          Statement: [
+            {
+              Effect: "Allow",
+              Principal: "*",
+              Action: ["s3:GetObject"],
+              Resource: [`arn:aws:s3:::${bucket}/*`],
+            },
+          ],
+        }),
+      }),
+    );
+    console.log(`  Policy:  public-read on ${bucket}`);
+  } catch (err) {
+    console.warn(
+      "  MinIO not available, skipping bucket creation:",
+      err.message,
+    );
+  }
 
   console.log("\nSeed complete.");
   process.exit(0);
