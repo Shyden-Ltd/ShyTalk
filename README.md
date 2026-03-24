@@ -159,43 +159,97 @@ ShyTalk/
 ### Prerequisites
 
 - **Android Studio** Ladybug or newer
-- **Firebase project** (Spark/free plan) -- Auth, Firestore, RTDB, FCM
-- **LiveKit Cloud account** (free tier)
-- **Cloudflare account** (free) -- R2 storage, Pages hosting
-- **Oracle Cloud account** (free tier) -- Express API hosting
-- **Node.js 18+** for Express API
 - **JDK 17+**
+- **Node.js 24+**
+- **Docker** (for LiveKit local server)
+- **Firebase CLI** (`npm install -g firebase-tools`)
 
-### Setup
+### Local Development (Recommended)
 
-1. **Clone the repository**
+The fastest way to get started. Uses Firebase Emulators and a local LiveKit Docker container — no cloud accounts needed, no costs, no quota limits.
+
+1. **Clone and install**
    ```bash
    git clone https://github.com/ShydenMcM/ShyTalk.git
    cd ShyTalk
+   cd express-api && npm install && cd ..
    ```
 
-2. **Firebase setup**
-   - Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
-   - Enable **Google Sign-In** and **Apple Sign-In** in the Authentication section
-   - Enable **Firestore**, **Realtime Database**, and **Cloud Messaging**
-   - Download `google-services.json` and place it in `app/`
+2. **Start local services**
+   ```bash
+   bash local/start.sh
+   ```
+   This starts Firebase Emulators (Firestore, Auth, RTDB) and a LiveKit Docker container. On first run it automatically seeds test data (admin user, sample gifts, config).
 
-3. **Express API setup**
+   You'll see:
+   ```
+   Local environment ready:
+     Firebase UI:  http://localhost:4000
+     Firestore:    localhost:8080
+     Auth:         localhost:9099
+     RTDB:         localhost:9000
+     LiveKit:      localhost:7880
+   ```
+
+3. **Start the Express API** (in a new terminal)
    ```bash
    cd express-api
-   cp .env.example .env  # Edit with your credentials
+   cp .env.local.example .env.local   # Edit R2/SMTP values if needed
+   npm run local
+   ```
+   The API starts on `http://localhost:3000`. Test: `curl http://localhost:3000/api/health`
+
+4. **Build and run the Android app**
+   ```bash
+   ./gradlew installLocalDebug
+   ```
+   The `local` build flavor connects to `10.0.2.2` (Android emulator loopback to host).
+
+5. **Sign in**
+   - Open the app in the Android emulator
+   - Use the email sign-in flow with the seeded test account: `claude-test@shytalk.dev` / `localdev123`
+   - Or create a new account — it will use the local emulators
+
+6. **Stop local services**
+   ```bash
+   bash local/stop.sh
+   ```
+   Or press `Ctrl+C` in the `start.sh` terminal. Emulator data is saved automatically and restored on next start.
+
+### Useful Local Dev URLs
+
+| Service | URL | Purpose |
+|---------|-----|---------|
+| Firebase Emulator UI | http://localhost:4000 | Browse Firestore data, Auth users, RTDB |
+| Express API | http://localhost:3000 | Backend API |
+| Health check | http://localhost:3000/api/health | Verify API is running |
+
+### Cloud Development (Optional)
+
+If you need to test against real cloud services (e.g., real push notifications, real Google Sign-In):
+
+1. **Firebase setup**
+   - Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
+   - Enable **Google Sign-In** and **Apple Sign-In** in Authentication
+   - Enable **Firestore**, **Realtime Database**, and **Cloud Messaging**
+   - Download `google-services.json` and place it in `app/src/dev/`
+
+2. **Express API setup**
+   ```bash
+   cd express-api
+   cp .env.example .env  # Edit with your cloud credentials
    npm install
    npm start
    ```
 
-4. **Deploy Firestore rules**
+3. **Deploy Firestore rules**
    ```bash
    npx firebase deploy --only firestore:rules
    ```
 
-5. **Build the Android app**
+4. **Build the Android app** (dev flavor)
    ```bash
-   ./gradlew assembleDebug
+   ./gradlew assembleDevDebug
    ```
 
 ### Environment Variables
