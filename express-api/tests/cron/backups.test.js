@@ -64,56 +64,72 @@ beforeEach(() => {
 });
 
 describe('backups cron', () => {
-  test('backs up all top-level collections to R2', async () => {
-    // Every .get() returns empty snapshot (simplest case)
+  describe('collection scope based on environment', () => {
+    test('DEV_TOP_LEVEL_COLLECTIONS contains only essential data', () => {
+      expect(backups.DEV_TOP_LEVEL_COLLECTIONS).toEqual(['users', 'config', 'counters']);
+    });
+
+    test('ALL_TOP_LEVEL_COLLECTIONS contains all 27 collections', () => {
+      expect(backups.ALL_TOP_LEVEL_COLLECTIONS).toContain('users');
+      expect(backups.ALL_TOP_LEVEL_COLLECTIONS).toContain('rooms');
+      expect(backups.ALL_TOP_LEVEL_COLLECTIONS).toContain('conversations');
+      expect(backups.ALL_TOP_LEVEL_COLLECTIONS).toContain('deviceBans');
+      expect(backups.ALL_TOP_LEVEL_COLLECTIONS).toContain('networkBans');
+      expect(backups.ALL_TOP_LEVEL_COLLECTIONS.length).toBe(27);
+    });
+
+    test('ALL_SUBCOLLECTIONS contains 11 subcollection pairs', () => {
+      expect(backups.ALL_SUBCOLLECTIONS.length).toBe(11);
+    });
+
+    test('in test/dev, TOP_LEVEL_COLLECTIONS uses dev subset', () => {
+      // Tests run in non-production, so should use dev collections
+      expect(backups.TOP_LEVEL_COLLECTIONS).toEqual(backups.DEV_TOP_LEVEL_COLLECTIONS);
+    });
+
+    test('in test/dev, SUBCOLLECTIONS is empty', () => {
+      expect(backups.SUBCOLLECTIONS).toEqual([]);
+    });
+  });
+
+  test('backs up only dev collections to R2 in non-production', async () => {
     mockGet.mockResolvedValue(makeSnapshot([]));
 
     await backups();
 
-    // Should write one JSON file per top-level collection + subcollections + manifest + legacy users
-    // 15 top-level + 3 subcollections + 1 manifest + 1 legacy users = 20 putObject calls
     const putCalls = r2.putObject.mock.calls;
-
-    // Check that all top-level collections have backup files
-    const topLevelKeys = putCalls
+    const backupKeys = putCalls
       .map((c) => c[0])
-      .filter((k) => k.startsWith('backups/full/') && !k.endsWith('manifest.json'));
+      .filter(
+        (k) =>
+          k.startsWith('backups/full/') &&
+          !k.endsWith('manifest.json') &&
+          !k.startsWith('backups/users/'),
+      );
 
-    for (const collName of backups.TOP_LEVEL_COLLECTIONS) {
-      const found = topLevelKeys.some((k) => k.endsWith(`/${collName}.json`));
+    // Should only have dev collections: users, config, counters
+    for (const collName of backups.DEV_TOP_LEVEL_COLLECTIONS) {
+      const found = backupKeys.some((k) => k.endsWith(`/${collName}.json`));
       expect(found).toBe(true);
     }
+
+    // Should NOT have non-dev collections
+    expect(backupKeys.some((k) => k.endsWith('/rooms.json'))).toBe(false);
+    expect(backupKeys.some((k) => k.endsWith('/conversations.json'))).toBe(false);
+    expect(backupKeys.some((k) => k.endsWith('/deviceBans.json'))).toBe(false);
   });
 
-  test('backs up subcollections with parentId', async () => {
-    // For rooms collection, return one parent doc
-    const roomDoc = { id: 'room1', name: 'Test Room' };
-    const _roomSnapshot = makeSnapshot([roomDoc]);
-
-    // For subcollection, return one message
-    const msgDoc = { id: 'msg1', text: 'Hello' };
-    const _msgSnapshot = makeSnapshot([msgDoc]);
-
-    // We need to track which collection is being queried
-    let _getCallCount = 0;
-    mockGet.mockImplementation(() => {
-      _getCallCount++;
-      // The rooms collection get (called multiple times for top-level + subcollection parents)
-      // Return room doc for rooms, empty for everything else
-      // This is tricky with the flat mock, so we return non-empty for some calls
-      // and empty for others
-
-      // For simplicity, return empty snapshot for all calls
-      return Promise.resolve(makeSnapshot([]));
-    });
+  test('does not back up subcollections in non-production', async () => {
+    mockGet.mockResolvedValue(makeSnapshot([]));
 
     await backups();
 
-    // Verify subcollection backup files are created
     const putKeys = r2.putObject.mock.calls.map((c) => c[0]);
-    expect(putKeys.some((k) => k.endsWith('/rooms_messages.json'))).toBe(true);
-    expect(putKeys.some((k) => k.endsWith('/rooms_seatRequests.json'))).toBe(true);
-    expect(putKeys.some((k) => k.endsWith('/conversations_messages.json'))).toBe(true);
+    // No subcollection files should exist
+    expect(putKeys.some((k) => k.endsWith('/rooms_messages.json'))).toBe(false);
+    expect(putKeys.some((k) => k.endsWith('/rooms_seatRequests.json'))).toBe(false);
+    expect(putKeys.some((k) => k.endsWith('/conversations_messages.json'))).toBe(false);
+    expect(putKeys.some((k) => k.endsWith('/users_backpack.json'))).toBe(false);
   });
 
   test('creates manifest with doc counts', async () => {

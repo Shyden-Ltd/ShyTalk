@@ -16,6 +16,8 @@ const testDataCleanup = require('./testDataCleanup');
 const alertManager = require('../utils/alertManagerInstance');
 
 function startCronJobs() {
+  const isProd = process.env.NODE_ENV === 'production';
+
   // Archive old reports — Sunday 03:00 UTC
   cron.schedule('0 3 * * 0', () => {
     log.info('cron', 'Running archiveReports');
@@ -38,10 +40,12 @@ function startCronJobs() {
     );
   });
 
-  // Close stale OWNER_AWAY rooms — every 5 minutes
-  cron.schedule('*/5 * * * *', () => {
-    staleRooms().catch((err) => log.error('cron', 'staleRooms failed', { error: err.message }));
-  });
+  // Close stale OWNER_AWAY rooms — every 5 minutes (prod only, no real rooms on dev)
+  if (isProd) {
+    cron.schedule('*/5 * * * *', () => {
+      staleRooms().catch((err) => log.error('cron', 'staleRooms failed', { error: err.message }));
+    });
+  }
 
   // Backup user profiles + cleanup old closed rooms — daily 02:00 UTC
   cron.schedule('0 2 * * *', () => {
@@ -58,27 +62,31 @@ function startCronJobs() {
     );
   });
 
-  // Rotate logs from Firestore to R2 — every hour
-  cron.schedule('0 * * * *', () => {
+  // Rotate logs — every hour on prod, once per day on dev (04:30 UTC)
+  cron.schedule(isProd ? '0 * * * *' : '30 4 * * *', () => {
     log.info('cron', 'Running rotateLogs');
     rotateLogs().catch((err) => log.error('cron', 'rotateLogs failed', { error: err.message }));
   });
 
-  // Expire bans — every 15 minutes
-  cron.schedule('*/15 * * * *', () => {
-    log.info('cron', 'Running expireBans');
-    expireBans().catch((err) => log.error('cron', 'expireBans failed', { error: err.message }));
-  });
+  // Expire bans — every 15 minutes (prod only, dev has no real bans)
+  if (isProd) {
+    cron.schedule('*/15 * * * *', () => {
+      log.info('cron', 'Running expireBans');
+      expireBans().catch((err) => log.error('cron', 'expireBans failed', { error: err.message }));
+    });
+  }
 
-  // Server health check — every 5 minutes
-  cron.schedule('*/5 * * * *', () => {
-    serverHealth(alertManager).catch((err) =>
-      log.error('cron', 'serverHealth failed', { error: err.message }),
-    );
-  });
+  // Server health check — every 5 minutes (prod only)
+  if (isProd) {
+    cron.schedule('*/5 * * * *', () => {
+      serverHealth(alertManager).catch((err) =>
+        log.error('cron', 'serverHealth failed', { error: err.message }),
+      );
+    });
+  }
 
   // Test data cleanup — every 30 minutes (dev only)
-  if (process.env.NODE_ENV !== 'production') {
+  if (!isProd) {
     cron.schedule('*/30 * * * *', () => {
       log.info('cron', 'Running testDataCleanup');
       testDataCleanup().catch((err) =>

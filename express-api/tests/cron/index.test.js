@@ -51,52 +51,159 @@ beforeEach(() => {
 });
 
 describe('startCronJobs', () => {
-  test('registers all cron jobs with correct schedules in non-production', () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
+  describe('non-production (dev)', () => {
+    let originalEnv;
 
-    startCronJobs();
+    beforeEach(() => {
+      originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+    });
 
-    const schedules = mockSchedule.mock.calls.map((call) => call[0]);
+    afterEach(() => {
+      process.env.NODE_ENV = originalEnv;
+    });
 
-    // archiveReports — Sunday 03:00 UTC
-    expect(schedules).toContain('0 3 * * 0');
-    // subscriptions + backpackCleanup + expireTempIds — daily midnight
-    expect(schedules).toContain('0 0 * * *');
-    // staleRooms — every 5 minutes
-    expect(schedules).toContain('*/5 * * * *');
-    // backups + closedRooms — daily 02:00 UTC
-    expect(schedules).toContain('0 2 * * *');
-    // orphanedStorage — daily 04:00 UTC
-    expect(schedules).toContain('0 4 * * *');
-    // rotateLogs — every hour
-    expect(schedules).toContain('0 * * * *');
-    // expireBans — every 15 minutes
-    expect(schedules).toContain('*/15 * * * *');
-    // testDataCleanup — every 30 minutes (dev only)
-    expect(schedules).toContain('*/30 * * * *');
+    test('registers correct cron jobs — excludes staleRooms, expireBans, serverHealth', () => {
+      startCronJobs();
 
-    // Total: 9 schedules (staleRooms and serverHealth share */5, so count unique calls)
-    expect(mockSchedule).toHaveBeenCalledTimes(9);
+      const schedules = mockSchedule.mock.calls.map((call) => call[0]);
 
-    process.env.NODE_ENV = originalEnv;
+      // archiveReports — Sunday 03:00 UTC
+      expect(schedules).toContain('0 3 * * 0');
+      // subscriptions + backpackCleanup + expireTempIds — daily midnight
+      expect(schedules).toContain('0 0 * * *');
+      // backups + closedRooms — daily 02:00 UTC
+      expect(schedules).toContain('0 2 * * *');
+      // orphanedStorage — daily 04:00 UTC
+      expect(schedules).toContain('0 4 * * *');
+      // rotateLogs — once per day on dev (04:30 UTC)
+      expect(schedules).toContain('30 4 * * *');
+      // testDataCleanup — every 30 minutes (dev only)
+      expect(schedules).toContain('*/30 * * * *');
+
+      // Should NOT have prod-only jobs
+      expect(schedules).not.toContain('*/5 * * * *'); // staleRooms + serverHealth
+      expect(schedules).not.toContain('*/15 * * * *'); // expireBans
+      expect(schedules).not.toContain('0 * * * *'); // hourly rotateLogs
+
+      // Total: 6 schedules on dev
+      expect(mockSchedule).toHaveBeenCalledTimes(6);
+    });
+
+    test('rotateLogs uses daily schedule on dev', () => {
+      rotateLogs.mockResolvedValue(undefined);
+      startCronJobs();
+
+      const rotateCall = mockSchedule.mock.calls.find((c) => c[0] === '30 4 * * *');
+      expect(rotateCall).toBeDefined();
+
+      rotateCall[1]();
+      expect(rotateLogs).toHaveBeenCalled();
+    });
+
+    test('testDataCleanup is registered on dev', () => {
+      testDataCleanup.mockResolvedValue(undefined);
+      startCronJobs();
+
+      const cleanupCall = mockSchedule.mock.calls.find((c) => c[0] === '*/30 * * * *');
+      expect(cleanupCall).toBeDefined();
+
+      cleanupCall[1]();
+      expect(testDataCleanup).toHaveBeenCalled();
+    });
   });
 
-  test('does not register testDataCleanup in production', () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
+  describe('production', () => {
+    let originalEnv;
 
-    startCronJobs();
+    beforeEach(() => {
+      originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+    });
 
-    const schedules = mockSchedule.mock.calls.map((call) => call[0]);
-    // testDataCleanup schedule should not be present as an extra
-    // In production we should have 8 schedules instead of 9
-    expect(mockSchedule).toHaveBeenCalledTimes(8);
+    afterEach(() => {
+      process.env.NODE_ENV = originalEnv;
+    });
 
-    // The */30 schedule (testDataCleanup) should NOT be present
-    expect(schedules).not.toContain('*/30 * * * *');
+    test('registers all prod cron jobs with correct schedules', () => {
+      startCronJobs();
 
-    process.env.NODE_ENV = originalEnv;
+      const schedules = mockSchedule.mock.calls.map((call) => call[0]);
+
+      // archiveReports — Sunday 03:00 UTC
+      expect(schedules).toContain('0 3 * * 0');
+      // subscriptions + backpackCleanup + expireTempIds — daily midnight
+      expect(schedules).toContain('0 0 * * *');
+      // staleRooms — every 5 minutes
+      expect(schedules).toContain('*/5 * * * *');
+      // backups + closedRooms — daily 02:00 UTC
+      expect(schedules).toContain('0 2 * * *');
+      // orphanedStorage — daily 04:00 UTC
+      expect(schedules).toContain('0 4 * * *');
+      // rotateLogs — every hour
+      expect(schedules).toContain('0 * * * *');
+      // expireBans — every 15 minutes
+      expect(schedules).toContain('*/15 * * * *');
+
+      // Should NOT have dev-only jobs
+      expect(schedules).not.toContain('*/30 * * * *'); // testDataCleanup
+
+      // Total: 8 schedules in production (staleRooms + serverHealth share */5)
+      expect(mockSchedule).toHaveBeenCalledTimes(8);
+    });
+
+    test('does not register testDataCleanup in production', () => {
+      startCronJobs();
+
+      const schedules = mockSchedule.mock.calls.map((call) => call[0]);
+      expect(schedules).not.toContain('*/30 * * * *');
+    });
+
+    test('staleRooms callback invokes the job', () => {
+      staleRooms.mockResolvedValue(undefined);
+      startCronJobs();
+
+      const fiveMinCalls = mockSchedule.mock.calls.filter((c) => c[0] === '*/5 * * * *');
+      expect(fiveMinCalls.length).toBe(2); // staleRooms + serverHealth
+
+      fiveMinCalls[0][1]();
+      expect(staleRooms).toHaveBeenCalled();
+    });
+
+    test('expireBans callback invokes the job', () => {
+      expireBans.mockResolvedValue(undefined);
+      startCronJobs();
+
+      const expireCall = mockSchedule.mock.calls.find((c) => c[0] === '*/15 * * * *');
+      expect(expireCall).toBeDefined();
+
+      expireCall[1]();
+      expect(expireBans).toHaveBeenCalled();
+    });
+
+    test('serverHealth callback invokes the job with alertManager', () => {
+      serverHealth.mockResolvedValue(undefined);
+      startCronJobs();
+
+      const fiveMinCalls = mockSchedule.mock.calls.filter((c) => c[0] === '*/5 * * * *');
+      // serverHealth is the second */5 schedule
+      fiveMinCalls[1][1]();
+
+      expect(serverHealth).toHaveBeenCalled();
+      const alertManager = require('../../src/utils/alertManagerInstance');
+      expect(serverHealth).toHaveBeenCalledWith(alertManager);
+    });
+
+    test('rotateLogs uses hourly schedule in production', () => {
+      rotateLogs.mockResolvedValue(undefined);
+      startCronJobs();
+
+      const rotateCall = mockSchedule.mock.calls.find((c) => c[0] === '0 * * * *');
+      expect(rotateCall).toBeDefined();
+
+      rotateCall[1]();
+      expect(rotateLogs).toHaveBeenCalled();
+    });
   });
 
   test('logs that cron jobs are scheduled', () => {
@@ -108,7 +215,6 @@ describe('startCronJobs', () => {
     archiveReports.mockResolvedValue(undefined);
     startCronJobs();
 
-    // Find the archiveReports schedule callback (schedule '0 3 * * 0')
     const archiveCall = mockSchedule.mock.calls.find((c) => c[0] === '0 3 * * 0');
     expect(archiveCall).toBeDefined();
 
@@ -127,7 +233,6 @@ describe('startCronJobs', () => {
     const callback = archiveCall[1];
     callback();
 
-    // Wait for the promise rejection to be caught
     await new Promise((r) => setTimeout(r, 10));
 
     expect(log.error).toHaveBeenCalledWith('cron', 'archiveReports failed', {
@@ -165,18 +270,6 @@ describe('startCronJobs', () => {
     expect(closedRooms).toHaveBeenCalled();
   });
 
-  test('staleRooms callback invokes the job', () => {
-    staleRooms.mockResolvedValue(undefined);
-    startCronJobs();
-
-    // */5 is used by both staleRooms and serverHealth — staleRooms is first
-    const fiveMinCalls = mockSchedule.mock.calls.filter((c) => c[0] === '*/5 * * * *');
-    expect(fiveMinCalls.length).toBe(2);
-
-    fiveMinCalls[0][1]();
-    expect(staleRooms).toHaveBeenCalled();
-  });
-
   test('orphanedStorage callback invokes the job', () => {
     orphanedStorage.mockResolvedValue(undefined);
     startCronJobs();
@@ -187,61 +280,6 @@ describe('startCronJobs', () => {
     orphanCall[1]();
 
     expect(orphanedStorage).toHaveBeenCalled();
-  });
-
-  test('rotateLogs callback invokes the job', () => {
-    rotateLogs.mockResolvedValue(undefined);
-    startCronJobs();
-
-    const rotateCall = mockSchedule.mock.calls.find((c) => c[0] === '0 * * * *');
-    expect(rotateCall).toBeDefined();
-
-    rotateCall[1]();
-
-    expect(rotateLogs).toHaveBeenCalled();
-  });
-
-  test('expireBans callback invokes the job', () => {
-    expireBans.mockResolvedValue(undefined);
-    startCronJobs();
-
-    const expireCall = mockSchedule.mock.calls.find((c) => c[0] === '*/15 * * * *');
-    expect(expireCall).toBeDefined();
-
-    expireCall[1]();
-
-    expect(expireBans).toHaveBeenCalled();
-  });
-
-  test('serverHealth callback invokes the job with alertManager', () => {
-    serverHealth.mockResolvedValue(undefined);
-    startCronJobs();
-
-    const fiveMinCalls = mockSchedule.mock.calls.filter((c) => c[0] === '*/5 * * * *');
-    // serverHealth is the second */5 schedule
-    fiveMinCalls[1][1]();
-
-    expect(serverHealth).toHaveBeenCalled();
-    // Verify alertManager is passed as argument
-    const alertManager = require('../../src/utils/alertManagerInstance');
-    expect(serverHealth).toHaveBeenCalledWith(alertManager);
-  });
-
-  test('testDataCleanup callback invokes the job in dev', () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-    testDataCleanup.mockResolvedValue(undefined);
-
-    startCronJobs();
-
-    const cleanupCall = mockSchedule.mock.calls.find((c) => c[0] === '*/30 * * * *');
-    expect(cleanupCall).toBeDefined();
-
-    cleanupCall[1]();
-
-    expect(testDataCleanup).toHaveBeenCalled();
-
-    process.env.NODE_ENV = originalEnv;
   });
 
   test('subscriptions error is caught and logged', async () => {
@@ -261,7 +299,10 @@ describe('startCronJobs', () => {
     });
   });
 
-  test('staleRooms error is caught and logged', async () => {
+  test('staleRooms error is caught and logged (production)', async () => {
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+
     const error = new Error('stale error');
     staleRooms.mockRejectedValue(error);
     startCronJobs();
@@ -274,5 +315,7 @@ describe('startCronJobs', () => {
     expect(log.error).toHaveBeenCalledWith('cron', 'staleRooms failed', {
       error: 'stale error',
     });
+
+    process.env.NODE_ENV = originalEnv;
   });
 });

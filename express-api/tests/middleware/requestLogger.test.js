@@ -7,6 +7,7 @@ const EventEmitter = require('events');
 function mockReq(overrides = {}) {
   return {
     method: 'GET',
+    path: '/api/test',
     url: '/api/test',
     originalUrl: '/api/test',
     headers: {},
@@ -34,6 +35,34 @@ function mockLogger() {
 }
 
 describe('requestLogger middleware', () => {
+  test('skips logging for /api/health', () => {
+    const logger = mockLogger();
+    const middleware = createRequestLogger(logger);
+    const req = mockReq({ path: '/api/health', url: '/api/health' });
+    const res = mockRes();
+    const next = jest.fn();
+
+    middleware(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    // Should not set up response logging
+    res.emit('finish');
+    expect(logger.log).not.toHaveBeenCalled();
+  });
+
+  test('does not skip logging for non-health paths', () => {
+    const logger = mockLogger();
+    const middleware = createRequestLogger(logger);
+    const req = mockReq({ path: '/api/users', url: '/api/users' });
+    const res = mockRes();
+    const next = jest.fn();
+
+    middleware(req, res, next);
+    res.emit('finish');
+
+    expect(logger.log).toHaveBeenCalledTimes(1);
+  });
+
   test('calls next() immediately', () => {
     const logger = mockLogger();
     const middleware = createRequestLogger(logger);
