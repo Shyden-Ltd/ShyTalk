@@ -17,7 +17,7 @@ async function sendFcmToTokens(tokens, data) {
 
   if (process.env.NODE_ENV === 'local') {
     console.log('[FCM-LOCAL] Would send to', tokens.length, 'tokens:', data?.title);
-    return;
+    return [];
   }
 
   const stringData = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)]));

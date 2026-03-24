@@ -103,7 +103,7 @@ describe('fcm.js local mode', () => {
 
     const { sendFcmToTokens } = require('../../src/utils/fcm');
     const result = await sendFcmToTokens(['token1'], { title: 'Test' });
-    expect(result).toBeUndefined();
+    expect(result).toEqual([]);
     expect(mockMessaging.sendEachForMulticast).not.toHaveBeenCalled();
   });
 

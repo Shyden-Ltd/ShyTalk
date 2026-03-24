@@ -170,8 +170,11 @@ async function seed() {
     unlinkedAt: null,
   });
 
-  // Update counter to reflect seeded users
-  await db.doc("counters/uniqueId").set({ value: 100000002 });
+  // Update counter only if it's still at the initial value (don't overwrite if users were created)
+  const counterDoc = await db.doc("counters/uniqueId").get();
+  if (counterDoc.exists && counterDoc.data().value <= 100000000) {
+    await db.doc("counters/uniqueId").set({ value: 100000002 });
+  }
 
   // Sample gifts
   console.log("\nSample content:");
