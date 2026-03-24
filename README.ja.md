@@ -12,6 +12,8 @@
 
 ShyTalkは、リアルタイムのボイスチャットルームを作成・参加できるソーシャルボイスチャットアプリです。Kotlin Multiplatform（KMP）で構築されており、共通のコードベースでAndroidとiOSの両方に対応しています。会話をホストしたり、聴いたり、世界中の人々とつながりたい場合でも、ShyTalkが簡単に実現します。
 
+iOSはサポート対象プラットフォームですが、このガイドは主要な開発ターゲットであるAndroid開発に焦点を当てています。
+
 ## 機能
 
 ### ボイスチャットルーム
@@ -115,13 +117,13 @@ ShyTalkはクリーンな**Repositoryパターン**を使用した**MVVM**に準
 
 ```
 +---------------------------------------------+
-|                    UIレイヤー                  |
+|                    UI Layer                  |
 |  Compose Screens -> ViewModels -> UI State   |
 +---------------------------------------------+
-|                 ドメインレイヤー                |
+|                  Domain Layer                |
 |         Repository Interfaces                |
 +---------------------------------------------+
-|                 データレイヤー                  |
+|                  Data Layer                  |
 |  Repository Impls -> Firestore / R2 / RTDB / LiveKit  |
 +---------------------------------------------+
 ```
@@ -190,12 +192,14 @@ ShyTalk/
 - **Android Studio** Ladybug以降
 - **JDK 17+**
 - **Node.js 24+**
-- **Docker** (LiveKitローカルサーバー用)
+- **Docker** (LiveKit音声サーバー、MinIOストレージ、MailHogメール用)
 - **Firebase CLI** (`npm install -g firebase-tools`)
+
+開始するのにクラウドアカウントは不要です -- ローカル環境は完全にオフラインで動作します。
 
 ### ローカル開発 (推奨)
 
-最速の開始方法です。Firebase Emulatorsとローカルの LiveKit Dockerコンテナを使用 -- クラウドアカウント不要、コスト不要、クォータ制限なし。
+最速の開始方法です。1つのコマンドですべてを起動します -- Firebase Emulators、Dockerコンテナ、Express API、そしてAndroidアプリをビルドします。クラウドアカウント不要、コスト不要、クォータ制限なし。
 
 1. **クローンとインストール**
    ```bash
@@ -204,37 +208,49 @@ ShyTalk/
    cd express-api && npm install && cd ..
    ```
 
-2. **ローカルサービスの起動**
+2. **すべてを起動**
+
+   **Linux / macOS / Git Bash:**
    ```bash
    bash local/start.sh
    ```
-   Firebase Emulators (Firestore, Auth, RTDB) とLiveKit Dockerコンテナを起動します。初回実行時はテストデータ（管理者ユーザー、サンプルギフト、設定）を自動的にシードします。
 
-   以下が表示されます：
-   ```
-   Local environment ready:
-     Firebase UI:  http://localhost:4000
-     Firestore:    localhost:8080
-     Auth:         localhost:9099
-     RTDB:         localhost:9000
-     LiveKit:      localhost:7880
+   **Windows PowerShell:**
+   ```powershell
+   .\local\start.ps1
    ```
 
-3. **Express APIの起動**（新しいターミナルで）
-   ```bash
-   cd express-api
-   cp .env.local.example .env.local   # 必要に応じてR2/SMTP値を編集
-   npm run local
-   ```
-   APIは`http://localhost:3000`で起動します。テスト: `curl http://localhost:3000/api/health`
+   この1つのコマンドで：
+   - Dockerコンテナを起動（LiveKit音声サーバー、MinIOストレージ、MailHogメール）
+   - Firebase Emulatorsを起動（Firestore、Auth、RTDB）
+   - テストデータをシードし、MinIOストレージバケットを作成
+   - Express APIを起動
+   - Androidアプリをビルドしてインストール（デバイスが接続されている場合）
 
-4. **Androidエミュレーターでの実行**
-   ```bash
-   ./gradlew installLocalDebug
+   準備完了時に以下が表示されます：
    ```
-   `local`ビルドフレーバーは`10.0.2.2`（Androidエミュレーターのマシンへのループバック）に接続します。追加設定なしでそのまま動作します。
+   Local environment ready (fully offline):
 
-5. **物理デバイスでの実行**
+     Services:
+       Firebase UI:    http://localhost:4000
+       Express API:    http://localhost:3000
+       MailHog UI:     http://localhost:8025
+       MinIO Console:  http://localhost:9001
+       LiveKit:        localhost:7880
+
+     Credentials:
+       Test admin:     claude-test@shytalk.dev / localdev123
+       Test user:      user@test.com / localdev123
+       MinIO:          minioadmin / minioadmin
+   ```
+
+3. **サインイン**
+   - シードされたテストアカウントでメールサインインフローを使用：`claude-test@shytalk.dev` / `localdev123`
+   - または新しいアカウントを作成 -- ローカルエミュレーターを使用します
+   - Google/Appleサインインはローカルでは動作しません（実際のOAuthなし） -- 代わりにメールOTPを使用
+   - OTPコードはMailHogにキャプチャされます -- http://localhost:8025 を確認
+
+4. **物理デバイスでの実行**
 
    スマートフォンは開発マシンと**同じWi-Fiネットワーク**に接続されている必要があります。
 
@@ -268,19 +284,23 @@ ShyTalk/
    adb reverse tcp:9099 tcp:9099   # Authエミュレーター
    adb reverse tcp:9000 tcp:9000   # RTDBエミュレーター
    adb reverse tcp:7880 tcp:7880   # LiveKit
+   adb reverse tcp:9002 tcp:9002   # MinIO（画像ストレージ）
    ```
    `adb reverse`を使用すると、ローカルフレーバーのデフォルト`10.0.2.2`アドレスが物理デバイスでも動作します -- ビルド設定の変更は不要です。
 
-6. **サインイン**
-   - シードされたテストアカウントでメールサインインフローを使用：`claude-test@shytalk.dev` / `localdev123`
-   - または新しいアカウントを作成 -- ローカルエミュレーターを使用します
-   - Google/Appleサインインはローカルでは動作しません（実際のOAuthなし） -- 代わりにメールOTPを使用
+5. **ローカルサービスの停止**
 
-7. **ローカルサービスの停止**
+   **Linux / macOS / Git Bash:**
    ```bash
    bash local/stop.sh
    ```
-   または`start.sh`ターミナルで`Ctrl+C`を押します。エミュレーターデータは自動的に保存され、次回起動時に復元されます。
+
+   **Windows PowerShell:**
+   ```powershell
+   .\local\stop.ps1
+   ```
+
+   または起動スクリプトターミナルで`Ctrl+C`を押します。エミュレーターデータは自動的に保存され、次回起動時に復元されます。
 
 ### 便利なローカル開発URL
 
@@ -289,6 +309,18 @@ ShyTalk/
 | Firebase Emulator UI | http://localhost:4000 | Firestoreデータ、Authユーザー、RTDBの閲覧 |
 | Express API | http://localhost:3000 | バックエンドAPI |
 | ヘルスチェック | http://localhost:3000/api/health | APIの動作確認 |
+| MailHog | http://localhost:8025 | キャプチャされたメールとOTPコードの確認 |
+| MinIO Console | http://localhost:9001 | アップロードされた画像とファイルの閲覧 |
+
+### オプションサービス
+
+**LibreTranslate（メッセージ翻訳）**
+
+翻訳機能をローカルでテストするためのオプションの6GB+ Dockerイメージ：
+```bash
+docker run -d -p 5000:5000 libretranslate/libretranslate
+```
+イメージサイズが大きいため、デフォルトのセットアップには含まれていません。翻訳はこれなしでも動作します -- メッセージが翻訳されないだけです。
 
 ### クラウド開発 (オプション)
 
@@ -334,6 +366,25 @@ ShyTalk/
 
 ## テスト
 
+### ローカルでテストを実行
+
+```bash
+# インタラクティブテストメニュー（実行するものを選択）：
+bash local/test.sh        # Linux / macOS / Git Bash
+.\local\test.ps1          # Windows PowerShell
+
+# または個別のスイートを実行：
+bash local/test-unit.sh       # Kotlin + Express APIユニットテスト
+bash local/test-playwright.sh # Playwrightウェブテスト（ローカル環境が必要）
+bash local/test-e2e.sh        # Android E2Eテスト（ローカル環境 + デバイスが必要）
+bash local/test-lint.sh       # ktlint + ESLint
+
+# Allureテストレポートを表示：
+npx allure serve allure-results
+```
+
+### テストスイート
+
 | スイート | コマンド | 数量 |
 |-------|---------|-------|
 | Kotlinユニットテスト | `./gradlew test` | 100以上のテスト |
@@ -354,6 +405,22 @@ cd express-api && npm test
 # Playwrightブラウザテスト（管理パネルの実行が必要）
 npx playwright test
 ```
+
+### CIでのテスト
+
+CIでは、PlaywrightとAndroid E2Eテストは同じローカル環境（エミュレーター + Docker）に対して実行されます -- クラウドサービスは使用されません。これにより、テストがライブテスターに干渉することはありません。
+
+## トラブルシューティング
+
+- **ポートが使用中**: `lsof -i :<port>` (Linux/macOS) または `netstat -ano | findstr :<port>` (Windows) でポートを使用しているものを確認。
+- **Dockerが動作していない**: Docker Desktopが起動していることを確認。`docker ps`で確認。
+- **Firebase Emulatorsが起動しない**: Java 11+が必要。`java -version`で確認。
+- **Androidビルドが失敗**: JDK 17+とAndroid SDKがインストールされていることを確認。`./gradlew clean`を試す。
+- **adbデバイスが検出されない**: USBデバッグを有効にする。`adb devices`で確認。
+- **画像が読み込まれない**: MinIOバケットが作成されていない可能性。`cd express-api && NODE_ENV=local node ../local/seed.js`を実行。物理デバイスの場合、`adb reverse tcp:9002 tcp:9002`を実行。
+- **OTPが届かない**: コンソール出力で`[OTP-LOCAL]`行を確認。http://localhost:8025 のMailHog UIも確認。
+- **エミュレーターデータのリセット**: `local/firebase-emulator-data/`ディレクトリを削除して再起動。
+- **MinIOデータのリセット**: `docker compose -f local/docker-compose.yml down -v`を実行してボリュームを削除。
 
 ## デプロイ
 

@@ -10,85 +10,87 @@
 
 ## A propos
 
-ShyTalk est une application sociale de chat vocal ou les utilisateurs peuvent creer et rejoindre des salons de chat vocal en temps reel. Construite avec Kotlin Multiplatform (KMP), elle cible a la fois Android et iOS avec une base de code partagee. Que vous souhaitiez animer une conversation, ecouter ou vous connecter avec des personnes du monde entier, ShyTalk rend cela facile.
+ShyTalk est une application sociale de chat vocal ou les utilisateurs peuvent creer et rejoindre des salons de chat vocal en temps reel. Construite avec Kotlin Multiplatform (KMP), elle cible a la fois Android et iOS avec une base de code partagee. Que vous souhaitiez animer une conversation, ecouter ou vous connecter avec des personnes du monde entier, ShyTalk rend tout cela facile.
+
+iOS est une plateforme supportee mais ce guide se concentre sur le developpement Android, qui est la cible de developpement principale.
 
 ## Fonctionnalites
 
-### Salons de chat vocal
-- Creez ou rejoignez des salons avec de la voix en temps reel propulsee par LiveKit
-- Systeme de places structure avec des roles de proprietaire, animateur et participant
-- Demandes et invitations de places -- demandez a rejoindre une place ou invitez des auditeurs a parler
-- Bulle flottante -- continuez le chat vocal tout en naviguant dans d'autres parties de l'application
-- Expiration de salon -- les salons se ferment automatiquement lorsque le proprietaire est absent, avec des minuteries de compte a rebours
+### Salons de Chat Vocal
+- Creez ou rejoignez des salons avec voix en temps reel propulsee par LiveKit
+- Systeme de sieges structure avec roles de proprietaire, hote et participant
+- Demandes de sieges et invitations -- demandez a rejoindre un siege ou invitez des auditeurs a parler
+- Bulle flottante -- continuez le chat vocal tout en parcourant d'autres parties de l'app
+- Expiration de salon -- les salons se ferment automatiquement quand le proprietaire est absent, avec des compteurs a rebours
 
 ### Messagerie
-- Chat textuel en direct aux cotes de la voix dans chaque salon
-- Messagerie privee avec des conversations individuelles
-- Chats de groupe avec gestion des membres et des permissions
+- Chat textuel en direct a cote de la voix dans chaque salon
+- Messagerie privee avec conversations 1 a 1
+- Discussions de groupe avec gestion des membres et permissions
 - Indicateurs de saisie en temps reel
 - Support des stickers
 
 ### Social
 - Profils utilisateurs personnalisables avec photos, images de couverture, drapeaux de nationalite et biographies
 - Systeme de suivi -- suivez d'autres utilisateurs et voyez quand ils sont actifs
-- Mur de cadeaux -- exposez les cadeaux recus d'autres utilisateurs
-- Systeme de blocage -- bloquez des utilisateurs a travers les salons et les profils
+- Mur de cadeaux -- presentez les cadeaux recus d'autres utilisateurs
+- Systeme de blocage -- bloquez des utilisateurs dans les salons et profils
 
-### Economie virtuelle
-- Economie basee sur des pieces avec portefeuille et historique des transactions
-- Recompenses de connexion quotidienne avec bonus de serie
-- Systeme de Roue de la Chance (gacha) avec des prix par paliers
+### Economie Virtuelle
+- Economie basee sur les pieces avec portefeuille et historique des transactions
+- Recompenses de connexion quotidiennes avec bonus de serie
+- Systeme Lucky Spin (gacha) avec prix echelonnes
 - Cadeaux virtuels -- envoyez et recevez des cadeaux animes pendant les chats vocaux
 - Inventaire de sac a dos pour stocker les cadeaux
 - Packs de pieces pour acheter des pieces
 - Bannieres de diffusion avec effets de cadeaux animes
 
-### Compte et identite
-- Authentification multi-fournisseur -- connectez-vous avec Google, Apple ou e-mail (OTP)
+### Compte et Identite
+- Authentification multi-fournisseur -- connectez-vous avec Google, Apple ou Email (OTP)
 - Liez plusieurs methodes de connexion a un seul compte
 - Identite utilisateur stable (uniqueId) qui persiste entre les projets Firebase
 - Gestion des comptes lies dans les Parametres avec support de liaison/deliaison
-- Liaison d'appareil -- chaque appareil est lie de facon permanente a un seul compte
+- Liaison d'appareil -- chaque appareil est lie en permanence a un compte
 
-### Moderation et securite
-- Outils de moderation -- couper le son, expulser, deplacer les places et gerer les animateurs en tant que proprietaire de salon
-- Systeme de signalement des utilisateurs avec workflow de revision
-- Systeme d'avertissement et de suspension pour les violations de politique
-- Ecrans des normes communautaires, de la politique de confidentialite et des conditions d'utilisation
+### Moderation et Securite
+- Outils de moderation -- couper le son, expulser, deplacer les sieges et gerer les hotes en tant que proprietaire de salon
+- Systeme de signalement des utilisateurs avec flux de revision
+- Systeme d'avertissement et de suspension pour violations de politiques
+- Ecrans des standards communautaires, politique de confidentialite et conditions d'utilisation
 - Flux d'acceptation legale pour les nouveaux utilisateurs
-- Mise a jour forcee pour les versions obsoletes de l'application
+- Mise a jour forcee pour les versions obsoletes de l'app
 
-### Ecrans de demarrage
-- Ecrans de lancement configurables affiches au demarrage de l'application
-- Contenu gere par l'administrateur avec des options de planification et de ciblage
+### Ecrans de Demarrage
+- Ecrans de lancement configurables affiches au demarrage de l'app
+- Contenu gere par l'administrateur avec options de planification et de ciblage
 
 ### Securite
-- Protection par code PIN pour l'acces a l'application
+- Protection par code PIN pour l'acces a l'app
 - Authentification biometrique -- empreinte digitale et reconnaissance faciale
 - Verification OTP (mot de passe a usage unique) pour les actions sensibles
 
-### Panneau d'administration
+### Panneau d'Administration
 - Tableau de bord de moderation web sur le site statique du projet
-- Gestion des utilisateurs, moderation du contenu et configuration
-- Gestion des modeles et des cadeaux avec apercu en direct
-- Streaming de logs en temps reel et alertes
+- Gestion des utilisateurs, moderation de contenu et configuration
+- Gestion des modeles et cadeaux avec apercu en direct
+- Streaming de logs et alertes en temps reel
 
-### Compression d'images
+### Compression d'Images
 - Compression automatique des images lors du telechargement via Express API
 - Reduit les couts de stockage et de bande passante tout en preservant la qualite
 
 ### Internationalisation
 - 19 langues supportees nativement
-- Localisation complete pour toutes les chaines visibles par l'utilisateur
+- Localisation complete de toutes les chaines visibles par l'utilisateur
 
-### Journalisation et surveillance
-- Journalisation structuree a travers Express API, applications mobiles et panneau d'administration
+### Logs et Surveillance
+- Logging structure sur Express API, apps mobiles et panneau d'administration
 - Streaming de logs en temps reel dans le tableau de bord d'administration
 - Bannissement d'appareils et de reseaux avec application automatique
-- Systeme d'alertes pour les erreurs critiques et les anomalies
+- Systeme d'alertes pour erreurs critiques et anomalies
 - Propagation de Trace ID pour le suivi des requetes de bout en bout
 
-## Stack technique
+## Stack Technique
 
 | Couche | Technologie |
 |-------|-----------|
@@ -111,7 +113,7 @@ ShyTalk est une application sociale de chat vocal ou les utilisateurs peuvent cr
 
 ## Architecture
 
-ShyTalk suit le patron **MVVM** avec un **Repository Pattern** propre :
+ShyTalk suit le pattern **MVVM** avec un **Repository Pattern** propre :
 
 ```
 +---------------------------------------------+
@@ -126,16 +128,16 @@ ShyTalk suit le patron **MVVM** avec un **Repository Pattern** propre :
 +---------------------------------------------+
 ```
 
-- **Module partage** (`commonMain`) -- Modeles, interfaces de repository, ViewModels et UI partages entre les plateformes
-- **Module app** -- Ecrans specifiques a Android, implementations de repository et point d'entree
-- **Module iosApp** -- Point d'entree specifique a iOS
+- **Module shared** (`commonMain`) -- Modeles, interfaces de repository, ViewModels et UI partages entre plateformes
+- **Module app** -- Ecrans specifiques Android, implementations de repository et point d'entree
+- **Module iosApp** -- Point d'entree specifique iOS
 - **express-api** -- Backend Express.js fonctionnant sur Oracle Cloud Free Tier
 
-## Structure du projet
+## Structure du Projet
 
 ```
 ShyTalk/
-+-- app/                              # Module de l'app Android
++-- app/                              # Module app Android
 |   +-- src/
 |       +-- main/java/.../
 |       |   +-- ShyTalkApp.kt         # Point d'entree de l'application
@@ -165,37 +167,39 @@ ShyTalk/
 |       |   +-- remote/               # VoiceService, TokenService, etc.
 |       |   +-- repository/           # Interfaces de repository
 |       +-- feature/                  # Modules de fonctionnalites partages
-+-- iosApp/                           # Module de l'app iOS
++-- iosApp/                           # Module app iOS
 +-- express-api/                      # Serveur Express.js API
 |   +-- src/
 |       +-- routes/                   # Gestionnaires de routes API
-|       +-- middleware/               # Auth, middleware de journalisation
+|       +-- middleware/               # Middleware auth et logging
 |       +-- utils/                    # Firebase Admin, R2, logger
 |       +-- cron/                     # Taches planifiees
 +-- public/                           # Site statique & panneau d'administration
 +-- local/                            # Environnement de developpement local (emulateurs, donnees de test)
 +-- tests/web/                        # Tests navigateur Playwright
 +-- scripts/                          # Scripts utilitaires
-+-- .github/workflows/                # CI/CD (Checks de PR, Deploy vers Dev/Prod, E2E, lint)
++-- .github/workflows/                # CI/CD (Checks PR, Deploy vers Dev/Prod, E2E, lint)
 +-- firestore.rules                   # Regles de securite Firestore
 +-- database.rules.json               # Regles de securite RTDB
-+-- firestore.indexes.json            # Index composes Firestore
++-- firestore.indexes.json            # Index composites Firestore
 +-- firebase.json                     # Configuration Firebase
 ```
 
-## Pour commencer
+## Demarrage
 
 ### Prerequis
 
-- **Android Studio** Ladybug ou plus recent
+- **Android Studio** Ladybug ou ulterieur
 - **JDK 17+**
 - **Node.js 24+**
-- **Docker** (pour le serveur LiveKit local)
+- **Docker** (pour le serveur vocal LiveKit, le stockage MinIO, l'email MailHog)
 - **Firebase CLI** (`npm install -g firebase-tools`)
 
-### Developpement local (Recommande)
+Aucun compte cloud n'est necessaire pour commencer -- l'environnement local fonctionne entierement hors ligne.
 
-La facon la plus rapide de commencer. Utilise les emulateurs Firebase et un conteneur Docker LiveKit local -- pas besoin de comptes cloud, pas de couts, pas de limites de quota.
+### Developpement Local (Recommande)
+
+Le moyen le plus rapide de commencer. Une seule commande demarre tout -- emulateurs Firebase, conteneurs Docker, Express API et compile l'app Android. Pas de comptes cloud, pas de couts, pas de limites de quota.
 
 1. **Cloner et installer**
    ```bash
@@ -204,37 +208,49 @@ La facon la plus rapide de commencer. Utilise les emulateurs Firebase et un cont
    cd express-api && npm install && cd ..
    ```
 
-2. **Demarrer les services locaux**
+2. **Tout demarrer**
+
+   **Linux / macOS / Git Bash :**
    ```bash
    bash local/start.sh
    ```
-   Cela demarre les emulateurs Firebase (Firestore, Auth, RTDB) et un conteneur Docker LiveKit. Lors de la premiere execution, les donnees de test sont automatiquement inserees (utilisateur admin, cadeaux exemples, configuration).
 
-   Vous verrez :
-   ```
-   Local environment ready:
-     Firebase UI:  http://localhost:4000
-     Firestore:    localhost:8080
-     Auth:         localhost:9099
-     RTDB:         localhost:9000
-     LiveKit:      localhost:7880
+   **Windows PowerShell :**
+   ```powershell
+   .\local\start.ps1
    ```
 
-3. **Demarrer Express API** (dans un nouveau terminal)
-   ```bash
-   cd express-api
-   cp .env.local.example .env.local   # Modifiez les valeurs R2/SMTP si necessaire
-   npm run local
-   ```
-   L'API demarre sur `http://localhost:3000`. Test : `curl http://localhost:3000/api/health`
+   Cette unique commande :
+   - Demarre les conteneurs Docker (serveur vocal LiveKit, stockage MinIO, email MailHog)
+   - Demarre les emulateurs Firebase (Firestore, Auth, RTDB)
+   - Seme les donnees de test et cree le bucket de stockage MinIO
+   - Demarre l'Express API
+   - Compile et installe l'app Android (si un appareil est connecte)
 
-4. **Executer sur l'emulateur Android**
-   ```bash
-   ./gradlew installLocalDebug
+   Quand c'est pret, vous verrez :
    ```
-   Le flavor de build `local` se connecte a `10.0.2.2` (loopback de l'emulateur Android vers votre machine). Ca fonctionne directement -- pas de configuration supplementaire necessaire.
+   Local environment ready (fully offline):
 
-5. **Executer sur un appareil physique**
+     Services:
+       Firebase UI:    http://localhost:4000
+       Express API:    http://localhost:3000
+       MailHog UI:     http://localhost:8025
+       MinIO Console:  http://localhost:9001
+       LiveKit:        localhost:7880
+
+     Credentials:
+       Test admin:     claude-test@shytalk.dev / localdev123
+       Test user:      user@test.com / localdev123
+       MinIO:          minioadmin / minioadmin
+   ```
+
+3. **Se connecter**
+   - Utilisez le flux de connexion par email avec le compte de test : `claude-test@shytalk.dev` / `localdev123`
+   - Ou creez un nouveau compte -- il utilisera les emulateurs locaux
+   - La connexion Google/Apple ne fonctionne pas localement (pas de vrai OAuth) -- utilisez l'OTP par email a la place
+   - Les codes OTP sont captures par MailHog -- verifiez http://localhost:8025
+
+4. **Executer sur un Appareil Physique**
 
    Votre telephone doit etre sur le **meme reseau Wi-Fi** que votre machine de developpement.
 
@@ -268,39 +284,55 @@ La facon la plus rapide de commencer. Utilise les emulateurs Firebase et un cont
    adb reverse tcp:9099 tcp:9099   # Emulateur Auth
    adb reverse tcp:9000 tcp:9000   # Emulateur RTDB
    adb reverse tcp:7880 tcp:7880   # LiveKit
+   adb reverse tcp:9002 tcp:9002   # MinIO (stockage d'images)
    ```
-   Avec `adb reverse`, les adresses `10.0.2.2` par defaut du flavor local fonctionneront aussi sur un appareil physique -- pas besoin de modifier la configuration de build.
+   Avec `adb reverse`, les adresses par defaut `10.0.2.2` dans le flavor local fonctionneront aussi sur un appareil physique -- pas de changement de configuration de build necessaire.
 
-6. **Se connecter**
-   - Utilisez le flux de connexion par e-mail avec le compte de test insere : `claude-test@shytalk.dev` / `localdev123`
-   - Ou creez un nouveau compte -- il utilisera les emulateurs locaux
-   - La connexion Google/Apple ne fonctionne pas localement (pas de vrai OAuth) -- utilisez l'OTP par e-mail a la place
+5. **Arreter les services locaux**
 
-7. **Arreter les services locaux**
+   **Linux / macOS / Git Bash :**
    ```bash
    bash local/stop.sh
    ```
-   Ou appuyez sur `Ctrl+C` dans le terminal `start.sh`. Les donnees de l'emulateur sont automatiquement sauvegardees et restaurees au prochain demarrage.
 
-### URLs utiles pour le developpement local
+   **Windows PowerShell :**
+   ```powershell
+   .\local\stop.ps1
+   ```
+
+   Ou appuyez sur `Ctrl+C` dans le terminal du script de demarrage. Les donnees de l'emulateur sont sauvegardees automatiquement et restaurees au prochain demarrage.
+
+### URLs Utiles pour le Developpement Local
 
 | Service | URL | Objectif |
 |---------|-----|---------|
 | Firebase Emulator UI | http://localhost:4000 | Parcourir les donnees Firestore, utilisateurs Auth, RTDB |
 | Express API | http://localhost:3000 | API backend |
-| Verification de sante | http://localhost:3000/api/health | Verifier que l'API fonctionne |
+| Health check | http://localhost:3000/api/health | Verifier que l'API fonctionne |
+| MailHog | http://localhost:8025 | Voir les emails captures et codes OTP |
+| MinIO Console | http://localhost:9001 | Parcourir les images et fichiers telecharges |
 
-### Developpement cloud (Optionnel)
+### Services Optionnels
 
-Si vous devez tester contre de vrais services cloud (ex. vraies notifications push, vraie connexion Google) :
+**LibreTranslate (Traduction de Messages)**
 
-1. **Configurer Firebase**
+Image Docker optionnelle de 6 Go+ pour tester la fonctionnalite de traduction localement :
+```bash
+docker run -d -p 5000:5000 libretranslate/libretranslate
+```
+Non incluse dans la configuration par defaut en raison de la taille importante de l'image. La traduction fonctionne sans -- les messages restent simplement non traduits.
+
+### Developpement Cloud (Optionnel)
+
+Si vous devez tester avec de vrais services cloud (ex. vraies notifications push, vraie connexion Google) :
+
+1. **Configuration Firebase**
    - Creez un projet Firebase sur [console.firebase.google.com](https://console.firebase.google.com)
-   - Activez **Connexion Google** et **Connexion Apple** dans l'Authentification
+   - Activez **la connexion Google** et **la connexion Apple** dans l'Authentification
    - Activez **Firestore**, **Realtime Database** et **Cloud Messaging**
    - Telechargez `google-services.json` et placez-le dans `app/src/dev/`
 
-2. **Configurer Express API**
+2. **Configuration Express API**
    ```bash
    cd express-api
    cp .env.example .env  # Editez avec vos identifiants cloud
@@ -313,12 +345,12 @@ Si vous devez tester contre de vrais services cloud (ex. vraies notifications pu
    npx firebase deploy --only firestore:rules
    ```
 
-4. **Compiler l'application Android** (flavor dev)
+4. **Compiler l'app Android** (flavor dev)
    ```bash
    ./gradlew assembleDevDebug
    ```
 
-### Variables d'environnement
+### Variables d'Environnement
 
 | Variable | Description | Ou |
 |----------|-------------|-------|
@@ -326,7 +358,7 @@ Si vous devez tester contre de vrais services cloud (ex. vraies notifications pu
 | `R2_ACCOUNT_ID` | ID de compte Cloudflare R2 | Express API |
 | `R2_ACCESS_KEY_ID` | Cle d'acces R2 | Express API |
 | `R2_SECRET_ACCESS_KEY` | Cle secrete R2 | Express API |
-| `R2_BUCKET_NAME` | Nom du bucket R2 (par defaut : `shytalk-media`) | Express API |
+| `R2_BUCKET_NAME` | Nom du bucket R2 (defaut : `shytalk-media`) | Express API |
 | `LIVEKIT_API_KEY` | Cle API LiveKit | Express API |
 | `LIVEKIT_API_SECRET` | Secret API LiveKit | Express API |
 | `LIVEKIT_URL` | URL du serveur LiveKit | App Android (BuildConfig) |
@@ -334,12 +366,31 @@ Si vous devez tester contre de vrais services cloud (ex. vraies notifications pu
 
 ## Tests
 
+### Executer les Tests Localement
+
+```bash
+# Menu de test interactif (choisissez quoi executer) :
+bash local/test.sh        # Linux / macOS / Git Bash
+.\local\test.ps1          # Windows PowerShell
+
+# Ou executez des suites individuelles :
+bash local/test-unit.sh       # Tests unitaires Kotlin + Express API
+bash local/test-playwright.sh # Tests web Playwright (necessite l'env local)
+bash local/test-e2e.sh        # Tests E2E Android (necessite l'env local + appareil)
+bash local/test-lint.sh       # ktlint + ESLint
+
+# Voir le rapport de tests Allure :
+npx allure serve allure-results
+```
+
+### Suites de Tests
+
 | Suite | Commande | Nombre |
 |-------|---------|-------|
 | Tests unitaires Kotlin | `./gradlew test` | 100+ tests |
 | Tests Express API | `cd express-api && npm test` | 1 540+ tests |
 | E2E Gherkin (Android) | `./gradlew connectedDevDebugAndroidTest` | 34 fichiers de fonctionnalites |
-| Tests web Playwright | `npx playwright test` | 28 specifications |
+| Tests web Playwright | `npx playwright test` | 28 specs |
 
 ```bash
 # Tests unitaires Kotlin/KMP
@@ -348,12 +399,28 @@ Si vous devez tester contre de vrais services cloud (ex. vraies notifications pu
 # Tests Express API
 cd express-api && npm test
 
-# Tests E2E (necessite un appareil connecte ou un emulateur)
+# Tests E2E (necessite un appareil connecte ou emulateur)
 ./gradlew connectedDevDebugAndroidTest
 
-# Tests navigateur Playwright (necessite le panneau d'administration en cours d'execution)
+# Tests navigateur Playwright (necessite le panneau d'admin en fonctionnement)
 npx playwright test
 ```
+
+### Tests en CI
+
+En CI, les tests Playwright et Android E2E s'executent contre le meme environnement local (emulateurs + Docker) -- aucun service cloud n'est utilise. Cela garantit que les tests n'interferent jamais avec les vrais testeurs.
+
+## Depannage
+
+- **Port deja utilise** : `lsof -i :<port>` (Linux/macOS) ou `netstat -ano | findstr :<port>` (Windows) pour trouver ce qui utilise le port.
+- **Docker ne fonctionne pas** : Assurez-vous que Docker Desktop est demarre. Executez `docker ps` pour verifier.
+- **Les emulateurs Firebase ne demarrent pas** : Necessite Java 11+. Verifiez avec `java -version`.
+- **La compilation Android echoue** : Assurez-vous que JDK 17+ et Android SDK sont installes. Essayez `./gradlew clean`.
+- **Appareil adb non detecte** : Activez le debogage USB. Executez `adb devices` pour verifier.
+- **Les images ne chargent pas** : Le bucket MinIO n'a peut-etre pas ete cree. Executez `cd express-api && NODE_ENV=local node ../local/seed.js`. Pour les appareils physiques, executez `adb reverse tcp:9002 tcp:9002`.
+- **OTP ne arrive pas** : Verifiez la sortie console pour les lignes `[OTP-LOCAL]`. Verifiez aussi l'UI MailHog sur http://localhost:8025.
+- **Reinitialiser les donnees de l'emulateur** : Supprimez le repertoire `local/firebase-emulator-data/` et redemarrez.
+- **Reinitialiser les donnees MinIO** : Executez `docker compose -f local/docker-compose.yml down -v` pour supprimer les volumes.
 
 ## Deploiement
 
@@ -361,16 +428,16 @@ Les deploiements sont geres via les workflows GitHub Actions (`.github/workflows
 
 | Workflow | Declencheur | Ce qu'il fait |
 |----------|---------|-------------|
-| **PR Checks** | Automatique sur les PRs vers `main` | Execute le lint, les tests Kotlin, les tests Express API, les tests Playwright (selon les fichiers modifies) |
+| **PR Checks** | Automatique sur PRs vers `main` | Execute lint, tests Kotlin, tests Express API, tests Playwright (selon les fichiers modifies) |
 | **Deploy to Dev** | Manuel (`workflow_dispatch`) | Deploie Express API + web vers dev, distribue l'APK aux testeurs, execute optionnellement les tests Playwright |
-| **Deploy to Prod** | Manuel (`workflow_dispatch`) | Deploie une version taguee en prod -- Express API, web, Play Store et App Store |
+| **Deploy to Prod** | Manuel (`workflow_dispatch`) | Deploie une release taguee vers prod -- Express API, web, Play Store et App Store |
 
 Workflows supplementaires : **E2E Tests** (matrice d'emulateurs Android), **SonarCloud** (analyse statique), **Lint**, **Backend Tests**, **Dependabot Auto-merge**.
 
-- **Express API :** Deploye sur des VMs Oracle Cloud via SSH + PM2 (dev : Londres, prod : Singapour)
-- **Android :** Empaquete et televerse sur Google Play via CI
-- **iOS :** Compile et televerse sur App Store Connect / TestFlight via CI
-- **Panneau d'administration / Web :** Deploye sur Cloudflare Pages
+- **Express API :** Deployee sur VMs Oracle Cloud via SSH + PM2 (dev : Londres, prod : Singapour)
+- **Android :** Empaquetee et uploadee sur Google Play via CI
+- **iOS :** Compilee et uploadee sur App Store Connect / TestFlight via CI
+- **Panneau d'admin / web :** Deploye sur Cloudflare Pages
 
 ## Contribuer
 
@@ -386,9 +453,9 @@ Ce projet est sous licence Apache 2.0. Voir [LICENSE](LICENSE) pour les details.
 - [LiveKit](https://livekit.io) -- Communication vocale en temps reel
 - [Cloudflare](https://www.cloudflare.com) -- Stockage R2, hebergement Pages, CDN
 - [Oracle Cloud](https://www.oracle.com/cloud/free/) -- VM gratuite pour Express API
-- [Express.js](https://expressjs.com) -- Framework de serveur API
+- [Express.js](https://expressjs.com) -- Framework serveur API
 - [Jetpack Compose](https://developer.android.com/jetpack/compose) -- UI declarative moderne
 - [Koin](https://insert-koin.io) -- Injection de dependances legere
 - [Coil](https://coil-kt.github.io/coil/) -- Chargement d'images pour Kotlin Multiplatform
-- [Lottie](https://airbnb.design/lottie/) -- Effets animes de cadeaux et d'interface
+- [Lottie](https://airbnb.design/lottie/) -- Effets animes de cadeaux et UI
 - [kotlinx-datetime](https://github.com/Kotlin/kotlinx-datetime) -- Date/heure multiplateforme

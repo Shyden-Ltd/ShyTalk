@@ -12,6 +12,8 @@
 
 ShyTalk هو تطبيق دردشة صوتية اجتماعي يتيح للمستخدمين إنشاء غرف دردشة صوتية والانضمام إليها في الوقت الفعلي. تم بناؤه باستخدام Kotlin Multiplatform (KMP)، ويستهدف كلاً من Android وiOS بقاعدة شفرة مشتركة. سواء كنت ترغب في استضافة محادثة، أو الاستماع، أو التواصل مع أشخاص من جميع أنحاء العالم، فإن ShyTalk يجعل ذلك سهلاً.
 
+iOS منصة مدعومة ولكن هذا الدليل يركز على تطوير Android، وهو هدف التطوير الأساسي.
+
 ## الميزات
 
 ### غرف الدردشة الصوتية
@@ -190,12 +192,14 @@ ShyTalk/
 - **Android Studio** Ladybug أو أحدث
 - **JDK 17+**
 - **Node.js 24+**
-- **Docker** (لخادم LiveKit المحلي)
+- **Docker** (لخادم صوت LiveKit، تخزين MinIO، بريد MailHog)
 - **Firebase CLI** (`npm install -g firebase-tools`)
+
+لا حاجة لحسابات سحابية للبدء -- البيئة المحلية تعمل بالكامل بدون اتصال.
 
 ### التطوير المحلي (موصى به)
 
-أسرع طريقة للبدء. يستخدم محاكيات Firebase وحاوية LiveKit Docker محلية -- لا حاجة لحسابات سحابية، بدون تكاليف، بدون حدود حصص.
+أسرع طريقة للبدء. أمر واحد يشغل كل شيء -- محاكيات Firebase، حاويات Docker، Express API، ويبني تطبيق Android. لا حاجة لحسابات سحابية، بدون تكاليف، بدون حدود حصص.
 
 1. **الاستنساخ والتثبيت**
    ```bash
@@ -204,37 +208,49 @@ ShyTalk/
    cd express-api && npm install && cd ..
    ```
 
-2. **بدء الخدمات المحلية**
+2. **بدء كل شيء**
+
+   **Linux / macOS / Git Bash:**
    ```bash
    bash local/start.sh
    ```
-   يقوم هذا بتشغيل محاكيات Firebase (Firestore, Auth, RTDB) وحاوية LiveKit Docker. عند التشغيل الأول يقوم تلقائياً ببذر بيانات الاختبار (مستخدم مسؤول، هدايا نموذجية، التكوين).
 
-   سترى:
-   ```
-   Local environment ready:
-     Firebase UI:  http://localhost:4000
-     Firestore:    localhost:8080
-     Auth:         localhost:9099
-     RTDB:         localhost:9000
-     LiveKit:      localhost:7880
+   **Windows PowerShell:**
+   ```powershell
+   .\local\start.ps1
    ```
 
-3. **بدء Express API** (في نافذة طرفية جديدة)
-   ```bash
-   cd express-api
-   cp .env.local.example .env.local   # عدّل قيم R2/SMTP إذا لزم الأمر
-   npm run local
-   ```
-   تبدأ واجهة API على `http://localhost:3000`. للاختبار: `curl http://localhost:3000/api/health`
+   هذا الأمر الواحد:
+   - يشغل حاويات Docker (خادم صوت LiveKit، تخزين MinIO، بريد MailHog)
+   - يشغل محاكيات Firebase (Firestore, Auth, RTDB)
+   - يبذر بيانات الاختبار وينشئ حاوية تخزين MinIO
+   - يشغل Express API
+   - يبني ويثبت تطبيق Android (إذا كان هناك جهاز متصل)
 
-4. **التشغيل على محاكي Android**
-   ```bash
-   ./gradlew installLocalDebug
+   عندما يكون جاهزاً، سترى:
    ```
-   يتصل نكهة بناء `local` بـ `10.0.2.2` (الاسترجاع الداخلي لمحاكي Android إلى جهازك). يعمل مباشرة -- لا حاجة لتكوين إضافي.
+   Local environment ready (fully offline):
 
-5. **التشغيل على جهاز حقيقي**
+     Services:
+       Firebase UI:    http://localhost:4000
+       Express API:    http://localhost:3000
+       MailHog UI:     http://localhost:8025
+       MinIO Console:  http://localhost:9001
+       LiveKit:        localhost:7880
+
+     Credentials:
+       Test admin:     claude-test@shytalk.dev / localdev123
+       Test user:      user@test.com / localdev123
+       MinIO:          minioadmin / minioadmin
+   ```
+
+3. **تسجيل الدخول**
+   - استخدم تدفق تسجيل الدخول بالبريد الإلكتروني مع حساب الاختبار المبذور: `claude-test@shytalk.dev` / `localdev123`
+   - أو أنشئ حساباً جديداً -- سيستخدم المحاكيات المحلية
+   - لن يعمل تسجيل الدخول بـ Google/Apple محلياً (لا يوجد OAuth حقيقي) -- استخدم OTP بالبريد الإلكتروني بدلاً من ذلك
+   - يتم التقاط رموز OTP بواسطة MailHog -- تحقق من http://localhost:8025
+
+4. **التشغيل على جهاز حقيقي**
 
    يجب أن يكون هاتفك على **نفس شبكة Wi-Fi** مثل جهاز التطوير الخاص بك.
 
@@ -268,19 +284,23 @@ ShyTalk/
    adb reverse tcp:9099 tcp:9099   # محاكي Auth
    adb reverse tcp:9000 tcp:9000   # محاكي RTDB
    adb reverse tcp:7880 tcp:7880   # LiveKit
+   adb reverse tcp:9002 tcp:9002   # MinIO (تخزين الصور)
    ```
    مع `adb reverse`، ستعمل عناوين `10.0.2.2` الافتراضية في نكهة local على الجهاز الحقيقي أيضاً -- لا حاجة لتغيير تكوين البناء.
 
-6. **تسجيل الدخول**
-   - استخدم تدفق تسجيل الدخول بالبريد الإلكتروني مع حساب الاختبار المبذور: `claude-test@shytalk.dev` / `localdev123`
-   - أو أنشئ حساباً جديداً -- سيستخدم المحاكيات المحلية
-   - لن يعمل تسجيل الدخول بـ Google/Apple محلياً (لا يوجد OAuth حقيقي) -- استخدم OTP بالبريد الإلكتروني بدلاً من ذلك
+5. **إيقاف الخدمات المحلية**
 
-7. **إيقاف الخدمات المحلية**
+   **Linux / macOS / Git Bash:**
    ```bash
    bash local/stop.sh
    ```
-   أو اضغط `Ctrl+C` في نافذة `start.sh`. يتم حفظ بيانات المحاكي تلقائياً واستعادتها عند البدء التالي.
+
+   **Windows PowerShell:**
+   ```powershell
+   .\local\stop.ps1
+   ```
+
+   أو اضغط `Ctrl+C` في نافذة سكريبت البدء. يتم حفظ بيانات المحاكي تلقائياً واستعادتها عند البدء التالي.
 
 ### عناوين URL مفيدة للتطوير المحلي
 
@@ -289,6 +309,18 @@ ShyTalk/
 | Firebase Emulator UI | http://localhost:4000 | تصفح بيانات Firestore ومستخدمي Auth وRTDB |
 | Express API | http://localhost:3000 | واجهة API الخلفية |
 | فحص الصحة | http://localhost:3000/api/health | التحقق من أن API يعمل |
+| MailHog | http://localhost:8025 | عرض رسائل البريد الملتقطة ورموز OTP |
+| MinIO Console | http://localhost:9001 | تصفح الصور والملفات المرفوعة |
+
+### الخدمات الاختيارية
+
+**LibreTranslate (ترجمة الرسائل)**
+
+صورة Docker اختيارية بحجم 6 جيجابايت+ لاختبار ميزة الترجمة محلياً:
+```bash
+docker run -d -p 5000:5000 libretranslate/libretranslate
+```
+غير مضمنة في الإعداد الافتراضي بسبب حجم الصورة الكبير. تعمل الترجمة بدونها -- تبقى الرسائل فقط بدون ترجمة.
 
 ### التطوير السحابي (اختياري)
 
@@ -334,6 +366,25 @@ ShyTalk/
 
 ## الاختبار
 
+### تشغيل الاختبارات محلياً
+
+```bash
+# قائمة اختبارات تفاعلية (اختر ما تريد تشغيله):
+bash local/test.sh        # Linux / macOS / Git Bash
+.\local\test.ps1          # Windows PowerShell
+
+# أو تشغيل مجموعات فردية:
+bash local/test-unit.sh       # اختبارات وحدة Kotlin + Express API
+bash local/test-playwright.sh # اختبارات Playwright للويب (تحتاج بيئة محلية)
+bash local/test-e2e.sh        # اختبارات E2E لـ Android (تحتاج بيئة محلية + جهاز)
+bash local/test-lint.sh       # ktlint + ESLint
+
+# عرض تقرير Allure للاختبارات:
+npx allure serve allure-results
+```
+
+### مجموعات الاختبار
+
 | المجموعة | الأمر | العدد |
 |-------|---------|-------|
 | اختبارات Kotlin الوحدوية | `./gradlew test` | أكثر من 100 اختبار |
@@ -354,6 +405,22 @@ cd express-api && npm test
 # اختبارات متصفح Playwright (تتطلب لوحة الإدارة قيد التشغيل)
 npx playwright test
 ```
+
+### الاختبار في CI
+
+في CI، تعمل اختبارات Playwright و Android E2E ضد نفس البيئة المحلية (المحاكيات + Docker) -- لا تُستخدم خدمات سحابية. هذا يضمن أن الاختبارات لا تتداخل أبداً مع المختبرين الحقيقيين.
+
+## استكشاف الأخطاء وإصلاحها
+
+- **المنفذ مستخدم بالفعل**: `lsof -i :<port>` (Linux/macOS) أو `netstat -ano | findstr :<port>` (Windows) لمعرفة ما يستخدم المنفذ.
+- **Docker لا يعمل**: تأكد من تشغيل Docker Desktop. شغّل `docker ps` للتحقق.
+- **فشل تشغيل محاكيات Firebase**: يتطلب Java 11+. تحقق بـ `java -version`.
+- **فشل بناء Android**: تأكد من تثبيت JDK 17+ و Android SDK. جرب `./gradlew clean`.
+- **لم يُكتشف جهاز adb**: فعّل تصحيح USB. شغّل `adb devices` للتحقق.
+- **الصور لا تُحمّل**: قد لا تكون حاوية MinIO قد أُنشئت. شغّل `cd express-api && NODE_ENV=local node ../local/seed.js`. للأجهزة الحقيقية، شغّل `adb reverse tcp:9002 tcp:9002`.
+- **لم يصل OTP**: تحقق من مخرجات وحدة التحكم بحثاً عن سطور `[OTP-LOCAL]`. تحقق أيضاً من واجهة MailHog على http://localhost:8025.
+- **إعادة تعيين بيانات المحاكي**: احذف مجلد `local/firebase-emulator-data/` وأعد التشغيل.
+- **إعادة تعيين بيانات MinIO**: شغّل `docker compose -f local/docker-compose.yml down -v` لإزالة الأحجام.
 
 ## النشر
 

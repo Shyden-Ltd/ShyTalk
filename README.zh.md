@@ -8,403 +8,454 @@
 
 🌍 [English](README.md) | [العربية](README.ar.md) | [Deutsch](README.de.md) | [Español](README.es.md) | [Français](README.fr.md) | [हिन्दी](README.hi.md) | [Bahasa Indonesia](README.id.md) | [Italiano](README.it.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Nederlands](README.nl.md) | [Polski](README.pl.md) | [Português](README.pt.md) | [Русский](README.ru.md) | [Svenska](README.sv.md) | [ไทย](README.th.md) | [Türkçe](README.tr.md) | [Українська](README.uk.md) | [Tiếng Việt](README.vi.md) | **中文**
 
-## 关于
+## About
 
-ShyTalk 是一款社交语音聊天应用，用户可以创建和加入实时语音聊天室。基于 Kotlin Multiplatform（KMP）构建，同时支持 Android 和 iOS 平台，共享同一套代码。无论你想主持一场对话、旁听讨论，还是与世界各地的人建立联系，ShyTalk 都能让这一切变得轻松简单。
+ShyTalk is a social voice chat app where users can create and join real-time voice chat rooms. Built with Kotlin Multiplatform (KMP), it targets both Android and iOS with a shared codebase. Whether you want to host a conversation, listen in, or connect with people around the world, ShyTalk makes it easy.
 
-## 功能特性
+iOS is a supported platform but this guide focuses on Android development, which is the primary development target.
 
-### 语音聊天室
-- 基于 LiveKit 技术，创建或加入实时语音房间
-- 结构化的座位系统，支持房主、主持人和听众等角色
-- 上座申请与邀请——申请上座发言或邀请听众参与
-- 悬浮窗——在浏览应用其他部分时继续语音聊天
-- 房间过期机制——房主离开后自动关闭房间，带有倒计时提示
+## Features
 
-### 消息系统
-- 在每个房间中同步进行文字聊天
-- 一对一私信功能
-- 群聊功能，支持成员管理与权限设置
-- 实时输入状态提示
-- 表情贴纸支持
+### Voice Chat Rooms
+- Create or join rooms with real-time voice powered by LiveKit
+- Structured seating system with owner, host, and attendee roles
+- Seat requests and invites -- request to join a seat or invite listeners to speak
+- Floating chathead -- continue voice chat while browsing other parts of the app
+- Room expiry -- rooms auto-close when the owner is away, with countdown timers
 
-### 社交功能
-- 自定义用户资料，包括头像、封面图片、国旗标识和个人简介
-- 关注系统——关注其他用户，查看其在线状态
-- 礼物墙——展示收到的礼物
-- 拉黑系统——在房间和个人资料页面屏蔽用户
+### Messaging
+- Live text chat alongside voice in every room
+- Private messaging with 1-on-1 conversations
+- Group chats with member management and permissions
+- Typing indicators in real-time
+- Sticker support
 
-### 虚拟经济
-- 基于金币的经济系统，含钱包和交易记录
-- 每日登录奖励，连续登录有额外加成
-- 幸运转盘（抽奖）系统，设有多个奖品等级
-- 虚拟礼物——在语音聊天中发送和接收动画礼物
-- 背包系统，用于存放礼物
-- 金币商城，可购买金币套餐
-- 广播横幅，附带动画礼物特效
+### Social
+- Customizable user profiles with photos, cover images, nationality flags, and bios
+- Follow system -- follow other users and see when they're active
+- Gift wall -- showcase gifts received from other users
+- Block system -- block users across rooms and profiles
 
-### 账户与身份
-- 多提供商认证——支持 Google、Apple 或邮箱（OTP）登录
-- 将多种登录方式关联到同一账户
-- 稳定的用户身份（uniqueId），跨 Firebase 项目持久化
-- 设置中的关联账户管理，支持关联/取消关联操作
-- 设备绑定——每台设备永久绑定到一个账户
+### Virtual Economy
+- Coin-based economy with wallet and transaction history
+- Daily login rewards with streak bonuses
+- Lucky Spin (gacha) system with tiered prizes
+- Virtual gifts -- send and receive animated gifts during voice chats
+- Backpack inventory for storing gifts
+- Coin packages for purchasing coins
+- Broadcast banners with animated gift effects
 
-### 管理与安全
-- 管理工具——作为房主可以禁言、踢出、调换座位和管理主持人
-- 用户举报系统及审核流程
-- 警告与封禁机制
-- 社区准则、隐私政策和服务条款页面
-- 新用户法律条款确认流程
-- 强制更新机制，确保用户使用最新版本
+### Account & Identity
+- Multi-provider authentication -- sign in with Google, Apple, or Email (OTP)
+- Link multiple sign-in methods to a single account
+- Stable user identity (uniqueId) that persists across Firebase projects
+- Linked Accounts management in Settings with link/unlink support
+- Device binding -- each device is permanently tied to one account
 
-### 启动页面
-- 可配置的应用启动画面
-- 管理员管理内容，支持定时和定向投放
+### Moderation & Safety
+- Moderation tools -- mute, kick, move seats, and manage hosts as a room owner
+- User reporting system with review workflow
+- Warning and suspension system for policy violations
+- Community standards, privacy policy, and terms of service screens
+- Legal acceptance flow for new users
+- Force update enforcement for outdated app versions
 
-### 安全性
-- PIN 码保护应用访问
-- 生物识别认证——指纹和面部识别
-- 一次性密码（OTP）验证敏感操作
+### Starting Screens
+- Configurable launch screens shown on app startup
+- Admin-managed content with scheduling and targeting options
 
-### 管理面板
-- 基于 Web 的管理后台，部署在项目静态站点
-- 用户管理、内容审核和配置
-- 模板和礼物管理，支持实时预览
-- 实时日志流和告警
+### Security
+- PIN code protection for app access
+- Biometric authentication -- fingerprint and face recognition
+- OTP (one-time password) verification for sensitive actions
 
-### 图片压缩
-- 通过 Express API 上传时自动压缩图片
-- 降低存储和带宽成本，同时保持画质
+### Admin Panel
+- Web-based moderation dashboard at the project's static site
+- User management, content moderation, and configuration
+- Template and gift management with live preview
+- Real-time log streaming and alerting
 
-### 国际化
-- 开箱即用支持 19 种语言
-- 所有面向用户的字符串完全本地化
+### Image Compression
+- Automatic image compression on upload via the Express API
+- Reduces storage and bandwidth costs while preserving quality
 
-### 日志与监控
-- 横跨 Express API、移动应用和管理面板的结构化日志
-- 管理后台支持实时日志流
-- 设备和网络封禁，支持自动执行
-- 关键错误和异常的告警系统
-- Trace ID 传播，实现端到端的请求追踪
+### Internationalization
+- 19 languages supported out of the box
+- Full localization for all user-facing strings
 
-## 技术栈
+### Logging & Monitoring
+- Structured logging across Express API, mobile apps, and admin panel
+- Real-time log streaming in the admin dashboard
+- Device and network banning with automatic enforcement
+- Alerting system for critical errors and anomalies
+- Trace ID propagation for end-to-end request tracking
 
-| 层级 | 技术 |
-|------|------|
-| **框架** | Kotlin Multiplatform (KMP) |
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Framework** | Kotlin Multiplatform (KMP) |
 | **UI** | Compose Multiplatform |
-| **架构** | MVVM + Repository 模式 |
-| **依赖注入** | Koin |
-| **认证** | Firebase Authentication（Google、Apple、邮箱+OTP）多提供商身份系统 |
-| **数据库** | Cloud Firestore |
-| **实时通信** | Firebase Realtime Database |
-| **存储** | Cloudflare R2（通过 Express API 代理） |
-| **API 服务器** | Express.js（Oracle Cloud 免费层） |
-| **语音** | LiveKit |
-| **推送通知** | Firebase Cloud Messaging |
-| **图片加载** | Coil 3 (KMP) |
-| **动画** | Lottie Compose |
-| **日期/时间** | kotlinx-datetime |
-| **导航** | Compose Navigation |
+| **Architecture** | MVVM + Repository Pattern |
+| **DI** | Koin |
+| **Auth** | Firebase Authentication (Google, Apple, Email+OTP) with multi-provider identity system |
+| **Database** | Cloud Firestore |
+| **Real-time** | Firebase Realtime Database |
+| **Storage** | Cloudflare R2 (via Express API proxy) |
+| **API Server** | Express.js on Oracle Cloud Free Tier |
+| **Voice** | LiveKit |
+| **Push Notifications** | Firebase Cloud Messaging |
+| **Image Loading** | Coil 3 (KMP) |
+| **Animations** | Lottie Compose |
+| **Date/Time** | kotlinx-datetime |
+| **Navigation** | Compose Navigation |
 | **CDN** | Cloudflare Pages + CDN |
 
-## 架构
+## Architecture
 
-ShyTalk 遵循 **MVVM** 架构，采用清晰的 **Repository 模式**：
+ShyTalk follows **MVVM** with a clean **Repository Pattern**:
 
 ```
 +---------------------------------------------+
-|                   UI 层                      |
-|  Compose 界面 -> ViewModels -> UI 状态        |
+|                    UI Layer                  |
+|  Compose Screens -> ViewModels -> UI State   |
 +---------------------------------------------+
-|                  领域层                       |
-|            Repository 接口                    |
+|                  Domain Layer                |
+|         Repository Interfaces                |
 +---------------------------------------------+
-|                  数据层                       |
-|  Repository 实现 -> Firestore / R2 / RTDB / LiveKit  |
+|                  Data Layer                  |
+|  Repository Impls -> Firestore / R2 / RTDB / LiveKit  |
 +---------------------------------------------+
 ```
 
-- **shared 模块**（`commonMain`）——跨平台共享的模型、Repository 接口、ViewModel 和 UI
-- **app 模块**——Android 特定的界面、Repository 实现和入口
-- **iosApp 模块**——iOS 特定的入口
-- **express-api**——运行在 Oracle Cloud 免费层上的 Express.js 后端
+- **shared module** (`commonMain`) -- Models, repository interfaces, ViewModels, and UI shared across platforms
+- **app module** -- Android-specific screens, repository implementations, and entry point
+- **iosApp module** -- iOS-specific entry point
+- **express-api** -- Express.js backend running on Oracle Cloud Free Tier
 
-## 项目结构
+## Project Structure
 
 ```
 ShyTalk/
-+-- app/                              # Android 应用模块
++-- app/                              # Android app module
 |   +-- src/
 |       +-- main/java/.../
-|       |   +-- ShyTalkApp.kt         # 应用入口
-|       |   +-- MainActivity.kt       # 主 Activity
+|       |   +-- ShyTalkApp.kt         # Application entry point
+|       |   +-- MainActivity.kt       # Main activity
 |       |   +-- core/
-|       |   |   +-- di/               # Koin 依赖注入模块
-|       |   |   +-- room/             # ActiveRoomManager 和 RoomService
+|       |   |   +-- di/               # Koin DI module
+|       |   |   +-- room/             # ActiveRoomManager & RoomService
 |       |   +-- data/
-|       |   |   +-- remote/           # LiveKit 语音、在线状态、通知
-|       |   |   +-- repository/       # Repository 实现
+|       |   |   +-- remote/           # LiveKit voice, presence, notifications
+|       |   |   +-- repository/       # Repository implementations
 |       |   +-- feature/
-|       |   |   +-- auth/             # Google 登录界面
-|       |   |   +-- profile/          # 个人资料界面
-|       |   |   +-- room/             # 房间界面
-|       |   |   +-- settings/         # 应用设置
-|       |   +-- navigation/           # 导航图和路由
-|       +-- test/                     # 单元测试
-|       +-- androidTest/              # 端到端测试（Compose UI Test）
-+-- shared/                           # KMP 共享模块
+|       |   |   +-- auth/             # Google Sign-In screen
+|       |   |   +-- profile/          # Profile screen
+|       |   |   +-- room/             # Room screen
+|       |   |   +-- settings/         # App settings
+|       |   +-- navigation/           # NavGraph & Screen routes
+|       +-- test/                     # Unit tests
+|       +-- androidTest/              # E2E tests (Compose UI Test)
++-- shared/                           # KMP shared module
 |   +-- src/commonMain/kotlin/.../
 |       +-- core/
-|       |   +-- di/                   # 共享 Koin 模块
-|       |   +-- model/                # 数据模型（User、ChatRoom、Gift 等）
-|       |   +-- ui/                   # 共享组件
-|       |   +-- util/                 # 工具类和常量
+|       |   +-- di/                   # Shared Koin modules
+|       |   +-- model/                # Data models (User, ChatRoom, Gift, etc.)
+|       |   +-- ui/                   # Shared components
+|       |   +-- util/                 # Utilities & constants
 |       +-- data/
-|       |   +-- remote/               # VoiceService、TokenService 等
-|       |   +-- repository/           # Repository 接口
-|       +-- feature/                  # 共享功能模块
-+-- iosApp/                           # iOS 应用模块
-+-- express-api/                      # Express.js API 服务器
+|       |   +-- remote/               # VoiceService, TokenService, etc.
+|       |   +-- repository/           # Repository interfaces
+|       +-- feature/                  # Shared feature modules
++-- iosApp/                           # iOS app module
++-- express-api/                      # Express.js API server
 |   +-- src/
-|       +-- routes/                   # API 路由处理
-|       +-- middleware/               # 认证、日志中间件
-|       +-- utils/                    # Firebase Admin、R2、日志工具
-|       +-- cron/                     # 定时任务
-+-- public/                           # 静态网站和管理面板
-+-- local/                            # 本地开发环境（模拟器、种子数据）
-+-- tests/web/                        # Playwright 浏览器测试
-+-- scripts/                          # 工具脚本
-+-- .github/workflows/                # CI/CD（PR 检查、部署到 Dev/Prod、E2E、代码检查）
-+-- firestore.rules                   # Firestore 安全规则
-+-- database.rules.json               # RTDB 安全规则
-+-- firestore.indexes.json            # Firestore 复合索引
-+-- firebase.json                     # Firebase 配置
+|       +-- routes/                   # API route handlers
+|       +-- middleware/               # Auth, logging middleware
+|       +-- utils/                    # Firebase Admin, R2, logger
+|       +-- cron/                     # Scheduled jobs
++-- public/                           # Static site & admin panel
++-- local/                            # Local development environment (emulators, seed data)
++-- tests/web/                        # Playwright browser tests
++-- scripts/                          # Utility scripts
++-- .github/workflows/                # CI/CD (PR Checks, Deploy to Dev/Prod, E2E, lint)
++-- firestore.rules                   # Firestore security rules
++-- database.rules.json               # RTDB security rules
++-- firestore.indexes.json            # Firestore composite indexes
++-- firebase.json                     # Firebase configuration
 ```
 
-## 快速开始
+## Getting Started
 
-### 前置条件
+### Prerequisites
 
-- **Android Studio** Ladybug 或更新版本
+- **Android Studio** Ladybug or newer
 - **JDK 17+**
 - **Node.js 24+**
-- **Docker**（用于本地 LiveKit 服务器）
-- **Firebase CLI**（`npm install -g firebase-tools`）
+- **Docker** (for LiveKit voice server, MinIO storage, MailHog email)
+- **Firebase CLI** (`npm install -g firebase-tools`)
 
-### 本地开发（推荐）
+No cloud accounts are needed to get started -- the local environment runs entirely offline.
 
-最快的入门方式。使用 Firebase 模拟器和本地 LiveKit Docker 容器——无需云账号，零成本，无配额限制。
+### Local Development (Recommended)
 
-1. **克隆并安装**
+The fastest way to get started. One command starts everything -- Firebase Emulators, Docker containers, Express API, and builds the Android app. No cloud accounts needed, no costs, no quota limits.
+
+1. **Clone and install**
    ```bash
    git clone https://github.com/ShydenMcM/ShyTalk.git
    cd ShyTalk
    cd express-api && npm install && cd ..
    ```
 
-2. **启动本地服务**
+2. **Start everything**
 
-   **Linux / macOS / Git Bash：**
+   **Linux / macOS / Git Bash:**
    ```bash
    bash local/start.sh
    ```
 
-   **Windows PowerShell：**
+   **Windows PowerShell:**
    ```powershell
    .\local\start.ps1
    ```
 
-   这将启动 Firebase 模拟器（Firestore、Auth、RTDB）和 LiveKit Docker 容器。首次运行时会自动填充测试数据（管理员账户、示例礼物、配置）。
+   This single command:
+   - Starts Docker containers (LiveKit voice server, MinIO storage, MailHog email)
+   - Starts Firebase Emulators (Firestore, Auth, RTDB)
+   - Seeds test data and creates the MinIO storage bucket
+   - Starts the Express API
+   - Builds and installs the Android app (if a device is connected)
 
-   你将看到：
+   When ready, you'll see:
    ```
-   Local environment ready:
-     Firebase UI:  http://localhost:4000
-     Firestore:    localhost:8080
-     Auth:         localhost:9099
-     RTDB:         localhost:9000
-     LiveKit:      localhost:7880
+   Local environment ready (fully offline):
+
+     Services:
+       Firebase UI:    http://localhost:4000
+       Express API:    http://localhost:3000
+       MailHog UI:     http://localhost:8025
+       MinIO Console:  http://localhost:9001
+       LiveKit:        localhost:7880
+
+     Credentials:
+       Test admin:     claude-test@shytalk.dev / localdev123
+       Test user:      user@test.com / localdev123
+       MinIO:          minioadmin / minioadmin
    ```
 
-3. **启动 Express API**（在新终端窗口中）
-   ```bash
-   cd express-api
-   cp .env.local.example .env.local   # 按需编辑 R2/SMTP 值
-   npm run local
-   ```
-   API 将在 `http://localhost:3000` 启动。测试：`curl http://localhost:3000/api/health`
+3. **Sign in**
+   - Use the email sign-in flow with the seeded test account: `claude-test@shytalk.dev` / `localdev123`
+   - Or create a new account -- it will use the local emulators
+   - Google/Apple sign-in won't work locally (no real OAuth) -- use email OTP instead
+   - OTP codes are captured by MailHog -- check http://localhost:8025
 
-4. **在 Android 模拟器上运行**
-   ```bash
-   ./gradlew installLocalDebug
-   ```
-   `local` 构建变体连接到 `10.0.2.2`（Android 模拟器的回环地址）。无需额外配置即可运行。
+4. **Run on a Physical Device**
 
-5. **在真机上运行**
+   Your phone must be on the **same Wi-Fi network** as your development machine.
 
-   你的手机必须与开发机在**同一个 Wi-Fi 网络**上。
-
-   a. 查找你的机器本地 IP：
+   a. Find your machine's local IP:
    ```bash
    # Windows
-   ipconfig    # 查找 Wi-Fi 适配器下的 "IPv4 Address"（例如 192.168.1.42）
+   ipconfig    # Look for "IPv4 Address" under your Wi-Fi adapter (e.g. 192.168.1.42)
 
    # macOS / Linux
-   ifconfig | grep "inet "    # 或：ip addr show
+   ifconfig | grep "inet "    # or: ip addr show
    ```
 
-   b. 更新本地构建变体以使用你的 IP 替代 `10.0.2.2`。在 `app/build.gradle.kts` 中找到 `local` 变体并修改：
+   b. Update the local build flavor to use your IP instead of `10.0.2.2`. In `app/build.gradle.kts`, find the `local` flavor and change:
    ```kotlin
-   // 将 10.0.2.2 替换为你的本地 IP
+   // Replace 10.0.2.2 with your machine's local IP
    buildConfigField("String", "API_BASE_URL", "\"http://192.168.1.42:3000\"")
    buildConfigField("String", "WORKER_URL", "\"http://192.168.1.42:3000\"")
    buildConfigField("String", "LIVEKIT_SERVER_URL", "\"ws://192.168.1.42:7880\"")
    buildConfigField("String", "RTDB_URL", "\"http://192.168.1.42:9000\"")
    ```
 
-   c. 通过 USB 连接设备并启用 USB 调试，然后：
+   c. Connect your device via USB and enable USB debugging, then:
    ```bash
    ./gradlew installLocalDebug
    ```
 
-   d. 或者，使用 **adb reverse** 避免修改代码（设备将 localhost 路由到你的机器）：
+   d. Alternatively, use **adb reverse** to avoid changing any code (device routes localhost to your machine):
    ```bash
    adb reverse tcp:3000 tcp:3000   # Express API
-   adb reverse tcp:8080 tcp:8080   # Firestore 模拟器
-   adb reverse tcp:9099 tcp:9099   # Auth 模拟器
-   adb reverse tcp:9000 tcp:9000   # RTDB 模拟器
+   adb reverse tcp:8080 tcp:8080   # Firestore emulator
+   adb reverse tcp:9099 tcp:9099   # Auth emulator
+   adb reverse tcp:9000 tcp:9000   # RTDB emulator
    adb reverse tcp:7880 tcp:7880   # LiveKit
+   adb reverse tcp:9002 tcp:9002   # MinIO (image storage)
    ```
-   使用 `adb reverse` 后，本地变体中默认的 `10.0.2.2` 地址在真机上也能正常工作——无需修改构建配置。
+   With `adb reverse`, the default `10.0.2.2` addresses in the local flavor will work on a physical device too -- no build config changes needed.
 
-6. **登录**
-   - 使用邮箱登录流程和预设测试账户：`claude-test@shytalk.dev` / `localdev123`
-   - 或创建新账户——将使用本地模拟器
-   - Google/Apple 登录在本地不可用（无真实 OAuth）——请使用邮箱 OTP
+5. **Stop local services**
 
-7. **停止本地服务**
-
-   **Linux / macOS / Git Bash：**
+   **Linux / macOS / Git Bash:**
    ```bash
    bash local/stop.sh
    ```
 
-   **Windows PowerShell：**
+   **Windows PowerShell:**
    ```powershell
    .\local\stop.ps1
    ```
 
-   或在启动脚本终端中按 `Ctrl+C`。模拟器数据会自动保存，下次启动时恢复。
+   Or press `Ctrl+C` in the start script terminal. Emulator data is saved automatically and restored on next start.
 
-### 常用本地开发 URL
+### Useful Local Dev URLs
 
-| 服务 | URL | 用途 |
-|------|-----|------|
-| Firebase Emulator UI | http://localhost:4000 | 浏览 Firestore 数据、Auth 用户、RTDB |
-| Express API | http://localhost:3000 | 后端 API |
-| 健康检查 | http://localhost:3000/api/health | 验证 API 是否运行 |
+| Service | URL | Purpose |
+|---------|-----|---------|
+| Firebase Emulator UI | http://localhost:4000 | Browse Firestore data, Auth users, RTDB |
+| Express API | http://localhost:3000 | Backend API |
+| Health check | http://localhost:3000/api/health | Verify API is running |
+| MailHog | http://localhost:8025 | View captured emails and OTP codes |
+| MinIO Console | http://localhost:9001 | Browse uploaded images and files |
 
-### 云端开发（可选）
+### Optional Services
 
-如果你需要使用真实云服务进行测试（例如真实推送通知、真实 Google 登录）：
+**LibreTranslate (Message Translation)**
 
-1. **Firebase 设置**
-   - 在 [console.firebase.google.com](https://console.firebase.google.com) 创建 Firebase 项目
-   - 在认证部分启用 **Google 登录** 和 **Apple 登录**
-   - 启用 **Firestore**、**Realtime Database** 和 **Cloud Messaging**
-   - 下载 `google-services.json` 并放置于 `app/src/dev/`
+Optional 6GB+ Docker image for testing the translation feature locally:
+```bash
+docker run -d -p 5000:5000 libretranslate/libretranslate
+```
+Not included in the default setup due to large image size. Translation works without it -- messages just stay untranslated.
 
-2. **Express API 设置**
+### Cloud Development (Optional)
+
+If you need to test against real cloud services (e.g., real push notifications, real Google Sign-In):
+
+1. **Firebase setup**
+   - Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
+   - Enable **Google Sign-In** and **Apple Sign-In** in Authentication
+   - Enable **Firestore**, **Realtime Database**, and **Cloud Messaging**
+   - Download `google-services.json` and place it in `app/src/dev/`
+
+2. **Express API setup**
    ```bash
    cd express-api
-   cp .env.example .env  # 填入你的云端凭据
+   cp .env.example .env  # Edit with your cloud credentials
    npm install
    npm start
    ```
 
-3. **部署 Firestore 规则**
+3. **Deploy Firestore rules**
    ```bash
    npx firebase deploy --only firestore:rules
    ```
 
-4. **构建 Android 应用**（dev 变体）
+4. **Build the Android app** (dev flavor)
    ```bash
    ./gradlew assembleDevDebug
    ```
 
-### 环境变量
+### Environment Variables
 
-| 变量 | 说明 | 位置 |
-|------|------|------|
-| `FIREBASE_SERVICE_ACCOUNT` | Firebase Admin SDK 服务账号 JSON | Express API |
-| `R2_ACCOUNT_ID` | Cloudflare R2 账号 ID | Express API |
-| `R2_ACCESS_KEY_ID` | R2 访问密钥 | Express API |
-| `R2_SECRET_ACCESS_KEY` | R2 密钥 | Express API |
-| `R2_BUCKET_NAME` | R2 存储桶名称（默认：`shytalk-media`） | Express API |
-| `LIVEKIT_API_KEY` | LiveKit API 密钥 | Express API |
-| `LIVEKIT_API_SECRET` | LiveKit API 密钥 | Express API |
-| `LIVEKIT_URL` | LiveKit 服务器 URL | Android 应用（BuildConfig） |
-| `WORKER_URL` | Express API 基础 URL | Android 应用（BuildConfig） |
+| Variable | Description | Where |
+|----------|-------------|-------|
+| `FIREBASE_SERVICE_ACCOUNT` | Firebase Admin SDK service account JSON | Express API |
+| `R2_ACCOUNT_ID` | Cloudflare R2 account ID | Express API |
+| `R2_ACCESS_KEY_ID` | R2 access key | Express API |
+| `R2_SECRET_ACCESS_KEY` | R2 secret key | Express API |
+| `R2_BUCKET_NAME` | R2 bucket name (default: `shytalk-media`) | Express API |
+| `LIVEKIT_API_KEY` | LiveKit API key | Express API |
+| `LIVEKIT_API_SECRET` | LiveKit API secret | Express API |
+| `LIVEKIT_URL` | LiveKit server URL | Android app (BuildConfig) |
+| `WORKER_URL` | Express API base URL | Android app (BuildConfig) |
 
-## 测试
+## Testing
 
-| 套件 | 命令 | 数量 |
-|------|------|------|
-| Kotlin 单元测试 | `./gradlew test` | 100+ 测试 |
-| Express API 测试 | `cd express-api && npm test` | 1,540+ 测试 |
-| E2E Gherkin（Android） | `./gradlew connectedDevDebugAndroidTest` | 34 个特性文件 |
-| Playwright Web 测试 | `npx playwright test` | 28 个测试规范 |
+### Running Tests Locally
 
 ```bash
-# Kotlin/KMP 单元测试
+# Interactive test menu (choose what to run):
+bash local/test.sh        # Linux / macOS / Git Bash
+.\local\test.ps1          # Windows PowerShell
+
+# Or run individual suites:
+bash local/test-unit.sh       # Kotlin + Express API unit tests
+bash local/test-playwright.sh # Playwright web tests (needs local env)
+bash local/test-e2e.sh        # Android E2E tests (needs local env + device)
+bash local/test-lint.sh       # ktlint + ESLint
+
+# View Allure test report:
+npx allure serve allure-results
+```
+
+### Test Suites
+
+| Suite | Command | Count |
+|-------|---------|-------|
+| Kotlin unit tests | `./gradlew test` | 100+ tests |
+| Express API tests | `cd express-api && npm test` | 1,540+ tests |
+| E2E Gherkin (Android) | `./gradlew connectedDevDebugAndroidTest` | 34 feature files |
+| Playwright web tests | `npx playwright test` | 28 specs |
+
+```bash
+# Kotlin/KMP unit tests
 ./gradlew test
 
-# Express API 测试
+# Express API tests
 cd express-api && npm test
 
-# E2E 测试（需要连接设备或模拟器）
+# E2E tests (requires connected device or emulator)
 ./gradlew connectedDevDebugAndroidTest
 
-# Playwright 浏览器测试（需要管理面板运行）
+# Playwright browser tests (requires admin panel running)
 npx playwright test
 ```
 
-## 部署
+### Testing in CI
 
-部署通过 GitHub Actions 工作流管理（`.github/workflows/`）：
+In CI, Playwright and Android E2E tests run against the same local environment (emulators + Docker) -- no cloud services are used. This ensures tests never interfere with live testers.
 
-| 工作流 | 触发方式 | 功能 |
-|--------|----------|------|
-| **PR Checks** | PR 到 `main` 时自动触发 | 运行代码检查、Kotlin 测试、Express API 测试、Playwright 测试（根据变更文件） |
-| **Deploy to Dev** | 手动（`workflow_dispatch`） | 部署 Express API + Web 到 dev，分发 APK 给测试人员，可选运行 Playwright 测试 |
-| **Deploy to Prod** | 手动（`workflow_dispatch`） | 部署标记版本到 prod——Express API、Web、Play Store 和 App Store |
+## Troubleshooting
 
-其他工作流：**E2E Tests**（Android 模拟器矩阵）、**SonarCloud**（静态分析）、**Lint**、**Backend Tests**、**Dependabot Auto-merge**。
+- **Port already in use**: `lsof -i :<port>` (Linux/macOS) or `netstat -ano | findstr :<port>` (Windows) to find what's using the port.
+- **Docker not running**: Ensure Docker Desktop is started. Run `docker ps` to verify.
+- **Firebase emulators fail to start**: Requires Java 11+. Check with `java -version`.
+- **Android build fails**: Ensure JDK 17+ and Android SDK are installed. Try `./gradlew clean`.
+- **adb device not detected**: Enable USB debugging. Run `adb devices` to check.
+- **Images not loading**: MinIO bucket may not be created. Run `cd express-api && NODE_ENV=local node ../local/seed.js`. For physical devices, run `adb reverse tcp:9002 tcp:9002`.
+- **OTP not arriving**: Check console output for `[OTP-LOCAL]` lines. Also check MailHog UI at http://localhost:8025.
+- **Reset emulator data**: Delete `local/firebase-emulator-data/` directory and restart.
+- **Reset MinIO data**: Run `docker compose -f local/docker-compose.yml down -v` to remove volumes.
 
-- **Express API：** 通过 SSH + PM2 部署到 Oracle Cloud 虚拟机（dev：伦敦，prod：新加坡）
-- **Android：** 通过 CI 打包上传到 Google Play
-- **iOS：** 通过 CI 构建上传到 App Store Connect / TestFlight
-- **管理面板 / Web：** 部署到 Cloudflare Pages
+## Deployment
 
-## 参与贡献
+Deployments are managed through GitHub Actions workflows (`.github/workflows/`):
 
-欢迎贡献代码！请参阅 [CONTRIBUTING.md](CONTRIBUTING.md) 了解贡献指南。
+| Workflow | Trigger | What it does |
+|----------|---------|-------------|
+| **PR Checks** | Automatic on PRs to `main` | Runs lint, Kotlin tests, Express API tests, Playwright tests (based on changed files) |
+| **Deploy to Dev** | Manual (`workflow_dispatch`) | Deploys Express API + web to dev, distributes APK to testers, optionally runs Playwright tests |
+| **Deploy to Prod** | Manual (`workflow_dispatch`) | Deploys a tagged release to prod -- Express API, web, Play Store, and App Store |
 
-## 许可证
+Additional workflows: **E2E Tests** (Android emulator matrix), **SonarCloud** (static analysis), **Lint**, **Backend Tests**, **Dependabot Auto-merge**.
 
-本项目基于 Apache License 2.0 开源。详情请参阅 [LICENSE](LICENSE)。
+- **Express API:** Deployed to Oracle Cloud VMs via SSH + PM2 (dev: London, prod: Singapore)
+- **Android:** Bundled and uploaded to Google Play via CI
+- **iOS:** Built and uploaded to App Store Connect / TestFlight via CI
+- **Admin panel / web:** Deployed to Cloudflare Pages
 
-## 致谢
+## Contributing
 
-- [Firebase](https://firebase.google.com) —— 认证、Firestore、Realtime Database、云消息推送
-- [LiveKit](https://livekit.io) —— 实时语音通信
-- [Cloudflare](https://www.cloudflare.com) —— R2 存储、Pages 托管、CDN
-- [Oracle Cloud](https://www.oracle.com/cloud/free/) —— 免费层虚拟机，用于 Express API
-- [Express.js](https://expressjs.com) —— API 服务器框架
-- [Jetpack Compose](https://developer.android.com/jetpack/compose) —— 现代声明式 UI 框架
-- [Koin](https://insert-koin.io) —— 轻量级依赖注入
-- [Coil](https://coil-kt.github.io/coil/) —— Kotlin Multiplatform 图片加载库
-- [Lottie](https://airbnb.design/lottie/) —— 动画礼物和 UI 效果
-- [kotlinx-datetime](https://github.com/Kotlin/kotlinx-datetime) —— 跨平台日期时间处理
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## License
+
+This project is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
+
+## Acknowledgments
+
+- [Firebase](https://firebase.google.com) -- Authentication, Firestore, Realtime Database, Cloud Messaging
+- [LiveKit](https://livekit.io) -- Real-time voice communication
+- [Cloudflare](https://www.cloudflare.com) -- R2 storage, Pages hosting, CDN
+- [Oracle Cloud](https://www.oracle.com/cloud/free/) -- Free tier VM for Express API
+- [Express.js](https://expressjs.com) -- API server framework
+- [Jetpack Compose](https://developer.android.com/jetpack/compose) -- Modern declarative UI
+- [Koin](https://insert-koin.io) -- Lightweight dependency injection
+- [Coil](https://coil-kt.github.io/coil/) -- Image loading for Kotlin Multiplatform
+- [Lottie](https://airbnb.design/lottie/) -- Animated gift and UI effects
+- [kotlinx-datetime](https://github.com/Kotlin/kotlinx-datetime) -- Multiplatform date/time

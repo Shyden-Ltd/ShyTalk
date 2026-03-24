@@ -1,6 +1,6 @@
 # ShyTalk
 
-**Golosovi chat-kimnaty, pereosmussleni.**
+**Голосові чат-кімнати, переосмислені.**
 
 [![Android](https://img.shields.io/badge/Platform-Android%20%7C%20iOS-green.svg)](https://play.google.com/store/apps/details?id=com.shyden.shytalk)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.3.20-blue.svg)](https://kotlinlang.org)
@@ -8,110 +8,112 @@
 
 🌍 [English](README.md) | [العربية](README.ar.md) | [Deutsch](README.de.md) | [Español](README.es.md) | [Français](README.fr.md) | [हिन्दी](README.hi.md) | [Bahasa Indonesia](README.id.md) | [Italiano](README.it.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Nederlands](README.nl.md) | [Polski](README.pl.md) | [Português](README.pt.md) | [Русский](README.ru.md) | [Svenska](README.sv.md) | [ไทย](README.th.md) | [Türkçe](README.tr.md) | **Українська** | [Tiếng Việt](README.vi.md) | [中文](README.zh.md)
 
-## Pro proekt
+## About
 
-ShyTalk -- tse sotsialnyi dodatok dlia holosovoho chatu, de korystuvachi mozhut stvoriuvaty ta doluchiatsia do holosovykh kimnat u realnomu chasi. Pobudovanyi na Kotlin Multiplatform (KMP), vin pidtrymuie Android ta iOS iz spilnoiu kodovoiu bazoiu. Chomu by vy ne khotily vesty rozmovu, slukhaty chy zv'iazuvatysia z liudmy z usoho svitu -- ShyTalk robyt tse prosto.
+ShyTalk is a social voice chat app where users can create and join real-time voice chat rooms. Built with Kotlin Multiplatform (KMP), it targets both Android and iOS with a shared codebase. Whether you want to host a conversation, listen in, or connect with people around the world, ShyTalk makes it easy.
 
-## Funktsii
+iOS is a supported platform but this guide focuses on Android development, which is the primary development target.
 
-### Holosovi chat-kimnaty
-- Stvoriuite abo doluchaitesia do kimnat z holosom u realnomu chasi na bazi LiveKit
-- Strukturovana systema misc z roliamy vlasnika, moderatora ta uchasnyka
-- Zapyty na mistse ta zaproshennia -- zapytuite mistse abo zaprosit slukhachiv hovoryty
-- Plavaiuchyi chat -- prodovzhuyte holosovyi chat, perehliadaiuchy inshi chastyny dodatku
-- Termin dii kimnaty -- kimnaty avtomatychno zakryvaiutsia, koly vlasnyk vidsutii, z taimeramy zvorotnoho vidliku
+## Features
 
-### Povidomlennia
-- Zhyvyi tekstovyi chat poriad z holosom u kozhnii kimnati
-- Pryvatni povidomlennia z rozmovamy 1-na-1
-- Hrupovi chaty z kerivnytstvm uchasnykiv ta dozvolamy
-- Indykatory naboru tekstu v realnomu chasi
-- Pidtrymka stykeeriv
+### Voice Chat Rooms
+- Create or join rooms with real-time voice powered by LiveKit
+- Structured seating system with owner, host, and attendee roles
+- Seat requests and invites -- request to join a seat or invite listeners to speak
+- Floating chathead -- continue voice chat while browsing other parts of the app
+- Room expiry -- rooms auto-close when the owner is away, with countdown timers
 
-### Sotsialne
-- Nastroiuvani profili korystuvachiv z foto, obkladynkamy, praporamy krainy ta biohrafiiamy
-- Systema pidpysok -- pidpysuitesia na inshykh korystuvachiv i divitsia, koly vony aktyvni
-- Stina podarunkiv -- demonstruyte podarunky, otrymani vid inshykh korystuvachiv
-- Systema blokuvannia -- blokuyte korystuvachiv u kimnatakh ta profiliakh
+### Messaging
+- Live text chat alongside voice in every room
+- Private messaging with 1-on-1 conversations
+- Group chats with member management and permissions
+- Typing indicators in real-time
+- Sticker support
 
-### Virtualna ekonomika
-- Ekonomika na osnovi monet z hamantsem ta istoriieiu tranzaktsii
-- Shchodenni nahorody za vkhid z bonusamy za seriiu
-- Systema Kolo udachi (hacha) z rivnyamy pryziv
-- Virtualni podarunky -- nadsilajte ta otrymuyte animovani podarunky pid chas holosovykh chativ
-- Inventar riukzaka dlia zberihannia podarunkiv
-- Pakety monet dlia prydbannia
-- Trannsliatsiini banery z animovanymy efektamy podarunkiv
+### Social
+- Customizable user profiles with photos, cover images, nationality flags, and bios
+- Follow system -- follow other users and see when they're active
+- Gift wall -- showcase gifts received from other users
+- Block system -- block users across rooms and profiles
 
-### Oblikovi zapys ta identychnist
-- Bahatoprovaiderna avtentyfikatsiia -- vkhid cherez Google, Apple abo E-mail (OTP)
-- Priv'iazhit kilka metodiv vkhodu do odnoho oblikovoho zapysu
-- Stabilna identychnist korystuvacha (uniqueId), shcho zberighaietsia mizh proektamy Firebase
-- Keruvannia pryvazanymy oblikovymy zapysamy v nalashtuvanniakh z pidtrymkoiu pryvazky/vidvazky
-- Pryvazka prystroiu -- kozhen prystrii nazavzhdy pryvazanyi do odnoho oblikovoho zapysu
+### Virtual Economy
+- Coin-based economy with wallet and transaction history
+- Daily login rewards with streak bonuses
+- Lucky Spin (gacha) system with tiered prizes
+- Virtual gifts -- send and receive animated gifts during voice chats
+- Backpack inventory for storing gifts
+- Coin packages for purchasing coins
+- Broadcast banners with animated gift effects
 
-### Moderatsiia ta bezpeka
-- Instrumenty moderatsii -- vymknennia zvuku, vykliuchennia, peremishchennia misc ta keruvannia moderatoramy yak vlasnyk kimnaty
-- Systema skarh korystuvachiv z robochym protsesom perevirky
-- Systema poperedzhen ta pryzupynen za porushennia polityky
-- Ekrany standartiv spilnoty, polityky konfidentsinosti ta umov vykorystannia
-- Potik pryiniattia pravovykh umov dlia novykh korystuvachiv
-- Prymusove onovlennia dlia zastarilykh versii dodatku
+### Account & Identity
+- Multi-provider authentication -- sign in with Google, Apple, or Email (OTP)
+- Link multiple sign-in methods to a single account
+- Stable user identity (uniqueId) that persists across Firebase projects
+- Linked Accounts management in Settings with link/unlink support
+- Device binding -- each device is permanently tied to one account
 
-### Startovi ekrany
-- Nastroiuvani ekrany zapusku, shcho pokazuiutsia pry starti dodatku
-- Keruvanyi administratorom vmist z parametramy planuvannia ta natsilennia
+### Moderation & Safety
+- Moderation tools -- mute, kick, move seats, and manage hosts as a room owner
+- User reporting system with review workflow
+- Warning and suspension system for policy violations
+- Community standards, privacy policy, and terms of service screens
+- Legal acceptance flow for new users
+- Force update enforcement for outdated app versions
 
-### Bezpeka
-- Zakhyst PIN-kodom dlia dostupu do dodatku
-- Biometrychna avtentyfikatsiia -- vidbytok palttsia ta rozpiznnavannia oblychchya
-- OTP (odnorazovyi parol) dlia sensytyvnykh dii
+### Starting Screens
+- Configurable launch screens shown on app startup
+- Admin-managed content with scheduling and targeting options
 
-### Panel administratora
-- Veb-pannel moderatsii na statychnomu saiti proektu
-- Keruvannia korystuvachamy, moderatsiia vmistu ta konfighuratsiia
-- Keruvannia shablonamy ta podarunkamy z podhliadom u realnomu chasi
-- Potokove lohuvannia ta spovishchennia v realnomu chasi
+### Security
+- PIN code protection for app access
+- Biometric authentication -- fingerprint and face recognition
+- OTP (one-time password) verification for sensitive actions
 
-### Styskuvannia zobrazhen
-- Avtomatychne styskuvannia zobrazhen pry zavantzhenni cherez Express API
-- Zmenshuie vytraty na zberihannia ta smugu propuskannia, zberigaiuchy yakist
+### Admin Panel
+- Web-based moderation dashboard at the project's static site
+- User management, content moderation, and configuration
+- Template and gift management with live preview
+- Real-time log streaming and alerting
 
-### Internatsionalizatsiia
-- 19 mov pidtrymuyetsia odrazhu
-- Povna lokalizatsiia usikh riadkiv, shcho bache korystuvach
+### Image Compression
+- Automatic image compression on upload via the Express API
+- Reduces storage and bandwidth costs while preserving quality
 
-### Lohuvannia ta monitorynh
-- Strukturovane lohuvannia cherez Express API, mobilni dodatky ta panel administratora
-- Potokove lohuvannia v realnomu chasi v paneli administratora
-- Zaborona prystroiv ta merezh z avtomatychnym zastosuvannyam
-- Systema spovishchen dlia krytychnykh pomylok ta anomalii
-- Poshyrennia Trace ID dlia naskriznoho vidstezhennia zapytiv
+### Internationalization
+- 19 languages supported out of the box
+- Full localization for all user-facing strings
 
-## Tekhnolohichnyi stek
+### Logging & Monitoring
+- Structured logging across Express API, mobile apps, and admin panel
+- Real-time log streaming in the admin dashboard
+- Device and network banning with automatic enforcement
+- Alerting system for critical errors and anomalies
+- Trace ID propagation for end-to-end request tracking
 
-| Riven | Tekhnolohiia |
+## Tech Stack
+
+| Layer | Technology |
 |-------|-----------|
 | **Framework** | Kotlin Multiplatform (KMP) |
 | **UI** | Compose Multiplatform |
-| **Arkhitektura** | MVVM + Repository Pattern |
+| **Architecture** | MVVM + Repository Pattern |
 | **DI** | Koin |
-| **Avtentyfikatsiia** | Firebase Authentication (Google, Apple, Email+OTP) z bahatoprovadernoiu systemoiu identychnosti |
-| **Baza danykh** | Cloud Firestore |
-| **Realnyi chas** | Firebase Realtime Database |
-| **Skhovyshche** | Cloudflare R2 (cherez Express API proksi) |
-| **API-server** | Express.js na Oracle Cloud Free Tier |
-| **Holos** | LiveKit |
-| **Push-spovishchennia** | Firebase Cloud Messaging |
-| **Zavantazhennia zobrazhen** | Coil 3 (KMP) |
-| **Animatsii** | Lottie Compose |
-| **Data/Chas** | kotlinx-datetime |
-| **Navihatsiia** | Compose Navigation |
+| **Auth** | Firebase Authentication (Google, Apple, Email+OTP) with multi-provider identity system |
+| **Database** | Cloud Firestore |
+| **Real-time** | Firebase Realtime Database |
+| **Storage** | Cloudflare R2 (via Express API proxy) |
+| **API Server** | Express.js on Oracle Cloud Free Tier |
+| **Voice** | LiveKit |
+| **Push Notifications** | Firebase Cloud Messaging |
+| **Image Loading** | Coil 3 (KMP) |
+| **Animations** | Lottie Compose |
+| **Date/Time** | kotlinx-datetime |
+| **Navigation** | Compose Navigation |
 | **CDN** | Cloudflare Pages + CDN |
 
-## Arkhitektura
+## Architecture
 
-ShyTalk dotrymuietsia patterna **MVVM** z chystym **Repository Pattern**:
+ShyTalk follows **MVVM** with a clean **Repository Pattern**:
 
 ```
 +---------------------------------------------+
@@ -126,269 +128,334 @@ ShyTalk dotrymuietsia patterna **MVVM** z chystym **Repository Pattern**:
 +---------------------------------------------+
 ```
 
-- **shared modul** (`commonMain`) -- Modeli, interfejsy repozytoriv, ViewModel ta UI, spilni dlia platform
-- **app modul** -- Ekrany, spetsyfichni dlia Android, implementatsii repozytoriv ta tochka vkhodu
-- **iosApp modul** -- Tochka vkhodu, spetsyfichna dlia iOS
-- **express-api** -- Express.js backend na Oracle Cloud Free Tier
+- **shared module** (`commonMain`) -- Models, repository interfaces, ViewModels, and UI shared across platforms
+- **app module** -- Android-specific screens, repository implementations, and entry point
+- **iosApp module** -- iOS-specific entry point
+- **express-api** -- Express.js backend running on Oracle Cloud Free Tier
 
-## Struktura proektu
+## Project Structure
 
 ```
 ShyTalk/
-+-- app/                              # Modul dodatku Android
++-- app/                              # Android app module
 |   +-- src/
 |       +-- main/java/.../
-|       |   +-- ShyTalkApp.kt         # Tochka vkhodu dodatku
-|       |   +-- MainActivity.kt       # Holovna aktyvnist
+|       |   +-- ShyTalkApp.kt         # Application entry point
+|       |   +-- MainActivity.kt       # Main activity
 |       |   +-- core/
-|       |   |   +-- di/               # Modul Koin DI
+|       |   |   +-- di/               # Koin DI module
 |       |   |   +-- room/             # ActiveRoomManager & RoomService
 |       |   +-- data/
-|       |   |   +-- remote/           # LiveKit holos, prysutnist, spovishchennia
-|       |   |   +-- repository/       # Implementatsii repozytoriv
+|       |   |   +-- remote/           # LiveKit voice, presence, notifications
+|       |   |   +-- repository/       # Repository implementations
 |       |   +-- feature/
-|       |   |   +-- auth/             # Ekran vkhodu Google
-|       |   |   +-- profile/          # Ekran profiliu
-|       |   |   +-- room/             # Ekran kimnaty
-|       |   |   +-- settings/         # Nalashtuvannia dodatku
-|       |   +-- navigation/           # NavGraph ta marshruty ekraniv
-|       +-- test/                     # Modulni testy
-|       +-- androidTest/              # E2E testy (Compose UI Test)
-+-- shared/                           # KMP spilnyi modul
+|       |   |   +-- auth/             # Google Sign-In screen
+|       |   |   +-- profile/          # Profile screen
+|       |   |   +-- room/             # Room screen
+|       |   |   +-- settings/         # App settings
+|       |   +-- navigation/           # NavGraph & Screen routes
+|       +-- test/                     # Unit tests
+|       +-- androidTest/              # E2E tests (Compose UI Test)
++-- shared/                           # KMP shared module
 |   +-- src/commonMain/kotlin/.../
 |       +-- core/
-|       |   +-- di/                   # Spilni moduli Koin
-|       |   +-- model/                # Modeli danykh (User, ChatRoom, Gift toshcho)
-|       |   +-- ui/                   # Spilni komponenty
-|       |   +-- util/                 # Utiliti ta konstanty
+|       |   +-- di/                   # Shared Koin modules
+|       |   +-- model/                # Data models (User, ChatRoom, Gift, etc.)
+|       |   +-- ui/                   # Shared components
+|       |   +-- util/                 # Utilities & constants
 |       +-- data/
-|       |   +-- remote/               # VoiceService, TokenService toshcho
-|       |   +-- repository/           # Interfejsy repozytoriv
-|       +-- feature/                  # Spilni feature-moduli
-+-- iosApp/                           # Modul dodatku iOS
-+-- express-api/                      # Express.js API-server
+|       |   +-- remote/               # VoiceService, TokenService, etc.
+|       |   +-- repository/           # Repository interfaces
+|       +-- feature/                  # Shared feature modules
++-- iosApp/                           # iOS app module
++-- express-api/                      # Express.js API server
 |   +-- src/
-|       +-- routes/                   # Obrobnyky API-marshrutiv
-|       +-- middleware/               # Auth, lohuvannia middleware
-|       +-- utils/                    # Firebase Admin, R2, Logger
-|       +-- cron/                     # Zaplanovani zavdannia
-+-- public/                           # Statychnyi sait ta panel administratora
-+-- local/                            # Lokalne seredovyshche rozrobky (emulatory, testovi dani)
-+-- tests/web/                        # Playwright testy brauzera
-+-- scripts/                          # Dopomizhni skrypty
-+-- .github/workflows/                # CI/CD (PR Perevirky, Rozhortannia na Dev/Prod, E2E, Lint)
-+-- firestore.rules                   # Pravyla bezpeky Firestore
-+-- database.rules.json               # Pravyla bezpeky RTDB
-+-- firestore.indexes.json            # Skladeni indeksy Firestore
-+-- firebase.json                     # Konfiguratsiia Firebase
+|       +-- routes/                   # API route handlers
+|       +-- middleware/               # Auth, logging middleware
+|       +-- utils/                    # Firebase Admin, R2, logger
+|       +-- cron/                     # Scheduled jobs
++-- public/                           # Static site & admin panel
++-- local/                            # Local development environment (emulators, seed data)
++-- tests/web/                        # Playwright browser tests
++-- scripts/                          # Utility scripts
++-- .github/workflows/                # CI/CD (PR Checks, Deploy to Dev/Prod, E2E, lint)
++-- firestore.rules                   # Firestore security rules
++-- database.rules.json               # RTDB security rules
++-- firestore.indexes.json            # Firestore composite indexes
++-- firebase.json                     # Firebase configuration
 ```
 
-## Pochatok roboty
+## Getting Started
 
-### Peredumovy
+### Prerequisites
 
-- **Android Studio** Ladybug abo novishyi
+- **Android Studio** Ladybug or newer
 - **JDK 17+**
 - **Node.js 24+**
-- **Docker** (dlia lokalnoho servera LiveKit)
+- **Docker** (for LiveKit voice server, MinIO storage, MailHog email)
 - **Firebase CLI** (`npm install -g firebase-tools`)
 
-### Lokalna rozrobka (Rekomendovano)
+No cloud accounts are needed to get started -- the local environment runs entirely offline.
 
-Naishvydshyi sposib pochaty. Vykorystovuie Firebase Emulatory ta lokalnyi Docker kontejner LiveKit -- ne potribni khmarni obllikovi zapysy, bez vytrat, bez limitiv kvot.
+### Local Development (Recommended)
 
-1. **Klonuvannia ta vstanovlennia**
+The fastest way to get started. One command starts everything -- Firebase Emulators, Docker containers, Express API, and builds the Android app. No cloud accounts needed, no costs, no quota limits.
+
+1. **Clone and install**
    ```bash
    git clone https://github.com/ShydenMcM/ShyTalk.git
    cd ShyTalk
    cd express-api && npm install && cd ..
    ```
 
-2. **Zapusk lokalnykh servisiv**
+2. **Start everything**
+
+   **Linux / macOS / Git Bash:**
    ```bash
    bash local/start.sh
    ```
-   Tse zapuskaie Firebase Emulatory (Firestore, Auth, RTDB) ta Docker kontejner LiveKit. Pry pershomu zapusku avtomatychno zahruzhuiutsia testovi dani (korystuvach-administrator, zrazky podarunkiv, konfiguratsiia).
 
-   Vy pobachyte:
-   ```
-   Local environment ready:
-     Firebase UI:  http://localhost:4000
-     Firestore:    localhost:8080
-     Auth:         localhost:9099
-     RTDB:         localhost:9000
-     LiveKit:      localhost:7880
+   **Windows PowerShell:**
+   ```powershell
+   .\local\start.ps1
    ```
 
-3. **Zapustit Express API** (u novomu terminali)
-   ```bash
-   cd express-api
-   cp .env.local.example .env.local   # Vidredahuyte znachennia R2/SMTP za potreby
-   npm run local
+   This single command:
+   - Starts Docker containers (LiveKit voice server, MinIO storage, MailHog email)
+   - Starts Firebase Emulators (Firestore, Auth, RTDB)
+   - Seeds test data and creates the MinIO storage bucket
+   - Starts the Express API
+   - Builds and installs the Android app (if a device is connected)
+
+   When ready, you'll see:
    ```
-   API zapuskaietsia na `http://localhost:3000`. Test: `curl http://localhost:3000/api/health`
+   Local environment ready (fully offline):
 
-4. **Zapusk na emulatori Android**
-   ```bash
-   ./gradlew installLocalDebug
+     Services:
+       Firebase UI:    http://localhost:4000
+       Express API:    http://localhost:3000
+       MailHog UI:     http://localhost:8025
+       MinIO Console:  http://localhost:9001
+       LiveKit:        localhost:7880
+
+     Credentials:
+       Test admin:     claude-test@shytalk.dev / localdev123
+       Test user:      user@test.com / localdev123
+       MinIO:          minioadmin / minioadmin
    ```
-   Build flavor `local` pidkliuchaietsia do `10.0.2.2` (zvorotnyi tsykl emulatora Android do vashoii mashyny). Pratsiuie odrazhu -- dodatkova konfiguratsiia ne potribna.
 
-5. **Zapusk na fizychnomu prystroii**
+3. **Sign in**
+   - Use the email sign-in flow with the seeded test account: `claude-test@shytalk.dev` / `localdev123`
+   - Or create a new account -- it will use the local emulators
+   - Google/Apple sign-in won't work locally (no real OAuth) -- use email OTP instead
+   - OTP codes are captured by MailHog -- check http://localhost:8025
 
-   Vash telefon maie buty u **tii samii Wi-Fi merezhi**, shcho i vasha mashyna rozrobky.
+4. **Run on a Physical Device**
 
-   a. Znaidit lokalnyi IP vashoii mashyny:
+   Your phone must be on the **same Wi-Fi network** as your development machine.
+
+   a. Find your machine's local IP:
    ```bash
    # Windows
-   ipconfig    # Shukajte "IPv4 Address" pid vashym Wi-Fi adapterom (napr. 192.168.1.42)
+   ipconfig    # Look for "IPv4 Address" under your Wi-Fi adapter (e.g. 192.168.1.42)
 
    # macOS / Linux
-   ifconfig | grep "inet "    # abo: ip addr show
+   ifconfig | grep "inet "    # or: ip addr show
    ```
 
-   b. Onovit lokalnyi build flavor, shchob vykorystovuvaty vashu IP zamist `10.0.2.2`. U `app/build.gradle.kts` znaidit flavor `local` ta zminit:
+   b. Update the local build flavor to use your IP instead of `10.0.2.2`. In `app/build.gradle.kts`, find the `local` flavor and change:
    ```kotlin
-   // Zaminit 10.0.2.2 na lokalnyi IP vashoii mashyny
+   // Replace 10.0.2.2 with your machine's local IP
    buildConfigField("String", "API_BASE_URL", "\"http://192.168.1.42:3000\"")
    buildConfigField("String", "WORKER_URL", "\"http://192.168.1.42:3000\"")
    buildConfigField("String", "LIVEKIT_SERVER_URL", "\"ws://192.168.1.42:7880\"")
    buildConfigField("String", "RTDB_URL", "\"http://192.168.1.42:9000\"")
    ```
 
-   c. Pidkliuchit prystrii cherez USB ta vvimknit nalahodzhennia USB, potim:
+   c. Connect your device via USB and enable USB debugging, then:
    ```bash
    ./gradlew installLocalDebug
    ```
 
-   d. Alternatyvno vykorystovuite **adb reverse**, shchob unyknuty zmin kodu (prystrii perenapravliaie localhost na vashu mashynu):
+   d. Alternatively, use **adb reverse** to avoid changing any code (device routes localhost to your machine):
    ```bash
    adb reverse tcp:3000 tcp:3000   # Express API
-   adb reverse tcp:8080 tcp:8080   # Emulator Firestore
-   adb reverse tcp:9099 tcp:9099   # Emulator Auth
-   adb reverse tcp:9000 tcp:9000   # Emulator RTDB
+   adb reverse tcp:8080 tcp:8080   # Firestore emulator
+   adb reverse tcp:9099 tcp:9099   # Auth emulator
+   adb reverse tcp:9000 tcp:9000   # RTDB emulator
    adb reverse tcp:7880 tcp:7880   # LiveKit
+   adb reverse tcp:9002 tcp:9002   # MinIO (image storage)
    ```
-   Z `adb reverse` adresy `10.0.2.2` za zamovchuvannyam u lokalnomu flavori pratsyuvatymut i na fizychnomu prystroii -- zminy konfiguratsii zbirky ne potribni.
+   With `adb reverse`, the default `10.0.2.2` addresses in the local flavor will work on a physical device too -- no build config changes needed.
 
-6. **Vvijty**
-   - Vykorystovuite potik vkhodu cherez email z tesotovym oblikovym zapysom: `claude-test@shytalk.dev` / `localdev123`
-   - Abo stvorit novyi oblikovyi zapys -- vin vykorystovuvatyme lokalni emulatory
-   - Vkhid cherez Google/Apple ne pratsyie lokalno (nemaie realnoho OAuth) -- vykorystovuite email OTP
+5. **Stop local services**
 
-7. **Zupynka lokalnykh servisiv**
+   **Linux / macOS / Git Bash:**
    ```bash
    bash local/stop.sh
    ```
-   Abo natysnitl `Ctrl+C` u terminali `start.sh`. Dani emulatora avtomatychno zberighaytsia ta vidnovliuiutsia pry nastupnomu zapusku.
 
-### Korysni URL dlia lokalnoi rozrobky
+   **Windows PowerShell:**
+   ```powershell
+   .\local\stop.ps1
+   ```
 
-| Servis | URL | Pryznachennia |
+   Or press `Ctrl+C` in the start script terminal. Emulator data is saved automatically and restored on next start.
+
+### Useful Local Dev URLs
+
+| Service | URL | Purpose |
 |---------|-----|---------|
-| Firebase Emulator UI | http://localhost:4000 | Perehliad danykh Firestore, korystuvachiv Auth, RTDB |
+| Firebase Emulator UI | http://localhost:4000 | Browse Firestore data, Auth users, RTDB |
 | Express API | http://localhost:3000 | Backend API |
-| Perevirka zdorovia | http://localhost:3000/api/health | Perevirka roboty API |
+| Health check | http://localhost:3000/api/health | Verify API is running |
+| MailHog | http://localhost:8025 | View captured emails and OTP codes |
+| MinIO Console | http://localhost:9001 | Browse uploaded images and files |
 
-### Khmarna rozrobka (Neoboviazkovoi)
+### Optional Services
 
-Yakshcho vam potribno testuvaty z realnymy khmarnymy servisamy (napr. realni push-spovishchennia, realnyi vkhid cherez Google):
+**LibreTranslate (Message Translation)**
 
-1. **Nalashtuvannia Firebase**
-   - Stvorit proekt Firebase na [console.firebase.google.com](https://console.firebase.google.com)
-   - Uvimknit **Vkhid cherez Google** ta **Vkhid cherez Apple** v Avtentyfikatsii
-   - Uvimknit **Firestore**, **Realtime Database** ta **Cloud Messaging**
-   - Zavantazhte `google-services.json` ta rozmistit u `app/src/dev/`
+Optional 6GB+ Docker image for testing the translation feature locally:
+```bash
+docker run -d -p 5000:5000 libretranslate/libretranslate
+```
+Not included in the default setup due to large image size. Translation works without it -- messages just stay untranslated.
 
-2. **Nalashtuvannia Express API**
+### Cloud Development (Optional)
+
+If you need to test against real cloud services (e.g., real push notifications, real Google Sign-In):
+
+1. **Firebase setup**
+   - Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
+   - Enable **Google Sign-In** and **Apple Sign-In** in Authentication
+   - Enable **Firestore**, **Realtime Database**, and **Cloud Messaging**
+   - Download `google-services.json` and place it in `app/src/dev/`
+
+2. **Express API setup**
    ```bash
    cd express-api
-   cp .env.example .env  # Vidredahuyte z vashymy khmarnymy oblikovymy danymy
+   cp .env.example .env  # Edit with your cloud credentials
    npm install
    npm start
    ```
 
-3. **Rozhortannia pravyl Firestore**
+3. **Deploy Firestore rules**
    ```bash
    npx firebase deploy --only firestore:rules
    ```
 
-4. **Zbirka dodatku Android** (dev flavor)
+4. **Build the Android app** (dev flavor)
    ```bash
    ./gradlew assembleDevDebug
    ```
 
-### Zminni seredovyshcha
+### Environment Variables
 
-| Zminna | Opys | De |
+| Variable | Description | Where |
 |----------|-------------|-------|
-| `FIREBASE_SERVICE_ACCOUNT` | JSON servisnoho obliikovoho zapysu Firebase Admin SDK | Express API |
-| `R2_ACCOUNT_ID` | ID obliikovoho zapysu Cloudflare R2 | Express API |
-| `R2_ACCESS_KEY_ID` | Kliuch dostupu R2 | Express API |
-| `R2_SECRET_ACCESS_KEY` | Sekretnyi kliuch R2 | Express API |
-| `R2_BUCKET_NAME` | Nazva R2 bucket (za zamovchuvannyam: `shytalk-media`) | Express API |
-| `LIVEKIT_API_KEY` | API kliuch LiveKit | Express API |
-| `LIVEKIT_API_SECRET` | API sekret LiveKit | Express API |
-| `LIVEKIT_URL` | URL servera LiveKit | Dodatok Android (BuildConfig) |
-| `WORKER_URL` | Bazova URL Express API | Dodatok Android (BuildConfig) |
+| `FIREBASE_SERVICE_ACCOUNT` | Firebase Admin SDK service account JSON | Express API |
+| `R2_ACCOUNT_ID` | Cloudflare R2 account ID | Express API |
+| `R2_ACCESS_KEY_ID` | R2 access key | Express API |
+| `R2_SECRET_ACCESS_KEY` | R2 secret key | Express API |
+| `R2_BUCKET_NAME` | R2 bucket name (default: `shytalk-media`) | Express API |
+| `LIVEKIT_API_KEY` | LiveKit API key | Express API |
+| `LIVEKIT_API_SECRET` | LiveKit API secret | Express API |
+| `LIVEKIT_URL` | LiveKit server URL | Android app (BuildConfig) |
+| `WORKER_URL` | Express API base URL | Android app (BuildConfig) |
 
-## Testuvannia
+## Testing
 
-| Suite | Komanda | Kilkist |
-|-------|---------|-------|
-| Modulni testy Kotlin | `./gradlew test` | 100+ testiv |
-| Testy Express API | `cd express-api && npm test` | 1 540+ testiv |
-| E2E Gherkin (Android) | `./gradlew connectedDevDebugAndroidTest` | 34 feature-faily |
-| Playwright web testy | `npx playwright test` | 28 spetsyfikatsii |
+### Running Tests Locally
 
 ```bash
-# Modulni testy Kotlin/KMP
+# Interactive test menu (choose what to run):
+bash local/test.sh        # Linux / macOS / Git Bash
+.\local\test.ps1          # Windows PowerShell
+
+# Or run individual suites:
+bash local/test-unit.sh       # Kotlin + Express API unit tests
+bash local/test-playwright.sh # Playwright web tests (needs local env)
+bash local/test-e2e.sh        # Android E2E tests (needs local env + device)
+bash local/test-lint.sh       # ktlint + ESLint
+
+# View Allure test report:
+npx allure serve allure-results
+```
+
+### Test Suites
+
+| Suite | Command | Count |
+|-------|---------|-------|
+| Kotlin unit tests | `./gradlew test` | 100+ tests |
+| Express API tests | `cd express-api && npm test` | 1,540+ tests |
+| E2E Gherkin (Android) | `./gradlew connectedDevDebugAndroidTest` | 34 feature files |
+| Playwright web tests | `npx playwright test` | 28 specs |
+
+```bash
+# Kotlin/KMP unit tests
 ./gradlew test
 
-# Testy Express API
+# Express API tests
 cd express-api && npm test
 
-# E2E testy (potribien pidkliuchenyi prystrii abo emulator)
+# E2E tests (requires connected device or emulator)
 ./gradlew connectedDevDebugAndroidTest
 
-# Playwright testy brauzera (potribna zapushchena panel administratora)
+# Playwright browser tests (requires admin panel running)
 npx playwright test
 ```
 
-## Rozhortannia
+### Testing in CI
 
-Rozhortannia keruiutsia cherez robochi protsesy GitHub Actions (`.github/workflows/`):
+In CI, Playwright and Android E2E tests run against the same local environment (emulators + Docker) -- no cloud services are used. This ensures tests never interfere with live testers.
 
-| Robochyi protses | Trygher | Shcho robytt |
+## Troubleshooting
+
+- **Port already in use**: `lsof -i :<port>` (Linux/macOS) or `netstat -ano | findstr :<port>` (Windows) to find what's using the port.
+- **Docker not running**: Ensure Docker Desktop is started. Run `docker ps` to verify.
+- **Firebase emulators fail to start**: Requires Java 11+. Check with `java -version`.
+- **Android build fails**: Ensure JDK 17+ and Android SDK are installed. Try `./gradlew clean`.
+- **adb device not detected**: Enable USB debugging. Run `adb devices` to check.
+- **Images not loading**: MinIO bucket may not be created. Run `cd express-api && NODE_ENV=local node ../local/seed.js`. For physical devices, run `adb reverse tcp:9002 tcp:9002`.
+- **OTP not arriving**: Check console output for `[OTP-LOCAL]` lines. Also check MailHog UI at http://localhost:8025.
+- **Reset emulator data**: Delete `local/firebase-emulator-data/` directory and restart.
+- **Reset MinIO data**: Run `docker compose -f local/docker-compose.yml down -v` to remove volumes.
+
+## Deployment
+
+Deployments are managed through GitHub Actions workflows (`.github/workflows/`):
+
+| Workflow | Trigger | What it does |
 |----------|---------|-------------|
-| **PR Checks** | Avtomatychno na PR do `main` | Zapuskaie lint, testy Kotlin, testy Express API, testy Playwright (zalezhno vid zminyenykh fajliv) |
-| **Deploy to Dev** | Vruchnu (`workflow_dispatch`) | Rozhortaie Express API + web na dev, rozpodilaie APK testerau, za bazhannyam zapuskaie testy Playwright |
-| **Deploy to Prod** | Vruchnu (`workflow_dispatch`) | Rozhortaie pozhnachehnyi reliz na prod -- Express API, web, Play Store ta App Store |
+| **PR Checks** | Automatic on PRs to `main` | Runs lint, Kotlin tests, Express API tests, Playwright tests (based on changed files) |
+| **Deploy to Dev** | Manual (`workflow_dispatch`) | Deploys Express API + web to dev, distributes APK to testers, optionally runs Playwright tests |
+| **Deploy to Prod** | Manual (`workflow_dispatch`) | Deploys a tagged release to prod -- Express API, web, Play Store, and App Store |
 
-Dodatkovi robochi protsesy: **E2E Tests** (matrytsia emulatoriv Android), **SonarCloud** (statychnyi analiz), **Lint**, **Backend Tests**, **Dependabot Auto-merge**.
+Additional workflows: **E2E Tests** (Android emulator matrix), **SonarCloud** (static analysis), **Lint**, **Backend Tests**, **Dependabot Auto-merge**.
 
-- **Express API:** Rozhortaietsia na VM Oracle Cloud cherez SSH + PM2 (dev: London, prod: Sinhnapur)
-- **Android:** Pakuietsia ta zavanttazhuietsia na Google Play cherez CI
-- **iOS:** Zbyraietsia ta zavantazhuietsia na App Store Connect / TestFlight cherez CI
-- **Panel administratora / web:** Rozhortaietsia na Cloudflare Pages
+- **Express API:** Deployed to Oracle Cloud VMs via SSH + PM2 (dev: London, prod: Singapore)
+- **Android:** Bundled and uploaded to Google Play via CI
+- **iOS:** Built and uploaded to App Store Connect / TestFlight via CI
+- **Admin panel / web:** Deployed to Cloudflare Pages
 
-## Uchast
+## Contributing
 
-Vneski vitaiutsia! Bud laska, dyvitsia [CONTRIBUTING.md](CONTRIBUTING.md) dlia rekomendatsii.
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-## Litsenziia
+## License
 
-Tsei proekt litsenzovanyi za litsenziieiu Apache 2.0. Dyvitsia [LICENSE](LICENSE) dlia detailei.
+This project is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
 
-## Podiaky
+## Acknowledgments
 
-- [Firebase](https://firebase.google.com) -- Avtentyfikatsiia, Firestore, Realtime Database, Cloud Messaging
-- [LiveKit](https://livekit.io) -- Holsovyi zv'iazok u realnomu chasi
-- [Cloudflare](https://www.cloudflare.com) -- Skhovyshche R2, khostynh Pages, CDN
-- [Oracle Cloud](https://www.oracle.com/cloud/free/) -- Bezkhoshtovna VM dlia Express API
-- [Express.js](https://expressjs.com) -- Framework API-servera
-- [Jetpack Compose](https://developer.android.com/jetpack/compose) -- Suchasnyi deklaratyvnyi UI
-- [Koin](https://insert-koin.io) -- Lehka in'iektsiia zalezhnostei
-- [Coil](https://coil-kt.github.io/coil/) -- Zavantazhennia zobrazhen dlia Kotlin Multiplatform
-- [Lottie](https://airbnb.design/lottie/) -- Animovani efekty podarunkiv ta UI
-- [kotlinx-datetime](https://github.com/Kotlin/kotlinx-datetime) -- Bahatoplatformni data/chas
+- [Firebase](https://firebase.google.com) -- Authentication, Firestore, Realtime Database, Cloud Messaging
+- [LiveKit](https://livekit.io) -- Real-time voice communication
+- [Cloudflare](https://www.cloudflare.com) -- R2 storage, Pages hosting, CDN
+- [Oracle Cloud](https://www.oracle.com/cloud/free/) -- Free tier VM for Express API
+- [Express.js](https://expressjs.com) -- API server framework
+- [Jetpack Compose](https://developer.android.com/jetpack/compose) -- Modern declarative UI
+- [Koin](https://insert-koin.io) -- Lightweight dependency injection
+- [Coil](https://coil-kt.github.io/coil/) -- Image loading for Kotlin Multiplatform
+- [Lottie](https://airbnb.design/lottie/) -- Animated gift and UI effects
+- [kotlinx-datetime](https://github.com/Kotlin/kotlinx-datetime) -- Multiplatform date/time

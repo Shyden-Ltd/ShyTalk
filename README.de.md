@@ -12,6 +12,8 @@
 
 ShyTalk ist eine soziale Sprachchat-App, in der Nutzer Echtzeit-Sprachchatraeume erstellen und ihnen beitreten koennen. Entwickelt mit Kotlin Multiplatform (KMP), unterstuetzt es sowohl Android als auch iOS mit einer gemeinsamen Codebasis. Egal ob du ein Gespraech moderieren, zuhoeren oder dich mit Menschen auf der ganzen Welt verbinden moechtest -- ShyTalk macht es einfach.
 
+iOS ist eine unterstuetzte Plattform, aber dieser Leitfaden konzentriert sich auf die Android-Entwicklung, die das primaere Entwicklungsziel ist.
+
 ## Funktionen
 
 ### Sprachchat-Raeume
@@ -190,12 +192,14 @@ ShyTalk/
 - **Android Studio** Ladybug oder neuer
 - **JDK 17+**
 - **Node.js 24+**
-- **Docker** (fuer lokalen LiveKit-Server)
+- **Docker** (fuer LiveKit-Sprachserver, MinIO-Speicher, MailHog-E-Mail)
 - **Firebase CLI** (`npm install -g firebase-tools`)
+
+Keine Cloud-Konten erforderlich um loszulegen -- die lokale Umgebung laeuft vollstaendig offline.
 
 ### Lokale Entwicklung (Empfohlen)
 
-Der schnellste Weg, um loszulegen. Verwendet Firebase-Emulatoren und einen lokalen LiveKit-Docker-Container -- keine Cloud-Konten noetig, keine Kosten, keine Kontingentbegrenzungen.
+Der schnellste Weg, um loszulegen. Ein Befehl startet alles -- Firebase-Emulatoren, Docker-Container, Express API und baut die Android-App. Keine Cloud-Konten noetig, keine Kosten, keine Kontingentbegrenzungen.
 
 1. **Klonen und installieren**
    ```bash
@@ -204,37 +208,49 @@ Der schnellste Weg, um loszulegen. Verwendet Firebase-Emulatoren und einen lokal
    cd express-api && npm install && cd ..
    ```
 
-2. **Lokale Dienste starten**
+2. **Alles starten**
+
+   **Linux / macOS / Git Bash:**
    ```bash
    bash local/start.sh
    ```
-   Dies startet Firebase-Emulatoren (Firestore, Auth, RTDB) und einen LiveKit-Docker-Container. Beim ersten Start werden automatisch Testdaten geseedet (Admin-Nutzer, Beispielgeschenke, Konfiguration).
 
-   Du siehst:
-   ```
-   Local environment ready:
-     Firebase UI:  http://localhost:4000
-     Firestore:    localhost:8080
-     Auth:         localhost:9099
-     RTDB:         localhost:9000
-     LiveKit:      localhost:7880
+   **Windows PowerShell:**
+   ```powershell
+   .\local\start.ps1
    ```
 
-3. **Express API starten** (in einem neuen Terminal)
-   ```bash
-   cd express-api
-   cp .env.local.example .env.local   # R2/SMTP-Werte bei Bedarf anpassen
-   npm run local
-   ```
-   Die API startet auf `http://localhost:3000`. Test: `curl http://localhost:3000/api/health`
+   Dieser einzelne Befehl:
+   - Startet Docker-Container (LiveKit-Sprachserver, MinIO-Speicher, MailHog-E-Mail)
+   - Startet Firebase-Emulatoren (Firestore, Auth, RTDB)
+   - Seedet Testdaten und erstellt den MinIO-Speicher-Bucket
+   - Startet die Express API
+   - Baut und installiert die Android-App (wenn ein Geraet angeschlossen ist)
 
-4. **Auf Android-Emulator ausfuehren**
-   ```bash
-   ./gradlew installLocalDebug
+   Wenn bereit, siehst du:
    ```
-   Der `local`-Build-Flavor verbindet sich mit `10.0.2.2` (Loopback des Android-Emulators zu deinem Rechner). Es funktioniert einfach -- keine zusaetzliche Konfiguration noetig.
+   Local environment ready (fully offline):
 
-5. **Auf einem physischen Geraet ausfuehren**
+     Services:
+       Firebase UI:    http://localhost:4000
+       Express API:    http://localhost:3000
+       MailHog UI:     http://localhost:8025
+       MinIO Console:  http://localhost:9001
+       LiveKit:        localhost:7880
+
+     Credentials:
+       Test admin:     claude-test@shytalk.dev / localdev123
+       Test user:      user@test.com / localdev123
+       MinIO:          minioadmin / minioadmin
+   ```
+
+3. **Anmelden**
+   - Verwende den E-Mail-Anmeldefluss mit dem geseedeten Testkonto: `claude-test@shytalk.dev` / `localdev123`
+   - Oder erstelle ein neues Konto -- es verwendet die lokalen Emulatoren
+   - Google/Apple-Anmeldung funktioniert lokal nicht (kein echtes OAuth) -- verwende stattdessen E-Mail-OTP
+   - OTP-Codes werden von MailHog erfasst -- pruefe http://localhost:8025
+
+4. **Auf einem physischen Geraet ausfuehren**
 
    Dein Telefon muss sich im **selben Wi-Fi-Netzwerk** wie dein Entwicklungsrechner befinden.
 
@@ -268,19 +284,23 @@ Der schnellste Weg, um loszulegen. Verwendet Firebase-Emulatoren und einen lokal
    adb reverse tcp:9099 tcp:9099   # Auth-Emulator
    adb reverse tcp:9000 tcp:9000   # RTDB-Emulator
    adb reverse tcp:7880 tcp:7880   # LiveKit
+   adb reverse tcp:9002 tcp:9002   # MinIO (Bildspeicher)
    ```
    Mit `adb reverse` funktionieren die Standard-`10.0.2.2`-Adressen im lokalen Flavor auch auf einem physischen Geraet -- keine Build-Konfigurationsaenderungen noetig.
 
-6. **Anmelden**
-   - Verwende den E-Mail-Anmeldefluss mit dem geseededten Testkonto: `claude-test@shytalk.dev` / `localdev123`
-   - Oder erstelle ein neues Konto -- es verwendet die lokalen Emulatoren
-   - Google/Apple-Anmeldung funktioniert lokal nicht (kein echtes OAuth) -- verwende stattdessen E-Mail-OTP
+5. **Lokale Dienste stoppen**
 
-7. **Lokale Dienste stoppen**
+   **Linux / macOS / Git Bash:**
    ```bash
    bash local/stop.sh
    ```
-   Oder druecke `Ctrl+C` im `start.sh`-Terminal. Emulatordaten werden automatisch gespeichert und beim naechsten Start wiederhergestellt.
+
+   **Windows PowerShell:**
+   ```powershell
+   .\local\stop.ps1
+   ```
+
+   Oder druecke `Ctrl+C` im Startskript-Terminal. Emulatordaten werden automatisch gespeichert und beim naechsten Start wiederhergestellt.
 
 ### Nuetzliche URLs fuer lokale Entwicklung
 
@@ -289,6 +309,18 @@ Der schnellste Weg, um loszulegen. Verwendet Firebase-Emulatoren und einen lokal
 | Firebase Emulator UI | http://localhost:4000 | Firestore-Daten, Auth-Nutzer, RTDB durchsuchen |
 | Express API | http://localhost:3000 | Backend-API |
 | Gesundheitspruefung | http://localhost:3000/api/health | Pruefen, ob die API laeuft |
+| MailHog | http://localhost:8025 | Erfasste E-Mails und OTP-Codes anzeigen |
+| MinIO Console | http://localhost:9001 | Hochgeladene Bilder und Dateien durchsuchen |
+
+### Optionale Dienste
+
+**LibreTranslate (Nachrichtenuebersetung)**
+
+Optionales Docker-Image (6 GB+) zum lokalen Testen der Uebersetzungsfunktion:
+```bash
+docker run -d -p 5000:5000 libretranslate/libretranslate
+```
+Nicht im Standard-Setup enthalten wegen der groszen Image-Groesze. Die Uebersetzung funktioniert auch ohne -- Nachrichten bleiben einfach unuebersetzt.
 
 ### Cloud-Entwicklung (Optional)
 
@@ -334,6 +366,25 @@ Wenn du gegen echte Cloud-Dienste testen musst (z.B. echte Push-Benachrichtigung
 
 ## Tests
 
+### Tests lokal ausfuehren
+
+```bash
+# Interaktives Testmenue (waehle was du ausfuehren moechtest):
+bash local/test.sh        # Linux / macOS / Git Bash
+.\local\test.ps1          # Windows PowerShell
+
+# Oder einzelne Suiten ausfuehren:
+bash local/test-unit.sh       # Kotlin + Express API Unit-Tests
+bash local/test-playwright.sh # Playwright Web-Tests (benoetigt lokale Umgebung)
+bash local/test-e2e.sh        # Android E2E-Tests (benoetigt lokale Umgebung + Geraet)
+bash local/test-lint.sh       # ktlint + ESLint
+
+# Allure-Testbericht anzeigen:
+npx allure serve allure-results
+```
+
+### Test-Suiten
+
 | Suite | Befehl | Anzahl |
 |-------|---------|-------|
 | Kotlin Unit-Tests | `./gradlew test` | 100+ Tests |
@@ -354,6 +405,22 @@ cd express-api && npm test
 # Playwright-Browsertests (erfordert laufendes Admin-Panel)
 npx playwright test
 ```
+
+### Testen in CI
+
+In CI laufen Playwright- und Android-E2E-Tests gegen dieselbe lokale Umgebung (Emulatoren + Docker) -- es werden keine Cloud-Dienste verwendet. Dies stellt sicher, dass Tests niemals echte Tester beeintraechtigen.
+
+## Fehlerbehebung
+
+- **Port bereits belegt**: `lsof -i :<port>` (Linux/macOS) oder `netstat -ano | findstr :<port>` (Windows) um herauszufinden, was den Port verwendet.
+- **Docker laeuft nicht**: Stelle sicher, dass Docker Desktop gestartet ist. Fuehre `docker ps` zur Ueberpruefung aus.
+- **Firebase-Emulatoren starten nicht**: Erfordert Java 11+. Pruefe mit `java -version`.
+- **Android-Build schlaegt fehl**: Stelle sicher, dass JDK 17+ und Android SDK installiert sind. Versuche `./gradlew clean`.
+- **adb-Geraet nicht erkannt**: Aktiviere USB-Debugging. Fuehre `adb devices` zur Ueberpruefung aus.
+- **Bilder laden nicht**: MinIO-Bucket wurde moeglicherweise nicht erstellt. Fuehre `cd express-api && NODE_ENV=local node ../local/seed.js` aus. Fuer physische Geraete, fuehre `adb reverse tcp:9002 tcp:9002` aus.
+- **OTP kommt nicht an**: Pruefe die Konsolenausgabe auf `[OTP-LOCAL]`-Zeilen. Pruefe auch die MailHog-UI unter http://localhost:8025.
+- **Emulatordaten zuruecksetzen**: Loesche das Verzeichnis `local/firebase-emulator-data/` und starte neu.
+- **MinIO-Daten zuruecksetzen**: Fuehre `docker compose -f local/docker-compose.yml down -v` aus, um Volumes zu entfernen.
 
 ## Bereitstellung
 
