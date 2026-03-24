@@ -4,10 +4,47 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-echo "Starting LiveKit..."
+API_PID=""
+FIREBASE_PID=""
+
+cleanup() {
+  echo ""
+  echo "Shutting down..."
+
+  # 1. Stop Express API
+  if [ -n "$API_PID" ] && kill -0 "$API_PID" 2>/dev/null; then
+    echo "Stopping Express API..."
+    kill "$API_PID" 2>/dev/null || true
+    wait "$API_PID" 2>/dev/null || true
+  fi
+
+  # 2. Stop Firebase Emulators (graceful -- exports data)
+  if [ -n "$FIREBASE_PID" ] && kill -0 "$FIREBASE_PID" 2>/dev/null; then
+    echo "Stopping Firebase Emulators (exporting data)..."
+    kill "$FIREBASE_PID" 2>/dev/null || true
+    wait "$FIREBASE_PID" 2>/dev/null || true
+  fi
+
+  # 3. Stop Docker containers
+  echo "Stopping Docker containers..."
+  docker compose -f "$SCRIPT_DIR/docker-compose.yml" down 2>/dev/null || true
+
+  echo "Local environment stopped."
+  exit 0
+}
+
+trap cleanup INT TERM
+
+# =============================================================================
+# Step 1: Docker Compose up (LiveKit + MinIO + MailHog)
+# =============================================================================
+echo "==> Step 1/8: Starting Docker containers (LiveKit, MinIO, MailHog)..."
 docker compose -f "$SCRIPT_DIR/docker-compose.yml" up -d
 
-echo "Starting Firebase Emulators..."
+# =============================================================================
+# Step 2: Start Firebase Emulators (background)
+# =============================================================================
+echo "==> Step 2/8: Starting Firebase Emulators..."
 cd "$PROJECT_ROOT"
 npx firebase emulators:start \
   --project=demo-shytalk \
@@ -15,29 +52,90 @@ npx firebase emulators:start \
   --export-on-exit=local/firebase-emulator-data &
 FIREBASE_PID=$!
 
-# Wait for emulators to be ready
-echo "Waiting for emulators..."
-until curl -s http://localhost:4000 > /dev/null 2>&1; do sleep 1; done
-echo "Emulators ready."
+# =============================================================================
+# Step 3: Wait for readiness (emulators + MinIO)
+# =============================================================================
+echo "==> Step 3/8: Waiting for emulators and MinIO..."
 
-# Seed data on first run
-if [ ! -d "local/firebase-emulator-data/firestore_export" ]; then
-  echo "First run - seeding data..."
-  cd express-api && node ../local/seed.js && cd "$PROJECT_ROOT"
+echo "  Waiting for Firebase Emulators (localhost:4000)..."
+until curl -s http://localhost:4000 > /dev/null 2>&1; do sleep 1; done
+echo "  Firebase Emulators ready."
+
+echo "  Waiting for MinIO (localhost:9002)..."
+until curl -s http://localhost:9002/minio/health/live > /dev/null 2>&1; do sleep 1; done
+echo "  MinIO ready."
+
+# =============================================================================
+# Step 4: Seed data (Firestore + MinIO bucket)
+# =============================================================================
+echo "==> Step 4/8: Seeding data..."
+cd "$PROJECT_ROOT/express-api" && node ../local/seed.js && cd "$PROJECT_ROOT"
+
+# =============================================================================
+# Step 5: Start Express API (background)
+# =============================================================================
+echo "==> Step 5/8: Starting Express API..."
+cd "$PROJECT_ROOT/express-api" && NODE_ENV=local node src/index.js 2>&1 | sed 's/^/[API] /' &
+API_PID=$!
+cd "$PROJECT_ROOT"
+
+# =============================================================================
+# Step 6: Wait for API ready
+# =============================================================================
+echo "==> Step 6/8: Waiting for Express API (localhost:3000)..."
+until curl -s http://localhost:3000/api/health > /dev/null 2>&1; do sleep 1; done
+echo "  Express API ready."
+
+# =============================================================================
+# Step 7: Build Android APK
+# =============================================================================
+APK_PATH="app/build/outputs/apk/local/debug/app-local-debug.apk"
+echo "==> Step 7/8: Building Android APK..."
+cd "$PROJECT_ROOT" && ./gradlew assembleLocalDebug
+
+# =============================================================================
+# Step 8: Install on device if connected
+# =============================================================================
+echo "==> Step 8/8: Checking for connected device..."
+DEVICE_NAME="No device connected"
+if adb devices 2>/dev/null | grep -q "device$"; then
+  DEVICE_NAME=$(adb devices -l 2>/dev/null | grep "device " | head -1 | sed 's/.*model:\([^ ]*\).*/\1/' || echo "connected device")
+  echo "  Installing on $DEVICE_NAME..."
+  adb install -r "$PROJECT_ROOT/$APK_PATH" 2>/dev/null && echo "  Installed." || echo "  Install failed -- APK path shown below."
+else
+  echo "  No device connected -- skipping install."
 fi
 
+# =============================================================================
+# Ready message
+# =============================================================================
 echo ""
-echo "Local environment ready:"
-echo "  Firebase UI:  http://localhost:4000"
-echo "  Firestore:    localhost:8080"
-echo "  Auth:         localhost:9099"
-echo "  RTDB:         localhost:9000"
-echo "  LiveKit:      localhost:7880"
+echo "========================================================"
+echo "  Local environment ready (fully offline):"
+echo "========================================================"
 echo ""
-echo "Start the API:  cd express-api && npm run local"
-echo "Build Android:  ./gradlew installLocalDebug"
+echo "  Services:"
+echo "    Firebase UI:    http://localhost:4000"
+echo "    Express API:    http://localhost:3000"
+echo "    MailHog UI:     http://localhost:8025"
+echo "    MinIO Console:  http://localhost:9001"
+echo "    LiveKit:        localhost:7880"
 echo ""
+echo "  Credentials:"
+echo "    Test admin:     claude-test@shytalk.dev / localdev123"
+echo "    Test user:      user@test.com / localdev123"
+echo "    MinIO:          minioadmin / minioadmin"
+echo ""
+echo "  Android:"
+echo "    APK path:       $APK_PATH"
+echo "    Installed on:   $DEVICE_NAME"
+echo ""
+echo "  iOS: Supported but not covered here -- development focuses on Android."
+echo ""
+echo "  Run tests:        bash local/test.sh"
+echo "  View Allure:      npx allure serve allure-results"
+echo ""
+echo "Press Ctrl+C to stop..."
 
-# Keep running until Ctrl+C — clean shutdown exports emulator data
-trap "echo 'Shutting down...'; kill $FIREBASE_PID 2>/dev/null; wait $FIREBASE_PID 2>/dev/null; docker compose -f \"$SCRIPT_DIR/docker-compose.yml\" down; exit 0" INT TERM
+# Keep running until Ctrl+C
 wait $FIREBASE_PID
