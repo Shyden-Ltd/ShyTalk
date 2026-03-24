@@ -90,28 +90,27 @@ try {
 } finally {
     Write-Host "Shutting down..."
 
-    # Kill the emulator process tree using parent PID
+    # Ctrl+C was sent to all console processes — the emulators are already
+    # shutting down gracefully (exporting data, stopping each emulator).
+    # Give them up to 30 seconds to finish before force-killing.
     if (-not $emulatorProcess.HasExited) {
-        # Kill child processes first (Java emulators spawned by npx/firebase)
-        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-            $_.ParentProcessId -eq $emulatorProcess.Id
-        } | ForEach-Object {
-            # Also kill grandchildren (java processes)
+        Write-Host "Waiting for emulators to finish graceful shutdown..."
+        $exited = $emulatorProcess.WaitForExit(30000)
+        if (-not $exited) {
+            Write-Host "Grace period expired — force-killing remaining processes..." -ForegroundColor Yellow
+            # Kill child processes (Java emulators spawned by npx/firebase)
             Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-                $_.ParentProcessId -eq $_.ProcessId
+                $_.CommandLine -match "firebase.*emulators|cloud-firestore-emulator|cloud-datastore-emulator"
             } | ForEach-Object {
                 Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
             }
-            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+            Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+                $_.Name -match "java" -and $_.CommandLine -match "firebase"
+            } | ForEach-Object {
+                Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+            }
+            Stop-Process -Id $emulatorProcess.Id -Force -ErrorAction SilentlyContinue
         }
-        Stop-Process -Id $emulatorProcess.Id -Force -ErrorAction SilentlyContinue
-    }
-
-    # Fallback: kill any remaining firebase emulator processes
-    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-        $_.CommandLine -match "firebase.*emulators"
-    } | ForEach-Object {
-        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
     }
 
     # Stop LiveKit Docker container
