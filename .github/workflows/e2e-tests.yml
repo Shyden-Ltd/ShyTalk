@@ -229,8 +229,9 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
           script: |
-            set -o pipefail
-            ./gradlew connectedLocalDebugAndroidTest --no-parallel 2>&1 | tee test-output.log
+            ./gradlew connectedLocalDebugAndroidTest --no-parallel > test-output.log 2>&1; RESULT=$?
+            cat test-output.log
+            exit $RESULT
 
       - name: Cleanup Docker containers
         if: always()
