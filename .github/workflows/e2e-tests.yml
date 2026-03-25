@@ -188,9 +188,13 @@ jobs:
       - name: Start Firebase Emulators
         run: |
           npm install -g firebase-tools
-          firebase emulators:start --project=demo-shytalk --import=local/firebase-emulator-data &
+          firebase emulators:start --project=demo-shytalk &
           echo "Waiting for emulators..."
-          until curl -s http://localhost:4000 > /dev/null 2>&1; do sleep 1; done
+          WAITED=0
+          until curl -s http://localhost:4000 > /dev/null 2>&1; do
+            sleep 1; WAITED=$((WAITED+1))
+            if [ $WAITED -ge 120 ]; then echo "ERROR: Emulators did not start within 120s"; exit 1; fi
+          done
           echo "Emulators ready"
 
       - name: Seed local data
@@ -359,8 +363,12 @@ jobs:
       - name: Start Firebase Emulators
         run: |
           npm install -g firebase-tools
-          firebase emulators:start --project=demo-shytalk --import=local/firebase-emulator-data &
-          until curl -s http://localhost:4000 > /dev/null 2>&1; do sleep 1; done
+          firebase emulators:start --project=demo-shytalk &
+          WAITED=0
+          until curl -s http://localhost:4000 > /dev/null 2>&1; do
+            sleep 1; WAITED=$((WAITED+1))
+            if [ $WAITED -ge 120 ]; then echo "ERROR: Emulators did not start within 120s"; exit 1; fi
+          done
 
       - name: Install Express API and seed data
         run: |
