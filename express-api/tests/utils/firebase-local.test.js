@@ -79,7 +79,10 @@ describe('firebase.js local mode', () => {
 
     require('../../src/utils/firebase');
 
-    expect(mockInitializeApp).toHaveBeenCalledWith({ projectId: 'demo-shytalk' });
+    expect(mockInitializeApp).toHaveBeenCalledWith({
+      projectId: 'demo-shytalk',
+      databaseURL: 'http://localhost:9000?ns=demo-shytalk-default-rtdb',
+    });
     expect(mockCert).not.toHaveBeenCalled();
   });
 });

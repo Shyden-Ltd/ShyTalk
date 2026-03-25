@@ -24,8 +24,11 @@ configureLocalEmulators();
 
 if (!admin.apps.length) {
   if (process.env.NODE_ENV === 'local') {
-    // Emulators don't need a service account or database URL
-    admin.initializeApp({ projectId: 'demo-shytalk' });
+    // Emulators need a databaseURL for RTDB even though traffic goes to emulator
+    admin.initializeApp({
+      projectId: 'demo-shytalk',
+      databaseURL: 'http://localhost:9000?ns=demo-shytalk-default-rtdb',
+    });
   } else {
     if (!process.env.FIREBASE_DATABASE_URL) {
       // eslint-disable-next-line no-console

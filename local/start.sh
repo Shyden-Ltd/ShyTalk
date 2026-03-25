@@ -69,7 +69,7 @@ echo "  MinIO ready."
 # Step 4: Seed data (Firestore + MinIO bucket)
 # =============================================================================
 echo "==> Step 4/8: Seeding data..."
-cd "$PROJECT_ROOT/express-api" && node ../local/seed.js && cd "$PROJECT_ROOT"
+cd "$PROJECT_ROOT/express-api" && NODE_PATH=./node_modules node ../local/seed.js && cd "$PROJECT_ROOT"
 
 # =============================================================================
 # Step 5: Start Express API (background)

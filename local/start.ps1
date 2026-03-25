@@ -102,7 +102,9 @@ Write-Host "==> Step 4/8: Seeding data..."
 $expressDir = Join-Path $ProjectRoot "express-api"
 Push-Location $expressDir
 try {
+    $env:NODE_PATH = ".\node_modules"
     node ..\local\seed.js
+    $env:NODE_PATH = $null
 } finally {
     Pop-Location
 }

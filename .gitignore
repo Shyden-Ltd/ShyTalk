@@ -81,3 +81,8 @@ tests/web/.auth/
 
 # Express API coverage
 express-api/coverage/
+
+# Firebase emulator debug logs
+firebase-debug.log
+firestore-debug.log
+database-debug.log
