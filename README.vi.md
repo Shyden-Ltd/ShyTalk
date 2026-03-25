@@ -8,87 +8,87 @@
 
 🌍 [English](README.md) | [العربية](README.ar.md) | [Deutsch](README.de.md) | [Español](README.es.md) | [Français](README.fr.md) | [हिन्दी](README.hi.md) | [Bahasa Indonesia](README.id.md) | [Italiano](README.it.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Nederlands](README.nl.md) | [Polski](README.pl.md) | [Português](README.pt.md) | [Русский](README.ru.md) | [Svenska](README.sv.md) | [ไทย](README.th.md) | [Türkçe](README.tr.md) | [Українська](README.uk.md) | **Tiếng Việt** | [中文](README.zh.md)
 
-## About
+## Giới Thiệu
 
-ShyTalk is a social voice chat app where users can create and join real-time voice chat rooms. Built with Kotlin Multiplatform (KMP), it targets both Android and iOS with a shared codebase. Whether you want to host a conversation, listen in, or connect with people around the world, ShyTalk makes it easy.
+ShyTalk là một ứng dụng trò chuyện thoại xã hội nơi người dùng có thể tạo và tham gia các phòng trò chuyện thoại theo thời gian thực. Được xây dựng bằng Kotlin Multiplatform (KMP), nó hướng đến cả Android và iOS với một codebase chung. Cho dù bạn muốn tổ chức một cuộc trò chuyện, lắng nghe, hay kết nối với mọi người trên thế giới, ShyTalk giúp bạn dễ dàng thực hiện.
 
-iOS is a supported platform but this guide focuses on Android development, which is the primary development target.
+iOS là một nền tảng được hỗ trợ nhưng hướng dẫn này tập trung vào phát triển Android, đây là mục tiêu phát triển chính.
 
-## Features
+## Tính Năng
 
-### Voice Chat Rooms
-- Create or join rooms with real-time voice powered by LiveKit
-- Structured seating system with owner, host, and attendee roles
-- Seat requests and invites -- request to join a seat or invite listeners to speak
-- Floating chathead -- continue voice chat while browsing other parts of the app
-- Room expiry -- rooms auto-close when the owner is away, with countdown timers
+### Phòng Trò Chuyện Thoại
+- Tạo hoặc tham gia các phòng với thoại thời gian thực được cung cấp bởi LiveKit
+- Hệ thống xếp chỗ ngồi có cấu trúc với vai trò chủ sở hữu, người dẫn dắt và người tham dự
+- Yêu cầu chỗ ngồi và lời mời -- yêu cầu tham gia một chỗ ngồi hoặc mời những người lắng nghe để phát biểu
+- Chathead nổi -- tiếp tục trò chuyện thoại trong khi duyệt các phần khác của ứng dụng
+- Hết hạn phòng -- các phòng tự động đóng khi chủ sở hữu vắng mặt, có bộ đếm ngược
 
-### Messaging
-- Live text chat alongside voice in every room
-- Private messaging with 1-on-1 conversations
-- Group chats with member management and permissions
-- Typing indicators in real-time
-- Sticker support
+### Nhắn Tin
+- Trò chuyện văn bản trực tiếp cùng với thoại trong mỗi phòng
+- Nhắn tin riêng tư với cuộc trò chuyện 1-1
+- Trò chuyện nhóm với quản lý thành viên và quyền hạn
+- Chỉ báo đang gõ theo thời gian thực
+- Hỗ trợ sticker
 
-### Social
-- Customizable user profiles with photos, cover images, nationality flags, and bios
-- Follow system -- follow other users and see when they're active
-- Gift wall -- showcase gifts received from other users
-- Block system -- block users across rooms and profiles
+### Xã Hội
+- Hồ sơ người dùng có thể tùy chỉnh với ảnh, ảnh bìa, cờ quốc tịch và tiểu sử
+- Hệ thống theo dõi -- theo dõi người dùng khác và xem khi họ hoạt động
+- Tường quà -- trưng bày các quà tặng nhận được từ người dùng khác
+- Hệ thống chặn -- chặn người dùng trên các phòng và hồ sơ
 
-### Virtual Economy
-- Coin-based economy with wallet and transaction history
-- Daily login rewards with streak bonuses
-- Lucky Spin (gacha) system with tiered prizes
-- Virtual gifts -- send and receive animated gifts during voice chats
-- Backpack inventory for storing gifts
-- Coin packages for purchasing coins
-- Broadcast banners with animated gift effects
+### Nền Kinh Tế Ảo
+- Nền kinh tế dựa trên đồng tiền với ví và lịch sử giao dịch
+- Phần thưởng đăng nhập hàng ngày với tiền thưởng streak
+- Hệ thống Lucky Spin (gacha) với giải thưởng theo tầng
+- Quà tặng ảo -- gửi và nhận quà tặng động hình trong các cuộc trò chuyện thoại
+- Kho lưu trữ để lưu trữ quà tặng
+- Gói đồng tiền để mua đồng tiền
+- Spanduk phát sóng với các hiệu ứng quà tặng động hình
 
-### Account & Identity
-- Multi-provider authentication -- sign in with Google, Apple, or Email (OTP)
-- Link multiple sign-in methods to a single account
-- Stable user identity (uniqueId) that persists across Firebase projects
-- Linked Accounts management in Settings with link/unlink support
-- Device binding -- each device is permanently tied to one account
+### Tài Khoản & Nhận Dạng
+- Xác thực đa nhà cung cấp -- đăng nhập bằng Google, Apple hoặc Email (OTP)
+- Liên kết nhiều phương pháp đăng nhập với một tài khoản
+- Danh tính người dùng ổn định (uniqueId) vẫn tồn tại trên các dự án Firebase
+- Quản lý Tài Khoản Được Liên Kết trong Cài Đặt với hỗ trợ liên kết/bỏ liên kết
+- Liên kết thiết bị -- mỗi thiết bị được gắn vĩnh viễn với một tài khoản
 
-### Moderation & Safety
-- Moderation tools -- mute, kick, move seats, and manage hosts as a room owner
-- User reporting system with review workflow
-- Warning and suspension system for policy violations
-- Community standards, privacy policy, and terms of service screens
-- Legal acceptance flow for new users
-- Force update enforcement for outdated app versions
+### Kiểm Duyệt & An Toàn
+- Công cụ kiểm duyệt -- tắt tiếng, loại bỏ, chuyển chỗ ngồi và quản lý người dẫn dắt như chủ sở hữu phòng
+- Hệ thống báo cáo người dùng với quy trình xem xét
+- Hệ thống cảnh báo và tạm dừng để vi phạm chính sách
+- Các màn hình tiêu chuẩn cộng đồng, chính sách bảo mật và điều khoản dịch vụ
+- Quy trình chấp nhận pháp lý cho những người dùng mới
+- Thực thi cập nhật bắt buộc cho các phiên bản ứng dụng lỗi thời
 
-### Starting Screens
-- Configurable launch screens shown on app startup
-- Admin-managed content with scheduling and targeting options
+### Màn Hình Khởi Động
+- Các màn hình khởi động có thể cấu hình được hiển thị khi khởi động ứng dụng
+- Nội dung do quản trị viên quản lý với các tùy chọn lên lịch và nhắm mục tiêu
 
-### Security
-- PIN code protection for app access
-- Biometric authentication -- fingerprint and face recognition
-- OTP (one-time password) verification for sensitive actions
+### Bảo Mật
+- Bảo vệ mã PIN cho quyền truy cập ứng dụng
+- Xác thực sinh trắc học -- nhận dạng dấu vân tay và khuôn mặt
+- Xác minh OTP (mật khẩu một lần) cho các hành động nhạy cảm
 
-### Admin Panel
-- Web-based moderation dashboard at the project's static site
-- User management, content moderation, and configuration
-- Template and gift management with live preview
-- Real-time log streaming and alerting
+### Bảng Điều Khiển Quản Trị
+- Bảng điều khiển kiểm duyệt dựa trên web tại trang tĩnh của dự án
+- Quản lý người dùng, kiểm duyệt nội dung và cấu hình
+- Quản lý mẫu và quà tặng với xem trước trực tiếp
+- Phát trực tiếp nhật ký theo thời gian thực và cảnh báo
 
-### Image Compression
-- Automatic image compression on upload via the Express API
-- Reduces storage and bandwidth costs while preserving quality
+### Nén Ảnh
+- Nén ảnh tự động khi tải lên thông qua Express API
+- Giảm chi phí lưu trữ và băng thông trong khi bảo toàn chất lượng
 
-### Internationalization
-- 19 languages supported out of the box
-- Full localization for all user-facing strings
+### Quốc Tế Hóa
+- 19 ngôn ngữ được hỗ trợ ngay từ đầu
+- Bản địa hóa đầy đủ cho tất cả các chuỗi đối mặt với người dùng
 
-### Logging & Monitoring
-- Structured logging across Express API, mobile apps, and admin panel
-- Real-time log streaming in the admin dashboard
-- Device and network banning with automatic enforcement
-- Alerting system for critical errors and anomalies
-- Trace ID propagation for end-to-end request tracking
+### Ghi Nhật Ký & Giám Sát
+- Ghi nhật ký có cấu trúc trên Express API, các ứng dụng di động và bảng điều khiển quản trị
+- Phát trực tiếp nhật ký theo thời gian thực trong bảng điều khiển quản trị
+- Lệnh cấm thiết bị và mạng với thực thi tự động
+- Hệ thống cảnh báo cho các lỗi nghiêm trọng và bất thường
+- Lan truyền ID theo dõi cho việc theo dõi yêu cầu từ đầu đến cuối
 
 ## Tech Stack
 
@@ -111,9 +111,9 @@ iOS is a supported platform but this guide focuses on Android development, which
 | **Navigation** | Compose Navigation |
 | **CDN** | Cloudflare Pages + CDN |
 
-## Architecture
+## Kiến Trúc
 
-ShyTalk follows **MVVM** with a clean **Repository Pattern**:
+ShyTalk tuân theo **MVVM** với một **Mẫu Kho Dữ Liệu** sạch:
 
 ```
 +---------------------------------------------+
@@ -128,87 +128,87 @@ ShyTalk follows **MVVM** with a clean **Repository Pattern**:
 +---------------------------------------------+
 ```
 
-- **shared module** (`commonMain`) -- Models, repository interfaces, ViewModels, and UI shared across platforms
-- **app module** -- Android-specific screens, repository implementations, and entry point
-- **iosApp module** -- iOS-specific entry point
-- **express-api** -- Express.js backend running on Oracle Cloud Free Tier
+- **shared module** (`commonMain`) -- Mô hình, giao diện kho dữ liệu, ViewModels và UI được chia sẻ trên các nền tảng
+- **app module** -- Các màn hình dành riêng cho Android, triển khai kho dữ liệu và điểm vào
+- **iosApp module** -- Điểm vào dành riêng cho iOS
+- **express-api** -- Backend Express.js chạy trên Oracle Cloud Free Tier
 
-## Project Structure
+## Cấu Trúc Dự Án
 
 ```
 ShyTalk/
-+-- app/                              # Android app module
++-- app/                              # Module ứng dụng Android
 |   +-- src/
 |       +-- main/java/.../
-|       |   +-- ShyTalkApp.kt         # Application entry point
-|       |   +-- MainActivity.kt       # Main activity
+|       |   +-- ShyTalkApp.kt         # Điểm vào ứng dụng
+|       |   +-- MainActivity.kt       # Hoạt động chính
 |       |   +-- core/
-|       |   |   +-- di/               # Koin DI module
+|       |   |   +-- di/               # Module DI Koin
 |       |   |   +-- room/             # ActiveRoomManager & RoomService
 |       |   +-- data/
-|       |   |   +-- remote/           # LiveKit voice, presence, notifications
-|       |   |   +-- repository/       # Repository implementations
+|       |   |   +-- remote/           # Thoại LiveKit, có mặt, thông báo
+|       |   |   +-- repository/       # Triển khai kho dữ liệu
 |       |   +-- feature/
-|       |   |   +-- auth/             # Google Sign-In screen
-|       |   |   +-- profile/          # Profile screen
-|       |   |   +-- room/             # Room screen
-|       |   |   +-- settings/         # App settings
-|       |   +-- navigation/           # NavGraph & Screen routes
-|       +-- test/                     # Unit tests
-|       +-- androidTest/              # E2E tests (Compose UI Test)
-+-- shared/                           # KMP shared module
+|       |   |   +-- auth/             # Màn hình Đăng Nhập Google
+|       |   |   +-- profile/          # Màn hình hồ sơ
+|       |   |   +-- room/             # Màn hình phòng
+|       |   |   +-- settings/         # Cài đặt ứng dụng
+|       |   +-- navigation/           # NavGraph & Tuyến đường màn hình
+|       +-- test/                     # Kiểm tra đơn vị
+|       +-- androidTest/              # Kiểm tra E2E (Compose UI Test)
++-- shared/                           # Module KMP chia sẻ
 |   +-- src/commonMain/kotlin/.../
 |       +-- core/
-|       |   +-- di/                   # Shared Koin modules
-|       |   +-- model/                # Data models (User, ChatRoom, Gift, etc.)
-|       |   +-- ui/                   # Shared components
-|       |   +-- util/                 # Utilities & constants
+|       |   +-- di/                   # Các mô-đun Koin chia sẻ
+|       |   +-- model/                # Các mô hình dữ liệu (Người dùng, ChatRoom, Quà tặng, v.v.)
+|       |   +-- ui/                   # Các thành phần chia sẻ
+|       |   +-- util/                 # Tiện ích & hằng số
 |       +-- data/
-|       |   +-- remote/               # VoiceService, TokenService, etc.
-|       |   +-- repository/           # Repository interfaces
-|       +-- feature/                  # Shared feature modules
-+-- iosApp/                           # iOS app module
-+-- express-api/                      # Express.js API server
+|       |   +-- remote/               # VoiceService, TokenService, v.v.
+|       |   +-- repository/           # Giao diện kho dữ liệu
+|       +-- feature/                  # Các mô-đun tính năng chia sẻ
++-- iosApp/                           # Module ứng dụng iOS
++-- express-api/                      # Máy chủ API Express.js
 |   +-- src/
-|       +-- routes/                   # API route handlers
-|       +-- middleware/               # Auth, logging middleware
+|       +-- routes/                   # Trình xử lý tuyến đường API
+|       +-- middleware/               # Middleware xác thực, ghi nhật ký
 |       +-- utils/                    # Firebase Admin, R2, logger
-|       +-- cron/                     # Scheduled jobs
-+-- public/                           # Static site & admin panel
-+-- local/                            # Local development environment (emulators, seed data)
-+-- tests/web/                        # Playwright browser tests
-+-- scripts/                          # Utility scripts
-+-- .github/workflows/                # CI/CD (PR Checks, Deploy to Dev/Prod, E2E, lint)
-+-- firestore.rules                   # Firestore security rules
-+-- database.rules.json               # RTDB security rules
-+-- firestore.indexes.json            # Firestore composite indexes
-+-- firebase.json                     # Firebase configuration
+|       +-- cron/                     # Các công việc được lên lịch
++-- public/                           # Trang tĩnh & bảng điều khiển quản trị
++-- local/                            # Môi trường phát triển cục bộ (bộ giả lập, dữ liệu hạt giống)
++-- tests/web/                        # Kiểm tra trình duyệt Playwright
++-- scripts/                          # Các tập lệnh tiện ích
++-- .github/workflows/                # CI/CD (Kiểm tra PR, Triển khai đến Dev/Prod, E2E, lint)
++-- firestore.rules                   # Quy tắc bảo mật Firestore
++-- database.rules.json               # Quy tắc bảo mật RTDB
++-- firestore.indexes.json            # Chỉ số tổng hợp Firestore
++-- firebase.json                     # Cấu hình Firebase
 ```
 
-## Getting Started
+## Bắt Đầu
 
-### Prerequisites
+### Điều Kiện Tiên Quyết
 
-- **Android Studio** Ladybug or newer
+- **Android Studio** Ladybug hoặc mới hơn
 - **JDK 17+**
 - **Node.js 24+**
-- **Docker** (for LiveKit voice server, MinIO storage, MailHog email)
+- **Docker** (cho máy chủ thoại LiveKit, lưu trữ MinIO, email MailHog)
 - **Firebase CLI** (`npm install -g firebase-tools`)
 
-No cloud accounts are needed to get started -- the local environment runs entirely offline.
+Không cần tài khoản đám mây để bắt đầu -- môi trường cục bộ chạy hoàn toàn ngoại tuyến.
 
-### Local Development (Recommended)
+### Phát Triển Cục Bộ (Được Khuyến Nghị)
 
-The fastest way to get started. One command starts everything -- Firebase Emulators, Docker containers, Express API, and builds the Android app. No cloud accounts needed, no costs, no quota limits.
+Cách nhanh nhất để bắt đầu. Một lệnh khởi động tất cả -- Firebase Emulators, vùng chứa Docker, Express API và xây dựng ứng dụng Android. Không cần tài khoản đám mây, không có chi phí, không có giới hạn hạn ngạch.
 
-1. **Clone and install**
+1. **Sao chép và cài đặt**
    ```bash
    git clone https://github.com/ShydenMcM/ShyTalk.git
    cd ShyTalk
    cd express-api && npm install && cd ..
    ```
 
-2. **Start everything**
+2. **Khởi động tất cả**
 
    **Linux / macOS / Git Bash:**
    ```bash
@@ -220,75 +220,75 @@ The fastest way to get started. One command starts everything -- Firebase Emulat
    .\local\start.ps1
    ```
 
-   This single command:
-   - Starts Docker containers (LiveKit voice server, MinIO storage, MailHog email)
-   - Starts Firebase Emulators (Firestore, Auth, RTDB)
-   - Seeds test data and creates the MinIO storage bucket
-   - Starts the Express API
-   - Builds and installs the Android app (if a device is connected)
+   Một lệnh này:
+   - Khởi động vùng chứa Docker (máy chủ thoại LiveKit, lưu trữ MinIO, email MailHog)
+   - Khởi động Firebase Emulators (Firestore, Auth, RTDB)
+   - Tạo hạt giống dữ liệu kiểm tra và tạo bộ lưu trữ MinIO
+   - Khởi động Express API
+   - Xây dựng và cài đặt ứng dụng Android (nếu một thiết bị được kết nối)
 
-   When ready, you'll see:
+   Khi sẵn sàng, bạn sẽ thấy:
    ```
-   Local environment ready (fully offline):
+   Môi trường cục bộ sẵn sàng (hoàn toàn ngoại tuyến):
 
-     Services:
+     Dịch vụ:
        Firebase UI:    http://localhost:4000
        Express API:    http://localhost:3000
        MailHog UI:     http://localhost:8025
        MinIO Console:  http://localhost:9001
        LiveKit:        localhost:7880
 
-     Credentials:
-       Test admin:     claude-test@shytalk.dev / localdev123
-       Test user:      user@test.com / localdev123
-       MinIO:          minioadmin / minioadmin
+     Thông tin đăng nhập:
+       Quản trị viên kiểm tra:  claude-test@shytalk.dev / localdev123
+       Người dùng kiểm tra:     user@test.com / localdev123
+       MinIO:                   minioadmin / minioadmin
    ```
 
-3. **Sign in**
-   - Use the email sign-in flow with the seeded test account: `claude-test@shytalk.dev` / `localdev123`
-   - Or create a new account -- it will use the local emulators
-   - Google/Apple sign-in won't work locally (no real OAuth) -- use email OTP instead
-   - OTP codes are captured by MailHog -- check http://localhost:8025
+3. **Đăng nhập**
+   - Sử dụng luồng đăng nhập email với tài khoản kiểm tra đã tạo hạt giống: `claude-test@shytalk.dev` / `localdev123`
+   - Hoặc tạo một tài khoản mới -- nó sẽ sử dụng bộ giả lập cục bộ
+   - Đăng nhập Google/Apple sẽ không hoạt động cục bộ (không OAuth thực tế) -- thay vào đó sử dụng email OTP
+   - Các mã OTP được MailHog ghi lại -- kiểm tra http://localhost:8025
 
-4. **Run on a Physical Device**
+4. **Chạy trên Thiết Bị Vật Lý**
 
-   Your phone must be on the **same Wi-Fi network** as your development machine.
+   Điện thoại của bạn phải ở trên **mạng Wi-Fi giống nhau** với máy phát triển của bạn.
 
-   a. Find your machine's local IP:
+   a. Tìm IP cục bộ của máy của bạn:
    ```bash
    # Windows
-   ipconfig    # Look for "IPv4 Address" under your Wi-Fi adapter (e.g. 192.168.1.42)
+   ipconfig    # Tìm "IPv4 Address" dưới bộ điều hợp Wi-Fi của bạn (ví dụ: 192.168.1.42)
 
    # macOS / Linux
-   ifconfig | grep "inet "    # or: ip addr show
+   ifconfig | grep "inet "    # hoặc: ip addr show
    ```
 
-   b. Update the local build flavor to use your IP instead of `10.0.2.2`. In `app/build.gradle.kts`, find the `local` flavor and change:
+   b. Cập nhật hương vị xây dựng cục bộ để sử dụng IP của bạn thay vì `10.0.2.2`. Trong `app/build.gradle.kts`, tìm hương vị `local` và thay đổi:
    ```kotlin
-   // Replace 10.0.2.2 with your machine's local IP
+   // Thay thế 10.0.2.2 bằng IP cục bộ của máy của bạn
    buildConfigField("String", "API_BASE_URL", "\"http://192.168.1.42:3000\"")
    buildConfigField("String", "WORKER_URL", "\"http://192.168.1.42:3000\"")
    buildConfigField("String", "LIVEKIT_SERVER_URL", "\"ws://192.168.1.42:7880\"")
    buildConfigField("String", "RTDB_URL", "\"http://192.168.1.42:9000\"")
    ```
 
-   c. Connect your device via USB and enable USB debugging, then:
+   c. Kết nối thiết bị của bạn qua USB và bật gỡ lỗi USB, sau đó:
    ```bash
    ./gradlew installLocalDebug
    ```
 
-   d. Alternatively, use **adb reverse** to avoid changing any code (device routes localhost to your machine):
+   d. Ngoài ra, sử dụng **adb reverse** để tránh thay đổi bất kỳ mã nào (thiết bị định tuyến localhost đến máy của bạn):
    ```bash
    adb reverse tcp:3000 tcp:3000   # Express API
-   adb reverse tcp:8080 tcp:8080   # Firestore emulator
-   adb reverse tcp:9099 tcp:9099   # Auth emulator
-   adb reverse tcp:9000 tcp:9000   # RTDB emulator
+   adb reverse tcp:8080 tcp:8080   # Bộ giả lập Firestore
+   adb reverse tcp:9099 tcp:9099   # Bộ giả lập Auth
+   adb reverse tcp:9000 tcp:9000   # Bộ giả lập RTDB
    adb reverse tcp:7880 tcp:7880   # LiveKit
-   adb reverse tcp:9002 tcp:9002   # MinIO (image storage)
+   adb reverse tcp:9002 tcp:9002   # MinIO (lưu trữ hình ảnh)
    ```
-   With `adb reverse`, the default `10.0.2.2` addresses in the local flavor will work on a physical device too -- no build config changes needed.
+   Với `adb reverse`, địa chỉ `10.0.2.2` mặc định trong hương vị cục bộ cũng sẽ hoạt động trên thiết bị vật lý -- không cần thay đổi cấu hình xây dựng.
 
-5. **Stop local services**
+5. **Dừng các dịch vụ cục bộ**
 
    **Linux / macOS / Git Bash:**
    ```bash
@@ -300,162 +300,162 @@ The fastest way to get started. One command starts everything -- Firebase Emulat
    .\local\stop.ps1
    ```
 
-   Or press `Ctrl+C` in the start script terminal. Emulator data is saved automatically and restored on next start.
+   Hoặc nhấn `Ctrl+C` trong terminal tập lệnh khởi động. Dữ liệu bộ giả lập được lưu tự động và khôi phục khi khởi động lại.
 
-### Useful Local Dev URLs
+### Các URL Phát Triển Cục Bộ Hữu Ích
 
-| Service | URL | Purpose |
+| Dịch Vụ | URL | Mục Đích |
 |---------|-----|---------|
-| Firebase Emulator UI | http://localhost:4000 | Browse Firestore data, Auth users, RTDB |
-| Express API | http://localhost:3000 | Backend API |
-| Health check | http://localhost:3000/api/health | Verify API is running |
-| MailHog | http://localhost:8025 | View captured emails and OTP codes |
-| MinIO Console | http://localhost:9001 | Browse uploaded images and files |
+| Giao diện người dùng Firebase Emulator | http://localhost:4000 | Duyệt dữ liệu Firestore, người dùng Auth, RTDB |
+| Express API | http://localhost:3000 | API Backend |
+| Kiểm tra sức khỏe | http://localhost:3000/api/health | Xác minh API đang chạy |
+| MailHog | http://localhost:8025 | Xem email được ghi lại và mã OTP |
+| Bảng điều khiển MinIO | http://localhost:9001 | Duyệt hình ảnh và tệp đã tải lên |
 
-### Optional Services
+### Dịch Vụ Tùy Chọn
 
-**LibreTranslate (Message Translation)**
+**LibreTranslate (Dịch Tin Nhắn)**
 
-Optional 6GB+ Docker image for testing the translation feature locally:
+Hình ảnh Docker tùy chọn 6GB+ để kiểm tra tính năng dịch cục bộ:
 ```bash
 docker run -d -p 5000:5000 libretranslate/libretranslate
 ```
-Not included in the default setup due to large image size. Translation works without it -- messages just stay untranslated.
+Không được đưa vào thiết lập mặc định do kích thước hình ảnh lớn. Dịch hoạt động mà không có nó -- tin nhắn chỉ cần giữ nguyên không được dịch.
 
-### Cloud Development (Optional)
+### Phát Triển Đám Mây (Tùy Chọn)
 
-If you need to test against real cloud services (e.g., real push notifications, real Google Sign-In):
+Nếu bạn cần kiểm tra đối với các dịch vụ đám mây thực tế (ví dụ: thông báo đẩy thực tế, Đăng Nhập Google thực tế):
 
-1. **Firebase setup**
-   - Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
-   - Enable **Google Sign-In** and **Apple Sign-In** in Authentication
-   - Enable **Firestore**, **Realtime Database**, and **Cloud Messaging**
-   - Download `google-services.json` and place it in `app/src/dev/`
+1. **Thiết lập Firebase**
+   - Tạo dự án Firebase tại [console.firebase.google.com](https://console.firebase.google.com)
+   - Bật **Đăng Nhập Google** và **Đăng Nhập Apple** trong Xác Thực
+   - Bật **Firestore**, **Cơ Sở Dữ Liệu Thời Gian Thực** và **Nhắn Tin Đám Mây**
+   - Tải xuống `google-services.json` và đặt nó vào `app/src/dev/`
 
-2. **Express API setup**
+2. **Thiết lập Express API**
    ```bash
    cd express-api
-   cp .env.example .env  # Edit with your cloud credentials
+   cp .env.example .env  # Chỉnh sửa bằng thông tin đăng nhập đám mây của bạn
    npm install
    npm start
    ```
 
-3. **Deploy Firestore rules**
+3. **Triển khai quy tắc Firestore**
    ```bash
    npx firebase deploy --only firestore:rules
    ```
 
-4. **Build the Android app** (dev flavor)
+4. **Xây dựng ứng dụng Android** (hương vị dev)
    ```bash
    ./gradlew assembleDevDebug
    ```
 
-### Environment Variables
+### Biến Môi Trường
 
-| Variable | Description | Where |
+| Biến | Mô Tả | Nơi |
 |----------|-------------|-------|
-| `FIREBASE_SERVICE_ACCOUNT` | Firebase Admin SDK service account JSON | Express API |
-| `R2_ACCOUNT_ID` | Cloudflare R2 account ID | Express API |
-| `R2_ACCESS_KEY_ID` | R2 access key | Express API |
-| `R2_SECRET_ACCESS_KEY` | R2 secret key | Express API |
-| `R2_BUCKET_NAME` | R2 bucket name (default: `shytalk-media`) | Express API |
-| `LIVEKIT_API_KEY` | LiveKit API key | Express API |
-| `LIVEKIT_API_SECRET` | LiveKit API secret | Express API |
-| `LIVEKIT_URL` | LiveKit server URL | Android app (BuildConfig) |
-| `WORKER_URL` | Express API base URL | Android app (BuildConfig) |
+| `FIREBASE_SERVICE_ACCOUNT` | JSON tài khoản dịch vụ Firebase Admin SDK | Express API |
+| `R2_ACCOUNT_ID` | Cloudflare R2 ID tài khoản | Express API |
+| `R2_ACCESS_KEY_ID` | Khóa truy cập R2 | Express API |
+| `R2_SECRET_ACCESS_KEY` | Khóa bí mật R2 | Express API |
+| `R2_BUCKET_NAME` | Tên xô R2 (mặc định: `shytalk-media`) | Express API |
+| `LIVEKIT_API_KEY` | Khóa API LiveKit | Express API |
+| `LIVEKIT_API_SECRET` | Bí mật API LiveKit | Express API |
+| `LIVEKIT_URL` | URL máy chủ LiveKit | Ứng dụng Android (BuildConfig) |
+| `WORKER_URL` | URL cơ sở Express API | Ứng dụng Android (BuildConfig) |
 
-## Testing
+## Kiểm Tra
 
-### Running Tests Locally
+### Chạy Kiểm Tra Cục Bộ
 
 ```bash
-# Interactive test menu (choose what to run):
+# Menu kiểm tra tương tác (chọn cái gì để chạy):
 bash local/test.sh        # Linux / macOS / Git Bash
 .\local\test.ps1          # Windows PowerShell
 
-# Or run individual suites:
-bash local/test-unit.sh       # Kotlin + Express API unit tests
-bash local/test-playwright.sh # Playwright web tests (needs local env)
-bash local/test-e2e.sh        # Android E2E tests (needs local env + device)
+# Hoặc chạy các bộ riêng lẻ:
+bash local/test-unit.sh       # Kiểm tra đơn vị Kotlin + Express API
+bash local/test-playwright.sh # Kiểm tra web Playwright (cần môi trường cục bộ)
+bash local/test-e2e.sh        # Kiểm tra E2E Android (cần môi trường cục bộ + thiết bị)
 bash local/test-lint.sh       # ktlint + ESLint
 
-# View Allure test report:
+# Xem báo cáo kiểm tra Allure:
 npx allure serve allure-results
 ```
 
-### Test Suites
+### Bộ Kiểm Tra
 
-| Suite | Command | Count |
+| Bộ | Lệnh | Số Lượng |
 |-------|---------|-------|
-| Kotlin unit tests | `./gradlew test` | 100+ tests |
-| Express API tests | `cd express-api && npm test` | 1,540+ tests |
-| E2E Gherkin (Android) | `./gradlew connectedDevDebugAndroidTest` | 34 feature files |
-| Playwright web tests | `npx playwright test` | 28 specs |
+| Kiểm tra đơn vị Kotlin | `./gradlew test` | Hơn 100 bài kiểm tra |
+| Kiểm tra Express API | `cd express-api && npm test` | Hơn 1.540 bài kiểm tra |
+| E2E Gherkin (Android) | `./gradlew connectedDevDebugAndroidTest` | 34 tệp tính năng |
+| Kiểm tra web Playwright | `npx playwright test` | 28 spec |
 
 ```bash
-# Kotlin/KMP unit tests
+# Kiểm tra đơn vị Kotlin/KMP
 ./gradlew test
 
-# Express API tests
+# Kiểm tra Express API
 cd express-api && npm test
 
-# E2E tests (requires connected device or emulator)
+# Kiểm tra E2E (yêu cầu thiết bị được kết nối hoặc bộ giả lập)
 ./gradlew connectedDevDebugAndroidTest
 
-# Playwright browser tests (requires admin panel running)
+# Kiểm tra trình duyệt Playwright (yêu cầu bảng điều khiển quản trị chạy)
 npx playwright test
 ```
 
-### Testing in CI
+### Kiểm Tra trong CI
 
-In CI, Playwright and Android E2E tests run against the same local environment (emulators + Docker) -- no cloud services are used. This ensures tests never interfere with live testers.
+Trong CI, kiểm tra Playwright và Android E2E chạy dựa trên cùng một môi trường cục bộ (bộ giả lập + Docker) -- không sử dụng dịch vụ đám mây. Điều này đảm bảo kiểm tra không bao giờ can thiệp vào những người kiểm tra trực tiếp.
 
-## Troubleshooting
+## Khắc Phục Sự Cố
 
-- **Port already in use**: `lsof -i :<port>` (Linux/macOS) or `netstat -ano | findstr :<port>` (Windows) to find what's using the port.
-- **Docker not running**: Ensure Docker Desktop is started. Run `docker ps` to verify.
-- **Firebase emulators fail to start**: Requires Java 11+. Check with `java -version`.
-- **Android build fails**: Ensure JDK 17+ and Android SDK are installed. Try `./gradlew clean`.
-- **adb device not detected**: Enable USB debugging. Run `adb devices` to check.
-- **Images not loading**: MinIO bucket may not be created. Run `cd express-api && NODE_ENV=local node ../local/seed.js`. For physical devices, run `adb reverse tcp:9002 tcp:9002`.
-- **OTP not arriving**: Check console output for `[OTP-LOCAL]` lines. Also check MailHog UI at http://localhost:8025.
-- **Reset emulator data**: Delete `local/firebase-emulator-data/` directory and restart.
-- **Reset MinIO data**: Run `docker compose -f local/docker-compose.yml down -v` to remove volumes.
+- **Cổng đã được sử dụng**: `lsof -i :<port>` (Linux/macOS) hoặc `netstat -ano | findstr :<port>` (Windows) để tìm cái gì đang sử dụng cổng.
+- **Docker không chạy**: Đảm bảo Docker Desktop được khởi động. Chạy `docker ps` để xác minh.
+- **Bộ giả lập Firebase không khởi động**: Yêu cầu Java 11+. Kiểm tra với `java -version`.
+- **Bản dựng Android không thành công**: Đảm bảo JDK 17+ và Android SDK được cài đặt. Thử `./gradlew clean`.
+- **Thiết bị adb không được phát hiện**: Bật gỡ lỗi USB. Chạy `adb devices` để kiểm tra.
+- **Hình ảnh không tải**: Xô MinIO có thể không được tạo. Chạy `cd express-api && NODE_ENV=local node ../local/seed.js`. Đối với thiết bị vật lý, hãy chạy `adb reverse tcp:9002 tcp:9002`.
+- **OTP không đến**: Kiểm tra đầu ra bảng điều khiển cho các dòng `[OTP-LOCAL]`. Cũng kiểm tra Giao diện MailHog tại http://localhost:8025.
+- **Đặt lại dữ liệu bộ giả lập**: Xóa thư mục `local/firebase-emulator-data/` và khởi động lại.
+- **Đặt lại dữ liệu MinIO**: Chạy `docker compose -f local/docker-compose.yml down -v` để xóa các tập.
 
-## Deployment
+## Triển Khai
 
-Deployments are managed through GitHub Actions workflows (`.github/workflows/`):
+Các triển khai được quản lý thông qua các quy trình làm việc GitHub Actions (`.github/workflows/`):
 
-| Workflow | Trigger | What it does |
+| Quy Trình Làm Việc | Kích Hoạt | Chức Năng |
 |----------|---------|-------------|
-| **PR Checks** | Automatic on PRs to `main` | Runs lint, Kotlin tests, Express API tests, Playwright tests (based on changed files) |
-| **Deploy to Dev** | Manual (`workflow_dispatch`) | Deploys Express API + web to dev, distributes APK to testers, optionally runs Playwright tests |
-| **Deploy to Prod** | Manual (`workflow_dispatch`) | Deploys a tagged release to prod -- Express API, web, Play Store, and App Store |
+| **Kiểm Tra PR** | Tự động trên PR để `main` | Chạy lint, kiểm tra Kotlin, kiểm tra Express API, kiểm tra Playwright (dựa trên các tệp đã thay đổi) |
+| **Triển Khai Để Dev** | Thủ công (`workflow_dispatch`) | Triển khai Express API + web để phát triển, phân phối APK cho người kiểm tra, tùy chọn chạy kiểm tra Playwright |
+| **Triển Khai Để Prod** | Thủ công (`workflow_dispatch`) | Triển khai bản phát hành được gắn thẻ để sản xuất -- Express API, web, Play Store và App Store |
 
-Additional workflows: **E2E Tests** (Android emulator matrix), **SonarCloud** (static analysis), **Lint**, **Backend Tests**, **Dependabot Auto-merge**.
+Quy trình làm việc bổ sung: **Kiểm Tra E2E** (ma trận bộ giả lập Android), **SonarCloud** (phân tích tĩnh), **Lint**, **Kiểm Tra Backend**, **Tự Động Hợp Nhất Dependabot**.
 
-- **Express API:** Deployed to Oracle Cloud VMs via SSH + PM2 (dev: London, prod: Singapore)
-- **Android:** Bundled and uploaded to Google Play via CI
-- **iOS:** Built and uploaded to App Store Connect / TestFlight via CI
-- **Admin panel / web:** Deployed to Cloudflare Pages
+- **Express API:** Triển khai trên máy ảo Oracle Cloud thông qua SSH + PM2 (dev: London, prod: Singapore)
+- **Android:** Được lập gói và tải lên Google Play thông qua CI
+- **iOS:** Được xây dựng và tải lên App Store Connect / TestFlight thông qua CI
+- **Bảng điều khiển quản trị / web:** Triển khai trên Cloudflare Pages
 
-## Contributing
+## Đóng Góp
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Sự đóng góp được chào đón! Vui lòng xem [CONTRIBUTING.md](CONTRIBUTING.md) để biết hướng dẫn.
 
-## License
+## Giấy Phép
 
-This project is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
+Dự án này được cấp phép theo Giấy Phép Apache 2.0. Xem [LICENSE](LICENSE) để biết chi tiết.
 
-## Acknowledgments
+## Lời Cảm Ơn
 
-- [Firebase](https://firebase.google.com) -- Authentication, Firestore, Realtime Database, Cloud Messaging
-- [LiveKit](https://livekit.io) -- Real-time voice communication
-- [Cloudflare](https://www.cloudflare.com) -- R2 storage, Pages hosting, CDN
-- [Oracle Cloud](https://www.oracle.com/cloud/free/) -- Free tier VM for Express API
-- [Express.js](https://expressjs.com) -- API server framework
-- [Jetpack Compose](https://developer.android.com/jetpack/compose) -- Modern declarative UI
-- [Koin](https://insert-koin.io) -- Lightweight dependency injection
-- [Coil](https://coil-kt.github.io/coil/) -- Image loading for Kotlin Multiplatform
-- [Lottie](https://airbnb.design/lottie/) -- Animated gift and UI effects
-- [kotlinx-datetime](https://github.com/Kotlin/kotlinx-datetime) -- Multiplatform date/time
+- [Firebase](https://firebase.google.com) -- Xác Thực, Firestore, Cơ Sở Dữ Liệu Thời Gian Thực, Nhắn Tin Đám Mây
+- [LiveKit](https://livekit.io) -- Giao Tiếp Thoại Thời Gian Thực
+- [Cloudflare](https://www.cloudflare.com) -- Lưu Trữ R2, Trang Lưu Trữ, CDN
+- [Oracle Cloud](https://www.oracle.com/cloud/free/) -- Máy Ảo Tầng Miễn Phí Cho Express API
+- [Express.js](https://expressjs.com) -- Khung Công Việc Máy Chủ API
+- [Jetpack Compose](https://developer.android.com/jetpack/compose) -- Giao Diện Người Dùng Khai Báo Hiện Đại
+- [Koin](https://insert-koin.io) -- Tiêm Phụ Thuộc Nhẹ
+- [Coil](https://coil-kt.github.io/coil/) -- Tải Hình Ảnh Cho Kotlin Multiplatform
+- [Lottie](https://airbnb.design/lottie/) -- Hiệu Ứng Quà Tặng Và Giao Diện Người Dùng Động Hình
+- [kotlinx-datetime](https://github.com/Kotlin/kotlinx-datetime) -- Ngày/Giờ Multiplatform
