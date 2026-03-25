@@ -185,7 +185,13 @@ jobs:
             minio/minio:RELEASE.2025-03-12T18-04-18Z server /data --console-address ":9001"
           docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit:v1.21
 
-      - name: Start Firebase Emulators
+      - name: Cache Firebase Emulators
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}
+
+      - name: Install firebase-tools and start emulators
         run: |
           npm install -g firebase-tools
           firebase emulators:start --project=demo-shytalk &
@@ -221,7 +227,9 @@ jobs:
           force-avd-creation: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
-          script: ./gradlew connectedLocalDebugAndroidTest --no-parallel 2>&1 | tee test-output.log
+          script: |
+            set -o pipefail
+            ./gradlew connectedLocalDebugAndroidTest --no-parallel 2>&1 | tee test-output.log
 
       - name: Cleanup Docker containers
         if: always()
@@ -360,7 +368,13 @@ jobs:
             minio/minio:RELEASE.2025-03-12T18-04-18Z server /data --console-address ":9001"
           docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit:v1.21
 
-      - name: Start Firebase Emulators
+      - name: Cache Firebase Emulators
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}
+
+      - name: Install firebase-tools and start emulators
         run: |
           npm install -g firebase-tools
           firebase emulators:start --project=demo-shytalk &
