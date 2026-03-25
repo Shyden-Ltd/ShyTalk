@@ -7,6 +7,7 @@
 const router = require('express').Router();
 const { AccessToken } = require('livekit-server-sdk');
 const log = require('../utils/log');
+const { getRegion, getRegionConfig } = require('../utils/livekit-region');
 
 router.post('/livekit/token', async (req, res) => {
   try {
@@ -18,9 +19,12 @@ router.post('/livekit/token', async (req, res) => {
       return res.status(400).json({ error: 'roomName is required' });
     }
 
-    log.info('livekit', 'Generating token', { userId: identity, roomName });
+    const region = getRegion(req);
+    const regionConfig = getRegionConfig(region);
 
-    const at = new AccessToken(process.env.LIVEKIT_API_KEY, process.env.LIVEKIT_API_SECRET, {
+    log.info('livekit', 'Generating token', { userId: identity, roomName, region });
+
+    const at = new AccessToken(regionConfig.apiKey, regionConfig.apiSecret, {
       identity,
       ttl: '24h',
     });
@@ -33,7 +37,13 @@ router.post('/livekit/token', async (req, res) => {
     });
 
     const token = await at.toJwt();
-    return res.json({ token });
+
+    const response = { token };
+    if (process.env.NODE_ENV !== 'local') {
+      response.url = regionConfig.url;
+    }
+
+    return res.json(response);
   } catch (err) {
     log.error('livekit', 'Failed to generate token', {
       userId: req.auth?.uniqueId,
