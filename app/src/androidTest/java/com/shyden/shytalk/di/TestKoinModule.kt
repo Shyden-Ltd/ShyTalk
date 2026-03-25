@@ -2,6 +2,7 @@ package com.shyden.shytalk.di
 
 import com.shyden.shytalk.core.room.ActiveRoomManager
 import com.shyden.shytalk.core.room.RoomLifecycleManager
+import com.shyden.shytalk.core.util.SecureStorage
 import com.shyden.shytalk.data.remote.AppConfigService
 import com.shyden.shytalk.data.remote.BillingService
 import com.shyden.shytalk.data.remote.PresenceService
@@ -76,6 +77,9 @@ val testModule =
     module {
         // Device ID
         single(named("deviceId")) { "test-device-id" }
+
+        // SecureStorage (real implementation — works on emulator with EncryptedSharedPreferences)
+        single { SecureStorage(androidContext()) }
 
         // Fake services
         single { FakeTokenService() } bind TokenService::class

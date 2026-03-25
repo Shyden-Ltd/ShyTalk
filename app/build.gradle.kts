@@ -22,8 +22,8 @@ android {
         applicationId = "com.shyden.shytalk"
         minSdk = 28
         targetSdk = 36
-        versionCode = 67
-        versionName = "0.56.0"
+        versionCode = 68
+        versionName = "0.57.0"
 
         testInstrumentationRunner = "com.shyden.shytalk.ShyTalkTestRunner"
 
@@ -62,6 +62,17 @@ android {
             buildConfigField("String", "WEB_CLIENT_ID", "\"517834977595-cdu78p6q7vg57utpsvtik04c195lbh8b.apps.googleusercontent.com\"")
             buildConfigField("String", "RTDB_URL", "\"https://shytalk-7ba69-default-rtdb.asia-southeast1.firebasedatabase.app\"")
             buildConfigField("String", "EMAIL_LINK_DOMAIN", "\"shytalk.shyden.co.uk\"")
+        }
+        create("local") {
+            dimension = "env"
+            applicationIdSuffix = ".local"
+            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3000\"")
+            buildConfigField("String", "WORKER_URL", "\"http://10.0.2.2:3000\"")
+            buildConfigField("String", "LIVEKIT_SERVER_URL", "\"ws://10.0.2.2:7880\"")
+            buildConfigField("String", "RTDB_URL", "\"http://10.0.2.2:9000\"")
+            buildConfigField("String", "EMAIL_LINK_DOMAIN", "\"localhost\"")
+            buildConfigField("String", "WEB_CLIENT_ID", "\"placeholder-local\"")
+            buildConfigField("Boolean", "BYPASS_DEVICE_CHECKS", "true")
         }
     }
 
@@ -178,7 +189,14 @@ project(":shared").afterEvaluate {
 }
 
 afterEvaluate {
-    listOf("mergeDevDebugAssets", "mergeDevReleaseAssets", "mergeProdDebugAssets", "mergeProdReleaseAssets").forEach { taskName ->
+    listOf(
+        "mergeDevDebugAssets",
+        "mergeDevReleaseAssets",
+        "mergeProdDebugAssets",
+        "mergeProdReleaseAssets",
+        "mergeLocalDebugAssets",
+        "mergeLocalReleaseAssets",
+    ).forEach { taskName ->
         tasks.findByName(taskName)?.dependsOn(copyComposeResources)
     }
     // Lint vital tasks also read the Compose resources assets directory

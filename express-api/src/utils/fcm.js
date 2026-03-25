@@ -15,6 +15,11 @@ const log = require('./log');
 async function sendFcmToTokens(tokens, data) {
   if (!tokens || tokens.length === 0) return [];
 
+  if (process.env.NODE_ENV === 'local') {
+    log.info('fcm', `[FCM-LOCAL] Would send to ${tokens.length} tokens: ${data?.title}`);
+    return [];
+  }
+
   const stringData = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)]));
 
   const result = await messaging.sendEachForMulticast({
@@ -50,6 +55,7 @@ async function sendFcmToTokens(tokens, data) {
  */
 async function cleanupInvalidTokens(invalidTokens, userId) {
   if (!invalidTokens || invalidTokens.length === 0 || !userId) return;
+  if (process.env.NODE_ENV === 'local') return;
   try {
     await db.doc(`users/${userId}`).update({
       fcmTokens: FieldValue.arrayRemove(...invalidTokens),

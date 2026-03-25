@@ -28,8 +28,6 @@ jest.mock('../../src/cron/rotateLogs', () => jest.fn());
 jest.mock('../../src/cron/expireBans', () => jest.fn());
 jest.mock('../../src/cron/expireTempIds', () => jest.fn());
 jest.mock('../../src/cron/serverHealth', () => jest.fn());
-jest.mock('../../src/cron/testDataCleanup', () => jest.fn());
-
 const { startCronJobs } = require('../../src/cron/index');
 const log = require('../../src/utils/log');
 
@@ -44,8 +42,6 @@ const rotateLogs = require('../../src/cron/rotateLogs');
 const expireBans = require('../../src/cron/expireBans');
 const expireTempIds = require('../../src/cron/expireTempIds');
 const serverHealth = require('../../src/cron/serverHealth');
-const testDataCleanup = require('../../src/cron/testDataCleanup');
-
 beforeEach(() => {
   jest.clearAllMocks();
 });
@@ -63,53 +59,20 @@ describe('startCronJobs', () => {
       process.env.NODE_ENV = originalEnv;
     });
 
-    test('registers correct cron jobs — excludes staleRooms, expireBans, serverHealth', () => {
+    test('does not register any cron jobs in non-production', () => {
       startCronJobs();
 
-      const schedules = mockSchedule.mock.calls.map((call) => call[0]);
-
-      // archiveReports — Sunday 03:00 UTC
-      expect(schedules).toContain('0 3 * * 0');
-      // subscriptions + backpackCleanup + expireTempIds — daily midnight
-      expect(schedules).toContain('0 0 * * *');
-      // backups + closedRooms — daily 02:00 UTC
-      expect(schedules).toContain('0 2 * * *');
-      // orphanedStorage — daily 04:00 UTC
-      expect(schedules).toContain('0 4 * * *');
-      // rotateLogs — once per day on dev (04:30 UTC)
-      expect(schedules).toContain('30 4 * * *');
-      // testDataCleanup — every 30 minutes (dev only)
-      expect(schedules).toContain('*/30 * * * *');
-
-      // Should NOT have prod-only jobs
-      expect(schedules).not.toContain('*/5 * * * *'); // staleRooms + serverHealth
-      expect(schedules).not.toContain('*/15 * * * *'); // expireBans
-      expect(schedules).not.toContain('0 * * * *'); // hourly rotateLogs
-
-      // Total: 6 schedules on dev
-      expect(mockSchedule).toHaveBeenCalledTimes(6);
+      // All cron jobs are prod-only to avoid burning Firestore quota on dev
+      expect(mockSchedule).not.toHaveBeenCalled();
     });
 
-    test('rotateLogs uses daily schedule on dev', () => {
-      rotateLogs.mockResolvedValue(undefined);
+    test('logs that cron jobs are disabled', () => {
       startCronJobs();
 
-      const rotateCall = mockSchedule.mock.calls.find((c) => c[0] === '30 4 * * *');
-      expect(rotateCall).toBeDefined();
-
-      rotateCall[1]();
-      expect(rotateLogs).toHaveBeenCalled();
-    });
-
-    test('testDataCleanup is registered on dev', () => {
-      testDataCleanup.mockResolvedValue(undefined);
-      startCronJobs();
-
-      const cleanupCall = mockSchedule.mock.calls.find((c) => c[0] === '*/30 * * * *');
-      expect(cleanupCall).toBeDefined();
-
-      cleanupCall[1]();
-      expect(testDataCleanup).toHaveBeenCalled();
+      expect(log.info).toHaveBeenCalledWith(
+        'cron',
+        'Cron jobs disabled (non-production environment)',
+      );
     });
   });
 
@@ -204,118 +167,113 @@ describe('startCronJobs', () => {
       rotateCall[1]();
       expect(rotateLogs).toHaveBeenCalled();
     });
-  });
 
-  test('logs that cron jobs are scheduled', () => {
-    startCronJobs();
-    expect(log.info).toHaveBeenCalledWith('cron', 'Cron jobs scheduled');
-  });
-
-  test('archiveReports callback invokes the job and catches errors', async () => {
-    archiveReports.mockResolvedValue(undefined);
-    startCronJobs();
-
-    const archiveCall = mockSchedule.mock.calls.find((c) => c[0] === '0 3 * * 0');
-    expect(archiveCall).toBeDefined();
-
-    const callback = archiveCall[1];
-    callback();
-
-    expect(archiveReports).toHaveBeenCalled();
-  });
-
-  test('archiveReports error is caught and logged', async () => {
-    const error = new Error('archive failed');
-    archiveReports.mockRejectedValue(error);
-    startCronJobs();
-
-    const archiveCall = mockSchedule.mock.calls.find((c) => c[0] === '0 3 * * 0');
-    const callback = archiveCall[1];
-    callback();
-
-    await new Promise((r) => setTimeout(r, 10));
-
-    expect(log.error).toHaveBeenCalledWith('cron', 'archiveReports failed', {
-      error: 'archive failed',
-    });
-  });
-
-  test('midnight callback invokes subscriptions, backpackCleanup, and expireTempIds', () => {
-    subscriptions.mockResolvedValue(undefined);
-    backpackCleanup.mockResolvedValue(undefined);
-    expireTempIds.mockResolvedValue(undefined);
-    startCronJobs();
-
-    const midnightCall = mockSchedule.mock.calls.find((c) => c[0] === '0 0 * * *');
-    expect(midnightCall).toBeDefined();
-
-    midnightCall[1]();
-
-    expect(subscriptions).toHaveBeenCalled();
-    expect(backpackCleanup).toHaveBeenCalled();
-    expect(expireTempIds).toHaveBeenCalled();
-  });
-
-  test('02:00 callback invokes backups and closedRooms', () => {
-    backups.mockResolvedValue(undefined);
-    closedRooms.mockResolvedValue(undefined);
-    startCronJobs();
-
-    const twoAmCall = mockSchedule.mock.calls.find((c) => c[0] === '0 2 * * *');
-    expect(twoAmCall).toBeDefined();
-
-    twoAmCall[1]();
-
-    expect(backups).toHaveBeenCalled();
-    expect(closedRooms).toHaveBeenCalled();
-  });
-
-  test('orphanedStorage callback invokes the job', () => {
-    orphanedStorage.mockResolvedValue(undefined);
-    startCronJobs();
-
-    const orphanCall = mockSchedule.mock.calls.find((c) => c[0] === '0 4 * * *');
-    expect(orphanCall).toBeDefined();
-
-    orphanCall[1]();
-
-    expect(orphanedStorage).toHaveBeenCalled();
-  });
-
-  test('subscriptions error is caught and logged', async () => {
-    const error = new Error('sub error');
-    subscriptions.mockRejectedValue(error);
-    backpackCleanup.mockResolvedValue(undefined);
-    expireTempIds.mockResolvedValue(undefined);
-    startCronJobs();
-
-    const midnightCall = mockSchedule.mock.calls.find((c) => c[0] === '0 0 * * *');
-    midnightCall[1]();
-
-    await new Promise((r) => setTimeout(r, 10));
-
-    expect(log.error).toHaveBeenCalledWith('cron', 'subscriptions failed', {
-      error: 'sub error',
-    });
-  });
-
-  test('staleRooms error is caught and logged (production)', async () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
-
-    const error = new Error('stale error');
-    staleRooms.mockRejectedValue(error);
-    startCronJobs();
-
-    const fiveMinCalls = mockSchedule.mock.calls.filter((c) => c[0] === '*/5 * * * *');
-    fiveMinCalls[0][1]();
-
-    await new Promise((r) => setTimeout(r, 10));
-
-    expect(log.error).toHaveBeenCalledWith('cron', 'staleRooms failed', {
-      error: 'stale error',
+    test('logs that cron jobs are scheduled', () => {
+      startCronJobs();
+      expect(log.info).toHaveBeenCalledWith('cron', 'Cron jobs scheduled');
     });
 
-    process.env.NODE_ENV = originalEnv;
+    test('archiveReports callback invokes the job and catches errors', async () => {
+      archiveReports.mockResolvedValue(undefined);
+      startCronJobs();
+
+      const archiveCall = mockSchedule.mock.calls.find((c) => c[0] === '0 3 * * 0');
+      expect(archiveCall).toBeDefined();
+
+      const callback = archiveCall[1];
+      callback();
+
+      expect(archiveReports).toHaveBeenCalled();
+    });
+
+    test('archiveReports error is caught and logged', async () => {
+      const error = new Error('archive failed');
+      archiveReports.mockRejectedValue(error);
+      startCronJobs();
+
+      const archiveCall = mockSchedule.mock.calls.find((c) => c[0] === '0 3 * * 0');
+      const callback = archiveCall[1];
+      callback();
+
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(log.error).toHaveBeenCalledWith('cron', 'archiveReports failed', {
+        error: 'archive failed',
+      });
+    });
+
+    test('midnight callback invokes subscriptions, backpackCleanup, and expireTempIds', () => {
+      subscriptions.mockResolvedValue(undefined);
+      backpackCleanup.mockResolvedValue(undefined);
+      expireTempIds.mockResolvedValue(undefined);
+      startCronJobs();
+
+      const midnightCall = mockSchedule.mock.calls.find((c) => c[0] === '0 0 * * *');
+      expect(midnightCall).toBeDefined();
+
+      midnightCall[1]();
+
+      expect(subscriptions).toHaveBeenCalled();
+      expect(backpackCleanup).toHaveBeenCalled();
+      expect(expireTempIds).toHaveBeenCalled();
+    });
+
+    test('02:00 callback invokes backups and closedRooms', () => {
+      backups.mockResolvedValue(undefined);
+      closedRooms.mockResolvedValue(undefined);
+      startCronJobs();
+
+      const twoAmCall = mockSchedule.mock.calls.find((c) => c[0] === '0 2 * * *');
+      expect(twoAmCall).toBeDefined();
+
+      twoAmCall[1]();
+
+      expect(backups).toHaveBeenCalled();
+      expect(closedRooms).toHaveBeenCalled();
+    });
+
+    test('orphanedStorage callback invokes the job', () => {
+      orphanedStorage.mockResolvedValue(undefined);
+      startCronJobs();
+
+      const orphanCall = mockSchedule.mock.calls.find((c) => c[0] === '0 4 * * *');
+      expect(orphanCall).toBeDefined();
+
+      orphanCall[1]();
+
+      expect(orphanedStorage).toHaveBeenCalled();
+    });
+
+    test('subscriptions error is caught and logged', async () => {
+      const error = new Error('sub error');
+      subscriptions.mockRejectedValue(error);
+      backpackCleanup.mockResolvedValue(undefined);
+      expireTempIds.mockResolvedValue(undefined);
+      startCronJobs();
+
+      const midnightCall = mockSchedule.mock.calls.find((c) => c[0] === '0 0 * * *');
+      midnightCall[1]();
+
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(log.error).toHaveBeenCalledWith('cron', 'subscriptions failed', {
+        error: 'sub error',
+      });
+    });
+
+    test('staleRooms error is caught and logged', async () => {
+      const error = new Error('stale error');
+      staleRooms.mockRejectedValue(error);
+      startCronJobs();
+
+      const fiveMinCalls = mockSchedule.mock.calls.filter((c) => c[0] === '*/5 * * * *');
+      fiveMinCalls[0][1]();
+
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(log.error).toHaveBeenCalledWith('cron', 'staleRooms failed', {
+        error: 'stale error',
+      });
+    });
   });
 });

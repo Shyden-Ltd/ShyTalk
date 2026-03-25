@@ -1,8 +1,8 @@
-v0.56.0
+v0.57.0
 
-Starting Screens — configurable launch screens with admin panel, 10-cycle audit
-- ## Summary
-- - Configurable starting screens shown on app launch (blocking or dismissable)
-- - Full admin panel CRUD with live device preview, image upload, scheduling
-- GET/PUT/DELETE endpoints with ETag caching, allowlists
-- composable, file-based cache, MainActivity integration, 19 locales
+fully offline local development environment
+- One-command local dev with Docker (LiveKit, MinIO, Mailpit), Firebase
+- Emulators, Express API auto-start, and Android APK build. Zero cloud
+- services hit during development or CI testing.
+- Key changes:
+- LiveKit + MinIO (S3 storage) + Mailpit (email capture)

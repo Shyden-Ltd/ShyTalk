@@ -72,10 +72,21 @@ Before opening or updating a PR, run ALL applicable checks:
 - Firestore rules don't cascade into subcollections
 
 ## Environments
+- **Local**: Firebase Emulators + LiveKit Docker, zero cloud usage
 - **Dev**: Firebase `shytalk-dev`, API `dev-api.shytalk.shyden.co.uk` (London)
 - **Prod**: Firebase `shytalk-7ba69`, API `api.shytalk.shyden.co.uk` (Singapore)
-- Build flavors: `dev` and `prod` in `app/build.gradle.kts`
-- `google-services.json` in `app/src/dev/` and `app/src/prod/`
+- Build flavors: `dev`, `prod`, and `local` in `app/build.gradle.kts`
+- `google-services.json` in `app/src/dev/`, `app/src/prod/`, and `app/src/local/`
+
+## Local Development (Zero Cloud)
+- **Start:** `bash local/start.sh` (starts Firebase Emulators + LiveKit Docker)
+- **API:** `cd express-api && npm run local`
+- **Android:** `./gradlew installLocalDebug`
+- **Firebase UI:** http://localhost:4000
+- **Stop:** `bash local/stop.sh` or Ctrl+C in the start.sh terminal
+- **Prerequisites:** Java 21+, Docker, Firebase CLI (`npm i -g firebase-tools`)
+- **Seed data:** Auto-runs on first start. Manual: `node local/seed.js`
+- **No cloud quota consumed** — all Firestore/Auth/RTDB traffic goes to emulators
 
 ## Express API (Oracle Cloud)
 - Source: `express-api/src/` — routes, utils, middleware

@@ -78,10 +78,10 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
 
       - name: Set up Gradle
@@ -153,7 +153,7 @@ jobs:
       ref: ${{ github.event.pull_request.head.sha }}
     secrets: inherit
 
-  android-e2e-smoke:
+  android-e2e:
     needs: [detect-changes, build-and-test]
     if: |
       always() &&
@@ -168,9 +168,24 @@ jobs:
       ref: ${{ github.event.pull_request.head.sha }}
     secrets: inherit
 
+  playwright-web:
+    needs: [detect-changes, build-and-test]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.web_changed == 'true' &&
+      (needs.build-and-test.result == 'success' || needs.build-and-test.result == 'skipped')
+    uses: ./.github/workflows/e2e-tests.yml
+    with:
+      android: 'none'
+      ios: 'none'
+      web: 'all'
+      parallel: true
+      ref: ${{ github.event.pull_request.head.sha }}
+    secrets: inherit
+
   gate:
     name: PR Gate
-    needs: [detect-changes, lint, build-and-test, sonarcloud, test-backend, android-e2e-smoke]
+    needs: [detect-changes, lint, build-and-test, sonarcloud, test-backend, android-e2e, playwright-web]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -182,7 +197,8 @@ jobs:
             "${{ needs.build-and-test.result }}" \
             "${{ needs.sonarcloud.result }}" \
             "${{ needs.test-backend.result }}" \
-            "${{ needs.android-e2e-smoke.result }}"; do
+            "${{ needs.android-e2e.result }}" \
+            "${{ needs.playwright-web.result }}"; do
             if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
               echo "Required check failed: $result"
               exit 1

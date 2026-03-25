@@ -22,6 +22,10 @@ worker-api/node_modules/
 worker-api/.wrangler/
 .env
 
+# Local development
+local/firebase-emulator-data/
+express-api/.env.local
+
 # Admin panel config files (contain Firebase API keys)
 public/admin/config.js
 public/admin/config.dev.js
@@ -38,6 +42,7 @@ replay_pid*.log
 .playwright-mcp/
 playwright-report/
 playwright-results.xml
+playwright-errors.log
 
 # Migration scripts (one-time use)
 scripts/migrate-*.mjs
@@ -76,3 +81,8 @@ tests/web/.auth/
 
 # Express API coverage
 express-api/coverage/
+
+# Firebase emulator debug logs
+firebase-debug.log
+firestore-debug.log
+database-debug.log

@@ -122,6 +122,9 @@ router.post('/auth/otp/send', sensitiveLimiter, async (req, res) => {
 
     // Send email
     const template = buildOtpEmail(code);
+    if (process.env.NODE_ENV === 'local') {
+      log.info('auth', `[OTP-LOCAL] Code for ${emailLower}: ${code}`);
+    }
     await sendEmail(emailLower, template.subject, template.html);
 
     res.json({ message: 'OTP sent' });

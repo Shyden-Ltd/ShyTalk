@@ -1,8 +1,12 @@
 package com.shyden.shytalk.core.di
 
 import android.provider.Settings
+import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.auth
+import com.google.firebase.database.database
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.firestore
 import com.shyden.shytalk.BuildConfig
 import com.shyden.shytalk.core.room.ActiveRoomManager
 import com.shyden.shytalk.core.room.RoomLifecycleManager
@@ -104,6 +108,14 @@ val appModule =
         // Firebase Auth + Firestore (free Spark plan)
         single { FirebaseAuth.getInstance() }
         single { FirebaseFirestore.getInstance() }
+
+        // Connect to Firebase Emulators for local development
+        if (BuildConfig.FLAVOR == "local") {
+            Firebase.firestore.useEmulator("10.0.2.2", 8080)
+            Firebase.auth.useEmulator("10.0.2.2", 9099)
+            Firebase.database.useEmulator("10.0.2.2", 9000)
+        }
+
         // HTTP client
         single {
             OkHttpClient
