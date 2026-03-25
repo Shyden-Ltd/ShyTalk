@@ -103,7 +103,7 @@ iOS desteklenen bir platformdur ancak bu rehber, birincil geliştirme hedefi ola
 | **Real-time** | Firebase Realtime Database |
 | **Storage** | Cloudflare R2 (via Express API proxy) |
 | **API Server** | Express.js on Oracle Cloud Free Tier |
-| **Voice** | LiveKit |
+| **Voice** | LiveKit (self-hosted on Oracle Cloud) |
 | **Push Notifications** | Firebase Cloud Messaging |
 | **Image Loading** | Coil 3 (KMP) |
 | **Animations** | Lottie Compose |
@@ -360,9 +360,12 @@ Gerçek bulut hizmetlerine karşı test etmeniz gerekiyorsa (örneğin, gerçek 
 | `R2_ACCESS_KEY_ID` | R2 erişim anahtarı | Express API |
 | `R2_SECRET_ACCESS_KEY` | R2 gizli anahtarı | Express API |
 | `R2_BUCKET_NAME` | R2 kova adı (varsayılan: `shytalk-media`) | Express API |
-| `LIVEKIT_API_KEY` | LiveKit API anahtarı | Express API |
-| `LIVEKIT_API_SECRET` | LiveKit API sırrı | Express API |
-| `LIVEKIT_URL` | LiveKit sunucu URL'si | Android uygulaması (BuildConfig) |
+| `LIVEKIT_KEY_ASIA` | LiveKit API anahtarı (Asya/Singapur) | Express API |
+| `LIVEKIT_SECRET_ASIA` | LiveKit API sırrı (Asya/Singapur) | Express API |
+| `LIVEKIT_URL_ASIA` | LiveKit sunucu URL'si (Asya) — `wss://livekit.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_KEY_EU` | LiveKit API anahtarı (AB/Londra) | Express API |
+| `LIVEKIT_SECRET_EU` | LiveKit API sırrı (AB/Londra) | Express API |
+| `LIVEKIT_URL_EU` | LiveKit sunucu URL'si (AB) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
 | `WORKER_URL` | Express API temel URL'si | Android uygulaması (BuildConfig) |
 
 ## Test

@@ -103,7 +103,7 @@ iOS là một nền tảng được hỗ trợ nhưng hướng dẫn này tập 
 | **Real-time** | Firebase Realtime Database |
 | **Storage** | Cloudflare R2 (via Express API proxy) |
 | **API Server** | Express.js on Oracle Cloud Free Tier |
-| **Voice** | LiveKit |
+| **Voice** | LiveKit (self-hosted on Oracle Cloud) |
 | **Push Notifications** | Firebase Cloud Messaging |
 | **Image Loading** | Coil 3 (KMP) |
 | **Animations** | Lottie Compose |
@@ -360,9 +360,12 @@ Nếu bạn cần kiểm tra đối với các dịch vụ đám mây thực t�
 | `R2_ACCESS_KEY_ID` | Khóa truy cập R2 | Express API |
 | `R2_SECRET_ACCESS_KEY` | Khóa bí mật R2 | Express API |
 | `R2_BUCKET_NAME` | Tên xô R2 (mặc định: `shytalk-media`) | Express API |
-| `LIVEKIT_API_KEY` | Khóa API LiveKit | Express API |
-| `LIVEKIT_API_SECRET` | Bí mật API LiveKit | Express API |
-| `LIVEKIT_URL` | URL máy chủ LiveKit | Ứng dụng Android (BuildConfig) |
+| `LIVEKIT_KEY_ASIA` | Khóa API LiveKit (Châu Á/Singapore) | Express API |
+| `LIVEKIT_SECRET_ASIA` | Bí mật API LiveKit (Châu Á/Singapore) | Express API |
+| `LIVEKIT_URL_ASIA` | URL máy chủ LiveKit (Châu Á) — `wss://livekit.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_KEY_EU` | Khóa API LiveKit (EU/London) | Express API |
+| `LIVEKIT_SECRET_EU` | Bí mật API LiveKit (EU/London) | Express API |
+| `LIVEKIT_URL_EU` | URL máy chủ LiveKit (EU) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
 | `WORKER_URL` | URL cơ sở Express API | Ứng dụng Android (BuildConfig) |
 
 ## Kiểm Tra

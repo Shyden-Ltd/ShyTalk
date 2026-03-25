@@ -103,7 +103,7 @@ iOS ist eine unterstuetzte Plattform, aber dieser Leitfaden konzentriert sich au
 | **Echtzeit** | Firebase Realtime Database |
 | **Speicher** | Cloudflare R2 (ueber Express API Proxy) |
 | **API-Server** | Express.js auf Oracle Cloud Free Tier |
-| **Sprache** | LiveKit |
+| **Sprache** | LiveKit (self-hosted on Oracle Cloud) |
 | **Push-Benachrichtigungen** | Firebase Cloud Messaging |
 | **Bildladen** | Coil 3 (KMP) |
 | **Animationen** | Lottie Compose |
@@ -360,9 +360,12 @@ Wenn du gegen echte Cloud-Dienste testen musst (z.B. echte Push-Benachrichtigung
 | `R2_ACCESS_KEY_ID` | R2-Zugriffsschluessel | Express API |
 | `R2_SECRET_ACCESS_KEY` | R2-Geheimschluessel | Express API |
 | `R2_BUCKET_NAME` | R2-Bucket-Name (Standard: `shytalk-media`) | Express API |
-| `LIVEKIT_API_KEY` | LiveKit API-Schluessel | Express API |
-| `LIVEKIT_API_SECRET` | LiveKit API-Geheimnis | Express API |
-| `LIVEKIT_URL` | LiveKit-Server-URL | Android-App (BuildConfig) |
+| `LIVEKIT_KEY_ASIA` | LiveKit API-Schluessel (Asien/Singapur) | Express API |
+| `LIVEKIT_SECRET_ASIA` | LiveKit API-Geheimnis (Asien/Singapur) | Express API |
+| `LIVEKIT_URL_ASIA` | LiveKit-Server-URL (Asien) — `wss://livekit.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_KEY_EU` | LiveKit API-Schluessel (EU/London) | Express API |
+| `LIVEKIT_SECRET_EU` | LiveKit API-Geheimnis (EU/London) | Express API |
+| `LIVEKIT_URL_EU` | LiveKit-Server-URL (EU) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
 | `WORKER_URL` | Express API Basis-URL | Android-App (BuildConfig) |
 
 ## Tests

@@ -103,7 +103,7 @@ iOSはサポート対象プラットフォームですが、このガイドは�
 | **リアルタイム** | Firebase Realtime Database |
 | **ストレージ** | Cloudflare R2 (Express APIプロキシ経由) |
 | **APIサーバー** | Express.js on Oracle Cloud Free Tier |
-| **音声** | LiveKit |
+| **音声** | LiveKit (self-hosted on Oracle Cloud) |
 | **プッシュ通知** | Firebase Cloud Messaging |
 | **画像読み込み** | Coil 3 (KMP) |
 | **アニメーション** | Lottie Compose |
@@ -360,9 +360,12 @@ docker run -d -p 5000:5000 libretranslate/libretranslate
 | `R2_ACCESS_KEY_ID` | R2アクセスキー | Express API |
 | `R2_SECRET_ACCESS_KEY` | R2シークレットキー | Express API |
 | `R2_BUCKET_NAME` | R2バケット名（デフォルト：`shytalk-media`） | Express API |
-| `LIVEKIT_API_KEY` | LiveKit APIキー | Express API |
-| `LIVEKIT_API_SECRET` | LiveKit APIシークレット | Express API |
-| `LIVEKIT_URL` | LiveKitサーバーURL | Androidアプリ (BuildConfig) |
+| `LIVEKIT_KEY_ASIA` | LiveKit APIキー（アジア/シンガポール） | Express API |
+| `LIVEKIT_SECRET_ASIA` | LiveKit APIシークレット（アジア/シンガポール） | Express API |
+| `LIVEKIT_URL_ASIA` | LiveKitサーバーURL（アジア） — `wss://livekit.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_KEY_EU` | LiveKit APIキー（EU/ロンドン） | Express API |
+| `LIVEKIT_SECRET_EU` | LiveKit APIシークレット（EU/ロンドン） | Express API |
+| `LIVEKIT_URL_EU` | LiveKitサーバーURL（EU） — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
 | `WORKER_URL` | Express APIベースURL | Androidアプリ (BuildConfig) |
 
 ## テスト

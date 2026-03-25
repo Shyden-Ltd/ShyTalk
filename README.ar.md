@@ -103,7 +103,7 @@ iOS منصة مدعومة ولكن هذا الدليل يركز على تطوي�
 | **الوقت الفعلي** | Firebase Realtime Database |
 | **التخزين** | Cloudflare R2 (عبر وكيل Express API) |
 | **خادم API** | Express.js على Oracle Cloud Free Tier |
-| **الصوت** | LiveKit |
+| **الصوت** | LiveKit (self-hosted on Oracle Cloud) |
 | **الإشعارات الفورية** | Firebase Cloud Messaging |
 | **تحميل الصور** | Coil 3 (KMP) |
 | **الرسوم المتحركة** | Lottie Compose |
@@ -360,9 +360,12 @@ docker run -d -p 5000:5000 libretranslate/libretranslate
 | `R2_ACCESS_KEY_ID` | مفتاح وصول R2 | Express API |
 | `R2_SECRET_ACCESS_KEY` | مفتاح R2 السري | Express API |
 | `R2_BUCKET_NAME` | اسم حاوية R2 (الافتراضي: `shytalk-media`) | Express API |
-| `LIVEKIT_API_KEY` | مفتاح LiveKit API | Express API |
-| `LIVEKIT_API_SECRET` | سر LiveKit API | Express API |
-| `LIVEKIT_URL` | رابط خادم LiveKit | تطبيق Android (BuildConfig) |
+| `LIVEKIT_KEY_ASIA` | مفتاح LiveKit API (آسيا/سنغافورة) | Express API |
+| `LIVEKIT_SECRET_ASIA` | سر LiveKit API (آسيا/سنغافورة) | Express API |
+| `LIVEKIT_URL_ASIA` | رابط خادم LiveKit (آسيا) — `wss://livekit.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_KEY_EU` | مفتاح LiveKit API (أوروبا/لندن) | Express API |
+| `LIVEKIT_SECRET_EU` | سر LiveKit API (أوروبا/لندن) | Express API |
+| `LIVEKIT_URL_EU` | رابط خادم LiveKit (أوروبا) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
 | `WORKER_URL` | رابط قاعدة Express API | تطبيق Android (BuildConfig) |
 
 ## الاختبار

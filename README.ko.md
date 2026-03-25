@@ -103,7 +103,7 @@ iOS는 지원 플랫폼이지만 이 가이드는 주요 개발 대상인 Androi
 | **실시간** | Firebase Realtime Database |
 | **스토리지** | Cloudflare R2 (Express API 프록시 경유) |
 | **API 서버** | Express.js on Oracle Cloud Free Tier |
-| **음성** | LiveKit |
+| **음성** | LiveKit (self-hosted on Oracle Cloud) |
 | **푸시 알림** | Firebase Cloud Messaging |
 | **이미지 로딩** | Coil 3 (KMP) |
 | **애니메이션** | Lottie Compose |
@@ -360,9 +360,12 @@ docker run -d -p 5000:5000 libretranslate/libretranslate
 | `R2_ACCESS_KEY_ID` | R2 액세스 키 | Express API |
 | `R2_SECRET_ACCESS_KEY` | R2 시크릿 키 | Express API |
 | `R2_BUCKET_NAME` | R2 버킷 이름 (기본값: `shytalk-media`) | Express API |
-| `LIVEKIT_API_KEY` | LiveKit API 키 | Express API |
-| `LIVEKIT_API_SECRET` | LiveKit API 시크릿 | Express API |
-| `LIVEKIT_URL` | LiveKit 서버 URL | Android 앱 (BuildConfig) |
+| `LIVEKIT_KEY_ASIA` | LiveKit API 키 (아시아/싱가포르) | Express API |
+| `LIVEKIT_SECRET_ASIA` | LiveKit API 시크릿 (아시아/싱가포르) | Express API |
+| `LIVEKIT_URL_ASIA` | LiveKit 서버 URL (아시아) — `wss://livekit.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_KEY_EU` | LiveKit API 키 (EU/런던) | Express API |
+| `LIVEKIT_SECRET_EU` | LiveKit API 시크릿 (EU/런던) | Express API |
+| `LIVEKIT_URL_EU` | LiveKit 서버 URL (EU) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
 | `WORKER_URL` | Express API 기본 URL | Android 앱 (BuildConfig) |
 
 ## 테스트

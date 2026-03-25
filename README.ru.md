@@ -103,7 +103,7 @@ iOS является поддерживаемой платформой, но д�
 | **Реальное время** | Firebase Realtime Database |
 | **Хранилище** | Cloudflare R2 (через прокси Express API) |
 | **API-сервер** | Express.js на Oracle Cloud Free Tier |
-| **Голос** | LiveKit |
+| **Голос** | LiveKit (self-hosted on Oracle Cloud) |
 | **Push-уведомления** | Firebase Cloud Messaging |
 | **Загрузка изображений** | Coil 3 (KMP) |
 | **Анимации** | Lottie Compose |
@@ -360,9 +360,12 @@ docker run -d -p 5000:5000 libretranslate/libretranslate
 | `R2_ACCESS_KEY_ID` | Ключ доступа R2 | Express API |
 | `R2_SECRET_ACCESS_KEY` | Секретный ключ R2 | Express API |
 | `R2_BUCKET_NAME` | Имя бакета R2 (по умолчанию: `shytalk-media`) | Express API |
-| `LIVEKIT_API_KEY` | API-ключ LiveKit | Express API |
-| `LIVEKIT_API_SECRET` | API-секрет LiveKit | Express API |
-| `LIVEKIT_URL` | URL сервера LiveKit | Android-приложение (BuildConfig) |
+| `LIVEKIT_KEY_ASIA` | API-ключ LiveKit (Азия/Сингапур) | Express API |
+| `LIVEKIT_SECRET_ASIA` | API-секрет LiveKit (Азия/Сингапур) | Express API |
+| `LIVEKIT_URL_ASIA` | URL сервера LiveKit (Азия) — `wss://livekit.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_KEY_EU` | API-ключ LiveKit (ЕС/Лондон) | Express API |
+| `LIVEKIT_SECRET_EU` | API-секрет LiveKit (ЕС/Лондон) | Express API |
+| `LIVEKIT_URL_EU` | URL сервера LiveKit (ЕС) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
 | `WORKER_URL` | Базовый URL Express API | Android-приложение (BuildConfig) |
 
 ## Тестирование

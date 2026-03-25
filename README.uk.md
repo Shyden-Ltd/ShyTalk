@@ -103,7 +103,7 @@ iOS — підтримувана платформа, але цей посібн�
 | **Real-time** | Firebase Realtime Database |
 | **Storage** | Cloudflare R2 (via Express API proxy) |
 | **API Server** | Express.js on Oracle Cloud Free Tier |
-| **Voice** | LiveKit |
+| **Voice** | LiveKit (self-hosted on Oracle Cloud) |
 | **Push Notifications** | Firebase Cloud Messaging |
 | **Image Loading** | Coil 3 (KMP) |
 | **Animations** | Lottie Compose |
@@ -360,9 +360,12 @@ docker run -d -p 5000:5000 libretranslate/libretranslate
 | `R2_ACCESS_KEY_ID` | R2 access key | Express API |
 | `R2_SECRET_ACCESS_KEY` | R2 secret key | Express API |
 | `R2_BUCKET_NAME` | R2 bucket name (default: `shytalk-media`) | Express API |
-| `LIVEKIT_API_KEY` | LiveKit API key | Express API |
-| `LIVEKIT_API_SECRET` | LiveKit API secret | Express API |
-| `LIVEKIT_URL` | LiveKit server URL | Android app (BuildConfig) |
+| `LIVEKIT_KEY_ASIA` | LiveKit API key (Asia/Singapore) | Express API |
+| `LIVEKIT_SECRET_ASIA` | LiveKit API secret (Asia/Singapore) | Express API |
+| `LIVEKIT_URL_ASIA` | LiveKit server URL (Asia) — `wss://livekit.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_KEY_EU` | LiveKit API key (EU/London) | Express API |
+| `LIVEKIT_SECRET_EU` | LiveKit API secret (EU/London) | Express API |
+| `LIVEKIT_URL_EU` | LiveKit server URL (EU) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
 | `WORKER_URL` | Express API base URL | Android app (BuildConfig) |
 
 ## Тестування

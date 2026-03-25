@@ -103,7 +103,7 @@ iOS 是受支持的平台，但本指南侧重于 Android 开发，这是主要�
 | **实时通信** | Firebase Realtime Database |
 | **存储** | Cloudflare R2（通过 Express API 代理） |
 | **API 服务器** | Express.js（部署于 Oracle Cloud 免费层） |
-| **语音** | LiveKit |
+| **语音** | LiveKit (self-hosted on Oracle Cloud) |
 | **推送通知** | Firebase Cloud Messaging |
 | **图片加载** | Coil 3 (KMP) |
 | **动画** | Lottie Compose |
@@ -360,9 +360,12 @@ docker run -d -p 5000:5000 libretranslate/libretranslate
 | `R2_ACCESS_KEY_ID` | R2 访问密钥 | Express API |
 | `R2_SECRET_ACCESS_KEY` | R2 密钥 | Express API |
 | `R2_BUCKET_NAME` | R2 存储桶名称（默认：`shytalk-media`） | Express API |
-| `LIVEKIT_API_KEY` | LiveKit API 密钥 | Express API |
-| `LIVEKIT_API_SECRET` | LiveKit API 密钥 | Express API |
-| `LIVEKIT_URL` | LiveKit 服务器 URL | Android 应用（BuildConfig） |
+| `LIVEKIT_KEY_ASIA` | LiveKit API 密钥（亚洲/新加坡） | Express API |
+| `LIVEKIT_SECRET_ASIA` | LiveKit API 密钥（亚洲/新加坡） | Express API |
+| `LIVEKIT_URL_ASIA` | LiveKit 服务器 URL（亚洲） — `wss://livekit.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_KEY_EU` | LiveKit API 密钥（欧盟/伦敦） | Express API |
+| `LIVEKIT_SECRET_EU` | LiveKit API 密钥（欧盟/伦敦） | Express API |
+| `LIVEKIT_URL_EU` | LiveKit 服务器 URL（欧盟） — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
 | `WORKER_URL` | Express API 基础 URL | Android 应用（BuildConfig） |
 
 ## 测试

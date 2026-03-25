@@ -103,7 +103,7 @@ iOS jest obslugiwana platforma, ale ten przewodnik koncentruje sie na rozwoju An
 | **Czas rzeczywisty** | Firebase Realtime Database |
 | **Pamiec** | Cloudflare R2 (przez proxy Express API) |
 | **Serwer API** | Express.js na Oracle Cloud Free Tier |
-| **Glos** | LiveKit |
+| **Glos** | LiveKit (self-hosted on Oracle Cloud) |
 | **Powiadomienia push** | Firebase Cloud Messaging |
 | **Ladowanie obrazow** | Coil 3 (KMP) |
 | **Animacje** | Lottie Compose |
@@ -360,9 +360,12 @@ Jesli musisz testowac z prawdziwymi uslugami chmurowymi (np. prawdziwe powiadomi
 | `R2_ACCESS_KEY_ID` | Klucz dostepu R2 | Express API |
 | `R2_SECRET_ACCESS_KEY` | Tajny klucz R2 | Express API |
 | `R2_BUCKET_NAME` | Nazwa bucketa R2 (domyslnie: `shytalk-media`) | Express API |
-| `LIVEKIT_API_KEY` | Klucz API LiveKit | Express API |
-| `LIVEKIT_API_SECRET` | Sekret API LiveKit | Express API |
-| `LIVEKIT_URL` | URL serwera LiveKit | Aplikacja Android (BuildConfig) |
+| `LIVEKIT_KEY_ASIA` | Klucz API LiveKit (Azja/Singapur) | Express API |
+| `LIVEKIT_SECRET_ASIA` | Sekret API LiveKit (Azja/Singapur) | Express API |
+| `LIVEKIT_URL_ASIA` | URL serwera LiveKit (Azja) — `wss://livekit.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_KEY_EU` | Klucz API LiveKit (UE/Londyn) | Express API |
+| `LIVEKIT_SECRET_EU` | Sekret API LiveKit (UE/Londyn) | Express API |
+| `LIVEKIT_URL_EU` | URL serwera LiveKit (UE) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
 | `WORKER_URL` | Bazowy URL Express API | Aplikacja Android (BuildConfig) |
 
 ## Testowanie

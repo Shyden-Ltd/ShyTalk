@@ -103,7 +103,7 @@ iOS एक समर्थित प्लेटफॉर्म है लेक
 | **रियल-टाइम** | Firebase Realtime Database |
 | **स्टोरेज** | Cloudflare R2 (Express API प्रॉक्सी के माध्यम से) |
 | **API सर्वर** | Express.js on Oracle Cloud Free Tier |
-| **वॉइस** | LiveKit |
+| **वॉइस** | LiveKit (self-hosted on Oracle Cloud) |
 | **पुश नोटिफिकेशन** | Firebase Cloud Messaging |
 | **इमेज लोडिंग** | Coil 3 (KMP) |
 | **एनिमेशन** | Lottie Compose |
@@ -360,9 +360,12 @@ docker run -d -p 5000:5000 libretranslate/libretranslate
 | `R2_ACCESS_KEY_ID` | R2 एक्सेस की | Express API |
 | `R2_SECRET_ACCESS_KEY` | R2 सीक्रेट की | Express API |
 | `R2_BUCKET_NAME` | R2 बकेट नाम (डिफॉल्ट: `shytalk-media`) | Express API |
-| `LIVEKIT_API_KEY` | LiveKit API की | Express API |
-| `LIVEKIT_API_SECRET` | LiveKit API सीक्रेट | Express API |
-| `LIVEKIT_URL` | LiveKit सर्वर URL | Android ऐप (BuildConfig) |
+| `LIVEKIT_KEY_ASIA` | LiveKit API की (एशिया/सिंगापुर) | Express API |
+| `LIVEKIT_SECRET_ASIA` | LiveKit API सीक्रेट (एशिया/सिंगापुर) | Express API |
+| `LIVEKIT_URL_ASIA` | LiveKit सर्वर URL (एशिया) — `wss://livekit.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_KEY_EU` | LiveKit API की (EU/लंदन) | Express API |
+| `LIVEKIT_SECRET_EU` | LiveKit API सीक्रेट (EU/लंदन) | Express API |
+| `LIVEKIT_URL_EU` | LiveKit सर्वर URL (EU) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
 | `WORKER_URL` | Express API बेस URL | Android ऐप (BuildConfig) |
 
 ## टेस्टिंग
