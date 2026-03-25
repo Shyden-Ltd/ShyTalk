@@ -113,8 +113,9 @@ try {
 # Step 5: Start Express API (background)
 # =============================================================================
 Write-Host "==> Step 5/8: Starting Express API..."
+$env:NODE_ENV = "local"
 $apiProcess = Start-Process -FilePath "cmd.exe" `
-    -ArgumentList "/c", "cd /d $expressDir && set NODE_ENV=local && node src/index.js" `
+    -ArgumentList "/c", "cd /d $expressDir && node src/index.js" `
     -PassThru `
     -NoNewWindow
 
