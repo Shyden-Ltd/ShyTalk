@@ -129,6 +129,7 @@ async function seed() {
     followingIds: [],
     followerIds: [],
     createdAt: now,
+    lastSeenAt: now,
   });
   await seedIfMissing("identityMap/email:claude-test@shytalk.dev", {
     uniqueId: 100000001,
@@ -165,6 +166,7 @@ async function seed() {
     followingIds: [],
     followerIds: [],
     createdAt: now,
+    lastSeenAt: now,
   });
   await seedIfMissing("identityMap/email:user@test.com", {
     uniqueId: 100000002,

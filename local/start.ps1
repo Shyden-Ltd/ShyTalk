@@ -135,7 +135,14 @@ while ($attempt -lt $maxAttempts) {
 }
 if ($attempt -ge $maxAttempts) {
     Write-Host "ERROR: Express API did not start within $maxAttempts seconds." -ForegroundColor Red
-    # Continue anyway -- build can still proceed
+    if ($apiProcess -and -not $apiProcess.HasExited) {
+        Stop-Process -Id $apiProcess.Id -Force -ErrorAction SilentlyContinue
+    }
+    if (-not $emulatorProcess.HasExited) {
+        Stop-Process -Id $emulatorProcess.Id -Force -ErrorAction SilentlyContinue
+    }
+    docker compose -f "$ScriptDir\docker-compose.yml" down 2>$null
+    exit 1
 }
 Write-Host "  Express API ready."
 

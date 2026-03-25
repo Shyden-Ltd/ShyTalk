@@ -285,6 +285,7 @@ The fastest way to get started. One command starts everything -- Firebase Emulat
    adb reverse tcp:9000 tcp:9000   # RTDB emulator
    adb reverse tcp:7880 tcp:7880   # LiveKit
    adb reverse tcp:9002 tcp:9002   # MinIO (image storage)
+   adb reverse tcp:8025 tcp:8025   # MailHog UI (view OTP emails)
    ```
    With `adb reverse`, the default `10.0.2.2` addresses in the local flavor will work on a physical device too -- no build config changes needed.
 
@@ -417,7 +418,7 @@ In CI, Playwright and Android E2E tests run against the same local environment (
 - **Firebase emulators fail to start**: Requires Java 21+. Check with `java -version`.
 - **Android build fails**: Ensure JDK 21+ and Android SDK are installed. Try `./gradlew clean`.
 - **adb device not detected**: Enable USB debugging. Run `adb devices` to check.
-- **Images not loading**: MinIO bucket may not be created. Run `cd express-api && NODE_ENV=local node ../local/seed.js`. For physical devices, run `adb reverse tcp:9002 tcp:9002`.
+- **Images not loading**: MinIO bucket may not be created. Run `cd express-api && NODE_PATH=./node_modules node ../local/seed.js`. For physical devices, run `adb reverse tcp:9002 tcp:9002`.
 - **OTP not arriving**: Check console output for `[OTP-LOCAL]` lines. Also check MailHog UI at http://localhost:8025.
 - **Reset emulator data**: Delete `local/firebase-emulator-data/` directory and restart.
 - **Reset MinIO data**: Run `docker compose -f local/docker-compose.yml down -v` to remove volumes.
