@@ -41,10 +41,12 @@ class LiveKitVoiceService(
     private var currentRoomName: String? = null
     private var currentUserId: String? = null
     private var cachedToken: String? = null
+    private var cachedServerUrl: String? = null
     private val joinMutex = Mutex()
 
     // Token pre-warming: fetched in background before user navigates to room
     private var prewarmedToken: String? = null
+    private var prewarmedUrl: String? = null
     private var prewarmedRoomName: String? = null
     private var prewarmJob: Job? = null
 
@@ -201,33 +203,34 @@ class LiveKitVoiceService(
 
         // Use prewarmed token if available for this room, otherwise fetch
         prewarmJob?.join() // Wait for in-flight prewarm if running
-        val token: String? =
-            if (prewarmedRoomName == roomName && prewarmedToken != null) {
-                Log.d(TAG, "Using prewarmed token for room=$roomName")
-                prewarmedToken.also {
-                    prewarmedToken = null
-                    prewarmedRoomName = null
-                }
-            } else {
+        val token: String
+        val serverUrl: String
+        if (prewarmedRoomName == roomName && prewarmedToken != null) {
+            Log.d(TAG, "Using prewarmed token for room=$roomName")
+            token = prewarmedToken!!
+            serverUrl = prewarmedUrl ?: BuildConfig.LIVEKIT_SERVER_URL
+            prewarmedToken = null
+            prewarmedRoomName = null
+            prewarmedUrl = null
+        } else {
+            val response =
                 try {
                     tokenService.fetchToken(roomName, userId)
                 } catch (e: Exception) {
                     Log.w(TAG, "Token fetch failed", e)
                     _error.value = "Voice is temporarily unavailable"
-                    null
+                    currentRoomName = null
+                    currentUserId = null
+                    return@withLock
                 }
-            }
-
-        if (token == null) {
-            currentRoomName = null
-            currentUserId = null
-            return@withLock
+            token = response.token
+            serverUrl = response.url ?: BuildConfig.LIVEKIT_SERVER_URL
         }
 
         cachedToken = token
+        cachedServerUrl = serverUrl
 
         try {
-            val serverUrl = BuildConfig.LIVEKIT_SERVER_URL
             if (serverUrl.isBlank()) {
                 _error.value = "Voice is temporarily unavailable"
                 currentRoomName = null
@@ -243,6 +246,7 @@ class LiveKitVoiceService(
             currentRoomName = null
             currentUserId = null
             cachedToken = null
+            cachedServerUrl = null
         }
     }
 
@@ -253,7 +257,9 @@ class LiveKitVoiceService(
         currentRoomName = null
         currentUserId = null
         cachedToken = null
+        cachedServerUrl = null
         prewarmedToken = null
+        prewarmedUrl = null
         prewarmedRoomName = null
         prewarmJob?.cancel()
         desiredMicEnabled = false
@@ -324,7 +330,9 @@ class LiveKitVoiceService(
             val token =
                 cachedToken ?: try {
                     Log.w(TAG, "No cached token for audio switch, fetching new one")
-                    tokenService.fetchToken(roomName, userId)
+                    val response = tokenService.fetchToken(roomName, userId)
+                    cachedServerUrl = response.url ?: cachedServerUrl
+                    response.token
                 } catch (e: Exception) {
                     Log.e(TAG, "Token fetch failed during audio switch", e)
                     _error.value = "Voice is temporarily unavailable"
@@ -346,7 +354,7 @@ class LiveKitVoiceService(
                 setupEventCollection()
 
                 // Reconnect
-                val serverUrl = BuildConfig.LIVEKIT_SERVER_URL
+                val serverUrl = cachedServerUrl ?: BuildConfig.LIVEKIT_SERVER_URL
                 room.connect(serverUrl, token)
                 cachedToken = token
 
@@ -368,13 +376,15 @@ class LiveKitVoiceService(
     ) {
         prewarmJob?.cancel()
         prewarmedToken = null
+        prewarmedUrl = null
         prewarmedRoomName = null
         prewarmJob =
             scope.launch {
                 try {
                     Log.d(TAG, "Pre-warming token for room=$roomName")
-                    val token = tokenService.fetchToken(roomName, userId)
-                    prewarmedToken = token
+                    val response = tokenService.fetchToken(roomName, userId)
+                    prewarmedToken = response.token
+                    prewarmedUrl = response.url
                     prewarmedRoomName = roomName
                     Log.d(TAG, "Token pre-warmed for room=$roomName")
                 } catch (e: Exception) {

@@ -8,7 +8,7 @@ class LiveKitTokenService(
     override suspend fun fetchToken(
         roomName: String,
         identity: String,
-    ): String {
+    ): TokenResponse {
         val response =
             api.post(
                 "/api/livekit/token",
@@ -17,9 +17,12 @@ class LiveKitTokenService(
                     put("identity", identity)
                 },
             )
-        return response
-            .optString("token")
-            .takeIf { it.isNotEmpty() }
-            ?: throw IllegalStateException("Invalid token response from server")
+        val token =
+            response
+                .optString("token")
+                .takeIf { it.isNotEmpty() }
+                ?: throw IllegalStateException("Invalid token response from server")
+        val url = response.optString("url").takeIf { it.isNotEmpty() }
+        return TokenResponse(token = token, url = url)
     }
 }

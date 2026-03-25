@@ -6,6 +6,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 
@@ -27,10 +28,26 @@ class LiveKitTokenServiceTest {
                     put("token", "test-jwt-token")
                 }
 
-            val token = service.fetchToken("room-1", "user-1")
+            val result = service.fetchToken("room-1", "user-1")
 
-            assertEquals("test-jwt-token", token)
+            assertEquals("test-jwt-token", result.token)
+            assertNull(result.url)
             coVerify { api.post("/api/livekit/token", any()) }
+        }
+
+    @Test
+    fun `fetchToken returns url when present in response`() =
+        runTest {
+            coEvery { api.post("/api/livekit/token", any()) } returns
+                JSONObject().apply {
+                    put("token", "test-jwt-token")
+                    put("url", "wss://livekit.test.com")
+                }
+
+            val result = service.fetchToken("room-1", "user-1")
+
+            assertEquals("test-jwt-token", result.token)
+            assertEquals("wss://livekit.test.com", result.url)
         }
 
     @Test(expected = IllegalStateException::class)
