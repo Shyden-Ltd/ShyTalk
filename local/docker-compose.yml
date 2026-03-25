@@ -11,7 +11,7 @@ services:
     command: --config /etc/livekit.yaml
 
   minio:
-    image: minio/minio
+    image: minio/minio:RELEASE.2025-03-12T18-04-18Z
     ports:
       - "9002:9000"
       - "9001:9001"
@@ -21,7 +21,7 @@ services:
     command: server /data --console-address ":9001"
 
   mailhog:
-    image: mailhog/mailhog
+    image: mailhog/mailhog:v1.0.1
     ports:
       - "1025:1025"
       - "8025:8025"

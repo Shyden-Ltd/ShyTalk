@@ -389,7 +389,7 @@ npx allure serve allure-results
 |-------|---------|-------|
 | Kotlin unit tests | `./gradlew test` | 100+ tests |
 | Express API tests | `cd express-api && npm test` | 1,540+ tests |
-| E2E Gherkin (Android) | `./gradlew connectedDevDebugAndroidTest` | 34 feature files |
+| E2E Gherkin (Android) | `./gradlew connectedLocalDebugAndroidTest` | 34 feature files |
 | Playwright web tests | `npx playwright test` | 28 specs |
 
 ```bash
@@ -400,7 +400,7 @@ npx allure serve allure-results
 cd express-api && npm test
 
 # E2E tests (requires connected device or emulator)
-./gradlew connectedDevDebugAndroidTest
+./gradlew connectedLocalDebugAndroidTest
 
 # Playwright browser tests (requires admin panel running)
 npx playwright test
@@ -414,7 +414,7 @@ In CI, Playwright and Android E2E tests run against the same local environment (
 
 - **Port already in use**: `lsof -i :<port>` (Linux/macOS) or `netstat -ano | findstr :<port>` (Windows) to find what's using the port.
 - **Docker not running**: Ensure Docker Desktop is started. Run `docker ps` to verify.
-- **Firebase emulators fail to start**: Requires Java 11+. Check with `java -version`.
+- **Firebase emulators fail to start**: Requires Java 21+. Check with `java -version`.
 - **Android build fails**: Ensure JDK 21+ and Android SDK are installed. Try `./gradlew clean`.
 - **adb device not detected**: Enable USB debugging. Run `adb devices` to check.
 - **Images not loading**: MinIO bucket may not be created. Run `cd express-api && NODE_ENV=local node ../local/seed.js`. For physical devices, run `adb reverse tcp:9002 tcp:9002`.

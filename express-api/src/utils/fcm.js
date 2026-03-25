@@ -16,7 +16,7 @@ async function sendFcmToTokens(tokens, data) {
   if (!tokens || tokens.length === 0) return [];
 
   if (process.env.NODE_ENV === 'local') {
-    console.log('[FCM-LOCAL] Would send to', tokens.length, 'tokens:', data?.title);
+    log.info('fcm', `[FCM-LOCAL] Would send to ${tokens.length} tokens: ${data?.title}`);
     return [];
   }
 
