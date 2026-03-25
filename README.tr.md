@@ -192,7 +192,7 @@ ShyTalk/
 - **Android Studio** Ladybug veya daha yeni
 - **JDK 17+**
 - **Node.js 24+**
-- **Docker** (LiveKit sesli sunucu, MinIO depolama, MailHog e-postası için)
+- **Docker** (LiveKit sesli sunucu, MinIO depolama, Mailpit e-postası için)
 - **Firebase CLI** (`npm install -g firebase-tools`)
 
 Başlamak için bulut hesaplarına gerek yoktur -- yerel ortam tamamen çevrimdışı çalışır.
@@ -221,7 +221,7 @@ Başlamanın en hızlı yolu. Bir komut her şeyi başlatır -- Firebase Emülat
    ```
 
    Bu tek komut:
-   - Docker konteynerlerini başlatır (LiveKit sesli sunucu, MinIO depolama, MailHog e-postası)
+   - Docker konteynerlerini başlatır (LiveKit sesli sunucu, MinIO depolama, Mailpit e-postası)
    - Firebase Emülatörlerini başlatır (Firestore, Auth, RTDB)
    - Test verilerini tohumlar ve MinIO depolama kovanını oluşturur
    - Express API'yi başlatır
@@ -234,7 +234,7 @@ Başlamanın en hızlı yolu. Bir komut her şeyi başlatır -- Firebase Emülat
      Hizmetler:
        Firebase UI:    http://localhost:4000
        Express API:    http://localhost:3000
-       MailHog UI:     http://localhost:8025
+       Mailpit UI:     http://localhost:8025
        MinIO Console:  http://localhost:9001
        LiveKit:        localhost:7880
 
@@ -248,7 +248,7 @@ Başlamanın en hızlı yolu. Bir komut her şeyi başlatır -- Firebase Emülat
    - Tohumlanmış test hesabı ile e-posta oturum açma akışını kullanın: `claude-test@shytalk.dev` / `localdev123`
    - Veya yeni bir hesap oluşturun -- yerel emülatörleri kullanacaktır
    - Google/Apple oturum açması yerel olarak çalışmaz (gerçek OAuth yok) -- bunun yerine e-posta OTP'sini kullanın
-   - OTP kodları MailHog tarafından yakalanır -- http://localhost:8025 adresini kontrol edin
+   - OTP kodları Mailpit tarafından yakalanır -- http://localhost:8025 adresini kontrol edin
 
 4. **Fiziksel Cihazda Çalıştırın**
 
@@ -309,7 +309,7 @@ Başlamanın en hızlı yolu. Bir komut her şeyi başlatır -- Firebase Emülat
 | Firebase Emülatör UI | http://localhost:4000 | Firestore verilerini, Auth kullanıcılarını, RTDB'yi göz atın |
 | Express API | http://localhost:3000 | Arka uç API'si |
 | Sağlık kontrolü | http://localhost:3000/api/health | API'nin çalışır durumda olduğunu doğrulayın |
-| MailHog | http://localhost:8025 | Yakalanan e-postaları ve OTP kodlarını görüntüleyin |
+| Mailpit | http://localhost:8025 | Yakalanan e-postaları ve OTP kodlarını görüntüleyin |
 | MinIO Konsolu | http://localhost:9001 | Yüklenmiş görselleri ve dosyaları göz atın |
 
 ### İsteğe Bağlı Hizmetler
@@ -418,7 +418,7 @@ CI'de, Playwright ve Android E2E testleri aynı yerel ortamda (emülatörler + D
 - **Android yapısı başarısız**: JDK 17+ ve Android SDK'nın yüklendiğinden emin olun. `./gradlew clean` deneyin.
 - **adb cihazı algılanmadı**: USB hata ayıklamayı etkinleştirin. Kontrol etmek için `adb devices` çalıştırın.
 - **Görüntüler yüklenmiyorsa**: MinIO kovası oluşturulmamış olabilir. `cd express-api && NODE_ENV=local node ../local/seed.js` çalıştırın. Fiziksel cihazlar için `adb reverse tcp:9002 tcp:9002` çalıştırın.
-- **OTP ulaşmıyor**: Konsol çıktısını `[OTP-LOCAL]` satırları için kontrol edin. Ayrıca http://localhost:8025 adresindeki MailHog UI'yi kontrol edin.
+- **OTP ulaşmıyor**: Konsol çıktısını `[OTP-LOCAL]` satırları için kontrol edin. Ayrıca http://localhost:8025 adresindeki Mailpit UI'yi kontrol edin.
 - **Emülatör verilerini sıfırla**: `local/firebase-emulator-data/` dizinini silin ve yeniden başlatın.
 - **MinIO verilerini sıfırla**: Birimleri kaldırmak için `docker compose -f local/docker-compose.yml down -v` çalıştırın.
 

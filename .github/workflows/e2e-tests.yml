@@ -179,11 +179,11 @@ jobs:
         run: |
           docker run -d --name livekit -p 7880:7880 -p 7881:7881 -p 7882:7882 \
             -v ${{ github.workspace }}/local/livekit.yaml:/etc/livekit.yaml \
-            livekit/livekit-server:v1.8.3 --config /etc/livekit.yaml
+            livekit/livekit-server:v1.9.1 --config /etc/livekit.yaml
           docker run -d --name minio -p 9002:9000 -p 9001:9001 \
             -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
             minio/minio:RELEASE.2025-03-12T18-04-18Z server /data --console-address ":9001"
-          docker run -d --name mailhog -p 1025:1025 -p 8025:8025 mailhog/mailhog:v1.0.1
+          docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit:v1.21
 
       - name: Start Firebase Emulators
         run: |
@@ -224,8 +224,8 @@ jobs:
         run: |
           docker logs livekit 2>/dev/null || true
           docker logs minio 2>/dev/null || true
-          docker logs mailhog 2>/dev/null || true
-          docker rm -f livekit minio mailhog 2>/dev/null || true
+          docker logs mailpit 2>/dev/null || true
+          docker rm -f livekit minio mailpit 2>/dev/null || true
 
       - name: Collect Allure results from JUnit XML
         if: always()
@@ -350,11 +350,11 @@ jobs:
         run: |
           docker run -d --name livekit -p 7880:7880 -p 7881:7881 -p 7882:7882 \
             -v ${{ github.workspace }}/local/livekit.yaml:/etc/livekit.yaml \
-            livekit/livekit-server:v1.8.3 --config /etc/livekit.yaml
+            livekit/livekit-server:v1.9.1 --config /etc/livekit.yaml
           docker run -d --name minio -p 9002:9000 -p 9001:9001 \
             -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
             minio/minio:RELEASE.2025-03-12T18-04-18Z server /data --console-address ":9001"
-          docker run -d --name mailhog -p 1025:1025 -p 8025:8025 mailhog/mailhog:v1.0.1
+          docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit:v1.21
 
       - name: Start Firebase Emulators
         run: |
@@ -392,8 +392,8 @@ jobs:
         run: |
           docker logs livekit 2>/dev/null || true
           docker logs minio 2>/dev/null || true
-          docker logs mailhog 2>/dev/null || true
-          docker rm -f livekit minio mailhog 2>/dev/null || true
+          docker logs mailpit 2>/dev/null || true
+          docker rm -f livekit minio mailpit 2>/dev/null || true
 
       - name: Write environment.properties
         if: always()

@@ -192,7 +192,7 @@ ShyTalk/
 - **Android Studio** Ladybug atau lebih baru
 - **JDK 17+**
 - **Node.js 24+**
-- **Docker** (untuk server suara LiveKit, penyimpanan MinIO, email MailHog)
+- **Docker** (untuk server suara LiveKit, penyimpanan MinIO, email Mailpit)
 - **Firebase CLI** (`npm install -g firebase-tools`)
 
 Tidak perlu akun cloud untuk memulai -- lingkungan lokal berjalan sepenuhnya offline.
@@ -221,7 +221,7 @@ Cara tercepat untuk memulai. Satu perintah memulai semuanya -- Firebase Emulator
    ```
 
    Perintah tunggal ini:
-   - Memulai kontainer Docker (server suara LiveKit, penyimpanan MinIO, email MailHog)
+   - Memulai kontainer Docker (server suara LiveKit, penyimpanan MinIO, email Mailpit)
    - Memulai Firebase Emulator (Firestore, Auth, RTDB)
    - Menyemai data tes dan membuat bucket penyimpanan MinIO
    - Memulai Express API
@@ -234,7 +234,7 @@ Cara tercepat untuk memulai. Satu perintah memulai semuanya -- Firebase Emulator
      Services:
        Firebase UI:    http://localhost:4000
        Express API:    http://localhost:3000
-       MailHog UI:     http://localhost:8025
+       Mailpit UI:     http://localhost:8025
        MinIO Console:  http://localhost:9001
        LiveKit:        localhost:7880
 
@@ -248,7 +248,7 @@ Cara tercepat untuk memulai. Satu perintah memulai semuanya -- Firebase Emulator
    - Gunakan alur masuk email dengan akun tes yang sudah disediakan: `claude-test@shytalk.dev` / `localdev123`
    - Atau buat akun baru -- akan menggunakan emulator lokal
    - Masuk Google/Apple tidak berfungsi secara lokal (tidak ada OAuth asli) -- gunakan OTP email sebagai gantinya
-   - Kode OTP ditangkap oleh MailHog -- periksa http://localhost:8025
+   - Kode OTP ditangkap oleh Mailpit -- periksa http://localhost:8025
 
 4. **Jalankan di Perangkat Fisik**
 
@@ -309,7 +309,7 @@ Cara tercepat untuk memulai. Satu perintah memulai semuanya -- Firebase Emulator
 | Firebase Emulator UI | http://localhost:4000 | Jelajahi data Firestore, pengguna Auth, RTDB |
 | Express API | http://localhost:3000 | API backend |
 | Health check | http://localhost:3000/api/health | Verifikasi API berjalan |
-| MailHog | http://localhost:8025 | Lihat email yang ditangkap dan kode OTP |
+| Mailpit | http://localhost:8025 | Lihat email yang ditangkap dan kode OTP |
 | MinIO Console | http://localhost:9001 | Jelajahi gambar dan file yang diunggah |
 
 ### Layanan Opsional
@@ -418,7 +418,7 @@ Di CI, tes Playwright dan Android E2E berjalan terhadap lingkungan lokal yang sa
 - **Build Android gagal**: Pastikan JDK 17+ dan Android SDK terinstal. Coba `./gradlew clean`.
 - **Perangkat adb tidak terdeteksi**: Aktifkan debugging USB. Jalankan `adb devices` untuk memeriksa.
 - **Gambar tidak dimuat**: Bucket MinIO mungkin belum dibuat. Jalankan `cd express-api && NODE_ENV=local node ../local/seed.js`. Untuk perangkat fisik, jalankan `adb reverse tcp:9002 tcp:9002`.
-- **OTP tidak tiba**: Periksa output konsol untuk baris `[OTP-LOCAL]`. Juga periksa UI MailHog di http://localhost:8025.
+- **OTP tidak tiba**: Periksa output konsol untuk baris `[OTP-LOCAL]`. Juga periksa UI Mailpit di http://localhost:8025.
 - **Reset data emulator**: Hapus direktori `local/firebase-emulator-data/` dan mulai ulang.
 - **Reset data MinIO**: Jalankan `docker compose -f local/docker-compose.yml down -v` untuk menghapus volume.
 

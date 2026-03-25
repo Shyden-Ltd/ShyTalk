@@ -36,9 +36,9 @@ cleanup() {
 trap cleanup INT TERM
 
 # =============================================================================
-# Step 1: Docker Compose up (LiveKit + MinIO + MailHog)
+# Step 1: Docker Compose up (LiveKit + MinIO + Mailpit)
 # =============================================================================
-echo "==> Step 1/8: Starting Docker containers (LiveKit, MinIO, MailHog)..."
+echo "==> Step 1/8: Starting Docker containers (LiveKit, MinIO, Mailpit)..."
 docker compose -f "$SCRIPT_DIR/docker-compose.yml" up -d
 
 # =============================================================================
@@ -141,7 +141,7 @@ echo ""
 echo "  Services:"
 echo "    Firebase UI:    http://localhost:4000"
 echo "    Express API:    http://localhost:3000"
-echo "    MailHog UI:     http://localhost:8025"
+echo "    Mailpit UI:     http://localhost:8025"
 echo "    MinIO Console:  http://localhost:9001"
 echo "    LiveKit:        localhost:7880"
 echo ""

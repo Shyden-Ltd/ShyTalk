@@ -192,7 +192,7 @@ ShyTalk/
 - **Android Studio** Ladybug以降
 - **JDK 17+**
 - **Node.js 24+**
-- **Docker** (LiveKit音声サーバー、MinIOストレージ、MailHogメール用)
+- **Docker** (LiveKit音声サーバー、MinIOストレージ、Mailpitメール用)
 - **Firebase CLI** (`npm install -g firebase-tools`)
 
 開始するのにクラウドアカウントは不要です -- ローカル環境は完全にオフラインで動作します。
@@ -221,7 +221,7 @@ ShyTalk/
    ```
 
    この1つのコマンドで：
-   - Dockerコンテナを起動（LiveKit音声サーバー、MinIOストレージ、MailHogメール）
+   - Dockerコンテナを起動（LiveKit音声サーバー、MinIOストレージ、Mailpitメール）
    - Firebase Emulatorsを起動（Firestore、Auth、RTDB）
    - テストデータをシードし、MinIOストレージバケットを作成
    - Express APIを起動
@@ -234,7 +234,7 @@ ShyTalk/
      Services:
        Firebase UI:    http://localhost:4000
        Express API:    http://localhost:3000
-       MailHog UI:     http://localhost:8025
+       Mailpit UI:     http://localhost:8025
        MinIO Console:  http://localhost:9001
        LiveKit:        localhost:7880
 
@@ -248,7 +248,7 @@ ShyTalk/
    - シードされたテストアカウントでメールサインインフローを使用：`claude-test@shytalk.dev` / `localdev123`
    - または新しいアカウントを作成 -- ローカルエミュレーターを使用します
    - Google/Appleサインインはローカルでは動作しません（実際のOAuthなし） -- 代わりにメールOTPを使用
-   - OTPコードはMailHogにキャプチャされます -- http://localhost:8025 を確認
+   - OTPコードはMailpitにキャプチャされます -- http://localhost:8025 を確認
 
 4. **物理デバイスでの実行**
 
@@ -309,7 +309,7 @@ ShyTalk/
 | Firebase Emulator UI | http://localhost:4000 | Firestoreデータ、Authユーザー、RTDBの閲覧 |
 | Express API | http://localhost:3000 | バックエンドAPI |
 | ヘルスチェック | http://localhost:3000/api/health | APIの動作確認 |
-| MailHog | http://localhost:8025 | キャプチャされたメールとOTPコードの確認 |
+| Mailpit | http://localhost:8025 | キャプチャされたメールとOTPコードの確認 |
 | MinIO Console | http://localhost:9001 | アップロードされた画像とファイルの閲覧 |
 
 ### オプションサービス
@@ -418,7 +418,7 @@ CIでは、PlaywrightとAndroid E2Eテストは同じローカル環境（エミ
 - **Androidビルドが失敗**: JDK 17+とAndroid SDKがインストールされていることを確認。`./gradlew clean`を試す。
 - **adbデバイスが検出されない**: USBデバッグを有効にする。`adb devices`で確認。
 - **画像が読み込まれない**: MinIOバケットが作成されていない可能性。`cd express-api && NODE_ENV=local node ../local/seed.js`を実行。物理デバイスの場合、`adb reverse tcp:9002 tcp:9002`を実行。
-- **OTPが届かない**: コンソール出力で`[OTP-LOCAL]`行を確認。http://localhost:8025 のMailHog UIも確認。
+- **OTPが届かない**: コンソール出力で`[OTP-LOCAL]`行を確認。http://localhost:8025 のMailpit UIも確認。
 - **エミュレーターデータのリセット**: `local/firebase-emulator-data/`ディレクトリを削除して再起動。
 - **MinIOデータのリセット**: `docker compose -f local/docker-compose.yml down -v`を実行してボリュームを削除。
 

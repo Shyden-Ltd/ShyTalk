@@ -192,7 +192,7 @@ ShyTalk/
 - **Android Studio** Ladybug or newer
 - **JDK 21+**
 - **Node.js 24+**
-- **Docker** (for LiveKit voice server, MinIO storage, MailHog email)
+- **Docker** (for LiveKit voice server, MinIO storage, Mailpit email)
 - **Firebase CLI** (`npm install -g firebase-tools`)
 
 No cloud accounts are needed to get started -- the local environment runs entirely offline.
@@ -221,7 +221,7 @@ The fastest way to get started. One command starts everything -- Firebase Emulat
    ```
 
    This single command:
-   - Starts Docker containers (LiveKit voice server, MinIO storage, MailHog email)
+   - Starts Docker containers (LiveKit voice server, MinIO storage, Mailpit email)
    - Starts Firebase Emulators (Firestore, Auth, RTDB)
    - Seeds test data and creates the MinIO storage bucket
    - Starts the Express API
@@ -234,7 +234,7 @@ The fastest way to get started. One command starts everything -- Firebase Emulat
      Services:
        Firebase UI:    http://localhost:4000
        Express API:    http://localhost:3000
-       MailHog UI:     http://localhost:8025
+       Mailpit UI:     http://localhost:8025
        MinIO Console:  http://localhost:9001
        LiveKit:        localhost:7880
 
@@ -248,7 +248,7 @@ The fastest way to get started. One command starts everything -- Firebase Emulat
    - Use the email sign-in flow with the seeded test account: `claude-test@shytalk.dev` / `localdev123`
    - Or create a new account -- it will use the local emulators
    - Google/Apple sign-in won't work locally (no real OAuth) -- use email OTP instead
-   - OTP codes are captured by MailHog -- check http://localhost:8025
+   - OTP codes are captured by Mailpit -- check http://localhost:8025
 
 4. **Run on a Physical Device**
 
@@ -285,7 +285,7 @@ The fastest way to get started. One command starts everything -- Firebase Emulat
    adb reverse tcp:9000 tcp:9000   # RTDB emulator
    adb reverse tcp:7880 tcp:7880   # LiveKit
    adb reverse tcp:9002 tcp:9002   # MinIO (image storage)
-   adb reverse tcp:8025 tcp:8025   # MailHog UI (view OTP emails)
+   adb reverse tcp:8025 tcp:8025   # Mailpit UI (view OTP emails)
    ```
    With `adb reverse`, the default `10.0.2.2` addresses in the local flavor will work on a physical device too -- no build config changes needed.
 
@@ -310,7 +310,7 @@ The fastest way to get started. One command starts everything -- Firebase Emulat
 | Firebase Emulator UI | http://localhost:4000 | Browse Firestore data, Auth users, RTDB |
 | Express API | http://localhost:3000 | Backend API |
 | Health check | http://localhost:3000/api/health | Verify API is running |
-| MailHog | http://localhost:8025 | View captured emails and OTP codes |
+| Mailpit | http://localhost:8025 | View captured emails and OTP codes |
 | MinIO Console | http://localhost:9001 | Browse uploaded images and files |
 
 ### Optional Services
@@ -419,7 +419,7 @@ In CI, Playwright and Android E2E tests run against the same local environment (
 - **Android build fails**: Ensure JDK 21+ and Android SDK are installed. Try `./gradlew clean`.
 - **adb device not detected**: Enable USB debugging. Run `adb devices` to check.
 - **Images not loading**: MinIO bucket may not be created. Run `cd express-api && NODE_PATH=./node_modules node ../local/seed.js`. For physical devices, run `adb reverse tcp:9002 tcp:9002`.
-- **OTP not arriving**: Check console output for `[OTP-LOCAL]` lines. Also check MailHog UI at http://localhost:8025.
+- **OTP not arriving**: Check console output for `[OTP-LOCAL]` lines. Also check Mailpit UI at http://localhost:8025.
 - **Reset emulator data**: Delete `local/firebase-emulator-data/` directory and restart.
 - **Reset MinIO data**: Run `docker compose -f local/docker-compose.yml down -v` to remove volumes.
 

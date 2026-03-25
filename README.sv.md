@@ -192,7 +192,7 @@ ShyTalk/
 - **Android Studio** Ladybug eller nyare
 - **JDK 17+**
 - **Node.js 24+**
-- **Docker** (for LiveKit-rostserver, MinIO-lagring, MailHog-e-post)
+- **Docker** (for LiveKit-rostserver, MinIO-lagring, Mailpit-e-post)
 - **Firebase CLI** (`npm install -g firebase-tools`)
 
 Inga molnkonton behovs for att komma igang -- den lokala miljon kors helt offline.
@@ -221,7 +221,7 @@ Det snabbaste sattet att komma igang. Ett kommando startar allt -- Firebase-emul
    ```
 
    Detta enda kommando:
-   - Startar Docker-containrar (LiveKit-rostserver, MinIO-lagring, MailHog-e-post)
+   - Startar Docker-containrar (LiveKit-rostserver, MinIO-lagring, Mailpit-e-post)
    - Startar Firebase-emulatorer (Firestore, Auth, RTDB)
    - Seedar testdata och skapar MinIO-lagringshinken
    - Startar Express API
@@ -234,7 +234,7 @@ Det snabbaste sattet att komma igang. Ett kommando startar allt -- Firebase-emul
      Services:
        Firebase UI:    http://localhost:4000
        Express API:    http://localhost:3000
-       MailHog UI:     http://localhost:8025
+       Mailpit UI:     http://localhost:8025
        MinIO Console:  http://localhost:9001
        LiveKit:        localhost:7880
 
@@ -248,7 +248,7 @@ Det snabbaste sattet att komma igang. Ett kommando startar allt -- Firebase-emul
    - Anvand e-postinloggningsfllodet med det seedade testkontot: `claude-test@shytalk.dev` / `localdev123`
    - Eller skapa ett nytt konto -- det anvander de lokala emulatorerna
    - Google/Apple-inloggning fungerar inte lokalt (inget riktigt OAuth) -- anvand e-post-OTP istallet
-   - OTP-koder fangas av MailHog -- kolla http://localhost:8025
+   - OTP-koder fangas av Mailpit -- kolla http://localhost:8025
 
 4. **Koor pa en fysisk enhet**
 
@@ -309,7 +309,7 @@ Det snabbaste sattet att komma igang. Ett kommando startar allt -- Firebase-emul
 | Firebase Emulator UI | http://localhost:4000 | Bladddra i Firestore-data, Auth-anvandare, RTDB |
 | Express API | http://localhost:3000 | Backend-API |
 | Halsokontroll | http://localhost:3000/api/health | Verifiera att API:et kor |
-| MailHog | http://localhost:8025 | Visa fangade e-postmeddelanden och OTP-koder |
+| Mailpit | http://localhost:8025 | Visa fangade e-postmeddelanden och OTP-koder |
 | MinIO Console | http://localhost:9001 | Bladddra bland uppladdade bilder och filer |
 
 ### Valfria tjanster
@@ -418,7 +418,7 @@ I CI kors Playwright- och Android E2E-tester mot samma lokala miljo (emulatorer 
 - **Android-bygget misslyckas**: Se till att JDK 17+ och Android SDK ar installerade. Prova `./gradlew clean`.
 - **adb-enhet hittas inte**: Aktivera USB-felsookning. Kor `adb devices` for att kontrollera.
 - **Bilder laddas inte**: MinIO-hinken kanske inte har skapats. Kor `cd express-api && NODE_ENV=local node ../local/seed.js`. For fysiska enheter, kor `adb reverse tcp:9002 tcp:9002`.
-- **OTP kommer inte**: Kontrollera konsolutdata for `[OTP-LOCAL]`-rader. Kolla ocksa MailHog UI pa http://localhost:8025.
+- **OTP kommer inte**: Kontrollera konsolutdata for `[OTP-LOCAL]`-rader. Kolla ocksa Mailpit UI pa http://localhost:8025.
 - **Aterstall emulatordata**: Ta bort katalogen `local/firebase-emulator-data/` och starta om.
 - **Aterstall MinIO-data**: Kor `docker compose -f local/docker-compose.yml down -v` for att ta bort volymer.
 

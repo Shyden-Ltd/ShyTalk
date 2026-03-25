@@ -30,9 +30,9 @@ $emulatorProcess = $null
 $apiProcess = $null
 
 # =============================================================================
-# Step 1: Docker Compose up (LiveKit + MinIO + MailHog)
+# Step 1: Docker Compose up (LiveKit + MinIO + Mailpit)
 # =============================================================================
-Write-Host "==> Step 1/8: Starting Docker containers (LiveKit, MinIO, MailHog)..."
+Write-Host "==> Step 1/8: Starting Docker containers (LiveKit, MinIO, Mailpit)..."
 docker compose -f "$ScriptDir\docker-compose.yml" up -d
 
 # =============================================================================
@@ -194,7 +194,7 @@ Write-Host ""
 Write-Host "  Services:"
 Write-Host "    Firebase UI:    http://localhost:4000"
 Write-Host "    Express API:    http://localhost:3000"
-Write-Host "    MailHog UI:     http://localhost:8025"
+Write-Host "    Mailpit UI:     http://localhost:8025"
 Write-Host "    MinIO Console:  http://localhost:9001"
 Write-Host "    LiveKit:        localhost:7880"
 Write-Host ""

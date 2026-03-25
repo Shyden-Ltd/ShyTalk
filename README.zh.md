@@ -192,7 +192,7 @@ ShyTalk/
 - **Android Studio** Ladybug 或更新版本
 - **JDK 17+**
 - **Node.js 24+**
-- **Docker**（用于 LiveKit 语音服务器、MinIO 存储、MailHog 邮件）
+- **Docker**（用于 LiveKit 语音服务器、MinIO 存储、Mailpit 邮件）
 - **Firebase CLI**（`npm install -g firebase-tools`）
 
 开始前无需任何云账户 -- 本地环境完全离线运行。
@@ -221,7 +221,7 @@ ShyTalk/
    ```
 
    该命令将：
-   - 启动 Docker 容器（LiveKit 语音服务器、MinIO 存储、MailHog 邮件）
+   - 启动 Docker 容器（LiveKit 语音服务器、MinIO 存储、Mailpit 邮件）
    - 启动 Firebase 模拟器（Firestore、Auth、RTDB）
    - 填充测试数据并创建 MinIO 存储桶
    - 启动 Express API
@@ -234,7 +234,7 @@ ShyTalk/
      Services:
        Firebase UI:    http://localhost:4000
        Express API:    http://localhost:3000
-       MailHog UI:     http://localhost:8025
+       Mailpit UI:     http://localhost:8025
        MinIO Console:  http://localhost:9001
        LiveKit:        localhost:7880
 
@@ -248,7 +248,7 @@ ShyTalk/
    - 使用预填充的测试账户通过邮箱登录：`claude-test@shytalk.dev` / `localdev123`
    - 或创建新账户 -- 将使用本地模拟器
    - Google/Apple 登录在本地不可用（无真实 OAuth） -- 请改用邮箱 OTP
-   - OTP 验证码由 MailHog 捕获 -- 查看 http://localhost:8025
+   - OTP 验证码由 Mailpit 捕获 -- 查看 http://localhost:8025
 
 4. **在实体设备上运行**
 
@@ -309,7 +309,7 @@ ShyTalk/
 | Firebase Emulator UI | http://localhost:4000 | 浏览 Firestore 数据、Auth 用户、RTDB |
 | Express API | http://localhost:3000 | 后端 API |
 | 健康检查 | http://localhost:3000/api/health | 验证 API 是否运行 |
-| MailHog | http://localhost:8025 | 查看捕获的邮件和 OTP 验证码 |
+| Mailpit | http://localhost:8025 | 查看捕获的邮件和 OTP 验证码 |
 | MinIO Console | http://localhost:9001 | 浏览上传的图片和文件 |
 
 ### 可选服务
@@ -418,7 +418,7 @@ npx playwright test
 - **Android 构建失败**：确保已安装 JDK 17+ 和 Android SDK。尝试 `./gradlew clean`。
 - **未检测到 adb 设备**：启用 USB 调试。运行 `adb devices` 检查。
 - **图片无法加载**：MinIO 存储桶可能未创建。运行 `cd express-api && NODE_ENV=local node ../local/seed.js`。实体设备请运行 `adb reverse tcp:9002 tcp:9002`。
-- **OTP 未收到**：检查控制台输出中的 `[OTP-LOCAL]` 行。同时检查 MailHog UI：http://localhost:8025。
+- **OTP 未收到**：检查控制台输出中的 `[OTP-LOCAL]` 行。同时检查 Mailpit UI：http://localhost:8025。
 - **重置模拟器数据**：删除 `local/firebase-emulator-data/` 目录并重启。
 - **重置 MinIO 数据**：运行 `docker compose -f local/docker-compose.yml down -v` 删除卷。
 

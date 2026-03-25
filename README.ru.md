@@ -192,7 +192,7 @@ ShyTalk/
 - **Android Studio** Ladybug или новее
 - **JDK 17+**
 - **Node.js 24+**
-- **Docker** (для голосового сервера LiveKit, хранилища MinIO, почты MailHog)
+- **Docker** (для голосового сервера LiveKit, хранилища MinIO, почты Mailpit)
 - **Firebase CLI** (`npm install -g firebase-tools`)
 
 Облачные аккаунты не нужны для начала работы -- локальная среда работает полностью офлайн.
@@ -221,7 +221,7 @@ ShyTalk/
    ```
 
    Эта одна команда:
-   - Запускает Docker-контейнеры (голосовой сервер LiveKit, хранилище MinIO, почта MailHog)
+   - Запускает Docker-контейнеры (голосовой сервер LiveKit, хранилище MinIO, почта Mailpit)
    - Запускает эмуляторы Firebase (Firestore, Auth, RTDB)
    - Заполняет тестовые данные и создаёт бакет хранилища MinIO
    - Запускает Express API
@@ -234,7 +234,7 @@ ShyTalk/
      Services:
        Firebase UI:    http://localhost:4000
        Express API:    http://localhost:3000
-       MailHog UI:     http://localhost:8025
+       Mailpit UI:     http://localhost:8025
        MinIO Console:  http://localhost:9001
        LiveKit:        localhost:7880
 
@@ -248,7 +248,7 @@ ShyTalk/
    - Используйте поток входа по email с тестовым аккаунтом: `claude-test@shytalk.dev` / `localdev123`
    - Или создайте новый аккаунт -- он будет использовать локальные эмуляторы
    - Вход через Google/Apple не работает локально (нет настоящего OAuth) -- используйте email OTP
-   - OTP-коды перехватываются MailHog -- проверьте http://localhost:8025
+   - OTP-коды перехватываются Mailpit -- проверьте http://localhost:8025
 
 4. **Запуск на физическом устройстве**
 
@@ -309,7 +309,7 @@ ShyTalk/
 | Firebase Emulator UI | http://localhost:4000 | Просмотр данных Firestore, пользователей Auth, RTDB |
 | Express API | http://localhost:3000 | Бэкенд API |
 | Health check | http://localhost:3000/api/health | Проверка работы API |
-| MailHog | http://localhost:8025 | Просмотр перехваченных писем и OTP-кодов |
+| Mailpit | http://localhost:8025 | Просмотр перехваченных писем и OTP-кодов |
 | MinIO Console | http://localhost:9001 | Просмотр загруженных изображений и файлов |
 
 ### Дополнительные сервисы
@@ -418,7 +418,7 @@ npx playwright test
 - **Сборка Android не удалась**: Убедитесь, что JDK 17+ и Android SDK установлены. Попробуйте `./gradlew clean`.
 - **Устройство adb не обнаружено**: Включите отладку по USB. Выполните `adb devices` для проверки.
 - **Изображения не загружаются**: Бакет MinIO мог быть не создан. Выполните `cd express-api && NODE_ENV=local node ../local/seed.js`. Для физических устройств выполните `adb reverse tcp:9002 tcp:9002`.
-- **OTP не приходит**: Проверьте вывод консоли на наличие строк `[OTP-LOCAL]`. Также проверьте UI MailHog по адресу http://localhost:8025.
+- **OTP не приходит**: Проверьте вывод консоли на наличие строк `[OTP-LOCAL]`. Также проверьте UI Mailpit по адресу http://localhost:8025.
 - **Сброс данных эмулятора**: Удалите директорию `local/firebase-emulator-data/` и перезапустите.
 - **Сброс данных MinIO**: Выполните `docker compose -f local/docker-compose.yml down -v` для удаления томов.
 

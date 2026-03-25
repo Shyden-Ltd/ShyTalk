@@ -41,6 +41,14 @@ jest.mock('bcrypt', () => ({
   compare: jest.fn(),
 }));
 
+jest.mock('../../src/utils/log', () => ({
+  debug: jest.fn(),
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+  fatal: jest.fn(),
+}));
+
 jest.mock('../../src/middleware/auth', () => ({
   authMiddleware: (req, res, next) => next(),
   clearSuspensionCache: jest.fn(),
@@ -58,6 +66,7 @@ const bcrypt = require('bcrypt');
 const { sendEmail } = require('../../src/utils/email');
 const { auth } = require('../../src/utils/firebase');
 const { buildOtpEmail } = require('../../src/utils/email-templates');
+const log = require('../../src/utils/log');
 
 // Build mini express app with just auth routes
 function buildApp() {
@@ -231,6 +240,34 @@ describe('OTP Routes', () => {
         .send({ email: `${local64}@example.com` });
 
       expect(res.status).toBe(200);
+    });
+
+    it('should log OTP code with [OTP-LOCAL] when NODE_ENV is local', async () => {
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'local';
+
+      mockDocGet.mockResolvedValueOnce({ exists: false }).mockResolvedValueOnce({ exists: false });
+
+      const res = await request(app).post('/api/auth/otp/send').send({ email: 'user@example.com' });
+
+      expect(res.status).toBe(200);
+      expect(log.info).toHaveBeenCalledWith('auth', expect.stringContaining('[OTP-LOCAL]'));
+
+      process.env.NODE_ENV = originalEnv;
+    });
+
+    it('should not log OTP code when NODE_ENV is not local', async () => {
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+
+      mockDocGet.mockResolvedValueOnce({ exists: false }).mockResolvedValueOnce({ exists: false });
+
+      const res = await request(app).post('/api/auth/otp/send').send({ email: 'user@example.com' });
+
+      expect(res.status).toBe(200);
+      expect(log.info).not.toHaveBeenCalledWith('auth', expect.stringContaining('[OTP-LOCAL]'));
+
+      process.env.NODE_ENV = originalEnv;
     });
   });
 

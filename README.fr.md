@@ -192,7 +192,7 @@ ShyTalk/
 - **Android Studio** Ladybug ou ulterieur
 - **JDK 17+**
 - **Node.js 24+**
-- **Docker** (pour le serveur vocal LiveKit, le stockage MinIO, l'email MailHog)
+- **Docker** (pour le serveur vocal LiveKit, le stockage MinIO, l'email Mailpit)
 - **Firebase CLI** (`npm install -g firebase-tools`)
 
 Aucun compte cloud n'est necessaire pour commencer -- l'environnement local fonctionne entierement hors ligne.
@@ -221,7 +221,7 @@ Le moyen le plus rapide de commencer. Une seule commande demarre tout -- emulate
    ```
 
    Cette unique commande :
-   - Demarre les conteneurs Docker (serveur vocal LiveKit, stockage MinIO, email MailHog)
+   - Demarre les conteneurs Docker (serveur vocal LiveKit, stockage MinIO, email Mailpit)
    - Demarre les emulateurs Firebase (Firestore, Auth, RTDB)
    - Seme les donnees de test et cree le bucket de stockage MinIO
    - Demarre l'Express API
@@ -234,7 +234,7 @@ Le moyen le plus rapide de commencer. Une seule commande demarre tout -- emulate
      Services:
        Firebase UI:    http://localhost:4000
        Express API:    http://localhost:3000
-       MailHog UI:     http://localhost:8025
+       Mailpit UI:     http://localhost:8025
        MinIO Console:  http://localhost:9001
        LiveKit:        localhost:7880
 
@@ -248,7 +248,7 @@ Le moyen le plus rapide de commencer. Une seule commande demarre tout -- emulate
    - Utilisez le flux de connexion par email avec le compte de test : `claude-test@shytalk.dev` / `localdev123`
    - Ou creez un nouveau compte -- il utilisera les emulateurs locaux
    - La connexion Google/Apple ne fonctionne pas localement (pas de vrai OAuth) -- utilisez l'OTP par email a la place
-   - Les codes OTP sont captures par MailHog -- verifiez http://localhost:8025
+   - Les codes OTP sont captures par Mailpit -- verifiez http://localhost:8025
 
 4. **Executer sur un Appareil Physique**
 
@@ -309,7 +309,7 @@ Le moyen le plus rapide de commencer. Une seule commande demarre tout -- emulate
 | Firebase Emulator UI | http://localhost:4000 | Parcourir les donnees Firestore, utilisateurs Auth, RTDB |
 | Express API | http://localhost:3000 | API backend |
 | Health check | http://localhost:3000/api/health | Verifier que l'API fonctionne |
-| MailHog | http://localhost:8025 | Voir les emails captures et codes OTP |
+| Mailpit | http://localhost:8025 | Voir les emails captures et codes OTP |
 | MinIO Console | http://localhost:9001 | Parcourir les images et fichiers telecharges |
 
 ### Services Optionnels
@@ -418,7 +418,7 @@ En CI, les tests Playwright et Android E2E s'executent contre le meme environnem
 - **La compilation Android echoue** : Assurez-vous que JDK 17+ et Android SDK sont installes. Essayez `./gradlew clean`.
 - **Appareil adb non detecte** : Activez le debogage USB. Executez `adb devices` pour verifier.
 - **Les images ne chargent pas** : Le bucket MinIO n'a peut-etre pas ete cree. Executez `cd express-api && NODE_ENV=local node ../local/seed.js`. Pour les appareils physiques, executez `adb reverse tcp:9002 tcp:9002`.
-- **OTP ne arrive pas** : Verifiez la sortie console pour les lignes `[OTP-LOCAL]`. Verifiez aussi l'UI MailHog sur http://localhost:8025.
+- **OTP ne arrive pas** : Verifiez la sortie console pour les lignes `[OTP-LOCAL]`. Verifiez aussi l'UI Mailpit sur http://localhost:8025.
 - **Reinitialiser les donnees de l'emulateur** : Supprimez le repertoire `local/firebase-emulator-data/` et redemarrez.
 - **Reinitialiser les donnees MinIO** : Executez `docker compose -f local/docker-compose.yml down -v` pour supprimer les volumes.
 

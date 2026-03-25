@@ -192,7 +192,7 @@ ShyTalk/
 - **Android Studio** Ladybug hoặc mới hơn
 - **JDK 17+**
 - **Node.js 24+**
-- **Docker** (cho máy chủ thoại LiveKit, lưu trữ MinIO, email MailHog)
+- **Docker** (cho máy chủ thoại LiveKit, lưu trữ MinIO, email Mailpit)
 - **Firebase CLI** (`npm install -g firebase-tools`)
 
 Không cần tài khoản đám mây để bắt đầu -- môi trường cục bộ chạy hoàn toàn ngoại tuyến.
@@ -221,7 +221,7 @@ Cách nhanh nhất để bắt đầu. Một lệnh khởi động tất cả --
    ```
 
    Một lệnh này:
-   - Khởi động vùng chứa Docker (máy chủ thoại LiveKit, lưu trữ MinIO, email MailHog)
+   - Khởi động vùng chứa Docker (máy chủ thoại LiveKit, lưu trữ MinIO, email Mailpit)
    - Khởi động Firebase Emulators (Firestore, Auth, RTDB)
    - Tạo hạt giống dữ liệu kiểm tra và tạo bộ lưu trữ MinIO
    - Khởi động Express API
@@ -234,7 +234,7 @@ Cách nhanh nhất để bắt đầu. Một lệnh khởi động tất cả --
      Dịch vụ:
        Firebase UI:    http://localhost:4000
        Express API:    http://localhost:3000
-       MailHog UI:     http://localhost:8025
+       Mailpit UI:     http://localhost:8025
        MinIO Console:  http://localhost:9001
        LiveKit:        localhost:7880
 
@@ -248,7 +248,7 @@ Cách nhanh nhất để bắt đầu. Một lệnh khởi động tất cả --
    - Sử dụng luồng đăng nhập email với tài khoản kiểm tra đã tạo hạt giống: `claude-test@shytalk.dev` / `localdev123`
    - Hoặc tạo một tài khoản mới -- nó sẽ sử dụng bộ giả lập cục bộ
    - Đăng nhập Google/Apple sẽ không hoạt động cục bộ (không OAuth thực tế) -- thay vào đó sử dụng email OTP
-   - Các mã OTP được MailHog ghi lại -- kiểm tra http://localhost:8025
+   - Các mã OTP được Mailpit ghi lại -- kiểm tra http://localhost:8025
 
 4. **Chạy trên Thiết Bị Vật Lý**
 
@@ -309,7 +309,7 @@ Cách nhanh nhất để bắt đầu. Một lệnh khởi động tất cả --
 | Giao diện người dùng Firebase Emulator | http://localhost:4000 | Duyệt dữ liệu Firestore, người dùng Auth, RTDB |
 | Express API | http://localhost:3000 | API Backend |
 | Kiểm tra sức khỏe | http://localhost:3000/api/health | Xác minh API đang chạy |
-| MailHog | http://localhost:8025 | Xem email được ghi lại và mã OTP |
+| Mailpit | http://localhost:8025 | Xem email được ghi lại và mã OTP |
 | Bảng điều khiển MinIO | http://localhost:9001 | Duyệt hình ảnh và tệp đã tải lên |
 
 ### Dịch Vụ Tùy Chọn
@@ -418,7 +418,7 @@ Trong CI, kiểm tra Playwright và Android E2E chạy dựa trên cùng một m
 - **Bản dựng Android không thành công**: Đảm bảo JDK 17+ và Android SDK được cài đặt. Thử `./gradlew clean`.
 - **Thiết bị adb không được phát hiện**: Bật gỡ lỗi USB. Chạy `adb devices` để kiểm tra.
 - **Hình ảnh không tải**: Xô MinIO có thể không được tạo. Chạy `cd express-api && NODE_ENV=local node ../local/seed.js`. Đối với thiết bị vật lý, hãy chạy `adb reverse tcp:9002 tcp:9002`.
-- **OTP không đến**: Kiểm tra đầu ra bảng điều khiển cho các dòng `[OTP-LOCAL]`. Cũng kiểm tra Giao diện MailHog tại http://localhost:8025.
+- **OTP không đến**: Kiểm tra đầu ra bảng điều khiển cho các dòng `[OTP-LOCAL]`. Cũng kiểm tra Giao diện Mailpit tại http://localhost:8025.
 - **Đặt lại dữ liệu bộ giả lập**: Xóa thư mục `local/firebase-emulator-data/` và khởi động lại.
 - **Đặt lại dữ liệu MinIO**: Chạy `docker compose -f local/docker-compose.yml down -v` để xóa các tập.
 

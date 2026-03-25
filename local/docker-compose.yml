@@ -1,6 +1,6 @@
 services:
   livekit:
-    image: livekit/livekit-server:v1.8.3
+    image: livekit/livekit-server:v1.9.1
     ports:
       - "7880:7880"
       - "7881:7881"
@@ -20,8 +20,8 @@ services:
       MINIO_ROOT_PASSWORD: minioadmin
     command: server /data --console-address ":9001"
 
-  mailhog:
-    image: mailhog/mailhog:v1.0.1
+  mailpit:
+    image: axllent/mailpit:v1.21
     ports:
       - "1025:1025"
       - "8025:8025"

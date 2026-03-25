@@ -17,7 +17,7 @@ describe('email.js local mode', () => {
     process.env = originalEnv;
   });
 
-  test('uses MailHog transport in local mode without SMTP credentials', async () => {
+  test('uses Mailpit transport in local mode without SMTP credentials', async () => {
     process.env.NODE_ENV = 'local';
     const nodemailer = require('nodemailer');
     const { sendEmail } = require('../../src/utils/email');

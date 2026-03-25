@@ -192,7 +192,7 @@ ShyTalk/
 - **Android Studio** Ladybug أو أحدث
 - **JDK 17+**
 - **Node.js 24+**
-- **Docker** (لخادم صوت LiveKit، تخزين MinIO، بريد MailHog)
+- **Docker** (لخادم صوت LiveKit، تخزين MinIO، بريد Mailpit)
 - **Firebase CLI** (`npm install -g firebase-tools`)
 
 لا حاجة لحسابات سحابية للبدء -- البيئة المحلية تعمل بالكامل بدون اتصال.
@@ -221,7 +221,7 @@ ShyTalk/
    ```
 
    هذا الأمر الواحد:
-   - يشغل حاويات Docker (خادم صوت LiveKit، تخزين MinIO، بريد MailHog)
+   - يشغل حاويات Docker (خادم صوت LiveKit، تخزين MinIO، بريد Mailpit)
    - يشغل محاكيات Firebase (Firestore, Auth, RTDB)
    - يبذر بيانات الاختبار وينشئ حاوية تخزين MinIO
    - يشغل Express API
@@ -234,7 +234,7 @@ ShyTalk/
      Services:
        Firebase UI:    http://localhost:4000
        Express API:    http://localhost:3000
-       MailHog UI:     http://localhost:8025
+       Mailpit UI:     http://localhost:8025
        MinIO Console:  http://localhost:9001
        LiveKit:        localhost:7880
 
@@ -248,7 +248,7 @@ ShyTalk/
    - استخدم تدفق تسجيل الدخول بالبريد الإلكتروني مع حساب الاختبار المبذور: `claude-test@shytalk.dev` / `localdev123`
    - أو أنشئ حساباً جديداً -- سيستخدم المحاكيات المحلية
    - لن يعمل تسجيل الدخول بـ Google/Apple محلياً (لا يوجد OAuth حقيقي) -- استخدم OTP بالبريد الإلكتروني بدلاً من ذلك
-   - يتم التقاط رموز OTP بواسطة MailHog -- تحقق من http://localhost:8025
+   - يتم التقاط رموز OTP بواسطة Mailpit -- تحقق من http://localhost:8025
 
 4. **التشغيل على جهاز حقيقي**
 
@@ -309,7 +309,7 @@ ShyTalk/
 | Firebase Emulator UI | http://localhost:4000 | تصفح بيانات Firestore ومستخدمي Auth وRTDB |
 | Express API | http://localhost:3000 | واجهة API الخلفية |
 | فحص الصحة | http://localhost:3000/api/health | التحقق من أن API يعمل |
-| MailHog | http://localhost:8025 | عرض رسائل البريد الملتقطة ورموز OTP |
+| Mailpit | http://localhost:8025 | عرض رسائل البريد الملتقطة ورموز OTP |
 | MinIO Console | http://localhost:9001 | تصفح الصور والملفات المرفوعة |
 
 ### الخدمات الاختيارية
@@ -418,7 +418,7 @@ npx playwright test
 - **فشل بناء Android**: تأكد من تثبيت JDK 17+ و Android SDK. جرب `./gradlew clean`.
 - **لم يُكتشف جهاز adb**: فعّل تصحيح USB. شغّل `adb devices` للتحقق.
 - **الصور لا تُحمّل**: قد لا تكون حاوية MinIO قد أُنشئت. شغّل `cd express-api && NODE_ENV=local node ../local/seed.js`. للأجهزة الحقيقية، شغّل `adb reverse tcp:9002 tcp:9002`.
-- **لم يصل OTP**: تحقق من مخرجات وحدة التحكم بحثاً عن سطور `[OTP-LOCAL]`. تحقق أيضاً من واجهة MailHog على http://localhost:8025.
+- **لم يصل OTP**: تحقق من مخرجات وحدة التحكم بحثاً عن سطور `[OTP-LOCAL]`. تحقق أيضاً من واجهة Mailpit على http://localhost:8025.
 - **إعادة تعيين بيانات المحاكي**: احذف مجلد `local/firebase-emulator-data/` وأعد التشغيل.
 - **إعادة تعيين بيانات MinIO**: شغّل `docker compose -f local/docker-compose.yml down -v` لإزالة الأحجام.
 

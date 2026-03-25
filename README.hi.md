@@ -192,7 +192,7 @@ ShyTalk/
 - **Android Studio** Ladybug या नया
 - **JDK 17+**
 - **Node.js 24+**
-- **Docker** (LiveKit वॉइस सर्वर, MinIO स्टोरेज, MailHog ईमेल के लिए)
+- **Docker** (LiveKit वॉइस सर्वर, MinIO स्टोरेज, Mailpit ईमेल के लिए)
 - **Firebase CLI** (`npm install -g firebase-tools`)
 
 शुरू करने के लिए किसी क्लाउड अकाउंट की आवश्यकता नहीं है -- लोकल एनवायरनमेंट पूरी तरह ऑफलाइन चलता है।
@@ -221,7 +221,7 @@ ShyTalk/
    ```
 
    यह एकल कमांड:
-   - Docker कंटेनर शुरू करती है (LiveKit वॉइस सर्वर, MinIO स्टोरेज, MailHog ईमेल)
+   - Docker कंटेनर शुरू करती है (LiveKit वॉइस सर्वर, MinIO स्टोरेज, Mailpit ईमेल)
    - Firebase एमुलेटर शुरू करती है (Firestore, Auth, RTDB)
    - टेस्ट डेटा सीड करती है और MinIO स्टोरेज बकेट बनाती है
    - Express API शुरू करती है
@@ -234,7 +234,7 @@ ShyTalk/
      Services:
        Firebase UI:    http://localhost:4000
        Express API:    http://localhost:3000
-       MailHog UI:     http://localhost:8025
+       Mailpit UI:     http://localhost:8025
        MinIO Console:  http://localhost:9001
        LiveKit:        localhost:7880
 
@@ -248,7 +248,7 @@ ShyTalk/
    - सीडेड टेस्ट अकाउंट के साथ ईमेल साइन-इन फ्लो का उपयोग करें: `claude-test@shytalk.dev` / `localdev123`
    - या नया अकाउंट बनाएं -- यह लोकल एमुलेटर का उपयोग करेगा
    - Google/Apple साइन-इन लोकली काम नहीं करेगा (कोई असली OAuth नहीं) -- इसके बजाय ईमेल OTP का उपयोग करें
-   - OTP कोड MailHog द्वारा कैप्चर किए जाते हैं -- http://localhost:8025 चेक करें
+   - OTP कोड Mailpit द्वारा कैप्चर किए जाते हैं -- http://localhost:8025 चेक करें
 
 4. **फिजिकल डिवाइस पर चलाएं**
 
@@ -309,7 +309,7 @@ ShyTalk/
 | Firebase Emulator UI | http://localhost:4000 | Firestore डेटा, Auth यूज़र, RTDB ब्राउज़ करें |
 | Express API | http://localhost:3000 | बैकएंड API |
 | Health check | http://localhost:3000/api/health | API चल रही है यह सत्यापित करें |
-| MailHog | http://localhost:8025 | कैप्चर्ड ईमेल और OTP कोड देखें |
+| Mailpit | http://localhost:8025 | कैप्चर्ड ईमेल और OTP कोड देखें |
 | MinIO Console | http://localhost:9001 | अपलोड की गई इमेज और फाइलें ब्राउज़ करें |
 
 ### वैकल्पिक सर्विसेज
@@ -418,7 +418,7 @@ CI में, Playwright और Android E2E टेस्ट उसी लोक�
 - **Android बिल्ड फेल होता है**: सुनिश्चित करें कि JDK 17+ और Android SDK इंस्टॉल हैं। `./gradlew clean` आज़माएं।
 - **adb डिवाइस नहीं दिखता**: USB डीबगिंग सक्षम करें। जांचने के लिए `adb devices` चलाएं।
 - **इमेज लोड नहीं होतीं**: MinIO बकेट शायद नहीं बना। `cd express-api && NODE_ENV=local node ../local/seed.js` चलाएं। फिजिकल डिवाइस के लिए, `adb reverse tcp:9002 tcp:9002` चलाएं।
-- **OTP नहीं आ रहा**: कंसोल आउटपुट में `[OTP-LOCAL]` लाइनें चेक करें। http://localhost:8025 पर MailHog UI भी चेक करें।
+- **OTP नहीं आ रहा**: कंसोल आउटपुट में `[OTP-LOCAL]` लाइनें चेक करें। http://localhost:8025 पर Mailpit UI भी चेक करें।
 - **एमुलेटर डेटा रीसेट करें**: `local/firebase-emulator-data/` डायरेक्टरी हटाएं और रीस्टार्ट करें।
 - **MinIO डेटा रीसेट करें**: वॉल्यूम हटाने के लिए `docker compose -f local/docker-compose.yml down -v` चलाएं।
 

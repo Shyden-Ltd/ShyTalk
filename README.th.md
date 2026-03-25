@@ -192,7 +192,7 @@ ShyTalk/
 - **Android Studio** Ladybug หรือใหม่กว่า
 - **JDK 17+**
 - **Node.js 24+**
-- **Docker** (สำหรับ LiveKit voice server, MinIO storage, MailHog email)
+- **Docker** (สำหรับ LiveKit voice server, MinIO storage, Mailpit email)
 - **Firebase CLI** (`npm install -g firebase-tools`)
 
 ไม่จำเป็นต้องมีบัญชี cloud เพื่อเริ่มต้น -- สภาพแวดล้อมท้องถิ่นทำงานออนไลน์โดยสิ้นเชิง
@@ -221,7 +221,7 @@ ShyTalk/
    ```
 
    This single command:
-   - Starts Docker containers (LiveKit voice server, MinIO storage, MailHog email)
+   - Starts Docker containers (LiveKit voice server, MinIO storage, Mailpit email)
    - Starts Firebase Emulators (Firestore, Auth, RTDB)
    - Seeds test data and creates the MinIO storage bucket
    - Starts the Express API
@@ -234,7 +234,7 @@ ShyTalk/
      Services:
        Firebase UI:    http://localhost:4000
        Express API:    http://localhost:3000
-       MailHog UI:     http://localhost:8025
+       Mailpit UI:     http://localhost:8025
        MinIO Console:  http://localhost:9001
        LiveKit:        localhost:7880
 
@@ -248,7 +248,7 @@ ShyTalk/
    - ใช้ขั้นตอนการลงชื่อเข้าใช้ด้วยอีเมลกับบัญชีทดสอบที่จัดเตรียมไว้: `claude-test@shytalk.dev` / `localdev123`
    - หรือสร้างบัญชีใหม่ -- จะใช้ emulator ท้องถิ่น
    - การลงชื่อเข้าใช้ Google/Apple จะไม่ทำงานในสภาพแวดล้อมท้องถิ่น (ไม่มี OAuth จริง) -- ใช้ email OTP แทน
-   - รหัส OTP จะถูกจับโดย MailHog -- ตรวจสอบที่ http://localhost:8025
+   - รหัส OTP จะถูกจับโดย Mailpit -- ตรวจสอบที่ http://localhost:8025
 
 4. **เรียกใช้บนอุปกรณ์จริง**
 
@@ -309,7 +309,7 @@ ShyTalk/
 | Firebase Emulator UI | http://localhost:4000 | เรียกดูข้อมูล Firestore, ผู้ใช้ Auth, RTDB |
 | Express API | http://localhost:3000 | Backend API |
 | Health check | http://localhost:3000/api/health | ตรวจสอบว่า API กำลังทำงาน |
-| MailHog | http://localhost:8025 | ดูอีเมลและรหัส OTP ที่จับได้ |
+| Mailpit | http://localhost:8025 | ดูอีเมลและรหัส OTP ที่จับได้ |
 | MinIO Console | http://localhost:9001 | เรียกดูรูปภาพและไฟล์ที่อัปโหลด |
 
 ### บริการเสริม
@@ -418,7 +418,7 @@ npx playwright test
 - **Android build fails**: ตรวจสอบว่าติดตั้ง JDK 17+ และ Android SDK แล้ว ลองใช้ `./gradlew clean`
 - **adb device not detected**: เปิดใช้งาน USB debugging เรียกใช้ `adb devices` เพื่อตรวจสอบ
 - **Images not loading**: MinIO bucket อาจไม่ได้สร้าง เรียกใช้ `cd express-api && NODE_ENV=local node ../local/seed.js` สำหรับอุปกรณ์จริง ให้เรียกใช้ `adb reverse tcp:9002 tcp:9002`
-- **OTP not arriving**: ตรวจสอบเอาต์พุตคอนโซลหาเส้น `[OTP-LOCAL]` ยังตรวจสอบ MailHog UI ที่ http://localhost:8025
+- **OTP not arriving**: ตรวจสอบเอาต์พุตคอนโซลหาเส้น `[OTP-LOCAL]` ยังตรวจสอบ Mailpit UI ที่ http://localhost:8025
 - **Reset emulator data**: ลบไดเรกทอรี `local/firebase-emulator-data/` และเริ่มต้นใหม่
 - **Reset MinIO data**: เรียกใช้ `docker compose -f local/docker-compose.yml down -v` เพื่อลบปริมาณ
 
