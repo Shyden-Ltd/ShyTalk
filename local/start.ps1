@@ -224,6 +224,9 @@ try {
     Write-Host ""
     Write-Host "Shutting down..."
 
+    # Clean up NODE_ENV so it doesn't leak into the caller's shell
+    Remove-Item Env:\NODE_ENV -ErrorAction SilentlyContinue
+
     # 1. Stop Express API
     if ($apiProcess -and -not $apiProcess.HasExited) {
         Write-Host "Stopping Express API..."

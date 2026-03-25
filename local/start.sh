@@ -30,10 +30,9 @@ cleanup() {
   docker compose -f "$SCRIPT_DIR/docker-compose.yml" down 2>/dev/null || true
 
   echo "Local environment stopped."
-  exit 0
 }
 
-trap cleanup INT TERM
+trap 'cleanup; exit 0' INT TERM
 
 # =============================================================================
 # Step 1: Docker Compose up (LiveKit + MinIO + Mailpit)
