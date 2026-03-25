@@ -8,89 +8,89 @@
 
 🌍 [English](README.md) | [العربية](README.ar.md) | [Deutsch](README.de.md) | [Español](README.es.md) | [Français](README.fr.md) | [हिन्दी](README.hi.md) | [Bahasa Indonesia](README.id.md) | [Italiano](README.it.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Nederlands](README.nl.md) | [Polski](README.pl.md) | [Português](README.pt.md) | [Русский](README.ru.md) | [Svenska](README.sv.md) | [ไทย](README.th.md) | **Türkçe** | [Українська](README.uk.md) | [Tiếng Việt](README.vi.md) | [中文](README.zh.md)
 
-## About
+## Hakkında
 
-ShyTalk is a social voice chat app where users can create and join real-time voice chat rooms. Built with Kotlin Multiplatform (KMP), it targets both Android and iOS with a shared codebase. Whether you want to host a conversation, listen in, or connect with people around the world, ShyTalk makes it easy.
+ShyTalk, kullanıcıların gerçek zamanlı sesli sohbet odaları oluşturabileceği ve katılabileceği bir sosyal sesli sohbet uygulamasıdır. Kotlin Multiplatform (KMP) ile oluşturulan bu uygulama, Android ve iOS'u paylaşılan bir kod tabanı ile hedefler. Konuşma barındırmak, dinlemek veya dünyada insanlarla bağlantı kurmak istiyorsanız, ShyTalk bunu kolaylaştırır.
 
-iOS is a supported platform but this guide focuses on Android development, which is the primary development target.
+iOS desteklenen bir platformdur ancak bu rehber, birincil geliştirme hedefi olan Android geliştirmeye odaklanır.
 
-## Features
+## Özellikler
 
-### Voice Chat Rooms
-- Create or join rooms with real-time voice powered by LiveKit
-- Structured seating system with owner, host, and attendee roles
-- Seat requests and invites -- request to join a seat or invite listeners to speak
-- Floating chathead -- continue voice chat while browsing other parts of the app
-- Room expiry -- rooms auto-close when the owner is away, with countdown timers
+### Sesli Sohbet Odaları
+- LiveKit tarafından desteklenen gerçek zamanlı sesle odalara katılın veya oluşturun
+- Sahip, host ve katılımcı rollerine sahip yapılandırılmış oturum sistemi
+- Koltuk istekleri ve davetler -- bir koltuğa katılmayı isteyin veya dinleyicileri konuşmaya davet edin
+- Kayan sohbet başlığı -- uygulamanın diğer bölümlerine göz atarken sesli sohbeti devam ettirin
+- Oda geçerliliği -- sahip uzakta olduğunda odalar geri sayım zamanlayıcıları ile otomatik olarak kapanır
 
-### Messaging
-- Live text chat alongside voice in every room
-- Private messaging with 1-on-1 conversations
-- Group chats with member management and permissions
-- Typing indicators in real-time
-- Sticker support
+### Mesajlaşma
+- Her odada sesle birlikte canlı metin sohbeti
+- 1-on-1 konuşmalarla özel mesajlaşma
+- Üye yönetimi ve izinleri olan grup sohbetleri
+- Gerçek zamanlı yazma göstergeleri
+- Çıkartma desteği
 
-### Social
-- Customizable user profiles with photos, cover images, nationality flags, and bios
-- Follow system -- follow other users and see when they're active
-- Gift wall -- showcase gifts received from other users
-- Block system -- block users across rooms and profiles
+### Sosyal
+- Fotoğraf, kapak görselleri, milliyetlik bayrakları ve biyografilerle özelleştirilebilir kullanıcı profilleri
+- Takip sistemi -- diğer kullanıcıları takip edin ve etkin olduklarında görün
+- Hediye duvarı -- diğer kullanıcılardan alınan hediyeleri sergileyip
+- Bloke sistemi -- odalar ve profiller arasında kullanıcıları engelleyin
 
-### Virtual Economy
-- Coin-based economy with wallet and transaction history
-- Daily login rewards with streak bonuses
-- Lucky Spin (gacha) system with tiered prizes
-- Virtual gifts -- send and receive animated gifts during voice chats
-- Backpack inventory for storing gifts
-- Coin packages for purchasing coins
-- Broadcast banners with animated gift effects
+### Sanal Ekonomi
+- Cüzdan ve işlem geçmişi ile madeni para tabanlı ekonomi
+- Giriş çizgi bonusları ile günlük giriş ödülleri
+- Katmanlı ödüller ile Lucky Spin (gacha) sistemi
+- Sanal hediyeler -- sesli sohbetler sırasında animasyonlu hediyeler gönderin ve alın
+- Hediyeleri depolamak için Sırt çantası envanteri
+- Madeni para satın almak için Madeni para paketleri
+- Animasyonlu hediye efektli Yayın paftaları
 
-### Account & Identity
-- Multi-provider authentication -- sign in with Google, Apple, or Email (OTP)
-- Link multiple sign-in methods to a single account
-- Stable user identity (uniqueId) that persists across Firebase projects
-- Linked Accounts management in Settings with link/unlink support
-- Device binding -- each device is permanently tied to one account
+### Hesap & Kimlik
+- Çoklu sağlayıcı kimlik doğrulaması -- Google, Apple veya E-posta (OTP) ile giriş yapın
+- Birden fazla giriş yöntemini tek bir hesaba bağlayın
+- Firebase projeleri arasında devam eden Kararlı kullanıcı kimliği (uniqueId)
+- Ayarlar'da Bağlı Hesaplar yönetimi ile bağlama/çöz desteği
+- Cihaz bağlaması -- her cihaz kalıcı olarak bir hesaba bağlanır
 
-### Moderation & Safety
-- Moderation tools -- mute, kick, move seats, and manage hosts as a room owner
-- User reporting system with review workflow
-- Warning and suspension system for policy violations
-- Community standards, privacy policy, and terms of service screens
-- Legal acceptance flow for new users
-- Force update enforcement for outdated app versions
+### İtidal & Güvenlik
+- Moderation araçları -- oda sahibi olarak sessiz, atma, koltukları taşı ve hostları yönet
+- İnceleme iş akışı ile kullanıcı raporlama sistemi
+- İlke ihlalleri için uyarı ve askıya alma sistemi
+- Topluluk standartları, gizlilik politikası ve hizmet şartları ekranları
+- Yeni kullanıcılar için yasal kabul akışı
+- Eski uygulama sürümleri için zorunlu güncelleme uygulaması
 
-### Starting Screens
-- Configurable launch screens shown on app startup
-- Admin-managed content with scheduling and targeting options
+### Başlangıç Ekranları
+- Uygulama başlangıcında gösterilen yapılandırılabilir başlatma ekranları
+- Planlama ve hedefleme seçenekleri ile yönetici tarafından yönetilen içerik
 
-### Security
-- PIN code protection for app access
-- Biometric authentication -- fingerprint and face recognition
-- OTP (one-time password) verification for sensitive actions
+### Güvenlik
+- Uygulama erişimi için PIN kodu koruması
+- Biyometrik kimlik doğrulaması -- parmak izi ve yüz tanıma
+- Hassas işlemler için OTP (tek kullanımlık şifre) doğrulaması
 
-### Admin Panel
-- Web-based moderation dashboard at the project's static site
-- User management, content moderation, and configuration
-- Template and gift management with live preview
-- Real-time log streaming and alerting
+### Yönetici Paneli
+- Projenin statik sitesinde web tabanlı moderation panosu
+- Kullanıcı yönetimi, içerik moderasyonu ve yapılandırma
+- Canlı önizleme ile şablon ve hediye yönetimi
+- Gerçek zamanlı günlük akışı ve uyarı
 
-### Image Compression
-- Automatic image compression on upload via the Express API
-- Reduces storage and bandwidth costs while preserving quality
+### Görüntü Sıkıştırma
+- Express API üzerinden yükleme sırasında otomatik görüntü sıkıştırması
+- Kaliteyi korurken depolama ve bant genişliği maliyetlerini azaltır
 
-### Internationalization
-- 19 languages supported out of the box
-- Full localization for all user-facing strings
+### Uluslararasılaştırma
+- Kutusuz 19 dil desteği
+- Tüm kullanıcı karşılıklı dizeler için tam yerelleştirme
 
-### Logging & Monitoring
-- Structured logging across Express API, mobile apps, and admin panel
-- Real-time log streaming in the admin dashboard
-- Device and network banning with automatic enforcement
-- Alerting system for critical errors and anomalies
-- Trace ID propagation for end-to-end request tracking
+### Günlük Tutuş & İzleme
+- Express API, mobil uygulamalar ve yönetici paneli arasında yapılandırılmış günlük tutuş
+- Yönetici panosunda gerçek zamanlı günlük akışı
+- Otomatik uygulamalar ile cihaz ve ağ yasaklaması
+- Kritik hatalar ve anomaliler için uyarı sistemi
+- Uçtan uca istek izleme için Trace ID yayılması
 
-## Tech Stack
+## Teknoloji Yığını
 
 | Layer | Technology |
 |-------|-----------|
@@ -111,9 +111,9 @@ iOS is a supported platform but this guide focuses on Android development, which
 | **Navigation** | Compose Navigation |
 | **CDN** | Cloudflare Pages + CDN |
 
-## Architecture
+## Mimarı
 
-ShyTalk follows **MVVM** with a clean **Repository Pattern**:
+ShyTalk, temiz bir **Repository Pattern** ile **MVVM** takip eder:
 
 ```
 +---------------------------------------------+
@@ -128,12 +128,12 @@ ShyTalk follows **MVVM** with a clean **Repository Pattern**:
 +---------------------------------------------+
 ```
 
-- **shared module** (`commonMain`) -- Models, repository interfaces, ViewModels, and UI shared across platforms
-- **app module** -- Android-specific screens, repository implementations, and entry point
-- **iosApp module** -- iOS-specific entry point
-- **express-api** -- Express.js backend running on Oracle Cloud Free Tier
+- **shared modülü** (`commonMain`) -- Modeller, depo arayüzleri, ViewModeller ve platformlar arasında paylaşılan UI
+- **app modülü** -- Android'e özel ekranlar, depo uygulamaları ve giriş noktası
+- **iosApp modülü** -- iOS'a özel giriş noktası
+- **express-api** -- Oracle Cloud Ücretsiz Seviye'sinde çalışan Express.js arka ucu
 
-## Project Structure
+## Proje Yapısı
 
 ```
 ShyTalk/
@@ -185,30 +185,30 @@ ShyTalk/
 +-- firebase.json                     # Firebase configuration
 ```
 
-## Getting Started
+## Başlarken
 
-### Prerequisites
+### Ön Koşullar
 
-- **Android Studio** Ladybug or newer
+- **Android Studio** Ladybug veya daha yeni
 - **JDK 17+**
 - **Node.js 24+**
-- **Docker** (for LiveKit voice server, MinIO storage, MailHog email)
+- **Docker** (LiveKit sesli sunucu, MinIO depolama, MailHog e-postası için)
 - **Firebase CLI** (`npm install -g firebase-tools`)
 
-No cloud accounts are needed to get started -- the local environment runs entirely offline.
+Başlamak için bulut hesaplarına gerek yoktur -- yerel ortam tamamen çevrimdışı çalışır.
 
-### Local Development (Recommended)
+### Yerel Geliştirme (Önerilir)
 
-The fastest way to get started. One command starts everything -- Firebase Emulators, Docker containers, Express API, and builds the Android app. No cloud accounts needed, no costs, no quota limits.
+Başlamanın en hızlı yolu. Bir komut her şeyi başlatır -- Firebase Emülatörleri, Docker konteynerlerini, Express API'yi ve Android uygulamasını oluşturur. Bulut hesabına, maliyete veya kota sınırlarına gerek yoktur.
 
-1. **Clone and install**
+1. **Klonla ve yükle**
    ```bash
    git clone https://github.com/ShydenMcM/ShyTalk.git
    cd ShyTalk
    cd express-api && npm install && cd ..
    ```
 
-2. **Start everything**
+2. **Her şeyi başlat**
 
    **Linux / macOS / Git Bash:**
    ```bash
@@ -220,75 +220,75 @@ The fastest way to get started. One command starts everything -- Firebase Emulat
    .\local\start.ps1
    ```
 
-   This single command:
-   - Starts Docker containers (LiveKit voice server, MinIO storage, MailHog email)
-   - Starts Firebase Emulators (Firestore, Auth, RTDB)
-   - Seeds test data and creates the MinIO storage bucket
-   - Starts the Express API
-   - Builds and installs the Android app (if a device is connected)
+   Bu tek komut:
+   - Docker konteynerlerini başlatır (LiveKit sesli sunucu, MinIO depolama, MailHog e-postası)
+   - Firebase Emülatörlerini başlatır (Firestore, Auth, RTDB)
+   - Test verilerini tohumlar ve MinIO depolama kovanını oluşturur
+   - Express API'yi başlatır
+   - Android uygulamasını oluşturur ve yükler (cihaz bağlı ise)
 
-   When ready, you'll see:
+   Hazır olduğunda şunu göreceksiniz:
    ```
-   Local environment ready (fully offline):
+   Yerel ortam hazır (tam çevrimdışı):
 
-     Services:
+     Hizmetler:
        Firebase UI:    http://localhost:4000
        Express API:    http://localhost:3000
        MailHog UI:     http://localhost:8025
        MinIO Console:  http://localhost:9001
        LiveKit:        localhost:7880
 
-     Credentials:
-       Test admin:     claude-test@shytalk.dev / localdev123
-       Test user:      user@test.com / localdev123
+     Kimlik Bilgileri:
+       Test yöneticisi:     claude-test@shytalk.dev / localdev123
+       Test kullanıcısı:      user@test.com / localdev123
        MinIO:          minioadmin / minioadmin
    ```
 
-3. **Sign in**
-   - Use the email sign-in flow with the seeded test account: `claude-test@shytalk.dev` / `localdev123`
-   - Or create a new account -- it will use the local emulators
-   - Google/Apple sign-in won't work locally (no real OAuth) -- use email OTP instead
-   - OTP codes are captured by MailHog -- check http://localhost:8025
+3. **Giriş yap**
+   - Tohumlanmış test hesabı ile e-posta oturum açma akışını kullanın: `claude-test@shytalk.dev` / `localdev123`
+   - Veya yeni bir hesap oluşturun -- yerel emülatörleri kullanacaktır
+   - Google/Apple oturum açması yerel olarak çalışmaz (gerçek OAuth yok) -- bunun yerine e-posta OTP'sini kullanın
+   - OTP kodları MailHog tarafından yakalanır -- http://localhost:8025 adresini kontrol edin
 
-4. **Run on a Physical Device**
+4. **Fiziksel Cihazda Çalıştırın**
 
-   Your phone must be on the **same Wi-Fi network** as your development machine.
+   Telefonunuz, geliştirme makinenizle aynı **Wi-Fi ağında** olmalıdır.
 
-   a. Find your machine's local IP:
+   a. Makinenizin yerel IP'sini bulun:
    ```bash
    # Windows
-   ipconfig    # Look for "IPv4 Address" under your Wi-Fi adapter (e.g. 192.168.1.42)
+   ipconfig    # Wi-Fi bağdaştırıcınız altında "IPv4 Adresi"ni arayın (örn. 192.168.1.42)
 
    # macOS / Linux
-   ifconfig | grep "inet "    # or: ip addr show
+   ifconfig | grep "inet "    # veya: ip addr show
    ```
 
-   b. Update the local build flavor to use your IP instead of `10.0.2.2`. In `app/build.gradle.kts`, find the `local` flavor and change:
+   b. Yerel yapı lezzetini `10.0.2.2` yerine IP'nizi kullanacak şekilde güncelleyin. `app/build.gradle.kts` içinde `local` lezzetini bulun ve değiştirin:
    ```kotlin
-   // Replace 10.0.2.2 with your machine's local IP
+   // 10.0.2.2 yerine makinenizin yerel IP'sini değiştirin
    buildConfigField("String", "API_BASE_URL", "\"http://192.168.1.42:3000\"")
    buildConfigField("String", "WORKER_URL", "\"http://192.168.1.42:3000\"")
    buildConfigField("String", "LIVEKIT_SERVER_URL", "\"ws://192.168.1.42:7880\"")
    buildConfigField("String", "RTDB_URL", "\"http://192.168.1.42:9000\"")
    ```
 
-   c. Connect your device via USB and enable USB debugging, then:
+   c. Cihazınızı USB aracılığıyla bağlayın ve USB hata ayıklamayı etkinleştirin, ardından:
    ```bash
    ./gradlew installLocalDebug
    ```
 
-   d. Alternatively, use **adb reverse** to avoid changing any code (device routes localhost to your machine):
+   d. Alternatif olarak, herhangi bir kodu değiştirmekten kaçınmak için **adb reverse** kullanın (cihaz localhost'u makinenize yönlendirir):
    ```bash
    adb reverse tcp:3000 tcp:3000   # Express API
-   adb reverse tcp:8080 tcp:8080   # Firestore emulator
-   adb reverse tcp:9099 tcp:9099   # Auth emulator
-   adb reverse tcp:9000 tcp:9000   # RTDB emulator
+   adb reverse tcp:8080 tcp:8080   # Firestore emülatörü
+   adb reverse tcp:9099 tcp:9099   # Auth emülatörü
+   adb reverse tcp:9000 tcp:9000   # RTDB emülatörü
    adb reverse tcp:7880 tcp:7880   # LiveKit
-   adb reverse tcp:9002 tcp:9002   # MinIO (image storage)
+   adb reverse tcp:9002 tcp:9002   # MinIO (görüntü depolama)
    ```
-   With `adb reverse`, the default `10.0.2.2` addresses in the local flavor will work on a physical device too -- no build config changes needed.
+   `adb reverse` ile, yerel lezzetteki varsayılan `10.0.2.2` adresleri fiziksel bir cihazda da çalışacaktır -- yapı konfigürasyonu değişikliklerine gerek yoktur.
 
-5. **Stop local services**
+5. **Yerel hizmetleri durdur**
 
    **Linux / macOS / Git Bash:**
    ```bash
@@ -300,162 +300,162 @@ The fastest way to get started. One command starts everything -- Firebase Emulat
    .\local\stop.ps1
    ```
 
-   Or press `Ctrl+C` in the start script terminal. Emulator data is saved automatically and restored on next start.
+   Veya başlat komut dosyası terminalinde `Ctrl+C` tuşuna basın. Emülatör verileri otomatik olarak kaydedilir ve sonraki başlangıçta geri yüklenir.
 
-### Useful Local Dev URLs
+### Faydalı Yerel Dev URL'leri
 
-| Service | URL | Purpose |
+| Hizmet | URL | Amaç |
 |---------|-----|---------|
-| Firebase Emulator UI | http://localhost:4000 | Browse Firestore data, Auth users, RTDB |
-| Express API | http://localhost:3000 | Backend API |
-| Health check | http://localhost:3000/api/health | Verify API is running |
-| MailHog | http://localhost:8025 | View captured emails and OTP codes |
-| MinIO Console | http://localhost:9001 | Browse uploaded images and files |
+| Firebase Emülatör UI | http://localhost:4000 | Firestore verilerini, Auth kullanıcılarını, RTDB'yi göz atın |
+| Express API | http://localhost:3000 | Arka uç API'si |
+| Sağlık kontrolü | http://localhost:3000/api/health | API'nin çalışır durumda olduğunu doğrulayın |
+| MailHog | http://localhost:8025 | Yakalanan e-postaları ve OTP kodlarını görüntüleyin |
+| MinIO Konsolu | http://localhost:9001 | Yüklenmiş görselleri ve dosyaları göz atın |
 
-### Optional Services
+### İsteğe Bağlı Hizmetler
 
-**LibreTranslate (Message Translation)**
+**LibreTranslate (İleti Çevirisi)**
 
-Optional 6GB+ Docker image for testing the translation feature locally:
+Çeviri özelliğini yerel olarak test etmek için isteğe bağlı 6GB+ Docker görüntüsü:
 ```bash
 docker run -d -p 5000:5000 libretranslate/libretranslate
 ```
-Not included in the default setup due to large image size. Translation works without it -- messages just stay untranslated.
+Büyük görüntü boyutu nedeniyle varsayılan kuruluma dahil değildir. Çeviri bunu olmadan çalışır -- iletiler çevrilmez.
 
-### Cloud Development (Optional)
+### Bulut Geliştirme (İsteğe Bağlı)
 
-If you need to test against real cloud services (e.g., real push notifications, real Google Sign-In):
+Gerçek bulut hizmetlerine karşı test etmeniz gerekiyorsa (örneğin, gerçek itme bildirimleri, gerçek Google Oturum Açma):
 
-1. **Firebase setup**
-   - Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
-   - Enable **Google Sign-In** and **Apple Sign-In** in Authentication
-   - Enable **Firestore**, **Realtime Database**, and **Cloud Messaging**
-   - Download `google-services.json` and place it in `app/src/dev/`
+1. **Firebase kurulumu**
+   - [console.firebase.google.com](https://console.firebase.google.com) adresinde bir Firebase projesi oluşturun
+   - Kimlik Doğrulamada **Google Oturum Açma** ve **Apple Oturum Açma**'yı etkinleştirin
+   - **Firestore**, **Gerçek Zamanlı Veritabanı** ve **Bulut Mesajlaşması**'nı etkinleştirin
+   - `google-services.json` dosyasını indirin ve `app/src/dev/` konumuna yerleştirin
 
-2. **Express API setup**
+2. **Express API kurulumu**
    ```bash
    cd express-api
-   cp .env.example .env  # Edit with your cloud credentials
+   cp .env.example .env  # Bulut kimlik bilgilerinizle düzenleyin
    npm install
    npm start
    ```
 
-3. **Deploy Firestore rules**
+3. **Firestore kurallarını dağıt**
    ```bash
    npx firebase deploy --only firestore:rules
    ```
 
-4. **Build the Android app** (dev flavor)
+4. **Android uygulamasını oluştur** (dev lezzeti)
    ```bash
    ./gradlew assembleDevDebug
    ```
 
-### Environment Variables
+### Ortam Değişkenleri
 
-| Variable | Description | Where |
+| Değişken | Açıklama | Nerede |
 |----------|-------------|-------|
-| `FIREBASE_SERVICE_ACCOUNT` | Firebase Admin SDK service account JSON | Express API |
-| `R2_ACCOUNT_ID` | Cloudflare R2 account ID | Express API |
-| `R2_ACCESS_KEY_ID` | R2 access key | Express API |
-| `R2_SECRET_ACCESS_KEY` | R2 secret key | Express API |
-| `R2_BUCKET_NAME` | R2 bucket name (default: `shytalk-media`) | Express API |
-| `LIVEKIT_API_KEY` | LiveKit API key | Express API |
-| `LIVEKIT_API_SECRET` | LiveKit API secret | Express API |
-| `LIVEKIT_URL` | LiveKit server URL | Android app (BuildConfig) |
-| `WORKER_URL` | Express API base URL | Android app (BuildConfig) |
+| `FIREBASE_SERVICE_ACCOUNT` | Firebase Admin SDK hizmet hesabı JSON'u | Express API |
+| `R2_ACCOUNT_ID` | Cloudflare R2 hesap kimliği | Express API |
+| `R2_ACCESS_KEY_ID` | R2 erişim anahtarı | Express API |
+| `R2_SECRET_ACCESS_KEY` | R2 gizli anahtarı | Express API |
+| `R2_BUCKET_NAME` | R2 kova adı (varsayılan: `shytalk-media`) | Express API |
+| `LIVEKIT_API_KEY` | LiveKit API anahtarı | Express API |
+| `LIVEKIT_API_SECRET` | LiveKit API sırrı | Express API |
+| `LIVEKIT_URL` | LiveKit sunucu URL'si | Android uygulaması (BuildConfig) |
+| `WORKER_URL` | Express API temel URL'si | Android uygulaması (BuildConfig) |
 
-## Testing
+## Test
 
-### Running Tests Locally
+### Testleri Yerel Olarak Çalıştırma
 
 ```bash
-# Interactive test menu (choose what to run):
+# İnteraktif test menüsü (çalıştırılacak seçin):
 bash local/test.sh        # Linux / macOS / Git Bash
 .\local\test.ps1          # Windows PowerShell
 
-# Or run individual suites:
-bash local/test-unit.sh       # Kotlin + Express API unit tests
-bash local/test-playwright.sh # Playwright web tests (needs local env)
-bash local/test-e2e.sh        # Android E2E tests (needs local env + device)
+# Veya bireysel paketleri çalıştırın:
+bash local/test-unit.sh       # Kotlin + Express API birim testleri
+bash local/test-playwright.sh # Playwright web testleri (yerel ortama ihtiyaç duyar)
+bash local/test-e2e.sh        # Android E2E testleri (yerel ortam + cihaza ihtiyaç duyar)
 bash local/test-lint.sh       # ktlint + ESLint
 
-# View Allure test report:
+# Allure test raporunu görüntüle:
 npx allure serve allure-results
 ```
 
-### Test Suites
+### Test Paketleri
 
-| Suite | Command | Count |
+| Paket | Komut | Say |
 |-------|---------|-------|
-| Kotlin unit tests | `./gradlew test` | 100+ tests |
-| Express API tests | `cd express-api && npm test` | 1,540+ tests |
-| E2E Gherkin (Android) | `./gradlew connectedDevDebugAndroidTest` | 34 feature files |
-| Playwright web tests | `npx playwright test` | 28 specs |
+| Kotlin birim testleri | `./gradlew test` | 100+ test |
+| Express API testleri | `cd express-api && npm test` | 1,540+ test |
+| E2E Gherkin (Android) | `./gradlew connectedDevDebugAndroidTest` | 34 özellik dosyası |
+| Playwright web testleri | `npx playwright test` | 28 spec |
 
 ```bash
-# Kotlin/KMP unit tests
+# Kotlin/KMP birim testleri
 ./gradlew test
 
-# Express API tests
+# Express API testleri
 cd express-api && npm test
 
-# E2E tests (requires connected device or emulator)
+# E2E testleri (bağlı cihaz veya emülatör gerekir)
 ./gradlew connectedDevDebugAndroidTest
 
-# Playwright browser tests (requires admin panel running)
+# Playwright tarayıcı testleri (yönetici paneli çalışması gerekir)
 npx playwright test
 ```
 
-### Testing in CI
+### CI'de Test Etme
 
-In CI, Playwright and Android E2E tests run against the same local environment (emulators + Docker) -- no cloud services are used. This ensures tests never interfere with live testers.
+CI'de, Playwright ve Android E2E testleri aynı yerel ortamda (emülatörler + Docker) çalışır -- hiçbir bulut hizmeti kullanılmaz. Bu, testlerin canlı test edicilerle hiçbir zaman müdahale etmemesini sağlar.
 
-## Troubleshooting
+## Sorun Giderme
 
-- **Port already in use**: `lsof -i :<port>` (Linux/macOS) or `netstat -ano | findstr :<port>` (Windows) to find what's using the port.
-- **Docker not running**: Ensure Docker Desktop is started. Run `docker ps` to verify.
-- **Firebase emulators fail to start**: Requires Java 11+. Check with `java -version`.
-- **Android build fails**: Ensure JDK 17+ and Android SDK are installed. Try `./gradlew clean`.
-- **adb device not detected**: Enable USB debugging. Run `adb devices` to check.
-- **Images not loading**: MinIO bucket may not be created. Run `cd express-api && NODE_ENV=local node ../local/seed.js`. For physical devices, run `adb reverse tcp:9002 tcp:9002`.
-- **OTP not arriving**: Check console output for `[OTP-LOCAL]` lines. Also check MailHog UI at http://localhost:8025.
-- **Reset emulator data**: Delete `local/firebase-emulator-data/` directory and restart.
-- **Reset MinIO data**: Run `docker compose -f local/docker-compose.yml down -v` to remove volumes.
+- **Bağlantı noktası zaten kullanımda**: `lsof -i :<port>` (Linux/macOS) veya `netstat -ano | findstr :<port>` (Windows) bağlantı noktasını neyin kullandığını bulun.
+- **Docker çalışmıyor**: Docker Desktop'un başlatıldığından emin olun. Doğrulamak için `docker ps` çalıştırın.
+- **Firebase emülatörleri başlatılamıyor**: Java 11+ gerektirir. `java -version` ile kontrol edin.
+- **Android yapısı başarısız**: JDK 17+ ve Android SDK'nın yüklendiğinden emin olun. `./gradlew clean` deneyin.
+- **adb cihazı algılanmadı**: USB hata ayıklamayı etkinleştirin. Kontrol etmek için `adb devices` çalıştırın.
+- **Görüntüler yüklenmiyorsa**: MinIO kovası oluşturulmamış olabilir. `cd express-api && NODE_ENV=local node ../local/seed.js` çalıştırın. Fiziksel cihazlar için `adb reverse tcp:9002 tcp:9002` çalıştırın.
+- **OTP ulaşmıyor**: Konsol çıktısını `[OTP-LOCAL]` satırları için kontrol edin. Ayrıca http://localhost:8025 adresindeki MailHog UI'yi kontrol edin.
+- **Emülatör verilerini sıfırla**: `local/firebase-emulator-data/` dizinini silin ve yeniden başlatın.
+- **MinIO verilerini sıfırla**: Birimleri kaldırmak için `docker compose -f local/docker-compose.yml down -v` çalıştırın.
 
-## Deployment
+## Dağıtım
 
-Deployments are managed through GitHub Actions workflows (`.github/workflows/`):
+Dağıtımlar GitHub Actions iş akışları (`.github/workflows/`) aracılığıyla yönetilir:
 
-| Workflow | Trigger | What it does |
+| İş Akışı | Tetikleyici | Ne yaptığı |
 |----------|---------|-------------|
-| **PR Checks** | Automatic on PRs to `main` | Runs lint, Kotlin tests, Express API tests, Playwright tests (based on changed files) |
-| **Deploy to Dev** | Manual (`workflow_dispatch`) | Deploys Express API + web to dev, distributes APK to testers, optionally runs Playwright tests |
-| **Deploy to Prod** | Manual (`workflow_dispatch`) | Deploys a tagged release to prod -- Express API, web, Play Store, and App Store |
+| **PR Kontrolleri** | `main` 'e PR'ler hakkında otomatik | Lint, Kotlin testleri, Express API testleri, Playwright testlerini çalıştırır (değişen dosyalara dayalı) |
+| **Dev'e Dağıt** | Manuel (`workflow_dispatch`) | Express API + web'i dev'e dağıtır, APK'yı test edicilere dağıtır, isteğe bağlı olarak Playwright testlerini çalıştırır |
+| **Prod'a Dağıt** | Manuel (`workflow_dispatch`) | Etiketlenmiş bir yayını prod'a dağıtır -- Express API, web, Play Store ve App Store |
 
-Additional workflows: **E2E Tests** (Android emulator matrix), **SonarCloud** (static analysis), **Lint**, **Backend Tests**, **Dependabot Auto-merge**.
+Ek iş akışları: **E2E Testleri** (Android emülatör matrisi), **SonarCloud** (statik analiz), **Lint**, **Arka Uç Testleri**, **Dependabot Otomatik Birleştirilmesi**.
 
-- **Express API:** Deployed to Oracle Cloud VMs via SSH + PM2 (dev: London, prod: Singapore)
-- **Android:** Bundled and uploaded to Google Play via CI
-- **iOS:** Built and uploaded to App Store Connect / TestFlight via CI
-- **Admin panel / web:** Deployed to Cloudflare Pages
+- **Express API:** SSH + PM2 aracılığıyla Oracle Cloud VM'lerine dağıtılır (dev: Londra, prod: Singapur)
+- **Android:** CI aracılığıyla Google Play'e paketlenmiş ve yüklenir
+- **iOS:** CI aracılığıyla App Store Connect / TestFlight'a oluşturulur ve yüklenir
+- **Yönetici paneli / web:** Cloudflare Pages'e dağıtılır
 
-## Contributing
+## Katkıda Bulunma
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Katkılar memnuniyetle karşılanır! Lütfen yönergeler için [CONTRIBUTING.md](CONTRIBUTING.md) adresine bakın.
 
-## License
+## Lisans
 
-This project is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
+Bu proje Apache Lisansı 2.0 altında lisanslanmıştır. Ayrıntılar için [LICENSE](LICENSE) adresine bakın.
 
-## Acknowledgments
+## Teşekkürler
 
-- [Firebase](https://firebase.google.com) -- Authentication, Firestore, Realtime Database, Cloud Messaging
-- [LiveKit](https://livekit.io) -- Real-time voice communication
-- [Cloudflare](https://www.cloudflare.com) -- R2 storage, Pages hosting, CDN
-- [Oracle Cloud](https://www.oracle.com/cloud/free/) -- Free tier VM for Express API
-- [Express.js](https://expressjs.com) -- API server framework
-- [Jetpack Compose](https://developer.android.com/jetpack/compose) -- Modern declarative UI
-- [Koin](https://insert-koin.io) -- Lightweight dependency injection
-- [Coil](https://coil-kt.github.io/coil/) -- Image loading for Kotlin Multiplatform
-- [Lottie](https://airbnb.design/lottie/) -- Animated gift and UI effects
-- [kotlinx-datetime](https://github.com/Kotlin/kotlinx-datetime) -- Multiplatform date/time
+- [Firebase](https://firebase.google.com) -- Kimlik Doğrulama, Firestore, Gerçek Zamanlı Veritabanı, Bulut Mesajlaşması
+- [LiveKit](https://livekit.io) -- Gerçek zamanlı sesli iletişim
+- [Cloudflare](https://www.cloudflare.com) -- R2 depolama, Pages barındırma, CDN
+- [Oracle Cloud](https://www.oracle.com/cloud/free/) -- Express API için ücretsiz seviye VM
+- [Express.js](https://expressjs.com) -- API sunucu çerçevesi
+- [Jetpack Compose](https://developer.android.com/jetpack/compose) -- Modern bildirimsel UI
+- [Koin](https://insert-koin.io) -- Hafif bağımlılık enjeksiyonu
+- [Coil](https://coil-kt.github.io/coil/) -- Kotlin Multiplatform için görüntü yükleme
+- [Lottie](https://airbnb.design/lottie/) -- Animasyonlu hediye ve UI efektleri
+- [kotlinx-datetime](https://github.com/Kotlin/kotlinx-datetime) -- Çok platformlu tarih/saat
