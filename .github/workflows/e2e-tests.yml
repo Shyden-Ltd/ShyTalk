@@ -184,7 +184,8 @@ jobs:
 
       - name: Start Firebase Emulators
         run: |
-          npx firebase emulators:start --project=demo-shytalk &
+          npm install -g firebase-tools
+          firebase emulators:start --project=demo-shytalk &
           echo "Waiting for emulators..."
           until curl -s http://localhost:4000 > /dev/null 2>&1; do sleep 1; done
           echo "Emulators ready"
@@ -192,7 +193,7 @@ jobs:
       - name: Seed local data
         run: |
           cd express-api && npm ci
-          NODE_ENV=local node ../local/seed.js
+          NODE_PATH=./node_modules NODE_ENV=local node ../local/seed.js
 
       - name: Start Express API
         run: |
@@ -343,13 +344,14 @@ jobs:
 
       - name: Start Firebase Emulators
         run: |
-          npx firebase emulators:start --project=demo-shytalk &
+          npm install -g firebase-tools
+          firebase emulators:start --project=demo-shytalk &
           until curl -s http://localhost:4000 > /dev/null 2>&1; do sleep 1; done
 
       - name: Install Express API and seed data
         run: |
           cd express-api && npm ci
-          NODE_ENV=local node ../local/seed.js
+          NODE_PATH=./node_modules NODE_ENV=local node ../local/seed.js
 
       - name: Start Express API
         run: |
