@@ -84,7 +84,7 @@ Before opening or updating a PR, run ALL applicable checks:
 - **Android:** `./gradlew installLocalDebug`
 - **Firebase UI:** http://localhost:4000
 - **Stop:** `bash local/stop.sh` or Ctrl+C in the start.sh terminal
-- **Prerequisites:** Java 11+, Docker, Firebase CLI (`npm i -g firebase-tools`)
+- **Prerequisites:** Java 21+, Docker, Firebase CLI (`npm i -g firebase-tools`)
 - **Seed data:** Auto-runs on first start. Manual: `node local/seed.js`
 - **No cloud quota consumed** — all Firestore/Auth/RTDB traffic goes to emulators
 

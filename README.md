@@ -190,7 +190,7 @@ ShyTalk/
 ### Prerequisites
 
 - **Android Studio** Ladybug or newer
-- **JDK 17+**
+- **JDK 21+**
 - **Node.js 24+**
 - **Docker** (for LiveKit voice server, MinIO storage, MailHog email)
 - **Firebase CLI** (`npm install -g firebase-tools`)
@@ -415,7 +415,7 @@ In CI, Playwright and Android E2E tests run against the same local environment (
 - **Port already in use**: `lsof -i :<port>` (Linux/macOS) or `netstat -ano | findstr :<port>` (Windows) to find what's using the port.
 - **Docker not running**: Ensure Docker Desktop is started. Run `docker ps` to verify.
 - **Firebase emulators fail to start**: Requires Java 11+. Check with `java -version`.
-- **Android build fails**: Ensure JDK 17+ and Android SDK are installed. Try `./gradlew clean`.
+- **Android build fails**: Ensure JDK 21+ and Android SDK are installed. Try `./gradlew clean`.
 - **adb device not detected**: Enable USB debugging. Run `adb devices` to check.
 - **Images not loading**: MinIO bucket may not be created. Run `cd express-api && NODE_ENV=local node ../local/seed.js`. For physical devices, run `adb reverse tcp:9002 tcp:9002`.
 - **OTP not arriving**: Check console output for `[OTP-LOCAL]` lines. Also check MailHog UI at http://localhost:8025.
