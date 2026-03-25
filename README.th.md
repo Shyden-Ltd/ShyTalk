@@ -8,89 +8,89 @@
 
 🌍 [English](README.md) | [العربية](README.ar.md) | [Deutsch](README.de.md) | [Español](README.es.md) | [Français](README.fr.md) | [हिन्दी](README.hi.md) | [Bahasa Indonesia](README.id.md) | [Italiano](README.it.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Nederlands](README.nl.md) | [Polski](README.pl.md) | [Português](README.pt.md) | [Русский](README.ru.md) | [Svenska](README.sv.md) | **ไทย** | [Türkçe](README.tr.md) | [Українська](README.uk.md) | [Tiếng Việt](README.vi.md) | [中文](README.zh.md)
 
-## About
+## เกี่ยวกับ
 
-ShyTalk is a social voice chat app where users can create and join real-time voice chat rooms. Built with Kotlin Multiplatform (KMP), it targets both Android and iOS with a shared codebase. Whether you want to host a conversation, listen in, or connect with people around the world, ShyTalk makes it easy.
+ShyTalk เป็นแอปแชทด้วยเสียงโซเชียลที่ผู้ใช้สามารถสร้างและเข้าร่วมห้องแชทเสียงแบบ real-time ได้ สร้างด้วย Kotlin Multiplatform (KMP) โดยมีเป้าหมายสำหรับ Android และ iOS ด้วยโค้ดที่ใช้ร่วมกัน ไม่ว่าคุณต้องการเป็นเจ้าภาพสนทนา ฟังแบบเงียบ ๆ หรือเชื่อมต่อกับผู้คนทั่วโลก ShyTalk จะทำให้เรื่องนี้เป็นเรื่องง่าย
 
-iOS is a supported platform but this guide focuses on Android development, which is the primary development target.
+iOS เป็นแพลตฟอร์มที่รองรับ แต่คู่มือนี้มุ่งเน้นไปที่การพัฒนา Android ซึ่งเป็นเป้าหมายการพัฒนาหลัก
 
-## Features
+## คุณสมบัติ
 
-### Voice Chat Rooms
-- Create or join rooms with real-time voice powered by LiveKit
-- Structured seating system with owner, host, and attendee roles
-- Seat requests and invites -- request to join a seat or invite listeners to speak
-- Floating chathead -- continue voice chat while browsing other parts of the app
-- Room expiry -- rooms auto-close when the owner is away, with countdown timers
+### ห้องแชทด้วยเสียง
+- สร้างหรือเข้าร่วมห้องด้วยเสียง real-time ที่ขับเคลื่อนโดย LiveKit
+- ระบบที่นั่งแบบมีโครงสร้างพร้อมบทบาทเจ้าของ โฮสต์ และผู้เข้าร่วม
+- คำขอที่นั่งและการเชิญ — ขอเข้าร่วมที่นั่งหรือเชิญผู้ฟังให้พูด
+- หัวแชทลอยตัว — ทำให้แชทด้วยเสียงต่อเนื่องในขณะที่เรียกดูส่วนอื่นของแอป
+- การหมดอายุของห้อง — ห้องจะปิดโดยอัตโนมัติเมื่อเจ้าของไม่อยู่ พร้อมตัวนับถอยหลัง
 
-### Messaging
-- Live text chat alongside voice in every room
-- Private messaging with 1-on-1 conversations
-- Group chats with member management and permissions
-- Typing indicators in real-time
-- Sticker support
+### การส่งข้อความ
+- แชทข้อความสดใจ ข้างๆ เสียงในทุกห้อง
+- การส่งข้อความส่วนตัวด้วยการสนทนาแบบ 1-1
+- แชทกลุ่มพร้อมการจัดการสมาชิกและสิทธิ์
+- ตัวบ่งชี้การพิมพ์ real-time
+- การรองรับสติกเกอร์
 
-### Social
-- Customizable user profiles with photos, cover images, nationality flags, and bios
-- Follow system -- follow other users and see when they're active
-- Gift wall -- showcase gifts received from other users
-- Block system -- block users across rooms and profiles
+### โซเชียล
+- โปรไฟล์ผู้ใช้ที่ปรับแต่งได้ด้วยรูปภาพ ภาพปก แฟล็กชาติ และประวัติ
+- ระบบติดตาม — ติดตามผู้ใช้อื่น ๆ และดูว่าพวกเขาออนไลน์เมื่อใด
+- กำแพงของขวัญ — แสดงขวัญที่ได้รับจากผู้ใช้อื่น ๆ
+- ระบบปิดกั้น — ปิดกั้นผู้ใช้ในห้องและโปรไฟล์
 
-### Virtual Economy
-- Coin-based economy with wallet and transaction history
-- Daily login rewards with streak bonuses
-- Lucky Spin (gacha) system with tiered prizes
-- Virtual gifts -- send and receive animated gifts during voice chats
-- Backpack inventory for storing gifts
-- Coin packages for purchasing coins
-- Broadcast banners with animated gift effects
+### เศรษฐกิจเสมือน
+- เศรษฐกิจที่ใช้เหรียญ พร้อมกระเป๋าและประวัติธุรกรรม
+- รางวัลการเข้าสู่ระบบรายวัน พร้อมโบนัสจากการรักษาสตรีค
+- ระบบ Lucky Spin (gacha) ที่มีรางวัลหลายระดับ
+- ของขวัญเสมือน — ส่งและรับของขวัญแบบเคลื่อนไหวในระหว่างแชทด้วยเสียง
+- สินค้าคงคลังเป้สะพาย สำหรับจัดเก็บของขวัญ
+- แพ็คเกจเหรียญสำหรับซื้อเหรียญ
+- แบนเนอร์ประกาศโฆษณาพร้อมเอฟเฟกต์ของขวัญแบบเคลื่อนไหว
 
-### Account & Identity
-- Multi-provider authentication -- sign in with Google, Apple, or Email (OTP)
-- Link multiple sign-in methods to a single account
-- Stable user identity (uniqueId) that persists across Firebase projects
-- Linked Accounts management in Settings with link/unlink support
-- Device binding -- each device is permanently tied to one account
+### บัญชีและข้อมูลประจำตัว
+- การตรวจสอบสิทธิ์จากหลายผู้ให้บริการ — ลงชื่อเข้าใช้ด้วย Google, Apple หรือ Email (OTP)
+- เชื่อมโยงวิธีการลงชื่อเข้าใช้หลายวิธีกับบัญชีเดียว
+- ข้อมูลประจำตัวผู้ใช้ที่เสถียร (uniqueId) ที่ยืนหยัดในโครงการ Firebase
+- การจัดการบัญชีที่เชื่อมโยงในการตั้งค่า พร้อมการรองรับลิงก์/ยกเลิกลิงก์
+- การผูกอุปกรณ์ — อุปกรณ์แต่ละเครื่องจะเชื่อมโยงกับบัญชีเดียวอย่างถาวร
 
-### Moderation & Safety
-- Moderation tools -- mute, kick, move seats, and manage hosts as a room owner
-- User reporting system with review workflow
-- Warning and suspension system for policy violations
-- Community standards, privacy policy, and terms of service screens
-- Legal acceptance flow for new users
-- Force update enforcement for outdated app versions
+### การดูแลและความปลอดภัย
+- เครื่องมือการดูแล — ปิดเสียง เตะออก ย้ายที่นั่ง และจัดการโฮสต์เป็นเจ้าของห้อง
+- ระบบรายงานผู้ใช้ด้วยเวิร์กโฟลว์การตรวจสอบ
+- ระบบคำเตือนและการระงับสำหรับการละเมิดนโยบาย
+- หน้าจออมูลมาตรฐานชุมชน นโยบายความเป็นส่วนตัว และเงื่อนไขการให้บริการ
+- ขั้นตอนการยอมรับทางกฎหมายสำหรับผู้ใช้ใหม่
+- บังคับปรับปรุงสำหรับเวอร์ชันแอปที่ล้าสมัย
 
-### Starting Screens
-- Configurable launch screens shown on app startup
-- Admin-managed content with scheduling and targeting options
+### หน้าจอเริ่มต้น
+- หน้าจอเปิดตัวที่สามารถกำหนดค่าได้ที่แสดงบนการเปิดตัวแอป
+- เนื้อหาที่จัดการโดยผู้ดูแลระบบ พร้อมตัวเลือกการกำหนดเวลาและเป้าหมาย
 
-### Security
-- PIN code protection for app access
-- Biometric authentication -- fingerprint and face recognition
-- OTP (one-time password) verification for sensitive actions
+### ความปลอดภัย
+- การป้องกัน PIN code สำหรับการเข้าถึงแอป
+- การตรวจสอบสิทธิ์แบบชีววัตร — การรู้จำลายนิ้วมือและใบหน้า
+- การยืนยัน OTP (รหัสผ่านครั้งเดียว) สำหรับการดำเนินการที่ละเอียดอ่อน
 
-### Admin Panel
-- Web-based moderation dashboard at the project's static site
-- User management, content moderation, and configuration
-- Template and gift management with live preview
-- Real-time log streaming and alerting
+### แผงควบคุมผู้ดูแลระบบ
+- แดชบอร์ดการดูแลแบบเว็บที่ไซต์คงที่ของโครงการ
+- การจัดการผู้ใช้ การดูแลเนื้อหา และการกำหนดค่า
+- การจัดการเทมเพลตและของขวัญพร้อมการแสดงตัวอย่างสดใจ
+- การสตรีมบันทึกเรียลไทม์ และการแจ้งเตือน
 
-### Image Compression
-- Automatic image compression on upload via the Express API
-- Reduces storage and bandwidth costs while preserving quality
+### การบีบอัดภาพ
+- การบีบอัดภาพอัตโนมัติเมื่ออัปโหลดผ่าน Express API
+- ลดต้นทุนการจัดเก็บและแบนด์วิดท์พร้อมรักษาคุณภาพ
 
-### Internationalization
-- 19 languages supported out of the box
-- Full localization for all user-facing strings
+### การสนับสนุนหลายภาษา
+- รองรับ 19 ภาษา จากกล่องไป
+- การแปลเป็นภาษาถิ่นแบบเต็มรูปแบบสำหรับสตริงที่ผู้ใช้มองเห็น
 
-### Logging & Monitoring
-- Structured logging across Express API, mobile apps, and admin panel
-- Real-time log streaming in the admin dashboard
-- Device and network banning with automatic enforcement
-- Alerting system for critical errors and anomalies
-- Trace ID propagation for end-to-end request tracking
+### การบันทึกและการเฝ监视
+- การบันทึกเชิงโครงสร้างข้าม Express API, แอปมือถือ และแผงควบคุมผู้ดูแลระบบ
+- การสตรีมบันทึกเรียลไทม์ในแดชบอร์ดผู้ดูแลระบบ
+- การห้ามอุปกรณ์และเครือข่าย พร้อมการบังคับใช้อัตโนมัติ
+- ระบบการแจ้งเตือนสำหรับข้อผิดพลาดและความผิดปกติที่สำคัญ
+- การแพร่กระจาย Trace ID สำหรับการติดตามคำขอจากต้นทางถึงปลายทาง
 
-## Tech Stack
+## สแต็กเทคโนโลยี
 
 | Layer | Technology |
 |-------|-----------|
@@ -111,9 +111,9 @@ iOS is a supported platform but this guide focuses on Android development, which
 | **Navigation** | Compose Navigation |
 | **CDN** | Cloudflare Pages + CDN |
 
-## Architecture
+## สถาปัตยกรรม
 
-ShyTalk follows **MVVM** with a clean **Repository Pattern**:
+ShyTalk ปฏิบัติตาม **MVVM** ด้วย **Repository Pattern** ที่สะอาด:
 
 ```
 +---------------------------------------------+
@@ -128,12 +128,12 @@ ShyTalk follows **MVVM** with a clean **Repository Pattern**:
 +---------------------------------------------+
 ```
 
-- **shared module** (`commonMain`) -- Models, repository interfaces, ViewModels, and UI shared across platforms
-- **app module** -- Android-specific screens, repository implementations, and entry point
-- **iosApp module** -- iOS-specific entry point
-- **express-api** -- Express.js backend running on Oracle Cloud Free Tier
+- **shared module** (`commonMain`) -- โมเดล อินเทอร์เฟซที่เก็บข้อมูล ViewModels และ UI ที่ใช้ร่วมกันบนแพลตฟอร์ม
+- **app module** -- หน้าจออื่น ๆ ของ Android, การใช้งานระบบที่เก็บข้อมูล และจุดเริ่มต้น
+- **iosApp module** -- จุดเริ่มต้นเฉพาะ iOS
+- **express-api** -- Express.js backend ทำงานบน Oracle Cloud Free Tier
 
-## Project Structure
+## โครงสร้างโครงการ
 
 ```
 ShyTalk/
@@ -185,21 +185,21 @@ ShyTalk/
 +-- firebase.json                     # Firebase configuration
 ```
 
-## Getting Started
+## เริ่มต้นใช้งาน
 
-### Prerequisites
+### ข้อกำหนดเบื้องต้น
 
-- **Android Studio** Ladybug or newer
+- **Android Studio** Ladybug หรือใหม่กว่า
 - **JDK 17+**
 - **Node.js 24+**
-- **Docker** (for LiveKit voice server, MinIO storage, MailHog email)
+- **Docker** (สำหรับ LiveKit voice server, MinIO storage, MailHog email)
 - **Firebase CLI** (`npm install -g firebase-tools`)
 
-No cloud accounts are needed to get started -- the local environment runs entirely offline.
+ไม่จำเป็นต้องมีบัญชี cloud เพื่อเริ่มต้น -- สภาพแวดล้อมท้องถิ่นทำงานออนไลน์โดยสิ้นเชิง
 
-### Local Development (Recommended)
+### การพัฒนาในสภาพแวดล้อมท้องถิ่น (ลองเลิก)
 
-The fastest way to get started. One command starts everything -- Firebase Emulators, Docker containers, Express API, and builds the Android app. No cloud accounts needed, no costs, no quota limits.
+วิธีที่เร็วที่สุดในการเริ่มต้น คำสั่งเดียวเริ่มต้นทุกอย่าง -- Firebase Emulators, Docker containers, Express API และสร้างแอป Android ไม่จำเป็นต้องมีบัญชี cloud ไม่มีต้นทุน ไม่มีขีดจำกัดโควต้า
 
 1. **Clone and install**
    ```bash
@@ -244,15 +244,15 @@ The fastest way to get started. One command starts everything -- Firebase Emulat
        MinIO:          minioadmin / minioadmin
    ```
 
-3. **Sign in**
-   - Use the email sign-in flow with the seeded test account: `claude-test@shytalk.dev` / `localdev123`
-   - Or create a new account -- it will use the local emulators
-   - Google/Apple sign-in won't work locally (no real OAuth) -- use email OTP instead
-   - OTP codes are captured by MailHog -- check http://localhost:8025
+3. **ลงชื่อเข้าใช้**
+   - ใช้ขั้นตอนการลงชื่อเข้าใช้ด้วยอีเมลกับบัญชีทดสอบที่จัดเตรียมไว้: `claude-test@shytalk.dev` / `localdev123`
+   - หรือสร้างบัญชีใหม่ -- จะใช้ emulator ท้องถิ่น
+   - การลงชื่อเข้าใช้ Google/Apple จะไม่ทำงานในสภาพแวดล้อมท้องถิ่น (ไม่มี OAuth จริง) -- ใช้ email OTP แทน
+   - รหัส OTP จะถูกจับโดย MailHog -- ตรวจสอบที่ http://localhost:8025
 
-4. **Run on a Physical Device**
+4. **เรียกใช้บนอุปกรณ์จริง**
 
-   Your phone must be on the **same Wi-Fi network** as your development machine.
+   โทรศัพท์ของคุณต้องอยู่บน **เครือข่าย Wi-Fi เดียวกัน** กับเครื่องพัฒนาของคุณ
 
    a. Find your machine's local IP:
    ```bash
@@ -286,9 +286,9 @@ The fastest way to get started. One command starts everything -- Firebase Emulat
    adb reverse tcp:7880 tcp:7880   # LiveKit
    adb reverse tcp:9002 tcp:9002   # MinIO (image storage)
    ```
-   With `adb reverse`, the default `10.0.2.2` addresses in the local flavor will work on a physical device too -- no build config changes needed.
+   ด้วย `adb reverse` ที่อยู่ `10.0.2.2` เริ่มต้นในรสชาติท้องถิ่นจะทำงานบนอุปกรณ์จริงได้เช่นกัน -- ไม่จำเป็นต้องเปลี่ยนการตั้งค่าการสร้าง
 
-5. **Stop local services**
+5. **หยุดบริการท้องถิ่น**
 
    **Linux / macOS / Git Bash:**
    ```bash
@@ -300,39 +300,39 @@ The fastest way to get started. One command starts everything -- Firebase Emulat
    .\local\stop.ps1
    ```
 
-   Or press `Ctrl+C` in the start script terminal. Emulator data is saved automatically and restored on next start.
+   หรือกด `Ctrl+C` ในเทอร์มินัล start script ข้อมูล Emulator จะบันทึกโดยอัตโนมัติและเรียกคืนเมื่อเริ่มครั้งต่อไป
 
-### Useful Local Dev URLs
+### URL การพัฒนาท้องถิ่นที่มีประโยชน์
 
 | Service | URL | Purpose |
 |---------|-----|---------|
-| Firebase Emulator UI | http://localhost:4000 | Browse Firestore data, Auth users, RTDB |
+| Firebase Emulator UI | http://localhost:4000 | เรียกดูข้อมูล Firestore, ผู้ใช้ Auth, RTDB |
 | Express API | http://localhost:3000 | Backend API |
-| Health check | http://localhost:3000/api/health | Verify API is running |
-| MailHog | http://localhost:8025 | View captured emails and OTP codes |
-| MinIO Console | http://localhost:9001 | Browse uploaded images and files |
+| Health check | http://localhost:3000/api/health | ตรวจสอบว่า API กำลังทำงาน |
+| MailHog | http://localhost:8025 | ดูอีเมลและรหัส OTP ที่จับได้ |
+| MinIO Console | http://localhost:9001 | เรียกดูรูปภาพและไฟล์ที่อัปโหลด |
 
-### Optional Services
+### บริการเสริม
 
-**LibreTranslate (Message Translation)**
+**LibreTranslate (การแปลข้อความ)**
 
-Optional 6GB+ Docker image for testing the translation feature locally:
+ภาพ Docker ขนาด 6GB+ ที่เสริมสำหรับการทดสอบฟีเจอร์การแปลภาษาในสภาพแวดล้อมท้องถิ่น:
 ```bash
 docker run -d -p 5000:5000 libretranslate/libretranslate
 ```
-Not included in the default setup due to large image size. Translation works without it -- messages just stay untranslated.
+ไม่รวมในการตั้งค่าเริ่มต้นเนื่องจากขนาดภาพขนาดใหญ่ การแปลจะทำงานโดยไม่มี -- ข้อความจะยังคงไม่แปล
 
-### Cloud Development (Optional)
+### การพัฒนา Cloud (ไม่บังคับ)
 
-If you need to test against real cloud services (e.g., real push notifications, real Google Sign-In):
+หากคุณต้องการทดสอบเกี่ยวกับบริการ cloud จริง (เช่น การแจ้งเตือนแบบ push จริง การลงชื่อเข้าใช้ Google จริง):
 
-1. **Firebase setup**
-   - Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
-   - Enable **Google Sign-In** and **Apple Sign-In** in Authentication
-   - Enable **Firestore**, **Realtime Database**, and **Cloud Messaging**
-   - Download `google-services.json` and place it in `app/src/dev/`
+1. **การตั้งค่า Firebase**
+   - สร้างโครงการ Firebase ที่ [console.firebase.google.com](https://console.firebase.google.com)
+   - เปิดใช้งาน **Google Sign-In** และ **Apple Sign-In** ในการตรวจสอบสิทธิ์
+   - เปิดใช้งาน **Firestore**, **Realtime Database** และ **Cloud Messaging**
+   - ดาวน์โหลด `google-services.json` และวางไว้ใน `app/src/dev/`
 
-2. **Express API setup**
+2. **การตั้งค่า Express API**
    ```bash
    cd express-api
    cp .env.example .env  # Edit with your cloud credentials
@@ -340,17 +340,17 @@ If you need to test against real cloud services (e.g., real push notifications, 
    npm start
    ```
 
-3. **Deploy Firestore rules**
+3. **ปรับใช้กฎ Firestore**
    ```bash
    npx firebase deploy --only firestore:rules
    ```
 
-4. **Build the Android app** (dev flavor)
+4. **สร้างแอป Android** (รสชาติ dev)
    ```bash
    ./gradlew assembleDevDebug
    ```
 
-### Environment Variables
+### ตัวแปรสภาพแวดล้อม
 
 | Variable | Description | Where |
 |----------|-------------|-------|
@@ -364,9 +364,9 @@ If you need to test against real cloud services (e.g., real push notifications, 
 | `LIVEKIT_URL` | LiveKit server URL | Android app (BuildConfig) |
 | `WORKER_URL` | Express API base URL | Android app (BuildConfig) |
 
-## Testing
+## การทดสอบ
 
-### Running Tests Locally
+### การเรียกใช้การทดสอบในสภาพแวดล้อมท้องถิ่น
 
 ```bash
 # Interactive test menu (choose what to run):
@@ -383,7 +383,7 @@ bash local/test-lint.sh       # ktlint + ESLint
 npx allure serve allure-results
 ```
 
-### Test Suites
+### ชุดการทดสอบ
 
 | Suite | Command | Count |
 |-------|---------|-------|
@@ -406,25 +406,25 @@ cd express-api && npm test
 npx playwright test
 ```
 
-### Testing in CI
+### การทดสอบใน CI
 
-In CI, Playwright and Android E2E tests run against the same local environment (emulators + Docker) -- no cloud services are used. This ensures tests never interfere with live testers.
+ใน CI Playwright และการทดสอบ Android E2E ทำงานเกี่ยวกับสภาพแวดล้อมท้องถิ่นเดียวกัน (emulator + Docker) -- ไม่มีการใช้บริการ cloud ซึ่งช่วยให้มั่นใจว่าการทดสอบไม่ขัดขวางผู้ทดสอบสดใจ
 
-## Troubleshooting
+## การแก้ปัญหา
 
-- **Port already in use**: `lsof -i :<port>` (Linux/macOS) or `netstat -ano | findstr :<port>` (Windows) to find what's using the port.
-- **Docker not running**: Ensure Docker Desktop is started. Run `docker ps` to verify.
-- **Firebase emulators fail to start**: Requires Java 11+. Check with `java -version`.
-- **Android build fails**: Ensure JDK 17+ and Android SDK are installed. Try `./gradlew clean`.
-- **adb device not detected**: Enable USB debugging. Run `adb devices` to check.
-- **Images not loading**: MinIO bucket may not be created. Run `cd express-api && NODE_ENV=local node ../local/seed.js`. For physical devices, run `adb reverse tcp:9002 tcp:9002`.
-- **OTP not arriving**: Check console output for `[OTP-LOCAL]` lines. Also check MailHog UI at http://localhost:8025.
-- **Reset emulator data**: Delete `local/firebase-emulator-data/` directory and restart.
-- **Reset MinIO data**: Run `docker compose -f local/docker-compose.yml down -v` to remove volumes.
+- **Port already in use**: `lsof -i :<port>` (Linux/macOS) หรือ `netstat -ano | findstr :<port>` (Windows) เพื่อค้นหาสิ่งที่ใช้พอร์ต
+- **Docker not running**: ตรวจสอบว่า Docker Desktop เริ่มขึ้นแล้ว เรียกใช้ `docker ps` เพื่อตรวจสอบ
+- **Firebase emulators fail to start**: ต้องใช้ Java 11+ ตรวจสอบด้วย `java -version`
+- **Android build fails**: ตรวจสอบว่าติดตั้ง JDK 17+ และ Android SDK แล้ว ลองใช้ `./gradlew clean`
+- **adb device not detected**: เปิดใช้งาน USB debugging เรียกใช้ `adb devices` เพื่อตรวจสอบ
+- **Images not loading**: MinIO bucket อาจไม่ได้สร้าง เรียกใช้ `cd express-api && NODE_ENV=local node ../local/seed.js` สำหรับอุปกรณ์จริง ให้เรียกใช้ `adb reverse tcp:9002 tcp:9002`
+- **OTP not arriving**: ตรวจสอบเอาต์พุตคอนโซลหาเส้น `[OTP-LOCAL]` ยังตรวจสอบ MailHog UI ที่ http://localhost:8025
+- **Reset emulator data**: ลบไดเรกทอรี `local/firebase-emulator-data/` และเริ่มต้นใหม่
+- **Reset MinIO data**: เรียกใช้ `docker compose -f local/docker-compose.yml down -v` เพื่อลบปริมาณ
 
-## Deployment
+## การปรับใช้
 
-Deployments are managed through GitHub Actions workflows (`.github/workflows/`):
+การปรับใช้ได้รับการจัดการผ่าน GitHub Actions workflows (`.github/workflows/`):
 
 | Workflow | Trigger | What it does |
 |----------|---------|-------------|
@@ -432,22 +432,22 @@ Deployments are managed through GitHub Actions workflows (`.github/workflows/`):
 | **Deploy to Dev** | Manual (`workflow_dispatch`) | Deploys Express API + web to dev, distributes APK to testers, optionally runs Playwright tests |
 | **Deploy to Prod** | Manual (`workflow_dispatch`) | Deploys a tagged release to prod -- Express API, web, Play Store, and App Store |
 
-Additional workflows: **E2E Tests** (Android emulator matrix), **SonarCloud** (static analysis), **Lint**, **Backend Tests**, **Dependabot Auto-merge**.
+Workflows เพิ่มเติม: **E2E Tests** (Android emulator matrix), **SonarCloud** (static analysis), **Lint**, **Backend Tests**, **Dependabot Auto-merge**.
 
-- **Express API:** Deployed to Oracle Cloud VMs via SSH + PM2 (dev: London, prod: Singapore)
-- **Android:** Bundled and uploaded to Google Play via CI
-- **iOS:** Built and uploaded to App Store Connect / TestFlight via CI
-- **Admin panel / web:** Deployed to Cloudflare Pages
+- **Express API:** ปรับใช้ไปยัง Oracle Cloud VMs ผ่าน SSH + PM2 (dev: London, prod: Singapore)
+- **Android:** บันเดิลและอัปโหลดไปยัง Google Play ผ่าน CI
+- **iOS:** สร้างและอัปโหลดไปยัง App Store Connect / TestFlight ผ่าน CI
+- **Admin panel / web:** ปรับใช้ไปยัง Cloudflare Pages
 
-## Contributing
+## การมีส่วนร่วม
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+อยากต้อนรับการร่วมมือ! โปรดดู [CONTRIBUTING.md](CONTRIBUTING.md) สำหรับคำแนะนำ
 
-## License
+## ลิขสิทธิ์
 
-This project is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
+โครงการนี้อยู่ภายใต้ใบอนุญาต Apache License 2.0 ดู [LICENSE](LICENSE) สำหรับรายละเอียด
 
-## Acknowledgments
+## ข้อมูลสำคัญ
 
 - [Firebase](https://firebase.google.com) -- Authentication, Firestore, Realtime Database, Cloud Messaging
 - [LiveKit](https://livekit.io) -- Real-time voice communication
