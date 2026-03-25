@@ -285,6 +285,7 @@ Başlamanın en hızlı yolu. Bir komut her şeyi başlatır -- Firebase Emülat
    adb reverse tcp:9000 tcp:9000   # RTDB emülatörü
    adb reverse tcp:7880 tcp:7880   # LiveKit
    adb reverse tcp:9002 tcp:9002   # MinIO (görüntü depolama)
+   adb reverse tcp:8025 tcp:8025   # Mailpit UI
    ```
    `adb reverse` ile, yerel lezzetteki varsayılan `10.0.2.2` adresleri fiziksel bir cihazda da çalışacaktır -- yapı konfigürasyonu değişikliklerine gerek yoktur.
 

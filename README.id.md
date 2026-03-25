@@ -285,6 +285,7 @@ Cara tercepat untuk memulai. Satu perintah memulai semuanya -- Firebase Emulator
    adb reverse tcp:9000 tcp:9000   # Emulator RTDB
    adb reverse tcp:7880 tcp:7880   # LiveKit
    adb reverse tcp:9002 tcp:9002   # MinIO (penyimpanan gambar)
+   adb reverse tcp:8025 tcp:8025   # Mailpit UI
    ```
    Dengan `adb reverse`, alamat default `10.0.2.2` di flavor lokal juga akan berfungsi di perangkat fisik -- tidak perlu perubahan konfigurasi build.
 

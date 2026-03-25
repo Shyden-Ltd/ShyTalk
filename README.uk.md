@@ -285,6 +285,7 @@ ShyTalk/
    adb reverse tcp:9000 tcp:9000   # RTDB emulator
    adb reverse tcp:7880 tcp:7880   # LiveKit
    adb reverse tcp:9002 tcp:9002   # MinIO (image storage)
+   adb reverse tcp:8025 tcp:8025   # Mailpit UI
    ```
    З `adb reverse`, стандартні адреси `10.0.2.2` у локальному смаку також працюватимуть на фізичному пристрої — змінювати конфігурацію збірки не потрібно.
 

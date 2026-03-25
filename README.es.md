@@ -285,6 +285,7 @@ La forma mas rapida de comenzar. Un comando inicia todo -- emuladores de Firebas
    adb reverse tcp:9000 tcp:9000   # Emulador de RTDB
    adb reverse tcp:7880 tcp:7880   # LiveKit
    adb reverse tcp:9002 tcp:9002   # MinIO (almacenamiento de imagenes)
+   adb reverse tcp:8025 tcp:8025   # Mailpit UI
    ```
    Con `adb reverse`, las direcciones predeterminadas `10.0.2.2` en el flavor local funcionaran en un dispositivo fisico tambien -- no se necesitan cambios en la configuracion de build.
 

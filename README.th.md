@@ -285,6 +285,7 @@ ShyTalk/
    adb reverse tcp:9000 tcp:9000   # RTDB emulator
    adb reverse tcp:7880 tcp:7880   # LiveKit
    adb reverse tcp:9002 tcp:9002   # MinIO (image storage)
+   adb reverse tcp:8025 tcp:8025   # Mailpit UI
    ```
    ด้วย `adb reverse` ที่อยู่ `10.0.2.2` เริ่มต้นในรสชาติท้องถิ่นจะทำงานบนอุปกรณ์จริงได้เช่นกัน -- ไม่จำเป็นต้องเปลี่ยนการตั้งค่าการสร้าง
 

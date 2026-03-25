@@ -285,6 +285,7 @@ ShyTalk/
    adb reverse tcp:9000 tcp:9000   # RTDB 에뮬레이터
    adb reverse tcp:7880 tcp:7880   # LiveKit
    adb reverse tcp:9002 tcp:9002   # MinIO (이미지 스토리지)
+   adb reverse tcp:8025 tcp:8025   # Mailpit UI
    ```
    `adb reverse`를 사용하면 로컬 플레이버의 기본 `10.0.2.2` 주소가 실제 기기에서도 작동합니다 -- 빌드 구성 변경 불필요.
 

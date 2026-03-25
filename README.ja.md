@@ -285,6 +285,7 @@ ShyTalk/
    adb reverse tcp:9000 tcp:9000   # RTDBエミュレーター
    adb reverse tcp:7880 tcp:7880   # LiveKit
    adb reverse tcp:9002 tcp:9002   # MinIO（画像ストレージ）
+   adb reverse tcp:8025 tcp:8025   # Mailpit UI
    ```
    `adb reverse`を使用すると、ローカルフレーバーのデフォルト`10.0.2.2`アドレスが物理デバイスでも動作します -- ビルド設定の変更は不要です。
 

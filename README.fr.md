@@ -285,6 +285,7 @@ Le moyen le plus rapide de commencer. Une seule commande demarre tout -- emulate
    adb reverse tcp:9000 tcp:9000   # Emulateur RTDB
    adb reverse tcp:7880 tcp:7880   # LiveKit
    adb reverse tcp:9002 tcp:9002   # MinIO (stockage d'images)
+   adb reverse tcp:8025 tcp:8025   # Mailpit UI
    ```
    Avec `adb reverse`, les adresses par defaut `10.0.2.2` dans le flavor local fonctionneront aussi sur un appareil physique -- pas de changement de configuration de build necessaire.
 

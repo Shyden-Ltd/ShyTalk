@@ -285,6 +285,7 @@ Cách nhanh nhất để bắt đầu. Một lệnh khởi động tất cả --
    adb reverse tcp:9000 tcp:9000   # Bộ giả lập RTDB
    adb reverse tcp:7880 tcp:7880   # LiveKit
    adb reverse tcp:9002 tcp:9002   # MinIO (lưu trữ hình ảnh)
+   adb reverse tcp:8025 tcp:8025   # Mailpit UI
    ```
    Với `adb reverse`, địa chỉ `10.0.2.2` mặc định trong hương vị cục bộ cũng sẽ hoạt động trên thiết bị vật lý -- không cần thay đổi cấu hình xây dựng.
 

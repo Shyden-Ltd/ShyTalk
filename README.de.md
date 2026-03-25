@@ -285,6 +285,7 @@ Der schnellste Weg, um loszulegen. Ein Befehl startet alles -- Firebase-Emulator
    adb reverse tcp:9000 tcp:9000   # RTDB-Emulator
    adb reverse tcp:7880 tcp:7880   # LiveKit
    adb reverse tcp:9002 tcp:9002   # MinIO (Bildspeicher)
+   adb reverse tcp:8025 tcp:8025   # Mailpit UI
    ```
    Mit `adb reverse` funktionieren die Standard-`10.0.2.2`-Adressen im lokalen Flavor auch auf einem physischen Geraet -- keine Build-Konfigurationsaenderungen noetig.
 
