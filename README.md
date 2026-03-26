@@ -366,6 +366,9 @@ If you need to test against real cloud services (e.g., real push notifications, 
 | `LIVEKIT_KEY_EU` | LiveKit API key (EU/London) | Express API |
 | `LIVEKIT_SECRET_EU` | LiveKit API secret (EU/London) | Express API |
 | `LIVEKIT_URL_EU` | LiveKit server URL (EU) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_API_KEY` | LiveKit API key (fallback when per-region keys not set) | Express API |
+| `LIVEKIT_API_SECRET` | LiveKit API secret (fallback when per-region keys not set) | Express API |
+| `LIVEKIT_URL` | LiveKit server URL (baked into Android app at build time) | Android app (BuildConfig) |
 | `WORKER_URL` | Express API base URL | Android app (BuildConfig) |
 
 ## Testing

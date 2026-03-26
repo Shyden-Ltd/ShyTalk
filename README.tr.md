@@ -366,6 +366,9 @@ Gerçek bulut hizmetlerine karşı test etmeniz gerekiyorsa (örneğin, gerçek 
 | `LIVEKIT_KEY_EU` | LiveKit API anahtarı (AB/Londra) | Express API |
 | `LIVEKIT_SECRET_EU` | LiveKit API sırrı (AB/Londra) | Express API |
 | `LIVEKIT_URL_EU` | LiveKit sunucu URL'si (AB) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_API_KEY` | LiveKit API anahtarı (bolgesel anahtarlar ayarlanmadıgında yedek) | Express API |
+| `LIVEKIT_API_SECRET` | LiveKit API sırrı (bolgesel anahtarlar ayarlanmadıgında yedek) | Express API |
+| `LIVEKIT_URL` | LiveKit sunucu URL'si (derleme zamanında Android uygulamasına yerlestirilir) | Android uygulaması (BuildConfig) |
 | `WORKER_URL` | Express API temel URL'si | Android uygulaması (BuildConfig) |
 
 ## Test

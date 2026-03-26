@@ -366,6 +366,9 @@ Als je moet testen met echte cloudservices (bijv. echte pushmeldingen, echte Goo
 | `LIVEKIT_KEY_EU` | LiveKit API-sleutel (EU/Londen) | Express API |
 | `LIVEKIT_SECRET_EU` | LiveKit API-geheim (EU/Londen) | Express API |
 | `LIVEKIT_URL_EU` | LiveKit server-URL (EU) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_API_KEY` | LiveKit API-sleutel (terugval wanneer regionale sleutels niet zijn ingesteld) | Express API |
+| `LIVEKIT_API_SECRET` | LiveKit API-geheim (terugval wanneer regionale sleutels niet zijn ingesteld) | Express API |
+| `LIVEKIT_URL` | LiveKit server-URL (ingebakken in Android app tijdens build) | Android app (BuildConfig) |
 | `WORKER_URL` | Express API basis-URL | Android app (BuildConfig) |
 
 ## Testen

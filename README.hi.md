@@ -366,6 +366,9 @@ docker run -d -p 5000:5000 libretranslate/libretranslate
 | `LIVEKIT_KEY_EU` | LiveKit API की (EU/लंदन) | Express API |
 | `LIVEKIT_SECRET_EU` | LiveKit API सीक्रेट (EU/लंदन) | Express API |
 | `LIVEKIT_URL_EU` | LiveKit सर्वर URL (EU) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_API_KEY` | LiveKit API की (फॉलबैक जब क्षेत्रीय कीज़ सेट नहीं हैं) | Express API |
+| `LIVEKIT_API_SECRET` | LiveKit API सीक्रेट (फॉलबैक जब क्षेत्रीय कीज़ सेट नहीं हैं) | Express API |
+| `LIVEKIT_URL` | LiveKit सर्वर URL (Android ऐप में बिल्ड टाइम पर एम्बेड) | Android ऐप (BuildConfig) |
 | `WORKER_URL` | Express API बेस URL | Android ऐप (BuildConfig) |
 
 ## टेस्टिंग

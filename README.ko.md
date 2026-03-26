@@ -366,6 +366,9 @@ docker run -d -p 5000:5000 libretranslate/libretranslate
 | `LIVEKIT_KEY_EU` | LiveKit API 키 (EU/런던) | Express API |
 | `LIVEKIT_SECRET_EU` | LiveKit API 시크릿 (EU/런던) | Express API |
 | `LIVEKIT_URL_EU` | LiveKit 서버 URL (EU) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_API_KEY` | LiveKit API 키 (지역별 키가 설정되지 않은 경우 대체) | Express API |
+| `LIVEKIT_API_SECRET` | LiveKit API 시크릿 (지역별 키가 설정되지 않은 경우 대체) | Express API |
+| `LIVEKIT_URL` | LiveKit 서버 URL (빌드 시 Android 앱에 내장) | Android 앱 (BuildConfig) |
 | `WORKER_URL` | Express API 기본 URL | Android 앱 (BuildConfig) |
 
 ## 테스트

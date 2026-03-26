@@ -366,6 +366,9 @@ Om du behover testa mot riktiga molntjanster (t.ex. riktiga push-notiser, riktig
 | `LIVEKIT_KEY_EU` | LiveKit API-nyckel (EU/London) | Express API |
 | `LIVEKIT_SECRET_EU` | LiveKit API-hemlighet (EU/London) | Express API |
 | `LIVEKIT_URL_EU` | LiveKit-server-URL (EU) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_API_KEY` | LiveKit API-nyckel (reserv nar regionala nycklar inte ar instaellda) | Express API |
+| `LIVEKIT_API_SECRET` | LiveKit API-hemlighet (reserv nar regionala nycklar inte ar instaellda) | Express API |
+| `LIVEKIT_URL` | LiveKit-server-URL (inbakas i Android-app vid byggtiden) | Android-app (BuildConfig) |
 | `WORKER_URL` | Express API-bas-URL | Android-app (BuildConfig) |
 
 ## Testning

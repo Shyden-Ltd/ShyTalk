@@ -366,6 +366,9 @@ docker run -d -p 5000:5000 libretranslate/libretranslate
 | `LIVEKIT_KEY_EU` | LiveKit API 密钥（欧盟/伦敦） | Express API |
 | `LIVEKIT_SECRET_EU` | LiveKit API 密钥（欧盟/伦敦） | Express API |
 | `LIVEKIT_URL_EU` | LiveKit 服务器 URL（欧盟） — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_API_KEY` | LiveKit API 密钥（未设置区域密钥时的回退） | Express API |
+| `LIVEKIT_API_SECRET` | LiveKit API 密钥（未设置区域密钥时的回退） | Express API |
+| `LIVEKIT_URL` | LiveKit 服务器 URL（在构建时内嵌到 Android 应用中） | Android 应用（BuildConfig） |
 | `WORKER_URL` | Express API 基础 URL | Android 应用（BuildConfig） |
 
 ## 测试

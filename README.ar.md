@@ -366,6 +366,9 @@ docker run -d -p 5000:5000 libretranslate/libretranslate
 | `LIVEKIT_KEY_EU` | مفتاح LiveKit API (أوروبا/لندن) | Express API |
 | `LIVEKIT_SECRET_EU` | سر LiveKit API (أوروبا/لندن) | Express API |
 | `LIVEKIT_URL_EU` | رابط خادم LiveKit (أوروبا) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_API_KEY` | مفتاح LiveKit API (احتياطي عند عدم تعيين مفاتيح إقليمية) | Express API |
+| `LIVEKIT_API_SECRET` | سر LiveKit API (احتياطي عند عدم تعيين مفاتيح إقليمية) | Express API |
+| `LIVEKIT_URL` | رابط خادم LiveKit (مدمج في تطبيق Android وقت البناء) | تطبيق Android (BuildConfig) |
 | `WORKER_URL` | رابط قاعدة Express API | تطبيق Android (BuildConfig) |
 
 ## الاختبار

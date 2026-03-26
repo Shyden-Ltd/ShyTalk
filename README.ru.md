@@ -366,6 +366,9 @@ docker run -d -p 5000:5000 libretranslate/libretranslate
 | `LIVEKIT_KEY_EU` | API-ключ LiveKit (ЕС/Лондон) | Express API |
 | `LIVEKIT_SECRET_EU` | API-секрет LiveKit (ЕС/Лондон) | Express API |
 | `LIVEKIT_URL_EU` | URL сервера LiveKit (ЕС) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_API_KEY` | API-ключ LiveKit (резервный, когда региональные ключи не заданы) | Express API |
+| `LIVEKIT_API_SECRET` | API-секрет LiveKit (резервный, когда региональные ключи не заданы) | Express API |
+| `LIVEKIT_URL` | URL сервера LiveKit (встраивается в Android-приложение при сборке) | Android-приложение (BuildConfig) |
 | `WORKER_URL` | Базовый URL Express API | Android-приложение (BuildConfig) |
 
 ## Тестирование

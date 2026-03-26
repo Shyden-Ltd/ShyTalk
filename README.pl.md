@@ -366,6 +366,9 @@ Jesli musisz testowac z prawdziwymi uslugami chmurowymi (np. prawdziwe powiadomi
 | `LIVEKIT_KEY_EU` | Klucz API LiveKit (UE/Londyn) | Express API |
 | `LIVEKIT_SECRET_EU` | Sekret API LiveKit (UE/Londyn) | Express API |
 | `LIVEKIT_URL_EU` | URL serwera LiveKit (UE) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_API_KEY` | Klucz API LiveKit (awaryjny gdy klucze regionalne nie sa ustawione) | Express API |
+| `LIVEKIT_API_SECRET` | Sekret API LiveKit (awaryjny gdy klucze regionalne nie sa ustawione) | Express API |
+| `LIVEKIT_URL` | URL serwera LiveKit (wbudowany w aplikacje Android w czasie budowania) | Aplikacja Android (BuildConfig) |
 | `WORKER_URL` | Bazowy URL Express API | Aplikacja Android (BuildConfig) |
 
 ## Testowanie

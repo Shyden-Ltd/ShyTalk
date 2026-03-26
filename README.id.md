@@ -366,6 +366,9 @@ Jika Anda perlu menguji terhadap layanan cloud asli (mis. notifikasi push asli, 
 | `LIVEKIT_KEY_EU` | Kunci API LiveKit (EU/London) | Express API |
 | `LIVEKIT_SECRET_EU` | Rahasia API LiveKit (EU/London) | Express API |
 | `LIVEKIT_URL_EU` | URL server LiveKit (EU) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_API_KEY` | Kunci API LiveKit (cadangan saat kunci per-wilayah tidak disetel) | Express API |
+| `LIVEKIT_API_SECRET` | Rahasia API LiveKit (cadangan saat kunci per-wilayah tidak disetel) | Express API |
+| `LIVEKIT_URL` | URL server LiveKit (dipanggang ke aplikasi Android saat build) | Aplikasi Android (BuildConfig) |
 | `WORKER_URL` | URL dasar Express API | Aplikasi Android (BuildConfig) |
 
 ## Pengujian

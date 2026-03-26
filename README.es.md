@@ -366,6 +366,9 @@ Si necesitas probar contra servicios reales en la nube (ej. notificaciones push 
 | `LIVEKIT_KEY_EU` | Clave API de LiveKit (UE/Londres) | Express API |
 | `LIVEKIT_SECRET_EU` | Secreto API de LiveKit (UE/Londres) | Express API |
 | `LIVEKIT_URL_EU` | URL del servidor LiveKit (UE) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_API_KEY` | Clave API de LiveKit (reserva cuando no se establecen claves regionales) | Express API |
+| `LIVEKIT_API_SECRET` | Secreto API de LiveKit (reserva cuando no se establecen claves regionales) | Express API |
+| `LIVEKIT_URL` | URL del servidor LiveKit (incorporada en la app Android en tiempo de compilacion) | App Android (BuildConfig) |
 | `WORKER_URL` | URL base de Express API | App Android (BuildConfig) |
 
 ## Tests

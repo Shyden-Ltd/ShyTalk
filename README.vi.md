@@ -366,6 +366,9 @@ Nếu bạn cần kiểm tra đối với các dịch vụ đám mây thực t�
 | `LIVEKIT_KEY_EU` | Khóa API LiveKit (EU/London) | Express API |
 | `LIVEKIT_SECRET_EU` | Bí mật API LiveKit (EU/London) | Express API |
 | `LIVEKIT_URL_EU` | URL máy chủ LiveKit (EU) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_API_KEY` | Khóa API LiveKit (dự phòng khi khóa theo vùng chưa được đặt) | Express API |
+| `LIVEKIT_API_SECRET` | Bí mật API LiveKit (dự phòng khi khóa theo vùng chưa được đặt) | Express API |
+| `LIVEKIT_URL` | URL máy chủ LiveKit (được nhúng vào ứng dụng Android lúc build) | Ứng dụng Android (BuildConfig) |
 | `WORKER_URL` | URL cơ sở Express API | Ứng dụng Android (BuildConfig) |
 
 ## Kiểm Tra
