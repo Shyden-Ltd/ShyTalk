@@ -248,7 +248,7 @@ test.describe('Admin Users - Profile Subtab', () => {
 
     // Click Show — toggle text should change to "Hide"
     await emailToggle.click();
-    await expect(emailToggle).toContainText('Hide', { timeout: 5_000 });
+    await expect(emailToggle).toContainText('Hide');
 
     // Email input should no longer be readonly
     const readonlyAfterShow = await emailInput.getAttribute('readonly');
@@ -256,7 +256,7 @@ test.describe('Admin Users - Profile Subtab', () => {
 
     // Click Hide — toggle text should change back to "Show"
     await emailToggle.click();
-    await expect(emailToggle).toContainText('Show', { timeout: 5_000 });
+    await expect(emailToggle).toContainText('Show');
 
     // Email input should be readonly again
     await expect(emailInput).toHaveAttribute('readonly', '');
@@ -280,11 +280,11 @@ test.describe('Admin Users - Profile Subtab', () => {
     await displayNameInput.fill(testName);
 
     // Verify draft preview updated live (without saving)
-    await expect(draftName).toHaveText(testName, { timeout: 5_000 });
+    await expect(draftName).toHaveText(testName);
 
     // Current profile should still show the original name
     const currentName = page.locator('#pc-name');
-    await expect(currentName).toHaveText(testData.user.displayName, { timeout: 5_000 });
+    await expect(currentName).toHaveText(testData.user.displayName);
 
     // Restore the field value without saving (press Escape or refill)
     await displayNameInput.fill(testData.user.displayName);

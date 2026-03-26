@@ -26,7 +26,7 @@ on:
         default: true
 
 permissions:
-  contents: write       # needed by e2e-tests.yml allure-report (gh-pages deploy)
+  contents: write       # needed by playwright-tests.yml allure-report (gh-pages deploy)
   actions: read
 
 env:
@@ -349,10 +349,8 @@ jobs:
       inputs.playwright &&
       (needs.deploy-backend-dev.result == 'success' || needs.deploy-backend-dev.result == 'skipped') &&
       (needs.deploy-web-dev.result == 'success' || needs.deploy-web-dev.result == 'skipped')
-    uses: ./.github/workflows/e2e-tests.yml
+    uses: ./.github/workflows/playwright-tests.yml
     with:
-      android: 'none'
-      ios: 'none'
       web: 'all'
       parallel: true
       ref: ${{ github.sha }}

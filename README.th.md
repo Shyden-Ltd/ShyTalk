@@ -103,7 +103,7 @@ iOS เป็นแพลตฟอร์มที่รองรับ แต่
 | **Real-time** | Firebase Realtime Database |
 | **Storage** | Cloudflare R2 (via Express API proxy) |
 | **API Server** | Express.js on Oracle Cloud Free Tier |
-| **Voice** | LiveKit |
+| **Voice** | LiveKit (self-hosted on Oracle Cloud) |
 | **Push Notifications** | Firebase Cloud Messaging |
 | **Image Loading** | Coil 3 (KMP) |
 | **Animations** | Lottie Compose |
@@ -190,7 +190,7 @@ ShyTalk/
 ### ข้อกำหนดเบื้องต้น
 
 - **Android Studio** Ladybug หรือใหม่กว่า
-- **JDK 17+**
+- **JDK 21+**
 - **Node.js 24+**
 - **Docker** (สำหรับ LiveKit voice server, MinIO storage, Mailpit email)
 - **Firebase CLI** (`npm install -g firebase-tools`)
@@ -360,9 +360,15 @@ docker run -d -p 5000:5000 libretranslate/libretranslate
 | `R2_ACCESS_KEY_ID` | R2 access key | Express API |
 | `R2_SECRET_ACCESS_KEY` | R2 secret key | Express API |
 | `R2_BUCKET_NAME` | R2 bucket name (default: `shytalk-media`) | Express API |
-| `LIVEKIT_API_KEY` | LiveKit API key | Express API |
-| `LIVEKIT_API_SECRET` | LiveKit API secret | Express API |
-| `LIVEKIT_URL` | LiveKit server URL | Android app (BuildConfig) |
+| `LIVEKIT_KEY_ASIA` | LiveKit API key (Asia/Singapore) | Express API |
+| `LIVEKIT_SECRET_ASIA` | LiveKit API secret (Asia/Singapore) | Express API |
+| `LIVEKIT_URL_ASIA` | LiveKit server URL (Asia) — `wss://livekit.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_KEY_EU` | LiveKit API key (EU/London) | Express API |
+| `LIVEKIT_SECRET_EU` | LiveKit API secret (EU/London) | Express API |
+| `LIVEKIT_URL_EU` | LiveKit server URL (EU) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_API_KEY` | คีย์ LiveKit API (สำรองเมื่อไม่ได้ตั้งค่าคีย์รายภูมิภาค) | Express API |
+| `LIVEKIT_API_SECRET` | รหัสลับ LiveKit API (สำรองเมื่อไม่ได้ตั้งค่าคีย์รายภูมิภาค) | Express API |
+| `LIVEKIT_URL` | URL เซิร์ฟเวอร์ LiveKit (ฝังในแอป Android ตอน build) | Android app (BuildConfig) |
 | `WORKER_URL` | Express API base URL | Android app (BuildConfig) |
 
 ## การทดสอบ
@@ -415,8 +421,8 @@ npx playwright test
 
 - **Port already in use**: `lsof -i :<port>` (Linux/macOS) หรือ `netstat -ano | findstr :<port>` (Windows) เพื่อค้นหาสิ่งที่ใช้พอร์ต
 - **Docker not running**: ตรวจสอบว่า Docker Desktop เริ่มขึ้นแล้ว เรียกใช้ `docker ps` เพื่อตรวจสอบ
-- **Firebase emulators fail to start**: ต้องใช้ Java 11+ ตรวจสอบด้วย `java -version`
-- **Android build fails**: ตรวจสอบว่าติดตั้ง JDK 17+ และ Android SDK แล้ว ลองใช้ `./gradlew clean`
+- **Firebase emulators fail to start**: ต้องใช้ Java 21+ ตรวจสอบด้วย `java -version`
+- **Android build fails**: ตรวจสอบว่าติดตั้ง JDK 21+ และ Android SDK แล้ว ลองใช้ `./gradlew clean`
 - **adb device not detected**: เปิดใช้งาน USB debugging เรียกใช้ `adb devices` เพื่อตรวจสอบ
 - **Images not loading**: MinIO bucket อาจไม่ได้สร้าง เรียกใช้ `cd express-api && NODE_ENV=local node ../local/seed.js` สำหรับอุปกรณ์จริง ให้เรียกใช้ `adb reverse tcp:9002 tcp:9002`
 - **OTP not arriving**: ตรวจสอบเอาต์พุตคอนโซลหาเส้น `[OTP-LOCAL]` ยังตรวจสอบ Mailpit UI ที่ http://localhost:8025

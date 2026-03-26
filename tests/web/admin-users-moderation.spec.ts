@@ -99,7 +99,7 @@ test.describe('Admin Users - Moderation Subtab', () => {
 
     // Click the Revoke button on that warning
     const revokeBtn = firstWarning.locator('.btn-revoke-warning');
-    await expect(revokeBtn).toBeVisible({ timeout: 5_000 });
+    await expect(revokeBtn).toBeVisible();
     await revokeBtn.click();
 
     // Verify "Revoked" status in history (the revoke button is replaced with "Revoked" text)

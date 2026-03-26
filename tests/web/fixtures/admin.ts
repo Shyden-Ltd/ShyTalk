@@ -29,8 +29,8 @@ export const test = base.extend<{}, { adminContext: BrowserContext; testData: Te
     const dashboard = page.locator('#dashboard-screen');
     const signInBtn = page.getByRole('button', { name: 'Sign In' });
     await Promise.race([
-      dashboard.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {}),
-      signInBtn.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {}),
+      dashboard.waitFor({ state: 'visible' }).catch(() => {}),
+      signInBtn.waitFor({ state: 'visible' }).catch(() => {}),
     ]);
 
     if (!await dashboard.isVisible()) {
@@ -40,7 +40,7 @@ export const test = base.extend<{}, { adminContext: BrowserContext; testData: Te
       await page.getByRole('textbox', { name: 'Email' }).fill(ADMIN_EMAIL);
       await page.getByRole('textbox', { name: 'Password' }).fill(ADMIN_PASSWORD);
       await signInBtn.click();
-      await expect(dashboard).toBeVisible({ timeout: 30_000 });
+      await expect(dashboard).toBeVisible({ timeout: 15_000 }); // Auth can take a moment
     }
 
     await page.close();
@@ -57,7 +57,7 @@ export const test = base.extend<{}, { adminContext: BrowserContext; testData: Te
       // Register token interceptor BEFORE navigating — otherwise the
       // admin panel's initial API calls fire before the listener is attached
       await page.goto('/admin/');
-      await page.locator('#dashboard-screen').waitFor({ state: 'visible', timeout: 15_000 });
+      await page.locator('#dashboard-screen').waitFor({ state: 'visible' });
       await api.waitForToken();
 
       const prefix = `${workerInfo.project.name}-w${workerInfo.workerIndex}`;

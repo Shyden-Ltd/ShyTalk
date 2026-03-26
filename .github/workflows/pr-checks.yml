@@ -6,7 +6,7 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: write       # needed by e2e-tests.yml allure-report (gh-pages deploy)
+  contents: write       # needed by e2e/playwright allure-report (gh-pages deploy)
   checks: write
   pull-requests: write
 
@@ -162,8 +162,6 @@ jobs:
     uses: ./.github/workflows/e2e-tests.yml
     with:
       android: '33-phone'
-      ios: 'none'
-      web: 'none'
       parallel: true
       ref: ${{ github.event.pull_request.head.sha }}
     secrets: inherit
@@ -174,18 +172,29 @@ jobs:
       always() &&
       needs.detect-changes.outputs.web_changed == 'true' &&
       (needs.build-and-test.result == 'success' || needs.build-and-test.result == 'skipped')
-    uses: ./.github/workflows/e2e-tests.yml
+    uses: ./.github/workflows/playwright-tests.yml
     with:
-      android: 'none'
-      ios: 'none'
       web: 'all'
+      parallel: true
+      ref: ${{ github.event.pull_request.head.sha }}
+    secrets: inherit
+
+  ios-e2e:
+    needs: [detect-changes, build-and-test]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.app_changed == 'true' &&
+      needs.build-and-test.result == 'success'
+    uses: ./.github/workflows/ios-tests.yml
+    with:
+      ios: 'none'
       parallel: true
       ref: ${{ github.event.pull_request.head.sha }}
     secrets: inherit
 
   gate:
     name: PR Gate
-    needs: [detect-changes, lint, build-and-test, sonarcloud, test-backend, android-e2e, playwright-web]
+    needs: [detect-changes, lint, build-and-test, sonarcloud, test-backend, android-e2e, playwright-web, ios-e2e]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -198,7 +207,8 @@ jobs:
             "${{ needs.sonarcloud.result }}" \
             "${{ needs.test-backend.result }}" \
             "${{ needs.android-e2e.result }}" \
-            "${{ needs.playwright-web.result }}"; do
+            "${{ needs.playwright-web.result }}" \
+            "${{ needs.ios-e2e.result }}"; do
             if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
               echo "Required check failed: $result"
               exit 1

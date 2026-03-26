@@ -143,7 +143,7 @@ test.describe('Admin Empty States', () => {
     if (cardCount === 0) {
       // Verify some form of empty state or the add button exists
       const addBtn = page.locator('#add-banner-btn, button:has-text("Add Banner")');
-      await expect(addBtn).toBeVisible({ timeout: 5_000 });
+      await expect(addBtn).toBeVisible();
     } else {
       expect(cardCount).toBeGreaterThan(0);
     }
@@ -163,7 +163,7 @@ test.describe('Admin Empty States', () => {
     if (cardCount === 0) {
       // Verify add button exists even when empty
       const addBtn = page.locator('#add-fact-btn, button:has-text("Add")');
-      await expect(addBtn).toBeVisible({ timeout: 5_000 });
+      await expect(addBtn).toBeVisible();
     } else {
       expect(cardCount).toBeGreaterThan(0);
     }
@@ -202,7 +202,7 @@ test.describe('Admin Empty States', () => {
 
     // Empty message should be visible
     const empty = page.locator('#devices-empty');
-    await expect(empty).toBeVisible({ timeout: 5_000 });
+    await expect(empty).toBeVisible();
   });
 
   // ── Test 8: Backups — list loads or shows empty ──

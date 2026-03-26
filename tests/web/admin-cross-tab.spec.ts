@@ -103,7 +103,7 @@ test.describe('Admin Cross-Tab Interactions', () => {
 
     // Handle confirm dialog
     const confirmBtn = page.locator('.confirm-ok');
-    await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
+    await expect(confirmBtn).toBeVisible();
     await confirmBtn.click();
     await waitForReportsLoaded(page);
 
@@ -241,7 +241,7 @@ test.describe('Admin Cross-Tab Interactions', () => {
 
     // Verify Logs tab is active
     const logsTabBtn = page.getByRole('button', { name: 'Logs', exact: true });
-    await expect(logsTabBtn).toHaveClass(/active/, { timeout: 5_000 });
+    await expect(logsTabBtn).toHaveClass(/active/);
 
     // Verify the userId filter is populated
     const userIdFilter = page.locator('#log-filter-userId');
@@ -336,9 +336,9 @@ test.describe('Admin Cross-Tab Interactions', () => {
     await expect(page.locator('#maintenance-panel')).toBeVisible({ timeout: 15_000 });
     await page.locator('#reset-all-btn').click();
     const overlay = page.locator('#nuclear-overlay');
-    await expect(overlay).toHaveClass(/visible/, { timeout: 5_000 });
+    await expect(overlay).toHaveClass(/visible/);
     await page.locator('#nuclear-cancel').click();
-    await expect(overlay).not.toHaveClass(/visible/, { timeout: 5_000 });
+    await expect(overlay).not.toHaveClass(/visible/);
   });
 
   // ── Test 8: Toast success auto-dismisses ──
@@ -425,7 +425,7 @@ test.describe('Admin Cross-Tab Interactions', () => {
     await btn.click();
 
     // Button should show "Processing..." (disabled state)
-    await expect(btn).toHaveText('Processing...', { timeout: 5_000 });
+    await expect(btn).toHaveText('Processing...');
 
     // Wait for completion
     const result = page.locator('#backfill-user-type-result');

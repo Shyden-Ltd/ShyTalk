@@ -103,7 +103,7 @@ iOS ist eine unterstuetzte Plattform, aber dieser Leitfaden konzentriert sich au
 | **Echtzeit** | Firebase Realtime Database |
 | **Speicher** | Cloudflare R2 (ueber Express API Proxy) |
 | **API-Server** | Express.js auf Oracle Cloud Free Tier |
-| **Sprache** | LiveKit |
+| **Sprache** | LiveKit (self-hosted on Oracle Cloud) |
 | **Push-Benachrichtigungen** | Firebase Cloud Messaging |
 | **Bildladen** | Coil 3 (KMP) |
 | **Animationen** | Lottie Compose |
@@ -190,7 +190,7 @@ ShyTalk/
 ### Voraussetzungen
 
 - **Android Studio** Ladybug oder neuer
-- **JDK 17+**
+- **JDK 21+**
 - **Node.js 24+**
 - **Docker** (fuer LiveKit-Sprachserver, MinIO-Speicher, Mailpit-E-Mail)
 - **Firebase CLI** (`npm install -g firebase-tools`)
@@ -360,9 +360,15 @@ Wenn du gegen echte Cloud-Dienste testen musst (z.B. echte Push-Benachrichtigung
 | `R2_ACCESS_KEY_ID` | R2-Zugriffsschluessel | Express API |
 | `R2_SECRET_ACCESS_KEY` | R2-Geheimschluessel | Express API |
 | `R2_BUCKET_NAME` | R2-Bucket-Name (Standard: `shytalk-media`) | Express API |
-| `LIVEKIT_API_KEY` | LiveKit API-Schluessel | Express API |
-| `LIVEKIT_API_SECRET` | LiveKit API-Geheimnis | Express API |
-| `LIVEKIT_URL` | LiveKit-Server-URL | Android-App (BuildConfig) |
+| `LIVEKIT_KEY_ASIA` | LiveKit API-Schluessel (Asien/Singapur) | Express API |
+| `LIVEKIT_SECRET_ASIA` | LiveKit API-Geheimnis (Asien/Singapur) | Express API |
+| `LIVEKIT_URL_ASIA` | LiveKit-Server-URL (Asien) — `wss://livekit.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_KEY_EU` | LiveKit API-Schluessel (EU/London) | Express API |
+| `LIVEKIT_SECRET_EU` | LiveKit API-Geheimnis (EU/London) | Express API |
+| `LIVEKIT_URL_EU` | LiveKit-Server-URL (EU) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_API_KEY` | LiveKit API-Schluessel (Fallback wenn regionale Schluessel nicht gesetzt) | Express API |
+| `LIVEKIT_API_SECRET` | LiveKit API-Geheimnis (Fallback wenn regionale Schluessel nicht gesetzt) | Express API |
+| `LIVEKIT_URL` | LiveKit-Server-URL (wird zur Build-Zeit in die Android-App eingebettet) | Android-App (BuildConfig) |
 | `WORKER_URL` | Express API Basis-URL | Android-App (BuildConfig) |
 
 ## Tests
@@ -415,8 +421,8 @@ In CI laufen Playwright- und Android-E2E-Tests gegen dieselbe lokale Umgebung (E
 
 - **Port bereits belegt**: `lsof -i :<port>` (Linux/macOS) oder `netstat -ano | findstr :<port>` (Windows) um herauszufinden, was den Port verwendet.
 - **Docker laeuft nicht**: Stelle sicher, dass Docker Desktop gestartet ist. Fuehre `docker ps` zur Ueberpruefung aus.
-- **Firebase-Emulatoren starten nicht**: Erfordert Java 11+. Pruefe mit `java -version`.
-- **Android-Build schlaegt fehl**: Stelle sicher, dass JDK 17+ und Android SDK installiert sind. Versuche `./gradlew clean`.
+- **Firebase-Emulatoren starten nicht**: Erfordert Java 21+. Pruefe mit `java -version`.
+- **Android-Build schlaegt fehl**: Stelle sicher, dass JDK 21+ und Android SDK installiert sind. Versuche `./gradlew clean`.
 - **adb-Geraet nicht erkannt**: Aktiviere USB-Debugging. Fuehre `adb devices` zur Ueberpruefung aus.
 - **Bilder laden nicht**: MinIO-Bucket wurde moeglicherweise nicht erstellt. Fuehre `cd express-api && NODE_ENV=local node ../local/seed.js` aus. Fuer physische Geraete, fuehre `adb reverse tcp:9002 tcp:9002` aus.
 - **OTP kommt nicht an**: Pruefe die Konsolenausgabe auf `[OTP-LOCAL]`-Zeilen. Pruefe auch die Mailpit-UI unter http://localhost:8025.

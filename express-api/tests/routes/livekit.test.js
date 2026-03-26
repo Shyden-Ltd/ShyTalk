@@ -27,15 +27,28 @@ jest.mock('livekit-server-sdk', () => ({
 
 const { AccessToken } = require('livekit-server-sdk');
 
+// ─── Region routing mock ─────────────────────────────────────────
+
+jest.mock('../../src/utils/livekit-region', () => ({
+  getRegion: jest.fn().mockReturnValue('asia'),
+  getRegionConfig: jest.fn().mockReturnValue({
+    url: 'wss://livekit.test.com',
+    apiKey: 'test-key',
+    apiSecret: 'test-secret',
+  }),
+}));
+const { getRegion, getRegionConfig } = require('../../src/utils/livekit-region');
+
 beforeEach(() => {
   jest.clearAllMocks();
-  process.env.LIVEKIT_API_KEY = 'test-key';
-  process.env.LIVEKIT_API_SECRET = 'test-secret';
-});
-
-afterEach(() => {
-  delete process.env.LIVEKIT_API_KEY;
-  delete process.env.LIVEKIT_API_SECRET;
+  // Reset region mock to default (asia) after clearAllMocks resets return values
+  getRegion.mockReturnValue('asia');
+  getRegionConfig.mockReturnValue({
+    url: 'wss://livekit.test.com',
+    apiKey: 'test-key',
+    apiSecret: 'test-secret',
+  });
+  mockToJwt.mockResolvedValue('mock-jwt-token');
 });
 
 // ─── App setup ───────────────────────────────────────────────────
@@ -76,8 +89,9 @@ describe('POST /api/livekit/token', () => {
       .expect(200);
 
     expect(res.body.token).toBe('mock-jwt-token');
+    expect(res.body.url).toBe('wss://livekit.test.com');
 
-    // Verify AccessToken was called with the authenticated user's uniqueId as a string
+    // Verify AccessToken was called with region config keys and the authenticated user's uniqueId
     expect(AccessToken).toHaveBeenCalledWith(
       'test-key',
       'test-secret',
@@ -112,5 +126,110 @@ describe('POST /api/livekit/token', () => {
         canSubscribe: true,
       }),
     );
+  });
+
+  test('returns url field from region config', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/livekit/token')
+      .send({ roomName: 'test-room' })
+      .expect(200);
+
+    expect(res.body.token).toBe('mock-jwt-token');
+    expect(res.body.url).toBe('wss://livekit.test.com');
+  });
+
+  test('uses EU region config when getRegion returns eu', async () => {
+    getRegion.mockReturnValue('eu');
+    getRegionConfig.mockReturnValue({
+      url: 'wss://livekit-eu.test.com',
+      apiKey: 'eu-key',
+      apiSecret: 'eu-secret',
+    });
+
+    const app = createApp(77001);
+    const res = await request(app)
+      .post('/api/livekit/token')
+      .send({ roomName: 'eu-room' })
+      .expect(200);
+
+    expect(res.body.url).toBe('wss://livekit-eu.test.com');
+    expect(AccessToken).toHaveBeenCalledWith(
+      'eu-key',
+      'eu-secret',
+      expect.objectContaining({ identity: '77001' }),
+    );
+    expect(getRegionConfig).toHaveBeenCalledWith('eu');
+  });
+
+  test('omits url field in local mode', async () => {
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'local';
+
+    try {
+      const app = createApp();
+      const res = await request(app)
+        .post('/api/livekit/token')
+        .send({ roomName: 'test-room' })
+        .expect(200);
+
+      expect(res.body.token).toBe('mock-jwt-token');
+      expect(res.body.url).toBeUndefined();
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+    }
+  });
+
+  test('returns 500 when token generation fails', async () => {
+    mockToJwt.mockRejectedValueOnce(new Error('signing failed'));
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/livekit/token')
+      .send({ roomName: 'test-room' })
+      .expect(500);
+
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('returns 503 when region credentials are not configured', async () => {
+    getRegionConfig.mockReturnValue({
+      url: 'wss://livekit.test.com',
+      apiKey: undefined,
+      apiSecret: undefined,
+    });
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/livekit/token')
+      .send({ roomName: 'test-room' })
+      .expect(503);
+
+    expect(res.body.error).toBe('Voice service not available');
+  });
+
+  test('returns 503 when only apiKey is missing', async () => {
+    getRegionConfig.mockReturnValue({
+      url: 'wss://livekit.test.com',
+      apiKey: undefined,
+      apiSecret: 'test-secret',
+    });
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/livekit/token')
+      .send({ roomName: 'test-room' })
+      .expect(503);
+
+    expect(res.body.error).toBe('Voice service not available');
+  });
+
+  test('returns 403 when uniqueId is null (user has no profile)', async () => {
+    const app = createApp(null);
+    const res = await request(app)
+      .post('/api/livekit/token')
+      .send({ roomName: 'test-room' })
+      .expect(403);
+
+    expect(res.body.error).toBe('User profile not found');
   });
 });

@@ -1,10 +1,10 @@
-name: Android E2E Tests
+name: Playwright Tests
 
 on:
   workflow_call:
     inputs:
-      android:
-        description: 'Android (all, none, or e.g. 28-phone,35-tablet)'
+      web:
+        description: 'Web (all, none, or e.g. chromium,firefox,mobile-chrome)'
         type: string
         default: 'all'
       parallel:
@@ -18,8 +18,8 @@ on:
 
   workflow_dispatch:
     inputs:
-      android:
-        description: 'Android (all, none, or e.g. 28-phone,35-tablet)'
+      web:
+        description: 'Web (all, none, or e.g. chromium,firefox,mobile-chrome)'
         type: string
         default: 'all'
       parallel:
@@ -28,45 +28,41 @@ on:
         default: true
 
 permissions:
-  contents: read
+  contents: write
 
-# Only one Android E2E run at a time — prevents emulator resource contention
 concurrency:
-  group: e2e-tests
+  group: playwright-tests
   cancel-in-progress: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # ── Resolve inputs into device matrix ────────────────────────
+  # ── Resolve inputs into browser matrix ──────────────────────
   resolve-inputs:
     name: Resolve Inputs
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:
-      run_android: ${{ steps.resolve.outputs.run_android }}
-      android_matrix: ${{ steps.resolve.outputs.android_matrix }}
+      run_web: ${{ steps.resolve.outputs.run_web }}
+      web_matrix: ${{ steps.resolve.outputs.web_matrix }}
       parallel: ${{ steps.resolve.outputs.parallel }}
       ref: ${{ steps.resolve.outputs.ref }}
     steps:
-      - name: Resolve platforms, devices, and ref
+      - name: Resolve browsers and ref
         id: resolve
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           script: |
-            const ANDROID_ALL = [
-              { 'api-level': 28, 'form-factor': 'phone', profile: 'pixel_2' },
-              { 'api-level': 28, 'form-factor': 'tablet', profile: 'Nexus 10' },
-              { 'api-level': 30, 'form-factor': 'phone', profile: 'pixel_4' },
-              { 'api-level': 30, 'form-factor': 'tablet', profile: 'Nexus 10' },
-              { 'api-level': 33, 'form-factor': 'phone', profile: 'pixel_6' },
-              { 'api-level': 33, 'form-factor': 'tablet', profile: 'pixel_tablet' },
-              { 'api-level': 35, 'form-factor': 'phone', profile: 'pixel_9' },
-              { 'api-level': 35, 'form-factor': 'tablet', profile: 'pixel_tablet' },
+            const WEB_ALL = [
+              { project: 'chromium', browser: 'Chromium', viewport: '1280x720' },
+              { project: 'firefox', browser: 'Firefox', viewport: '1280x720' },
+              { project: 'webkit', browser: 'WebKit', viewport: '1280x720' },
+              { project: 'mobile-chrome', browser: 'Mobile Chrome (Pixel 5)', viewport: '393x851' },
+              { project: 'mobile-safari', browser: 'Mobile Safari (iPhone 13)', viewport: '390x844' },
             ];
 
-            const android = '${{ inputs.android }}' || 'all';
+            const web = '${{ inputs.web }}' || 'all';
             const parallel = '${{ inputs.parallel }}' !== 'false';
             const ref = '${{ inputs.ref }}' || context.sha;
 
@@ -77,26 +73,63 @@ jobs:
               return catalog.filter(item => selected.includes(keyFn(item)));
             }
 
-            const androidMatrix = filter(android, ANDROID_ALL, d => `${d['api-level']}-${d['form-factor']}`);
+            const webMatrix = filter(web, WEB_ALL, d => d.project);
 
             core.setOutput('ref', ref);
             core.setOutput('parallel', String(parallel));
-            core.setOutput('run_android', String(androidMatrix.length > 0));
-            core.setOutput('android_matrix', JSON.stringify({ include: androidMatrix }));
+            core.setOutput('run_web', String(webMatrix.length > 0));
+            core.setOutput('web_matrix', JSON.stringify({ include: webMatrix }));
 
-            console.log(`Android: ${androidMatrix.length} devices`);
+            console.log(`Web: ${webMatrix.length} browsers`);
 
-  # ── Android E2E ───────────────────────────────────────────────
-  test-android:
-    name: "Android E2E (API ${{ matrix.api-level }}, ${{ matrix.form-factor }})"
+  # ── Prepare Playwright browsers ─────────────────────────────
+  prepare-playwright:
+    name: Prepare Playwright
     needs: [resolve-inputs]
-    if: always() && needs.resolve-inputs.result == 'success' && needs.resolve-inputs.outputs.run_android == 'true'
+    if: always() && needs.resolve-inputs.result == 'success' && needs.resolve-inputs.outputs.run_web == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ needs.resolve-inputs.outputs.ref }}
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Get Playwright version
+        id: pw
+        run: echo "version=$(npx playwright --version)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: cache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ steps.pw.outputs.version }}
+
+      - name: Install Playwright browsers
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: npx playwright install
+
+    outputs:
+      pw-version: ${{ steps.pw.outputs.version }}
+
+  # ── Playwright Web Tests ────────────────────────────────────
+  test-playwright:
+    name: "Playwright (${{ matrix.project }})"
+    needs: [resolve-inputs, prepare-playwright]
+    if: always() && needs.prepare-playwright.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
     strategy:
       fail-fast: false
-      max-parallel: ${{ needs.resolve-inputs.outputs.parallel == 'true' && 99 || 1 }}
-      matrix: ${{ fromJSON(needs.resolve-inputs.outputs.android_matrix) }}
+      matrix: ${{ fromJSON(needs.resolve-inputs.outputs.web_matrix) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -108,30 +141,28 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
-          cache-read-only: false
+          node-version: 24
+          cache: npm
 
-      - name: Decode google-services.json
-        env:
-          GOOGLE_SERVICES_DEV_BASE64: ${{ secrets.GOOGLE_SERVICES_DEV_BASE64 }}
-        run: |
-          mkdir -p app/src/dev app/src/prod app/src/local
-          echo "$GOOGLE_SERVICES_DEV_BASE64" | base64 -d > app/src/dev/google-services.json
-          echo "$GOOGLE_SERVICES_DEV_BASE64" | base64 -d > app/src/prod/google-services.json
-          echo '{"project_info":{"project_number":"0","project_id":"demo-shytalk"},"client":[{"client_info":{"mobilesdk_app_id":"1:0:android:0","android_client_info":{"package_name":"com.shyden.shytalk"}},"api_key":[{"current_key":"placeholder"}]},{"client_info":{"mobilesdk_app_id":"1:0:android:local","android_client_info":{"package_name":"com.shyden.shytalk.local"}},"api_key":[{"current_key":"placeholder"}]}]}' > app/src/local/google-services.json
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Decode keystore
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-        run: echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
+      - name: Restore Playwright browsers from cache
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ needs.prepare-playwright.outputs.pw-version }}
 
-      - name: Enable KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
+      - name: Cache apt packages for Playwright
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v4
+        with:
+          path: /var/cache/apt/archives
+          key: apt-playwright-${{ needs.prepare-playwright.outputs.pw-version }}
+
+      - name: Install system dependencies
+        run: npx playwright install-deps
 
       - name: Start local services
         run: |
@@ -153,15 +184,13 @@ jobs:
         run: |
           npm install -g firebase-tools
           firebase emulators:start --project=demo-shytalk &
-          echo "Waiting for emulators..."
           WAITED=0
           until curl -s http://localhost:4000 > /dev/null 2>&1; do
             sleep 1; WAITED=$((WAITED+1))
             if [ $WAITED -ge 120 ]; then echo "ERROR: Emulators did not start within 120s"; exit 1; fi
           done
-          echo "Emulators ready"
 
-      - name: Seed local data
+      - name: Install Express API and seed data
         run: |
           cd express-api && npm ci
           NODE_PATH=./node_modules NODE_ENV=local node ../local/seed.js
@@ -171,24 +200,34 @@ jobs:
           cd express-api
           NODE_ENV=local node src/index.js &
           until curl -s http://localhost:3000/api/health > /dev/null 2>&1; do sleep 1; done
-          echo "API ready"
 
-      - name: Run E2E tests on emulator
-        uses: reactivecircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a # v2.37.0
+      - name: Configure admin panel for local emulators
+        run: |
+          cat > public/admin/config.js << 'EOF'
+          window.SHYTALK_CONFIG = {
+            API_BASE: "http://localhost:3000",
+            USE_EMULATORS: true,
+            FIREBASE_CONFIG: {
+              apiKey: "fake-api-key",
+              authDomain: "localhost",
+              projectId: "demo-shytalk"
+            }
+          };
+          EOF
+
+      - name: Serve admin panel
+        run: npx serve public -l 8888 &
+
+      - name: Run Playwright tests (${{ matrix.project }})
         env:
-          LIVEKIT_URL: ws://10.0.2.2:7880
-        with:
-          api-level: ${{ matrix.api-level }}
-          target: google_apis
-          arch: x86_64
-          profile: ${{ matrix.profile }}
-          force-avd-creation: true
-          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          disable-animations: true
-          script: |
-            ./gradlew connectedLocalDebugAndroidTest --no-parallel > test-output.log 2>&1; RESULT=$?
-            cat test-output.log
-            exit $RESULT
+          WEB_BASE_URL: http://localhost:8888
+          API_BASE_URL: http://localhost:3000
+          ADMIN_EMAIL: claude-test@shytalk.dev
+          ADMIN_PASSWORD: localdev123
+          TEST_API_KEY: local-test-key
+          ALLURE_ENABLED: 'true'
+          ALLURE_PROJECT: ${{ matrix.project }}
+        run: npx playwright test --project=${{ matrix.project }} --reporter=list,allure-playwright,html
 
       - name: Cleanup Docker containers
         if: always()
@@ -198,76 +237,61 @@ jobs:
           docker logs mailpit 2>/dev/null || true
           docker rm -f livekit minio mailpit 2>/dev/null || true
 
-      - name: Collect Allure results from JUnit XML
+      - name: Write environment.properties
         if: always()
         run: |
-          mkdir -p allure-results-android
-          PACKAGE="com.shyden.shytalk.local"
-          adb exec-out run-as $PACKAGE sh -c 'cd files/allure-results && tar cf - .' 2>/dev/null | \
-            tar xf - -C allure-results-android/ 2>/dev/null || true
-          NATIVE_COUNT=$(find allure-results-android -name "*-result.json" 2>/dev/null | wc -l)
-          echo "Native Allure results: $NATIVE_COUNT files"
-          if [ "$NATIVE_COUNT" -eq 0 ]; then
-            echo "No native Allure results — using JUnit XML for Allure import"
-            find app/build/outputs/androidTest-results -name "TEST-*.xml" 2>/dev/null \
-              -exec cp {} allure-results-android/ \; || true
-          fi
-
-      - name: Write Android environment.properties
-        if: always()
-        run: |
-          sed 's/^ *//' > allure-results-android/environment.properties <<'ENVEOF'
-          platform=Android
-          api_level=${{ matrix.api-level }}
-          device=${{ matrix.profile }}
-          environment=local
-          ENVEOF
+          DIR="allure-results/${{ matrix.project }}"
+          mkdir -p "$DIR"
+          sed 's/^ *//' > "$DIR/environment.properties" <<'PWEOF'
+          platform=Web
+          browser=${{ matrix.browser }}
+          viewport=${{ matrix.viewport }}
+          base_url=localhost:8888
+          PWEOF
 
       - name: Upload Allure results
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         if: always()
         with:
-          name: allure-results-android-api${{ matrix.api-level }}-${{ matrix.form-factor }}
-          path: allure-results-android/
+          name: allure-results-playwright-${{ matrix.project }}
+          path: allure-results/
           retention-days: 14
 
-      - name: Upload test output
+      - name: Upload failure screenshots and traces
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
-        if: always()
+        if: failure()
         with:
-          name: android-test-output-api${{ matrix.api-level }}-${{ matrix.form-factor }}
-          path: |
-            test-output.log
-            app/build/reports/androidTests/connected/
-          retention-days: 14
+          name: playwright-failures-${{ matrix.project }}
+          path: test-results/
+          retention-days: 7
 
-  # ── Summary ──────────────────────────────────────────────────
-  e2e-summary:
-    name: Android E2E Summary
-    needs: [resolve-inputs, test-android]
+  # ── Summary ─────────────────────────────────────────────────
+  playwright-summary:
+    name: Playwright Summary
+    needs: [resolve-inputs, test-playwright]
     if: always() && needs.resolve-inputs.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Check results
         run: |
-          echo "## Android E2E Test Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Playwright Test Results" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
-          ANDROID="${{ needs.test-android.result }}"
+          PW="${{ needs.test-playwright.result }}"
 
-          echo "- Android E2E: $ANDROID" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Playwright Web: $PW" >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "$ANDROID" != "success" ] && [ "$ANDROID" != "skipped" ]; then
+          if [ "$PW" != "success" ] && [ "$PW" != "skipped" ]; then
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "**Android E2E tests failed.**" >> "$GITHUB_STEP_SUMMARY"
+            echo "**Playwright tests failed.**" >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
 
-  # ── Generate Allure Report ────────────────────────────────────
+  # ── Generate Allure Report ──────────────────────────────────
   allure-report:
     name: Generate Allure Report
-    needs: [resolve-inputs, test-android]
+    needs: [resolve-inputs, test-playwright]
     if: always() && needs.resolve-inputs.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10

@@ -103,7 +103,7 @@ iOS ar en plattform som stods, men den har guiden fokuserar pa Android-utvecklin
 | **Realtid** | Firebase Realtime Database |
 | **Lagring** | Cloudflare R2 (via Express API-proxy) |
 | **API-server** | Express.js pa Oracle Cloud Free Tier |
-| **Rost** | LiveKit |
+| **Rost** | LiveKit (self-hosted on Oracle Cloud) |
 | **Push-notiser** | Firebase Cloud Messaging |
 | **Bildladdning** | Coil 3 (KMP) |
 | **Animationer** | Lottie Compose |
@@ -190,7 +190,7 @@ ShyTalk/
 ### Forutsattningar
 
 - **Android Studio** Ladybug eller nyare
-- **JDK 17+**
+- **JDK 21+**
 - **Node.js 24+**
 - **Docker** (for LiveKit-rostserver, MinIO-lagring, Mailpit-e-post)
 - **Firebase CLI** (`npm install -g firebase-tools`)
@@ -360,9 +360,15 @@ Om du behover testa mot riktiga molntjanster (t.ex. riktiga push-notiser, riktig
 | `R2_ACCESS_KEY_ID` | R2-atkomstnyckel | Express API |
 | `R2_SECRET_ACCESS_KEY` | R2-hemlig nyckel | Express API |
 | `R2_BUCKET_NAME` | R2-hinknamn (standard: `shytalk-media`) | Express API |
-| `LIVEKIT_API_KEY` | LiveKit API-nyckel | Express API |
-| `LIVEKIT_API_SECRET` | LiveKit API-hemlighet | Express API |
-| `LIVEKIT_URL` | LiveKit-server-URL | Android-app (BuildConfig) |
+| `LIVEKIT_KEY_ASIA` | LiveKit API-nyckel (Asien/Singapore) | Express API |
+| `LIVEKIT_SECRET_ASIA` | LiveKit API-hemlighet (Asien/Singapore) | Express API |
+| `LIVEKIT_URL_ASIA` | LiveKit-server-URL (Asien) — `wss://livekit.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_KEY_EU` | LiveKit API-nyckel (EU/London) | Express API |
+| `LIVEKIT_SECRET_EU` | LiveKit API-hemlighet (EU/London) | Express API |
+| `LIVEKIT_URL_EU` | LiveKit-server-URL (EU) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_API_KEY` | LiveKit API-nyckel (reserv nar regionala nycklar inte ar instaellda) | Express API |
+| `LIVEKIT_API_SECRET` | LiveKit API-hemlighet (reserv nar regionala nycklar inte ar instaellda) | Express API |
+| `LIVEKIT_URL` | LiveKit-server-URL (inbakas i Android-app vid byggtiden) | Android-app (BuildConfig) |
 | `WORKER_URL` | Express API-bas-URL | Android-app (BuildConfig) |
 
 ## Testning
@@ -415,8 +421,8 @@ I CI kors Playwright- och Android E2E-tester mot samma lokala miljo (emulatorer 
 
 - **Port redan i anvandning**: `lsof -i :<port>` (Linux/macOS) eller `netstat -ano | findstr :<port>` (Windows) for att hitta vad som anvander porten.
 - **Docker kor inte**: Se till att Docker Desktop ar startat. Kor `docker ps` for att verifiera.
-- **Firebase-emulatorer startar inte**: Kraver Java 11+. Kontrollera med `java -version`.
-- **Android-bygget misslyckas**: Se till att JDK 17+ och Android SDK ar installerade. Prova `./gradlew clean`.
+- **Firebase-emulatorer startar inte**: Kraver Java 21+. Kontrollera med `java -version`.
+- **Android-bygget misslyckas**: Se till att JDK 21+ och Android SDK ar installerade. Prova `./gradlew clean`.
 - **adb-enhet hittas inte**: Aktivera USB-felsookning. Kor `adb devices` for att kontrollera.
 - **Bilder laddas inte**: MinIO-hinken kanske inte har skapats. Kor `cd express-api && NODE_ENV=local node ../local/seed.js`. For fysiska enheter, kor `adb reverse tcp:9002 tcp:9002`.
 - **OTP kommer inte**: Kontrollera konsolutdata for `[OTP-LOCAL]`-rader. Kolla ocksa Mailpit UI pa http://localhost:8025.

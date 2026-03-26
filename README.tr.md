@@ -103,7 +103,7 @@ iOS desteklenen bir platformdur ancak bu rehber, birincil geliştirme hedefi ola
 | **Real-time** | Firebase Realtime Database |
 | **Storage** | Cloudflare R2 (via Express API proxy) |
 | **API Server** | Express.js on Oracle Cloud Free Tier |
-| **Voice** | LiveKit |
+| **Voice** | LiveKit (self-hosted on Oracle Cloud) |
 | **Push Notifications** | Firebase Cloud Messaging |
 | **Image Loading** | Coil 3 (KMP) |
 | **Animations** | Lottie Compose |
@@ -190,7 +190,7 @@ ShyTalk/
 ### Ön Koşullar
 
 - **Android Studio** Ladybug veya daha yeni
-- **JDK 17+**
+- **JDK 21+**
 - **Node.js 24+**
 - **Docker** (LiveKit sesli sunucu, MinIO depolama, Mailpit e-postası için)
 - **Firebase CLI** (`npm install -g firebase-tools`)
@@ -360,9 +360,15 @@ Gerçek bulut hizmetlerine karşı test etmeniz gerekiyorsa (örneğin, gerçek 
 | `R2_ACCESS_KEY_ID` | R2 erişim anahtarı | Express API |
 | `R2_SECRET_ACCESS_KEY` | R2 gizli anahtarı | Express API |
 | `R2_BUCKET_NAME` | R2 kova adı (varsayılan: `shytalk-media`) | Express API |
-| `LIVEKIT_API_KEY` | LiveKit API anahtarı | Express API |
-| `LIVEKIT_API_SECRET` | LiveKit API sırrı | Express API |
-| `LIVEKIT_URL` | LiveKit sunucu URL'si | Android uygulaması (BuildConfig) |
+| `LIVEKIT_KEY_ASIA` | LiveKit API anahtarı (Asya/Singapur) | Express API |
+| `LIVEKIT_SECRET_ASIA` | LiveKit API sırrı (Asya/Singapur) | Express API |
+| `LIVEKIT_URL_ASIA` | LiveKit sunucu URL'si (Asya) — `wss://livekit.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_KEY_EU` | LiveKit API anahtarı (AB/Londra) | Express API |
+| `LIVEKIT_SECRET_EU` | LiveKit API sırrı (AB/Londra) | Express API |
+| `LIVEKIT_URL_EU` | LiveKit sunucu URL'si (AB) — `wss://livekit-eu.shytalk.shyden.co.uk` | Express API |
+| `LIVEKIT_API_KEY` | LiveKit API anahtarı (bolgesel anahtarlar ayarlanmadıgında yedek) | Express API |
+| `LIVEKIT_API_SECRET` | LiveKit API sırrı (bolgesel anahtarlar ayarlanmadıgında yedek) | Express API |
+| `LIVEKIT_URL` | LiveKit sunucu URL'si (derleme zamanında Android uygulamasına yerlestirilir) | Android uygulaması (BuildConfig) |
 | `WORKER_URL` | Express API temel URL'si | Android uygulaması (BuildConfig) |
 
 ## Test
@@ -415,8 +421,8 @@ CI'de, Playwright ve Android E2E testleri aynı yerel ortamda (emülatörler + D
 
 - **Bağlantı noktası zaten kullanımda**: `lsof -i :<port>` (Linux/macOS) veya `netstat -ano | findstr :<port>` (Windows) bağlantı noktasını neyin kullandığını bulun.
 - **Docker çalışmıyor**: Docker Desktop'un başlatıldığından emin olun. Doğrulamak için `docker ps` çalıştırın.
-- **Firebase emülatörleri başlatılamıyor**: Java 11+ gerektirir. `java -version` ile kontrol edin.
-- **Android yapısı başarısız**: JDK 17+ ve Android SDK'nın yüklendiğinden emin olun. `./gradlew clean` deneyin.
+- **Firebase emülatörleri başlatılamıyor**: Java 21+ gerektirir. `java -version` ile kontrol edin.
+- **Android yapısı başarısız**: JDK 21+ ve Android SDK'nın yüklendiğinden emin olun. `./gradlew clean` deneyin.
 - **adb cihazı algılanmadı**: USB hata ayıklamayı etkinleştirin. Kontrol etmek için `adb devices` çalıştırın.
 - **Görüntüler yüklenmiyorsa**: MinIO kovası oluşturulmamış olabilir. `cd express-api && NODE_ENV=local node ../local/seed.js` çalıştırın. Fiziksel cihazlar için `adb reverse tcp:9002 tcp:9002` çalıştırın.
 - **OTP ulaşmıyor**: Konsol çıktısını `[OTP-LOCAL]` satırları için kontrol edin. Ayrıca http://localhost:8025 adresindeki Mailpit UI'yi kontrol edin.

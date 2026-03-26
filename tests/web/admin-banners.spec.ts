@@ -13,7 +13,7 @@ async function waitForBannersLoaded(page: Page): Promise<void> {
 /** Open the Add Banner dialog. */
 async function openAddDialog(page: Page): Promise<void> {
   await page.locator('#banner-add-btn').click();
-  await expect(page.locator('#banner-dialog-overlay')).toHaveCSS('display', 'flex', { timeout: 5_000 });
+  await expect(page.locator('#banner-dialog-overlay')).toHaveCSS('display', 'flex');
   await expect(page.locator('#banner-dialog-title')).toHaveText('Add Banner');
 }
 
@@ -21,7 +21,7 @@ async function openAddDialog(page: Page): Promise<void> {
 async function openEditDialog(page: Page, bannerId: string): Promise<void> {
   const card = page.locator(`.banner-card[data-banner-id="${bannerId}"]`);
   await card.getByRole('button', { name: 'Edit' }).click();
-  await expect(page.locator('#banner-dialog-overlay')).toHaveCSS('display', 'flex', { timeout: 5_000 });
+  await expect(page.locator('#banner-dialog-overlay')).toHaveCSS('display', 'flex');
   await expect(page.locator('#banner-dialog-title')).toHaveText('Edit Banner');
 }
 
@@ -37,7 +37,7 @@ async function saveDialog(page: Page): Promise<void> {
 /** Click Cancel in the banner dialog. */
 async function cancelDialog(page: Page): Promise<void> {
   await page.locator('#banner-dialog-cancel').click();
-  await expect(page.locator('#banner-dialog-overlay')).toHaveCSS('display', 'none', { timeout: 5_000 });
+  await expect(page.locator('#banner-dialog-overlay')).toHaveCSS('display', 'none');
 }
 
 /**
@@ -310,7 +310,7 @@ test.describe('Admin Banners', () => {
 
     // Verify badge shows "Inactive"
     const card = page.locator(`.banner-card[data-banner-id="${testData.banner.id}"]`);
-    await expect(card.locator('span', { hasText: 'Inactive' })).toBeVisible({ timeout: 5_000 });
+    await expect(card.locator('span', { hasText: 'Inactive' })).toBeVisible();
 
     // API: active endpoint should NOT include this banner
     const activeBanners = await getActiveBannersViaApi(testData);
@@ -352,7 +352,7 @@ test.describe('Admin Banners', () => {
 
     // Verify "Scheduled" badge shows (future start date + active)
     const card = page.locator(`.banner-card[data-banner-id="${testData.banner.id}"]`);
-    await expect(card.locator('span', { hasText: 'Scheduled' })).toBeVisible({ timeout: 5_000 });
+    await expect(card.locator('span', { hasText: 'Scheduled' })).toBeVisible();
 
     // Clear dates
     await openEditDialog(page, testData.banner.id);
@@ -386,7 +386,7 @@ test.describe('Admin Banners', () => {
     });
 
     // Preview should now be visible with a blob URL
-    await expect(preview).toHaveCSS('display', 'block', { timeout: 5_000 });
+    await expect(preview).toHaveCSS('display', 'block');
     const src = await preview.getAttribute('src');
     expect(src).toBeTruthy();
     expect(src!.startsWith('blob:')).toBe(true);
@@ -484,7 +484,7 @@ test.describe('Admin Banners', () => {
     });
 
     // Verify preview appeared
-    await expect(page.locator('#banner-preview')).toHaveCSS('display', 'block', { timeout: 5_000 });
+    await expect(page.locator('#banner-preview')).toHaveCSS('display', 'block');
 
     // Save the banner
     await saveDialog(page);

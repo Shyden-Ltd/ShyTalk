@@ -3,7 +3,7 @@
 .SYNOPSIS
     Starts the ShyTalk local development environment (PowerShell equivalent of start.sh).
 .DESCRIPTION
-    Full 10-step flow: Docker containers, Firebase Emulators, seed data,
+    Full 8-step flow: Docker containers, Firebase Emulators, seed data,
     Express API, Android APK build, device install, ready message.
     Press Ctrl+C to shut down everything gracefully.
 #>

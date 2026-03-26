@@ -90,7 +90,7 @@ test.describe('Admin Fun Facts', () => {
 
     // Click "+ Add Fun Fact"
     await page.locator('#funfact-add-btn').click();
-    await expect(page.locator('#funfact-dialog-overlay')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('#funfact-dialog-overlay')).toBeVisible();
     await expect(page.locator('#funfact-dialog-title')).toHaveText('Add Fun Fact');
 
     // Fill all fields and save
@@ -130,7 +130,7 @@ test.describe('Admin Fun Facts', () => {
     await card.getByRole('button', { name: 'Edit' }).click();
 
     // Dialog should open in edit mode
-    await expect(page.locator('#funfact-dialog-overlay')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('#funfact-dialog-overlay')).toBeVisible();
     await expect(page.locator('#funfact-dialog-title')).toHaveText('Edit Fun Fact');
 
     // Modify text and save
@@ -149,7 +149,7 @@ test.describe('Admin Fun Facts', () => {
     // Restore original text
     const restoredCard = factCard(page, editedText);
     await restoredCard.getByRole('button', { name: 'Edit' }).click();
-    await expect(page.locator('#funfact-dialog-overlay')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('#funfact-dialog-overlay')).toBeVisible();
     await page.locator('#funfact-text-input').fill(originalText);
     await page.locator('#funfact-dialog-save').click();
     await expect(page.locator('#funfact-dialog-overlay')).toBeHidden({ timeout: 15_000 });
@@ -208,7 +208,7 @@ test.describe('Admin Fun Facts', () => {
     await page.waitForTimeout(500);
 
     // Fact should still be in the list
-    await expect(factCard(page, factText)).toBeVisible({ timeout: 5_000 });
+    await expect(factCard(page, factText)).toBeVisible();
   });
 
   // ── Test 6: Category dropdown — verify options, save each, verify persistence ──
@@ -226,7 +226,7 @@ test.describe('Admin Fun Facts', () => {
     const card = factCard(page, factText);
     await expect(card).toBeVisible({ timeout: 15_000 });
     await card.getByRole('button', { name: 'Edit' }).click();
-    await expect(page.locator('#funfact-dialog-overlay')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('#funfact-dialog-overlay')).toBeVisible();
 
     const options = page.locator('#funfact-category-input option');
     await expect(options).toHaveCount(4);
@@ -239,7 +239,7 @@ test.describe('Admin Fun Facts', () => {
     for (const cat of categories) {
       const currentCard = factCard(page, factText);
       await currentCard.getByRole('button', { name: 'Edit' }).click();
-      await expect(page.locator('#funfact-dialog-overlay')).toBeVisible({ timeout: 5_000 });
+      await expect(page.locator('#funfact-dialog-overlay')).toBeVisible();
       await page.locator('#funfact-category-input').selectOption(cat);
       await page.locator('#funfact-dialog-save').click();
       await expect(page.locator('#funfact-dialog-overlay')).toBeHidden({ timeout: 15_000 });
@@ -258,7 +258,7 @@ test.describe('Admin Fun Facts', () => {
     // the dropdown only has language/greeting/culture/trivia. Restore to a valid one.
     const restoreCard = factCard(page, factText);
     await restoreCard.getByRole('button', { name: 'Edit' }).click();
-    await expect(page.locator('#funfact-dialog-overlay')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('#funfact-dialog-overlay')).toBeVisible();
     await page.locator('#funfact-category-input').selectOption('trivia');
     await page.locator('#funfact-dialog-save').click();
     await expect(page.locator('#funfact-dialog-overlay')).toBeHidden({ timeout: 15_000 });
@@ -272,7 +272,7 @@ test.describe('Admin Fun Facts', () => {
     const card = factCard(page, factText);
     await expect(card).toBeVisible({ timeout: 15_000 });
     await card.getByRole('button', { name: 'Edit' }).click();
-    await expect(page.locator('#funfact-dialog-overlay')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('#funfact-dialog-overlay')).toBeVisible();
 
     await page.locator('#funfact-emoji-input').fill('🌍');
     await page.locator('#funfact-dialog-save').click();
@@ -295,7 +295,7 @@ test.describe('Admin Fun Facts', () => {
     // Restore original emoji
     const restoreCard = factCard(page, factText);
     await restoreCard.getByRole('button', { name: 'Edit' }).click();
-    await expect(page.locator('#funfact-dialog-overlay')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('#funfact-dialog-overlay')).toBeVisible();
     await page.locator('#funfact-emoji-input').fill('🔬');
     await page.locator('#funfact-dialog-save').click();
     await expect(page.locator('#funfact-dialog-overlay')).toBeHidden({ timeout: 15_000 });
@@ -309,7 +309,7 @@ test.describe('Admin Fun Facts', () => {
     const card = factCard(page, factText);
     await expect(card).toBeVisible({ timeout: 15_000 });
     await card.getByRole('button', { name: 'Edit' }).click();
-    await expect(page.locator('#funfact-dialog-overlay')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('#funfact-dialog-overlay')).toBeVisible();
 
     await page.locator('#funfact-sourcelang-input').fill('Mandarin');
     await page.locator('#funfact-dialog-save').click();
@@ -332,7 +332,7 @@ test.describe('Admin Fun Facts', () => {
     // Clear source language
     const updatedCard = factCard(page, factText);
     await updatedCard.getByRole('button', { name: 'Edit' }).click();
-    await expect(page.locator('#funfact-dialog-overlay')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('#funfact-dialog-overlay')).toBeVisible();
     await page.locator('#funfact-sourcelang-input').fill('');
     await page.locator('#funfact-dialog-save').click();
     await expect(page.locator('#funfact-dialog-overlay')).toBeHidden({ timeout: 15_000 });
@@ -357,7 +357,7 @@ test.describe('Admin Fun Facts', () => {
     const card = factCard(page, factText);
     await expect(card).toBeVisible({ timeout: 15_000 });
     await card.getByRole('button', { name: 'Edit' }).click();
-    await expect(page.locator('#funfact-dialog-overlay')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('#funfact-dialog-overlay')).toBeVisible();
 
     await page.locator('#funfact-active-check').uncheck();
     await page.locator('#funfact-dialog-save').click();
@@ -376,7 +376,7 @@ test.describe('Admin Fun Facts', () => {
     // Re-activate
     const inactiveCard = factCard(page, factText);
     await inactiveCard.getByRole('button', { name: 'Edit' }).click();
-    await expect(page.locator('#funfact-dialog-overlay')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('#funfact-dialog-overlay')).toBeVisible();
     await page.locator('#funfact-active-check').check();
     await page.locator('#funfact-dialog-save').click();
     await expect(page.locator('#funfact-dialog-overlay')).toBeHidden({ timeout: 15_000 });

@@ -73,8 +73,13 @@ Before opening or updating a PR, run ALL applicable checks:
 
 ## Environments
 - **Local**: Firebase Emulators + LiveKit Docker, zero cloud usage
+  - LiveKit: `ws://localhost:7880` (Docker container)
 - **Dev**: Firebase `shytalk-dev`, API `dev-api.shytalk.shyden.co.uk` (London)
+  - LiveKit: `livekit-eu.shytalk.shyden.co.uk` (London, Oracle Cloud)
 - **Prod**: Firebase `shytalk-7ba69`, API `api.shytalk.shyden.co.uk` (Singapore)
+  - LiveKit Asia: `livekit.shytalk.shyden.co.uk` (Singapore, Oracle Cloud)
+  - LiveKit EU: `livekit-eu.shytalk.shyden.co.uk` (London, Oracle Cloud)
+- LiveKit is self-hosted on Oracle Cloud VMs; multi-region routing handled by Express API
 - Build flavors: `dev`, `prod`, and `local` in `app/build.gradle.kts`
 - `google-services.json` in `app/src/dev/`, `app/src/prod/`, and `app/src/local/`
 
