@@ -126,7 +126,7 @@ jobs:
     needs: [resolve-inputs, prepare-playwright]
     if: always() && needs.prepare-playwright.result == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.resolve-inputs.outputs.web_matrix) }}
