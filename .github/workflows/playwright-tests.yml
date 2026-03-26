@@ -198,7 +198,7 @@ jobs:
       - name: Start Express API
         run: |
           cd express-api
-          NODE_ENV=local node src/index.js &
+          NODE_ENV=local TEST_API_KEY=local-test-key node src/index.js &
           until curl -s http://localhost:3000/api/health > /dev/null 2>&1; do sleep 1; done
 
       - name: Configure admin panel for local emulators
