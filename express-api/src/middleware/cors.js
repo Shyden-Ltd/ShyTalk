@@ -9,6 +9,10 @@ module.exports = cors({
     // Allow requests with no origin (mobile apps, curl, server-to-server)
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Allow localhost in local/test mode (admin panel served locally)
+    if (process.env.NODE_ENV === 'local' && /^http:\/\/localhost(:\d+)?$/.test(origin)) {
+      return callback(null, true);
+    }
     // Allow Cloudflare Pages preview deployments (subdomain.pages.dev)
     if (
       /^https:\/\/[a-z0-9][a-z0-9-]*\.shytalk-site-dev\.pages\.dev$/.test(origin) ||
