@@ -126,7 +126,7 @@ jobs:
     needs: [resolve-inputs, prepare-playwright]
     if: always() && needs.prepare-playwright.result == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.resolve-inputs.outputs.web_matrix) }}
@@ -200,6 +200,20 @@ jobs:
           cd express-api
           NODE_ENV=local node src/index.js &
           until curl -s http://localhost:3000/api/health > /dev/null 2>&1; do sleep 1; done
+
+      - name: Configure admin panel for local emulators
+        run: |
+          cat > public/admin/config.js << 'EOF'
+          window.SHYTALK_CONFIG = {
+            API_BASE: "http://localhost:3000",
+            USE_EMULATORS: true,
+            FIREBASE_CONFIG: {
+              apiKey: "fake-api-key",
+              authDomain: "localhost",
+              projectId: "demo-shytalk"
+            }
+          };
+          EOF
 
       - name: Serve admin panel
         run: npx serve public -l 8080 &

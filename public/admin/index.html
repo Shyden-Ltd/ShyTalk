@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <meta http-equiv="X-Frame-Options" content="DENY">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.google.com https://recaptcha.net; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://*.shytalk.shyden.co.uk https://recaptcha.net; frame-ancestors 'none';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.google.com https://recaptcha.net; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://*.shytalk.shyden.co.uk https://recaptcha.net http://localhost:*; frame-ancestors 'none';">
     <meta name="theme-color" content="#0f1117">
     <title>ShyTalk Admin</title>
     <style>
@@ -4399,7 +4399,7 @@
 <script type="module">
     // --- Firebase SDK (CDN) ---
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, connectAuthEmulator }
       from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
     import { getFirestore as getClientFirestore, collection, query, where, onSnapshot, getDocs, orderBy, limit, doc, Timestamp }
       from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
@@ -4411,6 +4411,11 @@
     const app = initializeApp(FIREBASE_CONFIG);
     const auth = getAuth(app);
     const clientDb = getClientFirestore(app);
+
+    // Connect to Firebase emulators when running locally or in CI
+    if (window.SHYTALK_CONFIG.USE_EMULATORS) {
+      connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true });
+    }
 
     // --- Number input sanitization (global) ---
     // Block scroll-to-change on all number inputs
