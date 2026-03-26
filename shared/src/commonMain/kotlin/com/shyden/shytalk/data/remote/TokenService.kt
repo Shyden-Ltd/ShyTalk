@@ -6,7 +6,5 @@ data class TokenResponse(
 )
 
 interface TokenService {
-    suspend fun fetchToken(
-        roomName: String,
-    ): TokenResponse
+    suspend fun fetchToken(roomName: String): TokenResponse
 }

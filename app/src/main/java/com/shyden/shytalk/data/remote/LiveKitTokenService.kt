@@ -5,9 +5,7 @@ import org.json.JSONObject
 class LiveKitTokenService(
     private val api: WorkerApiClient,
 ) : TokenService {
-    override suspend fun fetchToken(
-        roomName: String,
-    ): TokenResponse {
+    override suspend fun fetchToken(roomName: String): TokenResponse {
         val response =
             api.post(
                 "/api/livekit/token",
