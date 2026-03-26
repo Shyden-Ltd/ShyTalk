@@ -235,6 +235,35 @@ async function seed() {
     iconUrl: "",
   });
 
+  // Additional gifts to reach 16 on the wheel (gacha wheel requires exactly 16)
+  const extraGifts = [
+    { id: "local-gift-4", name: "Rose", coinValue: 20 },
+    { id: "local-gift-5", name: "Crown", coinValue: 100 },
+    { id: "local-gift-6", name: "Rocket", coinValue: 150 },
+    { id: "local-gift-7", name: "Teddy Bear", coinValue: 25 },
+    { id: "local-gift-8", name: "Cake", coinValue: 30 },
+    { id: "local-gift-9", name: "Fire", coinValue: 40 },
+    { id: "local-gift-10", name: "Lightning", coinValue: 60 },
+    { id: "local-gift-11", name: "Rainbow", coinValue: 80 },
+    { id: "local-gift-12", name: "Unicorn", coinValue: 120 },
+    { id: "local-gift-13", name: "Spaceship", coinValue: 300 },
+    { id: "local-gift-14", name: "Piano", coinValue: 500 },
+    { id: "local-gift-15", name: "Yacht", coinValue: 1000 },
+  ];
+  for (const g of extraGifts) {
+    await seedIfMissing(`gifts/${g.id}`, {
+      name: g.name,
+      coinValue: g.coinValue,
+      showInStore: true,
+      showOnWheel: true,
+      weight: 0.5,
+      order: parseInt(g.id.split("-")[2]),
+      animationUrl: "",
+      soundUrl: "",
+      iconUrl: "",
+    });
+  }
+
   // Coin package
   await seedIfMissing("coinPackages/local-pack-1", {
     coins: 100,
