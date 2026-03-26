@@ -1,7 +1,7 @@
 /**
- * LiveKit token generation — replaces generateLiveKitToken Cloud Function.
+ * LiveKit token generation with multi-region routing.
  *
- * POST /api/livekit/token  -> Generate a LiveKit access token
+ * POST /api/livekit/token  -> Generate a LiveKit access token + nearest server URL
  */
 
 const router = require('express').Router();

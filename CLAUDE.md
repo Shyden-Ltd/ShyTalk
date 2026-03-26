@@ -75,7 +75,7 @@ Before opening or updating a PR, run ALL applicable checks:
 - **Local**: Firebase Emulators + LiveKit Docker, zero cloud usage
   - LiveKit: `ws://localhost:7880` (Docker container)
 - **Dev**: Firebase `shytalk-dev`, API `dev-api.shytalk.shyden.co.uk` (London)
-  - LiveKit: `livekit-dev.shytalk.shyden.co.uk` (London, Oracle Cloud)
+  - LiveKit: `livekit-eu.shytalk.shyden.co.uk` (London, Oracle Cloud)
 - **Prod**: Firebase `shytalk-7ba69`, API `api.shytalk.shyden.co.uk` (Singapore)
   - LiveKit Asia: `livekit.shytalk.shyden.co.uk` (Singapore, Oracle Cloud)
   - LiveKit EU: `livekit-eu.shytalk.shyden.co.uk` (London, Oracle Cloud)
