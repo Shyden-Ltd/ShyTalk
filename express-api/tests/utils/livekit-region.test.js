@@ -69,12 +69,10 @@ describe('livekit-region', () => {
     process.env.LIVEKIT_API_KEY = 'fallback-key';
     process.env.LIVEKIT_API_SECRET = 'fallback-secret';
 
-    jest.isolateModules(() => {
-      const { getRegionConfig } = require('../../src/utils/livekit-region');
-      const config = getRegionConfig('asia');
-      expect(config.apiKey).toBe('fallback-key');
-      expect(config.apiSecret).toBe('fallback-secret');
-    });
+    const { getRegionConfig } = require('../../src/utils/livekit-region');
+    const config = getRegionConfig('asia');
+    expect(config.apiKey).toBe('fallback-key');
+    expect(config.apiSecret).toBe('fallback-secret');
   });
 
   test('falls back to single LIVEKIT_API_KEY for EU when per-region keys not set', () => {
@@ -83,12 +81,10 @@ describe('livekit-region', () => {
     process.env.LIVEKIT_API_KEY = 'fallback-key';
     process.env.LIVEKIT_API_SECRET = 'fallback-secret';
 
-    jest.isolateModules(() => {
-      const { getRegionConfig } = require('../../src/utils/livekit-region');
-      const config = getRegionConfig('eu');
-      expect(config.apiKey).toBe('fallback-key');
-      expect(config.apiSecret).toBe('fallback-secret');
-    });
+    const { getRegionConfig } = require('../../src/utils/livekit-region');
+    const config = getRegionConfig('eu');
+    expect(config.apiKey).toBe('fallback-key');
+    expect(config.apiSecret).toBe('fallback-secret');
   });
 
   test('returns asia for null cf-ipcountry header', () => {

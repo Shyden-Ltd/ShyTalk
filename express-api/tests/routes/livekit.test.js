@@ -206,4 +206,30 @@ describe('POST /api/livekit/token', () => {
 
     expect(res.body.error).toBe('Voice service not available');
   });
+
+  test('returns 503 when only apiKey is missing', async () => {
+    getRegionConfig.mockReturnValue({
+      url: 'wss://livekit.test.com',
+      apiKey: undefined,
+      apiSecret: 'test-secret',
+    });
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/livekit/token')
+      .send({ roomName: 'test-room' })
+      .expect(503);
+
+    expect(res.body.error).toBe('Voice service not available');
+  });
+
+  test('returns 403 when uniqueId is null (user has no profile)', async () => {
+    const app = createApp(null);
+    const res = await request(app)
+      .post('/api/livekit/token')
+      .send({ roomName: 'test-room' })
+      .expect(403);
+
+    expect(res.body.error).toBe('User profile not found');
+  });
 });

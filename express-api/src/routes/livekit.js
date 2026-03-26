@@ -12,6 +12,11 @@ const { getRegion, getRegionConfig } = require('../utils/livekit-region');
 router.post('/livekit/token', async (req, res) => {
   try {
     const { roomName } = req.body || {};
+
+    if (!req.auth.uniqueId) {
+      log.warn('livekit', 'Token request from user with no uniqueId', { uid: req.auth.uid });
+      return res.status(403).json({ error: 'User profile not found' });
+    }
     const identity = String(req.auth.uniqueId);
 
     if (!roomName || typeof roomName !== 'string') {

@@ -321,7 +321,7 @@ class LiveKitVoiceService(
     private suspend fun switchAudioType() =
         joinMutex.withLock {
             val roomName = currentRoomName ?: return@withLock
-            val userId = currentUserId ?: return@withLock
+            currentUserId ?: return@withLock
 
             // Snapshot voice mode at mutex entry to prevent reading a changed value
             // across suspend points (disconnect/connect) if setAudioMode fires again.
@@ -360,6 +360,12 @@ class LiveKitVoiceService(
 
                 // Reconnect
                 val serverUrl = cachedServerUrl ?: BuildConfig.LIVEKIT_SERVER_URL
+                if (serverUrl.isBlank()) {
+                    Log.e(TAG, "No LiveKit server URL for audio switch")
+                    _error.value = "Voice is temporarily unavailable"
+                    isSwitchingAudioType = false
+                    return@withLock
+                }
                 room.connect(serverUrl, token)
                 cachedToken = token
 
