@@ -4401,7 +4401,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, connectAuthEmulator }
       from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
-    import { getFirestore as getClientFirestore, collection, query, where, onSnapshot, getDocs, orderBy, limit, doc, Timestamp }
+    import { getFirestore as getClientFirestore, connectFirestoreEmulator, collection, query, where, onSnapshot, getDocs, orderBy, limit, doc, Timestamp }
       from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 
     // --- Config (loaded from config.js) ---
@@ -4415,6 +4415,7 @@
     // Connect to Firebase emulators when running locally or in CI
     if (window.SHYTALK_CONFIG.USE_EMULATORS) {
       connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true });
+      connectFirestoreEmulator(clientDb, "localhost", 8080);
     }
 
     // --- Number input sanitization (global) ---
