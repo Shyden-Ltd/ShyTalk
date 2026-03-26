@@ -7,14 +7,12 @@ class LiveKitTokenService(
 ) : TokenService {
     override suspend fun fetchToken(
         roomName: String,
-        identity: String,
     ): TokenResponse {
         val response =
             api.post(
                 "/api/livekit/token",
                 JSONObject().apply {
                     put("roomName", roomName)
-                    put("identity", identity)
                 },
             )
         val token =

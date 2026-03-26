@@ -28,7 +28,7 @@ class LiveKitTokenServiceTest {
                     put("token", "test-jwt-token")
                 }
 
-            val result = service.fetchToken("room-1", "user-1")
+            val result = service.fetchToken("room-1")
 
             assertEquals("test-jwt-token", result.token)
             assertNull(result.url)
@@ -44,7 +44,7 @@ class LiveKitTokenServiceTest {
                     put("url", "wss://livekit.test.com")
                 }
 
-            val result = service.fetchToken("room-1", "user-1")
+            val result = service.fetchToken("room-1")
 
             assertEquals("test-jwt-token", result.token)
             assertEquals("wss://livekit.test.com", result.url)
@@ -58,7 +58,7 @@ class LiveKitTokenServiceTest {
                     put("error", "no token")
                 }
 
-            service.fetchToken("room-1", "user-1")
+            service.fetchToken("room-1")
         }
 
     @Test(expected = RuntimeException::class)
@@ -66,6 +66,6 @@ class LiveKitTokenServiceTest {
         runTest {
             coEvery { api.post("/api/livekit/token", any()) } throws RuntimeException("Network error")
 
-            service.fetchToken("room-1", "user-1")
+            service.fetchToken("room-1")
         }
 }

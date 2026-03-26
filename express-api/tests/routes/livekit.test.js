@@ -179,4 +179,31 @@ describe('POST /api/livekit/token', () => {
       process.env.NODE_ENV = originalEnv;
     }
   });
+
+  test('returns 500 when token generation fails', async () => {
+    mockToJwt.mockRejectedValueOnce(new Error('signing failed'));
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/livekit/token')
+      .send({ roomName: 'test-room' })
+      .expect(500);
+
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('returns 503 when region credentials are not configured', async () => {
+    getRegionConfig.mockReturnValue({
+      url: 'wss://livekit.test.com',
+      apiKey: undefined,
+      apiSecret: undefined,
+    });
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/livekit/token')
+      .send({ roomName: 'test-room' })
+      .expect(503);
+
+    expect(res.body.error).toBe('Voice service not available');
+  });
 });

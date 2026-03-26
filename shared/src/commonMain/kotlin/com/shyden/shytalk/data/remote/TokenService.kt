@@ -8,6 +8,5 @@ data class TokenResponse(
 interface TokenService {
     suspend fun fetchToken(
         roomName: String,
-        identity: String,
     ): TokenResponse
 }

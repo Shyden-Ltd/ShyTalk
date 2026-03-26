@@ -22,6 +22,11 @@ router.post('/livekit/token', async (req, res) => {
     const region = getRegion(req);
     const regionConfig = getRegionConfig(region);
 
+    if (!regionConfig.apiKey || !regionConfig.apiSecret) {
+      log.error('livekit', 'LiveKit credentials not configured for region', { region });
+      return res.status(503).json({ error: 'Voice service not available' });
+    }
+
     log.info('livekit', 'Generating token', { userId: identity, roomName, region });
 
     const at = new AccessToken(regionConfig.apiKey, regionConfig.apiSecret, {

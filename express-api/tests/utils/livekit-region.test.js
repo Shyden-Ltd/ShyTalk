@@ -76,4 +76,28 @@ describe('livekit-region', () => {
       expect(config.apiSecret).toBe('fallback-secret');
     });
   });
+
+  test('falls back to single LIVEKIT_API_KEY for EU when per-region keys not set', () => {
+    delete process.env.LIVEKIT_KEY_EU;
+    delete process.env.LIVEKIT_SECRET_EU;
+    process.env.LIVEKIT_API_KEY = 'fallback-key';
+    process.env.LIVEKIT_API_SECRET = 'fallback-secret';
+
+    jest.isolateModules(() => {
+      const { getRegionConfig } = require('../../src/utils/livekit-region');
+      const config = getRegionConfig('eu');
+      expect(config.apiKey).toBe('fallback-key');
+      expect(config.apiSecret).toBe('fallback-secret');
+    });
+  });
+
+  test('returns asia for null cf-ipcountry header', () => {
+    const { getRegion } = require('../../src/utils/livekit-region');
+    expect(getRegion({ headers: { 'cf-ipcountry': null } })).toBe('asia');
+  });
+
+  test('returns asia for empty string cf-ipcountry header', () => {
+    const { getRegion } = require('../../src/utils/livekit-region');
+    expect(getRegion({ headers: { 'cf-ipcountry': '' } })).toBe('asia');
+  });
 });

@@ -215,7 +215,7 @@ class LiveKitVoiceService(
         } else {
             val response =
                 try {
-                    tokenService.fetchToken(roomName, userId)
+                    tokenService.fetchToken(roomName)
                 } catch (e: Exception) {
                     Log.w(TAG, "Token fetch failed", e)
                     _error.value = "Voice is temporarily unavailable"
@@ -235,6 +235,8 @@ class LiveKitVoiceService(
                 _error.value = "Voice is temporarily unavailable"
                 currentRoomName = null
                 currentUserId = null
+                cachedToken = null
+                cachedServerUrl = null
                 return@withLock
             }
             logI(TAG, "Connecting to room: roomId=$roomName")
@@ -330,7 +332,7 @@ class LiveKitVoiceService(
             val token =
                 cachedToken ?: try {
                     Log.w(TAG, "No cached token for audio switch, fetching new one")
-                    val response = tokenService.fetchToken(roomName, userId)
+                    val response = tokenService.fetchToken(roomName)
                     cachedServerUrl = response.url ?: cachedServerUrl
                     response.token
                 } catch (e: Exception) {
@@ -382,7 +384,7 @@ class LiveKitVoiceService(
             scope.launch {
                 try {
                     Log.d(TAG, "Pre-warming token for room=$roomName")
-                    val response = tokenService.fetchToken(roomName, userId)
+                    val response = tokenService.fetchToken(roomName)
                     prewarmedToken = response.token
                     prewarmedUrl = response.url
                     prewarmedRoomName = roomName
