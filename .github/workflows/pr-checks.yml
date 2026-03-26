@@ -6,7 +6,7 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: write       # needed by e2e-tests.yml allure-report (gh-pages deploy)
+  contents: write       # needed by e2e/playwright allure-report (gh-pages deploy)
   checks: write
   pull-requests: write
 
@@ -163,7 +163,6 @@ jobs:
     with:
       android: '33-phone'
       ios: 'none'
-      web: 'none'
       parallel: true
       ref: ${{ github.event.pull_request.head.sha }}
     secrets: inherit
@@ -174,10 +173,8 @@ jobs:
       always() &&
       needs.detect-changes.outputs.web_changed == 'true' &&
       (needs.build-and-test.result == 'success' || needs.build-and-test.result == 'skipped')
-    uses: ./.github/workflows/e2e-tests.yml
+    uses: ./.github/workflows/playwright-tests.yml
     with:
-      android: 'none'
-      ios: 'none'
       web: 'all'
       parallel: true
       ref: ${{ github.event.pull_request.head.sha }}

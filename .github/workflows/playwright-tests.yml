@@ -1,0 +1,349 @@
+name: Playwright Tests
+
+on:
+  workflow_call:
+    inputs:
+      web:
+        description: 'Web (all, none, or e.g. chromium,firefox,mobile-chrome)'
+        type: string
+        default: 'all'
+      parallel:
+        description: 'Run matrix jobs in parallel'
+        type: boolean
+        default: true
+      ref:
+        description: 'Git ref to test'
+        type: string
+        required: true
+
+  workflow_dispatch:
+    inputs:
+      web:
+        description: 'Web (all, none, or e.g. chromium,firefox,mobile-chrome)'
+        type: string
+        default: 'all'
+      parallel:
+        description: 'Run matrix jobs in parallel'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: playwright-tests
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  # ── Resolve inputs into browser matrix ──────────────────────
+  resolve-inputs:
+    name: Resolve Inputs
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      run_web: ${{ steps.resolve.outputs.run_web }}
+      web_matrix: ${{ steps.resolve.outputs.web_matrix }}
+      parallel: ${{ steps.resolve.outputs.parallel }}
+      ref: ${{ steps.resolve.outputs.ref }}
+    steps:
+      - name: Resolve browsers and ref
+        id: resolve
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const WEB_ALL = [
+              { project: 'chromium', browser: 'Chromium', viewport: '1280x720' },
+              { project: 'firefox', browser: 'Firefox', viewport: '1280x720' },
+              { project: 'webkit', browser: 'WebKit', viewport: '1280x720' },
+              { project: 'mobile-chrome', browser: 'Mobile Chrome (Pixel 5)', viewport: '393x851' },
+              { project: 'mobile-safari', browser: 'Mobile Safari (iPhone 13)', viewport: '390x844' },
+            ];
+
+            const web = '${{ inputs.web }}' || 'all';
+            const parallel = '${{ inputs.parallel }}' !== 'false';
+            const ref = '${{ inputs.ref }}' || context.sha;
+
+            function filter(input, catalog, keyFn) {
+              if (input === 'none' || input === 'false') return [];
+              if (input === 'all' || input === 'true') return catalog;
+              const selected = input.split(',').map(s => s.trim().toLowerCase());
+              return catalog.filter(item => selected.includes(keyFn(item)));
+            }
+
+            const webMatrix = filter(web, WEB_ALL, d => d.project);
+
+            core.setOutput('ref', ref);
+            core.setOutput('parallel', String(parallel));
+            core.setOutput('run_web', String(webMatrix.length > 0));
+            core.setOutput('web_matrix', JSON.stringify({ include: webMatrix }));
+
+            console.log(`Web: ${webMatrix.length} browsers`);
+
+  # ── Prepare Playwright browsers ─────────────────────────────
+  prepare-playwright:
+    name: Prepare Playwright
+    needs: [resolve-inputs]
+    if: always() && needs.resolve-inputs.result == 'success' && needs.resolve-inputs.outputs.run_web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ needs.resolve-inputs.outputs.ref }}
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Get Playwright version
+        id: pw
+        run: echo "version=$(npx playwright --version)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: cache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ steps.pw.outputs.version }}
+
+      - name: Install Playwright browsers
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: npx playwright install
+
+    outputs:
+      pw-version: ${{ steps.pw.outputs.version }}
+
+  # ── Playwright Web Tests ────────────────────────────────────
+  test-playwright:
+    name: "Playwright (${{ matrix.project }})"
+    needs: [resolve-inputs, prepare-playwright]
+    if: always() && needs.prepare-playwright.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.resolve-inputs.outputs.web_matrix) }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ needs.resolve-inputs.outputs.ref }}
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Restore Playwright browsers from cache
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ needs.prepare-playwright.outputs.pw-version }}
+
+      - name: Cache apt packages for Playwright
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v4
+        with:
+          path: /var/cache/apt/archives
+          key: apt-playwright-${{ needs.prepare-playwright.outputs.pw-version }}
+
+      - name: Install system dependencies
+        run: npx playwright install-deps
+
+      - name: Start local services
+        run: |
+          docker run -d --name livekit -p 7880:7880 -p 7881:7881 -p 7882:7882 \
+            -v ${{ github.workspace }}/local/livekit.yaml:/etc/livekit.yaml \
+            livekit/livekit-server:v1.9.1 --config /etc/livekit.yaml
+          docker run -d --name minio -p 9002:9000 -p 9001:9001 \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio:RELEASE.2025-03-12T18-04-18Z server /data --console-address ":9001"
+          docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit:v1.21
+
+      - name: Cache Firebase Emulators
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}
+
+      - name: Install firebase-tools and start emulators
+        run: |
+          npm install -g firebase-tools
+          firebase emulators:start --project=demo-shytalk &
+          WAITED=0
+          until curl -s http://localhost:4000 > /dev/null 2>&1; do
+            sleep 1; WAITED=$((WAITED+1))
+            if [ $WAITED -ge 120 ]; then echo "ERROR: Emulators did not start within 120s"; exit 1; fi
+          done
+
+      - name: Install Express API and seed data
+        run: |
+          cd express-api && npm ci
+          NODE_PATH=./node_modules NODE_ENV=local node ../local/seed.js
+
+      - name: Start Express API
+        run: |
+          cd express-api
+          NODE_ENV=local node src/index.js &
+          until curl -s http://localhost:3000/api/health > /dev/null 2>&1; do sleep 1; done
+
+      - name: Serve admin panel
+        run: npx serve public -l 8080 &
+
+      - name: Run Playwright tests (${{ matrix.project }})
+        env:
+          WEB_BASE_URL: http://localhost:8080
+          API_BASE_URL: http://localhost:3000
+          ADMIN_EMAIL: claude-test@shytalk.dev
+          ADMIN_PASSWORD: localdev123
+          TEST_API_KEY: local-test-key
+          ALLURE_ENABLED: 'true'
+          ALLURE_PROJECT: ${{ matrix.project }}
+        run: npx playwright test --project=${{ matrix.project }} --reporter=list,allure-playwright,html
+
+      - name: Cleanup Docker containers
+        if: always()
+        run: |
+          docker logs livekit 2>/dev/null || true
+          docker logs minio 2>/dev/null || true
+          docker logs mailpit 2>/dev/null || true
+          docker rm -f livekit minio mailpit 2>/dev/null || true
+
+      - name: Write environment.properties
+        if: always()
+        run: |
+          DIR="allure-results/${{ matrix.project }}"
+          mkdir -p "$DIR"
+          sed 's/^ *//' > "$DIR/environment.properties" <<'PWEOF'
+          platform=Web
+          browser=${{ matrix.browser }}
+          viewport=${{ matrix.viewport }}
+          base_url=localhost:8080
+          PWEOF
+
+      - name: Upload Allure results
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        if: always()
+        with:
+          name: allure-results-playwright-${{ matrix.project }}
+          path: allure-results/
+          retention-days: 14
+
+      - name: Upload failure screenshots and traces
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        if: failure()
+        with:
+          name: playwright-failures-${{ matrix.project }}
+          path: test-results/
+          retention-days: 7
+
+  # ── Summary ─────────────────────────────────────────────────
+  playwright-summary:
+    name: Playwright Summary
+    needs: [resolve-inputs, test-playwright]
+    if: always() && needs.resolve-inputs.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check results
+        run: |
+          echo "## Playwright Test Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          PW="${{ needs.test-playwright.result }}"
+
+          echo "- Playwright Web: $PW" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$PW" != "success" ] && [ "$PW" != "skipped" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "**Playwright tests failed.**" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+  # ── Generate Allure Report ──────────────────────────────────
+  allure-report:
+    name: Generate Allure Report
+    needs: [resolve-inputs, test-playwright]
+    if: always() && needs.resolve-inputs.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Download all Allure results
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: allure-results-*
+          path: allure-results-all/
+          merge-multiple: true
+
+      - name: Merge environment.properties from all test suites
+        run: |
+          MERGED="allure-results-all/environment.properties"
+          > "$MERGED"
+          find allure-results-all -name environment.properties -not -path "$MERGED" | sort | while read -r f; do
+            SUITE=$(echo "$f" | sed 's|allure-results-all/||;s|/environment.properties||;s|/|.|g')
+            while IFS= read -r line; do
+              trimmed=$(echo "$line" | sed 's/^[[:space:]]*//')
+              [ -z "$trimmed" ] && continue
+              KEY=$(echo "$trimmed" | cut -d= -f1)
+              VALUE=$(echo "$trimmed" | cut -d= -f2-)
+              echo "${SUITE}.${KEY}=${VALUE}" >> "$MERGED"
+            done < "$f"
+          done
+          echo "Merged environment.properties:"
+          cat "$MERGED"
+
+      - name: Sanitize results (strip secrets for public report)
+        run: bash .github/scripts/sanitize-allure.sh allure-results-all/
+
+      - name: Install Allure CLI
+        run: |
+          curl -sL https://github.com/allure-framework/allure2/releases/download/2.32.0/allure-2.32.0.tgz | tar xz
+          echo "$PWD/allure-2.32.0/bin" >> "$GITHUB_PATH"
+
+      - name: Restore Allure history from gh-pages
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: gh-pages
+          path: gh-pages
+        continue-on-error: true
+
+      - name: Copy history for trend tracking
+        run: |
+          mkdir -p allure-results-all/history
+          cp -r gh-pages/history/* allure-results-all/history/ 2>/dev/null || echo "No previous history (first run)"
+
+      - name: Generate Allure report
+        run: allure generate allure-results-all -o allure-report --clean
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: allure-report
+          keep_files: false
+
+      - name: Post report URL in summary
+        run: |
+          REPO="${{ github.repository }}"
+          OWNER="${REPO%%/*}"
+          echo "## Allure Report" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "[View Report](https://${OWNER}.github.io/${REPO##*/}/)" >> "$GITHUB_STEP_SUMMARY"
