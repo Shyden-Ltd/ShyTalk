@@ -162,7 +162,6 @@ jobs:
     uses: ./.github/workflows/e2e-tests.yml
     with:
       android: '33-phone'
-      ios: 'none'
       parallel: true
       ref: ${{ github.event.pull_request.head.sha }}
     secrets: inherit
