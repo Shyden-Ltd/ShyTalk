@@ -33,7 +33,8 @@ test.describe("Admin Panel", () => {
       () => (window as any).SHYTALK_CONFIG?.API_BASE,
     );
     expect(apiBase).toBeTruthy();
-    expect(apiBase).toContain("shytalk.shyden.co.uk");
+    // In CI/local mode the API_BASE is localhost; in dev/prod it's the domain
+    expect(apiBase).toMatch(/shytalk\.shyden\.co\.uk|localhost/);
   });
 
   test("has Firebase config loaded", async ({ page }) => {

@@ -14,15 +14,16 @@ async function goToStartingScreens(page: Page): Promise<void> {
 
 /** Create a screen via the UI. Auto-generates ID (no prompt). Returns the screen ID. */
 async function createScreenViaUI(page: Page): Promise<string> {
-  const countBefore = await page.locator("[data-screen-id]").count();
+  // Scope to active screens list only (exclude deleted section)
+  const activeCards = page.locator("#starting-screens-list [data-screen-id]");
+  const countBefore = await activeCards.count();
   await page.locator("#add-screen-btn").click();
-  // Wait for a new card to appear
-  await expect(page.locator("[data-screen-id]")).toHaveCount(countBefore + 1, {
+  // Wait for a new card to appear in the active list
+  await expect(activeCards).toHaveCount(countBefore + 1, {
     timeout: 15_000,
   });
-  // Get the ID of the newly added card (last one)
-  const cards = page.locator("[data-screen-id]");
-  const lastCard = cards.nth(countBefore);
+  // Get the ID of the newly added card (last one in active list)
+  const lastCard = activeCards.nth(countBefore);
   const screenId = await lastCard.getAttribute("data-screen-id");
   return screenId!;
 }

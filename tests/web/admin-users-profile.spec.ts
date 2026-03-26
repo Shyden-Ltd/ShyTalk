@@ -60,7 +60,8 @@ test.describe('Admin Users - Profile Subtab', () => {
   // ── Test 2: Edit display name persists ──
   test('edit display name persists', async ({ page, testData }) => {
     const originalName = testData.user.displayName;
-    const newName = `e2e-${testData.prefix}-renamed`;
+    // Display name input has maxlength=20 — keep the name short enough
+    const newName = `${testData.prefix}-ren`.slice(0, 20);
     const userPath = `/api/user/${testData.user.uniqueId}`;
 
     await searchUser(page, String(testData.user.uniqueId));

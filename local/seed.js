@@ -78,10 +78,19 @@ async function seed() {
   // Config documents
   console.log("Config:");
   await seedIfMissing("config/economy", {
-    dailyBonus: 50,
-    spinCost: 10,
-    pullCosts: { 1: 10, 10: 80, 100: 700 },
-    milestoneRewards: { 7: 100, 14: 250, 30: 500 },
+    beanConversionRate: 0.6,
+    beanRedeemBonusThreshold: 2000,
+    beanRedeemBonusMultiplier: 1.1,
+    pullCosts: { 1: 10, 10: 100, 100: 1000 },
+    broadcastSendThreshold: 0,
+    broadcastWinThreshold: 5000,
+    dropRateExponent: 1.5,
+    pitySoftStart: 80,
+    pityHardLimit: 120,
+    pitySoftMaxShift: 0.15,
+    pityHighValueThreshold: 5000,
+    dailyBase: 50,
+    milestoneRewards: { 7: 100, 14: 200, 30: 500, 60: 1000, 90: 2000 },
   });
   await seedIfMissing("config/app", {
     minVersionCode: 1,
@@ -239,6 +248,30 @@ async function seed() {
   await seedIfMissing("funFacts/local-fact-1", {
     text: "ShyTalk was built with Kotlin Multiplatform!",
     isActive: true,
+  });
+
+  // Sample log entries (the logger is no-op in non-production, so seed directly)
+  console.log("\nLogs:");
+  await seedIfMissing("logs/seed-log-1", {
+    level: "INFO",
+    source: "seed",
+    message: "Emulator seed completed",
+    timestamp: now,
+    userId: null,
+  });
+  await seedIfMissing("logs/seed-log-2", {
+    level: "WARN",
+    source: "seed",
+    message: "Sample warning log entry",
+    timestamp: now - 1000,
+    userId: null,
+  });
+  await seedIfMissing("logs/seed-log-3", {
+    level: "ERROR",
+    source: "seed",
+    message: "Sample error log entry",
+    timestamp: now - 2000,
+    userId: null,
   });
 
   // MinIO bucket (only when MinIO is available)

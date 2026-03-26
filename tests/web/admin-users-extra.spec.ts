@@ -257,19 +257,18 @@ test.describe('Admin Users - Extra Profile Fields', () => {
     // Click Apply
     await page.locator('#temp-id-apply').click();
 
-    // Verify current temp ID display updates
+    // Verify current temp ID display updates (wait for API response to update the text)
     const currentDisplay = page.locator('#temp-id-current');
-    await expect(currentDisplay).not.toBeEmpty({ timeout: 10_000 });
-    const displayText = await currentDisplay.textContent();
-    expect(displayText).toContain('55555555');
+    await expect(currentDisplay).toContainText('55555555', { timeout: 10_000 });
 
     // Verify via API
     const apiData = await testData.api.get(`/api/user/${uid}`);
     expect(apiData.tempUniqueId).toBe(55555555);
 
     // Clean up: clear the temp ID within this test
+    page.once('dialog', (dialog) => dialog.accept());
     await page.locator('#temp-id-clear').click();
-    await page.waitForTimeout(2_000);
+    await expect(page.locator('#temp-id-current')).toContainText('No temporary ID set', { timeout: 10_000 });
     const clearedData = await testData.api.get(`/api/user/${uid}`);
     expect(clearedData.tempUniqueId).toBeFalsy();
   });

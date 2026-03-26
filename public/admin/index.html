@@ -5025,6 +5025,14 @@
       const current = getFieldValue(field);
       const original = getOriginalValue(field);
 
+      // Reject empty required fields
+      if (field === "displayName" && (typeof current !== "string" || current.trim().length === 0)) {
+        fieldEl.classList.add("field-save-failed");
+        showFieldFeedback(fieldEl, "failed");
+        showToast("Display name cannot be empty", "error");
+        return;
+      }
+
       // Check if actually changed
       if (TIMESTAMP_FIELDS.includes(field)) {
         const toMinuteEpoch = (v) => {
@@ -10589,7 +10597,7 @@
           restoreMissingBtn.textContent = 'Restore Missing';
           restoreMissingBtn.title = 'Only fill in fields that are currently null/missing';
           restoreMissingBtn.style.cssText = 'padding:6px 14px;background:#f59e0b;color:#000;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;';
-          restoreMissingBtn.addEventListener('click', () => restoreBackup(b.date, 'missing'));
+          restoreMissingBtn.addEventListener('click', () => restoreBackup(b.date, 'missing-only'));
 
           const fullRestoreBtn = document.createElement('button');
           fullRestoreBtn.textContent = 'Full Restore';
@@ -10628,7 +10636,7 @@
     }
 
     async function restoreBackup(date, mode) {
-      const label = mode === 'full' ? 'FULL RESTORE (overwrites all fields)' : 'Restore missing fields only';
+      const label = mode === 'full' ? 'FULL RESTORE (overwrites all fields)' : mode === 'collection' ? 'Restore collection' : 'Restore missing fields only';
       if (!confirm(label + ' from backup ' + date + '?\n\nThis will update user profiles in Firestore.')) return;
       if (mode === 'full' && !confirm('Are you SURE? Full restore will overwrite current data with backup data.')) return;
       try {
@@ -11417,7 +11425,7 @@
         btn.addEventListener("click", () => {
           const uid = btn.dataset.viewLogsUser;
           if (!uid) return;
-          const logsUserFilter = $("#logs-filter-userId");
+          const logsUserFilter = $("#log-filter-userId");
           if (logsUserFilter) logsUserFilter.value = uid;
           switchTab("logs");
         });
@@ -11800,7 +11808,7 @@
 
     $("#bans-view-logs").addEventListener("click", () => {
       if (!currentUid) return;
-      const logsUserFilter = $("#logs-filter-userId");
+      const logsUserFilter = $("#log-filter-userId");
       if (logsUserFilter) logsUserFilter.value = currentUid;
       switchTab("logs");
     });

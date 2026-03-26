@@ -175,8 +175,8 @@ test.describe('Admin Alerts', () => {
   });
 
   // ── Test 6: Alert config edit (chromium-only — singleton) ──
-  test('alert config edit persists after reload', async ({ page, testData }) => {
-    test.skip(({ browserName }) => browserName !== 'chromium', 'Alert config is singleton — run in one project only');
+  test('alert config edit persists after reload', async ({ page, testData, browserName }) => {
+    test.skip(browserName !== 'chromium', 'Alert config is singleton — run in one project only');
 
     await navigateToTab(page, 'Logs');
     await expandAlertsSection(page);

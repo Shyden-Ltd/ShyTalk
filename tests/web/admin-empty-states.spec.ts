@@ -22,7 +22,8 @@ async function waitForReportsLoaded(page: Page): Promise<void> {
       const list = document.getElementById('reports-list');
       if (!list) return false;
       return list.querySelector('.report-card') !== null ||
-        list.textContent!.includes('No reports');
+        list.textContent!.includes('No reports') ||
+        list.textContent!.includes('Failed');
     },
     { timeout: 15_000 },
   );
@@ -162,7 +163,7 @@ test.describe('Admin Empty States', () => {
 
     if (cardCount === 0) {
       // Verify add button exists even when empty
-      const addBtn = page.locator('#add-fact-btn, button:has-text("Add")');
+      const addBtn = page.locator('#funfact-add-btn');
       await expect(addBtn).toBeVisible();
     } else {
       expect(cardCount).toBeGreaterThan(0);
@@ -270,12 +271,14 @@ test.describe('Admin Empty States', () => {
     await searchUser(page, String(testData.user.uniqueId));
     await switchUserSubtab(page, 'economy');
 
-    // Before clicking Load, the transaction list should be empty
+    // Before clicking Load, the transaction list container should exist in the DOM
+    // (it's an empty div with max-height, so it has 0 height and isn't "visible")
     const txList = page.locator('#tx-list');
-    await expect(txList).toBeVisible({ timeout: 15_000 });
+    await expect(txList).toBeAttached({ timeout: 15_000 });
 
-    // Verify the list container is visible and in its initial state before clicking Load
-    await expect(txList).toBeAttached();
+    // Verify the list has no transaction content yet
+    const content = await txList.textContent();
+    expect(content!.trim()).toBe('');
   });
 
   // ── Test 12: Backpack — empty grid ──

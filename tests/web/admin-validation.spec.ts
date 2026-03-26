@@ -35,7 +35,7 @@ test.describe('Admin Validation', () => {
 
     // Check for validation feedback or that the field was not saved empty
     const container = displayNameInput.locator('..');
-    const errorFeedback = container.locator('.field-feedback.error, .field-feedback.invalid');
+    const errorFeedback = container.locator('.field-feedback.error, .field-feedback.invalid, .field-feedback.failed');
     const hasFeedback = await errorFeedback.count() > 0;
 
     // Also check that an error toast or validation message appeared

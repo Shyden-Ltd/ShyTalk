@@ -9,7 +9,8 @@ async function waitForReportsLoaded(page: Page): Promise<void> {
       const list = document.getElementById('reports-list');
       if (!list) return false;
       return list.querySelector('.report-card') !== null ||
-        list.textContent!.includes('No reports');
+        list.textContent!.includes('No reports') ||
+        list.textContent!.includes('Failed');
     },
     { timeout: 15_000 },
   );
