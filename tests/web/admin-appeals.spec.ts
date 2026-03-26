@@ -240,7 +240,7 @@ test.describe('Admin Appeals', () => {
 
     // Verify lightbox opens
     const lightbox = page.locator('.evidence-lightbox');
-    await expect(lightbox).toBeVisible({ timeout: 5_000 });
+    await expect(lightbox).toBeVisible();
 
     // Verify it contains an image or video
     const media = lightbox.locator('img, video');
@@ -262,19 +262,19 @@ test.describe('Admin Appeals', () => {
 
     // Test close via Escape key
     await thumbs.first().click();
-    await expect(lightbox).toBeVisible({ timeout: 5_000 });
+    await expect(lightbox).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(lightbox).not.toBeVisible({ timeout: 3_000 });
 
     // Test close via X button
     await thumbs.first().click();
-    await expect(lightbox).toBeVisible({ timeout: 5_000 });
+    await expect(lightbox).toBeVisible();
     await page.locator('.evidence-lightbox-close').click();
     await expect(lightbox).not.toBeVisible({ timeout: 3_000 });
 
     // Test close via clicking the overlay background
     await thumbs.first().click();
-    await expect(lightbox).toBeVisible({ timeout: 5_000 });
+    await expect(lightbox).toBeVisible();
     // Click the overlay itself (not the image inside)
     await lightbox.click({ position: { x: 10, y: 10 } });
     await expect(lightbox).not.toBeVisible({ timeout: 3_000 });
@@ -301,7 +301,7 @@ test.describe('Admin Appeals', () => {
 
     // Verify report details are visible within the details element
     const reportItems = firstCard.locator('.appeal-report-item');
-    await expect(reportItems.first()).toBeVisible({ timeout: 5_000 });
+    await expect(reportItems.first()).toBeVisible();
 
     // Verify report has a reason
     const reportReason = firstCard.locator('.appeal-report-item .report-reason');

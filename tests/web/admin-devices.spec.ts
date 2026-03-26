@@ -156,7 +156,7 @@ test.describe('Admin Devices Tab', () => {
 
     // The detail panel should become visible
     const detail = page.locator(`.device-detail.visible`).first();
-    await expect(detail).toBeVisible({ timeout: 5_000 });
+    await expect(detail).toBeVisible();
 
     // Verify detail contains expected fields
     const detailText = await detail.textContent();
@@ -344,7 +344,7 @@ test.describe('Admin Devices Tab', () => {
 
     // Verify Logs tab is now active
     const logsTabBtn = page.getByRole('button', { name: 'Logs', exact: true });
-    await expect(logsTabBtn).toHaveClass(/active/, { timeout: 5_000 });
+    await expect(logsTabBtn).toHaveClass(/active/);
 
     // Verify the userId filter is populated
     const userIdFilter = page.locator('#log-filter-userId');
@@ -383,7 +383,7 @@ test.describe('Admin Devices Tab', () => {
 
     // The empty message should be visible
     const empty = page.locator('#devices-empty');
-    await expect(empty).toBeVisible({ timeout: 5_000 });
+    await expect(empty).toBeVisible();
 
     // No device rows should be present
     const rows = deviceRows(page);

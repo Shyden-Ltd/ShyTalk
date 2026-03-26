@@ -214,7 +214,7 @@ test.describe('Admin Users - Economy Subtab', () => {
     // Reload and verify the gift is gone
     await reloadAndNavigateToEconomy(page, uid);
     const giftCardAfter = page.locator(`#backpack-grid .backpack-item[data-gift-id="${firstGiftId}"]`);
-    await expect(giftCardAfter).not.toBeVisible({ timeout: 5_000 });
+    await expect(giftCardAfter).not.toBeVisible();
 
     // Verify via API: backpack should not contain this gift
     const backpack = await testData.api.get(`/api/users/${uid}/backpack`);

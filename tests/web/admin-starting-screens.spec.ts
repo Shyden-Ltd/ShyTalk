@@ -412,7 +412,7 @@ test.describe("Starting Screens Admin Section", () => {
       await card.locator(".save-screen-btn").click();
 
       const toast = page.locator("#toast");
-      await expect(toast).toHaveClass(/error/, { timeout: 5_000 });
+      await expect(toast).toHaveClass(/error/);
     } finally {
       await deleteScreenViaApi(page, screenId);
     }
@@ -432,7 +432,7 @@ test.describe("Starting Screens Admin Section", () => {
       await card.locator(".save-screen-btn").click();
 
       const toast = page.locator("#toast");
-      await expect(toast).toHaveClass(/error/, { timeout: 5_000 });
+      await expect(toast).toHaveClass(/error/);
     } finally {
       await deleteScreenViaApi(page, screenId);
     }

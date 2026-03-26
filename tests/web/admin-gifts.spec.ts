@@ -40,7 +40,7 @@ async function readRowFields(row: ReturnType<Page['locator']>) {
 async function applyAndConfirm(page: Page): Promise<void> {
   await page.locator('#gift-apply-btn').click();
   const overlay = page.locator('#gift-confirm-overlay');
-  await expect(overlay).toHaveClass(/visible/, { timeout: 5_000 });
+  await expect(overlay).toHaveClass(/visible/);
 
   const submitBtn = page.locator('#gift-confirm-submit');
   // If submit is disabled (wheel count !== 16), the test caller must handle that
@@ -312,7 +312,7 @@ test.describe('Admin Gifts Tab', () => {
     // Click Apply — opens the confirm dialog
     await page.locator('#gift-apply-btn').click();
     const overlay = page.locator('#gift-confirm-overlay');
-    await expect(overlay).toHaveClass(/visible/, { timeout: 5_000 });
+    await expect(overlay).toHaveClass(/visible/);
 
     // Verify all three sections appear in the dialog
     const body = page.locator('#gift-confirm-body');
@@ -328,7 +328,7 @@ test.describe('Admin Gifts Tab', () => {
 
     // Cancel — nothing should be saved
     await page.locator('#gift-confirm-cancel').click();
-    await expect(overlay).not.toHaveClass(/visible/, { timeout: 5_000 });
+    await expect(overlay).not.toHaveClass(/visible/);
 
     // Discard all changes to restore state
     await page.locator('#gift-discard-btn').click();

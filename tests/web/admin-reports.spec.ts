@@ -158,7 +158,7 @@ test.describe('Admin Reports', () => {
 
     // Handle confirm dialog
     const confirmBtn = page.locator('.confirm-ok');
-    await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
+    await expect(confirmBtn).toBeVisible();
     await confirmBtn.click();
 
     // Wait for reload
@@ -196,7 +196,7 @@ test.describe('Admin Reports', () => {
 
     // Handle confirm dialog
     const confirmBtn = page.locator('.confirm-ok');
-    await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
+    await expect(confirmBtn).toBeVisible();
     await confirmBtn.click();
 
     await waitForReportsLoaded(page);
@@ -243,7 +243,7 @@ test.describe('Admin Reports', () => {
 
     // Handle confirm dialog
     const confirmBtn = page.locator('.confirm-ok');
-    await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
+    await expect(confirmBtn).toBeVisible();
     await confirmBtn.click();
 
     await waitForReportsLoaded(page);
@@ -284,7 +284,7 @@ test.describe('Admin Reports', () => {
 
     // Handle confirm dialog
     const confirmBtn = page.locator('.confirm-ok');
-    await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
+    await expect(confirmBtn).toBeVisible();
     await confirmBtn.click();
 
     await waitForReportsLoaded(page);
@@ -472,7 +472,7 @@ test.describe('Admin Reports', () => {
     await thumbs.first().click();
 
     const lightbox = page.locator('.evidence-lightbox');
-    await expect(lightbox).toBeVisible({ timeout: 5_000 });
+    await expect(lightbox).toBeVisible();
 
     // Close
     await page.keyboard.press('Escape');

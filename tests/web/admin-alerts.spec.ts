@@ -22,7 +22,7 @@ async function expandAlertsSection(page: Page): Promise<void> {
   if (isCollapsed) {
     await page.locator('#logs-alerts-section .logs-section-header').click();
   }
-  await expect(page.locator('#logs-alerts-section .logs-section-body')).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator('#logs-alerts-section .logs-section-body')).toBeVisible();
 }
 
 test.describe('Admin Alerts', () => {
@@ -80,7 +80,7 @@ test.describe('Admin Alerts', () => {
 
     // Verify alerts section is expanded
     const alertsSection = page.locator('#logs-alerts-section');
-    await expect(alertsSection).not.toHaveClass(/collapsed/, { timeout: 5_000 });
+    await expect(alertsSection).not.toHaveClass(/collapsed/);
   });
 
   // ── Test 3: Seeded alert appears in alert list ──
@@ -139,7 +139,7 @@ test.describe('Admin Alerts', () => {
 
     // Verify toast appears
     const toast = page.locator('.toast.visible');
-    await expect(toast).toBeVisible({ timeout: 5_000 });
+    await expect(toast).toBeVisible();
     await expect(toast).toContainText('acknowledged');
 
     // API verify
@@ -170,7 +170,7 @@ test.describe('Admin Alerts', () => {
 
     // Verify toast
     const toast = page.locator('.toast.visible');
-    await expect(toast).toBeVisible({ timeout: 5_000 });
+    await expect(toast).toBeVisible();
     await expect(toast).toContainText('resolved');
   });
 
@@ -184,7 +184,7 @@ test.describe('Admin Alerts', () => {
     // Click "Configure Thresholds"
     await page.locator('#alerts-config-toggle').click();
     const configPanel = page.locator('#alert-config-panel');
-    await expect(configPanel).toBeVisible({ timeout: 5_000 });
+    await expect(configPanel).toBeVisible();
     await page.waitForTimeout(2_000);
 
     // Get current config via API for backup
@@ -212,7 +212,7 @@ test.describe('Admin Alerts', () => {
 
     // Verify toast
     const toast = page.locator('.toast.visible');
-    await expect(toast).toBeVisible({ timeout: 5_000 });
+    await expect(toast).toBeVisible();
 
     // Reload and verify persistence
     await page.reload();
@@ -220,16 +220,16 @@ test.describe('Admin Alerts', () => {
     await navigateToTab(page, 'Logs');
     await expandAlertsSection(page);
     await page.locator('#alerts-config-toggle').click();
-    await expect(page.locator('#alert-config-panel')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('#alert-config-panel')).toBeVisible();
     await page.waitForTimeout(2_000);
 
     const inputAfter = page.locator('#alert-config-grid input[type="number"]').first();
-    await expect(inputAfter).toHaveValue(newValue, { timeout: 5_000 });
+    await expect(inputAfter).toHaveValue(newValue);
 
     // Restore
     await inputAfter.fill(originalValue);
     await page.locator('#alert-config-save-btn').click();
-    await expect(page.locator('.toast.visible')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('.toast.visible')).toBeVisible();
   });
 
   // ── Test 7: Alert trace cross-nav ──

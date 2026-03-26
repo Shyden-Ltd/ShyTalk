@@ -131,9 +131,9 @@ test.describe("Admin Console Error Checks", () => {
 
       await page.locator("#reset-all-btn").click();
       const overlay = page.locator("#nuclear-overlay");
-      await expect(overlay).toHaveClass(/visible/, { timeout: 5_000 });
+      await expect(overlay).toHaveClass(/visible/);
       await page.locator("#nuclear-cancel").click();
-      await expect(overlay).not.toHaveClass(/visible/, { timeout: 5_000 });
+      await expect(overlay).not.toHaveClass(/visible/);
 
       // Test 2: Gifts — Add and remove a new gift row (no dialog, but tests the confirm overlay)
       await navigateToTab(page, "Gifts");

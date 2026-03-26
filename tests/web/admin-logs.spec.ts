@@ -265,7 +265,7 @@ test.describe('Admin Logs', () => {
 
     // Wait for alerts to load
     const alertsBody = page.locator('#logs-alerts-section .logs-section-body');
-    await expect(alertsBody).toBeVisible({ timeout: 5_000 });
+    await expect(alertsBody).toBeVisible();
 
     // Verify alerts table or empty message is shown
     const alertsTable = page.locator('#alerts-tbody');
@@ -325,7 +325,7 @@ test.describe('Admin Logs', () => {
 
     // Verify toast appears
     const toast = page.locator('.toast.visible');
-    await expect(toast).toBeVisible({ timeout: 5_000 });
+    await expect(toast).toBeVisible();
     await expect(toast).toContainText('acknowledged');
 
     // API verify the alert status changed
@@ -363,7 +363,7 @@ test.describe('Admin Logs', () => {
 
     // Verify toast
     const toast = page.locator('.toast.visible');
-    await expect(toast).toBeVisible({ timeout: 5_000 });
+    await expect(toast).toBeVisible();
     await expect(toast).toContainText('resolved');
   });
 
@@ -385,7 +385,7 @@ test.describe('Admin Logs', () => {
       // Click "Configure Thresholds" to show the config panel
       await page.locator('#alerts-config-toggle').click();
       const configPanel = page.locator('#alert-config-panel');
-      await expect(configPanel).toBeVisible({ timeout: 5_000 });
+      await expect(configPanel).toBeVisible();
 
       // Wait for config to load
       await page.waitForTimeout(2_000);
@@ -417,7 +417,7 @@ test.describe('Admin Logs', () => {
 
       // Verify toast
       const toast = page.locator('.toast.visible');
-      await expect(toast).toBeVisible({ timeout: 5_000 });
+      await expect(toast).toBeVisible();
       await expect(toast).toContainText('saved');
 
       // Reload and verify persistence
@@ -434,17 +434,17 @@ test.describe('Admin Logs', () => {
         await page.locator('#logs-alerts-section .logs-section-header').click();
       }
       await page.locator('#alerts-config-toggle').click();
-      await expect(page.locator('#alert-config-panel')).toBeVisible({ timeout: 5_000 });
+      await expect(page.locator('#alert-config-panel')).toBeVisible();
       await page.waitForTimeout(2_000);
 
       // Verify the value persisted
       const inputAfter = page.locator('#alert-config-grid input[type="number"]').first();
-      await expect(inputAfter).toHaveValue(newValue, { timeout: 5_000 });
+      await expect(inputAfter).toHaveValue(newValue);
 
       // Restore original value
       await inputAfter.fill(originalValue);
       await page.locator('#alert-config-save-btn').click();
-      await expect(page.locator('.toast.visible')).toBeVisible({ timeout: 5_000 });
+      await expect(page.locator('.toast.visible')).toBeVisible();
     });
 
     // ── Test 14: Log config — change retention, save, reload verify, restore ──
@@ -477,7 +477,7 @@ test.describe('Admin Logs', () => {
 
       // Verify toast
       const toast = page.locator('.toast.visible');
-      await expect(toast).toBeVisible({ timeout: 5_000 });
+      await expect(toast).toBeVisible();
       await expect(toast).toContainText('saved');
 
       // Verify via API
@@ -495,12 +495,12 @@ test.describe('Admin Logs', () => {
       await expect(page.locator('#logs-settings-section')).not.toHaveClass(/collapsed/, { timeout: 3_000 });
       await page.waitForTimeout(2_000);
 
-      await expect(page.locator('#log-cfg-retention')).toHaveValue(newRetention, { timeout: 5_000 });
+      await expect(page.locator('#log-cfg-retention')).toHaveValue(newRetention);
 
       // Restore original value
       await page.locator('#log-cfg-retention').fill(originalRetention || '72');
       await page.locator('#log-settings-save-btn').click();
-      await expect(page.locator('.toast.visible')).toBeVisible({ timeout: 5_000 });
+      await expect(page.locator('.toast.visible')).toBeVisible();
     });
   });
 

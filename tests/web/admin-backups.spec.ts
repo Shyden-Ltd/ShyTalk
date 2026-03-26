@@ -64,7 +64,7 @@ test.describe('Admin Backups Tab', () => {
     await triggerBtn.click();
 
     // Button should show "Backing up..." while processing
-    await expect(triggerBtn).toHaveText('Backing up...', { timeout: 5_000 });
+    await expect(triggerBtn).toHaveText('Backing up...');
 
     // Wait for the button to return to normal (backup complete)
     await expect(triggerBtn).toHaveText('Backup Now', { timeout: 60_000 });
@@ -197,7 +197,7 @@ test.describe('Admin Backups Tab', () => {
     await recoverBtn.click();
 
     // Button should show processing state
-    await expect(recoverBtn).toBeDisabled({ timeout: 5_000 });
+    await expect(recoverBtn).toBeDisabled();
 
     // Wait for completion and verify toast
     const toast = page.locator('#toast');

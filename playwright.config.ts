@@ -18,7 +18,10 @@ if (process.env.ALLURE_ENABLED === 'true') {
 export default defineConfig({
   testDir: './tests/web',
   testIgnore: ['**/auth.setup.ts'],
-  timeout: 60_000,
+  timeout: 30_000,
+  expect: {
+    timeout: 5_000,
+  },
   retries: 1,
   workers: 1, // Serial — Firebase Auth rate-limits concurrent logins causing flaky admin tests
   reporter: reporters,

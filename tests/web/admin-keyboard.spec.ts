@@ -192,7 +192,7 @@ test.describe('Admin Keyboard Shortcuts', () => {
 
     // Verify lightbox opened
     const lightbox = page.locator('.evidence-lightbox');
-    await expect(lightbox).toBeVisible({ timeout: 5_000 });
+    await expect(lightbox).toBeVisible();
 
     // Press Esc to close
     await page.keyboard.press('Escape');
@@ -225,7 +225,7 @@ test.describe('Admin Keyboard Shortcuts', () => {
     // Open nuclear dialog
     await page.locator('#reset-all-btn').click();
     const overlay = page.locator('#nuclear-overlay');
-    await expect(overlay).toHaveClass(/visible/, { timeout: 5_000 });
+    await expect(overlay).toHaveClass(/visible/);
 
     // Press Escape
     await page.keyboard.press('Escape');
@@ -237,6 +237,6 @@ test.describe('Admin Keyboard Shortcuts', () => {
     if (stillVisible) {
       await page.locator('#nuclear-cancel').click();
     }
-    await expect(overlay).not.toHaveClass(/visible/, { timeout: 5_000 });
+    await expect(overlay).not.toHaveClass(/visible/);
   });
 });

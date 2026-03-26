@@ -37,7 +37,7 @@ test.describe('Admin Maintenance Tab', () => {
     await auditBtn.click();
 
     // Button should show "Auditing..."
-    await expect(auditBtn).toHaveText('Auditing...', { timeout: 5_000 });
+    await expect(auditBtn).toHaveText('Auditing...');
 
     // Wait for result
     const result = page.locator('#storage-result');
@@ -48,7 +48,7 @@ test.describe('Admin Maintenance Tab', () => {
     expect(text).toMatch(/[KMG]?B/i);
 
     // Button should re-enable
-    await expect(auditBtn).toBeEnabled({ timeout: 5_000 });
+    await expect(auditBtn).toBeEnabled();
 
     // API verify: the endpoint works
     const apiData = await testData.api.get('/api/storage/audit');
@@ -91,7 +91,7 @@ test.describe('Admin Maintenance Tab', () => {
     await btn.click();
 
     // Button should show processing state
-    await expect(btn).toHaveText('Processing...', { timeout: 5_000 });
+    await expect(btn).toHaveText('Processing...');
 
     // Result should show success
     await expectMaintenanceSuccess(page, 'clear-reports-result');
@@ -132,7 +132,7 @@ test.describe('Admin Maintenance Tab', () => {
     await btn.click();
 
     // Button should show processing
-    await expect(btn).toHaveText('Processing...', { timeout: 5_000 });
+    await expect(btn).toHaveText('Processing...');
 
     // Result should become visible with success class
     await expect(result).toBeVisible({ timeout: 30_000 });
@@ -247,7 +247,7 @@ test.describe('Admin Maintenance Tab', () => {
 
     // Nuclear overlay should be visible
     const overlay = page.locator('#nuclear-overlay');
-    await expect(overlay).toHaveClass(/visible/, { timeout: 5_000 });
+    await expect(overlay).toHaveClass(/visible/);
 
     // Step 1 label
     const stepLabel = page.locator('#nuclear-step-label');
@@ -268,7 +268,7 @@ test.describe('Admin Maintenance Tab', () => {
 
     // Cancel should close the overlay
     await page.locator('#nuclear-cancel').click();
-    await expect(overlay).not.toHaveClass(/visible/, { timeout: 5_000 });
+    await expect(overlay).not.toHaveClass(/visible/);
   });
 
   // ── Test 14: Nuclear step 2 — proceed to step 2, verify, cancel ──
@@ -276,7 +276,7 @@ test.describe('Admin Maintenance Tab', () => {
     // Open nuclear dialog
     await page.locator('#reset-all-btn').click();
     const overlay = page.locator('#nuclear-overlay');
-    await expect(overlay).toHaveClass(/visible/, { timeout: 5_000 });
+    await expect(overlay).toHaveClass(/visible/);
 
     // Click proceed to go to step 2
     await page.locator('#nuclear-proceed').click();
@@ -295,7 +295,7 @@ test.describe('Admin Maintenance Tab', () => {
 
     // Cancel
     await page.locator('#nuclear-cancel').click();
-    await expect(overlay).not.toHaveClass(/visible/, { timeout: 5_000 });
+    await expect(overlay).not.toHaveClass(/visible/);
   });
 
   // ── Test 15: Nuclear step 3 — full dialog flow without executing ──
@@ -303,7 +303,7 @@ test.describe('Admin Maintenance Tab', () => {
     // Open nuclear dialog
     await page.locator('#reset-all-btn').click();
     const overlay = page.locator('#nuclear-overlay');
-    await expect(overlay).toHaveClass(/visible/, { timeout: 5_000 });
+    await expect(overlay).toHaveClass(/visible/);
 
     // Step 1 → Step 2
     await page.locator('#nuclear-proceed').click();
@@ -336,7 +336,7 @@ test.describe('Admin Maintenance Tab', () => {
 
     // DO NOT click proceed — cancel to avoid executing the destructive operation
     await page.locator('#nuclear-cancel').click();
-    await expect(overlay).not.toHaveClass(/visible/, { timeout: 5_000 });
+    await expect(overlay).not.toHaveClass(/visible/);
   });
 
   // ── Test 16: Mute toggle ──
@@ -344,7 +344,7 @@ test.describe('Admin Maintenance Tab', () => {
     // Open nuclear dialog
     await page.locator('#reset-all-btn').click();
     const overlay = page.locator('#nuclear-overlay');
-    await expect(overlay).toHaveClass(/visible/, { timeout: 5_000 });
+    await expect(overlay).toHaveClass(/visible/);
 
     // Mute button should show "Mute" initially
     const muteBtn = page.locator('#nuclear-mute');
@@ -360,6 +360,6 @@ test.describe('Admin Maintenance Tab', () => {
 
     // Cancel the dialog
     await page.locator('#nuclear-cancel').click();
-    await expect(overlay).not.toHaveClass(/visible/, { timeout: 5_000 });
+    await expect(overlay).not.toHaveClass(/visible/);
   });
 });

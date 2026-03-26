@@ -289,7 +289,7 @@ test.describe('Admin Economy Config', () => {
 
     // Click Add Milestone
     await page.locator('#ms-add-btn').click();
-    await expect(initialRows).toHaveCount(initialCount + 1, { timeout: 5_000 });
+    await expect(initialRows).toHaveCount(initialCount + 1);
 
     // Fill the new milestone row (last one)
     const newRow = page.locator('#milestone-rows .milestone-row').last();
@@ -344,7 +344,7 @@ test.describe('Admin Economy Config', () => {
 
     // Verify gift select dropdown appears (re-renders the row)
     const updatedRow = page.locator('#milestone-rows .milestone-row').last();
-    await expect(updatedRow.locator('.ms-gift-select')).toBeVisible({ timeout: 5_000 });
+    await expect(updatedRow.locator('.ms-gift-select')).toBeVisible();
 
     // Select a gift from the dropdown (first non-empty option)
     const giftSelect = updatedRow.locator('.ms-gift-select');
