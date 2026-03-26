@@ -216,11 +216,11 @@ jobs:
           EOF
 
       - name: Serve admin panel
-        run: npx serve public -l 8080 &
+        run: npx serve public -l 8888 &
 
       - name: Run Playwright tests (${{ matrix.project }})
         env:
-          WEB_BASE_URL: http://localhost:8080
+          WEB_BASE_URL: http://localhost:8888
           API_BASE_URL: http://localhost:3000
           ADMIN_EMAIL: claude-test@shytalk.dev
           ADMIN_PASSWORD: localdev123
@@ -246,7 +246,7 @@ jobs:
           platform=Web
           browser=${{ matrix.browser }}
           viewport=${{ matrix.viewport }}
-          base_url=localhost:8080
+          base_url=localhost:8888
           PWEOF
 
       - name: Upload Allure results

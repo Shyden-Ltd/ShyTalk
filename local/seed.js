@@ -38,11 +38,12 @@ async function seedIfMissing(path, data) {
   }
 }
 
-async function seedAuthUser(email, password, displayName) {
+async function seedAuthUser(email, password, displayName, customClaims) {
+  let uid;
   try {
     const existing = await auth.getUserByEmail(email);
     console.log(`  Exists:  Auth user ${email}`);
-    return existing.uid;
+    uid = existing.uid;
   } catch (_err) {
     const created = await auth.createUser({
       email,
@@ -51,8 +52,13 @@ async function seedAuthUser(email, password, displayName) {
       emailVerified: true,
     });
     console.log(`  Created: Auth user ${email}`);
-    return created.uid;
+    uid = created.uid;
   }
+  // Set custom claims (e.g., admin: true) — idempotent
+  if (customClaims) {
+    await auth.setCustomUserClaims(uid, customClaims);
+  }
+  return uid;
 }
 
 async function seed() {
@@ -109,6 +115,7 @@ async function seed() {
     "claude-test@shytalk.dev",
     "localdev123",
     "Local Admin",
+    { admin: true },
   );
   await seedIfMissing("users/100000001", {
     uid: "claude-test@shytalk.dev",
