@@ -421,7 +421,7 @@ In CI laufen Playwright- und Android-E2E-Tests gegen dieselbe lokale Umgebung (E
 
 - **Port bereits belegt**: `lsof -i :<port>` (Linux/macOS) oder `netstat -ano | findstr :<port>` (Windows) um herauszufinden, was den Port verwendet.
 - **Docker laeuft nicht**: Stelle sicher, dass Docker Desktop gestartet ist. Fuehre `docker ps` zur Ueberpruefung aus.
-- **Firebase-Emulatoren starten nicht**: Erfordert Java 11+. Pruefe mit `java -version`.
+- **Firebase-Emulatoren starten nicht**: Erfordert Java 21+. Pruefe mit `java -version`.
 - **Android-Build schlaegt fehl**: Stelle sicher, dass JDK 17+ und Android SDK installiert sind. Versuche `./gradlew clean`.
 - **adb-Geraet nicht erkannt**: Aktiviere USB-Debugging. Fuehre `adb devices` zur Ueberpruefung aus.
 - **Bilder laden nicht**: MinIO-Bucket wurde moeglicherweise nicht erstellt. Fuehre `cd express-api && NODE_ENV=local node ../local/seed.js` aus. Fuer physische Geraete, fuehre `adb reverse tcp:9002 tcp:9002` aus.

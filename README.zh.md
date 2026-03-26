@@ -421,7 +421,7 @@ npx playwright test
 
 - **端口已被占用**：使用 `lsof -i :<port>`（Linux/macOS）或 `netstat -ano | findstr :<port>`（Windows）查找占用端口的程序。
 - **Docker 未运行**：确保 Docker Desktop 已启动。运行 `docker ps` 验证。
-- **Firebase 模拟器启动失败**：需要 Java 11+。使用 `java -version` 检查。
+- **Firebase 模拟器启动失败**：需要 Java 21+。使用 `java -version` 检查。
 - **Android 构建失败**：确保已安装 JDK 17+ 和 Android SDK。尝试 `./gradlew clean`。
 - **未检测到 adb 设备**：启用 USB 调试。运行 `adb devices` 检查。
 - **图片无法加载**：MinIO 存储桶可能未创建。运行 `cd express-api && NODE_ENV=local node ../local/seed.js`。实体设备请运行 `adb reverse tcp:9002 tcp:9002`。

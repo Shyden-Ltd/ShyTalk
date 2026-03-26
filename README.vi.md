@@ -421,7 +421,7 @@ Trong CI, kiểm tra Playwright và Android E2E chạy dựa trên cùng một m
 
 - **Cổng đã được sử dụng**: `lsof -i :<port>` (Linux/macOS) hoặc `netstat -ano | findstr :<port>` (Windows) để tìm cái gì đang sử dụng cổng.
 - **Docker không chạy**: Đảm bảo Docker Desktop được khởi động. Chạy `docker ps` để xác minh.
-- **Bộ giả lập Firebase không khởi động**: Yêu cầu Java 11+. Kiểm tra với `java -version`.
+- **Bộ giả lập Firebase không khởi động**: Yêu cầu Java 21+. Kiểm tra với `java -version`.
 - **Bản dựng Android không thành công**: Đảm bảo JDK 17+ và Android SDK được cài đặt. Thử `./gradlew clean`.
 - **Thiết bị adb không được phát hiện**: Bật gỡ lỗi USB. Chạy `adb devices` để kiểm tra.
 - **Hình ảnh không tải**: Xô MinIO có thể không được tạo. Chạy `cd express-api && NODE_ENV=local node ../local/seed.js`. Đối với thiết bị vật lý, hãy chạy `adb reverse tcp:9002 tcp:9002`.

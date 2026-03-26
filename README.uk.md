@@ -421,7 +421,7 @@ npx playwright test
 
 - **Port already in use**: `lsof -i :<port>` (Linux/macOS) або `netstat -ano | findstr :<port>` (Windows) для пошуку того, що використовує порт.
 - **Docker not running**: Переконайтесь, що Docker Desktop запущено. Запустіть `docker ps`, щоб перевірити.
-- **Firebase emulators fail to start**: Вимагає Java 11+. Перевірте за допомогою `java -version`.
+- **Firebase emulators fail to start**: Вимагає Java 21+. Перевірте за допомогою `java -version`.
 - **Android build fails**: Переконайтесь, що JDK 17+ та Android SDK встановлені. Спробуйте `./gradlew clean`.
 - **adb device not detected**: Увімкніть налагодження USB. Запустіть `adb devices` для перевірки.
 - **Images not loading**: MinIO bucket не може бути створено. Запустіть `cd express-api && NODE_ENV=local node ../local/seed.js`. Для фізичних пристроїв запустіть `adb reverse tcp:9002 tcp:9002`.

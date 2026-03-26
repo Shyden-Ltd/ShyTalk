@@ -421,7 +421,7 @@ CI'de, Playwright ve Android E2E testleri aynı yerel ortamda (emülatörler + D
 
 - **Bağlantı noktası zaten kullanımda**: `lsof -i :<port>` (Linux/macOS) veya `netstat -ano | findstr :<port>` (Windows) bağlantı noktasını neyin kullandığını bulun.
 - **Docker çalışmıyor**: Docker Desktop'un başlatıldığından emin olun. Doğrulamak için `docker ps` çalıştırın.
-- **Firebase emülatörleri başlatılamıyor**: Java 11+ gerektirir. `java -version` ile kontrol edin.
+- **Firebase emülatörleri başlatılamıyor**: Java 21+ gerektirir. `java -version` ile kontrol edin.
 - **Android yapısı başarısız**: JDK 17+ ve Android SDK'nın yüklendiğinden emin olun. `./gradlew clean` deneyin.
 - **adb cihazı algılanmadı**: USB hata ayıklamayı etkinleştirin. Kontrol etmek için `adb devices` çalıştırın.
 - **Görüntüler yüklenmiyorsa**: MinIO kovası oluşturulmamış olabilir. `cd express-api && NODE_ENV=local node ../local/seed.js` çalıştırın. Fiziksel cihazlar için `adb reverse tcp:9002 tcp:9002` çalıştırın.

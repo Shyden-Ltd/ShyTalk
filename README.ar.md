@@ -421,7 +421,7 @@ npx playwright test
 
 - **المنفذ مستخدم بالفعل**: `lsof -i :<port>` (Linux/macOS) أو `netstat -ano | findstr :<port>` (Windows) لمعرفة ما يستخدم المنفذ.
 - **Docker لا يعمل**: تأكد من تشغيل Docker Desktop. شغّل `docker ps` للتحقق.
-- **فشل تشغيل محاكيات Firebase**: يتطلب Java 11+. تحقق بـ `java -version`.
+- **فشل تشغيل محاكيات Firebase**: يتطلب Java 21+. تحقق بـ `java -version`.
 - **فشل بناء Android**: تأكد من تثبيت JDK 17+ و Android SDK. جرب `./gradlew clean`.
 - **لم يُكتشف جهاز adb**: فعّل تصحيح USB. شغّل `adb devices` للتحقق.
 - **الصور لا تُحمّل**: قد لا تكون حاوية MinIO قد أُنشئت. شغّل `cd express-api && NODE_ENV=local node ../local/seed.js`. للأجهزة الحقيقية، شغّل `adb reverse tcp:9002 tcp:9002`.

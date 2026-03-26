@@ -421,7 +421,7 @@ CI에서 Playwright 및 Android E2E 테스트는 동일한 로컬 환경(에뮬�
 
 - **포트가 이미 사용 중**: `lsof -i :<port>` (Linux/macOS) 또는 `netstat -ano | findstr :<port>` (Windows)로 포트를 사용 중인 것을 확인.
 - **Docker가 실행되지 않음**: Docker Desktop이 시작되었는지 확인. `docker ps`로 확인.
-- **Firebase 에뮬레이터 시작 실패**: Java 11+ 필요. `java -version`으로 확인.
+- **Firebase 에뮬레이터 시작 실패**: Java 21+ 필요. `java -version`으로 확인.
 - **Android 빌드 실패**: JDK 17+와 Android SDK가 설치되었는지 확인. `./gradlew clean` 시도.
 - **adb 기기 감지 안됨**: USB 디버깅 활성화. `adb devices`로 확인.
 - **이미지가 로드되지 않음**: MinIO 버킷이 생성되지 않았을 수 있음. `cd express-api && NODE_ENV=local node ../local/seed.js` 실행. 실제 기기의 경우 `adb reverse tcp:9002 tcp:9002` 실행.

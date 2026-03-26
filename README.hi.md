@@ -421,7 +421,7 @@ CI में, Playwright और Android E2E टेस्ट उसी लोक�
 
 - **पोर्ट पहले से उपयोग में**: `lsof -i :<port>` (Linux/macOS) या `netstat -ano | findstr :<port>` (Windows) से पता करें कि पोर्ट क्या उपयोग कर रहा है।
 - **Docker नहीं चल रहा**: सुनिश्चित करें कि Docker Desktop शुरू है। सत्यापित करने के लिए `docker ps` चलाएं।
-- **Firebase एमुलेटर शुरू नहीं होते**: Java 11+ आवश्यक है। `java -version` से जांचें।
+- **Firebase एमुलेटर शुरू नहीं होते**: Java 21+ आवश्यक है। `java -version` से जांचें।
 - **Android बिल्ड फेल होता है**: सुनिश्चित करें कि JDK 17+ और Android SDK इंस्टॉल हैं। `./gradlew clean` आज़माएं।
 - **adb डिवाइस नहीं दिखता**: USB डीबगिंग सक्षम करें। जांचने के लिए `adb devices` चलाएं।
 - **इमेज लोड नहीं होतीं**: MinIO बकेट शायद नहीं बना। `cd express-api && NODE_ENV=local node ../local/seed.js` चलाएं। फिजिकल डिवाइस के लिए, `adb reverse tcp:9002 tcp:9002` चलाएं।
