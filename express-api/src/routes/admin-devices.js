@@ -1,7 +1,8 @@
 /**
- * Admin device bindings routes — list, search, get, unbind devices.
+ * Admin device bindings routes — list, search, get, create, unbind devices.
  *
  * GET    /admin/devices              → List all device bindings (paginated, searchable)
+ * POST   /admin/devices              → Create/re-seed a device binding (admin only)
  * GET    /admin/devices/user/:uniqueId → Get all devices for a user
  * GET    /admin/devices/:deviceId    → Get single device binding
  * DELETE /admin/devices/:deviceId    → Unbind device (delete binding)
@@ -51,6 +52,37 @@ router.get('/admin/devices', async (req, res) => {
     res.json({ devices: paginated, total });
   } catch (err) {
     log.error('admin-devices', 'Error listing device bindings', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── Create / re-seed a device binding ───────────────────────────
+
+router.post('/admin/devices', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+
+    const { deviceId, uniqueId, manufacturer, model, lastIp, isp } = req.body;
+
+    if (!deviceId || uniqueId === undefined) {
+      return res.status(400).json({ error: 'deviceId and uniqueId are required' });
+    }
+
+    const bindingData = {
+      deviceId,
+      uniqueId: Number(uniqueId),
+      manufacturer: manufacturer || 'Unknown',
+      model: model || 'Unknown',
+      lastIp: lastIp || null,
+      isp: isp || null,
+      boundAt: now(),
+    };
+
+    await db.doc(`deviceBindings/${deviceId}`).set(bindingData);
+
+    res.json({ id: deviceId, ...bindingData });
+  } catch (err) {
+    log.error('admin-devices', 'Error creating device binding', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });
   }
 });

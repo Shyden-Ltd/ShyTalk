@@ -119,7 +119,7 @@ test.describe('Admin Users - Security Subtab', () => {
     await expect(otpLimit).toContainText('100');
 
     // API: verify OTP metrics (global, not per-user)
-    const otpMetrics = await testData.api.get('/metrics/otp');
+    const otpMetrics = await testData.api.get('/api/metrics/otp');
     expect(otpMetrics.limit).toBe(100);
     expect(typeof otpMetrics.count).toBe('number');
 

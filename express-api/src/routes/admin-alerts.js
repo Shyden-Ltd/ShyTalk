@@ -1,16 +1,19 @@
 /**
- * Admin alert routes — list, acknowledge, resolve alerts and manage config.
+ * Admin alert routes — list, create, acknowledge, resolve alerts and manage config.
  *
- * GET    /admin/alerts         → List alerts with filters (admin only)
+ * GET    /admin/alerts          → List alerts with filters (admin only)
+ * POST   /admin/alerts          → Create a new alert (admin only)
+ * GET    /admin/alerts/:alertId → Get single alert (admin only)
  * PATCH  /admin/alerts/:alertId → Update alert status (admin only)
- * GET    /admin/alert-config   → Get alert thresholds (admin only)
- * PATCH  /admin/alert-config   → Update alert thresholds (admin only)
+ * GET    /admin/alert-config    → Get alert thresholds (admin only)
+ * PATCH  /admin/alert-config    → Update alert thresholds (admin only)
  */
 
 const router = require('express').Router();
 const { db } = require('../utils/firebase');
 const { requireAdmin } = require('../middleware/auth');
 const { DEFAULT_ALERT_CONFIG } = require('../utils/alertManager');
+const { generateId } = require('../utils/helpers');
 const log = require('../utils/log');
 
 const DEFAULT_LIMIT = 50;
@@ -40,6 +43,58 @@ router.get('/admin/alerts', async (req, res) => {
     res.json({ alerts });
   } catch (err) {
     log.error('admin-alerts', 'Error listing alerts', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /admin/alerts — Create a new alert
+router.post('/admin/alerts', async (req, res) => {
+  if (requireAdmin(req, res)) return;
+
+  try {
+    const { type, severity, message, status } = req.body;
+
+    if (!type || !message) {
+      return res.status(400).json({ error: 'type and message are required' });
+    }
+
+    const alertId = `alert_${generateId()}`;
+    const alertData = {
+      id: alertId,
+      type: type || 'error_rate',
+      severity: severity || 'medium',
+      message,
+      status: status || 'new',
+      createdAt: Date.now(),
+    };
+
+    await db.collection('alerts').doc(alertId).set(alertData);
+
+    res.json({ id: alertId, alertId, ...alertData });
+  } catch (err) {
+    log.error('admin-alerts', 'Error creating alert', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /admin/alerts/:alertId — Get single alert
+router.get('/admin/alerts/:alertId', async (req, res) => {
+  if (requireAdmin(req, res)) return;
+
+  try {
+    const { alertId } = req.params;
+    const snap = await db.collection('alerts').doc(alertId).get();
+
+    if (!snap.exists) {
+      return res.status(404).json({ error: 'Alert not found' });
+    }
+
+    res.json({ id: snap.id, ...snap.data() });
+  } catch (err) {
+    log.error('admin-alerts', 'Error getting alert', {
+      alertId: req.params.alertId,
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });

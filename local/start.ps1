@@ -114,6 +114,7 @@ try {
 # =============================================================================
 Write-Host "==> Step 5/8: Starting Express API..."
 $env:NODE_ENV = "local"
+$env:TEST_API_KEY = "local-test-key"
 $apiProcess = Start-Process -FilePath "cmd.exe" `
     -ArgumentList "/c", "cd /d $expressDir && node src/index.js" `
     -PassThru `
@@ -224,8 +225,9 @@ try {
     Write-Host ""
     Write-Host "Shutting down..."
 
-    # Clean up NODE_ENV so it doesn't leak into the caller's shell
+    # Clean up env vars so they don't leak into the caller's shell
     Remove-Item Env:\NODE_ENV -ErrorAction SilentlyContinue
+    Remove-Item Env:\TEST_API_KEY -ErrorAction SilentlyContinue
 
     # 1. Stop Express API
     if ($apiProcess -and -not $apiProcess.HasExited) {

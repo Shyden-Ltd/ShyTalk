@@ -45,9 +45,13 @@ echo ""
 
 TEST_EXIT=0
 WEB_BASE_URL=http://localhost:8080 \
+API_BASE_URL=http://localhost:3000 \
+TEST_API_KEY=local-test-key \
+ADMIN_EMAIL=claude-test@shytalk.dev \
+ADMIN_PASSWORD=localdev123 \
 ALLURE_ENABLED=true \
 ALLURE_PROJECT=local \
-npx playwright test || TEST_EXIT=$?
+npx playwright test "$@" || TEST_EXIT=$?
 
 # ---- Kill serve ----
 cleanup

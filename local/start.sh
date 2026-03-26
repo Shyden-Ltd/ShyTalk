@@ -90,7 +90,7 @@ echo "==> Step 4/8: Seeding data..."
 # Step 5: Start Express API (background)
 # =============================================================================
 echo "==> Step 5/8: Starting Express API..."
-cd "$PROJECT_ROOT/express-api" && NODE_ENV=local node src/index.js 2>&1 | sed 's/^/[API] /' &
+cd "$PROJECT_ROOT/express-api" && NODE_ENV=local TEST_API_KEY=local-test-key node src/index.js 2>&1 | sed 's/^/[API] /' &
 API_PID=$!
 cd "$PROJECT_ROOT"
 

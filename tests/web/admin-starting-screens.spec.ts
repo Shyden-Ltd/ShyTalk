@@ -639,7 +639,15 @@ test.describe("Starting Screens Admin Section", () => {
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       const deviceArea = card.locator(".allowlist-devices");
-      await deviceArea.fill("device-001\ndevice-002\ndevice-003");
+      // The textarea is a hidden backing store (display:none) behind a chip UI,
+      // so we set its value via evaluate instead of fill().
+      await deviceArea.evaluate(
+        (el: HTMLTextAreaElement, v: string) => {
+          el.value = v;
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+        },
+        "device-001\ndevice-002\ndevice-003",
+      );
       await expect(deviceArea).toHaveValue(
         "device-001\ndevice-002\ndevice-003",
       );
@@ -657,7 +665,15 @@ test.describe("Starting Screens Admin Section", () => {
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       const networkArea = card.locator(".allowlist-networks");
-      await networkArea.fill("Vodafone\nO2\nEE");
+      // The textarea is a hidden backing store (display:none) behind a chip UI,
+      // so we set its value via evaluate instead of fill().
+      await networkArea.evaluate(
+        (el: HTMLTextAreaElement, v: string) => {
+          el.value = v;
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+        },
+        "Vodafone\nO2\nEE",
+      );
       await expect(networkArea).toHaveValue("Vodafone\nO2\nEE");
     } finally {
       await deleteScreenViaApi(page, screenId);

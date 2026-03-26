@@ -48,10 +48,14 @@ try {
     Write-Host ""
 
     $env:WEB_BASE_URL = "http://localhost:8080"
+    $env:API_BASE_URL = "http://localhost:3000"
+    $env:TEST_API_KEY = "local-test-key"
+    $env:ADMIN_EMAIL = "claude-test@shytalk.dev"
+    $env:ADMIN_PASSWORD = "localdev123"
     $env:ALLURE_ENABLED = "true"
     $env:ALLURE_PROJECT = "local"
 
-    npx playwright test
+    npx playwright test @args
     $TestExit = $LASTEXITCODE
 } finally {
     # ---- Kill serve ----
@@ -61,6 +65,10 @@ try {
 
     # Clean up env vars
     Remove-Item Env:\WEB_BASE_URL -ErrorAction SilentlyContinue
+    Remove-Item Env:\API_BASE_URL -ErrorAction SilentlyContinue
+    Remove-Item Env:\TEST_API_KEY -ErrorAction SilentlyContinue
+    Remove-Item Env:\ADMIN_EMAIL -ErrorAction SilentlyContinue
+    Remove-Item Env:\ADMIN_PASSWORD -ErrorAction SilentlyContinue
     Remove-Item Env:\ALLURE_ENABLED -ErrorAction SilentlyContinue
     Remove-Item Env:\ALLURE_PROJECT -ErrorAction SilentlyContinue
 }
