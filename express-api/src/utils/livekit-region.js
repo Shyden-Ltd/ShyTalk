@@ -1,8 +1,11 @@
 /**
  * LiveKit multi-region routing.
  *
- * Routes users to the nearest LiveKit server based on CF-IPCountry header.
- * Returns the server URL and API credentials for that region.
+ * getRegion(req)        - determines region ('asia' or 'eu') from CF-IPCountry header.
+ * getRegionConfig(region) - returns { url, apiKey, apiSecret } for the given region.
+ *
+ * CF-IPCountry is set by Cloudflare on proxied requests. Direct-to-origin
+ * requests may not have this header; they default to Asia (Singapore).
  */
 
 const EU_COUNTRIES = new Set([

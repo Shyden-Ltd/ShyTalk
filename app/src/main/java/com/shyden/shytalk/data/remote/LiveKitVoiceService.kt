@@ -323,9 +323,13 @@ class LiveKitVoiceService(
             val roomName = currentRoomName ?: return@withLock
             val userId = currentUserId ?: return@withLock
 
+            // Snapshot voice mode at mutex entry to prevent reading a changed value
+            // across suspend points (disconnect/connect) if setAudioMode fires again.
+            val targetVoiceMode = isVoiceMode
+
             // If another switch already set the room to our desired mode, skip
-            if (isVoiceMode == roomIsVoiceMode) {
-                Log.d(TAG, "Room already has desired audio type (voiceMode=$isVoiceMode), skipping")
+            if (targetVoiceMode == roomIsVoiceMode) {
+                Log.d(TAG, "Room already has desired audio type (voiceMode=$targetVoiceMode), skipping")
                 return@withLock
             }
 
@@ -341,7 +345,7 @@ class LiveKitVoiceService(
                     return@withLock
                 }
 
-            Log.d(TAG, "Switching audio type: voiceMode=$isVoiceMode")
+            Log.d(TAG, "Switching audio type: voiceMode=$targetVoiceMode")
             isSwitchingAudioType = true
 
             try {
@@ -349,8 +353,7 @@ class LiveKitVoiceService(
                 room.disconnect()
                 room.release()
 
-                // Create new room with appropriate audio type
-                val targetVoiceMode = isVoiceMode
+                // Create new room with the snapshotted audio type
                 room = createRoom(targetVoiceMode)
                 roomIsVoiceMode = targetVoiceMode
                 setupEventCollection()
