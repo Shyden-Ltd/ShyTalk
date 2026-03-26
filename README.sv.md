@@ -190,7 +190,7 @@ ShyTalk/
 ### Forutsattningar
 
 - **Android Studio** Ladybug eller nyare
-- **JDK 17+**
+- **JDK 21+**
 - **Node.js 24+**
 - **Docker** (for LiveKit-rostserver, MinIO-lagring, Mailpit-e-post)
 - **Firebase CLI** (`npm install -g firebase-tools`)
@@ -422,7 +422,7 @@ I CI kors Playwright- och Android E2E-tester mot samma lokala miljo (emulatorer 
 - **Port redan i anvandning**: `lsof -i :<port>` (Linux/macOS) eller `netstat -ano | findstr :<port>` (Windows) for att hitta vad som anvander porten.
 - **Docker kor inte**: Se till att Docker Desktop ar startat. Kor `docker ps` for att verifiera.
 - **Firebase-emulatorer startar inte**: Kraver Java 21+. Kontrollera med `java -version`.
-- **Android-bygget misslyckas**: Se till att JDK 17+ och Android SDK ar installerade. Prova `./gradlew clean`.
+- **Android-bygget misslyckas**: Se till att JDK 21+ och Android SDK ar installerade. Prova `./gradlew clean`.
 - **adb-enhet hittas inte**: Aktivera USB-felsookning. Kor `adb devices` for att kontrollera.
 - **Bilder laddas inte**: MinIO-hinken kanske inte har skapats. Kor `cd express-api && NODE_ENV=local node ../local/seed.js`. For fysiska enheter, kor `adb reverse tcp:9002 tcp:9002`.
 - **OTP kommer inte**: Kontrollera konsolutdata for `[OTP-LOCAL]`-rader. Kolla ocksa Mailpit UI pa http://localhost:8025.

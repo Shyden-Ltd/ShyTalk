@@ -190,7 +190,7 @@ ShyTalk/
 ### Ön Koşullar
 
 - **Android Studio** Ladybug veya daha yeni
-- **JDK 17+**
+- **JDK 21+**
 - **Node.js 24+**
 - **Docker** (LiveKit sesli sunucu, MinIO depolama, Mailpit e-postası için)
 - **Firebase CLI** (`npm install -g firebase-tools`)
@@ -422,7 +422,7 @@ CI'de, Playwright ve Android E2E testleri aynı yerel ortamda (emülatörler + D
 - **Bağlantı noktası zaten kullanımda**: `lsof -i :<port>` (Linux/macOS) veya `netstat -ano | findstr :<port>` (Windows) bağlantı noktasını neyin kullandığını bulun.
 - **Docker çalışmıyor**: Docker Desktop'un başlatıldığından emin olun. Doğrulamak için `docker ps` çalıştırın.
 - **Firebase emülatörleri başlatılamıyor**: Java 21+ gerektirir. `java -version` ile kontrol edin.
-- **Android yapısı başarısız**: JDK 17+ ve Android SDK'nın yüklendiğinden emin olun. `./gradlew clean` deneyin.
+- **Android yapısı başarısız**: JDK 21+ ve Android SDK'nın yüklendiğinden emin olun. `./gradlew clean` deneyin.
 - **adb cihazı algılanmadı**: USB hata ayıklamayı etkinleştirin. Kontrol etmek için `adb devices` çalıştırın.
 - **Görüntüler yüklenmiyorsa**: MinIO kovası oluşturulmamış olabilir. `cd express-api && NODE_ENV=local node ../local/seed.js` çalıştırın. Fiziksel cihazlar için `adb reverse tcp:9002 tcp:9002` çalıştırın.
 - **OTP ulaşmıyor**: Konsol çıktısını `[OTP-LOCAL]` satırları için kontrol edin. Ayrıca http://localhost:8025 adresindeki Mailpit UI'yi kontrol edin.
