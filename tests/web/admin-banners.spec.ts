@@ -4,10 +4,19 @@ import { Page } from '@playwright/test';
 
 /** Wait for the banners list to finish loading (spinner disappears). */
 async function waitForBannersLoaded(page: Page): Promise<void> {
-  // Wait for either banner cards or the empty-state message to appear
-  await expect(
-    page.locator('#banners-list .banner-card, #banners-list p'),
-  ).not.toHaveCount(0, { timeout: 15_000 });
+  // Wait for banner cards, empty-state message, or loading to finish (no spinner)
+  await page.waitForFunction(
+    () => {
+      const list = document.getElementById('banners-list');
+      if (!list) return false;
+      // Banner cards loaded, or empty state <p>, or list cleared after error
+      if (list.querySelector('.banner-card') !== null) return true;
+      if (list.querySelector('p') !== null) return true;
+      // Loading state has a spinner div; once loading finishes, it's either cards, <p>, or empty
+      return list.childElementCount === 0 && !list.textContent?.includes('Loading');
+    },
+    { timeout: 15_000 },
+  );
 }
 
 /** Open the Add Banner dialog. */

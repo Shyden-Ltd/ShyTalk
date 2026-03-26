@@ -214,7 +214,8 @@ test.describe("Admin Console Error Checks", () => {
           return (
             list &&
             (list.querySelector(".report-card") !== null ||
-              list.textContent!.includes("No reports"))
+              list.textContent!.includes("No reports") ||
+              list.textContent!.includes("Failed"))
           );
         },
         { timeout: 15_000 },

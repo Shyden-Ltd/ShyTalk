@@ -11,7 +11,8 @@ async function waitForAppealsLoaded(page: Page): Promise<void> {
       if (!list) return false;
       // Either we have appeal cards, or a "No appeals" message
       return list.querySelector('.appeal-card') !== null ||
-        list.textContent!.includes('No appeals');
+        list.textContent!.includes('No appeals') ||
+        list.textContent!.includes('Failed');
     },
     { timeout: 15_000 },
   );

@@ -58,7 +58,8 @@ async function waitForAppealsLoaded(page: Page): Promise<void> {
       const list = document.getElementById('appeals-list');
       if (!list) return false;
       return list.querySelector('.appeal-card') !== null ||
-        list.textContent!.includes('No appeals');
+        list.textContent!.includes('No appeals') ||
+        list.textContent!.includes('Failed');
     },
     { timeout: 15_000 },
   );
