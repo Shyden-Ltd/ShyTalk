@@ -6659,6 +6659,7 @@
         if (!badge) {
           badge = document.createElement("span");
           badge.className = "tab-badge";
+          badge.setAttribute("aria-hidden", "true");
           tabReports.appendChild(badge);
         }
         badge.textContent = count > 99 ? "99+" : count;
