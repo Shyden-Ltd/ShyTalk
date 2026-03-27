@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <meta http-equiv="X-Frame-Options" content="DENY">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.google.com https://recaptcha.net; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://*.shytalk.shyden.co.uk https://recaptcha.net http://localhost:*; frame-ancestors 'none';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.google.com https://recaptcha.net; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: http://localhost:*; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://*.shytalk.shyden.co.uk https://recaptcha.net http://localhost:*; frame-ancestors 'none';">
     <meta name="theme-color" content="#0f1117">
     <title>ShyTalk Admin</title>
     <style>
@@ -6622,6 +6622,7 @@
     let selectedCardIndex = -1;
     let reportsUnsubscribe = null; // Firestore listener
     let currentLockedUid = null; // UID we currently hold a review lock on
+    let resolveInProgress = false; // true while a resolve operation is active (prevents snapshot reloads)
     let allReportUsers = []; // All users from API (for infinite scroll)
     let renderedCount = 0;
     const CARDS_PER_PAGE = 20;
@@ -6740,6 +6741,9 @@
     });
 
     function renderReportsFromSnapshot(snapshot) {
+      // Skip auto-refresh while a resolve operation is in progress to avoid
+      // wiping the DOM (and the action form) mid-flow.
+      if (resolveInProgress) return;
       // This just triggers a reload via API for full data
       loadReports();
     }
@@ -6951,14 +6955,20 @@
         btn.dataset.wired = "1";
         btn.addEventListener("click", async () => {
           const uid = btn.dataset.resolveFirst;
-          if (await acquireLock(uid)) resolveReport(uid, false);
+          resolveInProgress = true;
+          try {
+            if (await acquireLock(uid)) await resolveReport(uid, false);
+          } finally { resolveInProgress = false; }
         });
       }
       for (const btn of reportsList.querySelectorAll("[data-resolve-all]:not([data-wired])")) {
         btn.dataset.wired = "1";
         btn.addEventListener("click", async () => {
           const uid = btn.dataset.resolveAll;
-          if (await acquireLock(uid)) resolveReport(uid, true);
+          resolveInProgress = true;
+          try {
+            if (await acquireLock(uid)) await resolveReport(uid, true);
+          } finally { resolveInProgress = false; }
         });
       }
 
@@ -7659,7 +7669,7 @@
       const select = document.getElementById("backpack-gift-select");
       if (!select) return;
       try {
-        const raw = await apiCall("GET", "/api/gifts");
+        const raw = await apiCall("GET", "/api/gifts/all");
         _giftCatalog = Array.isArray(raw) ? raw : (raw.gifts || []);
         while (select.options.length > 1) select.remove(1);
         _giftCatalog.forEach(function(g) {
@@ -8167,6 +8177,14 @@
 
     async function loadEconomyConfig() {
       try {
+        // Ensure gift catalog is available for milestone gift dropdowns
+        if (giftsCache.length === 0) {
+          try {
+            const raw = await apiCall("GET", "/api/gifts/all");
+            giftsCache = Array.isArray(raw) ? raw : (raw.gifts || []);
+          } catch (_) { /* non-fatal — gift selects will just be empty */ }
+        }
+
         const token = await auth.currentUser.getIdToken();
         const resp = await fetch(`${API_BASE}/api/config/economy`, {
           headers: { "Authorization": `Bearer ${token}` },
