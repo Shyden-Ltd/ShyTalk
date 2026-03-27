@@ -192,34 +192,11 @@ test.describe('Admin Users - Economy Subtab', () => {
   test('remove gift from backpack', async ({ page, testData }) => {
     const uid = String(testData.user.uniqueId);
 
-    // Ensure at least one gift exists in the catalog
+    // Get a gift ID from the API (avoids depending on the UI dropdown timing)
     const allGifts = await testData.api.get('/api/gifts/all');
     const giftList = Array.isArray(allGifts) ? allGifts : (allGifts.gifts || []);
-    if (giftList.length === 0) {
-      await testData.api.testWrite('gifts', {
-        name: 'E2E Backpack Gift',
-        coinValue: 10,
-        showInStore: true,
-        showOnWheel: true,
-        order: 999,
-      });
-      // Reload to pick up the new gift in the backpack dropdown
-      await reloadAndNavigateToEconomy(page, uid);
-    }
-
-    // Wait for backpack gift select to populate
-    const giftSelect = page.locator('#backpack-gift-select');
-    await page.waitForFunction(() => {
-      const select = document.getElementById('backpack-gift-select') as HTMLSelectElement;
-      return select && select.options.length > 1;
-    });
-
-    const firstGiftId = await giftSelect.evaluate((el: HTMLSelectElement) => {
-      for (let i = 0; i < el.options.length; i++) {
-        if (el.options[i].value) return el.options[i].value;
-      }
-      return '';
-    });
+    expect(giftList.length).toBeGreaterThan(0);
+    const firstGiftId = giftList[0].id;
 
     // Add the gift via API
     await testData.api.post(`/api/users/${uid}/backpack`, {

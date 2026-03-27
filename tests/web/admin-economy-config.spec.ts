@@ -382,6 +382,7 @@ test.describe('Admin Economy Config', () => {
     const secondVal = await options.nth(1).getAttribute('value');
     expect(secondVal).toBeTruthy();
     await giftSelect.selectOption(secondVal!);
+    await giftSelect.dispatchEvent('change');
 
     // Save
     await saveEconomyConfig(page);
