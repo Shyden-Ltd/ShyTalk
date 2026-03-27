@@ -40,12 +40,16 @@ async function reseedAppeal(testData: TestData): Promise<string> {
     days: 7,
     canAppeal: true,
   });
-  // Create a new appeal
-  const result = await testData.api.post('/api/appeals', {
+  // Create a new appeal directly in Firestore via test helper.
+  // We cannot use POST /api/appeals because that endpoint checks if the
+  // *caller* (admin) is suspended, not the target user.
+  const result = await testData.api.testWrite('suspensionAppeals', {
     userId: testData.user.uniqueId,
     appealText: 'I did not do this (reseeded)',
+    status: 'pending',
+    createdAt: Date.now(),
   });
-  return result.id || result.appealId;
+  return result.id;
 }
 
 test.describe('Admin Appeals', () => {

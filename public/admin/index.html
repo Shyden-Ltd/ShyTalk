@@ -4700,6 +4700,20 @@
       return $(`#${map[field]}`);
     }
 
+    async function autoSaveListField(field) {
+      if (!currentUid) return;
+      const items = (listWidgetData[field] || [])
+        .map((s) => s.replace(/\s*\(.*\)$/, "").trim())
+        .filter(Boolean)
+        .map(Number)
+        .filter((n) => !isNaN(n));
+      try {
+        await apiCall("PATCH", `/api/user/${currentUid}`, { [field]: items });
+      } catch (err) {
+        showToast(`Failed to save ${field}: ${err.message}`, "error");
+      }
+    }
+
     function renderListWidget(field) {
       const widget = getListWidget(field);
       if (!widget) return;
@@ -4719,6 +4733,7 @@
         btn.addEventListener("click", () => {
           listWidgetData[field].splice(i, 1);
           renderListWidget(field);
+          autoSaveListField(field);
         });
         div.appendChild(btn);
         container.appendChild(div);
@@ -4742,6 +4757,7 @@
         listWidgetData[field].push(val);
         addInput.value = "";
         renderListWidget(field);
+        autoSaveListField(field);
       };
 
       addBtn.addEventListener("click", doAdd);

@@ -3,6 +3,7 @@
  *
  * POST /api/test/setup       → Create test scenario, return testRunId + created IDs
  * GET  /api/test/verify/:col/:id → Read Firestore doc for assertion
+ * POST /api/test/write/:col   → Write a document to an allowed collection
  * POST /api/test/teardown     → Delete all data for a testRunId
  * POST /api/test/reset        → Wipe all test data, restore fixtures
  */
@@ -328,6 +329,41 @@ router.get('/test/verify/:collection/:id', async (req, res) => {
     }
 
     res.json({ id: doc.id, ...doc.data() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/test/write/:collection — write a document to an allowed collection
+router.post('/test/write/:collection', async (req, res) => {
+  try {
+    if (requireTestApiKey(req, res)) return;
+
+    const { collection } = req.params;
+    const ALLOWED_COLLECTIONS = [
+      'users',
+      'rooms',
+      'gifts',
+      'conversations',
+      'banners',
+      'funFacts',
+      'reports',
+      'suspensionAppeals',
+      'alerts',
+    ];
+    if (!ALLOWED_COLLECTIONS.includes(collection)) {
+      return res.status(400).json({ error: 'Collection not allowed' });
+    }
+
+    const data = req.body;
+    if (!data || typeof data !== 'object') {
+      return res.status(400).json({ error: 'Request body must be a JSON object' });
+    }
+
+    const docId = data.id || generateId();
+    await db.doc(`${collection}/${docId}`).set({ ...data, id: docId }, { merge: true });
+
+    res.json({ success: true, id: docId });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

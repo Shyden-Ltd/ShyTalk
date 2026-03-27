@@ -247,7 +247,29 @@ router.get('/reports', async (req, res) => {
       return res.json({ users: Object.values(grouped) });
     }
 
-    res.json({ users: enriched });
+    // Resolved/archived: also group by reported user for consistent structure
+    const grouped = {};
+    for (const r of enriched) {
+      const key = r.reportedUserId;
+      if (!grouped[key]) {
+        grouped[key] = {
+          reportedUserId: key,
+          displayName: r.reportedUser?.displayName ?? r.reportedUser?.display_name ?? null,
+          profilePhotoUrl:
+            r.reportedUser?.profilePhotoUrl ?? r.reportedUser?.profile_photo_url ?? null,
+          uniqueId: r.reportedUser?.uniqueId ?? r.reportedUser?.unique_id ?? null,
+          warningCount: r.reportedUser?.warningCount ?? r.reportedUser?.warning_count ?? 0,
+          isSuspended: r.reportedUser?.isSuspended ?? r.reportedUser?.is_suspended ?? false,
+          gcsDisplayScore: r.reportedUser?.gcsDisplayScore ?? 100,
+          lock: r.lock,
+          reports: [],
+          reportCount: 0,
+        };
+      }
+      grouped[key].reports.push(r);
+      grouped[key].reportCount = grouped[key].reports.length;
+    }
+    res.json({ users: Object.values(grouped) });
   } catch (err) {
     log.error('reports', 'GET /api/reports failed', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });

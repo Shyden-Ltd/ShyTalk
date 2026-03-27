@@ -36,10 +36,9 @@ test.describe('Admin Maintenance Tab', () => {
     const auditBtn = page.locator('#audit-storage-btn');
     await auditBtn.click();
 
-    // Button should show "Auditing..."
-    await expect(auditBtn).toHaveText('Auditing...');
-
-    // Wait for result
+    // Skip transient "Auditing..." text assertion — the operation can complete
+    // before Playwright observes it, causing a race condition.
+    // Instead, just wait for the result to appear.
     const result = page.locator('#storage-result');
     await expect(result).toBeVisible();
 
@@ -186,7 +185,7 @@ test.describe('Admin Maintenance Tab', () => {
 
     // Restore: add coins back via balance adjustment
     await testData.api.post(`/api/users/${uniqueId}/adjust-balance`, {
-      field: 'shyCoins',
+      currency: 'coins',
       amount: 1000,
       reason: 'e2e-test-restore',
     });
@@ -209,7 +208,7 @@ test.describe('Admin Maintenance Tab', () => {
 
     // Restore: add beans back
     await testData.api.post(`/api/users/${uniqueId}/adjust-balance`, {
-      field: 'shyBeans',
+      currency: 'beans',
       amount: 500,
       reason: 'e2e-test-restore',
     });

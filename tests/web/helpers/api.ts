@@ -172,6 +172,15 @@ export class AdminApi {
     if (!res.ok()) throw new Error(`test/teardown → ${res.status()}: ${await res.text()}`);
   }
 
+  async testWrite(collection: string, data: Record<string, any>): Promise<{ id: string }> {
+    const res = await this.page.request.post(`${API_BASE}/api/test/write/${collection}`, {
+      headers: { 'X-Test-API-Key': TEST_API_KEY, 'Content-Type': 'application/json' },
+      data,
+    });
+    if (!res.ok()) throw new Error(`test/write/${collection} → ${res.status()}: ${await res.text()}`);
+    return res.json();
+  }
+
   async testVerify(collection: string, docId: string): Promise<any> {
     const res = await this.page.request.get(`${API_BASE}/api/test/verify/${collection}/${docId}`, {
       headers: { 'X-Test-API-Key': TEST_API_KEY },

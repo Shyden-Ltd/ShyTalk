@@ -43,7 +43,8 @@ async function applyAndConfirm(page: Page): Promise<void> {
   await expect(overlay).toHaveClass(/visible/);
 
   const submitBtn = page.locator('#gift-confirm-submit');
-  // If submit is disabled (wheel count !== 16), the test caller must handle that
+  // Fail fast with a clear message if the button is disabled (wheel count !== 16)
+  await expect(submitBtn).toBeEnabled();
   await submitBtn.click();
 
   // Wait for the overlay to close (changes applied and table refreshed)
