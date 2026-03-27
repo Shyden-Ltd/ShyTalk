@@ -202,6 +202,9 @@ test.describe('Admin Gifts Tab', () => {
     const newRow = page.locator('#gifts-tbody tr.gift-new').last();
     await fillAndTrigger(page, newRow.locator('[data-field="name"]'), tempName);
     await fillAndTrigger(page, newRow.locator('[data-field="coinValue"]'), '1');
+    // Uncheck showOnWheel so the wheel count stays at 16
+    const wheelCb = newRow.locator('[data-field="showOnWheel"]');
+    if (await wheelCb.isChecked()) await wheelCb.uncheck();
     await applyAndConfirm(page);
 
     // Reload to get the persisted gift row with its server-assigned ID
