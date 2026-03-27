@@ -739,9 +739,8 @@ router.put('/config/:key', async (req, res) => {
 // -- Get gift catalog (store-visible) --
 router.get('/gifts', async (req, res) => {
   try {
-    const results = await queryDocs(
-      db.collection('gifts').where('showInStore', '==', true).orderBy('order'),
-    );
+    const results = await queryDocs(db.collection('gifts').where('showInStore', '==', true));
+    results.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     res.set('Cache-Control', 'public, max-age=300');
     return res.json(results);
   } catch (err) {
@@ -753,7 +752,8 @@ router.get('/gifts', async (req, res) => {
 // -- Get all gifts (including hidden) --
 router.get('/gifts/all', async (req, res) => {
   try {
-    const results = await queryDocs(db.collection('gifts').orderBy('order'));
+    const results = await queryDocs(db.collection('gifts'));
+    results.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     return res.json(results);
   } catch (err) {
     log.error('config', 'Error fetching all gifts', { error: err.message });

@@ -187,9 +187,8 @@ test.describe('Admin Reports', () => {
     const actionSelect = firstCard.locator(`select[data-action-select="${uid}"]`);
     await actionSelect.selectOption('warn');
 
-    // Select severity 2
-    const sevRadio = firstCard.locator(`input#sev-${uid}-2`);
-    await sevRadio.check();
+    // Select severity 2 (radio inputs are display:none, click the label instead)
+    await firstCard.locator(`label[for="sev-${uid}-2"]`).click();
 
     // Click Resolve Latest
     const resolveBtn = firstCard.locator(`button[data-resolve-first="${uid}"]`);

@@ -14,7 +14,9 @@ jest.mock('../../src/utils/firebase', () => ({
       set: mockDocSet,
     })),
     collection: jest.fn(() => ({
+      get: mockCollectionGet,
       where: jest.fn(() => ({
+        get: mockCollectionGet,
         orderBy: jest.fn(() => ({
           get: mockCollectionGet,
         })),
