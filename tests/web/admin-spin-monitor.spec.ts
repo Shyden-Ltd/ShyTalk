@@ -179,14 +179,14 @@ test.describe('Admin Spin Monitor', () => {
     expect(firstGiftValue).toBeTruthy();
     await giftSelect.selectOption(firstGiftValue!);
 
-    // Handle the confirm dialog
+    // Accept all confirm dialogs (set + revoke both trigger confirm())
     page.on('dialog', (dialog) => dialog.accept());
 
     // Click Set Guarantee
     await page.locator('#guarantee-set-btn').click();
 
     // Wait for guarantee status to show "Active"
-    await expect(page.locator('#guarantee-status')).toContainText('Active', { timeout: 15_000 });
+    await expect(page.locator('#guarantee-status')).toContainText('Active');
 
     // Revoke button should now be visible
     await expect(page.locator('#guarantee-revoke-btn')).toBeVisible();
@@ -198,9 +198,8 @@ test.describe('Admin Spin Monitor', () => {
     expect(apiResult.active).toBe(true);
 
     // Clean up: revoke the guarantee
-    page.on('dialog', (dialog) => dialog.accept());
     await page.locator('#guarantee-revoke-btn').click();
-    await expect(page.locator('#guarantee-status')).not.toContainText('Active', { timeout: 10_000 });
+    await expect(page.locator('#guarantee-status')).not.toContainText('Active');
 
     await stopMonitoring(page);
   });

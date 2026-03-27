@@ -50,7 +50,8 @@ router.get('/admin/banners', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
-    const results = await queryDocs(db.collection('banners').orderBy('sortOrder', 'asc'));
+    const results = await queryDocs(db.collection('banners'));
+    results.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 
     res.json(results);
   } catch (err) {
