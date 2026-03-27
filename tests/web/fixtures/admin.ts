@@ -81,7 +81,7 @@ export const test = base.extend<{}, { adminContext: BrowserContext; testData: Te
             shyBeans: 250,
           },
         ],
-        banners: [{ title: `e2e-${prefix}-banner` }],
+        banners: [{ title: `e2e-${prefix}-banner`, imageUrl: 'https://placehold.co/600x200/png' }],
         funFacts: [{ text: `e2e-${prefix}-fact`, category: 'Science', emoji: '🔬' }],
         conversations: [{
           participants: ['placeholder'],
