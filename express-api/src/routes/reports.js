@@ -276,13 +276,20 @@ router.get('/reports', async (req, res) => {
   }
 });
 
+// Normalise short action names sent by the admin panel to the canonical stored values.
+// The admin panel sends 'warn' / 'suspend' / 'dismiss'; the backend stores 'warned' / 'suspended' / 'dismissed'.
+const ACTION_ALIASES = { warn: 'warned', suspend: 'suspended', dismiss: 'dismissed' };
+function normaliseAction(raw) {
+  return ACTION_ALIASES[raw] || raw || 'dismissed';
+}
+
 // ── Resolve report (admin — full logic) ──
 router.post('/reports/:id/resolve', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
     const body = req.body;
-    const action = body?.action || 'dismissed';
+    const action = normaliseAction(body?.action);
     const timestamp = now();
 
     // Fetch the report
@@ -311,14 +318,16 @@ router.post('/reports/:id/resolve', async (req, res) => {
 
     // Warning actions: create warning doc (which deducts GCS)
     if (action === 'warned' || action === 'warned_severe') {
-      const severity = action === 'warned_severe' ? 4 : 2;
+      const severity = body?.severity || (action === 'warned_severe' ? 4 : 2);
       const warningReason = body?.reason || report.reason;
+      // createWarning expects uniqueId (user doc key), not Firebase Auth UID
+      const warnUniqueId = report.reportedUserUniqueId ?? report.reportedUserId;
 
       try {
-        await createWarning(report.reportedUserId, {
+        await createWarning(warnUniqueId, {
           reason: warningReason,
           severity,
-          adminNote: null,
+          adminNote: body?.adminNote || null,
           source: 'report',
           linkedReportId: req.params.id,
           adminUid: req.auth.uid,
@@ -339,6 +348,58 @@ router.post('/reports/:id/resolve', async (req, res) => {
         log.error('reports', 'Failed to create warning from report', {
           reportId: req.params.id,
           error: warnErr.message,
+        });
+      }
+    }
+
+    // Suspension action: suspend the reported user
+    if (action === 'suspended') {
+      const suspensionDays = body?.suspensionDays ? Number(body.suspensionDays) : 0;
+      const canAppeal = body?.canAppeal ?? false;
+      const endTimestamp = suspensionDays > 0 ? Date.now() + suspensionDays * 86400000 : null;
+
+      // User documents are keyed by uniqueId, not Firebase Auth UID
+      const reportedUniqueId = report.reportedUserUniqueId ?? report.reportedUserId;
+      const reportedUser = await getDoc(`users/${reportedUniqueId}`);
+
+      try {
+        await db.doc(`users/${reportedUniqueId}`).update({
+          isSuspended: true,
+          suspensionReason: report.reason || 'Moderation action',
+          suspensionStartDate: timestamp,
+          suspensionEndDate: endTimestamp,
+          suspensionCanAppeal: canAppeal,
+          suspendedBy: req.auth.uid,
+          preSuspensionDisplayName: reportedUser?.displayName ?? reportedUser?.display_name ?? null,
+          preSuspensionProfilePhotoUrl:
+            reportedUser?.profilePhotoUrl ?? reportedUser?.profile_photo_url ?? null,
+          preSuspensionCoverPhotoUrl:
+            reportedUser?.coverPhotoUrl ?? reportedUser?.cover_photo_url ?? null,
+          displayName: 'Suspended Account',
+          profilePhotoUrl: null,
+          coverPhotoUrl: null,
+          avatarUrl: null,
+          description: null,
+          currentRoomId: null,
+        });
+
+        // Evict from rooms (fire-and-forget)
+        evictSuspendedUser(reportedUniqueId).catch((err) =>
+          log.error('reports', 'Failed to evict suspended user from resolve', {
+            userId: reportedUniqueId,
+            error: err.message,
+          }),
+        );
+
+        // Send suspension PM (fire-and-forget)
+        sendSystemPm(
+          report.reportedUserId,
+          `Your account has been suspended.\n\nReason: ${report.reason || 'Moderation action'}${canAppeal ? '\n\nYou may submit an appeal.' : ''}`,
+        ).catch(() => {});
+      } catch (susErr) {
+        log.error('reports', 'Failed to suspend user from resolve', {
+          reportId: req.params.id,
+          error: susErr.message,
         });
       }
     }
@@ -385,7 +446,7 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
     if (requireAdmin(req, res)) return;
 
     const body = req.body;
-    const action = body?.action || 'dismissed';
+    const action = normaliseAction(body?.action);
     const timestamp = now();
 
     // Fetch all pending reports for this user
@@ -411,14 +472,16 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
 
     // Apply warning if applicable (uses createWarning to write warning doc + update user)
     if (action === 'warned' || action === 'warned_severe') {
-      const severity = action === 'warned_severe' ? 4 : 2;
+      const severity = body?.severity || (action === 'warned_severe' ? 4 : 2);
       const warningReason = body?.reason || 'Multiple reports';
+      // createWarning expects uniqueId (user doc key), not Firebase Auth UID
+      const warnUniqueId = reports[0]?.reportedUserUniqueId ?? req.params.userId;
 
       try {
-        await createWarning(req.params.userId, {
+        await createWarning(warnUniqueId, {
           reason: warningReason,
           severity,
-          adminNote: null,
+          adminNote: body?.adminNote || null,
           source: 'report',
           linkedReportId: null,
           adminUid: req.auth.uid,
@@ -439,6 +502,51 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
         log.error('reports', 'Failed to create warning from bulk resolve', {
           userId: req.params.userId,
           error: warnErr.message,
+        });
+      }
+    }
+
+    // Suspension action: suspend the reported user
+    if (action === 'suspended') {
+      const suspensionDays = body?.suspensionDays ? Number(body.suspensionDays) : 0;
+      const canAppeal = body?.canAppeal ?? false;
+      const endTimestamp = suspensionDays > 0 ? Date.now() + suspensionDays * 86400000 : null;
+
+      // User docs are keyed by uniqueId; get it from the report data
+      const reportedUniqueId = reports[0]?.reportedUserUniqueId ?? req.params.userId;
+      const reportedUser = await getDoc(`users/${reportedUniqueId}`);
+
+      try {
+        await db.doc(`users/${reportedUniqueId}`).update({
+          isSuspended: true,
+          suspensionReason: 'Multiple reports',
+          suspensionStartDate: timestamp,
+          suspensionEndDate: endTimestamp,
+          suspensionCanAppeal: canAppeal,
+          suspendedBy: req.auth.uid,
+          preSuspensionDisplayName: reportedUser?.displayName ?? reportedUser?.display_name ?? null,
+          preSuspensionProfilePhotoUrl:
+            reportedUser?.profilePhotoUrl ?? reportedUser?.profile_photo_url ?? null,
+          preSuspensionCoverPhotoUrl:
+            reportedUser?.coverPhotoUrl ?? reportedUser?.cover_photo_url ?? null,
+          displayName: 'Suspended Account',
+          profilePhotoUrl: null,
+          coverPhotoUrl: null,
+          avatarUrl: null,
+          description: null,
+          currentRoomId: null,
+        });
+
+        evictSuspendedUser(reportedUniqueId).catch((err) =>
+          log.error('reports', 'Failed to evict suspended user from bulk resolve', {
+            userId: reportedUniqueId,
+            error: err.message,
+          }),
+        );
+      } catch (susErr) {
+        log.error('reports', 'Failed to suspend user from bulk resolve', {
+          userId: req.params.userId,
+          error: susErr.message,
         });
       }
     }

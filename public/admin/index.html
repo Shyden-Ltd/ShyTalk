@@ -7089,25 +7089,23 @@
       if (!confirmed) return;
 
       try {
+        // Fetch pending reports to get the correct Firebase Auth UID and report IDs
+        const reportsData = await apiCall("GET", `/api/reports?status=pending`);
+        const userReports = reportsData.users.find((u) => String(u.uniqueId || u.uid) === String(reportedUserId));
+        if (!userReports || userReports.reports.length === 0) {
+          showToast("No pending reports found", "error");
+          return;
+        }
+
         let result;
         if (resolveAll) {
-          result = await apiCall("POST", `/api/reports/resolve-all/${reportedUserId}`, {
+          // resolve-all endpoint expects the Firebase Auth UID (reportedUserId), not the uniqueId
+          result = await apiCall("POST", `/api/reports/resolve-all/${userReports.reportedUserId}`, {
             action, severity: action !== "dismiss" ? severity : undefined, adminNote,
             suspensionDays, canAppeal,
           });
         } else {
-          // Find the first pending report for this user
-          const card = reportsList.querySelector(`[data-uid="${reportedUserId}"]`);
-          // Get reportId from data (stored in reports array)
-          const reportItem = card?.querySelector(".report-item");
-          // Need to get the report ID - let's fetch from API
-          const reportsData = await apiCall("GET", `/api/reports?status=pending`);
-          const userReports = reportsData.users.find((u) => String(u.uniqueId || u.uid) === String(reportedUserId));
-          if (!userReports || userReports.reports.length === 0) {
-            showToast("No pending reports found", "error");
-            return;
-          }
-          const reportId = userReports.reports[0].reportId;
+          const reportId = userReports.reports[0].id;
           result = await apiCall("POST", `/api/reports/${reportId}/resolve`, {
             action, severity: action !== "dismiss" ? severity : undefined, adminNote,
             suspensionDays, canAppeal,
@@ -7833,7 +7831,7 @@
 
     async function loadGifts() {
       try {
-        const raw = await apiCall("GET", "/api/gifts");
+        const raw = await apiCall("GET", "/api/gifts/all");
         giftsCache = Array.isArray(raw) ? raw : (raw.gifts || []);
         clearPendingState();
         renderGiftsTable();
