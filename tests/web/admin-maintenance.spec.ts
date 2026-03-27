@@ -6,7 +6,7 @@ import type { Page } from '@playwright/test';
  * Helper: wait for the maintenance panel to be visible.
  */
 async function waitForMaintenanceLoaded(page: Page): Promise<void> {
-  await expect(page.locator('#maintenance-panel')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('#maintenance-panel')).toBeVisible();
 }
 
 /**
@@ -14,7 +14,7 @@ async function waitForMaintenanceLoaded(page: Page): Promise<void> {
  */
 async function expectMaintenanceSuccess(page: Page, resultId: string): Promise<void> {
   const result = page.locator(`#${resultId}`);
-  await expect(result).toHaveClass(/success/, { timeout: 30_000 });
+  await expect(result).toHaveClass(/success/);
   await expect(result).toBeVisible();
 }
 
@@ -41,7 +41,7 @@ test.describe('Admin Maintenance Tab', () => {
 
     // Wait for result
     const result = page.locator('#storage-result');
-    await expect(result).toBeVisible({ timeout: 30_000 });
+    await expect(result).toBeVisible();
 
     // Result should contain size information (KB, MB, or B)
     const text = await result.textContent();
@@ -97,7 +97,7 @@ test.describe('Admin Maintenance Tab', () => {
     await expectMaintenanceSuccess(page, 'clear-reports-result');
 
     // Button should re-enable with original label
-    await expect(btn).toHaveText('Clear All Reports', { timeout: 10_000 });
+    await expect(btn).toHaveText('Clear All Reports');
   });
 
   // ── Test 4: Confirm dialog — cancel path ──
@@ -134,11 +134,11 @@ test.describe('Admin Maintenance Tab', () => {
     // Result should become visible with success class
     // (skip transient "Backfilling..." text assertion — operation can complete
     // before Playwright observes it, causing a race condition)
-    await expect(result).toBeVisible({ timeout: 30_000 });
+    await expect(result).toBeVisible();
     await expect(result).toHaveClass(/success/);
 
     // Button should re-enable
-    await expect(btn).toBeEnabled({ timeout: 10_000 });
+    await expect(btn).toBeEnabled();
   });
 
   // ── Test 6: Clear system messages ──
@@ -227,7 +227,7 @@ test.describe('Admin Maintenance Tab', () => {
 
     // Wait for result
     const result = page.locator('#storage-result');
-    await expect(result).toBeVisible({ timeout: 30_000 });
+    await expect(result).toBeVisible();
   });
 
   // ── Test 12: Backfill user types ──

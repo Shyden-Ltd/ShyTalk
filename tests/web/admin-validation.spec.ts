@@ -9,7 +9,7 @@ import type { Page } from '@playwright/test';
 async function waitForAutoSave(page: Page, fieldSelector: string): Promise<void> {
   await page.locator(fieldSelector).evaluate(el => el.blur());
   const container = page.locator(fieldSelector).locator('..');
-  await expect(container.locator('.field-feedback.saved')).toBeVisible({ timeout: 15_000 });
+  await expect(container.locator('.field-feedback.saved')).toBeVisible();
 }
 
 test.describe('Admin Validation', () => {
@@ -203,7 +203,7 @@ test.describe('Admin Validation', () => {
     await navigateToTab(page, 'Users');
     await searchUser(page, String(testData.user.uniqueId));
 
-    await expect(displayNameInput).toHaveValue(emojiName, { timeout: 15_000 });
+    await expect(displayNameInput).toHaveValue(emojiName);
 
     // Verify via API
     const apiData = await testData.api.get(`/api/user/${testData.user.uniqueId}`);
@@ -228,7 +228,7 @@ test.describe('Admin Validation', () => {
     await navigateToTab(page, 'Users');
     await searchUser(page, String(testData.user.uniqueId));
 
-    await expect(descInput).toHaveValue(arabicText, { timeout: 15_000 });
+    await expect(descInput).toHaveValue(arabicText);
 
     // Verify via API
     const apiData = await testData.api.get(`/api/user/${testData.user.uniqueId}`);
@@ -261,7 +261,7 @@ test.describe('Admin Validation', () => {
     await warnBtn.click();
 
     // Wait for processing to complete
-    await expect(warnBtn).toContainText('Issue Warning', { timeout: 15_000 });
+    await expect(warnBtn).toContainText('Issue Warning');
 
     // Verify only 1 warning was created (button should have been disabled during API call)
     const warningsData = await testData.api.get(`/api/user/${uid}/warnings`);

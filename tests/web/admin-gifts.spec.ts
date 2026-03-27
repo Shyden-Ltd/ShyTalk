@@ -6,7 +6,7 @@ import type { Page } from '@playwright/test';
  * Helper: wait for the gifts table to finish loading (tbody has at least one row).
  */
 async function waitForGiftsTable(page: Page): Promise<void> {
-  await expect(page.locator('#gifts-tbody tr')).not.toHaveCount(0, { timeout: 15_000 });
+  await expect(page.locator('#gifts-tbody tr')).not.toHaveCount(0);
 }
 
 /**
@@ -47,7 +47,7 @@ async function applyAndConfirm(page: Page): Promise<void> {
   await submitBtn.click();
 
   // Wait for the overlay to close (changes applied and table refreshed)
-  await expect(overlay).not.toHaveClass(/visible/, { timeout: 30_000 });
+  await expect(overlay).not.toHaveClass(/visible/);
 }
 
 /**
@@ -184,7 +184,7 @@ test.describe('Admin Gifts Tab', () => {
     await waitForGiftsTable(page);
 
     const reloadedRow = page.locator(`#gifts-tbody tr[data-gift-id="${giftId}"]`);
-    await expect(reloadedRow.locator('[data-field="name"]')).toHaveValue(newName, { timeout: 10_000 });
+    await expect(reloadedRow.locator('[data-field="name"]')).toHaveValue(newName);
     await expect(reloadedRow.locator('[data-field="coinValue"]')).toHaveValue(newValue);
 
     // Restore original values
@@ -412,7 +412,7 @@ test.describe('Admin Gifts Tab', () => {
 
     // The row may have moved due to order change — find by gift ID
     const reloadedRow = page.locator(`#gifts-tbody tr[data-gift-id="${giftId}"]`);
-    await expect(reloadedRow.locator('[data-field="order"]')).toHaveValue(newOrder, { timeout: 10_000 });
+    await expect(reloadedRow.locator('[data-field="order"]')).toHaveValue(newOrder);
 
     // Restore original order
     await fillAndTrigger(page, reloadedRow.locator('[data-field="order"]'), originalOrder);
@@ -447,7 +447,7 @@ test.describe('Admin Gifts Tab', () => {
     await waitForGiftsTable(page);
 
     const reloadedRow = page.locator(`#gifts-tbody tr[data-gift-id="${giftId}"]`);
-    await expect(reloadedRow.locator('[data-field="animationUrl"]')).toHaveValue(testAnim, { timeout: 10_000 });
+    await expect(reloadedRow.locator('[data-field="animationUrl"]')).toHaveValue(testAnim);
     await expect(reloadedRow.locator('[data-field="soundUrl"]')).toHaveValue(testSound);
     await expect(reloadedRow.locator('[data-field="iconUrl"]')).toHaveValue(testIcon);
 

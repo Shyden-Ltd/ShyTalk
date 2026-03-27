@@ -7,9 +7,7 @@ import { Page } from "@playwright/test";
 /** Navigate to the Starting Screens tab (assumes already logged in). */
 async function goToStartingScreens(page: Page): Promise<void> {
   await navigateToTab(page, "Starting Screens");
-  await expect(page.locator("#starting-screens-panel")).toBeVisible({
-    timeout: 15_000,
-  });
+  await expect(page.locator("#starting-screens-panel")).toBeVisible();
 }
 
 /** Create a screen via the UI. Auto-generates ID (no prompt). Returns the screen ID. */
@@ -19,9 +17,7 @@ async function createScreenViaUI(page: Page): Promise<string> {
   const countBefore = await activeCards.count();
   await page.locator("#add-screen-btn").click();
   // Wait for a new card to appear in the active list
-  await expect(activeCards).toHaveCount(countBefore + 1, {
-    timeout: 15_000,
-  });
+  await expect(activeCards).toHaveCount(countBefore + 1);
   // Get the ID of the newly added card (last one in active list)
   const lastCard = activeCards.nth(countBefore);
   const screenId = await lastCard.getAttribute("data-screen-id");
@@ -362,7 +358,7 @@ test.describe("Starting Screens Admin Section", () => {
 
       // Save and wait for reload
       await card.locator(".save-screen-btn").click();
-      await expect(page.locator("#toast")).toBeVisible({ timeout: 15_000 });
+      await expect(page.locator("#toast")).toBeVisible();
 
       // Reload to see updated state
       await page.reload();
@@ -370,7 +366,7 @@ test.describe("Starting Screens Admin Section", () => {
       await goToStartingScreens(page);
 
       const reloadedCard = page.locator(`[data-screen-id="${screenId}"]`);
-      await expect(reloadedCard).toBeVisible({ timeout: 15_000 });
+      await expect(reloadedCard).toBeVisible();
       await expect(reloadedCard.locator(".status-active")).toBeVisible();
     } finally {
       await deleteScreenViaApi(page, screenId);
@@ -394,7 +390,7 @@ test.describe("Starting Screens Admin Section", () => {
 
       // Should show success or error toast
       const toast = page.locator("#toast");
-      await expect(toast).toBeVisible({ timeout: 15_000 });
+      await expect(toast).toBeVisible();
     } finally {
       await deleteScreenViaApi(page, screenId);
     }
@@ -455,11 +451,9 @@ test.describe("Starting Screens Admin Section", () => {
         .fill("This message is long enough to pass validation.");
 
       await card.locator(".save-screen-btn").click();
-      await expect(page.locator("#toast")).toBeVisible({ timeout: 15_000 });
+      await expect(page.locator("#toast")).toBeVisible();
       // Wait for toast to indicate success
-      await expect(page.locator("#toast")).not.toHaveClass(/error/, {
-        timeout: 5_000,
-      });
+      await expect(page.locator("#toast")).not.toHaveClass(/error/);
 
       // Reload and verify
       await page.reload();
@@ -467,7 +461,7 @@ test.describe("Starting Screens Admin Section", () => {
       await goToStartingScreens(page);
 
       const reloadedCard = page.locator(`[data-screen-id="${screenId}"]`);
-      await expect(reloadedCard).toBeVisible({ timeout: 15_000 });
+      await expect(reloadedCard).toBeVisible();
       await expect(reloadedCard.locator(".title-input")).toHaveValue(titleText);
     } finally {
       await deleteScreenViaApi(page, screenId);
@@ -514,12 +508,12 @@ test.describe("Starting Screens Admin Section", () => {
       .locator(".message-input")
       .fill("This screen will be deleted soon.");
     await card.locator(".save-screen-btn").click();
-    await expect(page.locator("#toast")).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator("#toast")).toBeVisible();
 
     // Wait for the card to re-render after save
     await expect(
       page.locator(`[data-screen-id="${screenId}"]`),
-    ).toBeVisible({ timeout: 15_000 });
+    ).toBeVisible();
 
     page.once("dialog", async (dialog) => {
       await dialog.accept();
@@ -532,7 +526,7 @@ test.describe("Starting Screens Admin Section", () => {
     // After soft-delete, the screen should appear in the deleted section
     await expect(
       page.locator(`[data-screen-id="${screenId}"][data-deleted="true"]`),
-    ).toBeVisible({ timeout: 15_000 });
+    ).toBeVisible();
 
     // Clean up with permanent delete
     await deleteScreenViaApi(page, screenId);
@@ -715,12 +709,12 @@ test.describe("Starting Screens Admin Section", () => {
         .locator(".message-input")
         .fill("This tests the deleted section visibility.");
       await card.locator(".save-screen-btn").click();
-      await expect(page.locator("#toast")).toBeVisible({ timeout: 15_000 });
+      await expect(page.locator("#toast")).toBeVisible();
 
       // Wait for card to re-render
       await expect(
         page.locator(`[data-screen-id="${screenId}"]`),
-      ).toBeVisible({ timeout: 15_000 });
+      ).toBeVisible();
 
       // Soft-delete via the delete button
       page.once("dialog", async (dialog) => await dialog.accept());
@@ -732,7 +726,7 @@ test.describe("Starting Screens Admin Section", () => {
       // Deleted screens section should become visible
       await expect(
         page.locator("#deleted-screens-section"),
-      ).toBeVisible({ timeout: 15_000 });
+      ).toBeVisible();
     } finally {
       await deleteScreenViaApi(page, screenId);
     }
@@ -751,11 +745,11 @@ test.describe("Starting Screens Admin Section", () => {
         .locator(".message-input")
         .fill("This tests the greyed out visual style.");
       await card.locator(".save-screen-btn").click();
-      await expect(page.locator("#toast")).toBeVisible({ timeout: 15_000 });
+      await expect(page.locator("#toast")).toBeVisible();
 
       await expect(
         page.locator(`[data-screen-id="${screenId}"]`),
-      ).toBeVisible({ timeout: 15_000 });
+      ).toBeVisible();
 
       page.once("dialog", async (dialog) => await dialog.accept());
       await page
@@ -767,7 +761,7 @@ test.describe("Starting Screens Admin Section", () => {
       const deletedCard = page.locator(
         `[data-screen-id="${screenId}"][data-deleted="true"]`,
       );
-      await expect(deletedCard).toBeVisible({ timeout: 15_000 });
+      await expect(deletedCard).toBeVisible();
 
       // Check that it has reduced opacity
       const opacity = await deletedCard.evaluate(
@@ -790,11 +784,11 @@ test.describe("Starting Screens Admin Section", () => {
         .locator(".message-input")
         .fill("This tests that restore button exists.");
       await card.locator(".save-screen-btn").click();
-      await expect(page.locator("#toast")).toBeVisible({ timeout: 15_000 });
+      await expect(page.locator("#toast")).toBeVisible();
 
       await expect(
         page.locator(`[data-screen-id="${screenId}"]`),
-      ).toBeVisible({ timeout: 15_000 });
+      ).toBeVisible();
 
       page.once("dialog", async (dialog) => await dialog.accept());
       await page
@@ -805,7 +799,7 @@ test.describe("Starting Screens Admin Section", () => {
       const deletedCard = page.locator(
         `[data-screen-id="${screenId}"][data-deleted="true"]`,
       );
-      await expect(deletedCard).toBeVisible({ timeout: 15_000 });
+      await expect(deletedCard).toBeVisible();
       await expect(
         deletedCard.locator(".restore-screen-btn"),
       ).toBeVisible();
@@ -827,11 +821,11 @@ test.describe("Starting Screens Admin Section", () => {
         .locator(".message-input")
         .fill("This tests permanent delete button.");
       await card.locator(".save-screen-btn").click();
-      await expect(page.locator("#toast")).toBeVisible({ timeout: 15_000 });
+      await expect(page.locator("#toast")).toBeVisible();
 
       await expect(
         page.locator(`[data-screen-id="${screenId}"]`),
-      ).toBeVisible({ timeout: 15_000 });
+      ).toBeVisible();
 
       page.once("dialog", async (dialog) => await dialog.accept());
       await page
@@ -842,7 +836,7 @@ test.describe("Starting Screens Admin Section", () => {
       const deletedCard = page.locator(
         `[data-screen-id="${screenId}"][data-deleted="true"]`,
       );
-      await expect(deletedCard).toBeVisible({ timeout: 15_000 });
+      await expect(deletedCard).toBeVisible();
       await expect(
         deletedCard.locator(".permanent-delete-btn"),
       ).toBeVisible();

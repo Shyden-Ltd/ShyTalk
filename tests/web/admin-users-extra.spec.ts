@@ -9,7 +9,7 @@ import type { Page } from '@playwright/test';
 async function waitForAutoSave(page: Page, fieldSelector: string): Promise<void> {
   await page.locator(fieldSelector).evaluate(el => el.blur());
   const container = page.locator(fieldSelector).locator('..');
-  await expect(container.locator('.field-feedback.saved')).toBeVisible({ timeout: 15_000 });
+  await expect(container.locator('.field-feedback.saved')).toBeVisible();
 }
 
 /**
@@ -17,7 +17,7 @@ async function waitForAutoSave(page: Page, fieldSelector: string): Promise<void>
  */
 async function waitForAutoSaveAfterChange(page: Page, fieldSelector: string): Promise<void> {
   const container = page.locator(fieldSelector).locator('..');
-  await expect(container.locator('.field-feedback.saved')).toBeVisible({ timeout: 15_000 });
+  await expect(container.locator('.field-feedback.saved')).toBeVisible();
 }
 
 /**
@@ -78,7 +78,7 @@ test.describe('Admin Users - Extra Profile Fields', () => {
 
     // Reload and verify persistence
     await reloadAndSearch(page, uid);
-    await expect(page.locator('[data-field="profilePhotoUrl"]')).toHaveValue(testUrl, { timeout: 15_000 });
+    await expect(page.locator('[data-field="profilePhotoUrl"]')).toHaveValue(testUrl);
 
     // Verify via API
     const apiData = await testData.api.get(userPath);
@@ -101,7 +101,7 @@ test.describe('Admin Users - Extra Profile Fields', () => {
 
     // Reload and verify persistence
     await reloadAndSearch(page, uid);
-    await expect(page.locator('[data-field="coverPhotoUrl"]')).toHaveValue(testUrl, { timeout: 15_000 });
+    await expect(page.locator('[data-field="coverPhotoUrl"]')).toHaveValue(testUrl);
 
     // Verify via API
     const apiData = await testData.api.get(userPath);
@@ -123,7 +123,7 @@ test.describe('Admin Users - Extra Profile Fields', () => {
 
     // Reload and verify checked
     await reloadAndSearch(page, uid);
-    await expect(page.locator('#cb-hideAge')).toBeChecked({ timeout: 15_000 });
+    await expect(page.locator('#cb-hideAge')).toBeChecked();
 
     // Verify via API
     const apiChecked = await testData.api.get(userPath);
@@ -149,7 +149,7 @@ test.describe('Admin Users - Extra Profile Fields', () => {
 
     // Reload and verify checked
     await reloadAndSearch(page, uid);
-    await expect(page.locator('#cb-hideOnlineStatus')).toBeChecked({ timeout: 15_000 });
+    await expect(page.locator('#cb-hideOnlineStatus')).toBeChecked();
 
     // Verify via API
     const apiChecked = await testData.api.get(userPath);
@@ -166,7 +166,7 @@ test.describe('Admin Users - Extra Profile Fields', () => {
   // ── Test 6: Character counter — display name ──
   test('character counter updates for display name (0/20)', async ({ page, testData }) => {
     const counter = page.locator('#counter-displayName');
-    await expect(counter).toBeVisible({ timeout: 15_000 });
+    await expect(counter).toBeVisible();
 
     // Type 15 characters
     const displayNameInput = page.locator('[data-field="displayName"]');
@@ -186,7 +186,7 @@ test.describe('Admin Users - Extra Profile Fields', () => {
   // ── Test 7: Character counter — description ──
   test('character counter updates for description (N/200)', async ({ page }) => {
     const counter = page.locator('#counter-description');
-    await expect(counter).toBeVisible({ timeout: 15_000 });
+    await expect(counter).toBeVisible();
 
     // Type some text
     const descInput = page.locator('[data-field="description"]');
@@ -240,7 +240,7 @@ test.describe('Admin Users - Extra Profile Fields', () => {
     await checkBtn.click();
 
     // Verify result message appears (available or taken)
-    await expect(resultDiv).not.toBeEmpty({ timeout: 10_000 });
+    await expect(resultDiv).not.toBeEmpty();
     const resultText = await resultDiv.textContent();
     expect(resultText).toBeTruthy();
   });
@@ -259,7 +259,7 @@ test.describe('Admin Users - Extra Profile Fields', () => {
 
     // Verify current temp ID display updates (wait for API response to update the text)
     const currentDisplay = page.locator('#temp-id-current');
-    await expect(currentDisplay).toContainText('55555555', { timeout: 10_000 });
+    await expect(currentDisplay).toContainText('55555555');
 
     // Verify via API
     const apiData = await testData.api.get(`/api/user/${uid}`);
@@ -268,7 +268,7 @@ test.describe('Admin Users - Extra Profile Fields', () => {
     // Clean up: clear the temp ID within this test
     page.once('dialog', (dialog) => dialog.accept());
     await page.locator('#temp-id-clear').click();
-    await expect(page.locator('#temp-id-current')).toContainText('No temporary ID set', { timeout: 10_000 });
+    await expect(page.locator('#temp-id-current')).toContainText('No temporary ID set');
     const clearedData = await testData.api.get(`/api/user/${uid}`);
     expect(clearedData.tempUniqueId).toBeFalsy();
   });
@@ -282,7 +282,7 @@ test.describe('Admin Users - Extra Profile Fields', () => {
     const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 16);
     await page.locator('#temp-id-expiry').fill(tomorrow);
     await page.locator('#temp-id-apply').click();
-    await expect(page.locator('#temp-id-current')).toContainText('55555555', { timeout: 10_000 });
+    await expect(page.locator('#temp-id-current')).toContainText('55555555');
 
     // Click Clear (accept the confirm dialog)
     page.once('dialog', (dialog) => dialog.accept());
@@ -312,7 +312,7 @@ test.describe('Admin Users - Extra Profile Fields', () => {
     await addBtn.click();
 
     // Verify the user appears in the list
-    await expect(blockedWidget).toContainText(secondUid, { timeout: 10_000 });
+    await expect(blockedWidget).toContainText(secondUid);
 
     // Verify via API
     const apiData = await testData.api.get(`/api/user/${uid}`);
@@ -351,7 +351,7 @@ test.describe('Admin Users - Extra Profile Fields', () => {
     await addBtn.click();
 
     // Verify the user appears in the list
-    await expect(followingWidget).toContainText(secondUid, { timeout: 10_000 });
+    await expect(followingWidget).toContainText(secondUid);
 
     // Verify via API
     const apiData = await testData.api.get(`/api/user/${uid}`);
@@ -388,7 +388,7 @@ test.describe('Admin Users - Extra Profile Fields', () => {
     await addBtn.click();
 
     // Verify the user appears
-    await expect(followerWidget).toContainText(secondUid, { timeout: 10_000 });
+    await expect(followerWidget).toContainText(secondUid);
 
     // Verify via API
     const apiData = await testData.api.get(`/api/user/${uid}`);
@@ -415,7 +415,7 @@ test.describe('Admin Users - Extra Profile Fields', () => {
   // ── Test 15: Stalkers list display ──
   test('stalkers list renders as read-only', async ({ page }) => {
     const stalkersList = page.locator('#stalkers-list');
-    await expect(stalkersList).toBeVisible({ timeout: 15_000 });
+    await expect(stalkersList).toBeVisible();
 
     // Stalkers list should be read-only (no add input)
     const addInputs = stalkersList.locator('input');
@@ -441,7 +441,7 @@ test.describe('Admin Users - Extra Profile Fields', () => {
 
     // Verify pre-suspension info is visible
     const preSuspensionInfo = page.locator('#pre-suspension-info');
-    await expect(preSuspensionInfo).toBeVisible({ timeout: 15_000 });
+    await expect(preSuspensionInfo).toBeVisible();
 
     // Verify pre-suspension name is shown
     const preSuspensionName = page.locator('#pre-suspension-name');
