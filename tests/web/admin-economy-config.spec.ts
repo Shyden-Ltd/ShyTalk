@@ -11,7 +11,7 @@ async function saveEconomyConfig(page: Page): Promise<void> {
   const btn = page.locator('#eco-save-btn');
   await btn.click();
   // Wait for "Economy config saved" toast or the save-info to show "Saved:"
-  await expect(page.locator('#eco-save-info')).toContainText('Saved', { timeout: 15_000 });
+  await expect(page.locator('#eco-save-info')).toContainText('Saved');
 }
 
 /**
@@ -22,7 +22,7 @@ async function reloadAndNavigateToEconomy(page: Page): Promise<void> {
   await adminLogin(page);
   await navigateToTab(page, 'Economy');
   // Wait for a known field to be populated (beanConversionRate is always present)
-  await expect(page.locator('#eco-beanConversionRate')).not.toHaveValue('', { timeout: 15_000 });
+  await expect(page.locator('#eco-beanConversionRate')).not.toHaveValue('');
 }
 
 /**
@@ -66,7 +66,7 @@ test.describe('Admin Economy Config', () => {
     await adminLogin(page);
     await navigateToTab(page, 'Economy');
     // Wait for config to load
-    await expect(page.locator('#eco-beanConversionRate')).not.toHaveValue('', { timeout: 15_000 });
+    await expect(page.locator('#eco-beanConversionRate')).not.toHaveValue('');
   });
 
   // ── Test 1: Config loads correctly ──
@@ -308,7 +308,7 @@ test.describe('Admin Economy Config', () => {
     // Reload and verify the milestone exists
     await reloadAndNavigateToEconomy(page);
     const afterReloadRows = page.locator('#milestone-rows .milestone-row');
-    await expect(afterReloadRows).toHaveCount(initialCount + 1, { timeout: 10_000 });
+    await expect(afterReloadRows).toHaveCount(initialCount + 1);
 
     // Verify the day-99 milestone
     const lastRow = page.locator('#milestone-rows .milestone-row').last();
@@ -321,7 +321,7 @@ test.describe('Admin Economy Config', () => {
     // Save and verify removal
     await saveEconomyConfig(page);
     await reloadAndNavigateToEconomy(page);
-    await expect(page.locator('#milestone-rows .milestone-row')).toHaveCount(initialCount, { timeout: 10_000 });
+    await expect(page.locator('#milestone-rows .milestone-row')).toHaveCount(initialCount);
 
     // Restore full config to be safe
     await restoreEconomyConfig(page, testData);
@@ -373,7 +373,6 @@ test.describe('Admin Economy Config', () => {
         const sel = lastRow.querySelector('.ms-gift-select') as HTMLSelectElement;
         return sel && sel.options.length > 1;
       },
-      { timeout: 10_000 },
     );
     const options = giftSelect.locator('option');
     const optCount = await options.count();
@@ -390,7 +389,7 @@ test.describe('Admin Economy Config', () => {
     // Reload and verify gift type persists
     await reloadAndNavigateToEconomy(page);
     const reloadedLastRow = page.locator('#milestone-rows .milestone-row').last();
-    await expect(reloadedLastRow.locator('.ms-type')).toHaveValue('gift', { timeout: 10_000 });
+    await expect(reloadedLastRow.locator('.ms-type')).toHaveValue('gift');
     await expect(reloadedLastRow.locator('.ms-gift-select')).toBeVisible();
 
     // Restore

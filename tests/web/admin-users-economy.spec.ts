@@ -22,7 +22,7 @@ async function reloadAndNavigateToEconomy(
 async function waitForPityAutoSave(page: import('@playwright/test').Page): Promise<void> {
   await page.locator('#eco-pity').evaluate(el => el.blur());
   const container = page.locator('#eco-pity').locator('..');
-  await expect(container.locator('.field-feedback.saved')).toBeVisible({ timeout: 15_000 });
+  await expect(container.locator('.field-feedback.saved')).toBeVisible();
 }
 
 test.describe('Admin Users - Economy Subtab', () => {
@@ -38,7 +38,7 @@ test.describe('Admin Users - Economy Subtab', () => {
   // ── Test 1: Coins balance displays correctly ──
   test('coins balance displays correctly', async ({ page, testData }) => {
     const coinsDisplay = page.locator('#eco-coins-display');
-    await expect(coinsDisplay).toHaveText('1000', { timeout: 15_000 });
+    await expect(coinsDisplay).toHaveText('1000');
 
     // Verify via API
     const economy = await testData.api.get(`/api/users/${testData.user.uniqueId}/economy`);
@@ -56,11 +56,11 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Wait for display to update
     const coinsDisplay = page.locator('#eco-coins-display');
-    await expect(coinsDisplay).toHaveText('1500', { timeout: 15_000 });
+    await expect(coinsDisplay).toHaveText('1500');
 
     // Reload and verify persistence
     await reloadAndNavigateToEconomy(page, uid);
-    await expect(page.locator('#eco-coins-display')).toHaveText('1500', { timeout: 15_000 });
+    await expect(page.locator('#eco-coins-display')).toHaveText('1500');
 
     // Verify via API
     const economy = await testData.api.get(`/api/users/${uid}/economy`);
@@ -83,11 +83,11 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Wait for display to update
     const coinsDisplay = page.locator('#eco-coins-display');
-    await expect(coinsDisplay).toHaveText('800', { timeout: 15_000 });
+    await expect(coinsDisplay).toHaveText('800');
 
     // Reload and verify persistence
     await reloadAndNavigateToEconomy(page, uid);
-    await expect(page.locator('#eco-coins-display')).toHaveText('800', { timeout: 15_000 });
+    await expect(page.locator('#eco-coins-display')).toHaveText('800');
 
     // Verify via API
     const economy = await testData.api.get(`/api/users/${uid}/economy`);
@@ -105,7 +105,7 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Verify seeded beans amount
     const beansDisplay = page.locator('#eco-beans-display');
-    await expect(beansDisplay).toHaveText('500', { timeout: 15_000 });
+    await expect(beansDisplay).toHaveText('500');
 
     // Add 300 beans
     await page.locator('#eco-beans-op').selectOption('add');
@@ -113,11 +113,11 @@ test.describe('Admin Users - Economy Subtab', () => {
     await page.locator('#eco-beans-apply').click();
 
     // Verify display shows 800
-    await expect(beansDisplay).toHaveText('800', { timeout: 15_000 });
+    await expect(beansDisplay).toHaveText('800');
 
     // Reload and verify persistence
     await reloadAndNavigateToEconomy(page, uid);
-    await expect(page.locator('#eco-beans-display')).toHaveText('800', { timeout: 15_000 });
+    await expect(page.locator('#eco-beans-display')).toHaveText('800');
 
     // Verify via API
     const economy = await testData.api.get(`/api/users/${uid}/economy`);
@@ -150,13 +150,13 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Wait for gift select to populate (options loaded from gift catalog)
     const giftSelect = page.locator('#backpack-gift-select');
-    await expect(giftSelect).toBeVisible({ timeout: 15_000 });
+    await expect(giftSelect).toBeVisible();
 
     // Pick the first non-empty option
     await page.waitForFunction(() => {
       const select = document.getElementById('backpack-gift-select') as HTMLSelectElement;
       return select && select.options.length > 1;
-    }, { timeout: 15_000 });
+    });
 
     const firstGiftId = await giftSelect.evaluate((el: HTMLSelectElement) => {
       for (let i = 0; i < el.options.length; i++) {
@@ -174,13 +174,13 @@ test.describe('Admin Users - Economy Subtab', () => {
     // Verify gift appears in backpack grid
     const backpackGrid = page.locator('#backpack-grid');
     const giftCard = backpackGrid.locator(`.backpack-item[data-gift-id="${firstGiftId}"]`);
-    await expect(giftCard).toBeVisible({ timeout: 15_000 });
+    await expect(giftCard).toBeVisible();
     await expect(giftCard.locator('.backpack-qty-badge')).toHaveText('3');
 
     // Reload and verify persistence
     await reloadAndNavigateToEconomy(page, uid);
     const giftCardAfter = page.locator(`#backpack-grid .backpack-item[data-gift-id="${firstGiftId}"]`);
-    await expect(giftCardAfter).toBeVisible({ timeout: 15_000 });
+    await expect(giftCardAfter).toBeVisible();
 
     // Clean up: remove the gift via API
     await testData.api.post(`/api/users/${uid}/backpack`, {
@@ -212,7 +212,7 @@ test.describe('Admin Users - Economy Subtab', () => {
     await page.waitForFunction(() => {
       const select = document.getElementById('backpack-gift-select') as HTMLSelectElement;
       return select && select.options.length > 1;
-    }, { timeout: 15_000 });
+    });
 
     const firstGiftId = await giftSelect.evaluate((el: HTMLSelectElement) => {
       for (let i = 0; i < el.options.length; i++) {
@@ -232,14 +232,14 @@ test.describe('Admin Users - Economy Subtab', () => {
     // Verify the gift is present
     const backpackGrid = page.locator('#backpack-grid');
     const giftCard = backpackGrid.locator(`.backpack-item[data-gift-id="${firstGiftId}"]`);
-    await expect(giftCard).toBeVisible({ timeout: 15_000 });
+    await expect(giftCard).toBeVisible();
 
     // Click the remove button (X) on the gift card
     const removeBtn = giftCard.locator('.backpack-remove-btn');
     await removeBtn.click();
 
     // Wait for the item to disappear from the grid
-    await expect(giftCard).not.toBeVisible({ timeout: 15_000 });
+    await expect(giftCard).not.toBeVisible();
 
     // Reload and verify the gift is gone
     await reloadAndNavigateToEconomy(page, uid);
@@ -263,14 +263,14 @@ test.describe('Admin Users - Economy Subtab', () => {
     await page.locator('#eco-coins-apply').click();
 
     // Wait for the coins display to update (confirms the action succeeded)
-    await expect(page.locator('#eco-coins-display')).toHaveText('1100', { timeout: 15_000 });
+    await expect(page.locator('#eco-coins-display')).toHaveText('1100');
 
     // Click Load to load transaction history
     await page.locator('#tx-load-btn').click();
 
     // Verify the transaction list contains an ADMIN_ADJUSTMENT entry
     const txList = page.locator('#tx-list');
-    await expect(txList.locator('text=ADMIN_ADJUSTMENT')).toBeVisible({ timeout: 15_000 });
+    await expect(txList.locator('text=ADMIN_ADJUSTMENT')).toBeVisible();
 
     // Verify via API
     const txData = await testData.api.get(`/api/users/${uid}/transactions?type=ADMIN_ADJUSTMENT`);
@@ -293,7 +293,7 @@ test.describe('Admin Users - Economy Subtab', () => {
     await page.locator('#eco-coins-op').selectOption('add');
     await page.locator('#eco-coins-amount').fill('50');
     await page.locator('#eco-coins-apply').click();
-    await expect(page.locator('#eco-coins-display')).not.toHaveText('1000', { timeout: 15_000 });
+    await expect(page.locator('#eco-coins-display')).not.toHaveText('1000');
 
     // Select "Admin Adjustment" from the type filter
     await page.locator('#tx-type-filter').selectOption('ADMIN_ADJUSTMENT');
@@ -301,7 +301,7 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Verify only ADMIN_ADJUSTMENT entries are shown
     const txList = page.locator('#tx-list');
-    await expect(txList.locator('text=ADMIN_ADJUSTMENT')).toBeVisible({ timeout: 15_000 });
+    await expect(txList.locator('text=ADMIN_ADJUSTMENT')).toBeVisible();
 
     // Verify all entries in the list are ADMIN_ADJUSTMENT
     const entries = txList.locator('div[style*="border-bottom"] span[style*="accent"]');
@@ -316,7 +316,7 @@ test.describe('Admin Users - Economy Subtab', () => {
     await page.locator('#tx-load-btn').click();
 
     // Wait for results to load
-    await expect(txList.locator('div[style*="border-bottom"]')).toBeVisible({ timeout: 15_000 });
+    await expect(txList.locator('div[style*="border-bottom"]')).toBeVisible();
 
     // Restore: deduct 50 via API
     await testData.api.post(`/api/users/${uid}/adjust-balance`, {
@@ -332,7 +332,7 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Verify initial pity counter is 0
     const pityInput = page.locator('#eco-pity');
-    await expect(pityInput).toHaveValue('0', { timeout: 15_000 });
+    await expect(pityInput).toHaveValue('0');
 
     // Change pity counter to 10
     await pityInput.fill('10');
@@ -340,7 +340,7 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Reload and verify persistence
     await reloadAndNavigateToEconomy(page, uid);
-    await expect(page.locator('#eco-pity')).toHaveValue('10', { timeout: 15_000 });
+    await expect(page.locator('#eco-pity')).toHaveValue('10');
 
     // Verify via API
     const luck = await testData.api.get(`/api/users/${uid}/luck`);
@@ -355,7 +355,7 @@ test.describe('Admin Users - Economy Subtab', () => {
     const uid = String(testData.user.uniqueId);
 
     // Verify starting balance is 1000
-    await expect(page.locator('#eco-coins-display')).toHaveText('1000', { timeout: 15_000 });
+    await expect(page.locator('#eco-coins-display')).toHaveText('1000');
 
     // Deduct 9999 (more than current balance)
     await page.locator('#eco-coins-op').selectOption('deduct');
@@ -364,7 +364,7 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Verify display shows 0 (clamped, not negative)
     const coinsDisplay = page.locator('#eco-coins-display');
-    await expect(coinsDisplay).toHaveText('0', { timeout: 15_000 });
+    await expect(coinsDisplay).toHaveText('0');
 
     // Verify via API
     const economy = await testData.api.get(`/api/users/${uid}/economy`);

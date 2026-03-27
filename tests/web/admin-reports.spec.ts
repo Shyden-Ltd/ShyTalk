@@ -12,7 +12,6 @@ async function waitForReportsLoaded(page: Page): Promise<void> {
         list.textContent!.includes('No reports') ||
         list.textContent!.includes('Failed');
     },
-    { timeout: 15_000 },
   );
 }
 
@@ -66,7 +65,7 @@ async function selectFirstReportCard(page: Page): Promise<void> {
   // Press ArrowDown to select the first card
   await page.keyboard.press('ArrowDown');
   const firstCard = page.locator('.report-card').first();
-  await expect(firstCard).toHaveClass(/selected/, { timeout: 3_000 });
+  await expect(firstCard).toHaveClass(/selected/);
 }
 
 test.describe('Admin Reports', () => {
@@ -84,7 +83,7 @@ test.describe('Admin Reports', () => {
 
     // Verify at least one report card is visible
     const cards = page.locator('.report-card');
-    await expect(cards.first()).toBeVisible({ timeout: 10_000 });
+    await expect(cards.first()).toBeVisible();
 
     // API verification
     const result = await getReportsViaApi(testData, 'pending');
@@ -146,7 +145,7 @@ test.describe('Admin Reports', () => {
     await filterReports(page, 'pending');
 
     const firstCard = page.locator('.report-card').first();
-    await expect(firstCard).toBeVisible({ timeout: 10_000 });
+    await expect(firstCard).toBeVisible();
 
     // Select "Dismiss" action
     const uid = await firstCard.getAttribute('data-uid');
@@ -168,7 +167,7 @@ test.describe('Admin Reports', () => {
     // Verify in resolved filter
     await filterReports(page, 'resolved');
     const resolvedCards = page.locator('.report-card');
-    await expect(resolvedCards.first()).toBeVisible({ timeout: 10_000 });
+    await expect(resolvedCards.first()).toBeVisible();
 
     // Re-seed report for other tests
     await seedReportViaApi(testData);
@@ -179,7 +178,7 @@ test.describe('Admin Reports', () => {
     await filterReports(page, 'pending');
 
     const firstCard = page.locator('.report-card').first();
-    await expect(firstCard).toBeVisible({ timeout: 10_000 });
+    await expect(firstCard).toBeVisible();
 
     const uid = await firstCard.getAttribute('data-uid');
 
@@ -230,7 +229,7 @@ test.describe('Admin Reports', () => {
     await filterReports(page, 'pending');
 
     const firstCard = page.locator('.report-card').first();
-    await expect(firstCard).toBeVisible({ timeout: 10_000 });
+    await expect(firstCard).toBeVisible();
 
     const uid = await firstCard.getAttribute('data-uid');
 
@@ -240,7 +239,7 @@ test.describe('Admin Reports', () => {
 
     // Suspension fields should become visible
     const suspensionFields = firstCard.locator(`[data-suspension-fields="${uid}"]`);
-    await expect(suspensionFields).toHaveClass(/visible/, { timeout: 3_000 });
+    await expect(suspensionFields).toHaveClass(/visible/);
 
     // Select 1 day suspension
     const daysSelect = firstCard.locator(`select[data-suspension-days="${uid}"]`);
@@ -279,7 +278,7 @@ test.describe('Admin Reports', () => {
     await filterReports(page, 'pending');
 
     const firstCard = page.locator('.report-card').first();
-    await expect(firstCard).toBeVisible({ timeout: 10_000 });
+    await expect(firstCard).toBeVisible();
 
     const uid = await firstCard.getAttribute('data-uid');
 
@@ -315,7 +314,7 @@ test.describe('Admin Reports', () => {
     await filterReports(page, 'pending');
 
     const firstCard = page.locator('.report-card').first();
-    await expect(firstCard).toBeVisible({ timeout: 10_000 });
+    await expect(firstCard).toBeVisible();
 
     const uid = await firstCard.getAttribute('data-uid');
 
@@ -334,7 +333,7 @@ test.describe('Admin Reports', () => {
     await filterReports(page, 'pending');
 
     const firstCard = page.locator('.report-card').first();
-    await expect(firstCard).toBeVisible({ timeout: 10_000 });
+    await expect(firstCard).toBeVisible();
 
     const uid = await firstCard.getAttribute('data-uid');
 
@@ -360,7 +359,7 @@ test.describe('Admin Reports', () => {
     const avgResponseStat = page.locator('#stat-avg-response');
     const reviewersStat = page.locator('#stat-reviewers');
 
-    await expect(pendingStat).toBeVisible({ timeout: 10_000 });
+    await expect(pendingStat).toBeVisible();
     await expect(resolvedTodayStat).toBeVisible();
     await expect(avgResponseStat).toBeVisible();
     await expect(reviewersStat).toBeVisible();
@@ -382,18 +381,18 @@ test.describe('Admin Reports', () => {
     // Click 30d
     const btn30d = periodButtons.filter({ hasText: '30d' });
     await btn30d.click();
-    await expect(btn30d).toHaveClass(/active/, { timeout: 3_000 });
+    await expect(btn30d).toHaveClass(/active/);
 
     // Click All
     const btnAll = periodButtons.filter({ hasText: 'All' });
     await btnAll.click();
-    await expect(btnAll).toHaveClass(/active/, { timeout: 3_000 });
+    await expect(btnAll).toHaveClass(/active/);
     await expect(btn30d).not.toHaveClass(/active/);
 
     // Click 7d
     const btn7d = periodButtons.filter({ hasText: '7d' });
     await btn7d.click();
-    await expect(btn7d).toHaveClass(/active/, { timeout: 3_000 });
+    await expect(btn7d).toHaveClass(/active/);
     await expect(btnAll).not.toHaveClass(/active/);
   });
 
@@ -410,7 +409,7 @@ test.describe('Admin Reports', () => {
     await exportTo.fill(today);
 
     // Listen for download
-    const downloadPromise = page.waitForEvent('download', { timeout: 15_000 });
+    const downloadPromise = page.waitForEvent('download');
     await page.locator('#export-csv-btn').click();
 
     const download = await downloadPromise;
@@ -422,7 +421,7 @@ test.describe('Admin Reports', () => {
     await filterReports(page, 'pending');
 
     const firstCard = page.locator('.report-card').first();
-    await expect(firstCard).toBeVisible({ timeout: 10_000 });
+    await expect(firstCard).toBeVisible();
 
     const uid = await firstCard.getAttribute('data-uid');
 
@@ -455,14 +454,14 @@ test.describe('Admin Reports', () => {
     await viewConvLink.click();
 
     const convViewer = page.locator('.conv-viewer');
-    await expect(convViewer).toBeVisible({ timeout: 10_000 });
+    await expect(convViewer).toBeVisible();
 
     const viewerText = await convViewer.textContent();
     expect(viewerText!.length).toBeGreaterThan(0);
 
     // Click again to toggle close
     await viewConvLink.click();
-    await expect(convViewer).not.toBeVisible({ timeout: 3_000 });
+    await expect(convViewer).not.toBeVisible();
   });
 
   // ── Test 15: Evidence lightbox — click image, verify opens ──
@@ -484,7 +483,7 @@ test.describe('Admin Reports', () => {
 
     // Close
     await page.keyboard.press('Escape');
-    await expect(lightbox).not.toBeVisible({ timeout: 3_000 });
+    await expect(lightbox).not.toBeVisible();
   });
 
   // ── Test 16: Take-over button — click user name, verify navigates to user ──
@@ -503,11 +502,11 @@ test.describe('Admin Reports', () => {
 
     // Verify the Users tab becomes active
     const usersTab = page.locator('#tab-users');
-    await expect(usersTab).toHaveClass(/active/, { timeout: 10_000 });
+    await expect(usersTab).toHaveClass(/active/);
 
     // Verify user data loaded (profile subtab visible)
     const profileSubtab = page.locator('.user-subtab[data-subtab="profile"]');
-    await expect(profileSubtab).toBeVisible({ timeout: 10_000 });
+    await expect(profileSubtab).toBeVisible();
   });
 
   // ── Test 17: Report grouping — pending reports grouped by user ──

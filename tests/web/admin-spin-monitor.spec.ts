@@ -7,7 +7,7 @@ import type { Page } from '@playwright/test';
  */
 async function goToMonitor(page: Page): Promise<void> {
   await navigateToTab(page, 'Spin Monitor');
-  await expect(page.locator('#monitor-panel')).toHaveClass(/visible/, { timeout: 10_000 });
+  await expect(page.locator('#monitor-panel')).toHaveClass(/visible/);
 }
 
 /**
@@ -17,10 +17,10 @@ async function startMonitoringUser(page: Page, uniqueId: number): Promise<void> 
   await page.locator('#monitor-uid-input').fill(String(uniqueId));
   await page.locator('#monitor-start-btn').click();
   // Wait for status to become visible and stats to load
-  await expect(page.locator('#monitor-status')).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator('#monitor-stats')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('#monitor-status')).toBeVisible();
+  await expect(page.locator('#monitor-stats')).toBeVisible();
   // Wait for the dot to go live
-  await expect(page.locator('#monitor-dot')).toHaveClass(/live/, { timeout: 10_000 });
+  await expect(page.locator('#monitor-dot')).toHaveClass(/live/);
 }
 
 /**
@@ -29,7 +29,7 @@ async function startMonitoringUser(page: Page, uniqueId: number): Promise<void> 
 async function stopMonitoring(page: Page): Promise<void> {
   await page.locator('#monitor-stop-btn').click();
   // Wait for start button to reappear
-  await expect(page.locator('#monitor-start-btn')).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('#monitor-start-btn')).toBeVisible();
 }
 
 test.describe('Admin Spin Monitor', () => {
@@ -95,8 +95,8 @@ test.describe('Admin Spin Monitor', () => {
     await input.press('Enter');
 
     // Wait for monitoring to start
-    await expect(page.locator('#monitor-status')).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator('#monitor-dot')).toHaveClass(/live/, { timeout: 10_000 });
+    await expect(page.locator('#monitor-status')).toBeVisible();
+    await expect(page.locator('#monitor-dot')).toHaveClass(/live/);
 
     // Verify it started correctly
     const statusText = await page.locator('#monitor-status-text').textContent();
@@ -169,7 +169,7 @@ test.describe('Admin Spin Monitor', () => {
 
     // Wait for guarantee gift dropdown to be populated
     const giftSelect = page.locator('#guarantee-gift-select');
-    await expect(giftSelect.locator('option')).not.toHaveCount(1, { timeout: 15_000 });
+    await expect(giftSelect.locator('option')).not.toHaveCount(1);
 
     // Select the first non-placeholder gift option
     const options = giftSelect.locator('option');
@@ -210,7 +210,7 @@ test.describe('Admin Spin Monitor', () => {
 
     // Wait for guarantee gift dropdown to be populated
     const giftSelect = page.locator('#guarantee-gift-select');
-    await expect(giftSelect.locator('option')).not.toHaveCount(1, { timeout: 15_000 });
+    await expect(giftSelect.locator('option')).not.toHaveCount(1);
 
     // Select a gift and set guarantee
     const options = giftSelect.locator('option');
@@ -221,13 +221,13 @@ test.describe('Admin Spin Monitor', () => {
     page.on('dialog', (dialog) => dialog.accept());
 
     await page.locator('#guarantee-set-btn').click();
-    await expect(page.locator('#guarantee-status')).toContainText('Active', { timeout: 15_000 });
+    await expect(page.locator('#guarantee-status')).toContainText('Active');
 
     // Now revoke
     await page.locator('#guarantee-revoke-btn').click();
 
     // Verify status no longer shows Active
-    await expect(page.locator('#guarantee-status')).toContainText('No guarantee set', { timeout: 10_000 });
+    await expect(page.locator('#guarantee-status')).toContainText('No guarantee set');
 
     // Revoke button should be hidden
     await expect(page.locator('#guarantee-revoke-btn')).toBeHidden();
@@ -246,7 +246,7 @@ test.describe('Admin Spin Monitor', () => {
     await startMonitoringUser(page, testData.user.uniqueId);
 
     // Wait for the totals wrap to be visible
-    await expect(page.locator('#monitor-totals-wrap')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('#monitor-totals-wrap')).toBeVisible();
 
     // Session stats should show numeric values
     const sessionSpins = await page.locator('#session-spins').textContent();

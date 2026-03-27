@@ -14,7 +14,6 @@ async function waitForAppealsLoaded(page: Page): Promise<void> {
         list.textContent!.includes('No appeals') ||
         list.textContent!.includes('Failed');
     },
-    { timeout: 15_000 },
   );
 }
 
@@ -91,7 +90,7 @@ test.describe('Admin Appeals', () => {
 
     // Verify at least one appeal card is visible
     const cards = page.locator('.appeal-card');
-    await expect(cards.first()).toBeVisible({ timeout: 10_000 });
+    await expect(cards.first()).toBeVisible();
 
     // Verify appeal text matches seeded data
     const appealsList = page.locator('#appeals-list');
@@ -139,7 +138,7 @@ test.describe('Admin Appeals', () => {
 
     // Find the first pending appeal card
     const firstCard = page.locator('.appeal-card').first();
-    await expect(firstCard).toBeVisible({ timeout: 10_000 });
+    await expect(firstCard).toBeVisible();
 
     // Fill the admin note
     const noteInput = firstCard.locator('input[data-note-for]');
@@ -155,7 +154,7 @@ test.describe('Admin Appeals', () => {
     // Verify it moved to "Approved" filter
     await filterAppeals(page, 'approved');
     const appealsList = page.locator('#appeals-list');
-    await expect(appealsList).toContainText('Approved by e2e test', { timeout: 10_000 });
+    await expect(appealsList).toContainText('Approved by e2e test');
 
     // API verification
     const approved = await getAppealsViaApi(testData, 'approved');
@@ -168,7 +167,7 @@ test.describe('Admin Appeals', () => {
     await adminLogin(page);
     await navigateToTab(page, 'Appeals');
     await filterAppeals(page, 'approved');
-    await expect(page.locator('#appeals-list')).toContainText('Approved by e2e test', { timeout: 10_000 });
+    await expect(page.locator('#appeals-list')).toContainText('Approved by e2e test');
   });
 
   // ── Test 4: Approve auto-unsuspends user — verify, then re-suspend + re-seed ──
@@ -190,7 +189,7 @@ test.describe('Admin Appeals', () => {
     await filterAppeals(page, 'pending');
 
     const firstCard = page.locator('.appeal-card').first();
-    await expect(firstCard).toBeVisible({ timeout: 10_000 });
+    await expect(firstCard).toBeVisible();
 
     // Fill admin note
     const noteInput = firstCard.locator('input[data-note-for]');
@@ -204,7 +203,7 @@ test.describe('Admin Appeals', () => {
 
     // Verify it appears in Denied filter
     await filterAppeals(page, 'denied');
-    await expect(page.locator('#appeals-list')).toContainText('Denied by e2e test', { timeout: 10_000 });
+    await expect(page.locator('#appeals-list')).toContainText('Denied by e2e test');
 
     // API verification
     const denied = await getAppealsViaApi(testData, 'denied');
@@ -233,7 +232,7 @@ test.describe('Admin Appeals', () => {
     await filterAppeals(page, 'pending');
 
     const firstCard = page.locator('.appeal-card').first();
-    await expect(firstCard).toBeVisible({ timeout: 10_000 });
+    await expect(firstCard).toBeVisible();
 
     // Verify the appeal-profile section exists
     const profile = firstCard.locator('.appeal-profile');
@@ -291,20 +290,20 @@ test.describe('Admin Appeals', () => {
     await thumbs.first().click();
     await expect(lightbox).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(lightbox).not.toBeVisible({ timeout: 3_000 });
+    await expect(lightbox).not.toBeVisible();
 
     // Test close via X button
     await thumbs.first().click();
     await expect(lightbox).toBeVisible();
     await page.locator('.evidence-lightbox-close').click();
-    await expect(lightbox).not.toBeVisible({ timeout: 3_000 });
+    await expect(lightbox).not.toBeVisible();
 
     // Test close via clicking the overlay background
     await thumbs.first().click();
     await expect(lightbox).toBeVisible();
     // Click the overlay itself (not the image inside)
     await lightbox.click({ position: { x: 10, y: 10 } });
-    await expect(lightbox).not.toBeVisible({ timeout: 3_000 });
+    await expect(lightbox).not.toBeVisible();
   });
 
   // ── Test 9: Expandable reports section — click to expand, verify details ──
@@ -312,7 +311,7 @@ test.describe('Admin Appeals', () => {
     await filterAppeals(page, 'pending');
 
     const firstCard = page.locator('.appeal-card').first();
-    await expect(firstCard).toBeVisible({ timeout: 10_000 });
+    await expect(firstCard).toBeVisible();
 
     // Look for the <details>/<summary> element for reports
     const reportsSummary = firstCard.locator('.appeal-reports summary');

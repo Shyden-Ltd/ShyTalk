@@ -18,7 +18,6 @@ async function waitForBannersLoaded(page: Page): Promise<void> {
       if (p && p.textContent && p.textContent.includes('No banners yet')) return true;
       return false;
     },
-    { timeout: 15_000 },
   );
 }
 
@@ -42,7 +41,7 @@ async function saveDialog(page: Page): Promise<void> {
   const saveBtn = page.locator('#banner-dialog-save');
   await saveBtn.click();
   // Wait for dialog to close (save completes)
-  await expect(page.locator('#banner-dialog-overlay')).toHaveCSS('display', 'none', { timeout: 15_000 });
+  await expect(page.locator('#banner-dialog-overlay')).toHaveCSS('display', 'none');
   await waitForBannersLoaded(page);
 }
 
@@ -116,7 +115,7 @@ test.describe('Admin Banners', () => {
       await navigateToTab(page, 'Banners');
       await waitForBannersLoaded(page);
     }
-    await expect(card).toBeVisible({ timeout: 10_000 });
+    await expect(card).toBeVisible();
 
     // Verify the title text within the card
     await expect(card.locator('strong')).toHaveText(testData.banner.title);
@@ -165,7 +164,7 @@ test.describe('Admin Banners', () => {
 
     // Find the newly created banner card by title
     const newCard = page.locator('.banner-card', { hasText: newTitle });
-    await expect(newCard).toBeVisible({ timeout: 10_000 });
+    await expect(newCard).toBeVisible();
 
     // Extract the banner ID for cleanup
     const newBannerId = await newCard.getAttribute('data-banner-id');
@@ -177,7 +176,7 @@ test.describe('Admin Banners', () => {
     await navigateToTab(page, 'Banners');
     await waitForBannersLoaded(page);
 
-    await expect(page.locator(`.banner-card[data-banner-id="${newBannerId}"]`)).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(`.banner-card[data-banner-id="${newBannerId}"]`)).toBeVisible();
     await expect(
       page.locator(`.banner-card[data-banner-id="${newBannerId}"] strong`),
     ).toHaveText(newTitle);
@@ -210,7 +209,7 @@ test.describe('Admin Banners', () => {
 
     await expect(
       page.locator(`.banner-card[data-banner-id="${testData.banner.id}"] strong`),
-    ).toHaveText(editedTitle, { timeout: 10_000 });
+    ).toHaveText(editedTitle);
 
     // Restore original title
     await openEditDialog(page, testData.banner.id);
@@ -237,14 +236,14 @@ test.describe('Admin Banners', () => {
     await waitForBannersLoaded(page);
 
     const card = page.locator(`.banner-card[data-banner-id="${tempId}"]`);
-    await expect(card).toBeVisible({ timeout: 10_000 });
+    await expect(card).toBeVisible();
 
     // Click delete and accept the confirm dialog
     page.on('dialog', (dialog) => dialog.accept());
     await card.getByRole('button', { name: 'Delete' }).click();
 
     // Wait for the card to disappear
-    await expect(card).not.toBeVisible({ timeout: 15_000 });
+    await expect(card).not.toBeVisible();
 
     // Reload and verify it's gone
     await page.reload();
@@ -265,7 +264,7 @@ test.describe('Admin Banners', () => {
     page.on('dialog', (dialog) => dialog.dismiss());
 
     const card = page.locator(`.banner-card[data-banner-id="${testData.banner.id}"]`);
-    await expect(card).toBeVisible({ timeout: 10_000 });
+    await expect(card).toBeVisible();
 
     await card.getByRole('button', { name: 'Delete' }).click();
 
@@ -510,7 +509,7 @@ test.describe('Admin Banners', () => {
 
     // Find the new banner card
     const newCard = page.locator('.banner-card', { hasText: uploadTitle });
-    await expect(newCard).toBeVisible({ timeout: 10_000 });
+    await expect(newCard).toBeVisible();
     const newBannerId = await newCard.getAttribute('data-banner-id');
     expect(newBannerId).toBeTruthy();
 
@@ -543,7 +542,7 @@ test.describe('Admin Banners', () => {
 
     // Verify empty state message
     const emptyMessage = page.locator('#banners-list p');
-    await expect(emptyMessage).toBeVisible({ timeout: 10_000 });
+    await expect(emptyMessage).toBeVisible();
     await expect(emptyMessage).toContainText('No banners yet');
     await expect(emptyMessage).toContainText('Add Banner');
 
