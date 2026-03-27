@@ -144,7 +144,7 @@ jobs:
           docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit:v1.21
 
       - name: Cache Firebase Emulators
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/firebase/emulators
           key: firebase-emulators-${{ runner.os }}
