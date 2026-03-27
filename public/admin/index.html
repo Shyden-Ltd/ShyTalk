@@ -9653,7 +9653,7 @@
       const giftCounts = {};
       for (const name of giftNames) {
         if (!giftCounts[name]) {
-          const info = monitorGiftCatalog[name];
+          const info = monitorGiftCatalogByName[name];
           giftCounts[name] = {
             count: 0,
             coinValue: info ? info.coinValue : 0,
@@ -9745,13 +9745,22 @@
 
     }
 
+    // monitorGiftCatalog: keyed by gift document ID
+    // monitorGiftCatalogByName: keyed by gift display name (for spin history lookups)
+    const monitorGiftCatalogByName = {};
     async function loadGiftCatalog() {
       if (Object.keys(monitorGiftCatalog).length > 0) return;
       try {
         const snapshot = await getDocs(collection(clientDb, "gifts"));
         snapshot.forEach(d => {
           const data = d.data();
-          monitorGiftCatalog[data.name] = {
+          monitorGiftCatalog[d.id] = {
+            name: data.name,
+            coinValue: data.coinValue || 0,
+            iconUrl: data.iconUrl || ""
+          };
+          monitorGiftCatalogByName[data.name] = {
+            id: d.id,
             coinValue: data.coinValue || 0,
             iconUrl: data.iconUrl || ""
           };
@@ -9837,7 +9846,7 @@
 
             const names = (tx.details || "").split(",").map(s => s.trim()).filter(Boolean);
             for (const name of names) {
-              const info = monitorGiftCatalog[name];
+              const info = monitorGiftCatalogByName[name];
               if (info) {
                 if (info.coinValue > monitorAllTime.bestValue) {
                   monitorAllTime.bestValue = info.coinValue;
@@ -9935,11 +9944,10 @@
       // Build sorted list by coin value
       const gifts = Object.entries(monitorGiftCatalog)
         .sort((a, b) => a[1].coinValue - b[1].coinValue);
-      for (const [name, info] of gifts) {
+      for (const [giftId, info] of gifts) {
         const opt = document.createElement("option");
-        // We need the gift ID, not name. Load from Firestore gifts collection
-        opt.value = name; // temporary — we'll look up ID below
-        opt.textContent = `${name} (${info.coinValue.toLocaleString()} coins)`;
+        opt.value = giftId;
+        opt.textContent = `${info.name} (${info.coinValue.toLocaleString()} coins)`;
         guaranteeGiftSelect.appendChild(opt);
       }
       // Now fetch actual gift IDs to map name -> id

@@ -885,11 +885,13 @@ router.patch('/appeals/:id', async (req, res) => {
     const userId = appeal.userId ?? appeal.user_id;
 
     // Update the appeal document
-    await db.doc(`suspensionAppeals/${req.params.id}`).update({
+    const appealUpdate = {
       status: status,
       reviewedBy: req.auth.uid,
       reviewedAt: timestamp,
-    });
+    };
+    if (body.adminNote !== undefined) appealUpdate.adminNote = body.adminNote;
+    await db.doc(`suspensionAppeals/${req.params.id}`).update(appealUpdate);
 
     // Update user's appeal status on the user document
     await db.doc(`users/${userId}`).update({
