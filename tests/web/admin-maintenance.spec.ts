@@ -131,10 +131,9 @@ test.describe('Admin Maintenance Tab', () => {
     // Click Backfill User Types (safe — idempotent operation)
     await btn.click();
 
-    // Button should show processing
-    await expect(btn).toHaveText('Backfilling...');
-
     // Result should become visible with success class
+    // (skip transient "Backfilling..." text assertion — operation can complete
+    // before Playwright observes it, causing a race condition)
     await expect(result).toBeVisible({ timeout: 30_000 });
     await expect(result).toHaveClass(/success/);
 

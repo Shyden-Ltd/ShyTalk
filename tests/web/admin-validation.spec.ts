@@ -50,9 +50,10 @@ test.describe('Admin Validation', () => {
     // The backend must not save an empty name
     expect(apiData.displayName).toBe(originalName);
 
-    // Restore
-    await displayNameInput.fill(originalName);
-    await waitForAutoSave(page, '[data-field="displayName"]');
+    // Restore via API (auto-save won't fire since the value matches loadedData)
+    await testData.api.patch(`/api/user/${testData.user.uniqueId}`, {
+      displayName: originalName,
+    });
   });
 
   // ── Test 2: Negative number in coin field ──

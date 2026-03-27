@@ -199,14 +199,13 @@ test.describe('Admin Backups Tab', () => {
     const recoverBtn = page.locator('#backup-recover-photos-btn');
     await recoverBtn.click();
 
-    // Button should show processing state
-    await expect(recoverBtn).toBeDisabled();
-
-    // Wait for completion and verify toast
+    // Wait for the toast to appear (success or error) — the API call may
+    // resolve/reject almost instantly in emulator mode, so checking the
+    // intermediate disabled state is racy.
     const toast = page.locator('#toast');
     await expect(toast).toBeVisible({ timeout: 30_000 });
 
-    // Button should re-enable
+    // Button should re-enable after the operation completes
     await expect(recoverBtn).toBeEnabled({ timeout: 30_000 });
   });
 

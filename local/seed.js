@@ -249,6 +249,8 @@ async function seed() {
     { id: "local-gift-13", name: "Spaceship", coinValue: 300 },
     { id: "local-gift-14", name: "Piano", coinValue: 500 },
     { id: "local-gift-15", name: "Yacht", coinValue: 1000 },
+    { id: "local-gift-16", name: "Trophy", coinValue: 75 },
+    { id: "local-gift-17", name: "Balloon", coinValue: 15 },
   ];
   for (const g of extraGifts) {
     await seedIfMissing(`gifts/${g.id}`, {
