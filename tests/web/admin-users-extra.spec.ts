@@ -284,7 +284,8 @@ test.describe('Admin Users - Extra Profile Fields', () => {
     await page.locator('#temp-id-apply').click();
     await expect(page.locator('#temp-id-current')).toContainText('55555555', { timeout: 10_000 });
 
-    // Click Clear
+    // Click Clear (accept the confirm dialog)
+    page.once('dialog', (dialog) => dialog.accept());
     await page.locator('#temp-id-clear').click();
 
     // Verify display shows none/empty

@@ -41,6 +41,7 @@ const writeLimiter = rateLimit({
 });
 
 // Sensitive operations (appeals, reports, purchases): 5 per minute per user
+// Admin users are exempt — admin panel tests legitimately create reports/appeals.
 const sensitiveLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 5,
@@ -48,6 +49,7 @@ const sensitiveLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator,
   validate: false,
+  skip: (req) => req.auth?.token?.admin === true,
   handler: (req, res) => {
     log.warn('rateLimit', 'Sensitive rate limit hit', {
       uid: req.auth?.uid,

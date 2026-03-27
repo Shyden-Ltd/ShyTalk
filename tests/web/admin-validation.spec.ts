@@ -87,8 +87,12 @@ test.describe('Admin Validation', () => {
   test('NaN input in number field is handled gracefully', async ({ page, testData }) => {
     await switchUserSubtab(page, 'economy');
 
-    // Try to enter "abc" in coin amount
-    await page.locator('#eco-coins-amount').fill('abc');
+    // Try to enter "abc" in coin amount — use evaluate since Playwright
+    // blocks non-numeric text in <input type="number">
+    await page.locator('#eco-coins-amount').evaluate((el: HTMLInputElement) => {
+      el.value = 'abc';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
     await page.locator('#eco-coins-apply').click();
 
     // Wait for response

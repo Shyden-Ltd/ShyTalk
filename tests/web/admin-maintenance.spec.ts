@@ -132,7 +132,7 @@ test.describe('Admin Maintenance Tab', () => {
     await btn.click();
 
     // Button should show processing
-    await expect(btn).toHaveText('Processing...');
+    await expect(btn).toHaveText('Backfilling...');
 
     // Result should become visible with success class
     await expect(result).toBeVisible({ timeout: 30_000 });

@@ -112,6 +112,10 @@ test.describe('Admin Gifts Tab', () => {
     await fillAndTrigger(page, newRow.locator('[data-field="name"]'), giftName);
     await fillAndTrigger(page, newRow.locator('[data-field="coinValue"]'), giftValue);
 
+    // Uncheck showOnWheel so the wheel count stays at 16 (required for Apply)
+    const wheelCheckbox = newRow.locator('[data-field="showOnWheel"]');
+    if (await wheelCheckbox.isChecked()) await wheelCheckbox.uncheck();
+
     // Apply button should show badge with count >= 1
     const badge = page.locator('#gift-apply-btn .badge');
     await expect(badge).not.toHaveText('0');

@@ -81,6 +81,7 @@ router.post('/test/setup', async (req, res) => {
         pityCounter: 0,
         isSuspended: false,
         createdAt: now,
+        lastSeenAt: now,
         _testRun: testRunId,
       };
       await db.doc(`users/${uniqueId}`).set(userData);

@@ -5424,7 +5424,11 @@
       const update = () => {
         const len = input.value.length;
         counterEl.textContent = len + "/" + max;
-        counterEl.className = (len < min || len > max) ? "char-counter over-limit" : "char-counter";
+        if (len < min || len > max) {
+          counterEl.classList.add("over-limit");
+        } else {
+          counterEl.classList.remove("over-limit");
+        }
       };
       input.addEventListener("input", update);
       update();
@@ -5748,6 +5752,9 @@
       if (deletedCount > 0) {
         deletedScreensSection.style.display = "block";
         deletedScreensTitle.textContent = "Deleted Screens (" + deletedCount + ")";
+        deletedScreensList.style.display = "block";
+        var arrow = document.getElementById("deleted-screens-arrow");
+        if (arrow) arrow.style.transform = "rotate(90deg)";
         for (var did in deletedScreens) { deletedScreensList.appendChild(renderDeletedScreenCard(did, deletedScreens[did])); }
       } else {
         deletedScreensSection.style.display = "none";
@@ -8366,7 +8373,8 @@
         const data = await resp.json();
         if (!resp.ok) throw new Error(data.error || "Save failed");
 
-        info.textContent = `Saved: ${data.updatedFields.join(", ")}`;
+        const fields = Array.isArray(data.updatedFields) ? data.updatedFields : Object.keys(updates);
+        info.textContent = `Saved: ${fields.join(", ")}`;
         info.style.color = "var(--success)";
         showToast("Economy config saved", "success");
       } catch (err) {

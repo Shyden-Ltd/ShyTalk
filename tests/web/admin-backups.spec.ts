@@ -192,6 +192,9 @@ test.describe('Admin Backups Tab', () => {
 
   // ── Test 7: Recover photos ──
   test('recover photos from R2 shows success toast', async ({ page }) => {
+    // Accept the confirm dialog
+    page.on('dialog', (dialog) => dialog.accept());
+
     // Click Recover Photos from R2
     const recoverBtn = page.locator('#backup-recover-photos-btn');
     await recoverBtn.click();

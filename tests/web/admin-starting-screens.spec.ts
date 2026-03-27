@@ -296,9 +296,12 @@ test.describe("Starting Screens Admin Section", () => {
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       const titleInput = card.locator(".title-input");
-      // Fill with 101 characters (maxlength=100 prevents typing more, so use fill + eval)
-      // The counter monitors input length — type enough to reach/exceed
-      await titleInput.fill("a".repeat(101));
+      // maxlength=100 prevents fill() from exceeding 100 chars,
+      // so bypass it via evaluate and dispatch an input event
+      await titleInput.evaluate((el: HTMLInputElement, val: string) => {
+        el.value = val;
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      }, "a".repeat(101));
 
       const counter = card.locator(".title-counter");
       await expect(counter).toHaveClass(/over-limit/);
@@ -875,13 +878,14 @@ test.describe("Starting Screens Admin Section", () => {
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       const freqToggle = card.locator(".frequency-select");
+      const toggleLabel = card.locator(".frequency-toggle-switch");
 
-      // Check the toggle (ON = once)
-      if (!(await freqToggle.isChecked())) await freqToggle.check();
+      // Check the toggle (ON = once) — click the label since the checkbox is visually hidden
+      if (!(await freqToggle.isChecked())) await toggleLabel.click();
       expect(await freqToggle.isChecked()).toBe(true);
 
       // Uncheck (OFF = every_launch)
-      await freqToggle.uncheck();
+      await toggleLabel.click();
       expect(await freqToggle.isChecked()).toBe(false);
     } finally {
       await deleteScreenViaApi(page, screenId);
