@@ -208,6 +208,9 @@ test.describe('Admin Appeals', () => {
 
   // ── Test 6: User profile preview — avatar, name, uniqueId in card ──
   test('appeal card shows user profile preview with name and uniqueId', async ({ page, testData }) => {
+    // Ensure a pending appeal exists (previous test may have failed before reseeding)
+    await reseedAppeal(testData);
+
     await filterAppeals(page, 'pending');
 
     const firstCard = page.locator('.appeal-card').first();

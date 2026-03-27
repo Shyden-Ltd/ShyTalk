@@ -2,18 +2,21 @@ import { test, expect, TestData } from './fixtures/admin';
 import { adminLogin, navigateToTab } from './helpers/admin-auth';
 import { Page } from '@playwright/test';
 
-/** Wait for the banners list to finish loading (spinner disappears). */
+/** Wait for the banners list to finish loading (actual content rendered, not just spinner gone). */
 async function waitForBannersLoaded(page: Page): Promise<void> {
-  // Wait for banner cards, empty-state message, or loading to finish (no spinner)
+  // Wait for either banner cards OR the empty-state <p> with "No banners yet".
+  // Do NOT treat an empty/cleared list as loaded — that's a transient state between
+  // clearing the old content and rendering the new content in renderBannersList().
   await page.waitForFunction(
     () => {
       const list = document.getElementById('banners-list');
       if (!list) return false;
-      // Banner cards loaded, or empty state <p>, or list cleared after error
+      // Banner cards have been rendered
       if (list.querySelector('.banner-card') !== null) return true;
-      if (list.querySelector('p') !== null) return true;
-      // Loading state has a spinner div; once loading finishes, it's either cards, <p>, or empty
-      return list.childElementCount === 0 && !list.textContent?.includes('Loading');
+      // Empty state: a <p> element containing the "No banners yet" message
+      const p = list.querySelector('p');
+      if (p && p.textContent && p.textContent.includes('No banners yet')) return true;
+      return false;
     },
     { timeout: 15_000 },
   );

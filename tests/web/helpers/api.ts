@@ -1,6 +1,12 @@
 import { Page } from '@playwright/test';
 
-const API_BASE = process.env.API_BASE_URL || 'https://dev-api.shytalk.shyden.co.uk';
+if (!process.env.API_BASE_URL) {
+  throw new Error(
+    'API_BASE_URL must be explicitly set for Playwright tests. ' +
+    'Use http://localhost:3000 for local or set it in CI workflows.',
+  );
+}
+const API_BASE = process.env.API_BASE_URL;
 const TEST_API_KEY = process.env.TEST_API_KEY || '';
 
 export interface SetupUserPayload {

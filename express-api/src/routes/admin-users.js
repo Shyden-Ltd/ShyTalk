@@ -70,6 +70,14 @@ function normalizeUser(user) {
     if (preName) user.displayName = preName;
     if (prePhoto) user.profilePhotoUrl = prePhoto;
     if (preCover) user.coverPhotoUrl = preCover;
+    // Expose _preSuspension object for the admin panel's pre-suspension info section
+    if (preName || prePhoto || preCover) {
+      user._preSuspension = {
+        displayName: preName || null,
+        profilePhotoUrl: prePhoto || null,
+        coverPhotoUrl: preCover || null,
+      };
+    }
   }
   user.dateOfBirth = user.dateOfBirth ?? user.date_of_birth ?? null;
   user.uniqueId = user.uniqueId ?? user.unique_id ?? null;

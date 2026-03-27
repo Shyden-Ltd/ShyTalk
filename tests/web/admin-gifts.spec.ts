@@ -351,7 +351,28 @@ test.describe('Admin Gifts Tab', () => {
     const giftId = await row.getAttribute('data-gift-id');
     const originalWheel = await row.locator('[data-field="showOnWheel"]').isChecked();
 
-    // Toggle showOnWheel checkbox (leave showInStore true so the gift stays visible)
+    // Find a compensating gift row with the opposite showOnWheel state.
+    // Toggling both keeps the wheel count at exactly 16 (required for Apply).
+    const allRows = page.locator('#gifts-tbody tr[data-gift-id]');
+    const rowCount = await allRows.count();
+    let compensateRow: ReturnType<Page['locator']> | null = null;
+    let compensateId = '';
+    let compensateOriginal = false;
+    for (let i = 0; i < rowCount; i++) {
+      const r = allRows.nth(i);
+      const rId = await r.getAttribute('data-gift-id');
+      if (rId === giftId) continue;
+      const rWheel = await r.locator('[data-field="showOnWheel"]').isChecked();
+      if (rWheel !== originalWheel) {
+        compensateRow = r;
+        compensateId = rId || '';
+        compensateOriginal = rWheel;
+        break;
+      }
+    }
+    expect(compensateRow).not.toBeNull();
+
+    // Toggle showOnWheel on the primary gift
     const wheelCheckbox = row.locator('[data-field="showOnWheel"]');
     if (originalWheel) {
       await wheelCheckbox.uncheck();
@@ -360,8 +381,18 @@ test.describe('Admin Gifts Tab', () => {
     }
     await wheelCheckbox.dispatchEvent('change');
 
-    // Row should be marked as modified
+    // Toggle the compensating gift in the opposite direction to maintain wheel count = 16
+    const compCheckbox = compensateRow!.locator('[data-field="showOnWheel"]');
+    if (compensateOriginal) {
+      await compCheckbox.uncheck();
+    } else {
+      await compCheckbox.check();
+    }
+    await compCheckbox.dispatchEvent('change');
+
+    // Both rows should be marked as modified
     await expect(row).toHaveClass(/gift-modified/);
+    await expect(compensateRow!).toHaveClass(/gift-modified/);
 
     // Apply and confirm
     await applyAndConfirm(page);
@@ -383,7 +414,7 @@ test.describe('Admin Gifts Tab', () => {
     expect(apiGift).toBeTruthy();
     expect(apiGift.showOnWheel).toBe(!originalWheel);
 
-    // Restore original state
+    // Restore original state for both gifts
     const restoredCheckbox = reloadedRow.locator('[data-field="showOnWheel"]');
     if (originalWheel) {
       await restoredCheckbox.check();
@@ -391,6 +422,16 @@ test.describe('Admin Gifts Tab', () => {
       await restoredCheckbox.uncheck();
     }
     await restoredCheckbox.dispatchEvent('change');
+
+    const reloadedCompRow = page.locator(`#gifts-tbody tr[data-gift-id="${compensateId}"]`);
+    const restoredCompCheckbox = reloadedCompRow.locator('[data-field="showOnWheel"]');
+    if (compensateOriginal) {
+      await restoredCompCheckbox.check();
+    } else {
+      await restoredCompCheckbox.uncheck();
+    }
+    await restoredCompCheckbox.dispatchEvent('change');
+
     await applyAndConfirm(page);
   });
 
