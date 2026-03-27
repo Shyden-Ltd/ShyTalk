@@ -218,6 +218,15 @@ test.describe('Admin Reports', () => {
 
   // ── Test 6: Resolve as suspended — verify user suspended, then unsuspend ──
   test('resolve as suspended suspends the user', async ({ page, testData }) => {
+    // Ensure a pending report exists (previous test may have consumed it or re-seed may be stale)
+    await unsuspendAndResetGcs(testData);
+    await seedReportViaApi(testData);
+
+    // Reload to pick up the freshly seeded report
+    await page.reload();
+    await adminLogin(page);
+    await navigateToTab(page, 'Reports');
+    await waitForReportsLoaded(page);
     await filterReports(page, 'pending');
 
     const firstCard = page.locator('.report-card').first();
@@ -417,17 +426,16 @@ test.describe('Admin Reports', () => {
 
     const uid = await firstCard.getAttribute('data-uid');
 
-    // Verify severity radios exist and show correct deductions
+    // Verify severity labels exist and show correct deductions
+    // (radio inputs are display:none — verify via labels and checked state)
     for (const sev of [1, 2, 3, 4, 5]) {
-      const radio = firstCard.locator(`input#sev-${uid}-${sev}`);
-      await expect(radio).toBeVisible();
-
       const label = firstCard.locator(`label[for="sev-${uid}-${sev}"]`);
+      await expect(label).toBeVisible();
       await expect(label).toContainText(`${sev} (-${sev * 5})`);
     }
 
-    // Select severity 3 and verify
-    await firstCard.locator(`input#sev-${uid}-3`).check();
+    // Select severity 3 by clicking the label and verify checked state
+    await firstCard.locator(`label[for="sev-${uid}-3"]`).click();
     await expect(firstCard.locator(`input#sev-${uid}-3`)).toBeChecked();
     await expect(firstCard.locator(`input#sev-${uid}-1`)).not.toBeChecked();
   });

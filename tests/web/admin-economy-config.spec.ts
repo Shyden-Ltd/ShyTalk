@@ -329,6 +329,22 @@ test.describe('Admin Economy Config', () => {
 
   // ── Test 14: Milestone type toggle ──
   test('milestone type toggle — gift type shows gift select', async ({ page, testData }) => {
+    // Ensure at least one gift exists in the catalog so the dropdown is populated
+    const allGifts = await testData.api.get('/api/gifts/all');
+    const giftList = Array.isArray(allGifts) ? allGifts : (allGifts.gifts || []);
+    if (giftList.length === 0) {
+      // Seed a temporary gift so the milestone gift select has options
+      await testData.api.testWrite('gifts', {
+        name: 'E2E Test Gift',
+        coinValue: 10,
+        showInStore: true,
+        showOnWheel: true,
+        order: 999,
+      });
+      // Reload to pick up the new gift in giftsCache
+      await reloadAndNavigateToEconomy(page);
+    }
+
     // Add a new milestone
     await page.locator('#ms-add-btn').click();
     const newRow = page.locator('#milestone-rows .milestone-row').last();
@@ -348,15 +364,25 @@ test.describe('Admin Economy Config', () => {
 
     // Select a gift from the dropdown (first non-empty option)
     const giftSelect = updatedRow.locator('.ms-gift-select');
+    // Wait for gift options to populate (giftsCache must be loaded)
+    await page.waitForFunction(
+      () => {
+        const rows = document.querySelectorAll('#milestone-rows .milestone-row');
+        const lastRow = rows[rows.length - 1];
+        if (!lastRow) return false;
+        const sel = lastRow.querySelector('.ms-gift-select') as HTMLSelectElement;
+        return sel && sel.options.length > 1;
+      },
+      { timeout: 10_000 },
+    );
     const options = giftSelect.locator('option');
     const optCount = await options.count();
-    if (optCount > 1) {
-      // Select the second option (first is the placeholder)
-      const secondVal = await options.nth(1).getAttribute('value');
-      if (secondVal) {
-        await giftSelect.selectOption(secondVal);
-      }
-    }
+    expect(optCount).toBeGreaterThan(1);
+
+    // Select the second option (first is the placeholder)
+    const secondVal = await options.nth(1).getAttribute('value');
+    expect(secondVal).toBeTruthy();
+    await giftSelect.selectOption(secondVal!);
 
     // Save
     await saveEconomyConfig(page);

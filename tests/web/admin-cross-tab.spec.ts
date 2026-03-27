@@ -97,8 +97,8 @@ test.describe('Admin Cross-Tab Interactions', () => {
     const actionSelect = firstCard.locator(`select[data-action-select="${uid}"]`);
     await actionSelect.selectOption('warn');
 
-    const sevRadio = firstCard.locator(`input#sev-${uid}-2`);
-    await sevRadio.check();
+    // Radio inputs are display:none — click the label instead
+    await firstCard.locator(`label[for="sev-${uid}-2"]`).click();
 
     const resolveBtn = firstCard.locator(`button[data-resolve-first="${uid}"]`);
     await resolveBtn.click();

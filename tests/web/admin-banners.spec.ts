@@ -107,8 +107,15 @@ test.describe('Admin Banners', () => {
 
   // ── Test 1: Seeded banner appears in list — API verify ──
   test('seeded banner appears in list with API verification', async ({ page, testData }) => {
-    // Verify the seeded banner card is visible in the UI
+    // Verify the seeded banner card is visible in the UI (retry once on reload if not found)
     const card = page.locator(`.banner-card[data-banner-id="${testData.banner.id}"]`);
+    if (!await card.isVisible().catch(() => false)) {
+      // Banner not yet rendered — reload and retry once
+      await page.reload();
+      await adminLogin(page);
+      await navigateToTab(page, 'Banners');
+      await waitForBannersLoaded(page);
+    }
     await expect(card).toBeVisible({ timeout: 10_000 });
 
     // Verify the title text within the card

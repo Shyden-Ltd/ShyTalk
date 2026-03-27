@@ -34,12 +34,26 @@ async function getAppealsViaApi(testData: TestData, status: string): Promise<any
 
 /** Re-seed appeal: suspend user, enable canAppeal, create a new appeal. */
 async function reseedAppeal(testData: TestData): Promise<string> {
-  // Suspend user with canAppeal=true
-  await testData.api.post(`/api/user/${testData.user.uniqueId}/suspend`, {
-    reason: 'E2E reseed',
-    days: 7,
-    canAppeal: true,
-  });
+  // Suspend user with canAppeal=true (tolerant — user may already be suspended)
+  try {
+    await testData.api.post(`/api/user/${testData.user.uniqueId}/suspend`, {
+      reason: 'E2E reseed',
+      days: 7,
+      canAppeal: true,
+    });
+  } catch (err) {
+    console.warn('reseedAppeal: suspend call failed (user may already be suspended):', err);
+    // Ensure canAppeal is set even if suspend throws
+    try {
+      await testData.api.testWrite('users', {
+        id: String(testData.user.uniqueId),
+        isSuspended: true,
+        suspensionCanAppeal: true,
+      });
+    } catch (writeErr) {
+      console.warn('reseedAppeal: fallback testWrite also failed:', writeErr);
+    }
+  }
   // Create a new appeal directly in Firestore via test helper.
   // We cannot use POST /api/appeals because that endpoint checks if the
   // *caller* (admin) is suspended, not the target user.
@@ -211,6 +225,11 @@ test.describe('Admin Appeals', () => {
     // Ensure a pending appeal exists (previous test may have failed before reseeding)
     await reseedAppeal(testData);
 
+    // Reload to pick up the freshly written appeal
+    await page.reload();
+    await adminLogin(page);
+    await navigateToTab(page, 'Appeals');
+    await waitForAppealsLoaded(page);
     await filterAppeals(page, 'pending');
 
     const firstCard = page.locator('.appeal-card').first();
