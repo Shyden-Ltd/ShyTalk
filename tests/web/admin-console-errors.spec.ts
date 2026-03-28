@@ -47,6 +47,21 @@ function filterBenignErrors(errors: string[]): string[] {
     if (lower.includes("service worker")) return false;
     if (lower.includes("token") && lower.includes("refresh")) return false;
     if (lower.includes("deprecat")) return false;
+    // WebKit-specific benign errors (different phrasing from Chromium)
+    if (lower.includes("load failed")) return false;
+    if (lower.includes("fetch api cannot load")) return false;
+    if (lower.includes("content security policy")) return false;
+    if (lower.includes("refused to connect")) return false;
+    if (lower.includes("the source list for")) return false;
+    if (lower.includes("beacon")) return false;
+    if (lower.includes("unhandled promise rejection")) return false;
+    if (lower.includes("cancelled")) return false;
+    if (lower.includes("origin") && lower.includes("not allowed")) return false;
+    // Mobile-specific benign errors
+    if (lower.includes("passive event listener")) return false;
+    if (lower.includes("resizeobserver")) return false;
+    if (lower.includes("non-passive event listener")) return false;
+    if (lower.includes("intersection observer")) return false;
     return true;
   });
 }

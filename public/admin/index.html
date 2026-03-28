@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <meta http-equiv="X-Frame-Options" content="DENY">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.google.com https://recaptcha.net; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: http://localhost:*; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://*.shytalk.shyden.co.uk https://recaptcha.net http://localhost:*; frame-ancestors 'none';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.google.com https://recaptcha.net; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: http://localhost:*; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://*.shytalk.shyden.co.uk wss://*.shytalk.shyden.co.uk https://recaptcha.net http://localhost:* ws://localhost:*; frame-ancestors 'none';">
     <meta name="theme-color" content="#0f1117">
     <title>ShyTalk Admin</title>
     <style>
@@ -2794,6 +2794,16 @@
           .logs-table .col-source, .logs-table .col-user { display: none; }
           .logs-table th:nth-child(3), .logs-table td:nth-child(3),
           .logs-table th:nth-child(4), .logs-table td:nth-child(4) { display: none; }
+          /* Stack screen-card form and preview vertically on narrow viewports */
+          .screen-card { grid-template-columns: 1fr; }
+          .screen-card-preview { width: 100%; max-width: 260px; margin: 0 auto; }
+          .screen-card-preview.tablet { width: 100%; max-width: 380px; }
+          /* Allow alerts table to scroll horizontally */
+          #logs-alerts-section .logs-section-body { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+          .alerts-table { min-width: 500px; }
+          /* Allow devices table to scroll horizontally */
+          #devices-table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+          .devices-table { min-width: 700px; }
         }
 
         @media (max-width: 480px) {
@@ -2803,6 +2813,8 @@
           .gifts-table .gift-url-input { width: 60px; font-size: 11px; }
           .gifts-table .gift-order-input { width: 40px; }
           .gift-actions button { padding: 3px 6px; font-size: 11px; }
+          /* Ensure toast fits on narrow screens */
+          .toast { right: 12px; left: 12px; max-width: none; }
         }
 
         /* Profile Preview Panel — side-by-side */
@@ -3932,7 +3944,7 @@
         <!-- Spin Monitor Panel -->
         <div id="monitor-panel">
             <div class="monitor-search">
-                <input type="number" id="monitor-uid-input" placeholder="Enter ShyTalk User ID"
+                <input type="text" inputmode="numeric" pattern="[0-9]*" id="monitor-uid-input" placeholder="Enter ShyTalk User ID"
                        aria-label="User ID to monitor">
                 <button id="monitor-start-btn">Start Monitoring</button>
                 <button id="monitor-stop-btn" class="btn-stop" style="display:none;">Stop</button>
@@ -9946,6 +9958,12 @@
       const liveDot = tabMonitor.querySelector(".tab-live-dot");
       if (liveDot) liveDot.remove();
     }
+
+    // Strip non-digit characters from monitor UID input (type="text" for cross-browser compat)
+    monitorUidInput.addEventListener("input", () => {
+      const cleaned = monitorUidInput.value.replace(/\D/g, "");
+      if (cleaned !== monitorUidInput.value) monitorUidInput.value = cleaned;
+    });
 
     // Wire up monitor buttons
     monitorStartBtn.addEventListener("click", () => {

@@ -85,23 +85,12 @@ test.describe('Admin Realtime Features', () => {
     // Seed a new report via API
     await seedReport(testData);
 
-    // Wait for onSnapshot to deliver the new report (up to 10s)
-    // The report list should update without a page refresh
-    await page.waitForTimeout(5_000);
-
-    // Check if the new report appeared
-    const updatedCards = page.locator('.report-card');
-    const updatedCount = await updatedCards.count();
-
-    // The count should have increased or the content should have changed
-    // onSnapshot may merge into existing group or add new one
-    // Verify by checking the report count badge values
-    const reportsList = page.locator('#reports-list');
-    const listText = await reportsList.textContent();
-    // listText verified implicitly by the count assertion below
-
-    // The count must have increased — proves the onSnapshot listener delivered the new report
-    expect(updatedCount).toBeGreaterThan(initialCount);
+    // Poll for onSnapshot to deliver the new report (WebKit's Firestore
+    // transport can be slower than Chromium's, so a static wait is unreliable)
+    await expect(async () => {
+      const updatedCount = await page.locator('.report-card').count();
+      expect(updatedCount).toBeGreaterThan(initialCount);
+    }).toPass({ timeout: 15_000 });
   });
 
   // ── Test 2: Spin monitor live coins update ──
