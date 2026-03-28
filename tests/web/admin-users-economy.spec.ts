@@ -192,19 +192,20 @@ test.describe('Admin Users - Economy Subtab', () => {
   test('remove gift from backpack', async ({ page, testData }) => {
     const uid = String(testData.user.uniqueId);
 
-    // Get a gift ID from the API (avoids depending on the UI dropdown timing)
+    // Get a gift ID from the API
     const allGifts = await testData.api.get('/api/gifts/all');
     const giftList = Array.isArray(allGifts) ? allGifts : (allGifts.gifts || []);
     expect(giftList.length).toBeGreaterThan(0);
     const firstGiftId = giftList[0].id;
 
-    // Add the gift via API
+    // Add the gift via API and trigger a backpack refresh in the UI
     await testData.api.post(`/api/users/${uid}/backpack`, {
       giftId: firstGiftId, quantity: 2, silent: true,
     });
 
-    // Reload to see the gift in the backpack
-    await reloadAndNavigateToEconomy(page, uid);
+    // Trigger backpack reload by clicking the refresh area (switching subtabs)
+    await switchUserSubtab(page, 'profile');
+    await switchUserSubtab(page, 'economy');
 
     // Verify the gift is present
     const backpackGrid = page.locator('#backpack-grid');
