@@ -236,8 +236,10 @@ test.describe('Admin Users - Economy Subtab', () => {
   test('transaction history shows admin adjustments', async ({ page, testData }) => {
     const uid = String(testData.user.uniqueId);
 
-    // Read current balance before adding
-    const beforeText = await page.locator('#eco-coins-display').textContent();
+    // Wait for economy data to load, then read current balance
+    const coinsDisplay = page.locator('#eco-coins-display');
+    await expect(coinsDisplay).not.toHaveText('0');
+    const beforeText = await coinsDisplay.textContent();
     const beforeBalance = Number(beforeText) || 0;
 
     // Add 100 coins to create a transaction
