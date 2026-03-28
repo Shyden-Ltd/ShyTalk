@@ -287,44 +287,20 @@ test.describe('Admin Spin Monitor', () => {
     const summary = page.locator('#spin-history-summary');
     const feed = page.locator('#spin-feed');
 
-    // Initially the collapsible is closed — check the custom .open property
-    const initiallyOpen = await toggle.evaluate(
-      (el: any) => el.open,
-    );
+    // Scroll summary into view (may be below fold on mobile)
+    await summary.scrollIntoViewIfNeeded();
 
-    if (initiallyOpen) {
-      // Close it
-      await summary.click();
-      // Verify feed is hidden (closed)
-      const isOpenAfterClose = await toggle.evaluate(
-        (el: any) => el.open,
-      );
-      expect(isOpenAfterClose).toBe(false);
+    // Initially closed
+    expect(await toggle.evaluate((el: any) => el.open)).toBe(false);
 
-      // Open it again
-      await summary.click();
-      const isOpenAfterReopen = await toggle.evaluate(
-        (el: any) => el.open,
-      );
-      expect(isOpenAfterReopen).toBe(true);
-    } else {
-      // Open it
-      await summary.click();
-      const isOpenAfterOpen = await toggle.evaluate(
-        (el: any) => el.open,
-      );
-      expect(isOpenAfterOpen).toBe(true);
+    // Open it
+    await summary.click();
+    expect(await toggle.evaluate((el: any) => el.open)).toBe(true);
+    await expect(feed).toBeVisible();
 
-      // The spin feed should be visible
-      await expect(feed).toBeVisible();
-
-      // Close it
-      await summary.click();
-      const isOpenAfterClose = await toggle.evaluate(
-        (el: any) => el.open,
-      );
-      expect(isOpenAfterClose).toBe(false);
-    }
+    // Close it
+    await summary.click();
+    expect(await toggle.evaluate((el: any) => el.open)).toBe(false);
 
     // Clean up
     await stopMonitoring(page);
