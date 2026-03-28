@@ -361,7 +361,12 @@ router.post('/test/write/:collection', async (req, res) => {
     }
 
     const docId = data.id || generateId();
-    await db.doc(`${collection}/${docId}`).set({ ...data, id: docId }, { merge: true });
+    const writeData = { ...data, id: docId };
+    // Propagate _testRun so teardown can clean up documents created via this endpoint
+    if (data._testRun) {
+      writeData._testRun = data._testRun;
+    }
+    await db.doc(`${collection}/${docId}`).set(writeData, { merge: true });
 
     res.json({ success: true, id: docId });
   } catch (err) {

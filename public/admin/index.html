@@ -4722,18 +4722,22 @@
       return $(`#${map[field]}`);
     }
 
-    async function autoSaveListField(field) {
+    const _listFieldTimers = {};
+    function autoSaveListField(field) {
       if (!currentUid) return;
-      const items = (listWidgetData[field] || [])
-        .map((s) => s.replace(/\s*\(.*\)$/, "").trim())
-        .filter(Boolean)
-        .map(Number)
-        .filter((n) => !isNaN(n));
-      try {
-        await apiCall("PATCH", `/api/user/${currentUid}`, { [field]: items });
-      } catch (err) {
-        showToast(`Failed to save ${field}: ${err.message}`, "error");
-      }
+      clearTimeout(_listFieldTimers[field]);
+      _listFieldTimers[field] = setTimeout(async () => {
+        const items = (listWidgetData[field] || [])
+          .map((s) => s.replace(/\s*\(.*\)$/, "").trim())
+          .filter(Boolean)
+          .map(Number)
+          .filter((n) => !isNaN(n));
+        try {
+          await apiCall("PATCH", `/api/user/${currentUid}`, { [field]: items }, { skipTabAbort: true });
+        } catch (err) {
+          showToast(`Failed to save ${field}: ${err.message}`, "error");
+        }
+      }, 300);
     }
 
     function renderListWidget(field) {
@@ -5315,30 +5319,6 @@
 
     // --- Search ---
     // NOTE: The authoritative search handler is doSearchFinal (registered below).
-    // Do NOT register doSearch here — it was superseded by doSearchUpdated
-    // and then doSearchFinal.  Multiple handlers on the same button cause
-    // triple API calls and DOM race conditions.
-
-    async function doSearch() {
-      const query = searchUid.value.trim();
-      if (!query) return;
-
-      searchBtn.disabled = true;
-      searchBtn.textContent = "Searching...";
-      userForm.classList.remove("visible");
-      document.getElementById("user-subtabs").style.display = "none";
-      document.getElementById("profile-preview").style.display = "none";
-
-      try {
-        const data = await apiCall("GET", `/api/search/uniqueId/${query}`);
-        populateForm(data);
-      } catch (err) {
-        showToast(err.message, "error");
-      }
-
-      searchBtn.disabled = false;
-      searchBtn.textContent = "Search";
-    }
 
     // Save handler removed — replaced by per-field auto-save
 
@@ -5369,10 +5349,8 @@
     const startingScreensPanel = $("#starting-screens-panel");
     const tabStartingScreens = $("#tab-starting-screens");
     let currentTab = "users";
-    let switchTabSeq = 0; // Monotonically increasing sequence counter — stale async ops can bail out
 
     function switchTab(tab) {
-      switchTabSeq++;
       // Abort in-flight tab-specific API requests from the previous tab
       tabAbortController.abort();
       tabAbortController = new AbortController();
@@ -6058,33 +6036,7 @@
       await _originalPopulateForm(data);
       populateSuspensionSection(data);
     }
-    // Re-bind search to use new populate
-    searchBtn.removeEventListener("click", doSearch);
-    searchUid.removeEventListener("keydown", doSearch);
-
-    async function doSearchUpdated() {
-      const query = searchUid.value.trim();
-      if (!query) return;
-
-      searchBtn.disabled = true;
-      searchBtn.textContent = "Searching...";
-      userForm.classList.remove("visible");
-      document.getElementById("user-subtabs").style.display = "none";
-      document.getElementById("profile-preview").style.display = "none";
-
-      try {
-        const data = await apiCall("GET", `/api/search/uniqueId/${query}`);
-        await populateFormWithSuspension(data);
-      } catch (err) {
-        showToast(err.message, "error");
-      }
-
-      searchBtn.disabled = false;
-      searchBtn.textContent = "Search";
-    }
-
-    // NOTE: doSearchUpdated was superseded by doSearchFinal — do NOT
-    // register it here.  The authoritative handler is below.
+    // (doSearch / doSearchUpdated removed — doSearchFinal is the authoritative handler)
 
     // --- Appeals ---
     const appealsList = $("#appeals-list");
@@ -6614,10 +6566,6 @@
       btn.addEventListener("click", () => switchUserSubtab(btn.dataset.subtab));
     });
 
-    // Re-bind search again
-    searchBtn.removeEventListener("click", doSearchUpdated);
-    if (typeof _keydownUpdated === 'function') searchUid.removeEventListener("keydown", _keydownUpdated);
-
     async function doSearchFinal() {
       const q = searchUid.value.trim();
       if (!q) return;
@@ -6742,8 +6690,9 @@
       if (reportsPollInterval) clearInterval(reportsPollInterval);
       reportsPollInterval = setInterval(async () => {
         if (currentTab !== "reports") return;
+        if (resolveInProgress) return;
         try { await loadReports(); } catch (_) {}
-      }, 5000);
+      }, 15000);
     }
 
     // --- Review Lock Functions ---
@@ -9944,15 +9893,14 @@
         monitorStartBtn.textContent = "Start Monitoring";
 
         // --- Background Firestore work (non-blocking) ---
-        // Load gift catalog, all-time stats, and set up listeners concurrently.
+        // Load gift catalog first (needed for all-time stats name→value lookups),
+        // then compute all-time stats. Set up listeners concurrently.
         // These use Firestore's WebChannel which can be slow on WebKit first use,
         // but the monitor status UI is already visible above.
 
-        // Load gift catalog (needed for spin entry rendering)
-        loadGiftCatalog().catch(err => console.warn("Gift catalog load failed:", err));
-
-        // Load all-time stats from full transaction history
+        // Load gift catalog, then compute all-time stats (depends on catalog)
         (async () => {
+          await loadGiftCatalog().catch(err => console.warn("Gift catalog load failed:", err));
           try {
             const allTxQuery = query(
               collection(clientDb, "users", resolvedUniqueId, "transactions"),
@@ -9993,15 +9941,16 @@
 
         // Polling fallback: on WebKit, the Firestore WebChannel transport
         // can be extremely slow or fail to deliver onSnapshot updates.
-        // Poll the API every 3 seconds to keep the UI fresh regardless.
+        // Poll the API every 10 seconds to keep the UI fresh regardless.
         if (monitorPollInterval) clearInterval(monitorPollInterval);
         monitorPollInterval = setInterval(async () => {
           if (!monitorUid) return;
+          if (currentTab !== "monitor") return;
           try {
             const freshData = await apiCall("GET", `/api/user/${monitorUid}`, null, { skipTabAbort: true });
             if (freshData) updateMonitorStats(freshData);
           } catch (_) { /* API may intermittently fail — ignore */ }
-        }, 3000);
+        }, 10000);
 
         // Set up real-time transactions listener
         const txQuery = query(
@@ -10109,24 +10058,6 @@
         opt.value = giftId;
         opt.textContent = `${info.name} (${info.coinValue.toLocaleString()} coins)`;
         guaranteeGiftSelect.appendChild(opt);
-      }
-      // Now fetch actual gift IDs to map name -> id
-      try {
-        const giftsData = await apiCall("GET", "/api/gifts");
-        const giftList = Array.isArray(giftsData) ? giftsData : (giftsData.gifts || []);
-        // Rebuild options with proper IDs
-        while (guaranteeGiftSelect.options.length > 1) {
-          guaranteeGiftSelect.remove(1);
-        }
-        const sorted = giftList.sort((a, b) => (a.coinValue || 0) - (b.coinValue || 0));
-        for (const g of sorted) {
-          const opt = document.createElement("option");
-          opt.value = g.id;
-          opt.textContent = `${g.name} (${(g.coinValue || 0).toLocaleString()} coins)`;
-          guaranteeGiftSelect.appendChild(opt);
-        }
-      } catch (err) {
-        console.warn("Failed to load gifts for guarantee dropdown:", err);
       }
     }
 

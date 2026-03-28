@@ -573,6 +573,36 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
             error: err.message,
           }),
         );
+
+        // Send suspension PM (fire-and-forget)
+        sendSystemPm(
+          reports[0]?.reportedUserId ?? req.params.userId,
+          `Your account has been suspended.\n\nReason: Multiple reports${canAppeal ? '\n\nYou may submit an appeal.' : ''}`,
+        ).catch((err) =>
+          log.error('reports', 'Failed to send suspension PM from bulk resolve', {
+            userId: req.params.userId,
+            error: err.message,
+          }),
+        );
+
+        // Audit log for suspension action
+        db.doc(`adminAuditLog/${generateId()}`)
+          .set(
+            {
+              adminId: req.auth.uid,
+              action: 'SUSPEND',
+              targetUserId: reportedUniqueId,
+              details: `Suspended via bulk resolve (${reports.length} reports)`,
+              createdAt: timestamp,
+            },
+            { merge: true },
+          )
+          .catch((err) =>
+            log.error('reports', 'Failed to write suspension audit log from bulk resolve', {
+              userId: reportedUniqueId,
+              error: err.message,
+            }),
+          );
       } catch (susErr) {
         log.error('reports', 'Failed to suspend user from bulk resolve', {
           userId: req.params.userId,
