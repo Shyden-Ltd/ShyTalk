@@ -354,12 +354,12 @@ test.describe('Admin Cross-Tab Interactions', () => {
     await expect(page.locator('#maintenance-panel')).toBeVisible();
     await page.locator('#backfill-user-type-btn').click();
 
-    // Wait for toast to appear
-    const toast = page.locator('.toast.visible');
-    await expect(toast).toBeVisible();
+    // Wait for toast to appear (check by ID — the .visible class is transient)
+    const toast = page.locator('#toast');
+    await expect(toast).toHaveClass(/visible/);
 
-    // Wait for toast to auto-dismiss (typically 3-5s)
-    await expect(toast).not.toBeVisible();
+    // Wait for toast to auto-dismiss (success toasts dismiss after 4s)
+    await expect(toast).not.toHaveClass(/visible/);
   });
 
   // ── Test 9: Toast error persists ──

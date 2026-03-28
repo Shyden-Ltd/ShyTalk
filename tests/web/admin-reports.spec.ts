@@ -228,25 +228,25 @@ test.describe('Admin Reports', () => {
     await waitForReportsLoaded(page);
     await filterReports(page, 'pending');
 
-    const firstCard = page.locator('.report-card').first();
-    await expect(firstCard).toBeVisible();
-
-    const uid = await firstCard.getAttribute('data-uid');
+    // Find the card for our test user specifically (other pending reports may exist)
+    const uid = String(testData.user.uniqueId);
+    const card = page.locator(`.report-card[data-uid="${uid}"]`);
+    await expect(card).toBeVisible();
 
     // Select "Suspend" action
-    const actionSelect = firstCard.locator(`select[data-action-select="${uid}"]`);
+    const actionSelect = card.locator(`select[data-action-select="${uid}"]`);
     await actionSelect.selectOption('suspend');
 
     // Suspension fields should become visible
-    const suspensionFields = firstCard.locator(`[data-suspension-fields="${uid}"]`);
+    const suspensionFields = card.locator(`[data-suspension-fields="${uid}"]`);
     await expect(suspensionFields).toHaveClass(/visible/);
 
     // Select 1 day suspension
-    const daysSelect = firstCard.locator(`select[data-suspension-days="${uid}"]`);
+    const daysSelect = card.locator(`select[data-suspension-days="${uid}"]`);
     await daysSelect.selectOption('1');
 
     // Click Resolve Latest
-    const resolveBtn = firstCard.locator(`button[data-resolve-first="${uid}"]`);
+    const resolveBtn = card.locator(`button[data-resolve-first="${uid}"]`);
     await resolveBtn.click();
 
     // Handle confirm dialog
