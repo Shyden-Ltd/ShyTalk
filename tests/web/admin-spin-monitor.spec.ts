@@ -290,14 +290,14 @@ test.describe('Admin Spin Monitor', () => {
     // Initially closed
     expect(await toggle.evaluate((el: any) => el.open)).toBe(false);
 
-    // Open it (use force:true — on mobile the element may be covered by
-    // floating/sticky elements that don't actually block user interaction)
-    await summary.click({ force: true });
+    // Open it via JS click (on mobile, a floating element covers the summary
+    // and intercepts Playwright's coordinate-based click)
+    await summary.evaluate((el: HTMLElement) => el.click());
     expect(await toggle.evaluate((el: any) => el.open)).toBe(true);
     await expect(feed).toBeVisible();
 
     // Close it
-    await summary.click({ force: true });
+    await summary.evaluate((el: HTMLElement) => el.click());
     expect(await toggle.evaluate((el: any) => el.open)).toBe(false);
 
     // Clean up
