@@ -7471,8 +7471,9 @@
     populateFormFull = async function(data) {
       await _origPopulateFull(data);
       populateEconomySection(data);
-      loadBackpack(String(data.uniqueId || data.uid));
-      populateGiftSelect();
+      // Load gift catalog first so backpack rendering has category/name data
+      await populateGiftSelect();
+      await loadBackpack(String(data.uniqueId || data.uid));
     };
 
     // Economy getModifiedFields override removed — economy fields now auto-save individually
@@ -8177,12 +8178,12 @@
 
     async function loadEconomyConfig() {
       try {
-        // Ensure gift catalog is available for milestone gift dropdowns
-        if (giftsCache.length === 0) {
-          try {
-            const raw = await apiCall("GET", "/api/gifts/all");
-            giftsCache = Array.isArray(raw) ? raw : (raw.gifts || []);
-          } catch (_) { /* non-fatal — gift selects will just be empty */ }
+        // Always refresh gift catalog so milestone gift dropdowns have options
+        try {
+          const raw = await apiCall("GET", "/api/gifts/all");
+          giftsCache = Array.isArray(raw) ? raw : (raw.gifts || []);
+        } catch (giftErr) {
+          console.warn("Failed to load gift catalog for milestones:", giftErr.message);
         }
 
         const token = await auth.currentUser.getIdToken();

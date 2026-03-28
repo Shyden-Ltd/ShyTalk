@@ -177,26 +177,51 @@ router.get('/reports', async (req, res) => {
       : userFiltered;
 
     // Collect all unique user IDs for enrichment
+    // User documents are keyed by uniqueId (numeric), NOT Firebase Auth UID.
+    // Build a mapping from reportedUserId → reportedUserUniqueId from report data,
+    // then use uniqueId to fetch user documents.
+    const reportedUniqueIdMap = {}; // reportedUserId → reportedUserUniqueId
+    for (const r of filtered) {
+      if (
+        r.reportedUserId &&
+        r.reportedUserUniqueId !== null &&
+        r.reportedUserUniqueId !== undefined
+      ) {
+        reportedUniqueIdMap[r.reportedUserId] = r.reportedUserUniqueId;
+      }
+    }
     const reportedUserIds = [...new Set(filtered.map((r) => r.reportedUserId).filter(Boolean))];
+    const reportedUniqueIds = [
+      ...new Set(
+        reportedUserIds
+          .map((uid) => reportedUniqueIdMap[uid])
+          .filter((id) => id !== null && id !== undefined),
+      ),
+    ];
     const reporterIds = [...new Set(filtered.map((r) => r.reporterId).filter(Boolean))];
 
     // Parallel-fetch user enrichment data and report locks
     const [reportedUserDocs, reporterDocs, locks] = await Promise.all([
-      Promise.all(reportedUserIds.map((uid) => getDoc(`users/${uid}`))),
+      Promise.all(reportedUniqueIds.map((uid) => getDoc(`users/${uid}`))),
       Promise.all(reporterIds.map((uid) => getDoc(`users/${uid}`))),
       queryDocs(db.collection('reportLocks')),
     ]);
 
-    // Build lookup maps
+    // Build lookup maps — index by reportedUserId for enrichment
     const userMap = {};
-    for (let i = 0; i < reportedUserIds.length; i++) {
+    for (let i = 0; i < reportedUniqueIds.length; i++) {
       const reportedUser = reportedUserDocs[i];
       if (reportedUser) {
         const gcsScore = reportedUser.gcsScore ?? reportedUser.gcs_score ?? 100;
         const gcsLastDeduction =
           reportedUser.gcsLastDeductionAt ?? reportedUser.gcs_last_deduction_at ?? null;
         reportedUser.gcsDisplayScore = computeDisplayScore(gcsScore, gcsLastDeduction);
-        userMap[reportedUserIds[i]] = reportedUser;
+        // Find the reportedUserId(s) that map to this uniqueId and index by them
+        for (const [ruid, uniqueId] of Object.entries(reportedUniqueIdMap)) {
+          if (String(uniqueId) === String(reportedUniqueIds[i])) {
+            userMap[ruid] = reportedUser;
+          }
+        }
       }
     }
 
@@ -232,7 +257,11 @@ router.get('/reports', async (req, res) => {
             displayName: r.reportedUser?.displayName ?? r.reportedUser?.display_name ?? null,
             profilePhotoUrl:
               r.reportedUser?.profilePhotoUrl ?? r.reportedUser?.profile_photo_url ?? null,
-            uniqueId: r.reportedUser?.uniqueId ?? r.reportedUser?.unique_id ?? null,
+            uniqueId:
+              r.reportedUser?.uniqueId ??
+              r.reportedUser?.unique_id ??
+              r.reportedUserUniqueId ??
+              null,
             warningCount: r.reportedUser?.warningCount ?? r.reportedUser?.warning_count ?? 0,
             isSuspended: r.reportedUser?.isSuspended ?? r.reportedUser?.is_suspended ?? false,
             gcsDisplayScore: r.reportedUser?.gcsDisplayScore ?? 100,
@@ -257,7 +286,8 @@ router.get('/reports', async (req, res) => {
           displayName: r.reportedUser?.displayName ?? r.reportedUser?.display_name ?? null,
           profilePhotoUrl:
             r.reportedUser?.profilePhotoUrl ?? r.reportedUser?.profile_photo_url ?? null,
-          uniqueId: r.reportedUser?.uniqueId ?? r.reportedUser?.unique_id ?? null,
+          uniqueId:
+            r.reportedUser?.uniqueId ?? r.reportedUser?.unique_id ?? r.reportedUserUniqueId ?? null,
           warningCount: r.reportedUser?.warningCount ?? r.reportedUser?.warning_count ?? 0,
           isSuspended: r.reportedUser?.isSuspended ?? r.reportedUser?.is_suspended ?? false,
           gcsDisplayScore: r.reportedUser?.gcsDisplayScore ?? 100,
