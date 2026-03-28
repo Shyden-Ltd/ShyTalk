@@ -84,4 +84,137 @@ describe('loggerInstance (non-production / console-only)', () => {
   test('getDailyStats hardCap is Infinity on dev', () => {
     expect(logger.getDailyStats().hardCap).toBe(Infinity);
   });
+
+  test('_setDailyCount sets the daily count to the given value (line 40)', () => {
+    logger._resetDailyCount();
+    expect(logger.getDailyStats().count).toBe(0);
+
+    logger._setDailyCount(42);
+    expect(logger.getDailyStats().count).toBe(42);
+
+    logger._setDailyCount(0);
+    expect(logger.getDailyStats().count).toBe(0);
+  });
+
+  test('_setDailyCount value persists across getDailyStats calls', () => {
+    logger._setDailyCount(100);
+    expect(logger.getDailyStats().count).toBe(100);
+    expect(logger.getDailyStats().count).toBe(100); // stable
+  });
+
+  test('log increments count on top of _setDailyCount value', async () => {
+    logger._setDailyCount(5);
+    await logger.log({ level: 'INFO', source: 'test', message: 'bump' });
+    expect(logger.getDailyStats().count).toBe(6);
+  });
+
+  describe('day rollover (lines 21-22)', () => {
+    let realDate;
+
+    beforeEach(() => {
+      realDate = global.Date;
+    });
+
+    afterEach(() => {
+      global.Date = realDate;
+      logger._resetDailyCount();
+    });
+
+    test('resetIfNewDay resets counter when day changes', async () => {
+      // Set up some count on "today"
+      logger._resetDailyCount();
+      await logger.log({ level: 'INFO', source: 'test', message: 'day1' });
+      await logger.log({ level: 'INFO', source: 'test', message: 'day1b' });
+      expect(logger.getDailyStats().count).toBe(2);
+
+      // Mock Date to return tomorrow
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowISO = tomorrow.toISOString().split('T')[0];
+
+      const OriginalDate = global.Date;
+      global.Date = class extends OriginalDate {
+        constructor(...args) {
+          if (args.length === 0) {
+            super();
+            this.setDate(this.getDate() + 1);
+          } else {
+            super(...args);
+          }
+        }
+
+        toISOString() {
+          // Return tomorrow's date
+          return tomorrowISO + 'T00:00:00.000Z';
+        }
+      };
+      global.Date.now = OriginalDate.now;
+
+      // getDailyStats should reset counter because day changed
+      const stats = logger.getDailyStats();
+      expect(stats.count).toBe(0);
+    });
+
+    test('resetIfNewDay does NOT reset counter on same day', async () => {
+      logger._resetDailyCount();
+      await logger.log({ level: 'INFO', source: 'test', message: 'same day' });
+      expect(logger.getDailyStats().count).toBe(1);
+
+      // Call getDailyStats again (triggers resetIfNewDay) — same day, no reset
+      expect(logger.getDailyStats().count).toBe(1);
+    });
+  });
+});
+
+describe('loggerInstance (production branch, lines 10-12)', () => {
+  let prodLogger;
+
+  beforeEach(() => {
+    jest.resetModules();
+  });
+
+  test('production mode loads createLogger from logger module and passes db', () => {
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+
+    const mockDb = { collection: jest.fn() };
+    const mockCreateLogger = jest.fn(() => ({
+      log: jest.fn(),
+      getDailyStats: jest.fn(),
+    }));
+
+    jest.doMock('../../src/utils/firebase', () => ({ db: mockDb }));
+    jest.doMock('../../src/utils/logger', () => ({ createLogger: mockCreateLogger }));
+
+    prodLogger = require('../../src/utils/loggerInstance');
+
+    expect(mockCreateLogger).toHaveBeenCalledWith(mockDb);
+    expect(prodLogger).toBeDefined();
+    expect(typeof prodLogger.log).toBe('function');
+
+    process.env.NODE_ENV = originalEnv;
+  });
+
+  test('production logger is the return value of createLogger(db)', () => {
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+
+    const fakeProdLogger = {
+      log: jest.fn(),
+      getDailyStats: jest.fn(() => ({ count: 0, hardCap: 15000 })),
+      _resetDailyCount: jest.fn(),
+    };
+
+    jest.doMock('../../src/utils/firebase', () => ({ db: {} }));
+    jest.doMock('../../src/utils/logger', () => ({
+      createLogger: jest.fn(() => fakeProdLogger),
+    }));
+
+    prodLogger = require('../../src/utils/loggerInstance');
+
+    // Should be the exact object returned by createLogger
+    expect(prodLogger).toBe(fakeProdLogger);
+
+    process.env.NODE_ENV = originalEnv;
+  });
 });

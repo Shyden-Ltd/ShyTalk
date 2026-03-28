@@ -3,21 +3,21 @@ const mockGet = jest.fn();
 const mockSet = jest.fn().mockResolvedValue(undefined);
 const mockDocRef = { get: mockGet, set: mockSet };
 const mockDoc = jest.fn(() => mockDocRef);
-const mockSubCollection = jest.fn(() => ({ get: mockGet, doc: mockDoc }));
+const mockSubCol = jest.fn(() => ({ get: mockGet, doc: mockDoc }));
 
 // Make doc return an object with .collection() for subcollections
-const mockDocWithSub = jest.fn((...args) => {
+const mockDocSub = jest.fn((...args) => {
   mockDoc(...args);
   return {
     get: mockGet,
     set: mockSet,
-    collection: mockSubCollection,
+    collection: mockSubCol,
   };
 });
 
 const mockCollection = jest.fn(() => ({
   get: mockGet,
-  doc: mockDocWithSub,
+  doc: mockDocSub,
 }));
 
 jest.mock('../../src/utils/firebase', () => ({
@@ -26,7 +26,7 @@ jest.mock('../../src/utils/firebase', () => ({
       mockCollection(...args);
       return {
         get: mockGet,
-        doc: mockDocWithSub,
+        doc: mockDocSub,
       };
     },
   },
@@ -234,5 +234,287 @@ describe('backups cron', () => {
     expect(result.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(result.manifest).toBeDefined();
     expect(result.manifest.collections).toBeDefined();
+  });
+
+  test('continues backing up remaining collections when one fails (line 139)', async () => {
+    let callCount = 0;
+    mockGet.mockImplementation(() => {
+      callCount++;
+      // Fail the first collection (users), succeed for the rest
+      if (callCount === 1) {
+        return Promise.reject(new Error('Firestore read failed'));
+      }
+      return Promise.resolve(makeSnapshot([]));
+    });
+
+    // Should not throw — errors are caught per-collection
+    const result = await backups();
+    expect(result).toBeDefined();
+    expect(result.manifest).toBeDefined();
+
+    // The remaining collections (config, counters) should still be saved
+    const putKeys = r2.putObject.mock.calls.map((c) => c[0]);
+    expect(putKeys.some((k) => k.endsWith('/config.json'))).toBe(true);
+    expect(putKeys.some((k) => k.endsWith('/counters.json'))).toBe(true);
+
+    // users.json should NOT appear (it failed)
+    const backupKeys = putKeys.filter(
+      (k) => k.startsWith('backups/full/') && !k.endsWith('manifest.json'),
+    );
+    expect(backupKeys.some((k) => k.endsWith('/users.json'))).toBe(false);
+  });
+
+  test('manifest omits collections that failed to back up', async () => {
+    let callCount = 0;
+    mockGet.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        return Promise.reject(new Error('read timeout'));
+      }
+      return Promise.resolve(makeSnapshot([{ id: 'c1', key: 'val' }]));
+    });
+
+    const result = await backups();
+    const manifest = result.manifest;
+
+    // users failed, so should not appear in manifest
+    expect(manifest.collections.users).toBeUndefined();
+    // config and counters succeeded
+    expect(manifest.collections.config).toBe(1);
+    expect(manifest.collections.counters).toBe(1);
+  });
+
+  test('backwards-compat users backup writes empty array when users collection fails', async () => {
+    // Make every get() fail — users will fail, usersJsonStr stays null
+    mockGet.mockRejectedValue(new Error('all reads fail'));
+
+    const result = await backups();
+    expect(result).toBeDefined();
+
+    // Backwards-compat file should still be written with "[]" fallback
+    const legacyCall = r2.putObject.mock.calls.find((c) => c[0].match(/^backups\/users\//));
+    expect(legacyCall).toBeDefined();
+    const body = legacyCall[1].toString();
+    expect(body).toBe('[]');
+  });
+
+  test('prune skips keys with unparseable dates', async () => {
+    mockGet.mockResolvedValue(makeSnapshot([]));
+
+    r2.listObjects.mockImplementation((prefix) => {
+      if (prefix === 'backups/full/') {
+        return Promise.resolve([
+          'backups/full/not-a-date/users.json',
+          'backups/full/2020-01-01/users.json', // old, should be pruned
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    await backups();
+
+    const allDeletedKeys = r2.deleteObjects.mock.calls.flatMap((c) => c[0]);
+    // Old key should still be pruned
+    expect(allDeletedKeys).toContain('backups/full/2020-01-01/users.json');
+    // Invalid date key should NOT be pruned (isNaN check filters it)
+    expect(allDeletedKeys).not.toContain('backups/full/not-a-date/users.json');
+  });
+
+  test('prune does not call deleteObjects when nothing is old', async () => {
+    mockGet.mockResolvedValue(makeSnapshot([]));
+
+    const today = new Date().toISOString().split('T')[0];
+    r2.listObjects.mockImplementation((prefix) => {
+      if (prefix === 'backups/full/') {
+        return Promise.resolve([`backups/full/${today}/users.json`]);
+      }
+      return Promise.resolve([]);
+    });
+
+    await backups();
+
+    // deleteObjects should NOT be called for the full prefix (all keys are recent)
+    const fullPrefixDeleteCalls = r2.deleteObjects.mock.calls.filter(
+      (c) => Array.isArray(c[0]) && c[0].some((k) => k.startsWith('backups/full/')),
+    );
+    expect(fullPrefixDeleteCalls).toHaveLength(0);
+  });
+});
+
+describe('backups cron (production mode with subcollections)', () => {
+  let prodBackups;
+  let prodR2;
+  let prodMockGet;
+  let prodMockSubGet;
+
+  beforeEach(() => {
+    jest.resetModules();
+
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+
+    // Track which collection path is being queried
+    prodMockGet = jest.fn();
+    prodMockSubGet = jest.fn().mockResolvedValue({ docs: [] });
+
+    const prodSubCol = jest.fn(() => ({ get: prodMockSubGet }));
+    const prodDocSub = jest.fn(() => ({
+      collection: prodSubCol,
+    }));
+
+    jest.doMock('../../src/utils/firebase', () => ({
+      db: {
+        collection: jest.fn(() => ({
+          get: prodMockGet,
+          doc: prodDocSub,
+        })),
+      },
+    }));
+
+    jest.doMock('../../src/utils/r2', () => ({
+      putObject: jest.fn().mockResolvedValue(undefined),
+      listObjects: jest.fn().mockResolvedValue([]),
+      deleteObjects: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    // Suppress console output from log utility
+    jest.doMock('../../src/utils/log', () => ({
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+      fatal: jest.fn(),
+    }));
+
+    prodBackups = require('../../src/cron/backups');
+    prodR2 = require('../../src/utils/r2');
+
+    process.env.NODE_ENV = originalEnv;
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  function makeProdSnapshot(docs) {
+    return {
+      empty: docs.length === 0,
+      docs: docs.map((d) => ({
+        id: d.id,
+        data: () => {
+          const { id: _id, ...rest } = d;
+          return rest;
+        },
+        ref: { path: `col/${d.id}` },
+      })),
+    };
+  }
+
+  test('production mode includes all top-level collections', () => {
+    expect(prodBackups.TOP_LEVEL_COLLECTIONS).toEqual(prodBackups.ALL_TOP_LEVEL_COLLECTIONS);
+    expect(prodBackups.SUBCOLLECTIONS).toEqual(prodBackups.ALL_SUBCOLLECTIONS);
+  });
+
+  test('backs up subcollections in production mode (lines 85-105, 145-162)', async () => {
+    // Parent docs with subcollection data
+    const parentDocs = [{ id: 'room1', name: 'Room One' }];
+    const subDocs = [
+      { id: 'msg1', text: 'hello' },
+      { id: 'msg2', text: 'world' },
+    ];
+
+    prodMockGet.mockResolvedValue(makeProdSnapshot(parentDocs));
+    prodMockSubGet.mockResolvedValue(makeProdSnapshot(subDocs));
+
+    await prodBackups();
+
+    const putKeys = prodR2.putObject.mock.calls.map((c) => c[0]);
+
+    // Should have subcollection files
+    expect(putKeys.some((k) => k.endsWith('/rooms_messages.json'))).toBe(true);
+    expect(putKeys.some((k) => k.endsWith('/rooms_seatRequests.json'))).toBe(true);
+    expect(putKeys.some((k) => k.endsWith('/conversations_messages.json'))).toBe(true);
+    expect(putKeys.some((k) => k.endsWith('/users_backpack.json'))).toBe(true);
+  });
+
+  test('subcollection backup includes parentId in each doc (lines 96-101)', async () => {
+    const parentDocs = [{ id: 'parent1', title: 'P1' }];
+    const subDocs = [{ id: 'sub1', content: 'data' }];
+
+    prodMockGet.mockResolvedValue(makeProdSnapshot(parentDocs));
+    prodMockSubGet.mockResolvedValue(makeProdSnapshot(subDocs));
+
+    await prodBackups();
+
+    // Find a subcollection put call and verify parentId is included
+    const subCall = prodR2.putObject.mock.calls.find((c) => c[0].endsWith('/rooms_messages.json'));
+    expect(subCall).toBeDefined();
+
+    const docs = JSON.parse(subCall[1].toString());
+    expect(docs.length).toBe(1);
+    expect(docs[0].parentId).toBe('parent1');
+    expect(docs[0].id).toBe('sub1');
+    expect(docs[0].content).toBe('data');
+  });
+
+  test('subcollection backup aggregates docs across multiple parent docs', async () => {
+    const parentDocs = [
+      { id: 'p1', title: 'P1' },
+      { id: 'p2', title: 'P2' },
+    ];
+
+    prodMockGet.mockResolvedValue(makeProdSnapshot(parentDocs));
+    prodMockSubGet.mockResolvedValue(makeProdSnapshot([{ id: 's1', val: 'x' }]));
+
+    await prodBackups();
+
+    const subCall = prodR2.putObject.mock.calls.find((c) => c[0].endsWith('/rooms_messages.json'));
+    expect(subCall).toBeDefined();
+
+    const docs = JSON.parse(subCall[1].toString());
+    // 1 subdoc per parent x 2 parents = 2 docs
+    expect(docs.length).toBe(2);
+    expect(docs[0].parentId).toBe('p1');
+    expect(docs[1].parentId).toBe('p2');
+  });
+
+  test('continues when a subcollection backup fails (lines 161-166)', async () => {
+    prodMockGet.mockResolvedValue(makeProdSnapshot([{ id: 'p1' }]));
+
+    let subCallCount = 0;
+    prodMockSubGet.mockImplementation(() => {
+      subCallCount++;
+      // Fail on first subcollection get, succeed on the rest
+      if (subCallCount === 1) {
+        return Promise.reject(new Error('subcollection read failed'));
+      }
+      return Promise.resolve(makeProdSnapshot([{ id: `doc${subCallCount}`, data: 'ok' }]));
+    });
+
+    // Should not throw — subcollection errors are caught
+    const result = await prodBackups();
+    expect(result).toBeDefined();
+    expect(result.manifest).toBeDefined();
+
+    // Manifest should still have entries for successfully backed up subcollections
+    const manifestKeys = Object.keys(result.manifest.collections);
+    expect(manifestKeys.length).toBeGreaterThan(0);
+  });
+
+  test('manifest includes subcollection doc counts in production', async () => {
+    const parentDocs = [{ id: 'p1' }];
+    const subDocs = [
+      { id: 's1', msg: 'hi' },
+      { id: 's2', msg: 'bye' },
+    ];
+
+    prodMockGet.mockResolvedValue(makeProdSnapshot(parentDocs));
+    prodMockSubGet.mockResolvedValue(makeProdSnapshot(subDocs));
+
+    const result = await prodBackups();
+
+    // Subcollection entries should appear with their doc counts
+    expect(result.manifest.collections.rooms_messages).toBe(2);
+    expect(result.manifest.collections.rooms_seatRequests).toBe(2);
   });
 });
