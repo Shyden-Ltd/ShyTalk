@@ -143,9 +143,13 @@ test.describe('Admin Cross-Tab Interactions', () => {
       days: 7,
       canAppeal: true,
     });
-    await testData.api.post('/api/appeals', {
+    // Use testWrite instead of POST /api/appeals (that endpoint checks if the
+    // caller is suspended, but the admin caller is never suspended)
+    await testData.api.testWrite('suspensionAppeals', {
       userId: uid,
       appealText: 'Cross-tab test appeal',
+      status: 'pending',
+      createdAt: Date.now(),
     });
 
     // Navigate to Appeals

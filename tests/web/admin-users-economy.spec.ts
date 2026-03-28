@@ -203,8 +203,8 @@ test.describe('Admin Users - Economy Subtab', () => {
       giftId: firstGiftId, quantity: 2, silent: true,
     });
 
-    // Trigger backpack reload by clicking the refresh area (switching subtabs)
-    await switchUserSubtab(page, 'profile');
+    // Re-search the user to reload backpack data (subtab switch doesn't reload)
+    await searchUser(page, uid);
     await switchUserSubtab(page, 'economy');
 
     // Verify the gift is present
