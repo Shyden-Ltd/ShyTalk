@@ -1298,11 +1298,9 @@
           letter-spacing: 0.5px;
           padding: 14px 8px;
           user-select: none;
-          list-style: none;
           -webkit-tap-highlight-color: transparent;
           touch-action: manipulation;
         }
-        .spin-history-summary::-webkit-details-marker { display: none; }
         .spin-history-summary::before {
           content: "\25B6";
           display: inline-block;
@@ -1310,7 +1308,7 @@
           font-size: 10px;
           transition: transform 0.2s;
         }
-        .spin-history-toggle[open] > .spin-history-summary::before {
+        .spin-history-toggle.open > .spin-history-summary::before {
           transform: rotate(90deg);
         }
         .spin-history-count {
@@ -4009,12 +4007,12 @@
                 </div>
             </div>
 
-            <details class="spin-history-toggle" id="spin-history-toggle">
-                <summary class="spin-history-summary">History <span class="spin-history-count" id="spin-history-count"></span></summary>
-                <div class="spin-feed" id="spin-feed">
+            <div class="spin-history-toggle" id="spin-history-toggle">
+                <div class="spin-history-summary" id="spin-history-summary" role="button" tabindex="0" aria-expanded="false">History <span class="spin-history-count" id="spin-history-count"></span></div>
+                <div class="spin-feed" id="spin-feed" style="display:none;">
                     <div class="spin-feed-empty">Enter a user ID and click "Start Monitoring" to watch spins live.</div>
                 </div>
-            </details>
+            </div>
         </div>
 
         <!-- Banners Panel -->
@@ -4629,6 +4627,7 @@
       stopMonitoring();
       if (logsQuotaInterval) { clearInterval(logsQuotaInterval); logsQuotaInterval = null; }
       if (alertBellInterval) { clearInterval(alertBellInterval); alertBellInterval = null; }
+      if (reportsPollInterval) { clearInterval(reportsPollInterval); reportsPollInterval = null; }
       sessionStorage.clear();
       await signOut(auth);
       userForm.classList.remove("visible");
@@ -4638,11 +4637,20 @@
     });
 
     // --- API helper ---
-    async function apiCall(method, path, body) {
+    // tabAbortController is aborted on each tab switch so that stale
+    // fetch requests from the previous tab are cancelled immediately.
+    let tabAbortController = new AbortController();
+
+    async function apiCall(method, path, body, { signal, skipTabAbort } = {}) {
       const token = await currentUser.getIdToken();
       const opts = {
         method,
         headers: { "Authorization": `Bearer ${token}` },
+        // Use the tab-level AbortController by default so that stale
+        // requests are cancelled when the user switches tabs.  Callers
+        // that must survive tab switches (e.g. user search, save
+        // operations) can pass skipTabAbort: true.
+        signal: signal || (skipTabAbort ? undefined : tabAbortController.signal),
       };
       if (body && !(body instanceof FormData)) {
         opts.headers["Content-Type"] = "application/json";
@@ -5080,13 +5088,14 @@
       showFieldFeedback(fieldEl, "saving");
 
       try {
-        await apiCall("PATCH", "/api/user/" + currentUid + "?silent=true", { [field]: current });
+        await apiCall("PATCH", "/api/user/" + currentUid + "?silent=true", { [field]: current }, { skipTabAbort: true });
         fieldEl.classList.remove("field-saving");
         fieldEl.classList.remove("field-save-failed");
         loadedData[field] = current;
         showFieldFeedback(fieldEl, "saved", previousValue);
         queueNotifyField(field);
       } catch (err) {
+        if (err.name === "AbortError") return;
         fieldEl.classList.remove("field-saving");
         fieldEl.classList.add("field-save-failed");
         showFieldFeedback(fieldEl, "failed");
@@ -5108,7 +5117,7 @@
       showFieldFeedback(el, "saving");
 
       try {
-        await apiCall("PATCH", "/api/user/" + currentUid + "?silent=true", { [fieldName]: value });
+        await apiCall("PATCH", "/api/user/" + currentUid + "?silent=true", { [fieldName]: value }, { skipTabAbort: true });
         el.classList.remove("field-saving");
         el.classList.remove("field-save-failed");
         loadedData[fieldName] = value;
@@ -5136,7 +5145,7 @@
       showFieldFeedback(fieldEl, "saving");
 
       try {
-        await apiCall("PATCH", "/api/user/" + currentUid + "?silent=true", { [fieldName]: previousValue });
+        await apiCall("PATCH", "/api/user/" + currentUid + "?silent=true", { [fieldName]: previousValue }, { skipTabAbort: true });
         fieldEl.classList.remove("field-saving");
         loadedData[fieldName] = previousValue;
 
@@ -5197,7 +5206,7 @@
       const fields = [...autoSaveState.pendingNotifyFields];
       autoSaveState.pendingNotifyFields = [];
       try {
-        await apiCall("POST", "/api/user/" + currentUid + "/notify-changes", { fields: fields });
+        await apiCall("POST", "/api/user/" + currentUid + "/notify-changes", { fields: fields }, { skipTabAbort: true });
       } catch (err) {
         console.warn("Failed to send change notification PM:", err);
       }
@@ -5305,8 +5314,10 @@
     }
 
     // --- Search ---
-    searchBtn.addEventListener("click", doSearch);
-    searchUid.addEventListener("keydown", (e) => { if (e.key === "Enter") doSearch(); });
+    // NOTE: The authoritative search handler is doSearchFinal (registered below).
+    // Do NOT register doSearch here — it was superseded by doSearchUpdated
+    // and then doSearchFinal.  Multiple handlers on the same button cause
+    // triple API calls and DOM race conditions.
 
     async function doSearch() {
       const query = searchUid.value.trim();
@@ -5358,8 +5369,13 @@
     const startingScreensPanel = $("#starting-screens-panel");
     const tabStartingScreens = $("#tab-starting-screens");
     let currentTab = "users";
+    let switchTabSeq = 0; // Monotonically increasing sequence counter — stale async ops can bail out
 
     function switchTab(tab) {
+      switchTabSeq++;
+      // Abort in-flight tab-specific API requests from the previous tab
+      tabAbortController.abort();
+      tabAbortController = new AbortController();
       currentTab = tab;
       sessionStorage.setItem("admin_tab", tab);
       tabUsers.classList.toggle("active", tab === "users");
@@ -6067,9 +6083,8 @@
       searchBtn.textContent = "Search";
     }
 
-    searchBtn.addEventListener("click", doSearchUpdated);
-    function _keydownUpdated(e) { if (e.key === "Enter") doSearchUpdated(); }
-    searchUid.addEventListener("keydown", _keydownUpdated);
+    // NOTE: doSearchUpdated was superseded by doSearchFinal — do NOT
+    // register it here.  The authoritative handler is below.
 
     // --- Appeals ---
     const appealsList = $("#appeals-list");
@@ -6614,10 +6629,11 @@
       document.getElementById("user-subtabs").style.display = "none";
       document.getElementById("profile-preview").style.display = "none";
       try {
-        const data = await apiCall("GET", `/api/search/uniqueId/${q}`);
+        const data = await apiCall("GET", `/api/search/uniqueId/${q}`, null, { skipTabAbort: true });
         await populateFormFull(data);
         sessionStorage.setItem("admin_user_search", q);
       } catch (err) {
+        if (err.name === "AbortError") return; // Tab switch — silently bail
         showToast(err.message, "error");
         sessionStorage.removeItem("admin_user_search");
       }
@@ -6635,6 +6651,7 @@
     let reportCards = []; // For keyboard navigation
     let selectedCardIndex = -1;
     let reportsUnsubscribe = null; // Firestore listener
+    let reportsPollInterval = null; // Polling fallback for WebKit where onSnapshot is unreliable
     let currentLockedUid = null; // UID we currently hold a review lock on
     let resolveInProgress = false; // true while a resolve operation is active (prevents snapshot reloads)
     let allReportUsers = []; // All users from API (for infinite scroll)
@@ -6717,6 +6734,16 @@
           renderReportsFromSnapshot(snapshot);
         }
       });
+
+      // Polling fallback: on WebKit, the Firestore WebChannel transport
+      // may not deliver onSnapshot updates reliably.  Poll the reports
+      // API every 5 seconds while the Reports tab is active so new
+      // reports always appear within a reasonable window.
+      if (reportsPollInterval) clearInterval(reportsPollInterval);
+      reportsPollInterval = setInterval(async () => {
+        if (currentTab !== "reports") return;
+        try { await loadReports(); } catch (_) {}
+      }, 5000);
     }
 
     // --- Review Lock Functions ---
@@ -6739,7 +6766,7 @@
 
     async function releaseLock() {
       if (!currentLockedUid) return;
-      try { await apiCall("DELETE", `/api/report-locks/${currentLockedUid}`); } catch (_) {}
+      try { await apiCall("DELETE", `/api/report-locks/${currentLockedUid}`, null, { skipTabAbort: true }); } catch (_) {}
       currentLockedUid = null;
     }
 
@@ -6764,7 +6791,13 @@
 
     async function loadReports() {
       await releaseLock(); // Release any held lock on reload
-      reportsList.innerHTML = '<div style="color:var(--text2);font-size:13px;">Loading...</div>';
+      // Only show the loading indicator when the list is empty — preserve
+      // existing cards during a refresh so that the UI doesn't flash blank
+      // while the API responds.  This also prevents the card count from
+      // momentarily dropping to 0 (which confuses realtime-update checks).
+      if (!reportsList.querySelector('.report-card')) {
+        reportsList.innerHTML = '<div style="color:var(--text2);font-size:13px;">Loading...</div>';
+      }
       try {
         let url = `/api/reports?status=${currentReportFilter}`;
         if (reportSearchQuery) url += `&search=${encodeURIComponent(reportSearchQuery)}`;
@@ -6787,6 +6820,7 @@
         renderMoreCards();
 
       } catch (err) {
+        if (err.name === "AbortError") return; // Tab switch — silently bail
         reportsList.innerHTML = `<div style="color:var(--danger);font-size:13px;">${escapeHtml(err.message)}</div>`;
       }
     }
@@ -7250,6 +7284,7 @@
         } catch (_) {}
       } else {
         if (reportsUnsubscribe) { reportsUnsubscribe(); reportsUnsubscribe = null; }
+        if (reportsPollInterval) { clearInterval(reportsPollInterval); reportsPollInterval = null; }
       }
     });
 
@@ -9602,6 +9637,7 @@
     let monitorUid = null;
     let monitorUserUnsub = null;
     let monitorTxUnsub = null;
+    let monitorPollInterval = null; // Polling fallback for WebKit where onSnapshot is unreliable
     let monitorGiftCatalog = {};
     let monitorSeenTxIds = new Set();
     let monitorSession = { spins: 0, spent: 0, bestGift: null, bestValue: 0 };
@@ -9623,7 +9659,35 @@
     const monitorTotalsWrap = $("#monitor-totals-wrap");
     const spinHistoryToggle = $("#spin-history-toggle");
     const spinHistoryCount = $("#spin-history-count");
+    const spinHistorySummary = $("#spin-history-summary");
     let spinEntryCount = 0;
+
+    // Define a custom .open property on the div-based collapsible so that
+    // existing code (and Playwright tests) can read/write it the same way
+    // they would on a native <details> element.
+    {
+      let _histOpen = false;
+      Object.defineProperty(spinHistoryToggle, "open", {
+        get() { return _histOpen; },
+        set(val) {
+          _histOpen = !!val;
+          spinFeed.style.display = _histOpen ? "" : "none";
+          spinHistoryToggle.classList.toggle("open", _histOpen);
+          spinHistorySummary.setAttribute("aria-expanded", String(_histOpen));
+        },
+        configurable: true,
+      });
+      // Click handler — no browser quirks since this is a plain div
+      spinHistorySummary.addEventListener("click", () => {
+        spinHistoryToggle.open = !spinHistoryToggle.open;
+      });
+      spinHistorySummary.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          spinHistoryToggle.open = !spinHistoryToggle.open;
+        }
+      });
+    }
 
     function flashCard(el) {
       el.classList.add("flash");
@@ -9927,6 +9991,18 @@
           if (snap.exists()) updateMonitorStats(snap.data());
         });
 
+        // Polling fallback: on WebKit, the Firestore WebChannel transport
+        // can be extremely slow or fail to deliver onSnapshot updates.
+        // Poll the API every 3 seconds to keep the UI fresh regardless.
+        if (monitorPollInterval) clearInterval(monitorPollInterval);
+        monitorPollInterval = setInterval(async () => {
+          if (!monitorUid) return;
+          try {
+            const freshData = await apiCall("GET", `/api/user/${monitorUid}`, null, { skipTabAbort: true });
+            if (freshData) updateMonitorStats(freshData);
+          } catch (_) { /* API may intermittently fail — ignore */ }
+        }, 3000);
+
         // Set up real-time transactions listener
         const txQuery = query(
           collection(clientDb, "users", resolvedUniqueId, "transactions"),
@@ -9959,6 +10035,7 @@
     function stopMonitoring() {
       if (monitorUserUnsub) { monitorUserUnsub(); monitorUserUnsub = null; }
       if (monitorTxUnsub) { monitorTxUnsub(); monitorTxUnsub = null; }
+      if (monitorPollInterval) { clearInterval(monitorPollInterval); monitorPollInterval = null; }
       monitorUid = null;
       sessionStorage.removeItem("admin_monitor_uid");
 
@@ -10008,20 +10085,8 @@
     monitorUidInput.addEventListener("keypress", handleMonitorEnter);
     monitorUidInput.addEventListener("keyup", handleMonitorEnter);
 
-    // Mobile Safari/WebKit workaround: <details>/<summary> toggle can fail
-    // on touch devices when the summary has custom styling that removes the
-    // default list-style marker. Attach a direct click handler that always
-    // toggles the open attribute, then prevent the default to avoid a
-    // double-toggle on browsers where native works correctly.
-    {
-      const histSummary = spinHistoryToggle.querySelector("summary");
-      if (histSummary) {
-        histSummary.addEventListener("click", (e) => {
-          e.preventDefault();
-          spinHistoryToggle.open = !spinHistoryToggle.open;
-        });
-      }
-    }
+    // No <details>/<summary> workaround needed — the spin history toggle
+    // is now a plain div with a custom .open property (defined above).
 
     // --- Guarantee Next Prize ---
     const guaranteeGiftSelect = $("#guarantee-gift-select");

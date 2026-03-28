@@ -287,35 +287,35 @@ test.describe('Admin Spin Monitor', () => {
   test('spin history collapsible — click toggle, verify expands/collapses', async ({ page, testData }) => {
     await startMonitoringUser(page, testData.user.uniqueId);
 
-    const details = page.locator('#spin-history-toggle');
-    const summary = details.locator('summary');
+    const toggle = page.locator('#spin-history-toggle');
+    const summary = page.locator('#spin-history-summary');
     const feed = page.locator('#spin-feed');
 
-    // Initially the details may be closed — check the open attribute
-    const initiallyOpen = await details.evaluate(
-      (el: HTMLDetailsElement) => el.open,
+    // Initially the collapsible is closed — check the custom .open property
+    const initiallyOpen = await toggle.evaluate(
+      (el: any) => el.open,
     );
 
     if (initiallyOpen) {
       // Close it
       await summary.click();
-      // Verify feed is hidden (details closed)
-      const isOpenAfterClose = await details.evaluate(
-        (el: HTMLDetailsElement) => el.open,
+      // Verify feed is hidden (closed)
+      const isOpenAfterClose = await toggle.evaluate(
+        (el: any) => el.open,
       );
       expect(isOpenAfterClose).toBe(false);
 
       // Open it again
       await summary.click();
-      const isOpenAfterReopen = await details.evaluate(
-        (el: HTMLDetailsElement) => el.open,
+      const isOpenAfterReopen = await toggle.evaluate(
+        (el: any) => el.open,
       );
       expect(isOpenAfterReopen).toBe(true);
     } else {
       // Open it
       await summary.click();
-      const isOpenAfterOpen = await details.evaluate(
-        (el: HTMLDetailsElement) => el.open,
+      const isOpenAfterOpen = await toggle.evaluate(
+        (el: any) => el.open,
       );
       expect(isOpenAfterOpen).toBe(true);
 
@@ -324,8 +324,8 @@ test.describe('Admin Spin Monitor', () => {
 
       // Close it
       await summary.click();
-      const isOpenAfterClose = await details.evaluate(
-        (el: HTMLDetailsElement) => el.open,
+      const isOpenAfterClose = await toggle.evaluate(
+        (el: any) => el.open,
       );
       expect(isOpenAfterClose).toBe(false);
     }
