@@ -248,12 +248,20 @@ describe('POST /api/reports/:id/resolve (admin resolve)', () => {
     );
   });
 
-  it('returns 200 for suspended action', async () => {
+  it('returns 200 for suspended action and sets isSuspended + Suspended Account on user doc', async () => {
     getDoc.mockResolvedValueOnce({
       id: 'report-1',
       reportedUserId: 'target-user',
+      reportedUserUniqueId: 'target-unique-1',
       reporterId: 'reporter-user',
       reason: 'severe violation',
+    });
+    // Second getDoc call: fetch user doc for pre-suspension data
+    getDoc.mockResolvedValueOnce({
+      id: 'target-unique-1',
+      displayName: 'Bad User',
+      profilePhotoUrl: 'https://photo.example.com/img.jpg',
+      coverPhotoUrl: null,
     });
 
     const res = await request(app)
@@ -262,10 +270,122 @@ describe('POST /api/reports/:id/resolve (admin resolve)', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
+    // Report doc updated with resolved status
     expect(mockDocUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         status: 'resolved',
         actionTaken: 'suspended',
+      }),
+    );
+    // User doc updated with suspension fields
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isSuspended: true,
+        displayName: 'Suspended Account',
+        suspensionReason: 'severe violation',
+        profilePhotoUrl: null,
+        coverPhotoUrl: null,
+        avatarUrl: null,
+        description: null,
+        currentRoomId: null,
+        preSuspensionDisplayName: 'Bad User',
+      }),
+    );
+  });
+
+  it('normaliseAction: resolves action "warn" as "warned"', async () => {
+    const { createWarning } = require('../../src/routes/admin-users');
+    getDoc.mockResolvedValueOnce({
+      id: 'report-2',
+      reportedUserId: 'target-user',
+      reportedUserUniqueId: 'target-unique-2',
+      reporterId: 'reporter-user',
+      reason: 'mild spam',
+    });
+
+    const res = await request(app).post('/api/reports/report-2/resolve').send({ action: 'warn' }); // short alias
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'resolved',
+        actionTaken: 'warned', // normalised from 'warn'
+      }),
+    );
+    expect(createWarning).toHaveBeenCalled();
+  });
+
+  it('normaliseAction: resolves action "suspend" as "suspended"', async () => {
+    getDoc.mockResolvedValueOnce({
+      id: 'report-3',
+      reportedUserId: 'target-user',
+      reportedUserUniqueId: 'target-unique-3',
+      reporterId: 'reporter-user',
+      reason: 'severe abuse',
+    });
+    // Second getDoc: user doc for suspension
+    getDoc.mockResolvedValueOnce({
+      id: 'target-unique-3',
+      displayName: 'Target',
+    });
+
+    const res = await request(app)
+      .post('/api/reports/report-3/resolve')
+      .send({ action: 'suspend' }); // short alias
+
+    expect(res.status).toBe(200);
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'resolved',
+        actionTaken: 'suspended', // normalised from 'suspend'
+      }),
+    );
+    // User doc should be suspended
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isSuspended: true,
+        displayName: 'Suspended Account',
+      }),
+    );
+  });
+
+  it('normaliseAction: resolves action "dismiss" as "dismissed"', async () => {
+    getDoc.mockResolvedValueOnce({
+      id: 'report-4',
+      reportedUserId: 'target-user',
+      reporterId: 'reporter-user',
+      reason: 'minor issue',
+    });
+
+    const res = await request(app)
+      .post('/api/reports/report-4/resolve')
+      .send({ action: 'dismiss' }); // short alias
+
+    expect(res.status).toBe(200);
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'resolved',
+        actionTaken: 'dismissed', // normalised from 'dismiss'
+      }),
+    );
+  });
+
+  it('normaliseAction: null action defaults to "dismissed"', async () => {
+    getDoc.mockResolvedValueOnce({
+      id: 'report-5',
+      reportedUserId: 'target-user',
+      reporterId: 'reporter-user',
+      reason: 'test',
+    });
+
+    const res = await request(app).post('/api/reports/report-5/resolve').send({}); // no action field at all
+
+    expect(res.status).toBe(200);
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'resolved',
+        actionTaken: 'dismissed', // default when action is null/undefined
       }),
     );
   });
@@ -446,5 +566,77 @@ describe('PATCH /api/appeals/:id (admin review appeal)', () => {
     );
     // User should NOT be unsuspended — clearSuspensionCache not called
     expect(clearSuspensionCache).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/appeals (admin list — enrichment)', () => {
+  let app;
+  let getDoc, queryDocs;
+  let requireAdmin;
+
+  beforeEach(() => {
+    app = createAdminApp();
+    jest.clearAllMocks();
+    ({ getDoc, queryDocs } = require('../../src/utils/firestore-helpers'));
+    ({ requireAdmin } = require('../../src/middleware/auth'));
+    requireAdmin.mockReturnValue(false);
+  });
+
+  it('returns enriched userUniqueId, userInfo.uniqueId, and userInfo.displayName', async () => {
+    queryDocs.mockResolvedValueOnce([
+      {
+        id: 'appeal-1',
+        userId: 'user-42',
+        appealText: 'Please reconsider',
+        status: 'pending',
+        createdAt: 1700000000000,
+      },
+    ]);
+    // getDoc for user enrichment
+    getDoc.mockResolvedValueOnce({
+      id: 'user-42',
+      uniqueId: 42,
+      displayName: 'Suspended Person',
+      profilePhotoUrl: 'https://photo.example.com/img.jpg',
+      suspensionReason: 'Spamming',
+      suspensionStartDate: 1699999000000,
+      suspensionEndDate: null,
+    });
+
+    const res = await request(app).get('/api/appeals').expect(200);
+
+    expect(res.body).toHaveLength(1);
+    const appeal = res.body[0];
+    expect(appeal.userUniqueId).toBe(42);
+    expect(appeal.uniqueId).toBe(42);
+    expect(appeal.userDisplayName).toBe('Suspended Person');
+    expect(appeal.displayName).toBe('Suspended Person');
+    expect(appeal.userInfo).toBeDefined();
+    expect(appeal.userInfo.uniqueId).toBe(42);
+    expect(appeal.userInfo.displayName).toBe('Suspended Person');
+    expect(appeal.userInfo.profilePhotoUrl).toBe('https://photo.example.com/img.jpg');
+    expect(appeal.userInfo.suspensionReason).toBe('Spamming');
+  });
+
+  it('handles appeal with no matching user doc gracefully', async () => {
+    queryDocs.mockResolvedValueOnce([
+      {
+        id: 'appeal-2',
+        userId: 'deleted-user',
+        appealText: 'I was banned',
+        status: 'pending',
+        createdAt: 1700000000000,
+      },
+    ]);
+    // getDoc returns null for non-existent user
+    getDoc.mockResolvedValueOnce(null);
+
+    const res = await request(app).get('/api/appeals').expect(200);
+
+    expect(res.body).toHaveLength(1);
+    const appeal = res.body[0];
+    expect(appeal.userUniqueId).toBeNull();
+    expect(appeal.userInfo.uniqueId).toBeNull();
+    expect(appeal.userInfo.displayName).toBeNull();
   });
 });

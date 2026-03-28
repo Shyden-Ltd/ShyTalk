@@ -169,6 +169,82 @@ describe('sensitiveLimiter', () => {
   });
 });
 
+describe('admin exemption', () => {
+  test('admin users are exempt from generalLimiter (6+ requests all succeed)', async () => {
+    const { generalLimiter } = freshLimiters();
+    const app = express();
+    // Inject admin auth before rate limiter
+    app.use((req, _res, next) => {
+      req.auth = { uid: 'admin-user', token: { admin: true } };
+      next();
+    });
+    app.use(generalLimiter);
+    app.get('/test', (req, res) => res.json({ success: true }));
+
+    // Send 210 requests — exceeds the 200 limit
+    for (let i = 0; i < 210; i++) {
+      const res = await request(app).get('/test');
+      expect(res.status).toBe(200);
+    }
+  });
+
+  test('admin users are exempt from sensitiveLimiter (6+ requests all succeed)', async () => {
+    const { sensitiveLimiter } = freshLimiters();
+    const app = express();
+    // Inject admin auth before rate limiter
+    app.use((req, _res, next) => {
+      req.auth = { uid: 'admin-user', token: { admin: true } };
+      next();
+    });
+    app.use(sensitiveLimiter);
+    app.post('/report', (req, res) => res.json({ success: true }));
+
+    // Send 10 requests — double the 5-request limit
+    for (let i = 0; i < 10; i++) {
+      const res = await request(app).post('/report');
+      expect(res.status).toBe(200);
+    }
+  });
+
+  test('non-admin users are still rate-limited on sensitiveLimiter', async () => {
+    const { sensitiveLimiter } = freshLimiters();
+    const app = express();
+    // Inject non-admin auth
+    app.use((req, _res, next) => {
+      req.auth = { uid: 'regular-user', token: { admin: false } };
+      next();
+    });
+    app.use(sensitiveLimiter);
+    app.post('/report', (req, res) => res.json({ success: true }));
+
+    for (let i = 0; i < 5; i++) {
+      await request(app).post('/report');
+    }
+
+    // 6th request should be rate limited
+    const res = await request(app).post('/report').expect(429);
+    expect(res.body.error).toBe('Rate limit exceeded for this operation');
+  });
+
+  test('admin token missing (token: {}) is NOT exempt — gets rate-limited', async () => {
+    const { sensitiveLimiter } = freshLimiters();
+    const app = express();
+    app.use((req, _res, next) => {
+      req.auth = { uid: 'user-no-admin', token: {} };
+      next();
+    });
+    app.use(sensitiveLimiter);
+    app.post('/report', (req, res) => res.json({ success: true }));
+
+    for (let i = 0; i < 5; i++) {
+      await request(app).post('/report');
+    }
+
+    const res = await request(app).post('/report').expect(429);
+    expect(res.body.error).toBe('Rate limit exceeded for this operation');
+  });
+});
+
 describe('keyGenerator', () => {
   test('uses authenticated uid when available', async () => {
     const { sensitiveLimiter } = freshLimiters();

@@ -5,6 +5,7 @@ const request = require('supertest');
 
 // Save the original env so we can restore after each test
 const savedAllowedOrigins = process.env.ALLOWED_ORIGINS;
+const savedNodeEnv = process.env.NODE_ENV;
 
 beforeEach(() => {
   jest.resetModules();
@@ -17,6 +18,11 @@ afterEach(() => {
   } else {
     delete process.env.ALLOWED_ORIGINS;
   }
+  if (savedNodeEnv !== undefined) {
+    process.env.NODE_ENV = savedNodeEnv;
+  } else {
+    delete process.env.NODE_ENV;
+  }
 });
 
 /**
@@ -24,11 +30,17 @@ afterEach(() => {
  * Sets env BEFORE requiring the module so the top-level evaluation picks it up.
  * Uses jest.resetModules() (in beforeEach) to ensure a fresh module each time.
  */
-function createApp(envOrigins) {
+function createApp(envOrigins, nodeEnv) {
   if (envOrigins !== undefined) {
     process.env.ALLOWED_ORIGINS = envOrigins;
   } else {
     delete process.env.ALLOWED_ORIGINS;
+  }
+
+  if (nodeEnv !== undefined) {
+    process.env.NODE_ENV = nodeEnv;
+  } else {
+    delete process.env.NODE_ENV;
   }
 
   const corsMiddleware = require('../../src/middleware/cors');
@@ -161,5 +173,61 @@ describe('CORS middleware', () => {
       .set('Access-Control-Request-Headers', 'x-device-id');
 
     expect(res.headers['access-control-allow-headers']).toMatch(/x-device-id/);
+  });
+});
+
+/* eslint-disable sonarjs/no-clear-text-protocols -- testing http://localhost CORS */
+describe('CORS localhost in local mode', () => {
+  test('NODE_ENV=local allows http://localhost:5500', async () => {
+    const app = createApp(undefined, 'local');
+    const res = await request(app).get('/test').set('Origin', 'http://localhost:5500').expect(200);
+
+    expect(res.headers['access-control-allow-origin']).toBe('http://localhost:5500');
+    expect(res.body.success).toBe(true);
+  });
+
+  test('NODE_ENV=local allows http://localhost (no port)', async () => {
+    const app = createApp(undefined, 'local');
+    const res = await request(app).get('/test').set('Origin', 'http://localhost').expect(200);
+
+    expect(res.headers['access-control-allow-origin']).toBe('http://localhost');
+  });
+
+  test('NODE_ENV=local allows http://localhost:4000 (Firebase UI)', async () => {
+    const app = createApp(undefined, 'local');
+    const res = await request(app).get('/test').set('Origin', 'http://localhost:4000').expect(200);
+
+    expect(res.headers['access-control-allow-origin']).toBe('http://localhost:4000');
+  });
+
+  test('NODE_ENV=production blocks http://localhost:5500', async () => {
+    const app = createApp(undefined, 'production');
+    const res = await request(app).get('/test').set('Origin', 'http://localhost:5500').expect(500);
+
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
+  test('NODE_ENV not set (undefined) blocks http://localhost:5500', async () => {
+    const app = createApp(undefined, undefined);
+    const res = await request(app).get('/test').set('Origin', 'http://localhost:5500').expect(500);
+
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
+  test('NODE_ENV=local still allows default origins', async () => {
+    const app = createApp(undefined, 'local');
+    const res = await request(app)
+      .get('/test')
+      .set('Origin', 'https://shytalk.shyden.co.uk')
+      .expect(200);
+
+    expect(res.headers['access-control-allow-origin']).toBe('https://shytalk.shyden.co.uk');
+  });
+
+  test('NODE_ENV=local still blocks non-localhost disallowed origins', async () => {
+    const app = createApp(undefined, 'local');
+    const res = await request(app).get('/test').set('Origin', 'https://evil-site.com').expect(500);
+
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
   });
 });
