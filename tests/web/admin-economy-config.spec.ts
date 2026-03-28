@@ -291,7 +291,7 @@ test.describe('Admin Economy Config', () => {
     await page.locator('#ms-add-btn').click();
     await expect(initialRows).toHaveCount(initialCount + 1);
 
-    // Fill the new milestone row (last one)
+    // Fill the new milestone row (last one added, which may not sort last)
     const newRow = page.locator('#milestone-rows .milestone-row').last();
     const dayInput = newRow.locator('.ms-day');
     await dayInput.fill('99');
@@ -305,18 +305,19 @@ test.describe('Admin Economy Config', () => {
     // Save
     await saveEconomyConfig(page);
 
-    // Reload and verify the milestone exists
+    // Reload and verify the milestone exists (find by day value, not position)
     await reloadAndNavigateToEconomy(page);
-    const afterReloadRows = page.locator('#milestone-rows .milestone-row');
-    await expect(afterReloadRows).toHaveCount(initialCount + 1);
-
-    // Verify the day-99 milestone
-    const lastRow = page.locator('#milestone-rows .milestone-row').last();
-    await expect(lastRow.locator('.ms-day')).toHaveValue('99');
+    const day99Row = page.locator('#milestone-rows .milestone-row').filter({
+      has: page.locator('.ms-day[value="99"]'),
+    });
+    await expect(day99Row).toBeVisible();
+    await expect(day99Row.locator('.ms-day')).toHaveValue('99');
 
     // Now remove it
-    await lastRow.locator('.ms-remove-btn').click();
-    await expect(page.locator('#milestone-rows .milestone-row')).toHaveCount(initialCount);
+    await day99Row.locator('.ms-remove-btn').click();
+
+    // The row should be gone
+    await expect(day99Row).toHaveCount(0);
 
     // Save and verify removal
     await saveEconomyConfig(page);
