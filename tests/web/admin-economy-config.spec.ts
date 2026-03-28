@@ -338,7 +338,7 @@ test.describe('Admin Economy Config', () => {
     // Save a gift-type milestone directly via API
     const currentConfig = await testData.api.get('/api/config/economy');
     const milestones = currentConfig.milestoneRewards || {};
-    milestones['88'] = { type: 'gift', giftId, quantity: 1 };
+    milestones['999'] = { type: 'gift', giftId, quantity: 1 };
     await page.request.put(`${API_BASE}/api/config/economy`, {
       headers: {
         Authorization: `Bearer ${await testData.api.waitForToken()}`,
@@ -348,8 +348,10 @@ test.describe('Admin Economy Config', () => {
     });
 
     // Reload and verify the gift milestone renders correctly
+    // Day 999 is guaranteed to sort last (milestones are sorted by day ascending)
     await reloadAndNavigateToEconomy(page);
     const lastRow = page.locator('#milestone-rows .milestone-row').last();
+    await expect(lastRow.locator('.ms-day')).toHaveValue('999');
     await expect(lastRow.locator('.ms-type')).toHaveValue('gift');
     await expect(lastRow.locator('.ms-gift-select')).toBeVisible();
 
