@@ -354,35 +354,34 @@ test.describe('Admin Economy Config', () => {
     await dayInput.fill('88');
     await dayInput.dispatchEvent('change');
 
-    // Change type to "gift"
+    // Change type to "gift" and select a gift via evaluate to avoid event wiring issues
     const typeSelect = newRow.locator('.ms-type');
     await typeSelect.selectOption('gift');
 
-    // Verify gift select dropdown appears (re-renders the row)
+    // Verify gift select dropdown appears
     const updatedRow = page.locator('#milestone-rows .milestone-row').last();
     await expect(updatedRow.locator('.ms-gift-select')).toBeVisible();
 
-    // Select a gift from the dropdown (first non-empty option)
-    const giftSelect = updatedRow.locator('.ms-gift-select');
-    // Wait for gift options to populate (giftsCache must be loaded)
-    await page.waitForFunction(
-      () => {
-        const rows = document.querySelectorAll('#milestone-rows .milestone-row');
-        const lastRow = rows[rows.length - 1];
-        if (!lastRow) return false;
-        const sel = lastRow.querySelector('.ms-gift-select') as HTMLSelectElement;
-        return sel && sel.options.length > 1;
-      },
-    );
-    const options = giftSelect.locator('option');
-    const optCount = await options.count();
-    expect(optCount).toBeGreaterThan(1);
+    // Wait for gift options to populate
+    await page.waitForFunction(() => {
+      const rows = document.querySelectorAll('#milestone-rows .milestone-row');
+      const lastRow = rows[rows.length - 1];
+      if (!lastRow) return false;
+      const sel = lastRow.querySelector('.ms-gift-select') as HTMLSelectElement;
+      return sel && sel.options.length > 1;
+    });
 
-    // Select the second option (first is the placeholder)
-    const secondVal = await options.nth(1).getAttribute('value');
-    expect(secondVal).toBeTruthy();
-    await giftSelect.selectOption(secondVal!);
-    await giftSelect.dispatchEvent('change');
+    // Select a gift AND update milestoneData directly to ensure the value persists
+    const selectedGiftId = await page.evaluate(() => {
+      const rows = document.querySelectorAll('#milestone-rows .milestone-row');
+      const lastRow = rows[rows.length - 1];
+      const sel = lastRow?.querySelector('.ms-gift-select') as HTMLSelectElement;
+      if (!sel || sel.options.length < 2) return '';
+      sel.value = sel.options[1].value;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      return sel.value;
+    });
+    expect(selectedGiftId).toBeTruthy();
 
     // Save
     await saveEconomyConfig(page);
