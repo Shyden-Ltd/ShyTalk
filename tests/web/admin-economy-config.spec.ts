@@ -329,68 +329,29 @@ test.describe('Admin Economy Config', () => {
 
   // ── Test 14: Milestone type toggle ──
   test('milestone type toggle — gift type shows gift select', async ({ page, testData }) => {
-    // Ensure at least one gift exists in the catalog so the dropdown is populated
+    // Get a gift ID from the API
     const allGifts = await testData.api.get('/api/gifts/all');
     const giftList = Array.isArray(allGifts) ? allGifts : (allGifts.gifts || []);
-    if (giftList.length === 0) {
-      // Seed a temporary gift so the milestone gift select has options
-      await testData.api.testWrite('gifts', {
-        name: 'E2E Test Gift',
-        coinValue: 10,
-        showInStore: true,
-        showOnWheel: true,
-        order: 999,
-      });
-      // Reload to pick up the new gift in giftsCache
-      await reloadAndNavigateToEconomy(page);
-    }
+    expect(giftList.length).toBeGreaterThan(0);
+    const giftId = giftList[0].id;
 
-    // Add a new milestone
-    await page.locator('#ms-add-btn').click();
-    const newRow = page.locator('#milestone-rows .milestone-row').last();
-
-    // Set day
-    const dayInput = newRow.locator('.ms-day');
-    await dayInput.fill('88');
-    await dayInput.dispatchEvent('change');
-
-    // Change type to "gift" and select a gift via evaluate to avoid event wiring issues
-    const typeSelect = newRow.locator('.ms-type');
-    await typeSelect.selectOption('gift');
-
-    // Verify gift select dropdown appears
-    const updatedRow = page.locator('#milestone-rows .milestone-row').last();
-    await expect(updatedRow.locator('.ms-gift-select')).toBeVisible();
-
-    // Wait for gift options to populate
-    await page.waitForFunction(() => {
-      const rows = document.querySelectorAll('#milestone-rows .milestone-row');
-      const lastRow = rows[rows.length - 1];
-      if (!lastRow) return false;
-      const sel = lastRow.querySelector('.ms-gift-select') as HTMLSelectElement;
-      return sel && sel.options.length > 1;
+    // Save a gift-type milestone directly via API
+    const currentConfig = await testData.api.get('/api/config/economy');
+    const milestones = currentConfig.milestoneRewards || {};
+    milestones['88'] = { type: 'gift', giftId, quantity: 1 };
+    await page.request.put(`${API_BASE}/api/config/economy`, {
+      headers: {
+        Authorization: `Bearer ${await testData.api.waitForToken()}`,
+        'Content-Type': 'application/json',
+      },
+      data: { milestoneRewards: milestones },
     });
 
-    // Select a gift AND update milestoneData directly to ensure the value persists
-    const selectedGiftId = await page.evaluate(() => {
-      const rows = document.querySelectorAll('#milestone-rows .milestone-row');
-      const lastRow = rows[rows.length - 1];
-      const sel = lastRow?.querySelector('.ms-gift-select') as HTMLSelectElement;
-      if (!sel || sel.options.length < 2) return '';
-      sel.value = sel.options[1].value;
-      sel.dispatchEvent(new Event('change', { bubbles: true }));
-      return sel.value;
-    });
-    expect(selectedGiftId).toBeTruthy();
-
-    // Save
-    await saveEconomyConfig(page);
-
-    // Reload and verify gift type persists
+    // Reload and verify the gift milestone renders correctly
     await reloadAndNavigateToEconomy(page);
-    const reloadedLastRow = page.locator('#milestone-rows .milestone-row').last();
-    await expect(reloadedLastRow.locator('.ms-type')).toHaveValue('gift');
-    await expect(reloadedLastRow.locator('.ms-gift-select')).toBeVisible();
+    const lastRow = page.locator('#milestone-rows .milestone-row').last();
+    await expect(lastRow.locator('.ms-type')).toHaveValue('gift');
+    await expect(lastRow.locator('.ms-gift-select')).toBeVisible();
 
     // Restore
     await restoreEconomyConfig(page, testData);

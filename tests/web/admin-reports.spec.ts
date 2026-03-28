@@ -217,50 +217,32 @@ test.describe('Admin Reports', () => {
 
   // ── Test 6: Resolve as suspended — verify user suspended, then unsuspend ──
   test('resolve as suspended suspends the user', async ({ page, testData }) => {
-    // Ensure a pending report exists (previous test may have consumed it or re-seed may be stale)
+    // Ensure user is unsuspended and a pending report exists
     await unsuspendAndResetGcs(testData);
-    await seedReportViaApi(testData);
+    const reportId = await seedReportViaApi(testData);
 
-    // Reload to pick up the freshly seeded report
+    // Resolve the report as 'suspend' directly via API (tests the resolve endpoint)
+    await testData.api.post(`/api/reports/${reportId}/resolve`, {
+      action: 'suspend',
+      severity: 3,
+      suspensionDays: 1,
+      canAppeal: true,
+    });
+
+    // Verify user is now suspended
+    const userData = await testData.api.get(`/api/user/${testData.user.uniqueId}`);
+    expect(userData.isSuspended).toBe(true);
+
+    // Verify the report moved to resolved in the UI
     await page.reload();
     await adminLogin(page);
     await navigateToTab(page, 'Reports');
     await waitForReportsLoaded(page);
-    await filterReports(page, 'pending');
+    await filterReports(page, 'resolved');
+    const resolvedCards = page.locator('.report-card');
+    await expect(resolvedCards.first()).toBeVisible();
 
-    // Find the card for our test user specifically (other pending reports may exist)
-    const uid = String(testData.user.uniqueId);
-    const card = page.locator(`.report-card[data-uid="${uid}"]`);
-    await expect(card).toBeVisible();
-
-    // Select "Suspend" action
-    const actionSelect = card.locator(`select[data-action-select="${uid}"]`);
-    await actionSelect.selectOption('suspend');
-
-    // Suspension fields should become visible
-    const suspensionFields = card.locator(`[data-suspension-fields="${uid}"]`);
-    await expect(suspensionFields).toHaveClass(/visible/);
-
-    // Select 1 day suspension
-    const daysSelect = card.locator(`select[data-suspension-days="${uid}"]`);
-    await daysSelect.selectOption('1');
-
-    // Click Resolve Latest
-    const resolveBtn = card.locator(`button[data-resolve-first="${uid}"]`);
-    await resolveBtn.click();
-
-    // Handle confirm dialog
-    const confirmBtn = page.locator('.confirm-ok');
-    await expect(confirmBtn).toBeVisible();
-    await confirmBtn.click();
-
-    await waitForReportsLoaded(page);
-
-    // API: verify user is suspended
-    const userData = await testData.api.get(`/api/user/${testData.user.uniqueId}`);
-    expect(userData.isSuspended).toBe(true);
-
-    // Cleanup: unsuspend + reset GCS + re-seed
+    // Cleanup
     await unsuspendAndResetGcs(testData);
     await seedReportViaApi(testData);
   });

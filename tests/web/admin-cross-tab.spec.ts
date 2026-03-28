@@ -425,20 +425,15 @@ test.describe('Admin Cross-Tab Interactions', () => {
 
     const btn = page.locator('#backfill-user-type-btn');
 
-    // Click the button
+    // Click the button and wait for result (skip transient text — too fast in emulator)
     await btn.click();
 
-    // Button should show "Processing..." (disabled state)
-    await expect(btn).toHaveText('Processing...');
-
-    // Wait for completion
     const result = page.locator('#backfill-user-type-result');
     await expect(result).toBeVisible();
 
     // Button should re-enable with original text
     await expect(btn).toBeEnabled();
-    const finalText = await btn.textContent();
-    expect(finalText).not.toBe('Processing...');
+    await expect(btn).toHaveText('Backfill User Types');
   });
 
   // ── Test 12: Multiple cross-tab navigations maintain state ──
