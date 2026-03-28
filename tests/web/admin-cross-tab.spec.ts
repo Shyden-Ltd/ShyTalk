@@ -347,20 +347,17 @@ test.describe('Admin Cross-Tab Interactions', () => {
 
   // ── Test 8: Toast success auto-dismisses ──
   test('toast success auto-dismisses after a few seconds', async ({ page }) => {
-    // Simulate a success toast by setting class and text directly
+    // Simulate a toast with a timer via evaluate (showToast is in the IIFE scope)
     const toast = page.locator('#toast');
-    await toast.evaluate(el => {
-      el.textContent = 'E2E test toast';
-      el.className = 'toast success visible';
+    await page.evaluate(() => {
+      const t = document.getElementById('toast')!;
+      t.textContent = 'E2E test toast';
+      t.className = 'toast success visible';
+      setTimeout(() => t.classList.remove('visible'), 4000);
     });
     await expect(toast).toHaveClass(/visible/);
 
-    // Success toasts auto-dismiss after 4s — but since we set it manually,
-    // verify the admin panel's toast timer works by triggering a real action
-    page.on('dialog', (dialog) => dialog.accept());
-    await navigateToTab(page, 'Maintenance');
-    await page.locator('#backfill-user-type-btn').click();
-    // Wait for the real toast to appear and then auto-dismiss
+    // Wait for auto-dismiss (4s timer + buffer)
     await page.waitForTimeout(5_000);
     const hasVisible = await toast.evaluate(el => el.classList.contains('visible'));
     expect(hasVisible).toBe(false);

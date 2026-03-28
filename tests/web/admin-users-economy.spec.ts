@@ -212,7 +212,8 @@ test.describe('Admin Users - Economy Subtab', () => {
     const giftCard = backpackGrid.locator(`.backpack-item[data-gift-id="${firstGiftId}"]`);
     await expect(giftCard).toBeVisible();
 
-    // Click the remove button (X) on the gift card
+    // Click the remove button (X) — only visible on hover
+    await giftCard.hover();
     const removeBtn = giftCard.locator('.backpack-remove-btn');
     await removeBtn.click();
 
