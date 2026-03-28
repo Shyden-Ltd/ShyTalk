@@ -971,19 +971,32 @@ router.get('/appeals', async (req, res) => {
     if (statusFilter) {
       query = query.where('status', '==', statusFilter);
     }
-    query = query.orderBy('createdAt', 'desc').limit(100);
+    query = query.limit(100);
 
     const appeals = await queryDocs(query);
+    appeals.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
     // Enrich with user data (display name, uniqueId, suspension info)
     const enriched = await Promise.all(
       appeals.map(async (a) => {
         const uid = a.userId ?? a.user_id;
         const userData = uid ? await getDoc(`users/${uid}`) : null;
+        const userUniqueId = userData?.uniqueId ?? userData?.unique_id ?? null;
         return {
           ...a,
+          userUniqueId,
+          uniqueId: userUniqueId,
+          userDisplayName: userData?.displayName ?? userData?.display_name ?? null,
           displayName: userData?.displayName ?? userData?.display_name ?? null,
-          uniqueId: userData?.uniqueId ?? userData?.unique_id ?? null,
+          userInfo: {
+            uniqueId: userUniqueId,
+            displayName: userData?.displayName ?? userData?.display_name ?? null,
+            profilePhotoUrl: userData?.profilePhotoUrl ?? userData?.profile_photo_url ?? null,
+            suspensionReason: userData?.suspensionReason ?? userData?.suspension_reason ?? null,
+            suspensionStartDate:
+              userData?.suspensionStartDate ?? userData?.suspension_start_date ?? null,
+            suspensionEndDate: userData?.suspensionEndDate ?? userData?.suspension_end_date ?? null,
+          },
           suspensionReason: userData?.suspensionReason ?? userData?.suspension_reason ?? null,
           suspensionEndDate: userData?.suspensionEndDate ?? userData?.suspension_end_date ?? null,
         };

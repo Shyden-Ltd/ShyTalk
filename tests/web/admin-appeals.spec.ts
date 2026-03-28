@@ -238,9 +238,9 @@ test.describe('Admin Appeals', () => {
     const profile = firstCard.locator('.appeal-profile');
     await expect(profile).toBeVisible();
 
-    // Verify the card contains the appeal text and user identifier (may be masked if suspended)
+    // Verify the card contains the user's unique ID
     const cardText = await firstCard.textContent();
-    expect(cardText).toContain('I did not do this');
+    expect(cardText).toContain(String(testData.user.uniqueId));
 
     // Verify either an avatar image or placeholder exists
     const avatar = firstCard.locator('.appeal-profile img, .appeal-profile .placeholder-avatar');
