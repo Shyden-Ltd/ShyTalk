@@ -7,7 +7,7 @@ import type { Page } from '@playwright/test';
  */
 async function goToMonitor(page: Page): Promise<void> {
   await navigateToTab(page, 'Spin Monitor');
-  await expect(page.locator('#monitor-panel')).toHaveClass(/visible/, { timeout: 10_000 });
+  await expect(page.locator('#monitor-panel')).toHaveClass(/visible/);
 }
 
 /**
@@ -16,12 +16,10 @@ async function goToMonitor(page: Page): Promise<void> {
 async function startMonitoringUser(page: Page, uniqueId: number): Promise<void> {
   await page.locator('#monitor-uid-input').fill(String(uniqueId));
   await page.locator('#monitor-start-btn').click();
-  // Wait for status to become visible and stats to load — use generous
-  // timeouts because WebKit/mobile Firestore connections can be slow
-  await expect(page.locator('#monitor-status')).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator('#monitor-stats')).toBeVisible({ timeout: 10_000 });
-  // Wait for the dot to go live
-  await expect(page.locator('#monitor-dot')).toHaveClass(/live/, { timeout: 10_000 });
+  // UI should appear immediately (admin panel shows status before Firestore connects)
+  await expect(page.locator('#monitor-status')).toBeVisible();
+  await expect(page.locator('#monitor-stats')).toBeVisible();
+  await expect(page.locator('#monitor-dot')).toHaveClass(/live/);
 }
 
 /**
@@ -29,8 +27,7 @@ async function startMonitoringUser(page: Page, uniqueId: number): Promise<void> 
  */
 async function stopMonitoring(page: Page): Promise<void> {
   await page.locator('#monitor-stop-btn').click();
-  // Wait for start button to reappear
-  await expect(page.locator('#monitor-start-btn')).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('#monitor-start-btn')).toBeVisible();
 }
 
 test.describe('Admin Spin Monitor', () => {
@@ -98,9 +95,8 @@ test.describe('Admin Spin Monitor', () => {
     await input.focus();
     await page.keyboard.press('Enter');
 
-    // Wait for monitoring to start — generous timeouts for WebKit/mobile
-    await expect(page.locator('#monitor-status')).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator('#monitor-dot')).toHaveClass(/live/, { timeout: 10_000 });
+    await expect(page.locator('#monitor-status')).toBeVisible();
+    await expect(page.locator('#monitor-dot')).toHaveClass(/live/);
 
     // Verify it started correctly
     const statusText = await page.locator('#monitor-status-text').textContent();
@@ -251,7 +247,7 @@ test.describe('Admin Spin Monitor', () => {
 
     // Wait for the totals wrap to be visible (confirms monitoring started
     // and the display:none wrapper has been shown)
-    await expect(page.locator('#monitor-totals-wrap')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('#monitor-totals-wrap')).toBeVisible();
 
     // Session stats are initialized to "0" by updateSessionTotals() — verify
     // the element has a non-null, non-empty textContent (WebKit can return
