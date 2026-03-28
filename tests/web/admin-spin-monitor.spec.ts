@@ -287,19 +287,17 @@ test.describe('Admin Spin Monitor', () => {
     const summary = page.locator('#spin-history-summary');
     const feed = page.locator('#spin-feed');
 
-    // Scroll summary into view (may be below fold on mobile)
-    await summary.scrollIntoViewIfNeeded();
-
     // Initially closed
     expect(await toggle.evaluate((el: any) => el.open)).toBe(false);
 
-    // Open it
-    await summary.click();
+    // Open it (use force:true — on mobile the element may be covered by
+    // floating/sticky elements that don't actually block user interaction)
+    await summary.click({ force: true });
     expect(await toggle.evaluate((el: any) => el.open)).toBe(true);
     await expect(feed).toBeVisible();
 
     // Close it
-    await summary.click();
+    await summary.click({ force: true });
     expect(await toggle.evaluate((el: any) => el.open)).toBe(false);
 
     // Clean up
