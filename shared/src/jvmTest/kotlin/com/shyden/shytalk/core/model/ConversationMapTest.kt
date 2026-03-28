@@ -12,13 +12,14 @@ class ConversationMapTest {
 
     @Test
     fun `ConversationPreview fromMap parses all fields`() {
-        val map = mapOf<String, Any?>(
-            "text" to "Hello!",
-            "senderId" to "user-1",
-            "senderName" to "Alice",
-            "createdAt" to 1705326600000L,
-            "type" to "IMAGE",
-        )
+        val map =
+            mapOf<String, Any?>(
+                "text" to "Hello!",
+                "senderId" to "user-1",
+                "senderName" to "Alice",
+                "createdAt" to 1705326600000L,
+                "type" to "IMAGE",
+            )
 
         val preview = ConversationPreview.fromMap(map)
 
@@ -41,13 +42,14 @@ class ConversationMapTest {
 
     @Test
     fun `ConversationPreview toMap includes all fields`() {
-        val preview = ConversationPreview(
-            text = "Hello",
-            senderId = "s1",
-            senderName = "Alice",
-            createdAt = 1705326600000L,
-            type = "TEXT",
-        )
+        val preview =
+            ConversationPreview(
+                text = "Hello",
+                senderId = "s1",
+                senderName = "Alice",
+                createdAt = 1705326600000L,
+                type = "TEXT",
+            )
 
         val map = preview.toMap()
 
@@ -60,13 +62,14 @@ class ConversationMapTest {
 
     @Test
     fun `ConversationPreview roundtrip`() {
-        val original = ConversationPreview(
-            text = "Hi!",
-            senderId = "sender-1",
-            senderName = "Sender",
-            createdAt = 1705326600000L,
-            type = "STICKER",
-        )
+        val original =
+            ConversationPreview(
+                text = "Hi!",
+                senderId = "sender-1",
+                senderName = "Sender",
+                createdAt = 1705326600000L,
+                type = "STICKER",
+            )
 
         val restored = ConversationPreview.fromMap(original.toMap())
 
@@ -77,13 +80,14 @@ class ConversationMapTest {
 
     @Test
     fun `Conversation fromMap parses 1-on-1 conversation`() {
-        val map = mapOf<String, Any?>(
-            "participantIds" to listOf("user-1", "user-2"),
-            "lastMessageAt" to 1705326600000L,
-            "createdAt" to 1705000000000L,
-            "isGroup" to false,
-            "isClosed" to false,
-        )
+        val map =
+            mapOf<String, Any?>(
+                "participantIds" to listOf("user-1", "user-2"),
+                "lastMessageAt" to 1705326600000L,
+                "createdAt" to 1705000000000L,
+                "isGroup" to false,
+                "isClosed" to false,
+            )
 
         val conv = Conversation.fromMap(map, "conv-1")
 
@@ -98,20 +102,21 @@ class ConversationMapTest {
 
     @Test
     fun `Conversation fromMap parses group conversation`() {
-        val map = mapOf<String, Any?>(
-            "participantIds" to listOf("user-1", "user-2", "user-3"),
-            "isGroup" to true,
-            "groupName" to "Test Group",
-            "groupPhotoUrl" to "https://photo.png",
-            "groupAdminIds" to listOf("user-1"),
-            "groupModIds" to listOf("user-2"),
-            "groupDescription" to "A test group",
-            "createdBy" to "user-1",
-            "isClosed" to false,
-            "createdAt" to 1705000000000L,
-            "lastMessageAt" to 1705326600000L,
-            "modNotifyMode" to "OWNER_ONLY",
-        )
+        val map =
+            mapOf<String, Any?>(
+                "participantIds" to listOf("user-1", "user-2", "user-3"),
+                "isGroup" to true,
+                "groupName" to "Test Group",
+                "groupPhotoUrl" to "https://photo.png",
+                "groupAdminIds" to listOf("user-1"),
+                "groupModIds" to listOf("user-2"),
+                "groupDescription" to "A test group",
+                "createdBy" to "user-1",
+                "isClosed" to false,
+                "createdAt" to 1705000000000L,
+                "lastMessageAt" to 1705326600000L,
+                "modNotifyMode" to "OWNER_ONLY",
+            )
 
         val conv = Conversation.fromMap(map, "conv-2")
 
@@ -146,17 +151,19 @@ class ConversationMapTest {
 
     @Test
     fun `Conversation fromMap parses lastMessage`() {
-        val map = mapOf<String, Any?>(
-            "lastMessage" to mapOf(
-                "text" to "Last msg",
-                "senderId" to "s1",
-                "senderName" to "Alice",
-                "createdAt" to 1705326600000L,
-                "type" to "TEXT",
-            ),
-            "createdAt" to 1705000000000L,
-            "lastMessageAt" to 1705326600000L,
-        )
+        val map =
+            mapOf<String, Any?>(
+                "lastMessage" to
+                    mapOf(
+                        "text" to "Last msg",
+                        "senderId" to "s1",
+                        "senderName" to "Alice",
+                        "createdAt" to 1705326600000L,
+                        "type" to "TEXT",
+                    ),
+                "createdAt" to 1705000000000L,
+                "lastMessageAt" to 1705326600000L,
+            )
 
         val conv = Conversation.fromMap(map, "conv-4")
 
@@ -176,14 +183,16 @@ class ConversationMapTest {
 
     @Test
     fun `Conversation fromMap parses permissions`() {
-        val map = mapOf<String, Any?>(
-            "permissions" to mapOf(
-                "whoCanSend" to "MODS_AND_ABOVE",
-                "whoCanAddMembers" to "ADMINS_ONLY",
-            ),
-            "createdAt" to 1705000000000L,
-            "lastMessageAt" to 1705326600000L,
-        )
+        val map =
+            mapOf<String, Any?>(
+                "permissions" to
+                    mapOf(
+                        "whoCanSend" to "MODS_AND_ABOVE",
+                        "whoCanAddMembers" to "ADMINS_ONLY",
+                    ),
+                "createdAt" to 1705000000000L,
+                "lastMessageAt" to 1705326600000L,
+            )
 
         val conv = Conversation.fromMap(map, "conv-6")
 
@@ -199,14 +208,16 @@ class ConversationMapTest {
 
     @Test
     fun `Conversation fromMap parses systemMessageConfig`() {
-        val map = mapOf<String, Any?>(
-            "systemMessageConfig" to mapOf(
-                "showJoins" to false,
-                "showLeaves" to true,
-            ),
-            "createdAt" to 1705000000000L,
-            "lastMessageAt" to 1705326600000L,
-        )
+        val map =
+            mapOf<String, Any?>(
+                "systemMessageConfig" to
+                    mapOf(
+                        "showJoins" to false,
+                        "showLeaves" to true,
+                    ),
+                "createdAt" to 1705000000000L,
+                "lastMessageAt" to 1705326600000L,
+            )
 
         val conv = Conversation.fromMap(map, "conv-8")
 
@@ -232,11 +243,12 @@ class ConversationMapTest {
 
     @Test
     fun `Conversation toMap for 1-on-1 does not include group fields`() {
-        val conv = Conversation(
-            conversationId = "conv-1",
-            participantIds = listOf("u1", "u2"),
-            isGroup = false,
-        )
+        val conv =
+            Conversation(
+                conversationId = "conv-1",
+                participantIds = listOf("u1", "u2"),
+                isGroup = false,
+            )
 
         val map = conv.toMap()
 
@@ -251,15 +263,16 @@ class ConversationMapTest {
 
     @Test
     fun `Conversation toMap for group includes group fields`() {
-        val conv = Conversation(
-            conversationId = "conv-2",
-            participantIds = listOf("u1", "u2", "u3"),
-            isGroup = true,
-            groupName = "Group",
-            groupAdminIds = listOf("u1"),
-            groupModIds = listOf("u2"),
-            createdBy = "u1",
-        )
+        val conv =
+            Conversation(
+                conversationId = "conv-2",
+                participantIds = listOf("u1", "u2", "u3"),
+                isGroup = true,
+                groupName = "Group",
+                groupAdminIds = listOf("u1"),
+                groupModIds = listOf("u2"),
+                createdBy = "u1",
+            )
 
         val map = conv.toMap()
 
@@ -274,9 +287,10 @@ class ConversationMapTest {
 
     @Test
     fun `Conversation toMap includes lastMessage map`() {
-        val conv = Conversation(
-            lastMessage = ConversationPreview(text = "Hi", senderId = "s1", senderName = "Alice"),
-        )
+        val conv =
+            Conversation(
+                lastMessage = ConversationPreview(text = "Hi", senderId = "s1", senderName = "Alice"),
+            )
 
         val map = conv.toMap()
         val lastMsg = map["lastMessage"] as? Map<*, *>
@@ -329,62 +343,68 @@ class ConversationMapTest {
 
     @Test
     fun `isAdmin returns false for non-admin non-creator`() {
-        val conv = Conversation(
-            isGroup = true,
-            createdBy = "owner-1",
-            groupAdminIds = listOf("admin-1"),
-        )
+        val conv =
+            Conversation(
+                isGroup = true,
+                createdBy = "owner-1",
+                groupAdminIds = listOf("admin-1"),
+            )
         assertFalse(conv.isAdmin("regular-user"))
     }
 
     @Test
     fun `isMod returns false for non-mod`() {
-        val conv = Conversation(
-            isGroup = true,
-            groupModIds = listOf("mod-1"),
-        )
+        val conv =
+            Conversation(
+                isGroup = true,
+                groupModIds = listOf("mod-1"),
+            )
         assertFalse(conv.isMod("regular-user"))
     }
 
     @Test
     fun `isModOrAbove returns false for member`() {
-        val conv = Conversation(
-            isGroup = true,
-            createdBy = "owner-1",
-            groupAdminIds = listOf("admin-1"),
-            groupModIds = listOf("mod-1"),
-        )
+        val conv =
+            Conversation(
+                isGroup = true,
+                createdBy = "owner-1",
+                groupAdminIds = listOf("admin-1"),
+                groupModIds = listOf("mod-1"),
+            )
         assertFalse(conv.isModOrAbove("regular-user"))
     }
 
     @Test
     fun `isModOrAbove returns true for mod`() {
-        val conv = Conversation(
-            isGroup = true,
-            createdBy = "owner-1",
-            groupModIds = listOf("mod-1"),
-        )
+        val conv =
+            Conversation(
+                isGroup = true,
+                createdBy = "owner-1",
+                groupModIds = listOf("mod-1"),
+            )
         assertTrue(conv.isModOrAbove("mod-1"))
     }
 
     @Test
     fun `roleOf returns ADMIN for admin`() {
-        val conv = Conversation(
-            isGroup = true,
-            createdBy = "owner-1",
-            groupAdminIds = listOf("admin-1"),
-        )
+        val conv =
+            Conversation(
+                isGroup = true,
+                createdBy = "owner-1",
+                groupAdminIds = listOf("admin-1"),
+            )
         assertEquals(GroupRole.ADMIN, conv.roleOf("admin-1"))
     }
 
     @Test
     fun `roleOf returns MOD for mod`() {
-        val conv = Conversation(
-            isGroup = true,
-            createdBy = "owner-1",
-            groupAdminIds = listOf("admin-1"),
-            groupModIds = listOf("mod-1"),
-        )
+        val conv =
+            Conversation(
+                isGroup = true,
+                createdBy = "owner-1",
+                groupAdminIds = listOf("admin-1"),
+                groupModIds = listOf("mod-1"),
+            )
         assertEquals(GroupRole.MOD, conv.roleOf("mod-1"))
     }
 

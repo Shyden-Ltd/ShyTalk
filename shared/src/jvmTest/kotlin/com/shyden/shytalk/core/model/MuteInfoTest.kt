@@ -10,14 +10,15 @@ class MuteInfoTest {
 
     @Test
     fun `fromMap parses all fields`() {
-        val map = mapOf<String, Any?>(
-            "mutedBy" to "mod-1",
-            "mutedByName" to "Moderator",
-            "reason" to "Spam",
-            "mutedAt" to 1705326600000L,
-            "expiresAt" to 1705413000000L,
-            "isActive" to true,
-        )
+        val map =
+            mapOf<String, Any?>(
+                "mutedBy" to "mod-1",
+                "mutedByName" to "Moderator",
+                "reason" to "Spam",
+                "mutedAt" to 1705326600000L,
+                "expiresAt" to 1705413000000L,
+                "isActive" to true,
+            )
 
         val info = MuteInfo.fromMap(map, "user-1")
 
@@ -75,15 +76,16 @@ class MuteInfoTest {
 
     @Test
     fun `toMap includes all fields`() {
-        val info = MuteInfo(
-            mutedUserId = "user-1",
-            mutedBy = "mod-1",
-            mutedByName = "Mod",
-            reason = "Bad behavior",
-            mutedAt = 1705326600000L,
-            expiresAt = 1705413000000L,
-            isActive = true,
-        )
+        val info =
+            MuteInfo(
+                mutedUserId = "user-1",
+                mutedBy = "mod-1",
+                mutedByName = "Mod",
+                reason = "Bad behavior",
+                mutedAt = 1705326600000L,
+                expiresAt = 1705413000000L,
+                isActive = true,
+            )
 
         val map = info.toMap()
 
@@ -106,15 +108,16 @@ class MuteInfoTest {
 
     @Test
     fun `toMap and fromMap roundtrip preserves data`() {
-        val original = MuteInfo(
-            mutedUserId = "user-rt",
-            mutedBy = "mod-1",
-            mutedByName = "Moderator",
-            reason = "Testing",
-            mutedAt = 1705326600000L,
-            expiresAt = 1705413000000L,
-            isActive = false,
-        )
+        val original =
+            MuteInfo(
+                mutedUserId = "user-rt",
+                mutedBy = "mod-1",
+                mutedByName = "Moderator",
+                reason = "Testing",
+                mutedAt = 1705326600000L,
+                expiresAt = 1705413000000L,
+                isActive = false,
+            )
 
         val map = original.toMap()
         val restored = MuteInfo.fromMap(map, original.mutedUserId)
@@ -124,13 +127,14 @@ class MuteInfoTest {
 
     @Test
     fun `roundtrip with null optional fields`() {
-        val original = MuteInfo(
-            mutedUserId = "u1",
-            mutedBy = "mod-1",
-            mutedByName = "Mod",
-            reason = null,
-            expiresAt = null,
-        )
+        val original =
+            MuteInfo(
+                mutedUserId = "u1",
+                mutedBy = "mod-1",
+                mutedByName = "Mod",
+                reason = null,
+                expiresAt = null,
+            )
 
         val map = original.toMap()
         val restored = MuteInfo.fromMap(map, original.mutedUserId)

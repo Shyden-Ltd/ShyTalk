@@ -10,19 +10,20 @@ class TransactionTest {
 
     @Test
     fun `fromMap parses all fields`() {
-        val map = mapOf<String, Any?>(
-            "type" to "GIFT_SENT",
-            "amount" to -100L,
-            "currency" to "COINS",
-            "balanceAfter" to 900L,
-            "giftId" to "gift-1",
-            "giftName" to "Rose",
-            "recipientId" to "user-2",
-            "senderId" to "user-1",
-            "pullCount" to 3,
-            "details" to "Sent Rose to user-2",
-            "timestamp" to 1705326600000L,
-        )
+        val map =
+            mapOf<String, Any?>(
+                "type" to "GIFT_SENT",
+                "amount" to -100L,
+                "currency" to "COINS",
+                "balanceAfter" to 900L,
+                "giftId" to "gift-1",
+                "giftName" to "Rose",
+                "recipientId" to "user-2",
+                "senderId" to "user-1",
+                "pullCount" to 3,
+                "details" to "Sent Rose to user-2",
+                "timestamp" to 1705326600000L,
+            )
 
         val tx = Transaction.fromMap(map, "tx-1")
 

@@ -4,7 +4,6 @@ import com.shyden.shytalk.core.util.currentTimeMillis
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -13,21 +12,22 @@ class UserTest {
 
     @Test
     fun `fromMap parses basic fields`() {
-        val map = mapOf<String, Any?>(
-            "displayName" to "Alice",
-            "avatarUrl" to "https://avatar.png",
-            "profilePhotoUrl" to "https://profile.png",
-            "coverPhotoUrl" to "https://cover.png",
-            "description" to "Hello world",
-            "nationality" to "US",
-            "uniqueId" to 10000001L,
-            "firebaseUid" to "firebase-uid-1",
-            "email" to "alice@example.com",
-            "userType" to "MEMBER",
-            "createdAt" to 1705326600000L,
-            "lastSeenAt" to 1705326700000L,
-            "language" to "en",
-        )
+        val map =
+            mapOf<String, Any?>(
+                "displayName" to "Alice",
+                "avatarUrl" to "https://avatar.png",
+                "profilePhotoUrl" to "https://profile.png",
+                "coverPhotoUrl" to "https://cover.png",
+                "description" to "Hello world",
+                "nationality" to "US",
+                "uniqueId" to 10000001L,
+                "firebaseUid" to "firebase-uid-1",
+                "email" to "alice@example.com",
+                "userType" to "MEMBER",
+                "createdAt" to 1705326600000L,
+                "lastSeenAt" to 1705326700000L,
+                "language" to "en",
+            )
 
         val user = User.fromMap(map, "10000001")
 
@@ -148,11 +148,12 @@ class UserTest {
 
     @Test
     fun `fromMap handles integer booleans for hide fields`() {
-        val map = mapOf<String, Any?>(
-            "hideFollowing" to 1,
-            "hideOnlineStatus" to 0,
-            "hideAge" to 1,
-        )
+        val map =
+            mapOf<String, Any?>(
+                "hideFollowing" to 1,
+                "hideOnlineStatus" to 0,
+                "hideAge" to 1,
+            )
 
         val user = User.fromMap(map, "u1")
 
@@ -163,10 +164,11 @@ class UserTest {
 
     @Test
     fun `fromMap handles integer booleans for suspension fields`() {
-        val map = mapOf<String, Any?>(
-            "isSuspended" to 1,
-            "suspensionCanAppeal" to 0,
-        )
+        val map =
+            mapOf<String, Any?>(
+                "isSuspended" to 1,
+                "suspensionCanAppeal" to 0,
+            )
 
         val user = User.fromMap(map, "u1")
 
@@ -176,13 +178,14 @@ class UserTest {
 
     @Test
     fun `fromMap handles integer booleans for PM settings`() {
-        val map = mapOf<String, Any?>(
-            "pmNotificationsEnabled" to 0,
-            "pmSoundEnabled" to 0,
-            "pmShowTimestamps" to 0,
-            "pmShowDateSeparators" to 0,
-            "pmNotificationPreview" to 0,
-        )
+        val map =
+            mapOf<String, Any?>(
+                "pmNotificationsEnabled" to 0,
+                "pmSoundEnabled" to 0,
+                "pmShowTimestamps" to 0,
+                "pmShowDateSeparators" to 0,
+                "pmNotificationPreview" to 0,
+            )
 
         val user = User.fromMap(map, "u1")
 
@@ -213,9 +216,10 @@ class UserTest {
 
     @Test
     fun `fromMap parses aliases`() {
-        val map = mapOf<String, Any?>(
-            "aliases" to mapOf("user-2" to "Bob Alias", "user-3" to "Charlie Alias"),
-        )
+        val map =
+            mapOf<String, Any?>(
+                "aliases" to mapOf("user-2" to "Bob Alias", "user-3" to "Charlie Alias"),
+            )
 
         val user = User.fromMap(map, "u1")
 
@@ -247,19 +251,21 @@ class UserTest {
 
     @Test
     fun `isActivelySuspended returns true when endDate is in the future`() {
-        val user = User(
-            isSuspended = true,
-            suspensionEndDate = currentTimeMillis() + 60_000,
-        )
+        val user =
+            User(
+                isSuspended = true,
+                suspensionEndDate = currentTimeMillis() + 60_000,
+            )
         assertTrue(user.isActivelySuspended)
     }
 
     @Test
     fun `isActivelySuspended returns false when endDate is in the past`() {
-        val user = User(
-            isSuspended = true,
-            suspensionEndDate = currentTimeMillis() - 60_000,
-        )
+        val user =
+            User(
+                isSuspended = true,
+                suspensionEndDate = currentTimeMillis() - 60_000,
+            )
         assertFalse(user.isActivelySuspended)
     }
 
@@ -283,21 +289,23 @@ class UserTest {
 
     @Test
     fun `displayUniqueId returns tempUniqueId when active`() {
-        val user = User(
-            uniqueId = 10000001,
-            tempUniqueId = 99999999,
-            tempUniqueIdExpiry = currentTimeMillis() + 60_000,
-        )
+        val user =
+            User(
+                uniqueId = 10000001,
+                tempUniqueId = 99999999,
+                tempUniqueIdExpiry = currentTimeMillis() + 60_000,
+            )
         assertEquals(99999999L, user.displayUniqueId)
     }
 
     @Test
     fun `displayUniqueId returns real uniqueId when temp is expired`() {
-        val user = User(
-            uniqueId = 10000001,
-            tempUniqueId = 99999999,
-            tempUniqueIdExpiry = currentTimeMillis() - 60_000,
-        )
+        val user =
+            User(
+                uniqueId = 10000001,
+                tempUniqueId = 99999999,
+                tempUniqueIdExpiry = currentTimeMillis() - 60_000,
+            )
         assertEquals(10000001L, user.displayUniqueId)
     }
 
@@ -309,11 +317,12 @@ class UserTest {
 
     @Test
     fun `displayUniqueId returns real uniqueId when tempUniqueIdExpiry is null`() {
-        val user = User(
-            uniqueId = 10000001,
-            tempUniqueId = 99999999,
-            tempUniqueIdExpiry = null,
-        )
+        val user =
+            User(
+                uniqueId = 10000001,
+                tempUniqueId = 99999999,
+                tempUniqueIdExpiry = null,
+            )
         assertEquals(10000001L, user.displayUniqueId)
     }
 
@@ -321,15 +330,16 @@ class UserTest {
 
     @Test
     fun `toMap includes key fields`() {
-        val user = User(
-            uid = "u1",
-            displayName = "Alice",
-            uniqueId = 10000001L,
-            userType = UserType.SHYTALK_OFFICIAL,
-            shyCoins = 500,
-            shyBeans = 100,
-            language = "ko",
-        )
+        val user =
+            User(
+                uid = "u1",
+                displayName = "Alice",
+                uniqueId = 10000001L,
+                userType = UserType.SHYTALK_OFFICIAL,
+                shyCoins = 500,
+                shyBeans = 100,
+                language = "ko",
+            )
 
         val map = user.toMap()
 
@@ -351,15 +361,16 @@ class UserTest {
 
     @Test
     fun `toMap includes suspension fields`() {
-        val user = User(
-            isSuspended = true,
-            suspensionReason = "Spam",
-            suspensionStartDate = 1705326600000L,
-            suspensionEndDate = 1705413000000L,
-            suspensionCanAppeal = true,
-            suspendedBy = "admin-1",
-            suspensionAppealStatus = "pending",
-        )
+        val user =
+            User(
+                isSuspended = true,
+                suspensionReason = "Spam",
+                suspensionStartDate = 1705326600000L,
+                suspensionEndDate = 1705413000000L,
+                suspensionCanAppeal = true,
+                suspendedBy = "admin-1",
+                suspensionAppealStatus = "pending",
+            )
 
         val map = user.toMap()
 
@@ -374,13 +385,14 @@ class UserTest {
 
     @Test
     fun `toMap includes DND fields`() {
-        val user = User(
-            dndEnabled = true,
-            dndStartHour = 23,
-            dndStartMinute = 30,
-            dndEndHour = 7,
-            dndEndMinute = 0,
-        )
+        val user =
+            User(
+                dndEnabled = true,
+                dndStartHour = 23,
+                dndStartMinute = 30,
+                dndEndHour = 7,
+                dndEndMinute = 0,
+            )
 
         val map = user.toMap()
 

@@ -10,12 +10,13 @@ class GiftWallEntryTest {
 
     @Test
     fun `fromMap parses all fields`() {
-        val map = mapOf<String, Any?>(
-            "receivedCount" to 100,
-            "senders" to mapOf("user-1" to 50, "user-2" to 30, "user-3" to 20),
-            "topSenderId" to "user-1",
-            "topSenderCount" to 50,
-        )
+        val map =
+            mapOf<String, Any?>(
+                "receivedCount" to 100,
+                "senders" to mapOf("user-1" to 50, "user-2" to 30, "user-3" to 20),
+                "topSenderId" to "user-1",
+                "topSenderCount" to 50,
+            )
 
         val entry = GiftWallEntry.fromMap(map, "gift-1")
 
@@ -49,9 +50,10 @@ class GiftWallEntryTest {
 
     @Test
     fun `fromMap handles Number types for sender counts`() {
-        val map = mapOf<String, Any?>(
-            "senders" to mapOf("u1" to 10L),
-        )
+        val map =
+            mapOf<String, Any?>(
+                "senders" to mapOf("u1" to 10L),
+            )
         val entry = GiftWallEntry.fromMap(map, "g1")
         assertEquals(10, entry.senders["u1"])
     }
@@ -90,12 +92,13 @@ class GiftWallEntryTest {
 
     @Test
     fun `GiftRankEntry stores properties correctly`() {
-        val entry = GiftRankEntry(
-            userId = "u1",
-            count = 100,
-            displayName = "Alice",
-            profilePhotoUrl = "photo.png",
-        )
+        val entry =
+            GiftRankEntry(
+                userId = "u1",
+                count = 100,
+                displayName = "Alice",
+                profilePhotoUrl = "photo.png",
+            )
         assertEquals("u1", entry.userId)
         assertEquals(100, entry.count)
         assertEquals("Alice", entry.displayName)

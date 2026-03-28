@@ -11,17 +11,18 @@ class GiftTest {
 
     @Test
     fun `fromMap parses all fields`() {
-        val map = mapOf<String, Any?>(
-            "name" to "Diamond Ring",
-            "coinValue" to 500,
-            "animationUrl" to "https://example.com/anim.json",
-            "soundUrl" to "https://example.com/sound.mp3",
-            "iconUrl" to "https://example.com/icon.png",
-            "order" to 3,
-            "expiresAfterDays" to 30,
-            "showInStore" to true,
-            "showOnWheel" to false,
-        )
+        val map =
+            mapOf<String, Any?>(
+                "name" to "Diamond Ring",
+                "coinValue" to 500,
+                "animationUrl" to "https://example.com/anim.json",
+                "soundUrl" to "https://example.com/sound.mp3",
+                "iconUrl" to "https://example.com/icon.png",
+                "order" to 3,
+                "expiresAfterDays" to 30,
+                "showInStore" to true,
+                "showOnWheel" to false,
+            )
 
         val gift = Gift.fromMap(map, "gift-1")
 
@@ -78,18 +79,19 @@ class GiftTest {
 
     @Test
     fun `toMap includes all fields`() {
-        val gift = Gift(
-            id = "gift-1",
-            name = "Rose",
-            coinValue = 10,
-            animationUrl = "anim",
-            soundUrl = "sound",
-            iconUrl = "icon",
-            order = 1,
-            expiresAfterDays = 7,
-            showInStore = true,
-            showOnWheel = false,
-        )
+        val gift =
+            Gift(
+                id = "gift-1",
+                name = "Rose",
+                coinValue = 10,
+                animationUrl = "anim",
+                soundUrl = "sound",
+                iconUrl = "icon",
+                order = 1,
+                expiresAfterDays = 7,
+                showInStore = true,
+                showOnWheel = false,
+            )
 
         val map = gift.toMap()
 
@@ -115,18 +117,19 @@ class GiftTest {
 
     @Test
     fun `toMap and fromMap roundtrip preserves data`() {
-        val original = Gift(
-            id = "gift-rt",
-            name = "Star",
-            coinValue = 250,
-            animationUrl = "https://anim.url",
-            soundUrl = "https://sound.url",
-            iconUrl = "https://icon.url",
-            order = 5,
-            expiresAfterDays = 14,
-            showInStore = false,
-            showOnWheel = true,
-        )
+        val original =
+            Gift(
+                id = "gift-rt",
+                name = "Star",
+                coinValue = 250,
+                animationUrl = "https://anim.url",
+                soundUrl = "https://sound.url",
+                iconUrl = "https://icon.url",
+                order = 5,
+                expiresAfterDays = 14,
+                showInStore = false,
+                showOnWheel = true,
+            )
 
         val map = original.toMap()
         val restored = Gift.fromMap(map, original.id)
@@ -136,12 +139,13 @@ class GiftTest {
 
     @Test
     fun `roundtrip with null expiresAfterDays`() {
-        val original = Gift(
-            id = "gift-null-exp",
-            name = "Basic",
-            coinValue = 5,
-            expiresAfterDays = null,
-        )
+        val original =
+            Gift(
+                id = "gift-null-exp",
+                name = "Basic",
+                coinValue = 5,
+                expiresAfterDays = null,
+            )
 
         val map = original.toMap()
         val restored = Gift.fromMap(map, original.id)

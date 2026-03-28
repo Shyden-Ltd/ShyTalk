@@ -219,8 +219,10 @@ class DateUtilsTest {
         val jan5 = 1704412800000L
         val result = formatDateForDisplay(jan5)
         // Day should be zero-padded: "05"
-        assertTrue(result.contains("05") || result.contains("04") || result.contains("06"),
-            "Expected zero-padded day, got: $result")
+        assertTrue(
+            result.contains("05") || result.contains("04") || result.contains("06"),
+            "Expected zero-padded day, got: $result",
+        )
     }
 
     // ── calculateAge ────────────────────────────────────────────────

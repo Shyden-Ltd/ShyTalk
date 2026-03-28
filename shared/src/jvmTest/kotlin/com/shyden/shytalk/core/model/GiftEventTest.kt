@@ -8,17 +8,18 @@ class GiftEventTest {
 
     @Test
     fun `fromMap parses all fields`() {
-        val map = mapOf<String, Any?>(
-            "senderId" to "sender-1",
-            "senderName" to "Alice",
-            "recipientId" to "recipient-1",
-            "recipientName" to "Bob",
-            "giftId" to "gift-1",
-            "giftName" to "Rose",
-            "coinValue" to 100,
-            "quantity" to 3,
-            "timestamp" to 1705326600000L,
-        )
+        val map =
+            mapOf<String, Any?>(
+                "senderId" to "sender-1",
+                "senderName" to "Alice",
+                "recipientId" to "recipient-1",
+                "recipientName" to "Bob",
+                "giftId" to "gift-1",
+                "giftName" to "Rose",
+                "coinValue" to 100,
+                "quantity" to 3,
+                "timestamp" to 1705326600000L,
+            )
 
         val event = GiftEvent.fromMap(map)
 

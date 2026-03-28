@@ -11,15 +11,16 @@ class ConversationSettingsTest {
 
     @Test
     fun `fromMap parses all fields`() {
-        val map = mapOf<String, Any?>(
-            "isMuted" to true,
-            "isHidden" to true,
-            "hiddenAt" to 1705326600000L,
-            "isPinned" to true,
-            "lastReadMessageId" to "msg-100",
-            "lastReadAt" to 1705326700000L,
-            "unreadCount" to 5L,
-        )
+        val map =
+            mapOf<String, Any?>(
+                "isMuted" to true,
+                "isHidden" to true,
+                "hiddenAt" to 1705326600000L,
+                "isPinned" to true,
+                "lastReadMessageId" to "msg-100",
+                "lastReadAt" to 1705326700000L,
+                "unreadCount" to 5L,
+            )
 
         val settings = ConversationSettings.fromMap(map, "user-1")
 
@@ -49,11 +50,12 @@ class ConversationSettingsTest {
 
     @Test
     fun `fromMap handles integer booleans`() {
-        val map = mapOf<String, Any?>(
-            "isMuted" to 1,
-            "isHidden" to 0,
-            "isPinned" to 1,
-        )
+        val map =
+            mapOf<String, Any?>(
+                "isMuted" to 1,
+                "isHidden" to 0,
+                "isPinned" to 1,
+            )
 
         val settings = ConversationSettings.fromMap(map, "u1")
 
@@ -73,16 +75,17 @@ class ConversationSettingsTest {
 
     @Test
     fun `toMap includes all fields`() {
-        val settings = ConversationSettings(
-            userId = "u1",
-            isMuted = true,
-            isHidden = false,
-            hiddenAt = 1705326600000L,
-            isPinned = true,
-            lastReadMessageId = "msg-50",
-            lastReadAt = 1705326700000L,
-            unreadCount = 3,
-        )
+        val settings =
+            ConversationSettings(
+                userId = "u1",
+                isMuted = true,
+                isHidden = false,
+                hiddenAt = 1705326600000L,
+                isPinned = true,
+                lastReadMessageId = "msg-50",
+                lastReadAt = 1705326700000L,
+                unreadCount = 3,
+            )
 
         val map = settings.toMap()
 
@@ -100,16 +103,17 @@ class ConversationSettingsTest {
 
     @Test
     fun `toMap and fromMap roundtrip preserves data`() {
-        val original = ConversationSettings(
-            userId = "u-rt",
-            isMuted = true,
-            isHidden = true,
-            hiddenAt = 1705326600000L,
-            isPinned = false,
-            lastReadMessageId = "msg-99",
-            lastReadAt = 1705326700000L,
-            unreadCount = 10,
-        )
+        val original =
+            ConversationSettings(
+                userId = "u-rt",
+                isMuted = true,
+                isHidden = true,
+                hiddenAt = 1705326600000L,
+                isPinned = false,
+                lastReadMessageId = "msg-99",
+                lastReadAt = 1705326700000L,
+                unreadCount = 10,
+            )
 
         val map = original.toMap()
         val restored = ConversationSettings.fromMap(map, original.userId)
@@ -119,10 +123,11 @@ class ConversationSettingsTest {
 
     @Test
     fun `roundtrip with null hiddenAt`() {
-        val original = ConversationSettings(
-            userId = "u-null",
-            hiddenAt = null,
-        )
+        val original =
+            ConversationSettings(
+                userId = "u-null",
+                hiddenAt = null,
+            )
 
         val map = original.toMap()
         val restored = ConversationSettings.fromMap(map, original.userId)

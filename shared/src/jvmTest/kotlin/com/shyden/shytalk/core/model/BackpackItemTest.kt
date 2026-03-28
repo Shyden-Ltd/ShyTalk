@@ -11,11 +11,12 @@ class BackpackItemTest {
 
     @Test
     fun `fromMap parses all fields`() {
-        val map = mapOf<String, Any?>(
-            "quantity" to 5,
-            "lastAcquired" to 1705326600000L,
-            "expiresAt" to 1705413000000L,
-        )
+        val map =
+            mapOf<String, Any?>(
+                "quantity" to 5,
+                "lastAcquired" to 1705326600000L,
+                "expiresAt" to 1705413000000L,
+            )
 
         val item = BackpackItem.fromMap(map, "gift-1")
 
@@ -60,12 +61,13 @@ class BackpackItemTest {
 
     @Test
     fun `toMap includes quantity, lastAcquired, expiresAt`() {
-        val item = BackpackItem(
-            giftId = "gift-1",
-            quantity = 3,
-            lastAcquired = 1705326600000L,
-            expiresAt = 1705413000000L,
-        )
+        val item =
+            BackpackItem(
+                giftId = "gift-1",
+                quantity = 3,
+                lastAcquired = 1705326600000L,
+                expiresAt = 1705413000000L,
+            )
 
         val map = item.toMap()
 
@@ -85,12 +87,13 @@ class BackpackItemTest {
 
     @Test
     fun `toMap and fromMap roundtrip preserves data`() {
-        val original = BackpackItem(
-            giftId = "gift-rt",
-            quantity = 7,
-            lastAcquired = 1705326600000L,
-            expiresAt = 1705413000000L,
-        )
+        val original =
+            BackpackItem(
+                giftId = "gift-rt",
+                quantity = 7,
+                lastAcquired = 1705326600000L,
+                expiresAt = 1705413000000L,
+            )
 
         val map = original.toMap()
         val restored = BackpackItem.fromMap(map, original.giftId)

@@ -10,12 +10,13 @@ class SystemMessageConfigTest {
 
     @Test
     fun `fromMap parses all fields`() {
-        val map = mapOf<String, Any?>(
-            "showJoins" to false,
-            "showLeaves" to true,
-            "showRoleChanges" to false,
-            "showPermissionChanges" to true,
-        )
+        val map =
+            mapOf<String, Any?>(
+                "showJoins" to false,
+                "showLeaves" to true,
+                "showRoleChanges" to false,
+                "showPermissionChanges" to true,
+            )
 
         val config = SystemMessageConfig.fromMap(map)
 
@@ -37,12 +38,13 @@ class SystemMessageConfigTest {
 
     @Test
     fun `fromMap handles integer booleans`() {
-        val map = mapOf<String, Any?>(
-            "showJoins" to 0,
-            "showLeaves" to 1,
-            "showRoleChanges" to 0,
-            "showPermissionChanges" to 1,
-        )
+        val map =
+            mapOf<String, Any?>(
+                "showJoins" to 0,
+                "showLeaves" to 1,
+                "showRoleChanges" to 0,
+                "showPermissionChanges" to 1,
+            )
 
         val config = SystemMessageConfig.fromMap(map)
 
@@ -54,10 +56,11 @@ class SystemMessageConfigTest {
 
     @Test
     fun `fromMap defaults to true for null values`() {
-        val map = mapOf<String, Any?>(
-            "showJoins" to null,
-            "showLeaves" to null,
-        )
+        val map =
+            mapOf<String, Any?>(
+                "showJoins" to null,
+                "showLeaves" to null,
+            )
 
         val config = SystemMessageConfig.fromMap(map)
 
@@ -69,12 +72,13 @@ class SystemMessageConfigTest {
 
     @Test
     fun `toMap includes all fields as booleans`() {
-        val config = SystemMessageConfig(
-            showJoins = false,
-            showLeaves = true,
-            showRoleChanges = false,
-            showPermissionChanges = true,
-        )
+        val config =
+            SystemMessageConfig(
+                showJoins = false,
+                showLeaves = true,
+                showRoleChanges = false,
+                showPermissionChanges = true,
+            )
 
         val map = config.toMap()
 
@@ -88,12 +92,13 @@ class SystemMessageConfigTest {
 
     @Test
     fun `toMap and fromMap roundtrip preserves data`() {
-        val original = SystemMessageConfig(
-            showJoins = false,
-            showLeaves = false,
-            showRoleChanges = true,
-            showPermissionChanges = false,
-        )
+        val original =
+            SystemMessageConfig(
+                showJoins = false,
+                showLeaves = false,
+                showRoleChanges = true,
+                showPermissionChanges = false,
+            )
 
         val map = original.toMap()
         val restored = SystemMessageConfig.fromMap(map)
@@ -110,12 +115,13 @@ class SystemMessageConfigTest {
 
     @Test
     fun `roundtrip with all false`() {
-        val original = SystemMessageConfig(
-            showJoins = false,
-            showLeaves = false,
-            showRoleChanges = false,
-            showPermissionChanges = false,
-        )
+        val original =
+            SystemMessageConfig(
+                showJoins = false,
+                showLeaves = false,
+                showRoleChanges = false,
+                showPermissionChanges = false,
+            )
         val restored = SystemMessageConfig.fromMap(original.toMap())
         assertEquals(original, restored)
     }

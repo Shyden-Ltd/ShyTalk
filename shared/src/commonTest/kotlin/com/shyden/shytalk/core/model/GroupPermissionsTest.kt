@@ -10,14 +10,15 @@ class GroupPermissionsTest {
 
     @Test
     fun `fromMap parses all fields`() {
-        val map = mapOf<String, Any?>(
-            "whoCanSend" to "ADMINS_ONLY",
-            "whoCanAddMembers" to "MODS_AND_ABOVE",
-            "whoCanEditInfo" to "OWNER_ONLY",
-            "whoCanDeleteMessages" to "EVERYONE",
-            "whoCanMuteMembers" to "ADMINS_ONLY",
-            "whoCanRemoveMembers" to "OWNER_ONLY",
-        )
+        val map =
+            mapOf<String, Any?>(
+                "whoCanSend" to "ADMINS_ONLY",
+                "whoCanAddMembers" to "MODS_AND_ABOVE",
+                "whoCanEditInfo" to "OWNER_ONLY",
+                "whoCanDeleteMessages" to "EVERYONE",
+                "whoCanMuteMembers" to "ADMINS_ONLY",
+                "whoCanRemoveMembers" to "OWNER_ONLY",
+            )
 
         val perms = GroupPermissions.fromMap(map)
 
@@ -73,14 +74,15 @@ class GroupPermissionsTest {
 
     @Test
     fun `toMap includes all fields as strings`() {
-        val perms = GroupPermissions(
-            whoCanSend = GroupPermissions.PermissionLevel.ADMINS_ONLY,
-            whoCanAddMembers = GroupPermissions.PermissionLevel.MODS_AND_ABOVE,
-            whoCanEditInfo = GroupPermissions.PermissionLevel.OWNER_ONLY,
-            whoCanDeleteMessages = GroupPermissions.PermissionLevel.EVERYONE,
-            whoCanMuteMembers = GroupPermissions.PermissionLevel.MODS_AND_ABOVE,
-            whoCanRemoveMembers = GroupPermissions.PermissionLevel.OWNER_ONLY,
-        )
+        val perms =
+            GroupPermissions(
+                whoCanSend = GroupPermissions.PermissionLevel.ADMINS_ONLY,
+                whoCanAddMembers = GroupPermissions.PermissionLevel.MODS_AND_ABOVE,
+                whoCanEditInfo = GroupPermissions.PermissionLevel.OWNER_ONLY,
+                whoCanDeleteMessages = GroupPermissions.PermissionLevel.EVERYONE,
+                whoCanMuteMembers = GroupPermissions.PermissionLevel.MODS_AND_ABOVE,
+                whoCanRemoveMembers = GroupPermissions.PermissionLevel.OWNER_ONLY,
+            )
 
         val map = perms.toMap()
 
@@ -96,14 +98,15 @@ class GroupPermissionsTest {
 
     @Test
     fun `toMap and fromMap roundtrip preserves data`() {
-        val original = GroupPermissions(
-            whoCanSend = GroupPermissions.PermissionLevel.MODS_AND_ABOVE,
-            whoCanAddMembers = GroupPermissions.PermissionLevel.ADMINS_ONLY,
-            whoCanEditInfo = GroupPermissions.PermissionLevel.OWNER_ONLY,
-            whoCanDeleteMessages = GroupPermissions.PermissionLevel.EVERYONE,
-            whoCanMuteMembers = GroupPermissions.PermissionLevel.ADMINS_ONLY,
-            whoCanRemoveMembers = GroupPermissions.PermissionLevel.MODS_AND_ABOVE,
-        )
+        val original =
+            GroupPermissions(
+                whoCanSend = GroupPermissions.PermissionLevel.MODS_AND_ABOVE,
+                whoCanAddMembers = GroupPermissions.PermissionLevel.ADMINS_ONLY,
+                whoCanEditInfo = GroupPermissions.PermissionLevel.OWNER_ONLY,
+                whoCanDeleteMessages = GroupPermissions.PermissionLevel.EVERYONE,
+                whoCanMuteMembers = GroupPermissions.PermissionLevel.ADMINS_ONLY,
+                whoCanRemoveMembers = GroupPermissions.PermissionLevel.MODS_AND_ABOVE,
+            )
 
         val map = original.toMap()
         val restored = GroupPermissions.fromMap(map)

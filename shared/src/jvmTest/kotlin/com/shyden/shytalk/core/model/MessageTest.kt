@@ -10,16 +10,17 @@ class MessageTest {
 
     @Test
     fun `fromMap parses all fields`() {
-        val map = mapOf<String, Any?>(
-            "senderId" to "user-1",
-            "senderName" to "Alice",
-            "text" to "Hello world",
-            "createdAt" to 1705326600000L,
-            "type" to "TEXT",
-            "isEdited" to false,
-            "giftId" to "gift-1",
-            "giftIconUrl" to "https://icon.png",
-        )
+        val map =
+            mapOf<String, Any?>(
+                "senderId" to "user-1",
+                "senderName" to "Alice",
+                "text" to "Hello world",
+                "createdAt" to 1705326600000L,
+                "type" to "TEXT",
+                "isEdited" to false,
+                "giftId" to "gift-1",
+                "giftIconUrl" to "https://icon.png",
+            )
 
         val msg = Message.fromMap(map, "msg-1")
 
@@ -101,17 +102,18 @@ class MessageTest {
 
     @Test
     fun `toMap includes all fields`() {
-        val msg = Message(
-            messageId = "msg-1",
-            senderId = "user-1",
-            senderName = "Alice",
-            text = "Hello",
-            createdAt = 1705326600000L,
-            type = MessageType.GIFT,
-            isEdited = true,
-            giftId = "gift-1",
-            giftIconUrl = "icon.png",
-        )
+        val msg =
+            Message(
+                messageId = "msg-1",
+                senderId = "user-1",
+                senderName = "Alice",
+                text = "Hello",
+                createdAt = 1705326600000L,
+                type = MessageType.GIFT,
+                isEdited = true,
+                giftId = "gift-1",
+                giftIconUrl = "icon.png",
+            )
 
         val map = msg.toMap()
 
@@ -130,17 +132,18 @@ class MessageTest {
 
     @Test
     fun `toMap and fromMap roundtrip preserves data`() {
-        val original = Message(
-            messageId = "msg-rt",
-            senderId = "sender-1",
-            senderName = "Bob",
-            text = "Test message",
-            createdAt = 1705326600000L,
-            type = MessageType.SYSTEM,
-            isEdited = true,
-            giftId = "g-1",
-            giftIconUrl = "https://gift.icon",
-        )
+        val original =
+            Message(
+                messageId = "msg-rt",
+                senderId = "sender-1",
+                senderName = "Bob",
+                text = "Test message",
+                createdAt = 1705326600000L,
+                type = MessageType.SYSTEM,
+                isEdited = true,
+                giftId = "g-1",
+                giftIconUrl = "https://gift.icon",
+            )
 
         val map = original.toMap()
         val restored = Message.fromMap(map, original.messageId)
@@ -150,14 +153,15 @@ class MessageTest {
 
     @Test
     fun `roundtrip for TEXT type`() {
-        val original = Message(
-            messageId = "msg-text",
-            senderId = "u1",
-            senderName = "User",
-            text = "Plain text",
-            createdAt = 1705326600000L,
-            type = MessageType.TEXT,
-        )
+        val original =
+            Message(
+                messageId = "msg-text",
+                senderId = "u1",
+                senderName = "User",
+                text = "Plain text",
+                createdAt = 1705326600000L,
+                type = MessageType.TEXT,
+            )
 
         val restored = Message.fromMap(original.toMap(), original.messageId)
         assertEquals(original, restored)

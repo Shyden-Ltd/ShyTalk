@@ -10,16 +10,17 @@ class SeatRequestTest {
 
     @Test
     fun `fromMap parses all fields`() {
-        val map = mapOf<String, Any?>(
-            "requestId" to "req-1",
-            "userId" to "user-1",
-            "userName" to "Alice",
-            "seatIndex" to 3,
-            "status" to "PENDING",
-            "createdAt" to 1705326600000L,
-            "resolvedBy" to "owner-1",
-            "resolvedAt" to 1705326700000L,
-        )
+        val map =
+            mapOf<String, Any?>(
+                "requestId" to "req-1",
+                "userId" to "user-1",
+                "userName" to "Alice",
+                "seatIndex" to 3,
+                "status" to "PENDING",
+                "createdAt" to 1705326600000L,
+                "resolvedBy" to "owner-1",
+                "resolvedAt" to 1705326700000L,
+            )
 
         val request = SeatRequest.fromMap(map, "req-1")
 
@@ -78,16 +79,17 @@ class SeatRequestTest {
 
     @Test
     fun `toMap includes all fields`() {
-        val request = SeatRequest(
-            requestId = "req-1",
-            userId = "user-1",
-            userName = "Alice",
-            seatIndex = 3,
-            status = SeatRequestStatus.APPROVED,
-            createdAt = 1705326600000L,
-            resolvedBy = "owner-1",
-            resolvedAt = 1705326700000L,
-        )
+        val request =
+            SeatRequest(
+                requestId = "req-1",
+                userId = "user-1",
+                userName = "Alice",
+                seatIndex = 3,
+                status = SeatRequestStatus.APPROVED,
+                createdAt = 1705326600000L,
+                resolvedBy = "owner-1",
+                resolvedAt = 1705326700000L,
+            )
 
         val map = request.toMap()
 
@@ -113,16 +115,17 @@ class SeatRequestTest {
 
     @Test
     fun `toMap and fromMap roundtrip preserves data`() {
-        val original = SeatRequest(
-            requestId = "req-rt",
-            userId = "user-1",
-            userName = "Bob",
-            seatIndex = 5,
-            status = SeatRequestStatus.DENIED,
-            createdAt = 1705326600000L,
-            resolvedBy = "owner-1",
-            resolvedAt = 1705326700000L,
-        )
+        val original =
+            SeatRequest(
+                requestId = "req-rt",
+                userId = "user-1",
+                userName = "Bob",
+                seatIndex = 5,
+                status = SeatRequestStatus.DENIED,
+                createdAt = 1705326600000L,
+                resolvedBy = "owner-1",
+                resolvedAt = 1705326700000L,
+            )
 
         val map = original.toMap()
         val restored = SeatRequest.fromMap(map, original.requestId)
@@ -132,16 +135,17 @@ class SeatRequestTest {
 
     @Test
     fun `roundtrip with PENDING status and no resolver`() {
-        val original = SeatRequest(
-            requestId = "req-pending",
-            userId = "u1",
-            userName = "User",
-            seatIndex = 2,
-            status = SeatRequestStatus.PENDING,
-            createdAt = 1705326600000L,
-            resolvedBy = null,
-            resolvedAt = null,
-        )
+        val original =
+            SeatRequest(
+                requestId = "req-pending",
+                userId = "u1",
+                userName = "User",
+                seatIndex = 2,
+                status = SeatRequestStatus.PENDING,
+                createdAt = 1705326600000L,
+                resolvedBy = null,
+                resolvedAt = null,
+            )
 
         val restored = SeatRequest.fromMap(original.toMap(), original.requestId)
         assertEquals(original, restored)

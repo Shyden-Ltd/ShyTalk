@@ -11,27 +11,28 @@ class PrivateMessageTest {
 
     @Test
     fun `fromMap parses all fields`() {
-        val map = mapOf<String, Any?>(
-            "senderId" to "user-1",
-            "senderName" to "Alice",
-            "text" to "Hello",
-            "imageUrls" to listOf("img1.png", "img2.png"),
-            "type" to "TEXT",
-            "createdAt" to 1705326600000L,
-            "editedAt" to 1705326700000L,
-            "editCount" to 2L,
-            "readBy" to listOf("user-2", "user-3"),
-            "replyToMessageId" to "orig-msg-1",
-            "replyToText" to "Original message",
-            "replyToSenderName" to "Bob",
-            "stickerUrl" to "sticker.png",
-            "roomInviteId" to "room-1",
-            "roomInviteName" to "Cool Room",
-            "reactions" to mapOf("thumbs_up" to listOf("user-2")),
-            "isRecalled" to false,
-            "isHidden" to true,
-            "hiddenBy" to "mod-1",
-        )
+        val map =
+            mapOf<String, Any?>(
+                "senderId" to "user-1",
+                "senderName" to "Alice",
+                "text" to "Hello",
+                "imageUrls" to listOf("img1.png", "img2.png"),
+                "type" to "TEXT",
+                "createdAt" to 1705326600000L,
+                "editedAt" to 1705326700000L,
+                "editCount" to 2L,
+                "readBy" to listOf("user-2", "user-3"),
+                "replyToMessageId" to "orig-msg-1",
+                "replyToText" to "Original message",
+                "replyToSenderName" to "Bob",
+                "stickerUrl" to "sticker.png",
+                "roomInviteId" to "room-1",
+                "roomInviteName" to "Cool Room",
+                "reactions" to mapOf("thumbs_up" to listOf("user-2")),
+                "isRecalled" to false,
+                "isHidden" to true,
+                "hiddenBy" to "mod-1",
+            )
 
         val pm = PrivateMessage.fromMap(map, "pm-1")
 
@@ -146,12 +147,14 @@ class PrivateMessageTest {
 
     @Test
     fun `fromMap parses multiple reactions`() {
-        val map = mapOf<String, Any?>(
-            "reactions" to mapOf(
-                "heart" to listOf("u1", "u2"),
-                "laugh" to listOf("u3"),
-            ),
-        )
+        val map =
+            mapOf<String, Any?>(
+                "reactions" to
+                    mapOf(
+                        "heart" to listOf("u1", "u2"),
+                        "laugh" to listOf("u3"),
+                    ),
+            )
         val pm = PrivateMessage.fromMap(map, "pm-react")
         assertEquals(2, pm.reactions.size)
         assertEquals(listOf("u1", "u2"), pm.reactions["heart"])
@@ -183,28 +186,29 @@ class PrivateMessageTest {
 
     @Test
     fun `toMap includes all fields`() {
-        val pm = PrivateMessage(
-            messageId = "pm-1",
-            senderId = "user-1",
-            senderName = "Alice",
-            text = "Hello",
-            imageUrls = listOf("img.png"),
-            type = PrivateMessageType.IMAGE,
-            createdAt = 1705326600000L,
-            editedAt = 1705326700000L,
-            editCount = 1,
-            readBy = listOf("user-2"),
-            replyToMessageId = "orig-1",
-            replyToText = "Original",
-            replyToSenderName = "Bob",
-            stickerUrl = null,
-            roomInviteId = null,
-            roomInviteName = null,
-            reactions = mapOf("heart" to listOf("u1")),
-            isRecalled = false,
-            isHidden = true,
-            hiddenBy = "mod-1",
-        )
+        val pm =
+            PrivateMessage(
+                messageId = "pm-1",
+                senderId = "user-1",
+                senderName = "Alice",
+                text = "Hello",
+                imageUrls = listOf("img.png"),
+                type = PrivateMessageType.IMAGE,
+                createdAt = 1705326600000L,
+                editedAt = 1705326700000L,
+                editCount = 1,
+                readBy = listOf("user-2"),
+                replyToMessageId = "orig-1",
+                replyToText = "Original",
+                replyToSenderName = "Bob",
+                stickerUrl = null,
+                roomInviteId = null,
+                roomInviteName = null,
+                reactions = mapOf("heart" to listOf("u1")),
+                isRecalled = false,
+                isHidden = true,
+                hiddenBy = "mod-1",
+            )
 
         val map = pm.toMap()
 
@@ -234,28 +238,29 @@ class PrivateMessageTest {
 
     @Test
     fun `toMap and fromMap roundtrip preserves data`() {
-        val original = PrivateMessage(
-            messageId = "pm-rt",
-            senderId = "sender-1",
-            senderName = "Sender",
-            text = "Test text",
-            imageUrls = listOf("a.png", "b.png"),
-            type = PrivateMessageType.TEXT,
-            createdAt = 1705326600000L,
-            editedAt = 1705326700000L,
-            editCount = 3,
-            readBy = listOf("r1", "r2"),
-            replyToMessageId = "reply-1",
-            replyToText = "Reply text",
-            replyToSenderName = "Replier",
-            stickerUrl = "sticker.png",
-            roomInviteId = "room-1",
-            roomInviteName = "Room Name",
-            reactions = mapOf("star" to listOf("u1", "u2")),
-            isRecalled = true,
-            isHidden = false,
-            hiddenBy = null,
-        )
+        val original =
+            PrivateMessage(
+                messageId = "pm-rt",
+                senderId = "sender-1",
+                senderName = "Sender",
+                text = "Test text",
+                imageUrls = listOf("a.png", "b.png"),
+                type = PrivateMessageType.TEXT,
+                createdAt = 1705326600000L,
+                editedAt = 1705326700000L,
+                editCount = 3,
+                readBy = listOf("r1", "r2"),
+                replyToMessageId = "reply-1",
+                replyToText = "Reply text",
+                replyToSenderName = "Replier",
+                stickerUrl = "sticker.png",
+                roomInviteId = "room-1",
+                roomInviteName = "Room Name",
+                reactions = mapOf("star" to listOf("u1", "u2")),
+                isRecalled = true,
+                isHidden = false,
+                hiddenBy = null,
+            )
 
         val map = original.toMap()
         val restored = PrivateMessage.fromMap(map, original.messageId)

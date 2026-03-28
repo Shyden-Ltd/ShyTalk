@@ -8,12 +8,13 @@ class ProfileVisitorTest {
 
     @Test
     fun `fromMap parses all fields`() {
-        val map = mapOf<String, Any?>(
-            "visitorId" to "visitor-1",
-            "visitCount" to 5L,
-            "lastVisitedAt" to 1705326600000L,
-            "firstVisitedAt" to 1705000000000L,
-        )
+        val map =
+            mapOf<String, Any?>(
+                "visitorId" to "visitor-1",
+                "visitCount" to 5L,
+                "lastVisitedAt" to 1705326600000L,
+                "firstVisitedAt" to 1705000000000L,
+            )
 
         val visitor = ProfileVisitor.fromMap(map)
 
@@ -49,12 +50,13 @@ class ProfileVisitorTest {
 
     @Test
     fun `toMap includes all fields`() {
-        val visitor = ProfileVisitor(
-            visitorId = "v1",
-            visitCount = 10,
-            lastVisitedAt = 1705326600000L,
-            firstVisitedAt = 1705000000000L,
-        )
+        val visitor =
+            ProfileVisitor(
+                visitorId = "v1",
+                visitCount = 10,
+                lastVisitedAt = 1705326600000L,
+                firstVisitedAt = 1705000000000L,
+            )
 
         val map = visitor.toMap()
 
@@ -68,12 +70,13 @@ class ProfileVisitorTest {
 
     @Test
     fun `toMap and fromMap roundtrip preserves data`() {
-        val original = ProfileVisitor(
-            visitorId = "v-rt",
-            visitCount = 7,
-            lastVisitedAt = 1705326600000L,
-            firstVisitedAt = 1705000000000L,
-        )
+        val original =
+            ProfileVisitor(
+                visitorId = "v-rt",
+                visitCount = 7,
+                lastVisitedAt = 1705326600000L,
+                firstVisitedAt = 1705000000000L,
+            )
 
         val map = original.toMap()
         val restored = ProfileVisitor.fromMap(map)

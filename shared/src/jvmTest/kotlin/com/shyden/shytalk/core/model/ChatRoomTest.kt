@@ -13,16 +13,17 @@ class ChatRoomTest {
 
     @Test
     fun `fromMap parses basic fields`() {
-        val map = mapOf<String, Any?>(
-            "name" to "Test Room",
-            "ownerId" to "owner-1",
-            "state" to "ACTIVE",
-            "createdAt" to 1705326600000L,
-            "participantIds" to listOf("owner-1", "user-2"),
-            "hostIds" to listOf("user-2"),
-            "requireApproval" to false,
-            "voiceRoomName" to "voice-room-1",
-        )
+        val map =
+            mapOf<String, Any?>(
+                "name" to "Test Room",
+                "ownerId" to "owner-1",
+                "state" to "ACTIVE",
+                "createdAt" to 1705326600000L,
+                "participantIds" to listOf("owner-1", "user-2"),
+                "hostIds" to listOf("user-2"),
+                "requireApproval" to false,
+                "voiceRoomName" to "voice-room-1",
+            )
 
         val room = ChatRoom.fromMap(map, "room-1")
 
@@ -128,12 +129,14 @@ class ChatRoomTest {
 
     @Test
     fun `fromMap parses seat data`() {
-        val map = mapOf<String, Any?>(
-            "seats" to mapOf(
-                "0" to mapOf("userId" to "owner-1", "state" to "OCCUPIED", "isMuted" to false),
-                "1" to mapOf("userId" to "user-2", "state" to "OCCUPIED", "isMuted" to true),
-            ),
-        )
+        val map =
+            mapOf<String, Any?>(
+                "seats" to
+                    mapOf(
+                        "0" to mapOf("userId" to "owner-1", "state" to "OCCUPIED", "isMuted" to false),
+                        "1" to mapOf("userId" to "user-2", "state" to "OCCUPIED", "isMuted" to true),
+                    ),
+            )
 
         val room = ChatRoom.fromMap(map, "r1")
 
@@ -145,9 +148,10 @@ class ChatRoomTest {
 
     @Test
     fun `fromMap fills missing seats with empty defaults`() {
-        val map = mapOf<String, Any?>(
-            "seats" to mapOf("0" to mapOf("userId" to "owner-1", "state" to "OCCUPIED")),
-        )
+        val map =
+            mapOf<String, Any?>(
+                "seats" to mapOf("0" to mapOf("userId" to "owner-1", "state" to "OCCUPIED")),
+            )
 
         val room = ChatRoom.fromMap(map, "r1")
 
@@ -164,11 +168,13 @@ class ChatRoomTest {
 
     @Test
     fun `fromMap parses kickInfo`() {
-        val map = mapOf<String, Any?>(
-            "kickInfo" to mapOf(
-                "user-2" to mapOf("kickedBy" to "owner-1", "reason" to "Spam"),
-            ),
-        )
+        val map =
+            mapOf<String, Any?>(
+                "kickInfo" to
+                    mapOf(
+                        "user-2" to mapOf("kickedBy" to "owner-1", "reason" to "Spam"),
+                    ),
+            )
 
         val room = ChatRoom.fromMap(map, "r1")
 
@@ -180,9 +186,10 @@ class ChatRoomTest {
 
     @Test
     fun `fromMap parses pendingInvites`() {
-        val map = mapOf<String, Any?>(
-            "pendingInvites" to mapOf("user-3" to "owner-1"),
-        )
+        val map =
+            mapOf<String, Any?>(
+                "pendingInvites" to mapOf("user-3" to "owner-1"),
+            )
 
         val room = ChatRoom.fromMap(map, "r1")
 
@@ -193,18 +200,20 @@ class ChatRoomTest {
 
     @Test
     fun `fromMap parses lastGiftEvent`() {
-        val map = mapOf<String, Any?>(
-            "lastGiftEvent" to mapOf(
-                "senderId" to "s1",
-                "senderName" to "Alice",
-                "recipientId" to "r1",
-                "recipientName" to "Bob",
-                "giftId" to "g1",
-                "giftName" to "Rose",
-                "coinValue" to 100,
-                "timestamp" to 1705326600000L,
-            ),
-        )
+        val map =
+            mapOf<String, Any?>(
+                "lastGiftEvent" to
+                    mapOf(
+                        "senderId" to "s1",
+                        "senderName" to "Alice",
+                        "recipientId" to "r1",
+                        "recipientName" to "Bob",
+                        "giftId" to "g1",
+                        "giftName" to "Rose",
+                        "coinValue" to 100,
+                        "timestamp" to 1705326600000L,
+                    ),
+            )
 
         val room = ChatRoom.fromMap(map, "r1")
 
@@ -232,10 +241,11 @@ class ChatRoomTest {
 
     @Test
     fun `fromMap prefers voiceRoomName over agoraChannelName`() {
-        val map = mapOf<String, Any?>(
-            "voiceRoomName" to "voice-room-1",
-            "agoraChannelName" to "agora-channel-1",
-        )
+        val map =
+            mapOf<String, Any?>(
+                "voiceRoomName" to "voice-room-1",
+                "agoraChannelName" to "agora-channel-1",
+            )
         val room = ChatRoom.fromMap(map, "r1")
         assertEquals("voice-room-1", room.voiceRoomName)
     }
@@ -270,11 +280,12 @@ class ChatRoomTest {
 
     @Test
     fun `findUserSeat returns seat entry for seated user`() {
-        val seats = mapOf(
-            "0" to Seat(userId = "owner-1", state = SeatState.OCCUPIED),
-            "1" to Seat(userId = "user-2", state = SeatState.OCCUPIED),
-            "2" to Seat(),
-        )
+        val seats =
+            mapOf(
+                "0" to Seat(userId = "owner-1", state = SeatState.OCCUPIED),
+                "1" to Seat(userId = "user-2", state = SeatState.OCCUPIED),
+                "2" to Seat(),
+            )
         val room = ChatRoom(seats = seats)
 
         val entry = room.findUserSeat("user-2")
@@ -306,30 +317,33 @@ class ChatRoomTest {
 
     @Test
     fun `hasSeatedNonOwners returns false when only owner is seated`() {
-        val seats = mapOf(
-            "0" to Seat(userId = "owner-1", state = SeatState.OCCUPIED),
-            "1" to Seat(),
-        )
+        val seats =
+            mapOf(
+                "0" to Seat(userId = "owner-1", state = SeatState.OCCUPIED),
+                "1" to Seat(),
+            )
         val room = ChatRoom(ownerId = "owner-1", seats = seats)
         assertFalse(room.hasSeatedNonOwners())
     }
 
     @Test
     fun `hasSeatedNonOwners returns true when non-owner is seated`() {
-        val seats = mapOf(
-            "0" to Seat(userId = "owner-1", state = SeatState.OCCUPIED),
-            "1" to Seat(userId = "user-2", state = SeatState.OCCUPIED),
-        )
+        val seats =
+            mapOf(
+                "0" to Seat(userId = "owner-1", state = SeatState.OCCUPIED),
+                "1" to Seat(userId = "user-2", state = SeatState.OCCUPIED),
+            )
         val room = ChatRoom(ownerId = "owner-1", seats = seats)
         assertTrue(room.hasSeatedNonOwners())
     }
 
     @Test
     fun `hasSeatedNonOwners ignores non-owner in EMPTY state`() {
-        val seats = mapOf(
-            "0" to Seat(userId = "owner-1", state = SeatState.OCCUPIED),
-            "1" to Seat(userId = "user-2", state = SeatState.EMPTY),
-        )
+        val seats =
+            mapOf(
+                "0" to Seat(userId = "owner-1", state = SeatState.OCCUPIED),
+                "1" to Seat(userId = "user-2", state = SeatState.EMPTY),
+            )
         val room = ChatRoom(ownerId = "owner-1", seats = seats)
         assertFalse(room.hasSeatedNonOwners())
     }
@@ -360,15 +374,16 @@ class ChatRoomTest {
 
     @Test
     fun `toMap includes all fields`() {
-        val room = ChatRoom(
-            roomId = "r1",
-            name = "Room",
-            ownerId = "owner-1",
-            state = RoomState.ACTIVE,
-            createdAt = 1705326600000L,
-            requireApproval = true,
-            voiceRoomName = "voice-1",
-        )
+        val room =
+            ChatRoom(
+                roomId = "r1",
+                name = "Room",
+                ownerId = "owner-1",
+                state = RoomState.ACTIVE,
+                createdAt = 1705326600000L,
+                requireApproval = true,
+                voiceRoomName = "voice-1",
+            )
 
         val map = room.toMap()
 

@@ -11,11 +11,12 @@ class SeatTest {
 
     @Test
     fun `fromMap parses occupied seat`() {
-        val map = mapOf<String, Any?>(
-            "userId" to "user-1",
-            "state" to "OCCUPIED",
-            "isMuted" to true,
-        )
+        val map =
+            mapOf<String, Any?>(
+                "userId" to "user-1",
+                "state" to "OCCUPIED",
+                "isMuted" to true,
+            )
 
         val seat = Seat.fromMap(map)
 
@@ -26,11 +27,12 @@ class SeatTest {
 
     @Test
     fun `fromMap parses empty seat`() {
-        val map = mapOf<String, Any?>(
-            "userId" to null,
-            "state" to "EMPTY",
-            "isMuted" to false,
-        )
+        val map =
+            mapOf<String, Any?>(
+                "userId" to null,
+                "state" to "EMPTY",
+                "isMuted" to false,
+            )
 
         val seat = Seat.fromMap(map)
 
