@@ -1296,9 +1296,11 @@
           color: var(--text2);
           text-transform: uppercase;
           letter-spacing: 0.5px;
-          padding: 8px 0;
+          padding: 14px 8px;
           user-select: none;
           list-style: none;
+          -webkit-tap-highlight-color: transparent;
+          touch-action: manipulation;
         }
         .spin-history-summary::-webkit-details-marker { display: none; }
         .spin-history-summary::before {
@@ -9833,17 +9835,14 @@
       monitorStartBtn.textContent = "Connecting...";
 
       try {
-        // Resolve uniqueId to user data
+        // Resolve uniqueId to user data via API (fast HTTP calls)
         const searchResult = await apiCall("GET", `/api/search/uniqueId/${uniqueId}`);
         const resolvedUniqueId = String(searchResult.uniqueId || uniqueId);
         if (!resolvedUniqueId) throw new Error("User not found");
 
-        // Get initial user data
+        // Get initial user data via API (fast HTTP call)
         const userData = await apiCall("GET", `/api/user/${resolvedUniqueId}`);
         monitorUid = resolvedUniqueId;
-
-        // Load gift catalog
-        await loadGiftCatalog();
 
         // Reset session and all-time totals
         monitorSession = { spins: 0, spent: 0, bestGift: null, bestValue: 0 };
@@ -9854,7 +9853,8 @@
         spinHistoryCount.textContent = "";
         spinHistoryToggle.open = false;
 
-        // Show UI
+        // Show UI immediately after API data loads — do NOT wait for
+        // Firestore connections (WebChannel can take 6-7s on WebKit first use)
         monitorStatusEl.style.display = "";
         monitorStats.style.display = "";
         monitorTotalsWrap.style.display = "";
@@ -9873,39 +9873,54 @@
 
         updateMonitorStats(userData);
         updateSessionTotals();
+        updateAllTimeTotals(); // Show "0" initially; background load will update
+
+        // Re-enable button immediately (UI is already shown)
+        monitorStartBtn.disabled = false;
+        monitorStartBtn.textContent = "Start Monitoring";
+
+        // --- Background Firestore work (non-blocking) ---
+        // Load gift catalog, all-time stats, and set up listeners concurrently.
+        // These use Firestore's WebChannel which can be slow on WebKit first use,
+        // but the monitor status UI is already visible above.
+
+        // Load gift catalog (needed for spin entry rendering)
+        loadGiftCatalog().catch(err => console.warn("Gift catalog load failed:", err));
 
         // Load all-time stats from full transaction history
-        try {
-          const allTxQuery = query(
-            collection(clientDb, "users", resolvedUniqueId, "transactions"),
-            where("type", "==", "GACHA_PULL"),
-            orderBy("timestamp", "desc")
-          );
-          const allTxSnapshot = await getDocs(allTxQuery);
-          allTxSnapshot.forEach(txDoc => {
-            const tx = txDoc.data();
-            const pulls = tx.pullCount || 1;
-            const spent = Math.abs(tx.amount || 0);
-            monitorAllTime.spins += pulls;
-            monitorAllTime.spent += spent;
+        (async () => {
+          try {
+            const allTxQuery = query(
+              collection(clientDb, "users", resolvedUniqueId, "transactions"),
+              where("type", "==", "GACHA_PULL"),
+              orderBy("timestamp", "desc")
+            );
+            const allTxSnapshot = await getDocs(allTxQuery);
+            allTxSnapshot.forEach(txDoc => {
+              const tx = txDoc.data();
+              const pulls = tx.pullCount || 1;
+              const spent = Math.abs(tx.amount || 0);
+              monitorAllTime.spins += pulls;
+              monitorAllTime.spent += spent;
 
-            const names = (tx.details || "").split(",").map(s => s.trim()).filter(Boolean);
-            for (const name of names) {
-              const info = monitorGiftCatalogByName[name];
-              if (info) {
-                if (info.coinValue > monitorAllTime.bestValue) {
-                  monitorAllTime.bestValue = info.coinValue;
-                  monitorAllTime.bestGift = name;
+              const names = (tx.details || "").split(",").map(s => s.trim()).filter(Boolean);
+              for (const name of names) {
+                const info = monitorGiftCatalogByName[name];
+                if (info) {
+                  if (info.coinValue > monitorAllTime.bestValue) {
+                    monitorAllTime.bestValue = info.coinValue;
+                    monitorAllTime.bestGift = name;
+                  }
                 }
               }
-            }
-          });
-          updateAllTimeTotals();
-        } catch (err) {
-          console.warn("Failed to load all-time stats:", err);
-          $("#alltime-spins").textContent = "?";
-          $("#alltime-spent").textContent = "?";
-        }
+            });
+            updateAllTimeTotals();
+          } catch (err) {
+            console.warn("Failed to load all-time stats:", err);
+            $("#alltime-spins").textContent = "?";
+            $("#alltime-spent").textContent = "?";
+          }
+        })();
 
         // Set up real-time user doc listener
         monitorUserUnsub = onSnapshot(doc(clientDb, "users", resolvedUniqueId), (snap) => {
@@ -9936,10 +9951,9 @@
         showToast(`Monitor error: ${err.message}`, "error");
         monitorStartBtn.style.display = "";
         monitorStopBtn.style.display = "none";
+        monitorStartBtn.disabled = false;
+        monitorStartBtn.textContent = "Start Monitoring";
       }
-
-      monitorStartBtn.disabled = false;
-      monitorStartBtn.textContent = "Start Monitoring";
     }
 
     function stopMonitoring() {
@@ -9974,10 +9988,40 @@
 
     monitorStopBtn.addEventListener("click", stopMonitoring);
 
-    // Enter key on monitor search
-    monitorUidInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") monitorStartBtn.click();
-    });
+    // Enter key on monitor search — listen to both keydown and keypress for
+    // maximum cross-browser compatibility (WebKit can be unreliable with
+    // keydown on inputmode="numeric" inputs). Guard against double-fire.
+    let monitorEnterHandled = false;
+    function handleMonitorEnter(e) {
+      if (e.key === "Enter" && !monitorEnterHandled) {
+        e.preventDefault();
+        monitorEnterHandled = true;
+        setTimeout(() => { monitorEnterHandled = false; }, 200);
+        const uid = monitorUidInput.value.trim();
+        if (uid) {
+          sessionStorage.setItem("admin_monitor_uid", uid);
+          startMonitoring(uid);
+        }
+      }
+    }
+    monitorUidInput.addEventListener("keydown", handleMonitorEnter);
+    monitorUidInput.addEventListener("keypress", handleMonitorEnter);
+    monitorUidInput.addEventListener("keyup", handleMonitorEnter);
+
+    // Mobile Safari/WebKit workaround: <details>/<summary> toggle can fail
+    // on touch devices when the summary has custom styling that removes the
+    // default list-style marker. Attach a direct click handler that always
+    // toggles the open attribute, then prevent the default to avoid a
+    // double-toggle on browsers where native works correctly.
+    {
+      const histSummary = spinHistoryToggle.querySelector("summary");
+      if (histSummary) {
+        histSummary.addEventListener("click", (e) => {
+          e.preventDefault();
+          spinHistoryToggle.open = !spinHistoryToggle.open;
+        });
+      }
+    }
 
     // --- Guarantee Next Prize ---
     const guaranteeGiftSelect = $("#guarantee-gift-select");
