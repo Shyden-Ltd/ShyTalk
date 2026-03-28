@@ -248,19 +248,18 @@ test.describe('Admin Users - Economy Subtab', () => {
     // Wait for the coins display to update (confirms the action succeeded)
     await expect(page.locator('#eco-coins-display')).toHaveText(String(beforeBalance + 100));
 
-    // Click Load to load transaction history
+    // Verify via API first (ensures the transaction exists in the DB)
+    const txData = await testData.api.get(`/api/users/${uid}/transactions`);
+    const transactions = Array.isArray(txData) ? txData : (txData.transactions || []);
+    const adminTx = transactions.find((t: any) => t.type === 'ADMIN_ADJUSTMENT');
+    expect(adminTx).toBeTruthy();
+
+    // Click Load to load transaction history in the UI
     await page.locator('#tx-load-btn').click();
 
     // Verify the transaction list contains an ADMIN_ADJUSTMENT entry
     const txList = page.locator('#tx-list');
     await expect(txList.locator('text=ADMIN_ADJUSTMENT')).toBeVisible();
-
-    // Verify via API
-    const txData = await testData.api.get(`/api/users/${uid}/transactions?type=ADMIN_ADJUSTMENT`);
-    const transactions = Array.isArray(txData) ? txData : (txData.transactions || []);
-    expect(transactions.length).toBeGreaterThan(0);
-    const latest = transactions[0];
-    expect(latest.type).toBe('ADMIN_ADJUSTMENT');
 
     // Restore: deduct 100 via API
     await testData.api.post(`/api/users/${uid}/adjust-balance`, {
