@@ -329,15 +329,18 @@ test.describe('Admin Economy Config', () => {
 
   // ── Test 14: Milestone type toggle ──
   test('milestone type toggle — gift type shows gift select', async ({ page, testData }) => {
+    // Always restore config first (removes leftover day-999 from previous failed run)
+    await restoreEconomyConfig(page, testData);
+
     // Get a gift ID from the API
     const allGifts = await testData.api.get('/api/gifts/all');
     const giftList = Array.isArray(allGifts) ? allGifts : (allGifts.gifts || []);
     expect(giftList.length).toBeGreaterThan(0);
     const giftId = giftList[0].id;
 
-    // Save a gift-type milestone directly via API
+    // Add a gift-type milestone at day 999 (guaranteed to sort last)
     const currentConfig = await testData.api.get('/api/config/economy');
-    const milestones = currentConfig.milestoneRewards || {};
+    const milestones = { ...(currentConfig.milestoneRewards || {}) };
     milestones['999'] = { type: 'gift', giftId, quantity: 1 };
     await page.request.put(`${API_BASE}/api/config/economy`, {
       headers: {
@@ -355,7 +358,7 @@ test.describe('Admin Economy Config', () => {
     await expect(lastRow.locator('.ms-type')).toHaveValue('gift');
     await expect(lastRow.locator('.ms-gift-select')).toBeVisible();
 
-    // Restore
+    // Restore (remove the day-999 milestone)
     await restoreEconomyConfig(page, testData);
   });
 
