@@ -7,6 +7,10 @@ on:
         description: 'Git ref to check out'
         type: string
         required: true
+      app_changed:
+        description: 'Whether Kotlin/Android source changed (skip JVM tests if false)'
+        type: boolean
+        default: true
 
   workflow_dispatch:
 
@@ -48,6 +52,7 @@ jobs:
           npx jest --coverage --coverageReporters=lcov || true
 
       - name: Decode google-services.json
+        if: inputs.app_changed
         env:
           GOOGLE_SERVICES_DEV_BASE64: ${{ secrets.GOOGLE_SERVICES_DEV_BASE64 }}
         run: |
@@ -62,7 +67,12 @@ jobs:
           fi
 
       - name: Run Kotlin JVM tests for coverage reports
+        if: inputs.app_changed
         run: ./gradlew :shared:jvmTest || true
+
+      - name: Skip Kotlin tests (no app changes)
+        if: "!inputs.app_changed"
+        run: echo "::notice::Skipping Kotlin JVM tests — no app/shared changes detected"
 
       - name: Run SonarCloud analysis
         if: env.SONAR_TOKEN != ''

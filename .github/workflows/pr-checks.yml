@@ -143,6 +143,7 @@ jobs:
     uses: ./.github/workflows/sonarcloud.yml
     with:
       ref: ${{ github.event.pull_request.head.sha }}
+      app_changed: ${{ needs.detect-changes.outputs.app_changed == 'true' }}
     secrets: inherit
 
   test-backend:
