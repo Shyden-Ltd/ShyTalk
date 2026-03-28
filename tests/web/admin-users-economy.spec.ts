@@ -68,7 +68,7 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Restore: deduct 500 via API
     await testData.api.post(`/api/users/${uid}/adjust-balance`, {
-      currency: 'COINS', amount: -500,
+      currency: 'coins', amount: -500,
     });
   });
 
@@ -95,7 +95,7 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Restore: add 200 via API
     await testData.api.post(`/api/users/${uid}/adjust-balance`, {
-      currency: 'COINS', amount: 200,
+      currency: 'coins', amount: 200,
     });
   });
 
@@ -125,7 +125,7 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Restore: deduct 300 via API
     await testData.api.post(`/api/users/${uid}/adjust-balance`, {
-      currency: 'BEANS', amount: -300,
+      currency: 'beans', amount: -300,
     });
   });
 
@@ -260,7 +260,7 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Restore: deduct 100 via API
     await testData.api.post(`/api/users/${uid}/adjust-balance`, {
-      currency: 'COINS', amount: -100,
+      currency: 'coins', amount: -100,
     });
   });
 
@@ -299,7 +299,7 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Restore: deduct 50 via API
     await testData.api.post(`/api/users/${uid}/adjust-balance`, {
-      currency: 'COINS', amount: -50,
+      currency: 'coins', amount: -50,
     });
   });
 
@@ -351,7 +351,7 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Restore: add 1000 to get back to seeded amount
     await testData.api.post(`/api/users/${uid}/adjust-balance`, {
-      currency: 'COINS', amount: 1000,
+      currency: 'coins', amount: 1000,
     });
   });
 });
