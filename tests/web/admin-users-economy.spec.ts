@@ -236,13 +236,17 @@ test.describe('Admin Users - Economy Subtab', () => {
   test('transaction history shows admin adjustments', async ({ page, testData }) => {
     const uid = String(testData.user.uniqueId);
 
+    // Read current balance before adding
+    const beforeText = await page.locator('#eco-coins-display').textContent();
+    const beforeBalance = Number(beforeText) || 0;
+
     // Add 100 coins to create a transaction
     await page.locator('#eco-coins-op').selectOption('add');
     await page.locator('#eco-coins-amount').fill('100');
     await page.locator('#eco-coins-apply').click();
 
     // Wait for the coins display to update (confirms the action succeeded)
-    await expect(page.locator('#eco-coins-display')).toHaveText('1100');
+    await expect(page.locator('#eco-coins-display')).toHaveText(String(beforeBalance + 100));
 
     // Click Load to load transaction history
     await page.locator('#tx-load-btn').click();
