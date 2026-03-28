@@ -248,7 +248,8 @@ test.describe('Admin Spin Monitor', () => {
     // Wait for the totals wrap to be visible
     await expect(page.locator('#monitor-totals-wrap')).toBeVisible();
 
-    // Session stats should show numeric values
+    // Wait for session stats to populate (WebKit can be slower)
+    await expect(page.locator('#session-spins')).not.toHaveText('');
     const sessionSpins = await page.locator('#session-spins').textContent();
     expect(sessionSpins).toBeTruthy();
     const sessionSpinsNum = Number(sessionSpins!.replace(/,/g, ''));
