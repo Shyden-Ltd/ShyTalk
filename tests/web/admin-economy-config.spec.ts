@@ -62,7 +62,11 @@ test.describe('Admin Economy Config', () => {
   test.describe.configure({ mode: 'serial' });
   test.skip(({ browserName }) => browserName !== 'chromium', 'Economy config is a singleton');
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    // Only run on desktop chromium — mobile-chrome times out because
+    // reload+re-auth in reloadAndNavigateToEconomy exceeds the 20s limit
+    test.skip(testInfo.project.name !== 'chromium', 'Desktop chromium only — mobile viewport too slow for reload+auth cycle');
+
     await adminLogin(page);
     await navigateToTab(page, 'Economy');
     // Wait for config to load

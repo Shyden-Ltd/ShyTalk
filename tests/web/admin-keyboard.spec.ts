@@ -207,7 +207,10 @@ test.describe('Admin Keyboard Shortcuts', () => {
 
     const input = page.locator('#monitor-uid-input');
     await input.fill(String(testData.user.uniqueId));
-    await input.press('Enter');
+    // Use page.keyboard.press — WebKit does not reliably fire keydown
+    // from locator.press() on inputs with inputmode="numeric"
+    await input.focus();
+    await page.keyboard.press('Enter');
 
     // Wait for monitoring to start
     await expect(page.locator('#monitor-status')).toBeVisible({ timeout: 15_000 });

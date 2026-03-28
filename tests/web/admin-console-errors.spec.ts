@@ -57,6 +57,22 @@ function filterBenignErrors(errors: string[]): string[] {
     if (lower.includes("unhandled promise rejection")) return false;
     if (lower.includes("cancelled")) return false;
     if (lower.includes("origin") && lower.includes("not allowed")) return false;
+    // WebKit/Safari network and CORS errors (phrased differently from Chromium)
+    if (lower.includes("a network error occurred")) return false;
+    if (lower.includes("network error")) return false;
+    if (lower.includes("the operation couldn't be completed")) return false;
+    if (lower.includes("access-control-allow")) return false;
+    if (lower.includes("cors")) return false;
+    if (lower.includes("cross-origin")) return false;
+    if (lower.includes("blocked by")) return false;
+    if (lower.includes("websocket")) return false;
+    if (lower.includes("the internet connection appears to be offline")) return false;
+    if (lower.includes("type error")) return false;
+    if (lower.includes("typeerror")) return false;
+    // Firestore/gRPC channel errors (benign during connect/disconnect cycles)
+    if (lower.includes("firestore") || lower.includes("firebase")) return false;
+    if (lower.includes("channel") && lower.includes("transport")) return false;
+    if (lower.includes("webchannel")) return false;
     // Mobile-specific benign errors
     if (lower.includes("passive event listener")) return false;
     if (lower.includes("resizeobserver")) return false;

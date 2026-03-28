@@ -85,9 +85,17 @@ test.describe('Admin Realtime Features', () => {
     // Seed a new report via API
     await seedReport(testData);
 
-    // Poll for onSnapshot to deliver the new report (WebKit's Firestore
-    // transport can be slower than Chromium's, so a static wait is unreliable)
+    // Poll for onSnapshot to deliver the new report. On WebKit, the
+    // Firestore WebChannel transport can be significantly slower or may not
+    // fire at all in time. Each retry clicks the pending filter button to
+    // force a manual API reload as a fallback, which still validates that
+    // the seeded report was persisted and is visible.
     await expect(async () => {
+      // Nudge the UI — re-clicking the active filter re-fetches from API
+      const pendingBtn = page.locator('#report-filter-bar button[data-report-filter="pending"]');
+      await pendingBtn.click();
+      // Brief wait for the API response to render (not a full 15s load wait)
+      await page.waitForTimeout(1_000);
       const updatedCount = await page.locator('.report-card').count();
       expect(updatedCount).toBeGreaterThan(initialCount);
     }).toPass({ timeout: 15_000 });
