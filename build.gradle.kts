@@ -59,9 +59,9 @@ sonar {
         property("sonar.sources", "express-api/src")
         property("sonar.tests", "express-api/tests")
 
-        // Kotlin test reports (auto-detected by plugin, but explicit for clarity)
+        // Kotlin test reports — use absolute path to avoid shared/shared/ doubling
         property("sonar.junit.reportPaths",
-            "shared/build/test-results/jvmTest"
+            "${rootProject.projectDir}/shared/build/test-results/jvmTest"
         )
 
         // Exclusions (generated code, resources)

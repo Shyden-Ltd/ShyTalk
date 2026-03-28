@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: read
 
 concurrency:
   group: release-main
@@ -198,3 +199,15 @@ jobs:
             --title "v${VERSION}" \
             --notes-file "${{ steps.notes.outputs.notes_file }}"
           echo "Created release v${VERSION} at ${COMMIT_SHA}"
+
+  # Run SonarCloud on main branch so the dashboard stays up to date
+  sonarcloud:
+    needs: [check-skip, detect-changes]
+    if: |
+      needs.check-skip.outputs.should_skip != 'true' &&
+      needs.detect-changes.outputs.workflow_only != 'true'
+    uses: ./.github/workflows/sonarcloud.yml
+    with:
+      ref: ${{ github.sha }}
+      app_changed: ${{ needs.detect-changes.outputs.app_changed == 'true' }}
+    secrets: inherit
