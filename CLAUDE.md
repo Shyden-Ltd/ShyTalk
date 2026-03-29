@@ -52,11 +52,22 @@ Social chat app with voice rooms. Kotlin Multiplatform (Android + iOS), Firebase
 - JVM test gotcha: `org.json.JSONObject` is stubbed — add `testImplementation("org.json:json:20231013")` if needed
 
 ## PR Quality Gate (Pre-Push Checklist)
-Before opening or updating a PR, run ALL applicable checks:
-- Kotlin unit tests: `./gradlew test` (if app changed)
-- Express API tests: `cd express-api && npm test` (if backend changed)
-- E2E tests: `./gradlew connectedDevDebugAndroidTest` (if app changed)
-- Playwright web tests: `npx playwright test` (if web changed)
+**Run ALL tests locally before pushing.** CI should be a safety net, not the first time tests run.
+
+### Local test sequence (run before every push):
+1. **Kotlin lint**: `ktlint --relative` (~1s, requires standalone ktlint 1.5.0)
+2. **Express tests**: `cd express-api && npm test` (~10s)
+3. **Kotlin tests + detekt**: `./gradlew testDevDebugUnitTest :shared:jvmTest detekt` (~2min)
+4. **Playwright tests**: `npx playwright test` (~5min, requires local stack)
+5. **E2E smoke tests**: `./gradlew connectedDevDebugAndroidTest` (requires emulator + local stack)
+
+### Local stack prerequisite (for steps 4-5):
+- Start Docker Desktop
+- Run `bash local/start.sh` (Firebase Emulators + LiveKit + MinIO + Mailpit)
+- Run `cd express-api && npm run local` (Express API against emulators)
+- Android emulator for step 5
+
+### Additional checks:
 - Code review agent on the diff
 - Security review agent on the changes
 - i18n checker for all 19 locales (if user-facing strings changed)

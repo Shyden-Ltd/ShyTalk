@@ -35,7 +35,11 @@ jobs:
       - name: Detect changed paths
         id: changes
         run: |
-          CHANGED=$(git diff --name-only "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}")
+          # Diff entire branch against main — not just the latest push.
+          # This ensures all changes in the PR are detected, even if the
+          # latest push only touches workflow files.
+          MERGE_BASE=$(git merge-base "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}")
+          CHANGED=$(git diff --name-only "$MERGE_BASE...${{ github.event.pull_request.head.sha }}")
           APP=false BACKEND=false WEB=false OTHER=false
           while IFS= read -r file; do
             [ -z "$file" ] && continue
@@ -220,6 +224,13 @@ jobs:
     steps:
       - name: Evaluate results
         run: |
+          # detect-changes MUST succeed — if cancelled, all skips are invalid
+          if [ "${{ needs.detect-changes.result }}" != "success" ]; then
+            echo "detect-changes did not succeed: ${{ needs.detect-changes.result }}"
+            exit 1
+          fi
+
+          # Check each job — failure or cancelled = block merge
           for result in \
             "${{ needs.lint.result }}" \
             "${{ needs.build-and-test.result }}" \
