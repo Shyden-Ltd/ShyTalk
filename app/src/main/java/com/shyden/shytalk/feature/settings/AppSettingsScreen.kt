@@ -45,6 +45,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -155,6 +156,8 @@ fun AppSettingsScreen(
                     uiState = uiState,
                     onBack = { currentPageName = SettingsPage.Main.name },
                     onNavigateToLinkedAccounts = { currentPageName = SettingsPage.LinkedAccounts.name },
+                    onRequestDeletion = { pin -> viewModel.requestAccountDeletion(pin) },
+                    onCancelDeletion = { viewModel.cancelAccountDeletion() },
                     snackbarHostState = snackbarHostState,
                 )
             SettingsPage.LinkedAccounts ->
@@ -642,9 +645,12 @@ private fun AccountPage(
     uiState: AppSettingsUiState,
     onBack: () -> Unit,
     onNavigateToLinkedAccounts: () -> Unit,
+    onRequestDeletion: (pin: String) -> Unit,
+    onCancelDeletion: () -> Unit,
     snackbarHostState: SnackbarHostState,
 ) {
     var showDeleteAccountDialog by remember { mutableStateOf(false) }
+    var showPinVerification by remember { mutableStateOf(false) }
 
     SettingsSubPage(
         title = stringResource(Res.string.account),
@@ -705,13 +711,68 @@ private fun AccountPage(
     if (showDeleteAccountDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteAccountDialog = false },
-            title = { Text(stringResource(Res.string.delete_account)) },
+            title = { Text(stringResource(Res.string.delete_account_confirm_title)) },
             text = {
-                Text(stringResource(Res.string.delete_account_description))
+                Text(stringResource(Res.string.delete_account_confirm_body))
             },
             confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteAccountDialog = false
+                        showPinVerification = true
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                ) {
+                    Text(stringResource(Res.string.delete_account))
+                }
+            },
+            dismissButton = {
                 TextButton(onClick = { showDeleteAccountDialog = false }) {
-                    Text(stringResource(Res.string.ok))
+                    Text(stringResource(Res.string.cancel))
+                }
+            },
+        )
+    }
+
+    if (showPinVerification) {
+        var pinInput by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showPinVerification = false },
+            title = { Text(stringResource(Res.string.delete_account_pin_required)) },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = pinInput,
+                        onValueChange = { if (it.length <= 8) pinInput = it },
+                        label = { Text(stringResource(Res.string.pin_verify_subtitle)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    uiState.deletionError?.let { error ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = error.resolve(),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onRequestDeletion(pinInput)
+                        showPinVerification = false
+                    },
+                    enabled = pinInput.isNotEmpty() && !uiState.isDeletionRequesting,
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                ) {
+                    Text(stringResource(Res.string.delete_account))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPinVerification = false }) {
+                    Text(stringResource(Res.string.cancel))
                 }
             },
         )

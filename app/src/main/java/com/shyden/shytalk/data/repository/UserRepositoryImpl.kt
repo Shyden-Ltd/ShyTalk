@@ -367,4 +367,34 @@ class UserRepositoryImpl(
                 .update(mapOf("hasActiveWarning" to false, "warningReason" to null))
                 .await()
         }
+
+    override suspend fun requestAccountDeletion(
+        userId: String,
+        pin: String,
+    ): Resource<Long> =
+        firebaseCall("Failed to request account deletion") {
+            val response =
+                api.post(
+                    "/api/users/$userId/delete",
+                    JSONObject().put("pin", pin),
+                )
+            response.getLong("deleteAt")
+        }
+
+    override suspend fun cancelAccountDeletion(userId: String): Resource<Unit> =
+        firebaseCall("Failed to cancel account deletion") {
+            api.post("/api/users/$userId/cancel-delete", JSONObject())
+        }
+
+    override suspend fun getAccountDeletionStatus(userId: String): Resource<UserRepository.DeletionStatus> =
+        firebaseCall("Failed to get deletion status") {
+            val response = api.get("/api/users/$userId/deletion-status")
+            UserRepository.DeletionStatus(
+                scheduled = response.optBoolean("scheduled", false),
+                scheduledAt = if (response.isNull("scheduledAt")) null else response.optLong("scheduledAt"),
+                executeAt = if (response.isNull("executeAt")) null else response.optLong("executeAt"),
+                reason = response.optString("reason", null),
+                daysRemaining = if (response.isNull("daysRemaining")) null else response.optInt("daysRemaining"),
+            )
+        }
 }

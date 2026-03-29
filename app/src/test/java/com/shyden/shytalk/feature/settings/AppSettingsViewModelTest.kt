@@ -923,4 +923,105 @@ class AppSettingsViewModelTest {
 
             coVerify(exactly = 0) { identityRepository.linkProvider(any(), any(), any()) }
         }
+
+    // ===== Account Deletion =====
+
+    @Test
+    fun `requestAccountDeletion - success sets deletionScheduled`() =
+        runTest {
+            val deleteAt = System.currentTimeMillis() + 30 * 86400000L
+            coEvery { userRepository.requestAccountDeletion(currentUserId, "123456") } returns Resource.Success(deleteAt)
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.requestAccountDeletion("123456")
+            advanceUntilIdle()
+
+            assertTrue(vm.uiState.value.deletionScheduled)
+            assertEquals(deleteAt, vm.uiState.value.deletionDeleteAt)
+            assertFalse(vm.uiState.value.isDeletionRequesting)
+            assertNull(vm.uiState.value.deletionError)
+        }
+
+    @Test
+    fun `requestAccountDeletion - sets isDeletionRequesting while in progress`() =
+        runTest {
+            coEvery { userRepository.requestAccountDeletion(currentUserId, "123456") } returns Resource.Success(0L)
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            assertFalse(vm.uiState.value.isDeletionRequesting)
+            vm.requestAccountDeletion("123456")
+            // isDeletionRequesting should be true before the coroutine completes
+            advanceUntilIdle()
+
+            assertFalse(vm.uiState.value.isDeletionRequesting)
+        }
+
+    @Test
+    fun `requestAccountDeletion - error sets deletionError`() =
+        runTest {
+            coEvery { userRepository.requestAccountDeletion(currentUserId, "wrong") } returns Resource.Error("Wrong PIN")
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.requestAccountDeletion("wrong")
+            advanceUntilIdle()
+
+            assertFalse(vm.uiState.value.deletionScheduled)
+            assertFalse(vm.uiState.value.isDeletionRequesting)
+            assertTrue(vm.uiState.value.deletionError is UiText.Plain)
+        }
+
+    @Test
+    fun `cancelAccountDeletion - success clears deletion state`() =
+        runTest {
+            coEvery { userRepository.cancelAccountDeletion(currentUserId) } returns Resource.Success(Unit)
+            coEvery { userRepository.requestAccountDeletion(currentUserId, "123456") } returns
+                Resource.Success(System.currentTimeMillis() + 30 * 86400000L)
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            // Schedule first
+            vm.requestAccountDeletion("123456")
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.deletionScheduled)
+
+            // Cancel
+            vm.cancelAccountDeletion()
+            advanceUntilIdle()
+
+            assertFalse(vm.uiState.value.deletionScheduled)
+            assertNull(vm.uiState.value.deletionDeleteAt)
+        }
+
+    @Test
+    fun `cancelAccountDeletion - error sets deletionError`() =
+        runTest {
+            coEvery { userRepository.cancelAccountDeletion(currentUserId) } returns Resource.Error("Cannot cancel admin deletion")
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.cancelAccountDeletion()
+            advanceUntilIdle()
+
+            assertTrue(vm.uiState.value.deletionError is UiText.Plain)
+        }
+
+    @Test
+    fun `deletion state defaults to not scheduled`() =
+        runTest {
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            assertFalse(vm.uiState.value.deletionScheduled)
+            assertFalse(vm.uiState.value.isDeletionRequesting)
+            assertNull(vm.uiState.value.deletionDeleteAt)
+            assertNull(vm.uiState.value.deletionError)
+        }
 }

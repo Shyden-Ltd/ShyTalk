@@ -2,6 +2,8 @@ const {
   buildOtpEmail,
   buildLockoutEmail,
   buildResetEmail,
+  buildDeletionScheduledEmail,
+  buildDeletionCompleteEmail,
 } = require('../../src/utils/email-templates');
 
 describe('Email Templates', () => {
@@ -102,11 +104,72 @@ describe('Email Templates', () => {
     });
   });
 
+  describe('buildDeletionScheduledEmail', () => {
+    it('should return correct subject', () => {
+      const result = buildDeletionScheduledEmail('2026-04-28');
+      expect(result.subject).toMatch(/scheduled for deletion/i);
+    });
+
+    it('should include the deletion date in the HTML', () => {
+      const result = buildDeletionScheduledEmail('2026-04-28');
+      expect(result.html).toContain('2026-04-28');
+    });
+
+    it('should mention how to cancel', () => {
+      const result = buildDeletionScheduledEmail('2026-04-28');
+      expect(result.html).toMatch(/sign in|cancel/i);
+    });
+
+    it('should include ShyTalk branding', () => {
+      const result = buildDeletionScheduledEmail('2026-04-28');
+      expect(result.html).toContain('ShyTalk');
+    });
+
+    it('should use dark theme', () => {
+      const result = buildDeletionScheduledEmail('2026-04-28');
+      expect(result.html).toContain('#1a1a2e');
+    });
+
+    it('should include support email', () => {
+      const result = buildDeletionScheduledEmail('2026-04-28');
+      expect(result.html).toContain('shytalk.help@gmail.com');
+    });
+  });
+
+  describe('buildDeletionCompleteEmail', () => {
+    it('should return correct subject', () => {
+      const result = buildDeletionCompleteEmail();
+      expect(result.subject).toMatch(/has been deleted/i);
+    });
+
+    it('should mention permanent deletion', () => {
+      const result = buildDeletionCompleteEmail();
+      expect(result.html).toMatch(/permanently deleted/i);
+    });
+
+    it('should include ShyTalk branding', () => {
+      const result = buildDeletionCompleteEmail();
+      expect(result.html).toContain('ShyTalk');
+    });
+
+    it('should use dark theme', () => {
+      const result = buildDeletionCompleteEmail();
+      expect(result.html).toContain('#1a1a2e');
+    });
+
+    it('should include support email for mistakes', () => {
+      const result = buildDeletionCompleteEmail();
+      expect(result.html).toContain('shytalk.help@gmail.com');
+    });
+  });
+
   describe('all templates', () => {
     const templates = [
       { name: 'OTP', fn: buildOtpEmail },
       { name: 'Lockout', fn: buildLockoutEmail },
       { name: 'Reset', fn: buildResetEmail },
+      { name: 'DeletionScheduled', fn: () => buildDeletionScheduledEmail('2026-04-28') },
+      { name: 'DeletionComplete', fn: () => buildDeletionCompleteEmail() },
     ];
 
     templates.forEach(({ name, fn }) => {
@@ -139,10 +202,12 @@ describe('Email Templates', () => {
         expect(result.html).toContain('</html>');
       });
 
-      it(`${name}: should handle 6-digit codes`, () => {
-        const result = fn('000000');
-        expect(result.html).toContain('000000');
-      });
+      if (!name.startsWith('Deletion')) {
+        it(`${name}: should handle 6-digit codes`, () => {
+          const result = fn('000000');
+          expect(result.html).toContain('000000');
+        });
+      }
     });
   });
 });

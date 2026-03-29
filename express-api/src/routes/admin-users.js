@@ -18,6 +18,8 @@
  * POST   /user/:uniqueId/unsuspend       → Unsuspend user (alias)
  * POST   /report-locks/:uniqueId/lock    → Lock reports for user (alias)
  * DELETE /report-locks/:uniqueId         → Unlock reports for user (alias)
+ * POST   /user/:uniqueId/delete          → Schedule account deletion (admin)
+ * POST   /user/:uniqueId/cancel-delete   → Cancel scheduled deletion (admin)
  */
 
 const router = require('express').Router();
@@ -28,6 +30,9 @@ const { computeDisplayScore } = require('../utils/gcs');
 const { sendSystemPm } = require('../utils/system-pm');
 const { getDoc } = require('../utils/firestore-helpers');
 const log = require('../utils/log');
+const { sendEmail } = require('../utils/email');
+const { buildDeletionScheduledEmail } = require('../utils/email-templates');
+const { sendFcmToTokens } = require('../utils/fcm');
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
@@ -1289,6 +1294,136 @@ router.get('/metrics/otp', async (req, res) => {
   } catch (err) {
     log.error('Admin OTP metrics failed', err);
     res.status(500).json({ error: 'Failed to get OTP metrics' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// POST /api/user/:uniqueId/delete — Admin schedule account deletion
+// ═══════════════════════════════════════════════════════════════════
+
+router.post('/user/:uniqueId/delete', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+
+    const uniqueId = req.params.uniqueId;
+    const { reason } = req.body || {};
+
+    const userSnap = await db.doc(`users/${uniqueId}`).get();
+    if (!userSnap.exists) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const user = userSnap.data();
+
+    if (user.deletionScheduledAt) {
+      return res.status(409).json({ error: 'Deletion already scheduled' });
+    }
+
+    const configSnap = await db.doc('config/app').get();
+    const graceDays = configSnap.exists
+      ? configSnap.data().accountDeletionGracePeriodDays || 30
+      : 30;
+
+    const timestamp = now();
+    const executeAt = timestamp + graceDays * 86400000;
+
+    await db.doc(`users/${uniqueId}`).update({
+      deletionScheduledAt: timestamp,
+      deletionReason: 'admin',
+      deletionExecuteAt: executeAt,
+      currentRoomId: null,
+    });
+
+    // Revoke refresh tokens
+    await auth.revokeRefreshTokens(user.firebaseUid);
+
+    // Send email notification
+    if (user.email) {
+      try {
+        const deleteDate = new Date(executeAt).toISOString().split('T')[0];
+        const template = buildDeletionScheduledEmail(deleteDate);
+        await sendEmail(user.email, template.subject, template.html);
+      } catch (emailErr) {
+        log.error('admin-users', 'Failed to send deletion email', { error: emailErr.message });
+      }
+    }
+
+    // Send push notification
+    if (user.fcmTokens && user.fcmTokens.length > 0) {
+      try {
+        const deleteDate = new Date(executeAt).toISOString().split('T')[0];
+        await sendFcmToTokens(user.fcmTokens, {
+          notification: {
+            title: 'Account Deletion Scheduled',
+            body: `Your account will be deleted on ${deleteDate}. Sign in to cancel.`,
+          },
+        });
+      } catch (fcmErr) {
+        log.error('admin-users', 'Failed to send deletion push', { error: fcmErr.message });
+      }
+    }
+
+    // Audit log
+    db.doc(`adminAuditLog/${generateId()}`).set({
+      action: 'ACCOUNT_DELETION_SCHEDULED',
+      adminId: req.auth.uid,
+      targetUserId: uniqueId,
+      details: reason ? `Admin deletion: ${reason}` : 'Admin deletion',
+      createdAt: timestamp,
+    });
+
+    log.info('admin-users', 'Admin scheduled account deletion', {
+      uniqueId,
+      adminId: req.auth.uid,
+    });
+    res.json({ success: true, deleteAt: executeAt });
+  } catch (err) {
+    log.error('admin-users', 'Failed to schedule account deletion', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// POST /api/user/:uniqueId/cancel-delete — Admin cancel deletion
+// ═══════════════════════════════════════════════════════════════════
+
+router.post('/user/:uniqueId/cancel-delete', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+
+    const uniqueId = req.params.uniqueId;
+
+    const userSnap = await db.doc(`users/${uniqueId}`).get();
+    if (!userSnap.exists) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const user = userSnap.data();
+
+    if (!user.deletionScheduledAt) {
+      return res.status(404).json({ error: 'No deletion scheduled' });
+    }
+
+    await db.doc(`users/${uniqueId}`).update({
+      deletionScheduledAt: null,
+      deletionReason: null,
+      deletionExecuteAt: null,
+    });
+
+    // Audit log
+    db.doc(`adminAuditLog/${generateId()}`).set({
+      action: 'ACCOUNT_DELETION_CANCELLED',
+      adminId: req.auth.uid,
+      targetUserId: uniqueId,
+      createdAt: now(),
+    });
+
+    log.info('admin-users', 'Admin cancelled account deletion', {
+      uniqueId,
+      adminId: req.auth.uid,
+    });
+    res.json({ success: true });
+  } catch (err) {
+    log.error('admin-users', 'Failed to cancel account deletion', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

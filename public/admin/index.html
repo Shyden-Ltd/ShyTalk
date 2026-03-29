@@ -3316,6 +3316,15 @@
                 </div>
             </div>
 
+            <!-- Account Deletion -->
+            <div class="section-card" id="account-deletion-section">
+                <h3>Account Deletion</h3>
+                <div id="deletion-status-badge" style="display:none;padding:8px 16px;border-radius:8px;background:#e74c3c33;color:#e74c3c;margin-bottom:12px;font-weight:600;"></div>
+                <div id="deletion-not-scheduled" style="margin-bottom:12px;color:var(--text-secondary);">No deletion scheduled.</div>
+                <button type="button" id="schedule-deletion-btn" class="btn" style="background:#e74c3c;color:#fff;">Schedule Deletion</button>
+                <button type="button" id="cancel-deletion-btn" class="btn" style="background:#2ecc71;color:#fff;display:none;">Cancel Deletion</button>
+            </div>
+
             <!-- Report History -->
             <div class="form-section" id="report-history-section" style="display:none;">
                 <h3>Report History</h3>
@@ -6035,12 +6044,71 @@
       }
     });
 
+    // --- Account Deletion section ---
+    const deletionStatusBadge = $("#deletion-status-badge");
+    const deletionNotScheduled = $("#deletion-not-scheduled");
+    const scheduleDeletionBtn = $("#schedule-deletion-btn");
+    const cancelDeletionBtn = $("#cancel-deletion-btn");
+
+    function populateDeletionSection(data) {
+      if (data.deletionScheduledAt) {
+        const executeDate = new Date(data.deletionExecuteAt).toLocaleDateString();
+        const msRemaining = data.deletionExecuteAt - Date.now();
+        const daysRemaining = Math.max(0, Math.ceil(msRemaining / 86400000));
+        deletionStatusBadge.textContent = `Deletion scheduled — ${daysRemaining} days remaining (${executeDate})`;
+        deletionStatusBadge.style.display = "block";
+        deletionNotScheduled.style.display = "none";
+        scheduleDeletionBtn.style.display = "none";
+        cancelDeletionBtn.style.display = "";
+      } else {
+        deletionStatusBadge.style.display = "none";
+        deletionNotScheduled.style.display = "block";
+        scheduleDeletionBtn.style.display = "";
+        cancelDeletionBtn.style.display = "none";
+      }
+    }
+
+    scheduleDeletionBtn.addEventListener("click", async () => {
+      const reason = prompt("Enter reason for account deletion (optional):");
+      if (reason === null) return; // cancelled
+      if (!confirm("Are you sure you want to schedule this account for deletion?")) return;
+      try {
+        const uid = currentUid;
+        await apiCall("POST", `/api/user/${uid}/delete`, { reason });
+        alert("Account deletion scheduled.");
+        const freshData = await apiCall("GET", `/api/user/${uid}`);
+        populateDeletionSection(freshData);
+      } catch (err) {
+        alert("Failed to schedule deletion: " + (err.message || err));
+      }
+    });
+
+    cancelDeletionBtn.addEventListener("click", async () => {
+      if (!confirm("Cancel the scheduled account deletion?")) return;
+      try {
+        const uid = currentUid;
+        await apiCall("POST", `/api/user/${uid}/cancel-delete`);
+        alert("Account deletion cancelled.");
+        const freshData = await apiCall("GET", `/api/user/${uid}`);
+        populateDeletionSection(freshData);
+      } catch (err) {
+        alert("Failed to cancel deletion: " + (err.message || err));
+      }
+    });
+
     // Hook into populateForm to also populate suspension section
     const _originalPopulateForm = populateForm;
     async function populateFormWithSuspension(data) {
       await _originalPopulateForm(data);
       populateSuspensionSection(data);
     }
+
+    // Hook into populateFormFull to also populate deletion section
+    const _origPopulateFullForDeletion = populateFormFull;
+    populateFormFull = async function(data) {
+      await _origPopulateFullForDeletion(data);
+      populateDeletionSection(data);
+    };
     // (doSearch / doSearchUpdated removed — doSearchFinal is the authoritative handler)
 
     // --- Appeals ---

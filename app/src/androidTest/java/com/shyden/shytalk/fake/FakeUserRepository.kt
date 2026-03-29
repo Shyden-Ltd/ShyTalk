@@ -155,4 +155,14 @@ class FakeUserRepository : UserRepository {
     }
 
     override suspend fun getWarningReason(userId: String): Resource<String?> = Resource.Success(userFlagsFlow.value.warningReason)
+
+    override suspend fun requestAccountDeletion(
+        userId: String,
+        pin: String,
+    ): Resource<Long> = Resource.Success(System.currentTimeMillis() + 30 * 86400000L)
+
+    override suspend fun cancelAccountDeletion(userId: String): Resource<Unit> = Resource.Success(Unit)
+
+    override suspend fun getAccountDeletionStatus(userId: String): Resource<UserRepository.DeletionStatus> =
+        Resource.Success(UserRepository.DeletionStatus())
 }

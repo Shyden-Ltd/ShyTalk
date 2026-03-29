@@ -520,7 +520,14 @@
     <string name="contact_support_hint">If the problem persists, contact shytalk.help@gmail.com</string>
     <string name="contact_us">Contact Us</string>
     <string name="delete_account">Delete Account</string>
-    <string name="delete_account_description">Account deletion is not available yet. Please contact shytalk.help@gmail.com for assistance.</string>
+    <string name="delete_account_description">Your account and all data will be permanently deleted after the grace period. You can cancel by signing in before then.</string>
+    <string name="delete_account_scheduled">Your account is scheduled for deletion on %1$s. Would you like to cancel?</string>
+    <string name="delete_account_cancel">Cancel Deletion</string>
+    <string name="delete_account_continue">Continue with Deletion</string>
+    <string name="delete_account_success">Your account has been scheduled for deletion.</string>
+    <string name="delete_account_pin_required">Verify your identity to delete your account</string>
+    <string name="delete_account_confirm_title">Are you sure?</string>
+    <string name="delete_account_confirm_body">This will permanently delete your account and all associated data after the grace period. This action cannot be undone.</string>
     <string name="denied">Denied</string>
     <string name="description">Description</string>
     <string name="device_locked_description">This device is already linked to another account.\nOnly one account is allowed per device.\n\nFor support, contact shytalk.help@gmail.com</string>

@@ -71,6 +71,10 @@ data class User(
     val selfDestructAlertEnabled: Boolean = false,
     val hasClaimedSuperShyTrial: Boolean = false,
     val language: String = "en",
+    // Account deletion
+    val deletionScheduledAt: Long? = null,
+    val deletionReason: String? = null,
+    val deletionExecuteAt: Long? = null,
 ) {
     val isActivelySuspended: Boolean
         get() {
@@ -78,6 +82,10 @@ data class User(
             val endDate = suspensionEndDate ?: return true // permanent
             return currentTimeMillis() < endDate
         }
+
+    /** Whether this account has a pending deletion. */
+    val isPendingDeletion: Boolean
+        get() = deletionScheduledAt != null && deletionExecuteAt != null
 
     /** Active (non-unlinked) providers only. */
     val activeProviders: List<LinkedProvider> get() = providers.filter { it.active }
@@ -162,6 +170,9 @@ data class User(
             "selfDestructAlertEnabled" to selfDestructAlertEnabled,
             "hasClaimedSuperShyTrial" to hasClaimedSuperShyTrial,
             "language" to language,
+            "deletionScheduledAt" to deletionScheduledAt,
+            "deletionReason" to deletionReason,
+            "deletionExecuteAt" to deletionExecuteAt,
         )
 
     companion object {
@@ -269,6 +280,9 @@ data class User(
                 selfDestructAlertEnabled = map["selfDestructAlertEnabled"].asBool(),
                 hasClaimedSuperShyTrial = map["hasClaimedSuperShyTrial"].asBool(),
                 language = map["language"] as? String ?: "en",
+                deletionScheduledAt = map["deletionScheduledAt"]?.let { timestampToMillis(it) },
+                deletionReason = map["deletionReason"] as? String,
+                deletionExecuteAt = map["deletionExecuteAt"]?.let { timestampToMillis(it) },
             )
     }
 }

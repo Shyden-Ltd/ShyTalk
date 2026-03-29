@@ -12,6 +12,7 @@ const rotateLogs = require('./rotateLogs');
 const expireBans = require('./expireBans');
 const expireTempIds = require('./expireTempIds');
 const serverHealth = require('./serverHealth');
+const accountDeletion = require('./accountDeletion');
 const alertManager = require('../utils/alertManagerInstance');
 
 function startCronJobs() {
@@ -77,6 +78,14 @@ function startCronJobs() {
   cron.schedule('*/15 * * * *', () => {
     log.info('cron', 'Running expireBans');
     expireBans().catch((err) => log.error('cron', 'expireBans failed', { error: err.message }));
+  });
+
+  // Account deletion — daily 03:00 UTC
+  cron.schedule('0 3 * * *', () => {
+    log.info('cron', 'Running accountDeletion');
+    accountDeletion().catch((err) =>
+      log.error('cron', 'accountDeletion failed', { error: err.message }),
+    );
   });
 
   // Server health check — every 5 minutes

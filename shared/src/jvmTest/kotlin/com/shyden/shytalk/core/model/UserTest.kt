@@ -471,4 +471,106 @@ class UserTest {
         val user = User.fromMap(map, "u1")
         assertEquals(3, user.acceptedLegalVersion)
     }
+
+    // ── Account deletion fields ────────────────────────────────────
+
+    @Test
+    fun `default deletion fields are null`() {
+        val user = User()
+        assertNull(user.deletionScheduledAt)
+        assertNull(user.deletionReason)
+        assertNull(user.deletionExecuteAt)
+        assertFalse(user.isPendingDeletion)
+    }
+
+    @Test
+    fun `isPendingDeletion is true when both timestamps are set`() {
+        val user =
+            User(
+                deletionScheduledAt = 1705326600000L,
+                deletionReason = "self",
+                deletionExecuteAt = 1705326600000L + 30 * 86400000L,
+            )
+        assertTrue(user.isPendingDeletion)
+    }
+
+    @Test
+    fun `isPendingDeletion is false when only scheduledAt is set`() {
+        val user = User(deletionScheduledAt = 1705326600000L)
+        assertFalse(user.isPendingDeletion)
+    }
+
+    @Test
+    fun `fromMap parses deletion fields`() {
+        val map =
+            mapOf<String, Any?>(
+                "deletionScheduledAt" to 1705326600000L,
+                "deletionReason" to "self",
+                "deletionExecuteAt" to 1707918600000L,
+            )
+        val user = User.fromMap(map, "u1")
+        assertEquals(1705326600000L, user.deletionScheduledAt)
+        assertEquals("self", user.deletionReason)
+        assertEquals(1707918600000L, user.deletionExecuteAt)
+    }
+
+    @Test
+    fun `fromMap handles null deletion fields`() {
+        val map =
+            mapOf<String, Any?>(
+                "deletionScheduledAt" to null,
+                "deletionReason" to null,
+                "deletionExecuteAt" to null,
+            )
+        val user = User.fromMap(map, "u1")
+        assertNull(user.deletionScheduledAt)
+        assertNull(user.deletionReason)
+        assertNull(user.deletionExecuteAt)
+    }
+
+    @Test
+    fun `fromMap handles missing deletion fields`() {
+        val map = emptyMap<String, Any?>()
+        val user = User.fromMap(map, "u1")
+        assertNull(user.deletionScheduledAt)
+        assertNull(user.deletionReason)
+        assertNull(user.deletionExecuteAt)
+    }
+
+    @Test
+    fun `toMap includes deletion fields`() {
+        val user =
+            User(
+                deletionScheduledAt = 1705326600000L,
+                deletionReason = "admin",
+                deletionExecuteAt = 1707918600000L,
+            )
+        val map = user.toMap()
+        assertEquals(1705326600000L, map["deletionScheduledAt"])
+        assertEquals("admin", map["deletionReason"])
+        assertEquals(1707918600000L, map["deletionExecuteAt"])
+    }
+
+    @Test
+    fun `toMap includes null deletion fields`() {
+        val user = User()
+        val map = user.toMap()
+        assertNull(map["deletionScheduledAt"])
+        assertNull(map["deletionReason"])
+        assertNull(map["deletionExecuteAt"])
+    }
+
+    @Test
+    fun `deletion reason can be self, admin, or inactivity`() {
+        listOf("self", "admin", "inactivity").forEach { reason ->
+            val user =
+                User(
+                    deletionScheduledAt = currentTimeMillis(),
+                    deletionReason = reason,
+                    deletionExecuteAt = currentTimeMillis() + 86400000L,
+                )
+            assertEquals(reason, user.deletionReason)
+            assertTrue(user.isPendingDeletion)
+        }
+    }
 }

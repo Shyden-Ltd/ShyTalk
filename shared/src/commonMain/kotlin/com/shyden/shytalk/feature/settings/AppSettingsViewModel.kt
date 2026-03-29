@@ -65,6 +65,11 @@ data class AppSettingsUiState(
     val isCheckingUpdate: Boolean = false,
     val language: String = LanguagePreference.get(),
     val currentSignInProvider: String? = null,
+    // Account deletion
+    val isDeletionRequesting: Boolean = false,
+    val deletionScheduled: Boolean = false,
+    val deletionDeleteAt: Long? = null,
+    val deletionError: UiText? = null,
 )
 
 class AppSettingsViewModel(
@@ -432,6 +437,54 @@ class AppSettingsViewModel(
                     logE(TAG, "Failed to link ${type.key}:$identifier")
                     _uiState.update {
                         it.copy(isUnlinkingProvider = false, error = UiText.plain("Failed to link account"))
+                    }
+                }
+                is Resource.Loading -> {}
+            }
+        }
+    }
+
+    fun requestAccountDeletion(pin: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isDeletionRequesting = true, deletionError = null) }
+            when (val result = userRepository.requestAccountDeletion(currentUserId, pin)) {
+                is Resource.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            isDeletionRequesting = false,
+                            deletionScheduled = true,
+                            deletionDeleteAt = result.data,
+                        )
+                    }
+                }
+                is Resource.Error -> {
+                    _uiState.update {
+                        it.copy(
+                            isDeletionRequesting = false,
+                            deletionError = UiText.Plain(result.message),
+                        )
+                    }
+                }
+                is Resource.Loading -> {}
+            }
+        }
+    }
+
+    fun cancelAccountDeletion() {
+        viewModelScope.launch {
+            when (val result = userRepository.cancelAccountDeletion(currentUserId)) {
+                is Resource.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            deletionScheduled = false,
+                            deletionDeleteAt = null,
+                            deletionError = null,
+                        )
+                    }
+                }
+                is Resource.Error -> {
+                    _uiState.update {
+                        it.copy(deletionError = UiText.Plain(result.message))
                     }
                 }
                 is Resource.Loading -> {}

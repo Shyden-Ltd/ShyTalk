@@ -111,4 +111,21 @@ interface UserRepository {
     suspend fun acknowledgeWarning(userId: String): Resource<Unit>
 
     suspend fun getWarningReason(userId: String): Resource<String?>
+
+    suspend fun requestAccountDeletion(
+        userId: String,
+        pin: String,
+    ): Resource<Long>
+
+    suspend fun cancelAccountDeletion(userId: String): Resource<Unit>
+
+    data class DeletionStatus(
+        val scheduled: Boolean = false,
+        val scheduledAt: Long? = null,
+        val executeAt: Long? = null,
+        val reason: String? = null,
+        val daysRemaining: Int? = null,
+    )
+
+    suspend fun getAccountDeletionStatus(userId: String): Resource<DeletionStatus>
 }

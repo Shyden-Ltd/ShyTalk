@@ -495,7 +495,14 @@
     <string name="update_now">Update Now</string>
     <string name="error_title">Error</string>
     <string name="delete_account">Delete Account</string>
-    <string name="delete_account_description">Account deletion is not available yet. Please contact shytalk.help@gmail.com for assistance.</string>
+    <string name="delete_account_description">Your account and all data will be permanently deleted after the grace period. You can cancel by signing in before then.</string>
+    <string name="delete_account_scheduled">Your account is scheduled for deletion on %1$s. Would you like to cancel?</string>
+    <string name="delete_account_cancel">Cancel Deletion</string>
+    <string name="delete_account_continue">Continue with Deletion</string>
+    <string name="delete_account_success">Your account has been scheduled for deletion.</string>
+    <string name="delete_account_pin_required">Verify your identity to delete your account</string>
+    <string name="delete_account_confirm_title">Are you sure?</string>
+    <string name="delete_account_confirm_body">This will permanently delete your account and all associated data after the grace period. This action cannot be undone.</string>
     <string name="unblock_confirm">Unblock %1$s?</string>
     <string name="unblock_description">They will be able to view your profile again.</string>
     <string name="dnd_start_time">DND Start Time</string>
