@@ -26,7 +26,7 @@ export default defineConfig({
   workers: 1, // Serial — Firebase Auth rate-limits concurrent logins causing flaky admin tests
   reporter: reporters,
   use: {
-    baseURL: process.env.WEB_BASE_URL || 'https://dev.shytalk.shyden.co.uk',
+    baseURL: process.env.WEB_BASE_URL || 'http://localhost:8888',
     headless: true,
     screenshot: 'only-on-failure', // Failure screenshots go to test-results/ artifacts (NOT Allure)
     trace: 'retain-on-failure', // Trace on failure for debugging
