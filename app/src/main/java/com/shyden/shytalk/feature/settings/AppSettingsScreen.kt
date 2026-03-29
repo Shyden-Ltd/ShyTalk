@@ -694,8 +694,10 @@ private fun AccountPage(
             Spacer(modifier = Modifier.height(16.dp))
 
             if (uiState.deletionScheduled && uiState.deletionDeleteAt != null) {
-                val deleteDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-                    .format(java.util.Date(uiState.deletionDeleteAt!!))
+                val deleteDate =
+                    java.text
+                        .SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                        .format(java.util.Date(uiState.deletionDeleteAt!!))
                 Text(
                     text = stringResource(Res.string.delete_account_scheduled, deleteDate),
                     color = MaterialTheme.colorScheme.error,
@@ -705,9 +707,10 @@ private fun AccountPage(
                 OutlinedButton(
                     onClick = { onCancelDeletion() },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.primary,
-                    ),
+                    colors =
+                        ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.primary,
+                        ),
                 ) {
                     Text(stringResource(Res.string.delete_account_cancel))
                 }
