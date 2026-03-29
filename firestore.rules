@@ -21,7 +21,8 @@ service cloud.firestore {
             .hasAny(['shyCoins', 'shyBeans', 'isSuperShy', 'superShyExpiry', 'superShyTier',
                      'gcsLastDeductionAt', 'isSuspended', 'suspensionReason',
                      'suspensionEndDate', 'userType', 'uniqueId', 'firebaseUid', 'providers',
-                     'pinHash', 'pinSetAt', 'pinAttempts', 'pinLockedUntil', 'pinLockoutCount']);
+                     'pinHash', 'pinSetAt', 'pinAttempts', 'pinLockedUntil', 'pinLockoutCount',
+                     'deletionScheduledAt', 'deletionReason', 'deletionExecuteAt']);
 
       // Backpack — read own, write only via API
       match /backpack/{giftId} {
