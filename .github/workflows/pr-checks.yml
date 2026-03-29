@@ -69,8 +69,12 @@ jobs:
 
   build-and-test:
     name: Build & Test
-    needs: [detect-changes]
-    if: needs.detect-changes.outputs.app_changed == 'true'
+    needs: [detect-changes, lint, test-backend]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.app_changed == 'true' &&
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
+      (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -147,8 +151,11 @@ jobs:
     secrets: inherit
 
   test-backend:
-    needs: [detect-changes]
-    if: needs.detect-changes.outputs.backend_changed == 'true'
+    needs: [detect-changes, lint]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.backend_changed == 'true' &&
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped')
     uses: ./.github/workflows/test-backend.yml
     with:
       ref: ${{ github.event.pull_request.head.sha }}
