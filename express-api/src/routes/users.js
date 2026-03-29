@@ -880,7 +880,11 @@ router.post('/users/:uniqueId/delete', async (req, res) => {
     await db.doc(`users/${uniqueId}`).update(updates);
 
     // Revoke refresh tokens (sign out all devices)
-    await auth.revokeRefreshTokens(user.firebaseUid);
+    try {
+      await auth.revokeRefreshTokens(user.firebaseUid);
+    } catch (revokeErr) {
+      log.error('users', 'Failed to revoke refresh tokens', { error: revokeErr.message });
+    }
 
     // Send email notification
     if (user.email) {

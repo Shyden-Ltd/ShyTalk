@@ -1334,7 +1334,11 @@ router.post('/user/:uniqueId/delete', async (req, res) => {
     });
 
     // Revoke refresh tokens
-    await auth.revokeRefreshTokens(user.firebaseUid);
+    try {
+      await auth.revokeRefreshTokens(user.firebaseUid);
+    } catch (revokeErr) {
+      log.error('admin-users', 'Failed to revoke refresh tokens', { error: revokeErr.message });
+    }
 
     // Send email notification
     if (user.email) {
