@@ -8,7 +8,7 @@ on:
         type: string
         required: true
       app_changed:
-        description: 'Whether Kotlin/Android source changed (skip JVM tests if false)'
+        description: 'Whether Kotlin/Android source changed'
         type: boolean
         default: true
 
@@ -51,6 +51,13 @@ jobs:
           cd express-api && npm ci
           npx jest --coverage --coverageReporters=lcov || true
 
+      - name: Download build outputs
+        if: inputs.app_changed
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v7
+        with:
+          name: build-outputs
+        continue-on-error: true
+
       - name: Decode google-services.json
         if: inputs.app_changed
         env:
@@ -66,20 +73,22 @@ jobs:
             echo "::warning::Using placeholder google-services.json (secrets unavailable — Dependabot PR)"
           fi
 
-      - name: Run Kotlin JVM tests for coverage reports
+      - name: Run Kotlin JVM tests (fallback if no build artifacts)
         if: inputs.app_changed
-        run: ./gradlew :shared:jvmTest || true
-
-      - name: Skip Kotlin tests (no app changes)
-        if: "!inputs.app_changed"
-        run: echo "::notice::Skipping Kotlin JVM tests — no app/shared changes detected"
+        run: |
+          if [ -d "shared/build/test-results" ]; then
+            echo "Build artifacts found — skipping rebuild"
+          else
+            echo "No build artifacts — running tests"
+            ./gradlew :shared:jvmTest || true
+          fi
 
       - name: Run SonarCloud analysis
         if: env.SONAR_TOKEN != ''
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew sonar -Dsonar.token=$SONAR_TOKEN -x :app:sonar
+        run: ./gradlew sonar -Dsonar.token=$SONAR_TOKEN -Dsonar.qualitygate.wait=true -x :app:sonar
 
       - name: Skip SonarCloud (no token)
         if: env.SONAR_TOKEN == ''

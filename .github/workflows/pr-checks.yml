@@ -69,8 +69,12 @@ jobs:
 
   build-and-test:
     name: Build & Test
-    needs: [detect-changes]
-    if: needs.detect-changes.outputs.app_changed == 'true'
+    needs: [detect-changes, lint, test-backend]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.app_changed == 'true' &&
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
+      (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -114,11 +118,11 @@ jobs:
             echo "::warning::Using debug keystore (secrets unavailable — Dependabot PR)"
           fi
 
-      - name: Run unit tests and build devRelease APK
+      - name: Run unit tests, detekt, and build devRelease APK
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'android' }}
           LIVEKIT_URL: ${{ secrets.LIVEKIT_URL || 'wss://placeholder.livekit.cloud' }}
-        run: ./gradlew testDevDebugUnitTest assembleDevRelease --parallel
+        run: ./gradlew testDevDebugUnitTest :shared:jvmTest detekt assembleDevRelease --parallel
 
       - name: Publish unit test report
         uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040 # v2
@@ -132,6 +136,17 @@ jobs:
         with:
           name: dev-release-apk
           path: app/build/outputs/apk/dev/release/*.apk
+
+      - name: Upload build outputs for SonarCloud
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        if: always()
+        with:
+          name: build-outputs
+          retention-days: 1
+          path: |
+            **/build/test-results/
+            **/build/reports/
+            **/build/classes/
 
   sonarcloud:
     needs: [detect-changes, build-and-test]
@@ -147,8 +162,11 @@ jobs:
     secrets: inherit
 
   test-backend:
-    needs: [detect-changes]
-    if: needs.detect-changes.outputs.backend_changed == 'true'
+    needs: [detect-changes, lint]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.backend_changed == 'true' &&
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped')
     uses: ./.github/workflows/test-backend.yml
     with:
       ref: ${{ github.event.pull_request.head.sha }}

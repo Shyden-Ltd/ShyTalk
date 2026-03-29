@@ -22,7 +22,9 @@ subprojects {
         ignoreFailures.set(false)
         filter {
             exclude { element ->
-                element.file.absolutePath.replace("\\", "/").contains("/build/")
+                element.file.absolutePath
+                    .replace("\\", "/")
+                    .contains("/build/")
             }
         }
     }
@@ -32,11 +34,13 @@ detekt {
     buildUponDefaultConfig = false
     config.setFrom(files("detekt.yml"))
     parallel = true
-    source.setFrom(files(
-        "shared/src/commonMain/kotlin",
-        "shared/src/androidMain/kotlin",
-        "app/src/main/java",
-    ))
+    source.setFrom(
+        files(
+            "shared/src/commonMain/kotlin",
+            "shared/src/androidMain/kotlin",
+            "app/src/main/java",
+        ),
+    )
 }
 
 // Skip sonar on the app module — SonarQube plugin v7 uses AppExtension (old AGP API)
@@ -53,6 +57,7 @@ sonar {
         property("sonar.organization", "shydenmcm")
         property("sonar.host.url", "https://sonarcloud.io")
         property("sonar.gradle.skipCompile", "true")
+        property("sonar.qualitygate.wait", "true")
 
         // Let the Gradle plugin auto-detect Kotlin sources from shared module.
         // Only manually specify Express API paths (not managed by Gradle).
@@ -60,17 +65,21 @@ sonar {
         property("sonar.tests", "express-api/tests")
 
         // Kotlin test reports — use absolute path to avoid shared/shared/ doubling
-        property("sonar.junit.reportPaths",
-            "${rootProject.projectDir}/shared/build/test-results/jvmTest"
+        property(
+            "sonar.junit.reportPaths",
+            "${rootProject.projectDir}/shared/build/test-results/jvmTest",
         )
 
         // Exclusions (generated code, resources)
-        property("sonar.exclusions", listOf(
-            "**/build/**",
-            "**/node_modules/**",
-            "**/*.json",
-            "**/composeResources/**",
-        ).joinToString(","))
+        property(
+            "sonar.exclusions",
+            listOf(
+                "**/build/**",
+                "**/node_modules/**",
+                "**/*.json",
+                "**/composeResources/**",
+            ).joinToString(","),
+        )
 
         // Coverage reports
         property("sonar.javascript.lcov.reportPaths", "express-api/coverage/lcov.info")

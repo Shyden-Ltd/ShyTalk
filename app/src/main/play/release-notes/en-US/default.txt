@@ -1,8 +1,8 @@
-v0.58.3
+v0.58.4
 
-comprehensive test coverage — Express API (1600→1916) + Kotlin (150→634) (#216)
-- comprehensive Express API coverage — 1600→1916 tests (+316)
-- Lines 76%→83%, Branches 68%→78%
-- Every source file (except server entry) at 85%+ coverage.
-- Claude Opus 4.6 (1M context) <noreply@anthropic.com>
-- comprehensive Kotlin test coverage — 150→634 tests (+484)
+build once, share artifacts, SonarCloud quality gate (#220)
+- switch from Gradle ktlint/detekt to standalone ktlint (~30s vs ~2min).
+-   No JDK or Gradle setup needed — just curl + run.
+- now also runs detekt + :shared:jvmTest in a single Gradle
+-   invocation. Uploads test-results, reports, and classes as artifacts
+-   for SonarCloud to reuse.
