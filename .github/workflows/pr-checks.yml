@@ -138,12 +138,12 @@ jobs:
           path: app/build/outputs/apk/dev/release/*.apk
 
   sonarcloud:
-    needs: [detect-changes, build-and-test]
+    needs: [detect-changes, lint]
     if: |
       always() &&
       needs.detect-changes.result == 'success' &&
       needs.detect-changes.outputs.workflow_only != 'true' &&
-      (needs.build-and-test.result == 'success' || needs.build-and-test.result == 'skipped')
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped')
     uses: ./.github/workflows/sonarcloud.yml
     with:
       ref: ${{ github.event.pull_request.head.sha }}
