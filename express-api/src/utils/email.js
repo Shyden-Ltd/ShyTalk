@@ -10,7 +10,7 @@ function getTransport() {
     if (!_transport) {
       _transport = nodemailer.createTransport({
         host: process.env.SMTP_HOST || 'localhost',
-        port: parseInt(process.env.SMTP_PORT || '1025', 10),
+        port: Number.parseInt(process.env.SMTP_PORT || '1025', 10),
       });
       _transportKey = 'local';
     }
@@ -28,7 +28,7 @@ function getTransport() {
 
   _transport = nodemailer.createTransport({
     host: SMTP_HOST,
-    port: parseInt(SMTP_PORT || '587', 10),
+    port: Number.parseInt(SMTP_PORT || '587', 10),
     secure: false,
     auth: {
       user: SMTP_USER,

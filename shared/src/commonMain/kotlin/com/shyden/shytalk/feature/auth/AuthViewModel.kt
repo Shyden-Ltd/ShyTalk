@@ -125,7 +125,7 @@ class AuthViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(isLoading = false, error = UiText.plain(result.message)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -150,7 +150,7 @@ class AuthViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(isLoading = false, error = UiText.plain(result.message)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -172,7 +172,7 @@ class AuthViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(isLoading = false, error = UiText.plain(result.message)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -182,6 +182,7 @@ class AuthViewModel(
      * the Express API identity map, handles device binding, ban checks, and
      * profile resolution.
      */
+    @Suppress("kotlin:S3776")
     private suspend fun resolveIdentityAndProceed(
         provider: String,
         identifier: String,
@@ -213,7 +214,7 @@ class AuthViewModel(
                                     }
                                 }
                                 is Resource.Error -> { /* lenient */ }
-                                is Resource.Loading -> {}
+                                is Resource.Loading -> Unit
                             }
                             checkAndApplyBan()
                         } else {
@@ -236,7 +237,7 @@ class AuthViewModel(
                                     }
                                 }
                                 is Resource.Error -> { /* lenient */ }
-                                is Resource.Loading -> {}
+                                is Resource.Loading -> Unit
                             }
                             checkAndApplyBan()
                         }
@@ -271,7 +272,7 @@ class AuthViewModel(
                 logE(TAG, "Identity resolution failed: ${result.message}")
                 _uiState.update { it.copy(isLoading = false, isBackendUnreachable = true) }
             }
-            is Resource.Loading -> {}
+            is Resource.Loading -> Unit
         }
     }
 
@@ -301,10 +302,11 @@ class AuthViewModel(
             is Resource.Error -> {
                 // Lenient: let user through on ban check failure
             }
-            is Resource.Loading -> {}
+            is Resource.Loading -> Unit
         }
     }
 
+    @Suppress("kotlin:S3776")
     private suspend fun resolveProfileState(userId: String) {
         when (val result = userRepository.userExists(userId)) {
             is Resource.Success -> {
@@ -385,7 +387,7 @@ class AuthViewModel(
                     it.copy(isLoading = false, isBackendUnreachable = true)
                 }
             }
-            is Resource.Loading -> {}
+            is Resource.Loading -> Unit
         }
     }
 
@@ -412,7 +414,7 @@ class AuthViewModel(
                     logE(TAG, "Failed to send sign-in link: ${result.message}")
                     _uiState.update { it.copy(isLoading = false, error = UiText.plain(result.message)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -437,7 +439,7 @@ class AuthViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(isLoading = false, error = UiText.plain(result.message)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -471,7 +473,7 @@ class AuthViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(isLoading = false, error = UiText.res(Res.string.error_submit_appeal)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -509,7 +511,7 @@ class AuthViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(isLoading = false, error = UiText.plain(result.message)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }

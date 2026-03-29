@@ -79,11 +79,6 @@ fun LuckySpinSummaryPopup(
         }
 
     val totalCoins = remember(wins) { wins.sumOf { it.coinValue } }
-    val bestCoinValue =
-        remember(wins) {
-            wins.maxByOrNull { it.coinValue }?.coinValue ?: 0
-        }
-
     // Animated entrance
     var appeared by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { appeared = true }

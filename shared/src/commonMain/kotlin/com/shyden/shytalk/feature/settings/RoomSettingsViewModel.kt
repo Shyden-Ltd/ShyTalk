@@ -70,7 +70,7 @@ class RoomSettingsViewModel(
                             )
                         }
                     }
-                    else -> {}
+                    else -> Unit
                 }
             }
         }
@@ -188,7 +188,7 @@ class RoomSettingsViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(error = result.message) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }

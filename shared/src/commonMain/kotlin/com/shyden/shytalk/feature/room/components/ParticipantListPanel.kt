@@ -50,6 +50,7 @@ data class ParticipantInfo(
     val isMuted: Boolean = false,
 )
 
+@Suppress("kotlin:S107")
 @Composable
 fun ParticipantListPanel(
     voiceUsers: List<ParticipantInfo>,
@@ -176,6 +177,7 @@ private fun SectionHeader(
     )
 }
 
+@Suppress("kotlin:S107", "kotlin:S3776")
 @Composable
 private fun ParticipantRow(
     participant: ParticipantInfo,
@@ -251,37 +253,41 @@ private fun ParticipantRow(
         )
 
         // Seat request actions (audience members only)
-        if (pendingRequest != null && isOwnerOrHost) {
-            IconButton(onClick = { onApprove?.invoke() }, modifier = Modifier.size(32.dp)) {
-                Icon(
-                    Icons.Default.Check,
-                    contentDescription = stringResource(Res.string.approve),
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp),
+        when {
+            pendingRequest != null && isOwnerOrHost -> {
+                IconButton(onClick = { onApprove?.invoke() }, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = stringResource(Res.string.approve),
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                IconButton(onClick = { onDeny?.invoke() }, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = stringResource(Res.string.deny),
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+            pendingRequest != null -> {
+                Text(
+                    text = stringResource(Res.string.requesting),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.tertiary,
                 )
             }
-            IconButton(onClick = { onDeny?.invoke() }, modifier = Modifier.size(32.dp)) {
-                Icon(
-                    Icons.Default.Close,
-                    contentDescription = stringResource(Res.string.deny),
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-        } else if (pendingRequest != null) {
-            Text(
-                text = stringResource(Res.string.requesting),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.tertiary,
-            )
-        } else if (onInvite != null) {
-            IconButton(onClick = onInvite, modifier = Modifier.size(32.dp)) {
-                Icon(
-                    Icons.Default.PersonAdd,
-                    contentDescription = stringResource(Res.string.invite_to_seat),
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp),
-                )
+            onInvite != null -> {
+                IconButton(onClick = onInvite, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        Icons.Default.PersonAdd,
+                        contentDescription = stringResource(Res.string.invite_to_seat),
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
             }
         }
 

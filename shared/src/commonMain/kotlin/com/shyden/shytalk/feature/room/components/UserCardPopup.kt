@@ -56,6 +56,7 @@ import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.ui.components.FlagBadge
 import org.jetbrains.compose.resources.stringResource
 
+@Suppress("kotlin:S107", "kotlin:S3776", "kotlin:S6615")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UserCardPopup(

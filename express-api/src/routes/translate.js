@@ -14,45 +14,72 @@ const router = express.Router();
 const LIBRETRANSLATE_URL = process.env.LIBRETRANSLATE_URL || 'http://localhost:5000';
 const FREE_DAILY_LIMIT = 50;
 
+/** Validate translate request inputs. Returns error string or null. */
+function validateTranslateInput(text, targetLang) {
+  if (!text || !targetLang) return 'text and targetLang required';
+  if (!/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(targetLang)) return 'Invalid language code';
+  if (text.length > 5000) return 'Text too long (max 5000 characters)';
+  return null;
+}
+
+/** Verify the user is a participant of the parent conversation/room. */
+async function verifyParticipant(messagePath, uniqueId) {
+  const parentPath = messagePath.split('/').slice(0, 2).join('/');
+  const parentSnap = await db.doc(parentPath).get();
+  if (!parentSnap.exists) return false;
+  const participantIds = parentSnap.data().participantIds || [];
+  return participantIds.includes(uniqueId);
+}
+
+/** Check translation cache on the message doc. */
+async function checkTranslationCache(messagePath, targetLang) {
+  const msgSnap = await db.doc(messagePath).get();
+  return msgSnap.data()?.translations?.[targetLang] || null;
+}
+
+/** Call LibreTranslate API. Returns { translatedText, detectedSourceLang } or null on error. */
+async function callLibreTranslate(text, targetLang, res) {
+  const ltResp = await fetch(`${LIBRETRANSLATE_URL}/translate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ q: text, source: 'auto', target: targetLang }),
+  });
+
+  if (!ltResp.ok) {
+    const err = await ltResp.text();
+    log.error('translate', 'LibreTranslate request failed', { status: ltResp.status, error: err });
+    res.status(502).json({ error: 'Translation service unavailable' });
+    return null;
+  }
+
+  const ltData = await ltResp.json();
+  return {
+    translatedText: ltData.translatedText,
+    detectedSourceLang: ltData.detectedLanguage?.language || 'unknown',
+  };
+}
+
 // POST /api/translate
 router.post('/translate', async (req, res) => {
   try {
     const { text, targetLang, messagePath } = req.body;
     const uniqueId = req.auth.uniqueId;
 
-    if (!text || !targetLang) {
-      return res.status(400).json({ error: 'text and targetLang required' });
-    }
-    if (!/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(targetLang)) {
-      return res.status(400).json({ error: 'Invalid language code' });
-    }
-    if (text.length > 5000) {
-      return res.status(400).json({ error: 'Text too long (max 5000 characters)' });
-    }
+    const inputError = validateTranslateInput(text, targetLang);
+    if (inputError) return res.status(400).json({ error: inputError });
 
-    // Check cache on message doc if messagePath provided
-    // Validate messagePath matches expected patterns to prevent path traversal
     const validMessagePath =
       messagePath &&
       /^(conversations|rooms)\/[a-zA-Z0-9_-]+\/messages\/[a-zA-Z0-9_-]+$/.test(messagePath);
 
-    // Verify the user is a participant of the referenced conversation/room
-    let participantVerified = false;
-    if (validMessagePath) {
-      const parentPath = messagePath.split('/').slice(0, 2).join('/');
-      const parentSnap = await db.doc(parentPath).get();
-      if (parentSnap.exists) {
-        const participantIds = parentSnap.data().participantIds || [];
-        participantVerified = participantIds.includes(uniqueId);
-      }
-    }
+    const participantVerified = validMessagePath
+      ? await verifyParticipant(messagePath, uniqueId)
+      : false;
 
+    // Check cache
     if (validMessagePath && participantVerified) {
-      const msgSnap = await db.doc(messagePath).get();
-      const cached = msgSnap.data()?.translations?.[targetLang];
-      if (cached) {
-        return res.json({ translatedText: cached, cached: true });
-      }
+      const cached = await checkTranslationCache(messagePath, targetLang);
+      if (cached) return res.json({ translatedText: cached, cached: true });
     }
 
     // Check quota for non-SuperShy users
@@ -73,36 +100,13 @@ router.post('/translate', async (req, res) => {
       }
     }
 
-    // Call LibreTranslate
-    const ltResp = await fetch(`${LIBRETRANSLATE_URL}/translate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        q: text,
-        source: 'auto',
-        target: targetLang,
-      }),
-    });
-
-    if (!ltResp.ok) {
-      const err = await ltResp.text();
-      log.error('translate', 'LibreTranslate request failed', {
-        status: ltResp.status,
-        error: err,
-      });
-      return res.status(502).json({ error: 'Translation service unavailable' });
-    }
-
-    const ltData = await ltResp.json();
-    const translatedText = ltData.translatedText;
-    const detectedSourceLang = ltData.detectedLanguage?.language || 'unknown';
+    const result = await callLibreTranslate(text, targetLang, res);
+    if (!result) return; // error response already sent
 
     // Cache translation on message doc (only if participant verified)
     if (validMessagePath && participantVerified) {
       db.doc(messagePath)
-        .update({
-          [`translations.${targetLang}`]: translatedText,
-        })
+        .update({ [`translations.${targetLang}`]: result.translatedText })
         .catch((err) =>
           log.error('translate', 'Failed to cache translation', {
             messagePath,
@@ -127,7 +131,11 @@ router.post('/translate', async (req, res) => {
         );
     }
 
-    res.json({ translatedText, detectedSourceLang, cached: false });
+    res.json({
+      translatedText: result.translatedText,
+      detectedSourceLang: result.detectedSourceLang,
+      cached: false,
+    });
   } catch (err) {
     log.error('translate', 'Translation request failed', { error: err.message });
     res.status(500).json({ error: 'Translation failed' });

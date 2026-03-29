@@ -102,7 +102,7 @@ class HomeViewModel(
                         _uiState.update { it.copy(lastRoomName = name) }
                     }
                 }
-                else -> {}
+                else -> Unit
             }
         }
     }
@@ -115,7 +115,7 @@ class HomeViewModel(
                     myBlockedUserIds = result.data
                     filterAndEmitRooms()
                 }
-                else -> {}
+                else -> Unit
             }
         }
     }
@@ -161,7 +161,7 @@ class HomeViewModel(
                 is Resource.Success -> {
                     myBlockedUserIds = result.data
                 }
-                else -> {}
+                else -> Unit
             }
             userCache.clear()
             filterAndEmitRooms()
@@ -196,7 +196,7 @@ class HomeViewModel(
             is Resource.Success -> {
                 myBlockedUserIds = result.data
             }
-            else -> {}
+            else -> Unit
         }
         // Evict stale cache entries instead of clearing everything
         val cutoff = currentTimeMillis() - REFRESH_INTERVAL_MS
@@ -232,7 +232,7 @@ class HomeViewModel(
                 is Resource.Success -> {
                     result.data.forEach { user -> cacheUser(user.uid, user) }
                 }
-                else -> {}
+                else -> Unit
             }
         }
 
@@ -303,7 +303,7 @@ class HomeViewModel(
                     logE(TAG, "Room creation failed: ${result.message}")
                     _uiState.update { it.copy(isLoading = false, error = result.message) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }

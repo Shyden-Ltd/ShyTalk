@@ -128,5 +128,6 @@ interface RoomRepository {
         userId: String,
     ): Resource<Unit>
 
+    @Suppress("kotlin:S6318")
     suspend fun prefetchActiveRooms() {}
 }

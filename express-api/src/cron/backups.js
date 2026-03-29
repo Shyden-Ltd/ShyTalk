@@ -211,7 +211,7 @@ async function pruneOldBackups(prefix) {
     }
 
     const backupDate = new Date(dateStr + 'T00:00:00Z');
-    return !isNaN(backupDate.getTime()) && backupDate.getTime() < sevenDaysAgo;
+    return !Number.isNaN(backupDate.getTime()) && backupDate.getTime() < sevenDaysAgo;
   });
 
   if (toDelete.length > 0) {

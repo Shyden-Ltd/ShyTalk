@@ -14,9 +14,12 @@ const logger = require('./loggerInstance');
 
 function logEntry(level, source, message, context) {
   try {
-    logger.log({ level, source, message, context });
-  } catch (_) {
-    // Never throw from logging
+    const result = logger.log({ level, source, message, context });
+    if (result && typeof result.catch === 'function') {
+      result.catch(() => {}); // Swallow async errors — never throw from logging
+    }
+  } catch {
+    // Intentionally swallowed — logging must never throw to avoid masking the caller's real error
   }
 }
 

@@ -74,7 +74,7 @@ class FollowListViewModel(
         viewModelScope.launch {
             when (val result = userRepository.getAliases(userId)) {
                 is Resource.Success -> _uiState.update { it.copy(aliases = result.data) }
-                else -> {}
+                else -> Unit
             }
         }
     }
@@ -102,6 +102,7 @@ class FollowListViewModel(
         }
     }
 
+    @Suppress("kotlin:S3776")
     private fun loadData() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
@@ -165,11 +166,11 @@ class FollowListViewModel(
                                 is Resource.Success -> {
                                     stalkerUserMap = usersResult.data.associateBy { it.uid }
                                 }
-                                else -> {}
+                                else -> Unit
                             }
                         }
                     }
-                    else -> {}
+                    else -> Unit
                 }
             }
 

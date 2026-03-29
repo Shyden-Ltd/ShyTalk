@@ -49,14 +49,15 @@ enum class BottomNavTab(
     Profile("Profile"),
 }
 
+@Suppress("kotlin:S107", "kotlin:S3776", "kotlin:S6615")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
     isBackendDegraded: Boolean = false,
     onNavigateToRoom: (String) -> Unit,
     onPrewarmRoom: (ChatRoom) -> Unit = {},
-    onNavigateToUserProfile: (String) -> Unit,
-    onNavigateToFollowList: (String, String) -> Unit,
+    _onNavigateToUserProfile: (String) -> Unit,
+    _onNavigateToFollowList: (String, String) -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToNewMessage: () -> Unit = {},
     onNavigateToWallet: () -> Unit = {},
@@ -154,7 +155,7 @@ fun MainScreen(
                         Icon(Icons.Default.Edit, contentDescription = stringResource(Res.string.new_message))
                     }
                 }
-                else -> {}
+                else -> Unit
             }
         },
     ) { padding ->
@@ -177,9 +178,9 @@ fun MainScreen(
                                         when (value) {
                                             "wallet" -> onNavigateToWallet()
                                             "settings" -> onNavigateToSettings()
-                                            else -> {}
+                                            else -> Unit
                                         }
-                                    BannerActionType.NONE -> {}
+                                    BannerActionType.NONE -> Unit
                                 }
                             },
                             snackbarHostState = snackbarHostState,

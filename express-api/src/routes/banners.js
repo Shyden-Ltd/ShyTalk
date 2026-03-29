@@ -89,7 +89,7 @@ router.post('/admin/banners', async (req, res) => {
         startDate: body.startDate ?? body.start_date ?? null,
         endDate: body.endDate ?? body.end_date ?? null,
         sortOrder,
-        isActive: body.isActive !== undefined ? !!body.isActive : body.is_active !== false,
+        isActive: body.isActive === undefined ? body.is_active !== false : !!body.isActive,
         createdAt: timestamp,
         updatedAt: timestamp,
       },
@@ -196,7 +196,7 @@ router.delete('/admin/banners/:id', async (req, res) => {
 
     // Delete R2 object if it's our CDN URL
     const CDN_PREFIX = CDN_URL + '/';
-    if (banner.imageUrl && banner.imageUrl.startsWith(CDN_PREFIX)) {
+    if (banner.imageUrl?.startsWith(CDN_PREFIX)) {
       const key = banner.imageUrl.slice(CDN_PREFIX.length);
       await deleteObject(key);
     }

@@ -31,7 +31,7 @@ router.get('/admin/logs', async (req, res) => {
       cursor,
     } = req.query;
 
-    let limit = parseInt(req.query.limit, 10) || DEFAULT_LIMIT;
+    let limit = Number.parseInt(req.query.limit, 10) || DEFAULT_LIMIT;
     if (limit < 1) limit = DEFAULT_LIMIT;
     if (limit > MAX_LIMIT) limit = MAX_LIMIT;
 
@@ -65,15 +65,13 @@ router.get('/admin/logs', async (req, res) => {
       const lowerKeyword = keyword.toLowerCase();
       logs = logs.filter(
         (entry) =>
-          (entry.message && entry.message.toLowerCase().includes(lowerKeyword)) ||
+          entry.message?.toLowerCase().includes(lowerKeyword) ||
           (entry.context && JSON.stringify(entry.context).toLowerCase().includes(lowerKeyword)),
       );
     }
 
     const nextCursor =
-      snapshot.docs.length === limit
-        ? snapshot.docs[snapshot.docs.length - 1].data().timestamp
-        : null;
+      snapshot.docs.length === limit ? snapshot.docs.at(-1).data().timestamp : null;
 
     res.json({ logs, nextCursor });
   } catch (err) {

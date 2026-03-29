@@ -64,7 +64,7 @@ class PinSetupViewModel(
         }
 
         when (current.step) {
-            PinSetupStep.ChooseLength -> {} // shouldn't happen
+            PinSetupStep.ChooseLength -> Unit // shouldn't happen
             PinSetupStep.Enter -> {
                 _state.update { it.copy(step = PinSetupStep.Confirm, firstPin = pin, pinInput = "", error = null) }
             }

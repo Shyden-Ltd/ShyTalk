@@ -68,8 +68,10 @@ import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 import kotlin.math.ceil
 
+private const val COIN_EMOJI = "\uD83E\uDE99"
 private val CyanAccent = Color(0xFF00BCD4)
 
+@Suppress("kotlin:S3776")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BackpackSheet(
@@ -147,7 +149,7 @@ fun BackpackSheet(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(stringResource(Res.string.gifts))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("\uD83E\uDE99", fontSize = 10.sp)
+                            Text(COIN_EMOJI, fontSize = 10.sp)
                             Text(
                                 formatLargeNumber(state.coinBalance),
                                 fontSize = 10.sp,
@@ -165,7 +167,7 @@ fun BackpackSheet(
                             Text(stringResource(Res.string.backpack))
                             if (backpackValue > 0) {
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("\uD83E\uDE99", fontSize = 10.sp)
+                                Text(COIN_EMOJI, fontSize = 10.sp)
                                 Text(
                                     formatLargeNumber(backpackValue),
                                     fontSize = 10.sp,
@@ -228,7 +230,7 @@ fun BackpackSheet(
                 BottomBar(
                     state = state,
                     giftCatalog = state.giftCatalog,
-                    isBackpackTab = true,
+                    _isBackpackTab = true,
                     onNavigateToWallet = onNavigateToWallet,
                     onQuantityClick = {},
                     onSendClick = { viewModel.activateTrial() },
@@ -240,7 +242,7 @@ fun BackpackSheet(
                 BottomBar(
                     state = state,
                     giftCatalog = state.giftCatalog,
-                    isBackpackTab = state.activeTab == 1,
+                    _isBackpackTab = state.activeTab == 1,
                     onNavigateToWallet = onNavigateToWallet,
                     onQuantityClick = { viewModel.toggleQuantityPicker() },
                     onSendClick = { viewModel.requestSend() },
@@ -258,7 +260,7 @@ fun BackpackSheet(
                 QuantityPickerPopup(
                     selectedGiftId = state.selectedGiftId,
                     backpackItems = state.backpackItems,
-                    coinBalance = state.coinBalance,
+                    _coinBalance = state.coinBalance,
                     giftCatalog = state.giftCatalog,
                     isBackpackTab = state.activeTab == 1,
                     selectedQuantity = state.selectedQuantity,
@@ -328,6 +330,7 @@ private data class GridItem(
 
 // ── Recipient Row ──
 
+@Suppress("kotlin:S107", "kotlin:S3776")
 @Composable
 private fun RecipientRow(
     seatedUsers: List<User>,
@@ -471,6 +474,7 @@ private fun RecipientAvatar(
 
 // ── Paged Gift Grid ──
 
+@Suppress("kotlin:S3776")
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PagedGiftGrid(
@@ -599,7 +603,7 @@ private fun ShopGiftCell(
             overflow = TextOverflow.Ellipsis,
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("\uD83E\uDE99", fontSize = 8.sp)
+            Text(COIN_EMOJI, fontSize = 8.sp)
             Spacer(modifier = Modifier.width(1.dp))
             Text(
                 "${item.gift.coinValue}",
@@ -695,7 +699,7 @@ private fun BackpackGiftCell(
             overflow = TextOverflow.Ellipsis,
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("\uD83E\uDE99", fontSize = 8.sp)
+            Text(COIN_EMOJI, fontSize = 8.sp)
             Spacer(modifier = Modifier.width(1.dp))
             Text(
                 "${item.gift.coinValue}",
@@ -721,11 +725,12 @@ private fun formatCountdown(ms: Long): String {
 
 // ── Bottom Bar ──
 
+@Suppress("kotlin:S107")
 @Composable
 private fun BottomBar(
     state: com.shyden.shytalk.feature.gifting.GiftingUiState,
     giftCatalog: List<Gift>,
-    isBackpackTab: Boolean,
+    _isBackpackTab: Boolean,
     onNavigateToWallet: () -> Unit,
     onQuantityClick: () -> Unit,
     onSendClick: () -> Unit,
@@ -749,7 +754,7 @@ private fun BottomBar(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.clickable { onNavigateToWallet() },
         ) {
-            Text("\uD83E\uDE99", fontSize = 14.sp)
+            Text(COIN_EMOJI, fontSize = 14.sp)
             Spacer(modifier = Modifier.width(4.dp))
             Text(
                 "${state.coinBalance}",
@@ -838,11 +843,12 @@ private fun BottomBar(
 
 // ── Quantity Picker Popup ──
 
+@Suppress("kotlin:S107", "kotlin:S3776")
 @Composable
 private fun QuantityPickerPopup(
     selectedGiftId: String?,
     backpackItems: List<BackpackItem>,
-    coinBalance: Long,
+    _coinBalance: Long,
     giftCatalog: List<Gift>,
     isBackpackTab: Boolean,
     selectedQuantity: Int,

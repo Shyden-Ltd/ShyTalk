@@ -53,6 +53,7 @@ import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 
+@Suppress("kotlin:S6615")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WalletScreen(
@@ -60,7 +61,7 @@ fun WalletScreen(
     onNavigateBack: () -> Unit,
     onNavigateToTransactions: () -> Unit,
     onPurchasePackage: (CoinPackage) -> Unit,
-    onPurchaseSubscription: (String) -> Unit,
+    _onPurchaseSubscription: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -220,6 +221,7 @@ private fun CoinsTab(
     }
 }
 
+@Suppress("kotlin:S3776")
 @Composable
 private fun BeansTab(
     beanBalance: Long,
@@ -405,7 +407,7 @@ fun CoinPurchaseSheetContent(
     coinPackages: List<CoinPackage>,
     isPurchasing: Boolean,
     onTestPurchase: (Int) -> Unit,
-    onDismiss: () -> Unit,
+    _onDismiss: () -> Unit,
 ) {
     Column(
         modifier =

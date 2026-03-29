@@ -33,6 +33,7 @@ import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
+@Suppress("kotlin:S6615")
 @Composable
 fun RequiredDOBScreen(
     onComplete: () -> Unit,

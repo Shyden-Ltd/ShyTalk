@@ -60,6 +60,7 @@ import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 
+@Suppress("kotlin:S107")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GroupSettingsSheet(
@@ -82,7 +83,7 @@ fun GroupSettingsSheet(
     onUpdateModNotifyMode: (String) -> Unit,
     onTransferOwnership: (String) -> Unit,
     onUnmuteMember: (String) -> Unit,
-    onAddParticipant: (String) -> Unit,
+    _onAddParticipant: (String) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -93,7 +94,6 @@ fun GroupSettingsSheet(
             stringResource(Res.string.permissions),
         )
     val isOwner = currentUserRole == GroupRole.OWNER
-    val permissions = conversation?.permissions ?: GroupPermissions()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -123,8 +123,8 @@ fun GroupSettingsSheet(
                         conversation = conversation,
                         conversationName = conversationName,
                         currentUserRole = currentUserRole,
-                        isAdmin = isAdmin,
-                        isModOrAbove = isModOrAbove,
+                        _isAdmin = isAdmin,
+                        _isModOrAbove = isModOrAbove,
                         isOwner = isOwner,
                         onUpdateGroupName = onUpdateGroupName,
                         onUpdateGroupDescription = onUpdateGroupDescription,
@@ -161,13 +161,14 @@ fun GroupSettingsSheet(
     }
 }
 
+@Suppress("kotlin:S107", "kotlin:S3776")
 @Composable
 private fun GeneralTab(
     conversation: Conversation?,
     conversationName: String,
     currentUserRole: GroupRole,
-    isAdmin: Boolean,
-    isModOrAbove: Boolean,
+    _isAdmin: Boolean,
+    _isModOrAbove: Boolean,
     isOwner: Boolean,
     onUpdateGroupName: (String) -> Unit,
     onUpdateGroupDescription: (String) -> Unit,
@@ -283,6 +284,7 @@ private fun GeneralTab(
     }
 }
 
+@Suppress("kotlin:S107", "kotlin:S3776")
 @Composable
 private fun MembersTab(
     conversation: Conversation?,
@@ -383,7 +385,7 @@ private fun MembersTab(
                                     GroupRole.ADMIN -> {
                                         currentAdmins.remove(user.uid)
                                     }
-                                    GroupRole.OWNER -> {}
+                                    GroupRole.OWNER -> Unit
                                 }
                                 onUpdateGroupRoles(currentAdmins, currentMods)
                             },
@@ -418,6 +420,7 @@ private fun MembersTab(
     }
 }
 
+@Suppress("kotlin:S107", "kotlin:S6615")
 @Composable
 private fun PermissionsTab(
     conversation: Conversation?,

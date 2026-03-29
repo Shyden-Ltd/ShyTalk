@@ -151,9 +151,23 @@ async function copySubcollection(srcDb, destDb, parentCollection, subName) {
   return total;
 }
 
+/** Run a migration phase operation, logging and capturing errors. */
+async function runMigrationOp(results, collectionName, phase, fn) {
+  try {
+    const count = await fn();
+    if (phase === 'delete') results.deleted[collectionName] = count;
+    else results.copied[collectionName] = count;
+    log.info('admin-migrate', `${phase === 'delete' ? 'Deleted' : 'Copied'} ${collectionName}`, {
+      count,
+    });
+  } catch (err) {
+    results.errors.push({ collection: collectionName, phase, error: err.message });
+    log.error('admin-migrate', `Failed to ${phase} ${collectionName}`, { error: err.message });
+  }
+}
+
 router.post('/admin/migrate-prod-data', async (req, res) => {
   if (requireAdmin(req, res)) return;
-
   if (process.env.NODE_ENV === 'production') {
     return res.status(403).json({ error: 'This endpoint is disabled in production' });
   }
@@ -166,69 +180,31 @@ router.post('/admin/migrate-prod-data', async (req, res) => {
 
     // Phase 1: Delete subcollections in dev first
     for (const [parent, sub] of SUBCOLLECTIONS) {
-      const collPath = `${parent}`;
-      try {
-        const parentDocs = await db.collection(collPath).listDocuments();
+      await runMigrationOp(results, `${parent}/${sub}`, 'delete', async () => {
+        const parentDocs = await db.collection(parent).listDocuments();
         let subDeleted = 0;
         for (const parentRef of parentDocs) {
-          subDeleted += await deleteCollection(db, `${collPath}/${parentRef.id}/${sub}`);
+          subDeleted += await deleteCollection(db, `${parent}/${parentRef.id}/${sub}`);
         }
-        results.deleted[`${parent}/${sub}`] = subDeleted;
-        log.info('admin-migrate', `Deleted dev subcollection ${parent}/${sub}`, {
-          count: subDeleted,
-        });
-      } catch (err) {
-        results.errors.push({
-          collection: `${parent}/${sub}`,
-          phase: 'delete',
-          error: err.message,
-        });
-        log.error('admin-migrate', `Failed to delete dev subcollection ${parent}/${sub}`, {
-          error: err.message,
-        });
-      }
+        return subDeleted;
+      });
     }
 
     // Phase 2: Delete top-level collections in dev
     for (const name of TOP_LEVEL_COLLECTIONS) {
-      try {
-        const deleted = await deleteCollection(db, name);
-        results.deleted[name] = deleted;
-        log.info('admin-migrate', `Deleted dev collection ${name}`, { count: deleted });
-      } catch (err) {
-        results.errors.push({ collection: name, phase: 'delete', error: err.message });
-        log.error('admin-migrate', `Failed to delete dev collection ${name}`, {
-          error: err.message,
-        });
-      }
+      await runMigrationOp(results, name, 'delete', () => deleteCollection(db, name));
     }
 
     // Phase 3: Copy top-level collections from prod
     for (const name of TOP_LEVEL_COLLECTIONS) {
-      try {
-        const copied = await copyCollection(srcDb, db, name);
-        results.copied[name] = copied;
-        log.info('admin-migrate', `Copied prod → dev collection ${name}`, { count: copied });
-      } catch (err) {
-        results.errors.push({ collection: name, phase: 'copy', error: err.message });
-        log.error('admin-migrate', `Failed to copy collection ${name}`, { error: err.message });
-      }
+      await runMigrationOp(results, name, 'copy', () => copyCollection(srcDb, db, name));
     }
 
     // Phase 4: Copy subcollections from prod
     for (const [parent, sub] of SUBCOLLECTIONS) {
-      try {
-        const copied = await copySubcollection(srcDb, db, parent, sub);
-        results.copied[`${parent}/${sub}`] = copied;
-        log.info('admin-migrate', `Copied prod → dev subcollection ${parent}/${sub}`, {
-          count: copied,
-        });
-      } catch (err) {
-        results.errors.push({ collection: `${parent}/${sub}`, phase: 'copy', error: err.message });
-        log.error('admin-migrate', `Failed to copy subcollection ${parent}/${sub}`, {
-          error: err.message,
-        });
-      }
+      await runMigrationOp(results, `${parent}/${sub}`, 'copy', () =>
+        copySubcollection(srcDb, db, parent, sub),
+      );
     }
 
     const totalDeleted = Object.values(results.deleted).reduce((a, b) => a + b, 0);
@@ -239,7 +215,6 @@ router.post('/admin/migrate-prod-data', async (req, res) => {
       totalCopied,
       errors: results.errors.length,
     });
-
     res.json({
       success: true,
       totalDeleted,

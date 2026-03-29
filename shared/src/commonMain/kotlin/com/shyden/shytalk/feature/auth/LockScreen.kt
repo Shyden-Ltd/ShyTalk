@@ -32,6 +32,7 @@ import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
+@Suppress("kotlin:S3776")
 @Composable
 fun LockScreen(
     onUnlocked: () -> Unit,

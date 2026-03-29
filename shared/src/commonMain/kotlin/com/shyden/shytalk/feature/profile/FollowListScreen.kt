@@ -59,6 +59,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
+@Suppress("kotlin:S3776")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FollowListScreen(
@@ -267,6 +268,7 @@ fun FollowListScreen(
     }
 }
 
+@Suppress("kotlin:S107", "kotlin:S3776")
 @Composable
 private fun FollowUserRow(
     user: User,
@@ -403,7 +405,7 @@ private fun FollowUserRow(
                         }
                     }
                 }
-                FollowTab.STALKERS -> {}
+                FollowTab.STALKERS -> Unit
             }
         }
     }
@@ -458,7 +460,7 @@ private fun StalkerUserRow(
             val unknownText = stringResource(Res.string.unknown)
             val resolvedName =
                 aliases[visitor.visitorId]
-                    ?: user?.displayName?.ifEmpty { unknownText }
+                    ?: user?.displayName?.ifEmpty { null }
                     ?: unknownText
             StyledDisplayName(
                 displayName = resolvedName,

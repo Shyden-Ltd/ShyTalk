@@ -2,7 +2,7 @@
  * Shared utility functions — pure helpers with no external dependencies.
  */
 
-const crypto = require('crypto');
+const crypto = require('node:crypto');
 
 function generateId() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';

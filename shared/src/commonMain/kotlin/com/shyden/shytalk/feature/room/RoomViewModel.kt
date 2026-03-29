@@ -290,6 +290,7 @@ class RoomViewModel(
 
     private fun Map<String, User>.replaceUser(user: User): Map<String, User> = if (user.uid in this) this + (user.uid to user) else this
 
+    @Suppress("kotlin:S3776")
     private fun observeRemoteUserChanges(userIds: Set<String>) {
         if (userIds == observedUserIds) return
         observedUserIds = userIds
@@ -344,7 +345,7 @@ class RoomViewModel(
                 is Resource.Success -> {
                     _uiState.update { it.copy(currentUserName = result.data.displayName) }
                 }
-                else -> {}
+                else -> Unit
             }
         }
     }
@@ -412,7 +413,7 @@ class RoomViewModel(
                 if (uncachedIds.isNotEmpty()) {
                     when (val result = userRepository.getUsers(uncachedIds)) {
                         is Resource.Success -> result.data.forEach { user -> userCache[user.uid] = user }
-                        else -> {}
+                        else -> Unit
                     }
                 }
             }
@@ -481,6 +482,7 @@ class RoomViewModel(
         return false
     }
 
+    @Suppress("kotlin:S3776")
     private fun handleFirstJoin(
         room: ChatRoom,
         userId: String,
@@ -608,13 +610,11 @@ class RoomViewModel(
         val currentlySeated = mySeat != null
         val hasAudio = _uiState.value.hasAudioPermission
 
-        if (currentlySeated != isSeated) {
-            if (!currentlySeated) {
-                logD(TAG, "User left seat, disabling mic")
-                voiceService.setMicrophoneEnabled(false)
-                voiceService.setAudioMode(false)
-            }
-            // When becoming seated: do NOT enable mic. User starts muted (Bug #6).
+        // When becoming seated: do NOT enable mic. User starts muted (Bug #6).
+        if (currentlySeated != isSeated && !currentlySeated) {
+            logD(TAG, "User left seat, disabling mic")
+            voiceService.setMicrophoneEnabled(false)
+            voiceService.setAudioMode(false)
         }
         isSeated = currentlySeated
 
@@ -684,6 +684,7 @@ class RoomViewModel(
         giftAnimationQueue.enqueue(event)
     }
 
+    @Suppress("kotlin:S3776")
     private fun checkBlockConflicts(room: ChatRoom) {
         viewModelScope.launch {
             val userId = _uiState.value.currentUserId
@@ -786,6 +787,7 @@ class RoomViewModel(
         loadUsersForIds(newIds) { /* accumulateKnownUsers handles the UI update */ }
     }
 
+    @Suppress("kotlin:S3776")
     private fun observeVoiceState() {
         viewModelScope.launch {
             combine(
@@ -833,6 +835,7 @@ class RoomViewModel(
         }
     }
 
+    @Suppress("kotlin:S3776")
     private fun joinRoom() {
         viewModelScope.launch {
             logI(TAG, "Joining room: roomId=$roomId")
@@ -856,7 +859,7 @@ class RoomViewModel(
                     is Resource.Success -> {
                         _uiState.update { it.copy(currentUserName = result.data.displayName) }
                     }
-                    else -> {}
+                    else -> Unit
                 }
             }
             val userName = _uiState.value.currentUserName
@@ -975,6 +978,7 @@ class RoomViewModel(
         }
     }
 
+    @Suppress("kotlin:S3776")
     private fun handleRoomExpiryCountdown(room: ChatRoom) {
         if (room.state == RoomState.CLOSED) {
             roomExpiryCountdownJob?.cancel()
@@ -1034,7 +1038,7 @@ class RoomViewModel(
                     is Resource.Error -> {
                         _uiState.update { it.copy(seatActionStatus = SeatActionStatus.Idle, error = result.message) }
                     }
-                    is Resource.Loading -> {}
+                    is Resource.Loading -> Unit
                 }
             } catch (e: Exception) {
                 logE(TAG, "Seat action failed", e)
@@ -1335,6 +1339,7 @@ class RoomViewModel(
         }
     }
 
+    @Suppress("kotlin:S3776")
     fun leaveRoom() {
         viewModelScope.launch {
             val userId = _uiState.value.currentUserId
@@ -1397,6 +1402,7 @@ class RoomViewModel(
         }
     }
 
+    @Suppress("kotlin:S3776")
     fun ownerReturn() {
         viewModelScope.launch {
             val userId = _uiState.value.currentUserId
@@ -1510,7 +1516,7 @@ class RoomViewModel(
                     // Persist to shared cache so re-entry skips these API calls
                     roomLifecycleManager.updateSharedUserCache(userCache)
                 }
-                else -> {}
+                else -> Unit
             }
             val filtered = userCache.filterKeys { it in userIds }
             onLoaded(filtered)
@@ -1540,7 +1546,7 @@ class RoomViewModel(
                 is Resource.Success -> {
                     _uiState.update { it.copy(aliases = result.data) }
                 }
-                else -> {}
+                else -> Unit
             }
         }
     }
@@ -1552,7 +1558,7 @@ class RoomViewModel(
                 is Resource.Success -> {
                     _uiState.update { it.copy(blockedUserIds = result.data) }
                 }
-                else -> {}
+                else -> Unit
             }
         }
     }
@@ -1567,7 +1573,7 @@ class RoomViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(error = "Failed to block user") }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -1582,7 +1588,7 @@ class RoomViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(error = "Failed to unblock user") }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -1655,7 +1661,7 @@ class RoomViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(error = "Failed to set alias") }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -1670,7 +1676,7 @@ class RoomViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(error = "Failed to remove alias") }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -1729,7 +1735,7 @@ class RoomViewModel(
                         _uiState.update { it.copy(isSubmittingReport = false, reportError = "Failed to upload evidence") }
                         return@launch
                     }
-                    is Resource.Loading -> {}
+                    is Resource.Loading -> Unit
                 }
             }
 
@@ -1753,7 +1759,7 @@ class RoomViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(isSubmittingReport = false, reportError = "Failed to submit report") }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -1811,7 +1817,7 @@ class RoomViewModel(
                     processedRequestIds.add(current.request.requestId)
                 is RoomNotification.RequestApproved ->
                     processedApprovalIds.add(current.request.requestId)
-                is RoomNotification.InviteReceived -> {}
+                is RoomNotification.InviteReceived -> Unit
             }
         }
         autoDismissJob?.cancel()
@@ -1933,7 +1939,7 @@ class RoomViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(error = result.message) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -1958,23 +1964,26 @@ class RoomViewModel(
 
         val limit = _uiState.value.effectiveSeatCount
         val seat = room.seats[request.seatIndex.toString()]
-        val seatIndex =
+        val seatIndex: Int =
             if (seat?.state == SeatState.OCCUPIED || request.seatIndex >= limit) {
                 // Original seat taken or beyond limit, find next available within limit
-                (1 until limit).firstOrNull { i ->
-                    val seat = room.seats[i.toString()]
-                    seat != null && seat.state != SeatState.OCCUPIED
+                val available =
+                    (1 until limit).firstOrNull { i ->
+                        val s = room.seats[i.toString()]
+                        s != null && s.state != SeatState.OCCUPIED
+                    }
+                if (available == null) {
+                    dismissCurrentNotification()
+                    _uiState.update { it.copy(error = "No seats available") }
+                    return
                 }
+                available
             } else {
                 request.seatIndex
             }
         dismissCurrentNotification()
-        if (seatIndex != null) {
-            withSeatAction("Taking seat...", "Seated") {
-                roomRepository.takeSeat(roomId, seatIndex, userId)
-            }
-        } else {
-            _uiState.update { it.copy(error = "No seats available") }
+        withSeatAction("Taking seat...", "Seated") {
+            roomRepository.takeSeat(roomId, seatIndex, userId)
         }
     }
 

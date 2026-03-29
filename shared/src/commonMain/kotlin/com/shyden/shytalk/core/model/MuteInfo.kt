@@ -32,7 +32,7 @@ data class MuteInfo(
                 mutedBy = map["mutedBy"] as? String ?: "",
                 mutedByName = map["mutedByName"] as? String ?: "",
                 reason = map["reason"] as? String,
-                mutedAt = (map["mutedAt"] as? Long) ?: map["mutedAt"]?.let { timestampToMillis(it) } ?: 0L,
+                mutedAt = map["mutedAt"]?.let { (it as? Long) ?: timestampToMillis(it) } ?: 0L,
                 expiresAt = map["expiresAt"]?.let { (it as? Long) ?: timestampToMillis(it) },
                 isActive = map["isActive"].asBool(true),
             )

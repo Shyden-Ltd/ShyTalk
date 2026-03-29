@@ -15,7 +15,7 @@ const { sendEmail } = require('../utils/email');
 const { buildDeletionCompleteEmail } = require('../utils/email-templates');
 const r2 = require('../utils/r2');
 const log = require('../utils/log');
-const crypto = require('crypto');
+const crypto = require('node:crypto');
 
 const AUDIT_HASH_SECRET = process.env.AUDIT_HASH_SECRET;
 if (!AUDIT_HASH_SECRET && process.env.NODE_ENV === 'production') {
@@ -23,25 +23,31 @@ if (!AUDIT_HASH_SECRET && process.env.NODE_ENV === 'production') {
 }
 
 /**
- * Hard-delete all data for a single user account.
- * Follows the 12-step sequence from the design spec.
+ * Delete docs in batches of 500.
  */
-async function hardDeleteAccount(userDoc) {
-  const user = userDoc.data();
-  const uniqueId = userDoc.id;
-  const firebaseUid = user.firebaseUid;
-
-  // Step 1: Send final email (before deleting user data)
-  if (user.email) {
-    try {
-      const template = buildDeletionCompleteEmail();
-      await sendEmail(user.email, template.subject, template.html);
-    } catch (err) {
-      log.error('cron', 'Failed to send deletion complete email', { uniqueId, error: err.message });
+async function batchDeletePaths(paths) {
+  for (let i = 0; i < paths.length; i += 500) {
+    const batch = db.batch();
+    for (const path of paths.slice(i, i + 500)) {
+      batch.delete(db.doc(path));
     }
+    await batch.commit();
   }
+}
 
-  // Step 2: Delete R2 storage
+/** Step 1: Send final email */
+async function sendDeletionEmail(user, uniqueId) {
+  if (!user.email) return;
+  try {
+    const template = buildDeletionCompleteEmail();
+    await sendEmail(user.email, template.subject, template.html);
+  } catch (err) {
+    log.error('cron', 'Failed to send deletion complete email', { uniqueId, error: err.message });
+  }
+}
+
+/** Step 2: Delete R2 storage */
+async function deleteUserR2Storage(uniqueId) {
   const prefixes = [
     `profiles/${uniqueId}/`,
     `covers/${uniqueId}/`,
@@ -52,100 +58,96 @@ async function hardDeleteAccount(userDoc) {
   for (const prefix of prefixes) {
     try {
       const keys = await r2.listObjects(prefix);
-      if (keys.length > 0) {
-        await r2.deleteObjects(keys);
-      }
+      if (keys.length > 0) await r2.deleteObjects(keys);
     } catch (err) {
       log.error('cron', 'Failed to delete R2 prefix', { prefix, error: err.message });
     }
   }
+}
 
-  // Step 3: Cleanup conversations (delete 1-on-1, remove from groups)
+/** Delete a 1-on-1 conversation and all its subcollections. */
+async function deleteOneOnOneConversation(convId) {
+  const [messages, userSettings, mutes] = await Promise.all([
+    queryDocs(db.collection(`conversations/${convId}/messages`)),
+    queryDocs(db.collection(`conversations/${convId}/userSettings`)),
+    queryDocs(db.collection(`conversations/${convId}/mutes`)),
+  ]);
+  const allDocs = [
+    ...messages.map((m) => `conversations/${convId}/messages/${m.id}`),
+    ...userSettings.map((s) => `conversations/${convId}/userSettings/${s.id}`),
+    ...mutes.map((m) => `conversations/${convId}/mutes/${m.id}`),
+    `conversations/${convId}`,
+  ];
+  await batchDeletePaths(allDocs);
+}
+
+/** Remove user from a group conversation. */
+async function removeUserFromGroupConversation(convId, uniqueId) {
+  await db.doc(`conversations/${convId}`).update({
+    participantIds: FieldValue.arrayRemove(Number(uniqueId)),
+  });
+  const [userSettings, mutes] = await Promise.all([
+    queryDocs(db.collection(`conversations/${convId}/userSettings`)),
+    queryDocs(db.collection(`conversations/${convId}/mutes`)),
+  ]);
+  const toDelete = [
+    ...userSettings
+      .filter((s) => s.userId === String(uniqueId))
+      .map((s) => `conversations/${convId}/userSettings/${s.id}`),
+    ...mutes
+      .filter((m) => m.id === String(uniqueId))
+      .map((m) => `conversations/${convId}/mutes/${m.id}`),
+  ];
+  for (const path of toDelete) {
+    await db.doc(path).delete();
+  }
+}
+
+/** Step 3: Cleanup conversations */
+async function cleanupConversations(uniqueId) {
   try {
-    const convQuery = db
+    const convSnap = await db
       .collection('conversations')
-      .where('participantIds', 'array-contains', Number(uniqueId));
-    const convSnap = await convQuery.get();
+      .where('participantIds', 'array-contains', Number(uniqueId))
+      .get();
     for (const convDoc of convSnap.docs) {
-      const convId = convDoc.id;
-      const convData = convDoc.data();
-      const participantCount = (convData.participantIds || []).length;
-
+      const participantCount = (convDoc.data().participantIds || []).length;
       if (participantCount <= 2) {
-        // 1-on-1: delete entire conversation + subcollections
-        const [messages, userSettings, mutes] = await Promise.all([
-          queryDocs(db.collection(`conversations/${convId}/messages`)),
-          queryDocs(db.collection(`conversations/${convId}/userSettings`)),
-          queryDocs(db.collection(`conversations/${convId}/mutes`)),
-        ]);
-        const allDocs = [
-          ...messages.map((m) => `conversations/${convId}/messages/${m.id}`),
-          ...userSettings.map((s) => `conversations/${convId}/userSettings/${s.id}`),
-          ...mutes.map((m) => `conversations/${convId}/mutes/${m.id}`),
-          `conversations/${convId}`,
-        ];
-        for (let i = 0; i < allDocs.length; i += 500) {
-          const batch = db.batch();
-          for (const path of allDocs.slice(i, i + 500)) {
-            batch.delete(db.doc(path));
-          }
-          await batch.commit();
-        }
+        await deleteOneOnOneConversation(convDoc.id);
       } else {
-        // Group chat: remove participant only, keep conversation
-        await db.doc(`conversations/${convId}`).update({
-          participantIds: FieldValue.arrayRemove(Number(uniqueId)),
-        });
-        // Delete this user's settings/mutes in the group
-        const [userSettings, mutes] = await Promise.all([
-          queryDocs(db.collection(`conversations/${convId}/userSettings`)),
-          queryDocs(db.collection(`conversations/${convId}/mutes`)),
-        ]);
-        const toDelete = [
-          ...userSettings
-            .filter((s) => s.userId === String(uniqueId))
-            .map((s) => `conversations/${convId}/userSettings/${s.id}`),
-          ...mutes
-            .filter((m) => m.id === String(uniqueId))
-            .map((m) => `conversations/${convId}/mutes/${m.id}`),
-        ];
-        for (const path of toDelete) {
-          await db.doc(path).delete();
-        }
+        await removeUserFromGroupConversation(convDoc.id, uniqueId);
       }
     }
   } catch (err) {
     log.error('cron', 'Failed to cleanup conversations', { uniqueId, error: err.message });
   }
+}
 
-  // Step 4: Cleanup rooms
+/** Delete a room and all its subcollections. */
+async function deleteOwnedRoom(roomDocId) {
+  const [messages, seatRequests] = await Promise.all([
+    queryDocs(db.collection(`rooms/${roomDocId}/messages`)),
+    queryDocs(db.collection(`rooms/${roomDocId}/seatRequests`)),
+  ]);
+  const allDocs = [
+    ...messages.map((m) => `rooms/${roomDocId}/messages/${m.id}`),
+    ...seatRequests.map((s) => `rooms/${roomDocId}/seatRequests/${s.id}`),
+    `rooms/${roomDocId}`,
+  ];
+  await batchDeletePaths(allDocs);
+}
+
+/** Step 4: Cleanup rooms */
+async function cleanupRooms(uniqueId) {
   try {
-    const roomQuery = db
+    const roomSnap = await db
       .collection('rooms')
-      .where('participantIds', 'array-contains', Number(uniqueId));
-    const roomSnap = await roomQuery.get();
+      .where('participantIds', 'array-contains', Number(uniqueId))
+      .get();
     for (const roomDoc of roomSnap.docs) {
-      const roomData = roomDoc.data();
-      if (String(roomData.ownerId) === uniqueId) {
-        // Delete room + subcollections
-        const [messages, seatRequests] = await Promise.all([
-          queryDocs(db.collection(`rooms/${roomDoc.id}/messages`)),
-          queryDocs(db.collection(`rooms/${roomDoc.id}/seatRequests`)),
-        ]);
-        const allDocs = [
-          ...messages.map((m) => `rooms/${roomDoc.id}/messages/${m.id}`),
-          ...seatRequests.map((s) => `rooms/${roomDoc.id}/seatRequests/${s.id}`),
-          `rooms/${roomDoc.id}`,
-        ];
-        for (let i = 0; i < allDocs.length; i += 500) {
-          const batch = db.batch();
-          for (const path of allDocs.slice(i, i + 500)) {
-            batch.delete(db.doc(path));
-          }
-          await batch.commit();
-        }
+      if (String(roomDoc.data().ownerId) === uniqueId) {
+        await deleteOwnedRoom(roomDoc.id);
       } else {
-        // Remove user from room
         await db.doc(`rooms/${roomDoc.id}`).update({
           participantIds: FieldValue.arrayRemove(Number(uniqueId)),
         });
@@ -154,8 +156,10 @@ async function hardDeleteAccount(userDoc) {
   } catch (err) {
     log.error('cron', 'Failed to cleanup rooms', { uniqueId, error: err.message });
   }
+}
 
-  // Step 5: Remove from follower/following arrays
+/** Step 5: Remove from follower/following arrays */
+async function cleanupFollowerFollowing(uniqueId) {
   try {
     const followerSnap = await db
       .collection('users')
@@ -178,8 +182,10 @@ async function hardDeleteAccount(userDoc) {
   } catch (err) {
     log.error('cron', 'Failed to cleanup follower/following', { uniqueId, error: err.message });
   }
+}
 
-  // Step 5b: Gift rankings cleanup
+/** Step 5b: Gift rankings cleanup */
+async function cleanupGiftRankings(uniqueId) {
   try {
     const rankSnap = await db.collection('giftRankings').where('userId', '==', uniqueId).get();
     for (const doc of rankSnap.docs) {
@@ -188,8 +194,10 @@ async function hardDeleteAccount(userDoc) {
   } catch (err) {
     log.error('cron', 'Failed to cleanup gift rankings', { uniqueId, error: err.message });
   }
+}
 
-  // Step 6: Reports & appeals
+/** Step 6: Reports & appeals */
+async function cleanupReportsAndAppeals(uniqueId) {
   try {
     const collections = ['reports', 'reportsArchive', 'suspensionAppeals'];
     for (const col of collections) {
@@ -205,8 +213,10 @@ async function hardDeleteAccount(userDoc) {
   } catch (err) {
     log.error('cron', 'Failed to cleanup reports/appeals', { uniqueId, error: err.message });
   }
+}
 
-  // Step 7: Auth-related (biometricKeys, otpCodes, emailMetrics, purchaseReceipts)
+/** Step 7: Auth-related cleanup */
+async function cleanupAuthData(user, uniqueId) {
   try {
     const bioSnap = await db
       .collection('biometricKeys')
@@ -216,7 +226,7 @@ async function hardDeleteAccount(userDoc) {
   } catch (err) {
     log.error('cron', 'Failed to cleanup biometric keys', { uniqueId, error: err.message });
   }
-  // Delete OTP codes (keyed by email)
+
   if (user.email) {
     try {
       const otpSnap = await db.doc(`otpCodes/${user.email.toLowerCase()}`).get();
@@ -227,7 +237,7 @@ async function hardDeleteAccount(userDoc) {
       log.error('cron', 'Failed to cleanup OTP/email data', { uniqueId, error: err.message });
     }
   }
-  // Mark purchase receipts for deferred deletion (retain 180 days for financial audit)
+
   try {
     const receiptSnap = await db
       .collection('purchaseReceipts')
@@ -245,26 +255,24 @@ async function hardDeleteAccount(userDoc) {
       error: err.message,
     });
   }
+}
 
-  // Step 8: User doc + subcollections
+/** Step 8: User doc + subcollections */
+async function deleteUserDocAndSubcollections(uniqueId) {
   try {
     const subcollections = ['backpack', 'giftWall', 'transactions', 'warnings', 'stalkers'];
     for (const sub of subcollections) {
       const subDocs = await queryDocs(db.collection(`users/${uniqueId}/${sub}`));
-      for (let i = 0; i < subDocs.length; i += 500) {
-        const batch = db.batch();
-        for (const doc of subDocs.slice(i, i + 500)) {
-          batch.delete(db.doc(`users/${uniqueId}/${sub}/${doc.id}`));
-        }
-        await batch.commit();
-      }
+      await batchDeletePaths(subDocs.map((doc) => `users/${uniqueId}/${sub}/${doc.id}`));
     }
     await db.doc(`users/${uniqueId}`).delete();
   } catch (err) {
     log.error('cron', 'Failed to delete user doc', { uniqueId, error: err.message });
   }
+}
 
-  // Step 9: Identity map soft-delete
+/** Step 9: Identity map soft-delete */
+async function softDeleteIdentityMap(user, uniqueId) {
   try {
     const identitySnap = await db
       .collection('identityMap')
@@ -281,8 +289,10 @@ async function hardDeleteAccount(userDoc) {
   } catch (err) {
     log.error('cron', 'Failed to soft-delete identity map', { uniqueId, error: err.message });
   }
+}
 
-  // Step 10: Device bindings
+/** Step 10: Device bindings */
+async function deleteDeviceBindings(uniqueId) {
   try {
     const bindingSnap = await db
       .collection('deviceBindings')
@@ -292,13 +302,38 @@ async function hardDeleteAccount(userDoc) {
   } catch (err) {
     log.error('cron', 'Failed to delete device bindings', { uniqueId, error: err.message });
   }
+}
 
-  // Step 11: Firebase Auth user (LAST data operation)
+/** Step 11: Firebase Auth user */
+async function deleteFirebaseAuthUser(firebaseUid, uniqueId) {
   try {
     await auth.deleteUser(firebaseUid);
   } catch (err) {
     log.error('cron', 'Failed to delete Firebase Auth user', { uniqueId, error: err.message });
   }
+}
+
+/**
+ * Hard-delete all data for a single user account.
+ * Follows the 12-step sequence from the design spec.
+ */
+async function hardDeleteAccount(userDoc) {
+  const user = userDoc.data();
+  const uniqueId = userDoc.id;
+  const firebaseUid = user.firebaseUid;
+
+  await sendDeletionEmail(user, uniqueId);
+  await deleteUserR2Storage(uniqueId);
+  await cleanupConversations(uniqueId);
+  await cleanupRooms(uniqueId);
+  await cleanupFollowerFollowing(uniqueId);
+  await cleanupGiftRankings(uniqueId);
+  await cleanupReportsAndAppeals(uniqueId);
+  await cleanupAuthData(user, uniqueId);
+  await deleteUserDocAndSubcollections(uniqueId);
+  await softDeleteIdentityMap(user, uniqueId);
+  await deleteDeviceBindings(uniqueId);
+  await deleteFirebaseAuthUser(firebaseUid, uniqueId);
 
   // Step 12: Audit log (zero PII)
   const hashedUniqueId = crypto

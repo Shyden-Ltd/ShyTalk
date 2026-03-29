@@ -48,6 +48,7 @@ data class Sticker(
     val localPath: String? = null,
 )
 
+@Suppress("kotlin:S3776", "kotlin:S6615")
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun StickerPicker(

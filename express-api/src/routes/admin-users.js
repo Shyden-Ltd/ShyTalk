@@ -219,7 +219,7 @@ router.patch('/user/:uniqueId', async (req, res) => {
         updates[key] = body[key];
       } else {
         // Also accept snake_case input and convert to camelCase
-        const snakeKey = key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+        const snakeKey = key.replaceAll(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
         if (snakeKey in body) updates[key] = body[snakeKey];
       }
     }
@@ -458,7 +458,7 @@ router.post('/user/:uniqueId/warn', async (req, res) => {
     const body = req.body;
     if (!body?.reason) return res.status(400).json({ error: 'reason is required' });
 
-    const severity = parseInt(body.severity, 10) || 3;
+    const severity = Number.parseInt(body.severity, 10) || 3;
     if (severity < 1 || severity > 5)
       return res.status(400).json({ error: 'severity must be 1-5' });
 
@@ -504,8 +504,8 @@ router.get('/user/:uniqueId/warnings', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
-    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
-    const startAfter = req.query.startAfter ? parseInt(req.query.startAfter, 10) : null;
+    const limit = Math.min(Number.parseInt(req.query.limit, 10) || 20, 100);
+    const startAfter = req.query.startAfter ? Number.parseInt(req.query.startAfter, 10) : null;
 
     let query = db.collection(`users/${req.params.uniqueId}/warnings`).orderBy('createdAt', 'desc');
 
@@ -642,7 +642,7 @@ router.get('/conversations/:id/messages', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
-    const messageLimit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+    const messageLimit = Math.min(Number.parseInt(req.query.limit, 10) || 50, 200);
 
     const snapshot = await db
       .collection(`conversations/${req.params.id}/messages`)
@@ -653,7 +653,7 @@ router.get('/conversations/:id/messages', async (req, res) => {
     const messages = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 
     // Return chronological order
-    res.json(messages.reverse());
+    res.json(messages.toReversed());
   } catch (err) {
     log.error('admin-users', 'Admin get messages failed', {
       conversationId: req.params.id,
@@ -672,7 +672,7 @@ router.get('/search/uniqueId/:id', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
-    const uniqueId = parseInt(req.params.id, 10);
+    const uniqueId = Number.parseInt(req.params.id, 10);
     const snapshot = await db.collection('users').where('uniqueId', '==', uniqueId).limit(1).get();
 
     if (snapshot.empty) {
@@ -775,7 +775,7 @@ router.post('/user/:uniqueId/suspend', async (req, res) => {
     let endTimestamp = null;
     if (body.endDate) {
       const endDate = new Date(body.endDate);
-      if (isNaN(endDate.getTime()))
+      if (Number.isNaN(endDate.getTime()))
         return res.status(400).json({ error: 'endDate must be a valid ISO-8601 date' });
       if (endDate.getTime() <= Date.now())
         return res.status(400).json({ error: 'endDate must be in the future' });
@@ -1173,7 +1173,7 @@ async function evictSuspendedUser(uid) {
     for (const [index, seat] of Object.entries(seats)) {
       if (seat && (seat.userId === uid || seat.user_id === uid)) {
         seats[index] = {
-          index: parseInt(index, 10),
+          index: Number.parseInt(index, 10),
           status: 'EMPTY',
           userId: null,
           isMuted: false,

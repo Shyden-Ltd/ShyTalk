@@ -3,6 +3,7 @@ package com.shyden.shytalk.ui.theme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 actual fun ShyTalkTheme(
     darkTheme: Boolean,

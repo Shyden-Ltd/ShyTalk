@@ -25,7 +25,7 @@ router.get('/admin/alerts', async (req, res) => {
 
   try {
     const { type, severity, status } = req.query;
-    let limit = parseInt(req.query.limit, 10) || DEFAULT_LIMIT;
+    let limit = Number.parseInt(req.query.limit, 10) || DEFAULT_LIMIT;
     if (limit < 1) limit = DEFAULT_LIMIT;
     if (limit > MAX_LIMIT) limit = MAX_LIMIT;
 

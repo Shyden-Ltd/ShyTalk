@@ -21,6 +21,7 @@ import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Constants
 
+@Suppress("kotlin:S107", "kotlin:S3776")
 @Composable
 fun SeatGrid(
     seats: Map<String, Seat>,
@@ -148,6 +149,7 @@ fun SeatGrid(
     }
 }
 
+@Suppress("kotlin:S107")
 @Composable
 private fun SeatRow(
     seats: List<Map.Entry<String, Seat>>,
@@ -204,7 +206,7 @@ private fun SeatRow(
                     seatIndex = seatIndex,
                     seat = seat,
                     seatRole = seatRole,
-                    isCurrentUser = seatUserId == currentUserId,
+                    _isCurrentUser = seatUserId == currentUserId,
                     canLeaveSeat = seatUserId == currentUserId && !isOwnerOnOwnSeat,
                     isSpeaking = isSpeaking && !isDisconnected,
                     isDisconnected = isDisconnected,

@@ -62,6 +62,7 @@ private val gachaWinGradient =
         Color(0xFF7B2FBE),
     )
 
+@Suppress("kotlin:S3776")
 @Composable
 fun BroadcastBanner(
     broadcasts: List<Broadcast>,

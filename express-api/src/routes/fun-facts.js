@@ -66,7 +66,7 @@ router.post('/admin/fun-facts', async (req, res) => {
       category: body.category || 'trivia',
       emoji: body.emoji || '',
       sourceLanguage: body.sourceLanguage || body.source_language || '',
-      isActive: body.isActive !== undefined ? !!body.isActive : body.is_active !== false,
+      isActive: body.isActive === undefined ? body.is_active !== false : !!body.isActive,
       createdAt: timestamp,
       updatedAt: timestamp,
     });

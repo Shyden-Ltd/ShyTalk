@@ -53,6 +53,7 @@ private fun reportReasonLabel(key: String): String =
         else -> key
     }
 
+@Suppress("kotlin:S107", "kotlin:S3776")
 @Composable
 fun ReportUserDialog(
     userName: String,

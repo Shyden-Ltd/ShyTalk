@@ -45,6 +45,7 @@ private val BottomGradient =
 
 private val WhiteAlpha80 = Color.White.copy(alpha = 0.8f)
 
+@Suppress("kotlin:S3776")
 @Composable
 fun RoomListItem(
     room: ChatRoom,

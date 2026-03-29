@@ -134,7 +134,7 @@ router.post('/test/setup', async (req, res) => {
         coinValue: giftSpec.coinValue ?? 10,
         showInStore: giftSpec.showInStore ?? true,
         showOnWheel: giftSpec.showOnWheel ?? true,
-        weight: 1.0,
+        weight: 1,
         order: 0,
         animationUrl: '',
         soundUrl: '',
@@ -286,7 +286,8 @@ router.post('/test/setup', async (req, res) => {
     try {
       const ecoDoc = await db.doc('config/economy').get();
       created.economyConfig = ecoDoc.exists ? ecoDoc.data() : ECONOMY_DEFAULTS;
-    } catch (_err) {
+    } catch {
+      // Fallback to defaults — economy config fetch is non-critical for test setup
       created.economyConfig = ECONOMY_DEFAULTS;
     }
 
@@ -380,7 +381,7 @@ router.post('/test/teardown', async (req, res) => {
     if (requireTestApiKey(req, res)) return;
 
     const { testRunId } = req.body;
-    if (!testRunId || !testRunId.startsWith(TEST_PREFIX)) {
+    if (!testRunId?.startsWith(TEST_PREFIX)) {
       return res.status(400).json({ error: 'Invalid testRunId' });
     }
 
@@ -533,8 +534,8 @@ async function deleteTestData(testRunId) {
         deleted += testScreenIds.length;
       }
     }
-  } catch (_err) {
-    // Config cleanup is best-effort
+  } catch {
+    // Best-effort cleanup — config deletion failure is non-critical
   }
 
   // 6. Restore uniqueId counter to the highest remaining real user (best-effort)
@@ -543,8 +544,8 @@ async function deleteTestData(testRunId) {
       const maxSnap = await db.collection('users').orderBy('uniqueId', 'desc').limit(1).get();
       const maxId = maxSnap.empty ? 100000000 : maxSnap.docs[0].data().uniqueId;
       await db.doc('counters/uniqueId').set({ value: maxId }, { merge: true });
-    } catch (_err) {
-      // Counter restoration is best-effort; cleanup still succeeds
+    } catch {
+      // Best-effort — counter restoration failure does not block test cleanup
     }
   }
 

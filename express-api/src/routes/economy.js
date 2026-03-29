@@ -61,8 +61,7 @@ async function loadEconomyConfig() {
 
   const snap = await db.doc('config/economy').get();
   if (snap.exists) {
-    const { id: _id, ...config } = { id: snap.id, ...snap.data() };
-    cachedEconomyConfig = { ...DEFAULT_ECONOMY_CONFIG, ...config };
+    cachedEconomyConfig = { ...DEFAULT_ECONOMY_CONFIG, ...snap.data() };
   } else {
     // Doc doesn't exist — write defaults so the Android SDK can read it
     await db.doc('config/economy').set(DEFAULT_ECONOMY_CONFIG);
@@ -223,6 +222,45 @@ async function updateGiftRankings(recipientId, giftId, quantity) {
   }
 }
 
+// ─── Shared gift helpers ─────────────────────────────────────────
+
+/** Check block relationship between sender and recipient. Returns error string or null. */
+function checkBlockRelationship(sender, recipient, senderId, recipientId) {
+  const senderBlocked = (sender?.blockedUserIds || []).map(String);
+  const recipientBlocked = (recipient?.blockedUserIds || []).map(String);
+  if (senderBlocked.includes(String(recipientId)) || recipientBlocked.includes(String(senderId))) {
+    return 'Cannot send gifts to or from blocked users';
+  }
+  return null;
+}
+
+/** Compute daily reward from config and streak. */
+function computeDailyReward(config, newStreak, isSuperShy) {
+  const milestoneRewards = config.milestoneRewards || {};
+  const rawReward = milestoneRewards[String(newStreak)];
+  const isMilestone = String(newStreak) in milestoneRewards;
+
+  if (rawReward && typeof rawReward === 'object' && rawReward.type === 'gift') {
+    return {
+      coinReward: 0,
+      giftReward: { giftId: rawReward.giftId, quantity: rawReward.quantity || 1 },
+      isMilestone,
+    };
+  }
+
+  let coinReward;
+  if (typeof rawReward === 'number') {
+    coinReward = rawReward;
+  } else if (rawReward?.amount) {
+    coinReward = rawReward.amount;
+  } else {
+    coinReward = config.dailyBase;
+  }
+  if (isSuperShy) coinReward = Math.ceil(coinReward * 1.1);
+
+  return { coinReward, giftReward: null, isMilestone };
+}
+
 // ─── Routes ───────────────────────────────────────────────────────
 
 // ── Daily reward ──
@@ -248,24 +286,11 @@ router.post('/economy/daily-reward', async (req, res) => {
     }
 
     const newStreak = lastLoginDate === yesterday ? loginStreak + 1 : 1;
-    const milestoneRewards = config.milestoneRewards || {};
-    const rawReward = milestoneRewards[String(newStreak)];
-    const isMilestone = String(newStreak) in milestoneRewards;
-
-    let coinReward = 0;
-    let giftReward = null;
-
-    if (rawReward && typeof rawReward === 'object' && rawReward.type === 'gift') {
-      giftReward = { giftId: rawReward.giftId, quantity: rawReward.quantity || 1 };
-    } else {
-      coinReward =
-        typeof rawReward === 'number'
-          ? rawReward
-          : rawReward?.amount
-            ? rawReward.amount
-            : config.dailyBase;
-      if (isSuperShy) coinReward = Math.ceil(coinReward * 1.1);
-    }
+    const { coinReward, giftReward, isMilestone } = computeDailyReward(
+      config,
+      newStreak,
+      isSuperShy,
+    );
 
     const newBalance = shyCoins + coinReward;
 
@@ -291,9 +316,10 @@ router.post('/economy/daily-reward', async (req, res) => {
 
     // Transaction record
     const txId = generateId();
+    const milestoneSuffix = isMilestone ? ' (milestone)' : '';
     const details = giftReward
       ? `Day ${newStreak} (milestone) — ${giftReward.quantity}x ${giftReward.giftId}`
-      : `Day ${newStreak}${isMilestone ? ' (milestone)' : ''}`;
+      : `Day ${newStreak}${milestoneSuffix}`;
 
     await writeTransaction(uniqueId, txId, {
       type: 'DAILY_REWARD',
@@ -319,6 +345,95 @@ router.post('/economy/daily-reward', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// ─── Gacha helpers ───────────────────────────────────────────────
+
+/** Apply hard or soft pity adjustments to weights. Returns true if hard pity was triggered. */
+function applyPitySystem(weights, pity, config, winnableGifts, highValueThreshold) {
+  if (pity >= config.pityHardLimit) {
+    // Hard pity: zero out low-value gifts
+    for (let j = 0; j < winnableGifts.length; j++) {
+      if (winnableGifts[j].coinValue < highValueThreshold) weights[j] = 0;
+    }
+    if (weights.every((w) => w === 0)) {
+      // Guarantee the most expensive gift
+      let bestIdx = 0;
+      for (let j = 1; j < winnableGifts.length; j++) {
+        if (winnableGifts[j].coinValue > winnableGifts[bestIdx].coinValue) bestIdx = j;
+      }
+      for (let j = 0; j < weights.length; j++) weights[j] = j === bestIdx ? 1 : 0;
+    }
+    return true;
+  }
+
+  if (pity >= config.pitySoftStart) {
+    const progress = (pity - config.pitySoftStart) / (config.pityHardLimit - config.pitySoftStart);
+    const shift = config.pitySoftMaxShift * progress;
+    let lowTotal = 0,
+      highTotal = 0;
+    for (let j = 0; j < winnableGifts.length; j++) {
+      if (winnableGifts[j].coinValue >= highValueThreshold) highTotal += weights[j];
+      else lowTotal += weights[j];
+    }
+    if (lowTotal > 0 && highTotal > 0) {
+      const totalWeight = lowTotal + highTotal;
+      const shiftAmount = shift * totalWeight;
+      for (let j = 0; j < winnableGifts.length; j++) {
+        if (winnableGifts[j].coinValue >= highValueThreshold) {
+          weights[j] += shiftAmount * (weights[j] / highTotal);
+        } else {
+          weights[j] -= shiftAmount * (weights[j] / lowTotal);
+          if (weights[j] < 0) weights[j] = 0;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+/** Apply luck-based weight adjustments (shift weight from cheapest to others). */
+function applyLuckBoost(weights, luck, winnableGifts) {
+  const luckBoost = (luck / 100) * 0.05;
+  if (luckBoost <= 0) return;
+
+  const totalWeight = weights.reduce((s, w) => s + w, 0);
+  const shiftAmount = luckBoost * totalWeight;
+  const minValue = Math.min(...winnableGifts.map((g) => g.coinValue));
+  let cheapTotal = 0,
+    expensiveTotal = 0;
+  for (let j = 0; j < winnableGifts.length; j++) {
+    if (winnableGifts[j].coinValue === minValue) cheapTotal += weights[j];
+    else expensiveTotal += weights[j];
+  }
+  if (cheapTotal <= shiftAmount || expensiveTotal <= 0) return;
+
+  for (let j = 0; j < winnableGifts.length; j++) {
+    if (winnableGifts[j].coinValue === minValue) {
+      weights[j] -= shiftAmount * (weights[j] / cheapTotal);
+    } else {
+      weights[j] += shiftAmount * (weights[j] / expensiveTotal);
+    }
+  }
+}
+
+/** Roll a weighted random selection from the gift pool. Returns { gift, fallback }. */
+function rollWeightedGift(weights, winnableGifts) {
+  const total = weights.reduce((s, w) => s + w, 0);
+  if (total <= 0) return { gift: winnableGifts[0], fallback: true };
+
+  const roll = Math.random() * total;
+  let cumulative = 0,
+    selectedIndex = 0;
+  for (let j = 0; j < weights.length; j++) {
+    cumulative += weights[j];
+    if (roll <= cumulative) {
+      selectedIndex = j;
+      break;
+    }
+  }
+  return { gift: winnableGifts[selectedIndex], fallback: false };
+}
 
 // ── Gacha ──
 router.post('/economy/gacha', async (req, res) => {
@@ -399,94 +514,23 @@ router.post('/economy/gacha', async (req, res) => {
 
     for (let i = guaranteedFirstPull ? 1 : 0; i < pullCount; i++) {
       const weights = [...baseWeights];
+      const hardPityTriggered = applyPitySystem(
+        weights,
+        pity,
+        config,
+        winnableGifts,
+        highValueThreshold,
+      );
+      applyLuckBoost(weights, luck, winnableGifts);
 
-      // Pity system
-      let hardPityTriggered = false;
-      if (pity >= config.pityHardLimit) {
-        hardPityTriggered = true;
-        // Zero out low-value gifts so only high-value remain
-        for (let j = 0; j < winnableGifts.length; j++) {
-          if (winnableGifts[j].coinValue < highValueThreshold) weights[j] = 0;
-        }
-        if (weights.every((w) => w === 0)) {
-          // No gifts meet the threshold — guarantee the most expensive gift
-          let bestIdx = 0;
-          for (let j = 1; j < winnableGifts.length; j++) {
-            if (winnableGifts[j].coinValue > winnableGifts[bestIdx].coinValue) bestIdx = j;
-          }
-          // Set only the most expensive gift's weight
-          for (let j = 0; j < weights.length; j++) weights[j] = j === bestIdx ? 1 : 0;
-        }
-      } else if (pity >= config.pitySoftStart) {
-        const progress =
-          (pity - config.pitySoftStart) / (config.pityHardLimit - config.pitySoftStart);
-        const shift = config.pitySoftMaxShift * progress;
-        let lowTotal = 0,
-          highTotal = 0;
-        for (let j = 0; j < winnableGifts.length; j++) {
-          if (winnableGifts[j].coinValue >= highValueThreshold) highTotal += weights[j];
-          else lowTotal += weights[j];
-        }
-        if (lowTotal > 0 && highTotal > 0) {
-          const totalWeight = lowTotal + highTotal;
-          const shiftAmount = shift * totalWeight;
-          for (let j = 0; j < winnableGifts.length; j++) {
-            if (winnableGifts[j].coinValue >= highValueThreshold) {
-              weights[j] += shiftAmount * (weights[j] / highTotal);
-            } else {
-              weights[j] -= shiftAmount * (weights[j] / lowTotal);
-              if (weights[j] < 0) weights[j] = 0;
-            }
-          }
-        }
-      }
-
-      // Luck boost
-      const luckBoost = (luck / 100) * 0.05;
-      if (luckBoost > 0) {
-        const totalWeight = weights.reduce((s, w) => s + w, 0);
-        const shiftAmount = luckBoost * totalWeight;
-        const minValue = Math.min(...winnableGifts.map((g) => g.coinValue));
-        let cheapTotal = 0,
-          expensiveTotal = 0;
-        for (let j = 0; j < winnableGifts.length; j++) {
-          if (winnableGifts[j].coinValue === minValue) cheapTotal += weights[j];
-          else expensiveTotal += weights[j];
-        }
-        if (cheapTotal > shiftAmount && expensiveTotal > 0) {
-          for (let j = 0; j < winnableGifts.length; j++) {
-            if (winnableGifts[j].coinValue === minValue) {
-              weights[j] -= shiftAmount * (weights[j] / cheapTotal);
-            } else {
-              weights[j] += shiftAmount * (weights[j] / expensiveTotal);
-            }
-          }
-        }
-      }
-
-      // Roll
-      const total = weights.reduce((s, w) => s + w, 0);
-      if (total <= 0) {
-        results.push(winnableGifts[0]);
-        pity = hardPityTriggered ? 0 : pity + 1;
-        continue;
-      }
-
-      const roll = Math.random() * total;
-      let cumulative = 0,
-        selectedIndex = 0;
-      for (let j = 0; j < weights.length; j++) {
-        cumulative += weights[j];
-        if (roll <= cumulative) {
-          selectedIndex = j;
-          break;
-        }
-      }
-
-      const gift = winnableGifts[selectedIndex];
+      const { gift, fallback } = rollWeightedGift(weights, winnableGifts);
       results.push(gift);
-      // Reset pity on hard pity trigger OR when a high-value gift is won naturally
-      pity = hardPityTriggered || gift.coinValue >= highValueThreshold ? 0 : pity + 1;
+
+      if (fallback || hardPityTriggered || gift.coinValue >= highValueThreshold) {
+        pity = hardPityTriggered || gift.coinValue >= highValueThreshold ? 0 : pity + 1;
+      } else {
+        pity = pity + 1;
+      }
     }
 
     if (pullCount === 100) luck = Math.min(100, luck + 2);
@@ -608,7 +652,7 @@ router.post('/economy/gift', async (req, res) => {
     const uniqueId = req.auth.uniqueId;
     const body = req.body;
     const { recipientId, giftId } = body || {};
-    const quantity = Math.max(1, Math.min(9999, parseInt(body?.quantity, 10) || 1));
+    const quantity = Math.max(1, Math.min(9999, Number.parseInt(body?.quantity, 10) || 1));
 
     if (!recipientId || !giftId)
       return res.status(400).json({ error: 'recipientId and giftId required' });
@@ -634,18 +678,13 @@ router.post('/economy/gift', async (req, res) => {
       return res.status(402).json({ error: 'Insufficient items in backpack' });
     if (!recipient) return res.status(404).json({ error: 'Recipient not found' });
 
-    // Check block relationship — UK OSA requires blocking prevents ALL contact
-    const senderBlocked = (sender?.blockedUserIds || []).map(String);
-    const recipientBlocked = (recipient?.blockedUserIds || []).map(String);
-    if (
-      senderBlocked.includes(String(recipientId)) ||
-      recipientBlocked.includes(String(uniqueId))
-    ) {
+    const blockError = checkBlockRelationship(sender, recipient, uniqueId, recipientId);
+    if (blockError) {
       log.warn('economy', 'Gift blocked: sender/recipient blocked', {
         senderUniqueId: uniqueId,
         recipientUniqueId: recipientId,
       });
-      return res.status(403).json({ error: 'Cannot send gifts to or from blocked users' });
+      return res.status(403).json({ error: blockError });
     }
 
     const config = await loadEconomyConfig();
@@ -765,7 +804,7 @@ router.post('/economy/gift-direct', async (req, res) => {
     const uniqueId = req.auth.uniqueId;
     const body = req.body;
     const { recipientId, giftId } = body || {};
-    const quantity = Math.max(1, Math.min(9999, parseInt(body?.quantity, 10) || 1));
+    const quantity = Math.max(1, Math.min(9999, Number.parseInt(body?.quantity, 10) || 1));
 
     if (!recipientId || !giftId)
       return res.status(400).json({ error: 'recipientId and giftId required' });
@@ -785,18 +824,13 @@ router.post('/economy/gift-direct', async (req, res) => {
     if (!gift) return res.status(404).json({ error: 'Gift not found' });
     if (!recipient) return res.status(404).json({ error: 'Recipient not found' });
 
-    // Check block relationship — UK OSA requires blocking prevents ALL contact
-    const senderBlocked = (sender?.blockedUserIds || []).map(String);
-    const recipientBlocked = (recipient?.blockedUserIds || []).map(String);
-    if (
-      senderBlocked.includes(String(recipientId)) ||
-      recipientBlocked.includes(String(uniqueId))
-    ) {
+    const blockError = checkBlockRelationship(sender, recipient, uniqueId, recipientId);
+    if (blockError) {
       log.warn('economy', 'Gift blocked: sender/recipient blocked', {
         senderUniqueId: uniqueId,
         recipientUniqueId: recipientId,
       });
-      return res.status(403).json({ error: 'Cannot send gifts to or from blocked users' });
+      return res.status(403).json({ error: blockError });
     }
 
     const coinValue = gift.coinValue || gift.coin_value || 0;
@@ -893,7 +927,7 @@ router.post('/economy/gift-batch', async (req, res) => {
     const uniqueId = req.auth.uniqueId;
     const body = req.body;
     const { recipientIds, giftId, fromBackpack } = body || {};
-    const quantity = Math.max(1, Math.min(9999, parseInt(body?.quantity, 10) || 1));
+    const quantity = Math.max(1, Math.min(9999, Number.parseInt(body?.quantity, 10) || 1));
 
     if (!recipientIds || !Array.isArray(recipientIds) || recipientIds.length === 0 || !giftId) {
       return res.status(400).json({ error: 'recipientIds array and giftId required' });
@@ -942,17 +976,16 @@ router.post('/economy/gift-batch', async (req, res) => {
     if (validRecipients.length === 0) return res.status(404).json({ error: 'No valid recipients' });
 
     // Check block relationships — UK OSA requires blocking prevents ALL contact
-    const senderBlocked = (sender?.blockedUserIds || []).map(String);
     for (let i = 0; i < recipientIds.length; i++) {
       if (!recipientSnaps[i].exists) continue;
-      const rid = String(recipientIds[i]);
-      const recipientBlocked = (recipientSnaps[i].data()?.blockedUserIds || []).map(String);
-      if (senderBlocked.includes(rid) || recipientBlocked.includes(String(uniqueId))) {
+      const recipientData = recipientSnaps[i].data();
+      const blockError = checkBlockRelationship(sender, recipientData, uniqueId, recipientIds[i]);
+      if (blockError) {
         log.warn('economy', 'Gift blocked: sender/recipient blocked', {
           senderUniqueId: uniqueId,
           recipientUniqueId: recipientIds[i],
         });
-        return res.status(403).json({ error: 'Cannot send gifts to or from blocked users' });
+        return res.status(403).json({ error: blockError });
       }
     }
 
@@ -1077,18 +1110,13 @@ router.post('/economy/backpack-send', async (req, res) => {
     if (!sender) return res.status(404).json({ error: 'Sender not found' });
     if (!recipient) return res.status(404).json({ error: 'Recipient not found' });
 
-    // Check block relationship — UK OSA requires blocking prevents ALL contact
-    const senderBlocked = (sender?.blockedUserIds || []).map(String);
-    const recipientBlocked = (recipient?.blockedUserIds || []).map(String);
-    if (
-      senderBlocked.includes(String(recipientId)) ||
-      recipientBlocked.includes(String(uniqueId))
-    ) {
+    const blockError = checkBlockRelationship(sender, recipient, uniqueId, recipientId);
+    if (blockError) {
       log.warn('economy', 'Gift blocked: sender/recipient blocked', {
         senderUniqueId: uniqueId,
         recipientUniqueId: recipientId,
       });
-      return res.status(403).json({ error: 'Cannot send gifts to or from blocked users' });
+      return res.status(403).json({ error: blockError });
     }
 
     // Get backpack items (excluding trial items)
@@ -1227,7 +1255,9 @@ router.post('/economy/redeem-beans', async (req, res) => {
       amount: coins,
       currency: 'COINS',
       balanceAfter: newCoins,
-      details: `Redeemed ${amount} beans${hasBonus ? ` (${bonusPct}% bonus)` : ''}`,
+      details: hasBonus
+        ? `Redeemed ${amount} beans (${bonusPct}% bonus)`
+        : `Redeemed ${amount} beans`,
     });
 
     res.json({ coinsReceived: coins, newCoinBalance: newCoins, newBeanBalance: newBeans });
@@ -1261,14 +1291,7 @@ router.post('/economy/purchase', async (req, res) => {
     // Verify purchase with Google Play
     const packageName = 'com.shyden.shytalk';
     let verification;
-    if (process.env.NODE_ENV !== 'production') {
-      log.warn('economy', 'Skipping purchase verification in non-production environment', {
-        userId: uniqueId,
-        productId,
-        isSubscription: !!isSubscription,
-      });
-      verification = { orderId: 'dev-unverified' };
-    } else {
+    if (process.env.NODE_ENV === 'production') {
       try {
         if (isSubscription) {
           verification = await verifySubscription(packageName, productId, purchaseToken);
@@ -1284,6 +1307,13 @@ router.post('/economy/purchase', async (req, res) => {
         });
         return res.status(403).json({ error: 'Purchase verification failed' });
       }
+    } else {
+      log.warn('economy', 'Skipping purchase verification in non-production environment', {
+        userId: uniqueId,
+        productId,
+        isSubscription: !!isSubscription,
+      });
+      verification = { orderId: 'dev-unverified' };
     }
 
     const orderId = verification.orderId || verification.latestOrderId || null;
@@ -1519,7 +1549,7 @@ router.get('/economy/balance', async (req, res) => {
 router.get('/economy/transactions', async (req, res) => {
   try {
     const uniqueId = req.auth.uniqueId;
-    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+    const limit = Math.min(Number.parseInt(req.query.limit, 10) || 50, 200);
     const filterType = req.query.type;
 
     let query = db.collection(`users/${uniqueId}/transactions`);
@@ -1542,7 +1572,7 @@ router.get('/economy/transactions', async (req, res) => {
 // ── Backpack ──
 router.get('/users/:uniqueId/backpack', async (req, res) => {
   try {
-    const isAdmin = req.auth.token && req.auth.token.admin;
+    const isAdmin = req.auth.token?.admin;
     if (String(req.auth.uniqueId) !== req.params.uniqueId && !isAdmin) {
       return res.status(403).json({ error: "Cannot access another user's backpack" });
     }

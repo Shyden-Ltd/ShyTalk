@@ -20,7 +20,7 @@ async function ensureSystemUser() {
 }
 
 function systemConversationId(recipientUid) {
-  return [recipientUid, SYSTEM_UID].sort().join('_');
+  return [recipientUid, SYSTEM_UID].sort((a, b) => String(a).localeCompare(String(b))).join('_');
 }
 
 async function sendSystemPm(recipientUid, text) {

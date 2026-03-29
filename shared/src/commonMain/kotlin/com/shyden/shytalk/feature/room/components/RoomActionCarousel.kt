@@ -46,6 +46,7 @@ import org.jetbrains.compose.resources.stringResource
 
 private const val PAGE_COUNT = 2
 
+@Suppress("kotlin:S3776")
 @Composable
 fun RoomActionCarousel(
     onOpenGacha: () -> Unit,

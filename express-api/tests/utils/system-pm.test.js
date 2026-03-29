@@ -74,7 +74,9 @@ describe('systemConversationId()', () => {
     // 'alice' < 'SHYTALK_SYSTEM' lexicographically (uppercase S < lowercase a in ASCII? No — uppercase comes first)
     // 'S' (83) < 'a' (97), so SHYTALK_SYSTEM sorts before alice
     const result = systemConversationId('alice');
-    expect(result).toBe(['alice', SYSTEM_UID].sort().join('_'));
+    expect(result).toBe(
+      ['alice', SYSTEM_UID].sort((a, b) => String(a).localeCompare(String(b))).join('_'),
+    );
   });
 
   test('returns the same ID regardless of argument order conceptually', () => {

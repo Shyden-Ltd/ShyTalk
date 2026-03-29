@@ -436,16 +436,18 @@ router.post('/reports/:id/resolve', async (req, res) => {
 
     // Resolution PM to reporter (fire-and-forget)
     if (report.reporterId) {
-      const actionText =
-        action === 'dismissed'
-          ? 'reviewed and dismissed'
-          : action === 'warned'
-            ? 'reviewed and a warning was issued'
-            : action === 'warned_severe'
-              ? 'reviewed and a severe warning was issued'
-              : action === 'suspended'
-                ? 'reviewed and the user has been suspended'
-                : 'reviewed';
+      let actionText;
+      if (action === 'dismissed') {
+        actionText = 'reviewed and dismissed';
+      } else if (action === 'warned') {
+        actionText = 'reviewed and a warning was issued';
+      } else if (action === 'warned_severe') {
+        actionText = 'reviewed and a severe warning was issued';
+      } else if (action === 'suspended') {
+        actionText = 'reviewed and the user has been suspended';
+      } else {
+        actionText = 'reviewed';
+      }
       sendSystemPm(
         report.reporterId,
         `Your report has been ${actionText}. Thank you for helping keep ShyTalk safe.`,
@@ -739,7 +741,7 @@ router.get('/reports/export', async (req, res) => {
     // Build Firestore query
     let query = db.collection('reports').where('status', '==', 'resolved');
 
-    if (fromMs && !isNaN(fromMs)) {
+    if (fromMs && !Number.isNaN(fromMs)) {
       query = query.where('resolvedAt', '>=', fromMs);
     }
 
@@ -749,7 +751,9 @@ router.get('/reports/export', async (req, res) => {
 
     // Client-side upper bound filter (Firestore requires composite index for two range filters)
     const rows =
-      toMs && !isNaN(toMs) ? results.filter((r) => r.resolvedAt && r.resolvedAt <= toMs) : results;
+      toMs && !Number.isNaN(toMs)
+        ? results.filter((r) => r.resolvedAt && r.resolvedAt <= toMs)
+        : results;
 
     // Build CSV
     const headers = [
@@ -772,7 +776,7 @@ router.get('/reports/export', async (req, res) => {
             if (h === 'resolvedAt' || h === 'createdAt') {
               val = val ? new Date(val).toISOString() : '';
             }
-            val = String(val).replace(/"/g, '""');
+            val = String(val).replaceAll('"', '""');
             return `"${val}"`;
           })
           .join(','),
@@ -850,7 +854,7 @@ router.post('/admin/users/:uniqueId/suspend', async (req, res) => {
     let endTimestamp = null;
     if (body.endDate) {
       const endDate = new Date(body.endDate);
-      if (isNaN(endDate.getTime()))
+      if (Number.isNaN(endDate.getTime()))
         return res.status(400).json({ error: 'endDate must be a valid ISO-8601 date' });
       if (endDate.getTime() <= Date.now())
         return res.status(400).json({ error: 'endDate must be in the future' });
@@ -1163,7 +1167,7 @@ router.get('/admin/audit-log', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
-    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+    const limit = Math.min(Number.parseInt(req.query.limit, 10) || 50, 200);
 
     const entries = await queryDocs(
       db.collection('adminAuditLog').orderBy('createdAt', 'desc').limit(limit),

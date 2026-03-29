@@ -39,6 +39,7 @@ import org.jetbrains.compose.resources.stringResource
 // Filter keys (non-localized, used as identifiers)
 private val FILTER_KEYS = listOf("All", "Purchases", "Gifts", "Gacha", "Rewards", "Redemptions")
 
+@Suppress("kotlin:S3776")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionHistoryScreen(

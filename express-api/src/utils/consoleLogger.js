@@ -58,8 +58,8 @@ function patchConsole() {
           source: detectSource(message),
           message: message.slice(0, 2000), // cap length
         });
-      } catch (_) {
-        // Never fail from logging
+      } catch {
+        // Intentionally swallowed — console patching must never throw to avoid breaking application output
       }
     };
   }

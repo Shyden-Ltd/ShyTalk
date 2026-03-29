@@ -6,7 +6,7 @@
  *   logger.log({ level: 'INFO', source: 'auth', message: 'User signed in', userId: '123' });
  */
 
-const crypto = require('crypto');
+const crypto = require('node:crypto');
 
 const VALID_LEVELS = ['DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL'];
 const SENSITIVE_KEYS = new Set([
@@ -80,69 +80,73 @@ function createLogger(db) {
     return false;
   }
 
+  function validateEntry(entry) {
+    if (!entry || typeof entry !== 'object') return null;
+    const { level, source, message } = entry;
+    if (!level || !VALID_LEVELS.includes(level)) return null;
+    if (!source || typeof source !== 'string') return null;
+    if (!message || typeof message !== 'string') return null;
+    return { level, source, message };
+  }
+
+  function isCircuitBreakerBlocking() {
+    if (consecutiveFailures < CIRCUIT_BREAKER_THRESHOLD) return false;
+    // Half-open: allow one probe write every 60s to check if Firestore recovered
+    return Date.now() - circuitBreakerOpenedAt < CIRCUIT_BREAKER_COOLDOWN;
+  }
+
+  function buildLogDoc(entry, level, source, message) {
+    const doc = {
+      id: crypto.randomBytes(16).toString('hex'),
+      timestamp: new Date().toISOString(),
+      level,
+      source,
+      message,
+    };
+    for (const field of PASSTHROUGH_FIELDS) {
+      if (entry[field] !== undefined) {
+        doc[field] = field === 'context' ? sanitize(entry[field]) : entry[field];
+      }
+    }
+    return doc;
+  }
+
+  function handleLogError(err) {
+    consecutiveFailures++;
+    if (consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
+      circuitBreakerOpenedAt = Date.now();
+    }
+    try {
+      if (consecutiveFailures <= CIRCUIT_BREAKER_THRESHOLD) {
+        // eslint-disable-next-line no-console
+        console.error('[logger] Failed to write log:', err.message);
+      } else if (consecutiveFailures === CIRCUIT_BREAKER_THRESHOLD + 1) {
+        // eslint-disable-next-line no-console
+        console.error(
+          '[logger] Circuit breaker open — suppressing Firestore writes until next success',
+        );
+      }
+    } catch {
+      // Intentionally swallowed — error reporting must never itself throw to avoid infinite loops
+    }
+  }
+
   async function log(entry) {
     try {
-      // Validate required fields
-      if (!entry || typeof entry !== 'object') return;
-      const { level, source, message } = entry;
-      if (!level || !VALID_LEVELS.includes(level)) return;
-      if (!source || typeof source !== 'string') return;
-      if (!message || typeof message !== 'string') return;
+      const validated = validateEntry(entry);
+      if (!validated) return;
+      const { level, source, message } = validated;
 
-      // Reset counter at midnight UTC
       resetIfNewDay();
-
-      // Quota check
       if (shouldThrottle(level)) return;
+      if (isCircuitBreakerBlocking()) return;
 
-      // Circuit breaker — stop attempting Firestore writes after consecutive failures
-      if (consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
-        // Half-open: allow one probe write every 60s to check if Firestore recovered
-        if (Date.now() - circuitBreakerOpenedAt < CIRCUIT_BREAKER_COOLDOWN) return;
-      }
-
-      // Build log document
-      const doc = {
-        id: crypto.randomBytes(16).toString('hex'),
-        timestamp: new Date().toISOString(),
-        level,
-        source,
-        message,
-      };
-
-      // Copy passthrough fields
-      for (const field of PASSTHROUGH_FIELDS) {
-        if (entry[field] !== undefined) {
-          doc[field] = field === 'context' ? sanitize(entry[field]) : entry[field];
-        }
-      }
-
-      // Count attempt before write so throttle works even when Firestore is down
+      const doc = buildLogDoc(entry, level, source, message);
       dailyCount++;
-
-      // Write to Firestore
       await db.collection('logs').doc(doc.id).set(doc);
-
       consecutiveFailures = 0;
     } catch (err) {
-      consecutiveFailures++;
-      if (consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
-        circuitBreakerOpenedAt = Date.now();
-      }
-      // Logger must never throw
-      try {
-        if (consecutiveFailures <= CIRCUIT_BREAKER_THRESHOLD) {
-          // eslint-disable-next-line no-console
-          console.error('[logger] Failed to write log:', err.message);
-        } else if (consecutiveFailures === CIRCUIT_BREAKER_THRESHOLD + 1) {
-          // eslint-disable-next-line no-console
-          console.error(
-            '[logger] Circuit breaker open — suppressing Firestore writes until next success',
-          );
-        }
-      } catch (_) {
-        /* swallow */
-      }
+      handleLogError(err);
     }
   }
 

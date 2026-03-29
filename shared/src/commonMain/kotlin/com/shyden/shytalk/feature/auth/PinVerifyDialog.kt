@@ -36,6 +36,7 @@ import org.jetbrains.compose.resources.stringResource
  * Shown before: change email/link provider, delete account, view/export data.
  * Works regardless of app lock setting.
  */
+@Suppress("kotlin:S3776", "kotlin:S6615")
 @Composable
 fun PinVerifyDialog(
     pinRepository: PinRepository,

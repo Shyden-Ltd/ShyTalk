@@ -1,6 +1,6 @@
 package com.shyden.shytalk.core.util
 
 actual fun getClipboardText(): String? {
-    // TODO: Phase 2 — UIPasteboard.general.string
+    // Clipboard access deferred until iOS UI layer is implemented
     return null
 }

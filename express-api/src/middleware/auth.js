@@ -81,7 +81,7 @@ async function checkSuspension(uniqueId) {
  */
 async function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (!authHeader?.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Missing or invalid Authorization header' });
   }
 
@@ -125,7 +125,7 @@ async function authMiddleware(req, res, next) {
  * Returns true if blocked (response already sent), false if admin.
  */
 function requireAdmin(req, res) {
-  if (!req.auth || !req.auth.token.admin) {
+  if (!req.auth?.token.admin) {
     res.status(403).json({ error: 'Admin access required' });
     return true;
   }

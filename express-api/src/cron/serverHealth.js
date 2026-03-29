@@ -4,8 +4,8 @@
  * Runs every 5 minutes. Creates alerts when thresholds are exceeded.
  */
 
-const { execFile } = require('child_process');
-const os = require('os');
+const { execFile } = require('node:child_process');
+const os = require('node:os');
 const log = require('../utils/log');
 
 // Track last-known restart counts to only alert on NEW restarts
@@ -76,14 +76,16 @@ async function serverHealth(alertManager) {
 
               lastRestartCounts[name] = restarts;
             }
-          } catch (_parseErr) {
+          } catch {
+            // PM2 output parsing failed — logged as warning but non-fatal for health check
             log.warn('cron', 'serverHealth: failed to parse PM2 output');
           }
           resolve();
         });
       });
-    } catch (_pm2Err) {
-      log.warn('cron', 'serverHealth: PM2 check failed', { error: _pm2Err.message });
+    } catch (pm2Err) {
+      // PM2 binary unavailable or exec failed — log and continue health check
+      log.warn('cron', 'serverHealth: PM2 check failed', { error: pm2Err.message });
     }
   }
 

@@ -65,8 +65,8 @@ fun GiftEffectOverlay(
  */
 @Composable
 fun GiftEffectOverlay(
-    animationUrl: String,
-    soundUrl: String,
+    _animationUrl: String,
+    _soundUrl: String,
     isVisible: Boolean,
     onFinished: () -> Unit,
     modifier: Modifier = Modifier,

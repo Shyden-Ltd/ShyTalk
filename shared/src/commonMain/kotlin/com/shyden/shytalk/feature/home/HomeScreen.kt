@@ -38,6 +38,7 @@ import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
+@Suppress("kotlin:S107")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RoomListContent(

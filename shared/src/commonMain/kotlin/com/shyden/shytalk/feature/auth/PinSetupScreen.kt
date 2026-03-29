@@ -171,6 +171,7 @@ private fun PinLengthChooser(
     }
 }
 
+@Suppress("kotlin:S107")
 @Composable
 private fun PinEntryStep(
     title: String,

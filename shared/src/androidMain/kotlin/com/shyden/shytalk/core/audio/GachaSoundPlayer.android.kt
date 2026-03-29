@@ -144,16 +144,16 @@ actual object GachaSoundPlayer {
             val t = i.toFloat() / numSamples
             val freq = 220.0 + (1760.0 - 220.0) * t
             phase += 2.0 * PI * freq / SAMPLE_RATE
-            var envelope = 1f
-            if (i < attackSamples) {
-                val x = (i.toFloat() / attackSamples * PI / 2).toFloat()
-                envelope = cos(x) * cos(x)
-                val at = i.toFloat() / attackSamples
-                envelope = (sin(at * PI / 2) * sin(at * PI / 2)).toFloat()
-            } else if (i > numSamples - decaySamples) {
-                val dt = (i - (numSamples - decaySamples)).toFloat() / decaySamples
-                envelope = (cos(dt * PI / 2) * cos(dt * PI / 2)).toFloat()
-            }
+            val envelope =
+                if (i < attackSamples) {
+                    val at = i.toFloat() / attackSamples
+                    (sin(at * PI / 2) * sin(at * PI / 2)).toFloat()
+                } else if (i > numSamples - decaySamples) {
+                    val dt = (i - (numSamples - decaySamples)).toFloat() / decaySamples
+                    (cos(dt * PI / 2) * cos(dt * PI / 2)).toFloat()
+                } else {
+                    1f
+                }
             samples[i] =
                 (
                     sin(
@@ -237,14 +237,14 @@ actual object GachaSoundPlayer {
         var phase = 0.0
         for (i in 0 until numSamples) {
             phase += 2.0 * PI * 523.0 / SAMPLE_RATE
-            var envelope = 1f
-            if (i < attackSamples) {
-                val at = i.toFloat() / attackSamples
-                envelope = (sin(at * PI / 2) * sin(at * PI / 2)).toFloat()
-            } else {
-                val dt = (i - attackSamples).toFloat() / (numSamples - attackSamples)
-                envelope = (1f - dt * dt)
-            }
+            val envelope =
+                if (i < attackSamples) {
+                    val at = i.toFloat() / attackSamples
+                    (sin(at * PI / 2) * sin(at * PI / 2)).toFloat()
+                } else {
+                    val dt = (i - attackSamples).toFloat() / (numSamples - attackSamples)
+                    (1f - dt * dt)
+                }
             samples[i] =
                 (
                     sin(
@@ -268,14 +268,14 @@ actual object GachaSoundPlayer {
         for (i in 0 until numSamples) {
             phase1 += 2.0 * PI * 523.0 / SAMPLE_RATE
             phase2 += 2.0 * PI * 659.0 / SAMPLE_RATE
-            var envelope = 1f
-            if (i < attackSamples) {
-                val at = i.toFloat() / attackSamples
-                envelope = (sin(at * PI / 2) * sin(at * PI / 2)).toFloat()
-            } else {
-                val dt = (i - attackSamples).toFloat() / (numSamples - attackSamples)
-                envelope = (1f - dt)
-            }
+            val envelope =
+                if (i < attackSamples) {
+                    val at = i.toFloat() / attackSamples
+                    (sin(at * PI / 2) * sin(at * PI / 2)).toFloat()
+                } else {
+                    val dt = (i - attackSamples).toFloat() / (numSamples - attackSamples)
+                    (1f - dt)
+                }
             val value = (sin(phase1) + sin(phase2)) * 0.5 * amplitude * envelope
             samples[i] = (value * Short.MAX_VALUE).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
         }
@@ -299,14 +299,14 @@ actual object GachaSoundPlayer {
             phase2 += 2.0 * PI * 659.0 / SAMPLE_RATE
             phase3 += 2.0 * PI * 784.0 / SAMPLE_RATE
             shimmerPhase += 2.0 * PI * 8.0 / SAMPLE_RATE
-            var envelope = 1f
-            if (i < attackSamples) {
-                val at = i.toFloat() / attackSamples
-                envelope = (sin(at * PI / 2) * sin(at * PI / 2)).toFloat()
-            } else {
-                val dt = (i - attackSamples).toFloat() / (numSamples - attackSamples)
-                envelope = (1f - dt * 0.7f)
-            }
+            val envelope =
+                if (i < attackSamples) {
+                    val at = i.toFloat() / attackSamples
+                    (sin(at * PI / 2) * sin(at * PI / 2)).toFloat()
+                } else {
+                    val dt = (i - attackSamples).toFloat() / (numSamples - attackSamples)
+                    (1f - dt * 0.7f)
+                }
             val shimmer = 1.0 + 0.15 * sin(shimmerPhase)
             val value = (sin(phase1) + sin(phase2) + sin(phase3)) / 3.0 * amplitude * envelope * shimmer
             samples[i] = (value * Short.MAX_VALUE).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
@@ -331,14 +331,14 @@ actual object GachaSoundPlayer {
             phase2 += 2.0 * PI * 554.0 / SAMPLE_RATE
             phase3 += 2.0 * PI * 659.0 / SAMPLE_RATE
             subPhase += 2.0 * PI * 80.0 / SAMPLE_RATE
-            var envelope = 1f
-            if (i < attackSamples) {
-                val at = i.toFloat() / attackSamples
-                envelope = (sin(at * PI / 2) * sin(at * PI / 2)).toFloat()
-            } else {
-                val dt = (i - attackSamples).toFloat() / (numSamples - attackSamples)
-                envelope = (1f - dt * 0.5f)
-            }
+            val envelope =
+                if (i < attackSamples) {
+                    val at = i.toFloat() / attackSamples
+                    (sin(at * PI / 2) * sin(at * PI / 2)).toFloat()
+                } else {
+                    val dt = (i - attackSamples).toFloat() / (numSamples - attackSamples)
+                    (1f - dt * 0.5f)
+                }
             val chord = (sin(phase1) + sin(phase2) + sin(phase3)) / 3.0
             val sub = sin(subPhase) * 0.3
             val value = (chord + sub) * amplitude * envelope / 1.3
@@ -370,14 +370,14 @@ actual object GachaSoundPlayer {
             val t = i.toFloat() / numSamples
             val chirpFreq = 880.0 + 1760.0 * t
             chirpPhase += 2.0 * PI * chirpFreq / SAMPLE_RATE
-            var envelope = 1f
-            if (i < attackSamples) {
-                val at = i.toFloat() / attackSamples
-                envelope = (sin(at * PI / 2) * sin(at * PI / 2)).toFloat()
-            } else {
-                val dt = (i - attackSamples).toFloat() / (numSamples - attackSamples)
-                envelope = (1f - dt * 0.4f)
-            }
+            val envelope =
+                if (i < attackSamples) {
+                    val at = i.toFloat() / attackSamples
+                    (sin(at * PI / 2) * sin(at * PI / 2)).toFloat()
+                } else {
+                    val dt = (i - attackSamples).toFloat() / (numSamples - attackSamples)
+                    (1f - dt * 0.4f)
+                }
             val chord = (sin(p1) + sin(p2) + sin(p3) + sin(p4) + sin(p5)) / 5.0
             val chirp = sin(chirpPhase) * 0.15 * (1.0 - t)
             val value = (chord + chirp) * amplitude * envelope / 1.15
