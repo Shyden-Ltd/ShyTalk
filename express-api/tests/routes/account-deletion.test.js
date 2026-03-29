@@ -223,33 +223,12 @@ describe('POST /api/users/:uniqueId/delete', () => {
     expect(mockSendFcmToTokens).toHaveBeenCalled();
   });
 
-  test('schedules deletion with valid biometric', async () => {
-    mockDocGet.mockImplementation((path) => {
-      if (path.startsWith('users/')) return Promise.resolve(mockUserDoc(10000001));
-      if (path === 'config/app') return Promise.resolve(mockConfigDoc(30));
-      if (path.startsWith('biometricKeys/'))
-        return Promise.resolve({
-          exists: true,
-          data: () => ({ publicKey: 'base64key', uniqueId: 10000001 }),
-        });
-      return Promise.resolve({ exists: false });
-    });
-
-    const res = await request(app)
-      .post('/api/users/10000001/delete')
-      .send({ biometricSignature: 'valid-sig', deviceId: 'dev-1' })
-      .expect(200);
-
-    expect(res.body.success).toBe(true);
-    expect(res.body.deleteAt).toBeDefined();
-  });
-
   test('returns 403 when not the owner', async () => {
     const otherApp = createApp('other-uid', 99999999);
     await request(otherApp).post('/api/users/10000001/delete').send({ pin: '123456' }).expect(403);
   });
 
-  test('returns 400 when neither PIN nor biometric provided', async () => {
+  test('returns 400 when PIN not provided', async () => {
     mockDocGet.mockImplementation((path) => {
       if (path.startsWith('users/')) return Promise.resolve(mockUserDoc(10000001));
       return Promise.resolve({ exists: false });
@@ -257,7 +236,7 @@ describe('POST /api/users/:uniqueId/delete', () => {
 
     const res = await request(app).post('/api/users/10000001/delete').send({}).expect(400);
 
-    expect(res.body.error).toMatch(/pin.*biometric|verification required/i);
+    expect(res.body.error).toMatch(/pin.*required|verification required/i);
   });
 
   test('returns 401 when PIN is wrong', async () => {

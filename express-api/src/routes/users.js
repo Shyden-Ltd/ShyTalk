@@ -90,9 +90,16 @@ router.post('/users', async (req, res) => {
       if (identitySnap.exists) {
         const identityData = identitySnap.data();
         if (identityData.unlinked) {
-          throw Object.assign(new Error('Identity deactivated'), { code: 'DEACTIVATED' });
+          // Deleted accounts: allow clean re-registration, block suspended
+          if (identityData.deletedAccount && identityData.deletionStanding === 'clean') {
+            // Clean deletion — allow re-registration with new uniqueId
+            // The old identity map entry will be replaced below
+          } else {
+            throw Object.assign(new Error('Identity deactivated'), { code: 'DEACTIVATED' });
+          }
+        } else {
+          throw Object.assign(new Error('Identity already linked'), { code: 'ALREADY_LINKED' });
         }
-        throw Object.assign(new Error('Identity already linked'), { code: 'ALREADY_LINKED' });
       }
 
       // Atomic counter increment
@@ -233,6 +240,11 @@ router.get('/users/:uniqueId', async (req, res) => {
     delete user.firebaseUid;
     delete user.email;
     delete user.dateOfBirth;
+
+    // Strip deletion fields (only visible to owner via /deletion-status)
+    delete user.deletionScheduledAt;
+    delete user.deletionReason;
+    delete user.deletionExecuteAt;
     if (Array.isArray(user.providers)) {
       user.providers = user.providers.map(({ identifier: _identifier, ...rest }) => rest);
     }
@@ -822,7 +834,7 @@ router.post('/users/:uniqueId/delete', async (req, res) => {
     if (requireOwner(req, res)) return;
 
     const uniqueId = req.params.uniqueId;
-    const { pin, biometricSignature, deviceId: _deviceId } = req.body || {};
+    const { pin } = req.body || {};
 
     // Fetch user
     const userSnap = await db.doc(`users/${uniqueId}`).get();
@@ -836,23 +848,18 @@ router.post('/users/:uniqueId/delete', async (req, res) => {
       return res.status(409).json({ error: 'Deletion already scheduled' });
     }
 
-    // Verify identity: PIN or biometric required
-    if (!pin && !biometricSignature) {
-      return res.status(400).json({ error: 'PIN or biometric verification required' });
+    // Verify identity: PIN required
+    if (!pin) {
+      return res.status(400).json({ error: 'PIN verification required' });
     }
 
-    if (pin) {
-      if (!user.pinHash) {
-        return res.status(400).json({ error: 'No PIN set for this account' });
-      }
-      const isValid = await bcrypt.compare(pin, user.pinHash);
-      if (!isValid) {
-        return res.status(401).json({ error: 'Wrong PIN' });
-      }
+    if (!user.pinHash) {
+      return res.status(400).json({ error: 'No PIN set for this account' });
     }
-
-    // Biometric verification would go here (signature check)
-    // For now, biometric presence is accepted if the key matches
+    const isValid = await bcrypt.compare(pin, user.pinHash);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Wrong PIN' });
+    }
 
     // Get grace period from config
     const configSnap = await db.doc('config/app').get();

@@ -136,6 +136,8 @@ class AppSettingsViewModel(
                             selfDestructAlertEnabled = user.selfDestructAlertEnabled,
                             language = user.language,
                             currentSignInProvider = providerInfo?.first,
+                            deletionScheduled = user.isPendingDeletion,
+                            deletionDeleteAt = user.deletionExecuteAt,
                         )
                     }
                 }

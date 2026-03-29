@@ -129,20 +129,20 @@ async function hardDeleteAccount(userDoc) {
   try {
     const followerSnap = await db
       .collection('users')
-      .where('followerIds', 'array-contains', uniqueId)
+      .where('followerIds', 'array-contains', Number(uniqueId))
       .get();
     for (const doc of followerSnap.docs) {
       await db.doc(`users/${doc.id}`).update({
-        followerIds: FieldValue.arrayRemove(uniqueId),
+        followerIds: FieldValue.arrayRemove(Number(uniqueId)),
       });
     }
     const followingSnap = await db
       .collection('users')
-      .where('followingIds', 'array-contains', uniqueId)
+      .where('followingIds', 'array-contains', Number(uniqueId))
       .get();
     for (const doc of followingSnap.docs) {
       await db.doc(`users/${doc.id}`).update({
-        followingIds: FieldValue.arrayRemove(uniqueId),
+        followingIds: FieldValue.arrayRemove(Number(uniqueId)),
       });
     }
   } catch (err) {
@@ -227,7 +227,7 @@ async function hardDeleteAccount(userDoc) {
   try {
     const bindingSnap = await db
       .collection('deviceBindings')
-      .where('uniqueId', '==', uniqueId)
+      .where('uniqueId', '==', Number(uniqueId))
       .get();
     for (const doc of bindingSnap.docs) await db.doc(`deviceBindings/${doc.id}`).delete();
   } catch (err) {
