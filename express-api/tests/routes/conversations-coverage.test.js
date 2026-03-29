@@ -307,6 +307,7 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
     expect(res.status).toBe(200);
     await new Promise((r) => setTimeout(r, 50));
     // FCM should NOT have been called for user-B
+    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
   });
 
   test('skips notification when conversation is muted (line 109)', async () => {
@@ -345,6 +346,7 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
 
     expect(res.status).toBe(200);
     await new Promise((r) => setTimeout(r, 50));
+    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
   });
 
   test('skips notification when user has no FCM tokens (line 113)', async () => {
@@ -475,7 +477,9 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
   });
 
   test('handles DND with start > end (overnight window, line 102-103)', async () => {
-    // DND 22:00-06:00 (overnight). Current time might or might not be in range.
+    // DND 22:00-06:00 (overnight). Set clock to 23:00 UTC so user IS in the window.
+    jest.useFakeTimers({ now: new Date('2024-03-08T23:00:00Z') });
+
     let getAllCallCount = 0;
     mockGetAll.mockImplementation((...refs) => {
       getAllCallCount++;
@@ -487,10 +491,10 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
             data: () => ({
               pmNotificationsEnabled: true,
               dndEnabled: true,
-              dndStartHour: 0,
+              dndStartHour: 22,
               dndStartMinute: 0,
-              dndEndHour: 23,
-              dndEndMinute: 59,
+              dndEndHour: 6,
+              dndEndMinute: 0,
               fcmTokens: ['token-b-1'],
             }),
           })),
@@ -505,7 +509,11 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
       .send({ text: 'Hello', senderName: 'Alice', type: 'TEXT' });
 
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 50));
+    await jest.advanceTimersByTimeAsync(50);
+    // User is in overnight DND (22:00-06:00, current=23:00), so no FCM call
+    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+
+    jest.useRealTimers();
   });
 });
 
@@ -544,6 +552,9 @@ describe('POST /api/conversations/:id/messages — preview text for message type
       .send({ type: 'STICKER', senderName: 'Alice', stickerUrl: 'sticker.png' });
 
     expect(res.status).toBe(200);
+    // Verify the lastMessage preview text stored in the batch
+    const convUpdate = mockBatchSet.mock.calls[1];
+    expect(convUpdate[1].lastMessage.text).toBe('[Sticker]');
   });
 
   test('ROOM_INVITE type uses [Room Invite] as preview text', async () => {
@@ -556,6 +567,9 @@ describe('POST /api/conversations/:id/messages — preview text for message type
     });
 
     expect(res.status).toBe(200);
+    // Verify the lastMessage preview text stored in the batch
+    const convUpdate = mockBatchSet.mock.calls[1];
+    expect(convUpdate[1].lastMessage.text).toBe('[Room Invite]');
   });
 
   test('MOD_ACTION type passes through', async () => {

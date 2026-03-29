@@ -476,14 +476,21 @@ describe('testDataCleanup cron', () => {
     const originalEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = 'development';
 
-    // Make the config/startingScreens doc return test screen IDs
+    // Implementation uses exactly these three prefixes: 'pw-', 'screen-', 'test-'
+    // Include edge-case keys that look similar but must NOT match
     mockDocGet.mockResolvedValue({
       exists: true,
       data: () => ({
+        // Should be deleted (match prefixes: pw-, screen-, test-)
         'pw-screen-1': { url: '/test1' },
         'screen-abc': { url: '/test2' },
         'test-xyz': { url: '/test3' },
+        // Should NOT be deleted (no matching prefix)
         'real-screen': { url: '/real' },
+        'password-reset': { url: '/pw-like' },
+        testing: { url: '/no-hyphen' },
+        screensaver: { url: '/no-hyphen2' },
+        'my-test-screen': { url: '/middle-match' },
       }),
     });
 
@@ -492,7 +499,7 @@ describe('testDataCleanup cron', () => {
     // Should have called doc for config/startingScreens
     expect(mockDoc).toHaveBeenCalledWith('config/startingScreens');
 
-    // Should have called update with FieldValue.delete() for test screens
+    // Should have called update with FieldValue.delete() for the 3 test-prefixed screens
     expect(mockDocUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         'pw-screen-1': '__FIELD_DELETE__',
@@ -501,9 +508,14 @@ describe('testDataCleanup cron', () => {
       }),
     );
 
-    // The 'real-screen' should NOT be deleted
+    // Verify ONLY 3 keys were targeted — no false positives
     const updateArg = mockDocUpdate.mock.calls[0][0];
+    expect(Object.keys(updateArg)).toHaveLength(3);
     expect(updateArg['real-screen']).toBeUndefined();
+    expect(updateArg['password-reset']).toBeUndefined();
+    expect(updateArg['testing']).toBeUndefined();
+    expect(updateArg['screensaver']).toBeUndefined();
+    expect(updateArg['my-test-screen']).toBeUndefined();
 
     process.env.NODE_ENV = originalEnv;
   });
