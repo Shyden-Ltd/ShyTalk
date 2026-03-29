@@ -46,6 +46,30 @@ function buildMessage(doc) {
   };
 }
 
+/** Check if the current time falls within a user's DND schedule. */
+function isInDndPeriod(user) {
+  if (!user.dndEnabled) return false;
+  const utcNow = new Date();
+  const currentMinutes = utcNow.getUTCHours() * 60 + utcNow.getUTCMinutes();
+  const dndStart = (user.dndStartHour || 0) * 60 + (user.dndStartMinute || 0);
+  const dndEnd = (user.dndEndHour || 0) * 60 + (user.dndEndMinute || 0);
+
+  if (dndStart <= dndEnd) {
+    return currentMinutes >= dndStart && currentMinutes < dndEnd;
+  }
+  return currentMinutes >= dndStart || currentMinutes < dndEnd;
+}
+
+/** Determine if a recipient should receive a notification. */
+function shouldNotifyRecipient(user, settings) {
+  if (!user) return false;
+  if (user.pmNotificationsEnabled === false) return false;
+  if (isInDndPeriod(user)) return false;
+  if (settings?.isMuted) return false;
+  if (!user.fcmTokens || user.fcmTokens.length === 0) return false;
+  return true;
+}
+
 /**
  * Send FCM push notifications to conversation participants (except sender).
  * Uses batch Firestore reads to minimize read cost.
@@ -63,7 +87,6 @@ async function sendMessageNotifications(
   try {
     if (recipients.length === 0) return;
 
-    // Batch-fetch all user docs and settings docs (2 reads instead of 2*N)
     const userRefs = recipients.map((p) => db.doc(`users/${p.userId}`));
     const settingsRefs = recipients.map((p) =>
       db.doc(`conversations/${conversationId}/userSettings/${p.userId}`),
@@ -74,7 +97,6 @@ async function sendMessageNotifications(
       db.getAll(...settingsRefs),
     ]);
 
-    // Build lookup maps
     const usersById = {};
     for (const snap of userSnaps) {
       if (snap.exists) usersById[snap.id] = snap.data();
@@ -87,30 +109,9 @@ async function sendMessageNotifications(
     for (const p of recipients) {
       const recipientId = p.userId;
       const user = usersById[recipientId];
-      if (!user) continue;
-      if (user.pmNotificationsEnabled === false) continue;
-
-      // Check DND schedule
-      if (user.dndEnabled) {
-        const utcNow = new Date();
-        const currentMinutes = utcNow.getUTCHours() * 60 + utcNow.getUTCMinutes();
-        const dndStart = (user.dndStartHour || 0) * 60 + (user.dndStartMinute || 0);
-        const dndEnd = (user.dndEndHour || 0) * 60 + (user.dndEndMinute || 0);
-
-        if (dndStart <= dndEnd) {
-          if (currentMinutes >= dndStart && currentMinutes < dndEnd) continue;
-        } else {
-          if (currentMinutes >= dndStart || currentMinutes < dndEnd) continue;
-        }
-      }
-
-      // Check if conversation is muted
       const settings = settingsById[recipientId];
-      if (settings?.isMuted) continue;
 
-      // Get FCM tokens
-      const tokens = user.fcmTokens || [];
-      if (tokens.length === 0) continue;
+      if (!shouldNotifyRecipient(user, settings)) continue;
 
       const showPreview = user.pmNotificationPreview !== false;
       const data = {
@@ -123,7 +124,7 @@ async function sendMessageNotifications(
         showPreview: String(showPreview),
       };
 
-      const invalidTokens = await sendFcmToTokens(tokens, data);
+      const invalidTokens = await sendFcmToTokens(user.fcmTokens, data);
       if (invalidTokens.length > 0) {
         await cleanupInvalidTokens(invalidTokens, recipientId);
       }
@@ -163,7 +164,7 @@ router.get('/conversations/:id/messages', async (req, res) => {
     }
 
     const limit = Math.min(
-      parseInt(req.query.limit, 10) || DEFAULT_MESSAGE_LIMIT,
+      Number.parseInt(req.query.limit, 10) || DEFAULT_MESSAGE_LIMIT,
       MAX_MESSAGE_LIMIT,
     );
 
@@ -176,7 +177,7 @@ router.get('/conversations/:id/messages', async (req, res) => {
     const messages = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
     // Return in chronological order (oldest first)
-    return res.json(messages.reverse().map(buildMessage));
+    return res.json(messages.toReversed().map(buildMessage));
   } catch (err) {
     log.error('conversations', 'Failed to fetch messages', {
       conversationId: req.params.id,

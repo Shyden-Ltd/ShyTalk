@@ -7,7 +7,7 @@
  *   app.use(createRequestLogger(logger));
  */
 
-const crypto = require('crypto');
+const crypto = require('node:crypto');
 
 const SENSITIVE_BODY_KEYS = new Set([
   'password',
@@ -90,8 +90,8 @@ function createRequestLogger(logger) {
             userAgent: req.headers['user-agent'] || null,
           },
         });
-      } catch (_) {
-        // Never throw from the logger middleware
+      } catch {
+        // Intentionally swallowed — request logging must never throw to avoid disrupting HTTP responses
       }
     });
 

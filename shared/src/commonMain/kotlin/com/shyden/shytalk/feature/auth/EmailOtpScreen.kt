@@ -185,6 +185,7 @@ private fun EmailStep(
     }
 }
 
+@Suppress("kotlin:S107")
 @Composable
 private fun CodeStep(
     email: String,

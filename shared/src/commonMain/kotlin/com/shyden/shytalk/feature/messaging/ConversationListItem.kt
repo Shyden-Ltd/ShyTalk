@@ -42,6 +42,7 @@ import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.ui.theme.SpeakingGreen
 import org.jetbrains.compose.resources.stringResource
 
+@Suppress("kotlin:S107", "kotlin:S3776")
 @Composable
 fun ConversationListItem(
     otherUser: User?,

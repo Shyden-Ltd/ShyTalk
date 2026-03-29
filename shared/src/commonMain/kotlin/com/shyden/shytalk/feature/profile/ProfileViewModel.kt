@@ -140,6 +140,7 @@ class ProfileViewModel(
         }
     }
 
+    @Suppress("kotlin:S3776")
     fun loadProfile(userId: String?) {
         val currentUid = authRepository.currentUserId ?: return
         val profileUserId = if (userId.isNullOrEmpty() || userId == currentUid) currentUid else userId
@@ -229,7 +230,7 @@ class ProfileViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(isLoading = false, error = UiText.plain(result.message)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -291,7 +292,7 @@ class ProfileViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(isLoading = false, error = UiText.plain(result.message)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -305,7 +306,7 @@ class ProfileViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(error = UiText.plain(result.message)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -323,7 +324,7 @@ class ProfileViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(isLoading = false, error = UiText.plain(result.message)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -363,7 +364,7 @@ class ProfileViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(isLoading = false, error = UiText.plain(result.message)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -408,14 +409,14 @@ class ProfileViewModel(
                                 it.copy(isUploadingPhoto = false, error = UiText.plain(saveResult.message))
                             }
                         }
-                        is Resource.Loading -> {}
+                        is Resource.Loading -> Unit
                     }
                 }
                 is Resource.Error -> {
                     logE(TAG, "Photo upload failed: ${result.message}")
                     _uiState.update { it.copy(isUploadingPhoto = false, error = UiText.plain(result.message)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -440,7 +441,7 @@ class ProfileViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(error = UiText.res(Res.string.error_block_user)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -455,7 +456,7 @@ class ProfileViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(error = UiText.res(Res.string.error_unblock_user)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -466,7 +467,7 @@ class ProfileViewModel(
         _uiState.update { it.copy(isFollowingTarget = true, followerCount = it.followerCount + 1) }
         viewModelScope.launch {
             when (userRepository.followUser(userId, targetUserId)) {
-                is Resource.Success -> {}
+                is Resource.Success -> Unit
                 is Resource.Error -> {
                     _uiState.update {
                         it.copy(
@@ -476,7 +477,7 @@ class ProfileViewModel(
                         )
                     }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -486,7 +487,7 @@ class ProfileViewModel(
         _uiState.update { it.copy(isFollowingTarget = false, followerCount = it.followerCount - 1) }
         viewModelScope.launch {
             when (userRepository.unfollowUser(userId, targetUserId)) {
-                is Resource.Success -> {}
+                is Resource.Success -> Unit
                 is Resource.Error -> {
                     _uiState.update {
                         it.copy(
@@ -496,7 +497,7 @@ class ProfileViewModel(
                         )
                     }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -546,7 +547,7 @@ class ProfileViewModel(
                         _uiState.update { it.copy(isSubmittingReport = false, reportError = UiText.res(Res.string.error_upload_evidence)) }
                         return@launch
                     }
-                    is Resource.Loading -> {}
+                    is Resource.Loading -> Unit
                 }
             }
 
@@ -570,7 +571,7 @@ class ProfileViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(isSubmittingReport = false, reportError = UiText.res(Res.string.error_submit_report)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -592,7 +593,7 @@ class ProfileViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(error = UiText.plain(result.message)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -608,7 +609,7 @@ class ProfileViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(error = UiText.plain(result.message)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -624,7 +625,7 @@ class ProfileViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(isPurchasingSuperShy = false, error = UiText.plain(result.message)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }

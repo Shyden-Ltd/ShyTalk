@@ -772,7 +772,7 @@ fun RoomScreen(
                                 currentRole = uiState.currentRole,
                                 seats = uiState.room?.seats ?: emptyMap(),
                                 userMap = userMap,
-                                isOwnerOrHost = isOwnerOrHost,
+                                _isOwnerOrHost = isOwnerOrHost,
                                 isVoiceUnavailable = uiState.isVoiceUnavailable,
                                 onToggleMic = { seatIndex ->
                                     val hasMic =
@@ -1283,7 +1283,7 @@ fun RoomScreen(
                             coinPackages = walletState.coinPackages,
                             isPurchasing = walletState.isPurchasing,
                             onTestPurchase = { coins -> walletViewModel.testPurchaseCoins(coins) },
-                            onDismiss = { showWalletSheet = false },
+                            _onDismiss = { showWalletSheet = false },
                         )
                     }
                 }

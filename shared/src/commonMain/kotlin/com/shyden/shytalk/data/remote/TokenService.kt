@@ -5,6 +5,6 @@ data class TokenResponse(
     val url: String? = null,
 )
 
-interface TokenService {
+fun interface TokenService {
     suspend fun fetchToken(roomName: String): TokenResponse
 }

@@ -100,6 +100,7 @@ private fun UserAvatar(
     }
 }
 
+@Suppress("kotlin:S107", "kotlin:S3776")
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MessageBubble(

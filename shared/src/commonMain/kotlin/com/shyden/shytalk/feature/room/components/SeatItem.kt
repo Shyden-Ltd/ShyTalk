@@ -62,13 +62,14 @@ import com.shyden.shytalk.ui.components.FlagBadge
 import com.shyden.shytalk.ui.theme.SpeakingGreen
 import org.jetbrains.compose.resources.stringResource
 
+@Suppress("kotlin:S107", "kotlin:S3776")
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SeatItem(
     seatIndex: Int,
     seat: Seat,
     seatRole: RoomRole,
-    isCurrentUser: Boolean,
+    _isCurrentUser: Boolean,
     canLeaveSeat: Boolean,
     isSpeaking: Boolean,
     isDisconnected: Boolean = false,
@@ -83,7 +84,7 @@ fun SeatItem(
     var showMenu by remember { mutableStateOf(false) }
 
     // Scale badges and icon padding proportionally to seat size (memoized)
-    val (badgeSize, badgeIconSize, iconPadding, flagFontSize) =
+    val (badgeSize, _, iconPadding, _) =
         remember(seatSize) {
             val scale = (seatSize / 70.dp).coerceIn(1f, 1.5f)
 

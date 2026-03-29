@@ -72,7 +72,7 @@ class TransactionHistoryViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(isLoading = false, error = result.message) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }

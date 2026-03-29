@@ -8,7 +8,7 @@
  *   alertManager.trackSlowEndpoint('/api/rooms', 5200);
  */
 
-const crypto = require('crypto');
+const crypto = require('node:crypto');
 
 const DEFAULT_ALERT_CONFIG = {
   errorSpikeThreshold: 10,
@@ -48,8 +48,8 @@ function createAlertManager(db, messaging) {
         cachedConfig = { ...DEFAULT_ALERT_CONFIG };
       }
       configLoadedAt = now;
-    } catch (_err) {
-      // On error, use cached or defaults
+    } catch {
+      // Firestore unavailable — fall back to cached config or defaults
       if (!cachedConfig) cachedConfig = { ...DEFAULT_ALERT_CONFIG };
     }
     return cachedConfig;
@@ -97,16 +97,16 @@ function createAlertManager(db, messaging) {
                 notification: { title, body: message },
                 token,
               });
-            } catch (_fcmErr) {
-              // Never throw on FCM failure
+            } catch {
+              // Intentionally swallowed — FCM delivery is best-effort, must never disrupt alerting
             }
           }
-        } catch (_userErr) {
-          // Never throw on user lookup failure
+        } catch {
+          // Intentionally swallowed — user lookup failure must not prevent other recipients from being notified
         }
       }
-    } catch (_err) {
-      // createAlert must never throw
+    } catch {
+      // Intentionally swallowed — alert creation must never throw to avoid masking the original error
     }
   }
 
@@ -145,8 +145,8 @@ function createAlertManager(db, messaging) {
           );
         }
       }
-    } catch (_err) {
-      // Never throw
+    } catch {
+      // Intentionally swallowed — error tracking must never throw to avoid recursive error loops
     }
   }
 
@@ -171,8 +171,8 @@ function createAlertManager(db, messaging) {
         `Response took ${durationMs}ms (threshold: ${threshold}ms)`,
         { route, durationMs, thresholdMs: threshold },
       );
-    } catch (_err) {
-      // Never throw
+    } catch {
+      // Intentionally swallowed — slow endpoint tracking must never throw to avoid disrupting request flow
     }
   }
 

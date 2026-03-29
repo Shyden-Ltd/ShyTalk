@@ -44,6 +44,7 @@ import org.jetbrains.compose.resources.stringResource
  * and a "Play Effect" button to preview the animation.
  * Dismiss by tapping outside the card.
  */
+@Suppress("kotlin:S6615")
 @Composable
 fun GiftPreviewPopup(
     gift: Gift,

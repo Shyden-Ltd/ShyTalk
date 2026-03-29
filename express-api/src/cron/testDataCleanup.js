@@ -41,51 +41,48 @@ async function deleteSubcollections(docRef, subcollections) {
   }
 }
 
-async function testDataCleanup() {
-  if (process.env.NODE_ENV === 'production') return;
+/** Delete stale docs from a tagged collection. Returns count and any deleted user IDs. */
+async function cleanupTaggedCollection(colName, cutoff) {
+  const snap = await db
+    .collection(colName)
+    .where('_testRun', '>=', TEST_PREFIX)
+    .where('_testRun', '<', TEST_PREFIX + '\uf8ff')
+    .limit(500)
+    .get();
 
-  const cutoff = Date.now() - MAX_AGE_MS;
-  let totalDeleted = 0;
-  const deletedUserUniqueIds = [];
+  if (snap.empty) return { deleted: 0, userIds: [] };
 
-  for (const colName of TAGGED_COLLECTIONS) {
-    // Query by _testRun prefix only (no composite index needed)
-    const snap = await db
-      .collection(colName)
-      .where('_testRun', '>=', TEST_PREFIX)
-      .where('_testRun', '<', TEST_PREFIX + '\uf8ff')
-      .limit(500)
-      .get();
+  const staleDocs = snap.docs.filter((doc) => {
+    const createdAt = doc.data().createdAt;
+    return typeof createdAt === 'number' ? createdAt < cutoff : true;
+  });
 
-    if (snap.empty) continue;
+  let deleted = 0;
+  const userIds = [];
 
-    // Filter by age client-side
-    const staleDocs = snap.docs.filter((doc) => {
-      const createdAt = doc.data().createdAt;
-      return typeof createdAt === 'number' ? createdAt < cutoff : true;
-    });
-
-    for (const doc of staleDocs) {
-      // Handle subcollections for users and conversations
-      if (colName === 'users') {
-        const uid = doc.data().uniqueId || doc.id;
-        deletedUserUniqueIds.push(uid);
-        await deleteSubcollections(doc.ref, USER_SUBCOLLECTIONS);
-      } else if (colName === 'conversations') {
-        await deleteSubcollections(doc.ref, [
-          'messages',
-          'userSettings',
-          'mutes',
-          'settings',
-          'mod_log',
-        ]);
-      }
-      await doc.ref.delete();
-      totalDeleted++;
+  for (const doc of staleDocs) {
+    if (colName === 'users') {
+      userIds.push(doc.data().uniqueId || doc.id);
+      await deleteSubcollections(doc.ref, USER_SUBCOLLECTIONS);
+    } else if (colName === 'conversations') {
+      await deleteSubcollections(doc.ref, [
+        'messages',
+        'userSettings',
+        'mutes',
+        'settings',
+        'mod_log',
+      ]);
     }
+    await doc.ref.delete();
+    deleted++;
   }
 
-  // Clean up device/network bans linked to deleted test users
+  return { deleted, userIds };
+}
+
+/** Clean up device/network bans linked to deleted test users. */
+async function cleanupLinkedBans(deletedUserUniqueIds) {
+  let deleted = 0;
   for (const uid of deletedUserUniqueIds) {
     for (const uidVariant of [uid, String(uid)]) {
       for (const banCol of ['deviceBans', 'networkBans']) {
@@ -98,31 +95,52 @@ async function testDataCleanup() {
         const batch = db.batch();
         banSnap.docs.forEach((d) => batch.delete(d.ref));
         await batch.commit();
-        totalDeleted += banSnap.size;
+        deleted += banSnap.size;
       }
     }
   }
+  return deleted;
+}
 
-  // Clean up test starting screens from config document
+/** Clean up test starting screens from config document. */
+async function cleanupTestStartingScreens() {
   try {
     const ssDoc = await db.doc('config/startingScreens').get();
-    if (ssDoc.exists) {
-      const ssData = ssDoc.data() || {};
-      const testScreenIds = Object.keys(ssData).filter(
-        (key) => key.startsWith('pw-') || key.startsWith('screen-') || key.startsWith('test-'),
-      );
-      if (testScreenIds.length > 0) {
-        const updates = {};
-        for (const id of testScreenIds) {
-          updates[id] = FieldValue.delete();
-        }
-        await db.doc('config/startingScreens').update(updates);
-        totalDeleted += testScreenIds.length;
-      }
+    if (!ssDoc.exists) return 0;
+
+    const ssData = ssDoc.data() || {};
+    const testScreenIds = Object.keys(ssData).filter(
+      (key) => key.startsWith('pw-') || key.startsWith('screen-') || key.startsWith('test-'),
+    );
+    if (testScreenIds.length === 0) return 0;
+
+    const updates = {};
+    for (const id of testScreenIds) {
+      updates[id] = FieldValue.delete();
     }
-  } catch (_err) {
-    // Config cleanup is best-effort
+    await db.doc('config/startingScreens').update(updates);
+    return testScreenIds.length;
+  } catch {
+    // Best-effort cleanup — config deletion failure is non-critical
+    return 0;
   }
+}
+
+async function testDataCleanup() {
+  if (process.env.NODE_ENV === 'production') return;
+
+  const cutoff = Date.now() - MAX_AGE_MS;
+  let totalDeleted = 0;
+  const deletedUserUniqueIds = [];
+
+  for (const colName of TAGGED_COLLECTIONS) {
+    const result = await cleanupTaggedCollection(colName, cutoff);
+    totalDeleted += result.deleted;
+    deletedUserUniqueIds.push(...result.userIds);
+  }
+
+  totalDeleted += await cleanupLinkedBans(deletedUserUniqueIds);
+  totalDeleted += await cleanupTestStartingScreens();
 
   // Restore counter if test users were deleted
   if (deletedUserUniqueIds.length > 0) {

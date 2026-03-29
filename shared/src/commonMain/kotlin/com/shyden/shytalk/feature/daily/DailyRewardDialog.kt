@@ -58,6 +58,7 @@ import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.compose.resources.stringResource
 import kotlin.time.Instant
 
+@Suppress("kotlin:S3776")
 @Composable
 fun DailyRewardDialog(
     viewModel: DailyRewardViewModel,
@@ -224,7 +225,7 @@ fun DailyRewardDialog(
                                         isClaimed = isClaimed,
                                         isToday = isToday,
                                         isPast = isPast,
-                                        isFuture = isFuture,
+                                        _isFuture = isFuture,
                                         isMilestone = isMilestone,
                                     )
                                 }
@@ -271,6 +272,7 @@ fun DailyRewardDialog(
     )
 }
 
+@Suppress("kotlin:S3776")
 @Composable
 private fun DayCell(
     day: Int,
@@ -278,7 +280,7 @@ private fun DayCell(
     isClaimed: Boolean,
     isToday: Boolean,
     isPast: Boolean,
-    isFuture: Boolean,
+    _isFuture: Boolean,
     isMilestone: Boolean,
 ) {
     val bgColor =
@@ -379,6 +381,7 @@ private fun DayCell(
     }
 }
 
+@Suppress("kotlin:S6615")
 @Composable
 fun DailyRewardCelebrationDialog(
     viewModel: DailyRewardViewModel,

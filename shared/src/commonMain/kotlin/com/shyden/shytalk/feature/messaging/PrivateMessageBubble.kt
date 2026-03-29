@@ -64,6 +64,7 @@ import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 
+@Suppress("kotlin:S107", "kotlin:S3776")
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PrivateMessageBubble(
@@ -71,7 +72,7 @@ fun PrivateMessageBubble(
     isSent: Boolean,
     isRead: Boolean,
     showTimestamp: Boolean,
-    otherUserId: String,
+    _otherUserId: String,
     currentUserId: String = "",
     onEdit: () -> Unit,
     onReply: () -> Unit,

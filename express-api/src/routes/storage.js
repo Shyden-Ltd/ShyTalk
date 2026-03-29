@@ -8,7 +8,7 @@
  * DELETE /api/storage/delete  → Delete a file from R2 (owner-only)
  */
 
-const crypto = require('crypto');
+const crypto = require('node:crypto');
 const express = require('express');
 const multer = require('multer');
 const r2 = require('../utils/r2');

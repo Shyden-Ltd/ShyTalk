@@ -1,0 +1,68 @@
+{
+  "lastUpdated": "2026-03-30",
+  "phases": [
+    {
+      "title": "Safety & Compliance",
+      "status": "active",
+      "features": [
+        { "name": "Account Deletion", "description": "Permanently delete your account and all associated data", "status": "done" },
+        { "name": "Data Export", "description": "Download a copy of all your personal data", "status": "next" },
+        { "name": "Age-Based Safety", "description": "Separate spaces for adults and minors", "status": "next" },
+        { "name": "Message Reporting", "description": "Report inappropriate messages from any room", "status": "next" },
+        { "name": "Gambling Self-Exclusion", "description": "Permanently opt out of gambling features", "status": "planned" }
+      ]
+    },
+    {
+      "title": "Platform & iOS",
+      "status": "soon",
+      "features": [
+        { "name": "iOS Launch", "description": "Full ShyTalk on iPhone and iPad", "status": "next" },
+        { "name": "Billing Upgrade", "description": "Smoother purchases with latest payment APIs", "status": "planned" }
+      ]
+    },
+    {
+      "title": "Social & Status",
+      "status": "planned",
+      "features": [
+        { "name": "Nobility Ranks", "description": "Earn ranks from gifting — unlock perks as you rise", "status": "planned" },
+        { "name": "Relationships", "description": "Friend, partner, and family tiers with exclusive perks", "status": "planned" },
+        { "name": "Decorations", "description": "Profile borders, speech bubbles, entrance effects", "status": "planned" },
+        { "name": "Posts & Stories", "description": "Social feed and disappearing stories", "status": "planned" },
+        { "name": "Leaderboards", "description": "Daily, weekly, and all-time rankings", "status": "planned" },
+        { "name": "User Search", "description": "Discover people with advanced filters", "status": "planned" }
+      ]
+    },
+    {
+      "title": "Quality of Life",
+      "status": "planned",
+      "features": [
+        { "name": "Auto-Translation", "description": "Real-time message translation", "status": "planned" },
+        { "name": "Pin Chats", "description": "Keep favourite conversations at the top", "status": "planned" },
+        { "name": "Room Filters", "description": "Filter by language, category, or activity", "status": "planned" },
+        { "name": "Gift Wishlist & Collections", "description": "Curate gifts and complete sets for rewards", "status": "planned" },
+        { "name": "Announcements", "description": "Room-wide and global messages", "status": "planned" }
+      ]
+    },
+    {
+      "title": "Entertainment",
+      "status": "planned",
+      "features": [
+        { "name": "Animated Stickers", "description": "Fun overlays on your avatar in rooms", "status": "planned" },
+        { "name": "PK Battles", "description": "Two rooms compete — winners earn bonus beans", "status": "planned" },
+        { "name": "Video & Screen Sharing", "description": "Camera and screen share in voice rooms", "status": "planned" },
+        { "name": "In-Room Games", "description": "Pool, ludo, and more without leaving the room", "status": "planned" },
+        { "name": "Karaoke & Singing", "description": "Sing with background music and audience scoring", "status": "planned" },
+        { "name": "MC Host Games", "description": "Hosts run interactive games with prizes", "status": "planned" }
+      ]
+    },
+    {
+      "title": "Support & Feedback",
+      "status": "planned",
+      "features": [
+        { "name": "In-App Help Centre", "description": "FAQ and support contact inside the app", "status": "planned" },
+        { "name": "Feedback & Suggestions", "description": "Submit ideas and vote on what you want", "status": "planned" },
+        { "name": "Teaching Rooms", "description": "Dedicated rooms for language learning", "status": "planned" }
+      ]
+    }
+  ]
+}

@@ -28,7 +28,7 @@ function parseExpiry(duration) {
   const units = { h: 3600000, d: 86400000 };
   const match = duration.match(/^(\d+)([hd])$/);
   if (!match) return null;
-  return new Date(Date.now() + parseInt(match[1], 10) * units[match[2]]).toISOString();
+  return new Date(Date.now() + Number.parseInt(match[1], 10) * units[match[2]]).toISOString();
 }
 
 // ─── List all active bans ────────────────────────────────────────

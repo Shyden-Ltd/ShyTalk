@@ -114,7 +114,7 @@ class NewMessageViewModel(
                             val ordered = recentUserIds.mapNotNull { usersMap[it] }
                             _uiState.update { it.copy(recentUsers = ordered) }
                         }
-                        else -> {}
+                        else -> Unit
                     }
                 }
             }
@@ -127,7 +127,7 @@ class NewMessageViewModel(
                 is Resource.Success -> {
                     _uiState.update { it.copy(ownedGroupCount = result.data) }
                 }
-                else -> {}
+                else -> Unit
             }
         }
     }
@@ -188,7 +188,7 @@ class NewMessageViewModel(
                             it.copy(isSearchingAll = false, error = UiText.plain(result.message))
                         }
                     }
-                    is Resource.Loading -> {}
+                    is Resource.Loading -> Unit
                 }
             }
     }

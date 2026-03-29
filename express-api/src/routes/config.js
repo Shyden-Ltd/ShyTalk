@@ -12,7 +12,7 @@
  * DELETE /api/config/startingScreens/:screenId -> Admin delete a starting screen
  */
 
-const crypto = require('crypto');
+const crypto = require('node:crypto');
 const router = require('express').Router();
 const { db } = require('../utils/firebase');
 const { requireAdmin } = require('../middleware/auth');
@@ -52,15 +52,16 @@ function isScreenActive(screen, now) {
 
 function cidrMatch(ip, cidr) {
   const [range, bits] = cidr.split('/');
-  const mask = ~(2 ** (32 - parseInt(bits, 10)) - 1) >>> 0;
-  const ipNum = ip.split('.').reduce((acc, oct) => (acc << 8) + parseInt(oct, 10), 0) >>> 0;
-  const rangeNum = range.split('.').reduce((acc, oct) => (acc << 8) + parseInt(oct, 10), 0) >>> 0;
+  const mask = ~(2 ** (32 - Number.parseInt(bits, 10)) - 1) >>> 0;
+  const ipNum = ip.split('.').reduce((acc, oct) => (acc << 8) + Number.parseInt(oct, 10), 0) >>> 0;
+  const rangeNum =
+    range.split('.').reduce((acc, oct) => (acc << 8) + Number.parseInt(oct, 10), 0) >>> 0;
   return (ipNum & mask) === (rangeNum & mask);
 }
 
 function normalizeIp(ip) {
   // Strip IPv6-mapped IPv4 prefix (e.g. ::ffff:127.0.0.1 → 127.0.0.1)
-  if (ip && ip.startsWith('::ffff:')) return ip.slice(7);
+  if (ip?.startsWith('::ffff:')) return ip.slice(7);
   return ip;
 }
 
@@ -194,7 +195,7 @@ const SCREEN_FIELDS = [
 function sanitiseTitle(title) {
   // Remove zero-width chars: U+200B, U+200C, U+200E, U+200F, U+FEFF, U+2060
   // Keep U+200D (ZWJ)
-  let result = title.replace(/[\u200B\u200C\u200E\u200F\uFEFF\u2060]/g, '');
+  let result = title.replaceAll(/[\u200B\u200C\u200E\u200F\uFEFF\u2060]/g, '');
   result = result.trim();
   result = result.normalize('NFC');
   return result;
@@ -206,9 +207,9 @@ function sanitiseTitle(title) {
 function sanitiseMessage(message) {
   // Remove control characters except \n (0x0A), \r (0x0D), \t (0x09)
   // eslint-disable-next-line no-control-regex
-  let result = message.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  let result = message.replaceAll(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
   // Collapse >2 consecutive newlines to 2
-  result = result.replace(/\n{3,}/g, '\n\n');
+  result = result.replaceAll(/\n{3,}/g, '\n\n');
   result = result.trim();
   result = result.normalize('NFC');
   return result;
@@ -222,7 +223,7 @@ function isValidIsoDate(str) {
   if (typeof str !== 'string') return false;
   if (!str.includes('T')) return false;
   const d = new Date(str);
-  return !isNaN(d.getTime());
+  return !Number.isNaN(d.getTime());
 }
 
 function validateDates(id, screen, existingEndDate) {
@@ -254,58 +255,61 @@ function validateDates(id, screen, existingEndDate) {
   return null;
 }
 
-function validateAllowlist(id, allowlist) {
-  if (typeof allowlist !== 'object' || Array.isArray(allowlist)) {
-    return { error: `Screen "${id}": allowlist must be an object`, field: 'allowlist' };
+function validateDeviceIds(id, deviceIds) {
+  if (deviceIds === undefined) return null;
+  if (!Array.isArray(deviceIds)) {
+    return {
+      error: `Screen "${id}": allowlist.deviceIds must be an array`,
+      field: 'allowlist.deviceIds',
+    };
   }
-  const { deviceIds, networks } = allowlist;
-  if (deviceIds !== undefined) {
-    if (!Array.isArray(deviceIds)) {
+  for (const did of deviceIds) {
+    if (typeof did !== 'string' || did === '') {
       return {
-        error: `Screen "${id}": allowlist.deviceIds must be an array`,
+        error: `Screen "${id}": allowlist.deviceIds must contain non-empty strings`,
         field: 'allowlist.deviceIds',
       };
-    }
-    for (const did of deviceIds) {
-      if (typeof did !== 'string' || did === '') {
-        return {
-          error: `Screen "${id}": allowlist.deviceIds must contain non-empty strings`,
-          field: 'allowlist.deviceIds',
-        };
-      }
-    }
-  }
-  if (networks !== undefined) {
-    if (!Array.isArray(networks)) {
-      return {
-        error: `Screen "${id}": allowlist.networks must be an array`,
-        field: 'allowlist.networks',
-      };
-    }
-    for (const net of networks) {
-      if (typeof net !== 'string' || net === '') {
-        return {
-          error: `Screen "${id}": each allowlist network must be a non-empty string`,
-          field: 'allowlist.networks',
-        };
-      }
-      if (net.includes('/') && net.split('/')[1] === '0') {
-        return {
-          error: `Screen "${id}": CIDR /0 not allowed in allowlist.networks`,
-          field: 'allowlist.networks',
-        };
-      }
     }
   }
   return null;
 }
 
-/**
- * Validate a single screen entry.
- * On success: returns { sanitisedTitle, sanitisedMessage }.
- * On failure: returns { error, field }.
- */
-function validateScreen(id, screen, existingEndDate) {
+function validateNetworks(id, networks) {
+  if (networks === undefined) return null;
+  if (!Array.isArray(networks)) {
+    return {
+      error: `Screen "${id}": allowlist.networks must be an array`,
+      field: 'allowlist.networks',
+    };
+  }
+  for (const net of networks) {
+    if (typeof net !== 'string' || net === '') {
+      return {
+        error: `Screen "${id}": each allowlist network must be a non-empty string`,
+        field: 'allowlist.networks',
+      };
+    }
+    if (net.includes('/') && net.split('/')[1] === '0') {
+      return {
+        error: `Screen "${id}": CIDR /0 not allowed in allowlist.networks`,
+        field: 'allowlist.networks',
+      };
+    }
+  }
+  return null;
+}
+
+function validateAllowlist(id, allowlist) {
+  if (typeof allowlist !== 'object' || Array.isArray(allowlist)) {
+    return { error: `Screen "${id}": allowlist must be an object`, field: 'allowlist' };
+  }
+  return (
+    validateDeviceIds(id, allowlist.deviceIds) || validateNetworks(id, allowlist.networks) || null
+  );
+}
+
+/** Validate required screen fields (enabled, dismissable, frequency, template). */
+function validateRequiredScreenFields(id, screen) {
   if (!screen || typeof screen !== 'object' || Array.isArray(screen)) {
     return { error: `Screen "${id}" must be an object`, field: id };
   }
@@ -321,28 +325,11 @@ function validateScreen(id, screen, existingEndDate) {
   if (!VALID_TEMPLATES.includes(screen.template)) {
     return { error: `Screen "${id}": invalid template`, field: 'template' };
   }
-  if (typeof screen.title !== 'string') {
-    return { error: `Screen "${id}": title must be a string`, field: 'title' };
-  }
-  const sanitisedTitle = sanitiseTitle(screen.title);
-  const titleLength = [...sanitisedTitle].length;
-  if (titleLength < 3 || titleLength > 100) {
-    return {
-      error: `Screen "${id}": title must be 3-100 characters (got ${titleLength})`,
-      field: 'title',
-    };
-  }
-  if (typeof screen.message !== 'string') {
-    return { error: `Screen "${id}": message must be a string`, field: 'message' };
-  }
-  const sanitisedMessage = sanitiseMessage(screen.message);
-  const messageLength = [...sanitisedMessage].length;
-  if (messageLength < 10 || messageLength > 500) {
-    return {
-      error: `Screen "${id}": message must be 10-500 characters (got ${messageLength})`,
-      field: 'message',
-    };
-  }
+  return null;
+}
+
+/** Validate optional screen fields (imageType, backgroundImage, backgroundImageFit). */
+function validateOptionalScreenFields(id, screen) {
   if (
     screen.imageType !== null &&
     screen.imageType !== undefined &&
@@ -369,13 +356,76 @@ function validateScreen(id, screen, existingEndDate) {
       field: 'backgroundImageFit',
     };
   }
+  return null;
+}
+
+/**
+ * Validate a single screen entry.
+ * On success: returns { sanitisedTitle, sanitisedMessage }.
+ * On failure: returns { error, field }.
+ */
+function validateScreen(id, screen, existingEndDate) {
+  const requiredErr = validateRequiredScreenFields(id, screen);
+  if (requiredErr) return requiredErr;
+
+  if (typeof screen.title !== 'string') {
+    return { error: `Screen "${id}": title must be a string`, field: 'title' };
+  }
+  const sanitisedTitle = sanitiseTitle(screen.title);
+  const titleLength = [...sanitisedTitle].length;
+  if (titleLength < 3 || titleLength > 100) {
+    return {
+      error: `Screen "${id}": title must be 3-100 characters (got ${titleLength})`,
+      field: 'title',
+    };
+  }
+  if (typeof screen.message !== 'string') {
+    return { error: `Screen "${id}": message must be a string`, field: 'message' };
+  }
+  const sanitisedMessage = sanitiseMessage(screen.message);
+  const messageLength = [...sanitisedMessage].length;
+  if (messageLength < 10 || messageLength > 500) {
+    return {
+      error: `Screen "${id}": message must be 10-500 characters (got ${messageLength})`,
+      field: 'message',
+    };
+  }
+
+  const optionalErr = validateOptionalScreenFields(id, screen);
+  if (optionalErr) return optionalErr;
+
   const dateErr = validateDates(id, screen, existingEndDate);
   if (dateErr) return dateErr;
+
   if (screen.allowlist !== null && screen.allowlist !== undefined) {
     const allowlistErr = validateAllowlist(id, screen.allowlist);
     if (allowlistErr) return allowlistErr;
   }
   return { sanitisedTitle, sanitisedMessage };
+}
+
+/** Build a clean screen object from validated data. */
+function buildCleanScreen(screen, result) {
+  const clean = {};
+  const NULL_DEFAULT_FIELDS = new Set(['imageType', 'backgroundImage', 'startDate', 'endDate']);
+  for (const field of SCREEN_FIELDS) {
+    if (field === 'title') {
+      clean.title = result.sanitisedTitle;
+    } else if (field === 'message') {
+      clean.message = result.sanitisedMessage;
+    } else if (field === 'allowlist') {
+      clean.allowlist = screen.allowlist
+        ? { deviceIds: screen.allowlist.deviceIds || [], networks: screen.allowlist.networks || [] }
+        : { deviceIds: [], networks: [] };
+    } else if (field in screen) {
+      clean[field] = screen[field];
+    } else if (field === 'backgroundImageFit') {
+      clean[field] = 'cover';
+    } else if (NULL_DEFAULT_FIELDS.has(field)) {
+      clean[field] = null;
+    }
+  }
+  return clean;
 }
 
 // -- Update starting screens (admin) --
@@ -388,14 +438,12 @@ router.put('/config/startingScreens', async (req, res) => {
       return res.status(400).json({ error: 'Request body must be a JSON object' });
     }
 
-    // Fetch existing screens early so we can pass existing endDate to validateScreen
     const snap = await db.doc('config/startingScreens').get();
     const existing = snap.exists ? snap.data() : {};
 
     // Validate all screen entries first
     const validatedScreens = {};
     for (const [id, screen] of Object.entries(body)) {
-      // Validate screen ID
       if (!id || !SCREEN_ID_REGEX.test(id)) {
         return res.status(400).json({
           error: `Invalid screen ID: "${id}". Must match ${SCREEN_ID_REGEX}`,
@@ -403,63 +451,22 @@ router.put('/config/startingScreens', async (req, res) => {
         });
       }
 
-      const existingEndDate = existing[id]?.endDate || undefined;
-      const result = validateScreen(id, screen, existingEndDate);
+      const result = validateScreen(id, screen, existing[id]?.endDate || undefined);
       if (result.error) {
         return res.status(400).json({ error: result.error, field: result.field });
       }
 
-      // Build clean screen object (only known fields)
-      const clean = {};
-      for (const field of SCREEN_FIELDS) {
-        if (field === 'title') {
-          clean.title = result.sanitisedTitle;
-        } else if (field === 'message') {
-          clean.message = result.sanitisedMessage;
-        } else if (field === 'allowlist') {
-          if (screen.allowlist) {
-            clean.allowlist = {
-              deviceIds: screen.allowlist.deviceIds || [],
-              networks: screen.allowlist.networks || [],
-            };
-          } else {
-            clean.allowlist = { deviceIds: [], networks: [] };
-          }
-        } else if (field in screen) {
-          clean[field] = screen[field];
-        } else if (field === 'backgroundImageFit') {
-          clean[field] = 'cover';
-        } else if (
-          field === 'imageType' ||
-          field === 'backgroundImage' ||
-          field === 'startDate' ||
-          field === 'endDate'
-        ) {
-          clean[field] = null;
-        }
-      }
-
-      validatedScreens[id] = clean;
+      validatedScreens[id] = buildCleanScreen(screen, result);
     }
 
-    // Build merged state (existing + updates)
-    // Note: There is a small TOCTOU window between the read above and the write below.
-    // For admin-only operations with low concurrency, this is acceptable.
-    const merged = { ...existing };
-    for (const [id, screen] of Object.entries(validatedScreens)) {
-      merged[id] = screen;
-    }
+    // Build merged state
+    const merged = { ...existing, ...validatedScreens };
 
     // Blocking constraint: max 1 non-dismissable screen enabled at a time
-    // Deleted screens don't count toward this constraint
-    const nonDismissable = [];
-    for (const [id, screen] of Object.entries(merged)) {
-      if (screen.enabled && screen.dismissable === false && !screen.deleted) {
-        nonDismissable.push(id);
-      }
-    }
+    const nonDismissable = Object.keys(merged).filter(
+      (id) => merged[id].enabled && merged[id].dismissable === false && !merged[id].deleted,
+    );
     if (nonDismissable.length > 1) {
-      // Find the first existing blocker that is NOT in the current batch
       const existingBlocker =
         nonDismissable.find((id) => !(id in validatedScreens)) || nonDismissable[0];
       return res.status(409).json({
@@ -580,9 +587,7 @@ router.delete('/config/startingScreens/:screenId', async (req, res) => {
 
       log.info('config', 'Starting screen soft-deleted', {
         screenId,
-        remainingScreens: Object.keys(existing).filter(
-          (id) => !existing[id] || !existing[id].deleted,
-        ).length,
+        remainingScreens: Object.keys(existing).filter((id) => !existing[id]?.deleted).length,
         admin: req.auth.uniqueId,
       });
 
@@ -629,8 +634,8 @@ router.get('/config/:key', async (req, res) => {
       }
       return res.status(404).json({ error: 'Config not found' });
     }
-    // Remove the Firestore doc id field, return plain config object
-    const { id: _id, ...config } = { id: snap.id, ...snap.data() };
+    // Return plain config object
+    const config = snap.data();
     res.set('Cache-Control', 'public, max-age=300');
     return res.json(config);
   } catch (err) {

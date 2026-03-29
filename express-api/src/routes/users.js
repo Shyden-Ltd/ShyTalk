@@ -66,7 +66,7 @@ router.post('/users', async (req, res) => {
       return res.status(400).json({ error: 'Date of birth is required' });
     }
     const dob = new Date(dateOfBirth);
-    if (isNaN(dob.getTime())) {
+    if (Number.isNaN(dob.getTime())) {
       return res.status(400).json({ error: 'Invalid date of birth format' });
     }
     const ageDiff = Date.now() - dob.getTime();
@@ -259,6 +259,80 @@ router.get('/users/:uniqueId', async (req, res) => {
   }
 });
 
+// ─── Profile update validation ─────────────────────────────────
+
+const PROFILE_STRING_FIELDS = [
+  'displayName',
+  'description',
+  'nationality',
+  'profilePhotoUrl',
+  'coverPhotoUrl',
+  'pmPrivacy',
+  'currentRoomId',
+  'lastRoomName',
+  'language',
+];
+const PROFILE_MAX_LENGTHS = {
+  displayName: 20,
+  description: 200,
+  nationality: 3,
+  language: 10,
+  lastRoomName: 50,
+};
+const PROFILE_BOOL_FIELDS = [
+  'pmNotificationsEnabled',
+  'pmSoundEnabled',
+  'pmShowTimestamps',
+  'pmShowDateSeparators',
+  'pmNotificationPreview',
+  'hideFollowing',
+  'hideOnlineStatus',
+  'hideAge',
+  'selfDestructAlertEnabled',
+  'dndEnabled',
+];
+const PROFILE_INT_FIELDS = [
+  'dndStartHour',
+  'dndStartMinute',
+  'dndEndHour',
+  'dndEndMinute',
+  'minGiftAnimationValue',
+  'acceptedLegalVersion',
+];
+
+/** Validate profile update field types and constraints. Returns error string or null. */
+function validateProfileUpdates(updates) {
+  for (const key of PROFILE_STRING_FIELDS) {
+    if (key in updates && updates[key] !== null && typeof updates[key] !== 'string') {
+      return `${key} must be a string`;
+    }
+    if (
+      key in updates &&
+      typeof updates[key] === 'string' &&
+      PROFILE_MAX_LENGTHS[key] &&
+      updates[key].length > PROFILE_MAX_LENGTHS[key]
+    ) {
+      return `${key} exceeds max length of ${PROFILE_MAX_LENGTHS[key]}`;
+    }
+  }
+  for (const key of PROFILE_BOOL_FIELDS) {
+    if (key in updates && typeof updates[key] !== 'boolean') return `${key} must be a boolean`;
+  }
+  for (const key of PROFILE_INT_FIELDS) {
+    if (key in updates && (typeof updates[key] !== 'number' || !Number.isInteger(updates[key])))
+      return `${key} must be an integer`;
+  }
+  for (const key of ['dndStartHour', 'dndEndHour']) {
+    if (key in updates && (updates[key] < 0 || updates[key] > 23))
+      return `${key} must be between 0 and 23`;
+  }
+  for (const key of ['dndStartMinute', 'dndEndMinute']) {
+    if (key in updates && (updates[key] < 0 || updates[key] > 59))
+      return `${key} must be between 0 and 59`;
+  }
+  return null;
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // PATCH /api/users/:uniqueId — Update user profile
 // ═══════════════════════════════════════════════════════════════════
@@ -308,77 +382,8 @@ router.patch('/users/:uniqueId', async (req, res) => {
     }
 
     // Validate field value types and lengths
-    const stringFields = [
-      'displayName',
-      'description',
-      'nationality',
-      'profilePhotoUrl',
-      'coverPhotoUrl',
-      'pmPrivacy',
-      'currentRoomId',
-      'lastRoomName',
-      'language',
-    ];
-    const maxLengths = {
-      displayName: 20,
-      description: 200,
-      nationality: 3,
-      language: 10,
-      lastRoomName: 50,
-    };
-    for (const key of stringFields) {
-      if (key in updates && updates[key] !== null && typeof updates[key] !== 'string') {
-        return res.status(400).json({ error: `${key} must be a string` });
-      }
-      if (
-        key in updates &&
-        typeof updates[key] === 'string' &&
-        maxLengths[key] &&
-        updates[key].length > maxLengths[key]
-      ) {
-        return res.status(400).json({ error: `${key} exceeds max length of ${maxLengths[key]}` });
-      }
-    }
-    const boolFields = [
-      'pmNotificationsEnabled',
-      'pmSoundEnabled',
-      'pmShowTimestamps',
-      'pmShowDateSeparators',
-      'pmNotificationPreview',
-      'hideFollowing',
-      'hideOnlineStatus',
-      'hideAge',
-      'selfDestructAlertEnabled',
-      'dndEnabled',
-    ];
-    for (const key of boolFields) {
-      if (key in updates && typeof updates[key] !== 'boolean') {
-        return res.status(400).json({ error: `${key} must be a boolean` });
-      }
-    }
-    const intFields = [
-      'dndStartHour',
-      'dndStartMinute',
-      'dndEndHour',
-      'dndEndMinute',
-      'minGiftAnimationValue',
-      'acceptedLegalVersion',
-    ];
-    for (const key of intFields) {
-      if (key in updates && (typeof updates[key] !== 'number' || !Number.isInteger(updates[key]))) {
-        return res.status(400).json({ error: `${key} must be an integer` });
-      }
-    }
-    for (const key of ['dndStartHour', 'dndEndHour']) {
-      if (key in updates && (updates[key] < 0 || updates[key] > 23)) {
-        return res.status(400).json({ error: `${key} must be between 0 and 23` });
-      }
-    }
-    for (const key of ['dndStartMinute', 'dndEndMinute']) {
-      if (key in updates && (updates[key] < 0 || updates[key] > 59)) {
-        return res.status(400).json({ error: `${key} must be between 0 and 59` });
-      }
-    }
+    const validationError = validateProfileUpdates(updates);
+    if (validationError) return res.status(400).json({ error: validationError });
 
     // GDPR consent audit trail — store acceptance timestamp
     if (updates.acceptedLegalVersion !== undefined) {
@@ -430,39 +435,33 @@ router.post('/users/:uniqueId/link-provider', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     // Check if identity is already claimed
-    if (existingIdentity) {
-      if (existingIdentity.uniqueId !== uniqueId) {
-        return res
-          .status(409)
-          .json({ error: 'This identity is already linked to another account' });
-      }
+    if (existingIdentity && existingIdentity.uniqueId !== uniqueId) {
+      return res.status(409).json({ error: 'This identity is already linked to another account' });
+    }
+
+    if (existingIdentity && existingIdentity.unlinked) {
       // Re-linking own deactivated identity
-      if (existingIdentity.unlinked) {
-        const timestamp = now();
+      const timestamp = now();
+      await db
+        .doc(`identityMap/${identityDocId}`)
+        .update({ unlinked: false, unlinkedAt: null, linkedAt: timestamp });
 
-        // Re-activate identity map entry
-        await db.doc(`identityMap/${identityDocId}`).update({
-          unlinked: false,
-          unlinkedAt: null,
-          linkedAt: timestamp,
-        });
+      const providers = (user.providers || []).map((p) =>
+        p.type === provider && p.identifier === identifier
+          ? { ...p, active: true, linkedAt: timestamp, unlinkedAt: undefined }
+          : p,
+      );
+      await db.doc(`users/${uniqueId}`).update({ providers });
 
-        // Update providers array in user doc
-        const providers = (user.providers || []).map((p) =>
-          p.type === provider && p.identifier === identifier
-            ? { ...p, active: true, linkedAt: timestamp, unlinkedAt: undefined }
-            : p,
-        );
+      log.info('users', 'Provider re-linked', {
+        uniqueId,
+        provider,
+        identifier: identifier.includes('@') ? `***@${identifier.split('@')[1]}` : '***',
+      });
+      return res.json({ success: true, relinked: true });
+    }
 
-        await db.doc(`users/${uniqueId}`).update({ providers });
-
-        log.info('users', 'Provider re-linked', {
-          uniqueId,
-          provider,
-          identifier: identifier.includes('@') ? `***@${identifier.split('@')[1]}` : '***',
-        });
-        return res.json({ success: true, relinked: true });
-      }
+    if (existingIdentity) {
       // Already active — no-op
       return res.json({ success: true, alreadyLinked: true });
     }
@@ -825,6 +824,31 @@ router.post('/users/:uniqueId/record-visit', async (req, res) => {
   }
 });
 
+/** Send email and push notification for scheduled account deletion. */
+async function sendDeletionNotifications(user, executeAt) {
+  const deleteDate = new Date(executeAt).toISOString().split('T')[0];
+  if (user.email) {
+    try {
+      const template = buildDeletionScheduledEmail(deleteDate);
+      await sendEmail(user.email, template.subject, template.html);
+    } catch (emailErr) {
+      log.error('users', 'Failed to send deletion email', { error: emailErr.message });
+    }
+  }
+  if (user.fcmTokens && user.fcmTokens.length > 0) {
+    try {
+      await sendFcmToTokens(user.fcmTokens, {
+        notification: {
+          title: 'Account Deletion Scheduled',
+          body: `Your account will be deleted on ${deleteDate}. Sign in to cancel.`,
+        },
+      });
+    } catch (fcmErr) {
+      log.error('users', 'Failed to send deletion push', { error: fcmErr.message });
+    }
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // POST /api/users/:uniqueId/delete — Schedule account deletion
 // ═══════════════════════════════════════════════════════════════════
@@ -886,31 +910,8 @@ router.post('/users/:uniqueId/delete', async (req, res) => {
       log.error('users', 'Failed to revoke refresh tokens', { error: revokeErr.message });
     }
 
-    // Send email notification
-    if (user.email) {
-      try {
-        const deleteDate = new Date(executeAt).toISOString().split('T')[0];
-        const template = buildDeletionScheduledEmail(deleteDate);
-        await sendEmail(user.email, template.subject, template.html);
-      } catch (emailErr) {
-        log.error('users', 'Failed to send deletion email', { error: emailErr.message });
-      }
-    }
-
-    // Send push notification
-    if (user.fcmTokens && user.fcmTokens.length > 0) {
-      try {
-        const deleteDate = new Date(executeAt).toISOString().split('T')[0];
-        await sendFcmToTokens(user.fcmTokens, {
-          notification: {
-            title: 'Account Deletion Scheduled',
-            body: `Your account will be deleted on ${deleteDate}. Sign in to cancel.`,
-          },
-        });
-      } catch (fcmErr) {
-        log.error('users', 'Failed to send deletion push', { error: fcmErr.message });
-      }
-    }
+    // Send deletion notifications (best-effort)
+    await sendDeletionNotifications(user, executeAt);
 
     // Audit log
     await db.doc(`adminAuditLog/${generateId()}`).set({

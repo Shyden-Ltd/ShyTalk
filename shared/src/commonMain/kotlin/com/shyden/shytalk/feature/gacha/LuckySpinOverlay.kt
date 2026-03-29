@@ -82,6 +82,7 @@ private enum class SpinPhase {
     SHOW_SUMMARY,
 }
 
+@Suppress("kotlin:S107", "kotlin:S3776", "kotlin:S6615")
 @Composable
 fun LuckySpinOverlay(
     gachaState: GachaUiState,
@@ -110,7 +111,6 @@ fun LuckySpinOverlay(
     var confettiCount by remember { mutableIntStateOf(60) }
     var showFlash by remember { mutableStateOf(false) }
     var flashColor by remember { mutableStateOf(Color.White) }
-    var spinProgress by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     val spinTiers = remember(gachaState.pullCosts) { buildSpinTiers(gachaState.pullCosts) }
     var activeTier by remember { mutableStateOf(spinTiers[0]) }
     var skipAnimation by remember { mutableStateOf(false) }
@@ -170,7 +170,6 @@ fun LuckySpinOverlay(
         wonSegments = emptySet()
         lastWin = null
         showSummary = false
-        spinProgress = null
         phase = SpinPhase.IDLE
     }
 
@@ -312,7 +311,6 @@ fun LuckySpinOverlay(
 
         if (is100x) {
             // Bulk sweep animation (~2s)
-            spinProgress = results.size to results.size
             val totalSteps = 60
             val intervalMs = 2000L / totalSteps
             val sweepPhase = (totalSteps * 0.65f).toInt()
@@ -368,7 +366,6 @@ fun LuckySpinOverlay(
             // 10x: per-result quick chase
             val newWon = mutableSetOf<String>()
             for (i in results.indices) {
-                spinProgress = (i + 1) to results.size
                 val result = results[i]
                 val pos = resolveWinPosition(result.giftId, outerGifts, innerGifts) ?: continue
 
@@ -415,7 +412,6 @@ fun LuckySpinOverlay(
             onSkipMultiSpin()
         }
 
-        spinProgress = null
         val bestCoinValue = allWins.maxByOrNull { it.coinValue }?.coinValue ?: 0
         GachaSoundPlayer.playWinReveal(bestCoinValue)
         if (bestCoinValue >= 500) {
@@ -940,6 +936,7 @@ private fun InlineCoinShop(
     }
 }
 
+@Suppress("kotlin:S3776")
 @Composable
 private fun InlineSpinHistory(
     transactions: List<Transaction>,

@@ -71,6 +71,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
+@Suppress("kotlin:S3776")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GroupSetupScreen(

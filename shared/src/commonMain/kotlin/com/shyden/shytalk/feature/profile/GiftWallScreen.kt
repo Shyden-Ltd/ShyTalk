@@ -83,6 +83,7 @@ fun GiftWallScreen(
  * Reusable gift wall content that can be embedded in ProfileScreen tabs
  * or used standalone in GiftWallScreen.
  */
+@Suppress("kotlin:S3776")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GiftWallContent(
@@ -176,6 +177,7 @@ fun GiftWallContent(
     }
 }
 
+@Suppress("kotlin:S3776")
 @Composable
 private fun GiftWallItem(
     gift: Gift,

@@ -75,7 +75,7 @@ class ConversationListViewModel(
             when (val result = userRepository.getAliases(currentUserId)) {
                 is Resource.Success -> _uiState.update { it.copy(aliases = result.data) }
                 is Resource.Error -> logW(TAG, "Failed to load aliases: ${result.message}")
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -133,7 +133,7 @@ class ConversationListViewModel(
                 is Resource.Error -> {
                     logW(TAG, "Failed to batch-fetch users: ${result.message}")
                 }
-                else -> {}
+                else -> Unit
             }
         }
 
@@ -147,6 +147,7 @@ class ConversationListViewModel(
         emitSortedConversations(conversationsWithDetails)
     }
 
+    @Suppress("kotlin:S3776")
     private fun buildConversationList(
         conversations: List<Conversation>,
         blockedByMe: Set<String>,

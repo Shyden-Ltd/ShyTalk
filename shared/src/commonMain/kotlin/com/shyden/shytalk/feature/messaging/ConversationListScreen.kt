@@ -49,6 +49,7 @@ import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
+@Suppress("kotlin:S3776", "kotlin:S6615")
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ConversationListScreen(

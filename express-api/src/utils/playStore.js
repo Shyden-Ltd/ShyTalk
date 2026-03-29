@@ -13,7 +13,26 @@ const { GoogleAuth } = require('google-auth-library');
 const log = require('./log');
 
 const SCOPE = 'https://www.googleapis.com/auth/androidpublisher';
-const BASE_URL = 'https://androidpublisher.googleapis.com/androidpublisher/v3/applications';
+const BASE = 'https://androidpublisher.googleapis.com';
+const API_PREFIX = '/androidpublisher/v3/applications';
+
+/** Validate and encode a URL path segment to prevent path traversal. */
+function safePathSegment(value, name) {
+  if (!value || typeof value !== 'string') {
+    throw new Error(`${name} is required`);
+  }
+  if (value.includes('/') || value.includes('\\') || value.includes('..')) {
+    throw new Error(`${name} contains invalid characters`);
+  }
+  return encodeURIComponent(value);
+}
+
+/** Build a Google Play API URL from pre-validated path segments. */
+function buildApiUrl(segments) {
+  const path = [API_PREFIX, ...segments].join('/');
+  const url = new URL(path, BASE);
+  return url.href;
+}
 
 let authClient = null;
 
@@ -37,7 +56,10 @@ async function getAccessToken() {
  */
 async function verifyProductPurchase(packageName, productId, token) {
   const accessToken = await getAccessToken();
-  const url = `${BASE_URL}/${packageName}/purchases/products/${productId}/tokens/${token}`;
+  const safePkg = safePathSegment(packageName, 'packageName');
+  const safeProd = safePathSegment(productId, 'productId');
+  const safeToken = safePathSegment(token, 'token');
+  const url = buildApiUrl([safePkg, 'purchases', 'products', safeProd, 'tokens', safeToken]);
 
   const resp = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -85,7 +107,9 @@ async function verifyProductPurchase(packageName, productId, token) {
  */
 async function verifySubscription(packageName, subscriptionId, token) {
   const accessToken = await getAccessToken();
-  const url = `${BASE_URL}/${packageName}/purchases/subscriptionsv2/tokens/${token}`;
+  const safePkg = safePathSegment(packageName, 'packageName');
+  const safeToken = safePathSegment(token, 'token');
+  const url = buildApiUrl([safePkg, 'purchases', 'subscriptionsv2', 'tokens', safeToken]);
 
   const resp = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },

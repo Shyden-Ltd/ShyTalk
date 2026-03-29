@@ -55,7 +55,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -89,6 +88,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import kotlin.time.Instant
 
+@Suppress("kotlin:S107", "kotlin:S3776", "kotlin:S6615")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrivateChatScreen(
@@ -106,7 +106,6 @@ fun PrivateChatScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val timeStrings = rememberRelativeTimeStrings()
 
@@ -593,7 +592,7 @@ fun PrivateChatScreen(
                                 isSent = isSent,
                                 isRead = isRead,
                                 showTimestamp = showTimestamps,
-                                otherUserId = otherUserId,
+                                _otherUserId = otherUserId,
                                 currentUserId = uiState.currentUserId,
                                 onEdit = { viewModel.startEditing(message) },
                                 onReply = { viewModel.startReply(message) },
@@ -891,7 +890,7 @@ fun PrivateChatScreen(
     }
 
     // Edit history dialog
-    showEditHistory?.let { (messageId, currentText) ->
+    showEditHistory?.let { (_, currentText) ->
         EditHistoryDialog(
             edits = editHistoryData,
             currentText = currentText,
@@ -953,7 +952,7 @@ fun PrivateChatScreen(
             onUpdateModNotifyMode = { viewModel.updateModNotifyMode(it) },
             onTransferOwnership = { viewModel.transferOwnership(it) },
             onUnmuteMember = { viewModel.unmuteGroupMember(it) },
-            onAddParticipant = { viewModel.addGroupParticipant(it) },
+            _onAddParticipant = { viewModel.addGroupParticipant(it) },
         )
     }
 }

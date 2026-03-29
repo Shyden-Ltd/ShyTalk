@@ -42,6 +42,7 @@ import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 
+@Suppress("kotlin:S3776")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SuperShyBottomSheet(

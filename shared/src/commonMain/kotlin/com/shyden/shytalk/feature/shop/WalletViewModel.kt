@@ -55,7 +55,7 @@ class WalletViewModel(
             when (val result = economyRepository.getCoinPackages()) {
                 is Resource.Success -> _uiState.update { it.copy(coinPackages = result.data) }
                 is Resource.Error -> _uiState.update { it.copy(error = UiText.plain(result.message)) }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
 
             // Load user balance
@@ -80,7 +80,7 @@ class WalletViewModel(
                 }
             }
             is Resource.Error -> _uiState.update { it.copy(isLoading = false, error = UiText.plain(result.message)) }
-            is Resource.Loading -> {}
+            is Resource.Loading -> Unit
         }
     }
 
@@ -105,7 +105,7 @@ class WalletViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(isPurchasing = false, error = UiText.plain(result.message)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -137,7 +137,7 @@ class WalletViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(isPurchasing = false, error = UiText.plain(result.message)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }
@@ -158,7 +158,7 @@ class WalletViewModel(
                 is Resource.Error -> {
                     _uiState.update { it.copy(isPurchasing = false, error = UiText.plain(result.message)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }

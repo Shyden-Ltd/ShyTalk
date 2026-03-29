@@ -195,7 +195,7 @@ class LockScreenViewModel(
                     _state.update { it.copy(isLoading = false) }
                 }
                 is BiometricResult.Error -> {
-                    _state.update { it.copy(isLoading = false, error = bioResult.message?.let { msg -> UiText.plain(msg) }) }
+                    _state.update { it.copy(isLoading = false, error = UiText.plain(bioResult.message)) }
                 }
             }
         }

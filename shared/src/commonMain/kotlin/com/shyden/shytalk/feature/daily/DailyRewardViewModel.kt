@@ -130,7 +130,7 @@ class DailyRewardViewModel(
                     logE(TAG, "Daily reward claim failed: ${result.message}")
                     _uiState.update { it.copy(isClaiming = false, error = result.message) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
         }
     }

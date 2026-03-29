@@ -212,11 +212,12 @@ private fun DrawScope.drawRareEffect(
                 )
             }
         }
-        else -> {} // Default rare effect (burst + orbiting particles) is enough
+        else -> Unit // Default rare effect (burst + orbiting particles) is enough
     }
 }
 
 // --- EPIC: full-screen effects ---
+@Suppress("kotlin:S3776")
 private fun DrawScope.drawEpicEffect(
     giftId: String,
     progress: Float,

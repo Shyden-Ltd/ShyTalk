@@ -1,5 +1,5 @@
 package com.shyden.shytalk.feature.splash
 
-interface BannerImagePreloader {
+fun interface BannerImagePreloader {
     suspend fun preload(url: String)
 }

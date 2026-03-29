@@ -69,7 +69,9 @@ router.get('/admin/backups', async (req, res) => {
 
     // Try to load manifest for each date
     const backups = [];
-    for (const date of Object.keys(dateMap).sort().reverse()) {
+    for (const date of Object.keys(dateMap)
+      .sort((a, b) => a.localeCompare(b))
+      .reverse()) {
       const entry = dateMap[date];
       try {
         const manifest = await readR2Json(`backups/full/${date}/manifest.json`);
@@ -192,6 +194,59 @@ router.get('/admin/backups/:date', async (req, res) => {
   }
 });
 
+/** Full or collection restore: wipe then write. */
+async function restoreFullCollection(collName, backupDocs) {
+  const existingSnap = await db.collection(collName).get();
+  const refs = existingSnap.docs.map((d) => d.ref);
+  for (let i = 0; i < refs.length; i += 500) {
+    const batch = db.batch();
+    refs.slice(i, i + 500).forEach((ref) => batch.delete(ref));
+    await batch.commit();
+  }
+  let count = 0;
+  for (const backupDoc of backupDocs) {
+    const { id, ...data } = backupDoc;
+    if (!id) continue;
+    await db.collection(collName).doc(id).set(data);
+    count++;
+  }
+  return count;
+}
+
+/** Missing-only restore: only write docs that don't exist. */
+async function restoreMissingOnly(collName, backupDocs) {
+  let count = 0;
+  for (const backupDoc of backupDocs) {
+    const { id, ...data } = backupDoc;
+    if (!id) continue;
+    const existing = await db.collection(collName).doc(id).get();
+    if (!existing.exists) {
+      await db.collection(collName).doc(id).set(data);
+      count++;
+    }
+  }
+  return count;
+}
+
+/** Restore a single collection from backup. Populates results object. */
+async function restoreCollection(date, collName, mode, results) {
+  const key = `backups/full/${date}/${collName}.json`;
+  const backupDocs = await readR2Json(key);
+
+  if (backupDocs === null) {
+    results[collName] = { status: 'skipped', reason: 'no backup file found' };
+    return null;
+  }
+
+  const restoredCount =
+    mode === 'full' || mode === 'collection'
+      ? await restoreFullCollection(collName, backupDocs)
+      : await restoreMissingOnly(collName, backupDocs);
+
+  results[collName] = { status: 'restored', restoredCount, totalInBackup: backupDocs.length };
+  return restoredCount;
+}
+
 // ── Restore from a backup ──
 router.post('/admin/backups/restore/:date', async (req, res) => {
   try {
@@ -230,51 +285,10 @@ router.post('/admin/backups/restore/:date', async (req, res) => {
     const results = {};
 
     for (const collName of collectionsToRestore) {
-      const key = `backups/full/${date}/${collName}.json`;
-      const backupDocs = await readR2Json(key);
-
-      if (backupDocs === null) {
-        results[collName] = { status: 'skipped', reason: 'no backup file found' };
-        continue;
+      const restoredCount = await restoreCollection(date, collName, mode, results);
+      if (restoredCount !== null) {
+        results[collName].restoredCount = restoredCount;
       }
-
-      let restoredCount = 0;
-
-      if (mode === 'full' || mode === 'collection') {
-        // Full restore: delete existing docs in batches of 500, then write from backup
-        const existingSnap = await db.collection(collName).get();
-        const refs = existingSnap.docs.map((d) => d.ref);
-        for (let i = 0; i < refs.length; i += 500) {
-          const batch = db.batch();
-          refs.slice(i, i + 500).forEach((ref) => batch.delete(ref));
-          await batch.commit();
-        }
-
-        // Write backup docs
-        for (const backupDoc of backupDocs) {
-          const { id, ...data } = backupDoc;
-          if (!id) continue;
-          await db.collection(collName).doc(id).set(data);
-          restoredCount++;
-        }
-      } else {
-        // missing-only: only restore docs that don't exist currently
-        for (const backupDoc of backupDocs) {
-          const { id, ...data } = backupDoc;
-          if (!id) continue;
-          const existing = await db.collection(collName).doc(id).get();
-          if (!existing.exists) {
-            await db.collection(collName).doc(id).set(data);
-            restoredCount++;
-          }
-        }
-      }
-
-      results[collName] = {
-        status: 'restored',
-        restoredCount,
-        totalInBackup: backupDocs.length,
-      };
     }
 
     res.json({
@@ -292,6 +306,32 @@ router.post('/admin/backups/restore/:date', async (req, res) => {
   }
 });
 
+/** Scan an R2 folder and restore missing photo URLs to user docs. */
+async function recoverPhotosFromFolder(folder, CDN_URL) {
+  const field = folder === 'profiles/' ? 'profilePhotoUrl' : 'coverPhotoUrl';
+  const userPhotos = {};
+
+  const objects = await listObjectsWithMeta(folder);
+  for (const obj of objects) {
+    const parts = obj.key.split('/');
+    if (parts.length < 3) continue;
+    const uid = parts[1];
+    if (!userPhotos[uid] || (obj.lastModified && obj.lastModified > userPhotos[uid].lastModified)) {
+      userPhotos[uid] = { key: obj.key, lastModified: obj.lastModified };
+    }
+  }
+
+  let recovered = 0;
+  for (const [uid, photo] of Object.entries(userPhotos)) {
+    const snap = await db.doc(`users/${uid}`).get();
+    if (!snap.exists) continue;
+    if (snap.data()[field]) continue;
+    await db.doc(`users/${uid}`).update({ [field]: `${CDN_URL}/${photo.key}` });
+    recovered++;
+  }
+  return recovered;
+}
+
 // ── Recover profile/cover photos from R2 ──
 router.post('/admin/backups/recover-photos', async (req, res) => {
   try {
@@ -300,40 +340,8 @@ router.post('/admin/backups/recover-photos', async (req, res) => {
     const CDN_URL = r2.CDN_URL;
     let recovered = 0;
 
-    // Scan R2 for profile photos and cover photos
     for (const folder of ['profiles/', 'covers/']) {
-      const field = folder === 'profiles/' ? 'profilePhotoUrl' : 'coverPhotoUrl';
-      const userPhotos = {}; // uid -> latest key
-
-      const objects = await listObjectsWithMeta(folder);
-      for (const obj of objects) {
-        // Keys are like: profiles/{uid}/{filename} or covers/{uid}/{filename}
-        const parts = obj.key.split('/');
-        if (parts.length >= 3) {
-          const uid = parts[1];
-          // Keep the most recently uploaded photo per user
-          if (
-            !userPhotos[uid] ||
-            (obj.lastModified && obj.lastModified > userPhotos[uid].lastModified)
-          ) {
-            userPhotos[uid] = { key: obj.key, lastModified: obj.lastModified };
-          }
-        }
-      }
-
-      // For each user with an R2 photo, check if their Firestore doc is missing the URL
-      for (const [uid, photo] of Object.entries(userPhotos)) {
-        const snap = await db.doc(`users/${uid}`).get();
-        if (!snap.exists) continue;
-        const user = snap.data();
-
-        const currentUrl = user[field];
-        if (!currentUrl) {
-          const photoUrl = `${CDN_URL}/${photo.key}`;
-          await db.doc(`users/${uid}`).update({ [field]: photoUrl });
-          recovered++;
-        }
-      }
+      recovered += await recoverPhotosFromFolder(folder, CDN_URL);
     }
 
     res.json({ message: `Recovered ${recovered} photo URLs from R2`, recovered });

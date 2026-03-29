@@ -28,6 +28,7 @@ import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 
+@Suppress("kotlin:S107")
 @Composable
 fun RoomNotificationOverlay(
     notification: RoomNotification?,

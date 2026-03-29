@@ -111,6 +111,7 @@ interface PrivateMessageRepository {
         query: String,
     ): Resource<List<PrivateMessage>>
 
+    @Suppress("kotlin:S107")
     suspend fun createGroupConversation(
         creatorId: String,
         participantIds: List<String>,
@@ -233,5 +234,6 @@ interface PrivateMessageRepository {
     // Counting
     suspend fun getOwnedGroupCount(userId: String): Resource<Int>
 
+    @Suppress("kotlin:S6318")
     suspend fun prefetchConversations() {}
 }

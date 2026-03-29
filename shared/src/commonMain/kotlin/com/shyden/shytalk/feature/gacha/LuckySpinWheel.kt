@@ -29,7 +29,6 @@ import kotlin.math.sin
 
 /** Neutral segment color for all gifts (rarity removed). */
 private val SegmentColor = Color(0xFF9E9E9E)
-private val SegmentAccentColor = Color(0xFF757575)
 
 enum class Ring { OUTER, INNER }
 
@@ -217,6 +216,7 @@ fun LuckySpinWheel(
     }
 }
 
+@Suppress("kotlin:S107", "kotlin:S3776")
 private fun DrawScope.drawRing(
     gifts: List<Gift>,
     segmentAngle: Float,
@@ -239,11 +239,8 @@ private fun DrawScope.drawRing(
         val isActive = isLit || isPrevWon
 
         val baseColor = SegmentColor
-        val accentColor = SegmentAccentColor
 
         val startAngleDeg = index * segmentAngle - 90f - segmentAngle / 2f
-        val startAngleRad = startAngleDeg * (PI.toFloat() / 180f)
-        val endAngleRad = (startAngleDeg + segmentAngle) * (PI.toFloat() / 180f)
         val midAngleRad = (startAngleDeg + segmentAngle / 2f) * (PI.toFloat() / 180f)
 
         // Draw filled arc segment

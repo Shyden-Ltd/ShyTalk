@@ -13,7 +13,7 @@
  */
 
 const router = require('express').Router();
-const crypto = require('crypto');
+const crypto = require('node:crypto');
 const bcrypt = require('bcrypt');
 const { db, auth } = require('../utils/firebase');
 const { sendEmail } = require('../utils/email');
@@ -49,6 +49,45 @@ function today() {
 // OTP Routes
 // ═══════════════════════════════════════════════════════════════════
 
+/** Check per-email OTP rate limit. Returns error response or null. */
+function checkOtpRateLimit(otpDoc, res) {
+  if (!otpDoc.exists) return null;
+  const data = otpDoc.data();
+  const windowElapsed = Date.now() - (data.firstRequestAt || 0) > OTP_RATE_WINDOW_MS;
+  if (!windowElapsed && (data.requestCount || 0) >= OTP_MAX_REQUESTS_PER_HOUR) {
+    return res.status(429).json({ error: 'Too many OTP requests. Try again later.' });
+  }
+  return null;
+}
+
+/** Check global daily email cap. Returns error response or null. */
+function checkDailyEmailCap(metricsDoc, res) {
+  if (!metricsDoc.exists) return null;
+  const metrics = metricsDoc.data();
+  if (metrics.date === today() && metrics.count >= DAILY_EMAIL_CAP) {
+    return res.status(429).json({
+      error: 'daily_limit',
+      message: 'Too many requests. Try again tomorrow or use Google/Apple sign-in.',
+    });
+  }
+  return null;
+}
+
+/** Compute rate limit fields for storing OTP. */
+function computeRateLimitFields(otpDoc) {
+  let requestCount = 1;
+  let firstRequestAt = Date.now();
+  if (otpDoc.exists) {
+    const data = otpDoc.data();
+    const windowElapsed = Date.now() - (data.firstRequestAt || 0) > OTP_RATE_WINDOW_MS;
+    if (!windowElapsed) {
+      requestCount = (data.requestCount || 0) + 1;
+      firstRequestAt = data.firstRequestAt;
+    }
+  }
+  return { requestCount, firstRequestAt };
+}
+
 // POST /api/auth/otp/send
 router.post('/auth/otp/send', sensitiveLimiter, async (req, res) => {
   try {
@@ -58,50 +97,21 @@ router.post('/auth/otp/send', sensitiveLimiter, async (req, res) => {
     }
 
     const emailLower = email.toLowerCase().trim();
-
-    // Per-email rate limit (5 per hour, fixed window from firstRequestAt)
     const otpRef = db.doc(`otpCodes/${emailLower}`);
     const otpDoc = await otpRef.get();
 
-    if (otpDoc.exists) {
-      const data = otpDoc.data();
-      const windowElapsed = Date.now() - (data.firstRequestAt || 0) > OTP_RATE_WINDOW_MS;
+    const rateError = checkOtpRateLimit(otpDoc, res);
+    if (rateError) return rateError;
 
-      if (!windowElapsed && (data.requestCount || 0) >= OTP_MAX_REQUESTS_PER_HOUR) {
-        return res.status(429).json({ error: 'Too many OTP requests. Try again later.' });
-      }
-    }
-
-    // Global daily email cap
     const metricsRef = db.doc('emailMetrics/daily');
     const metricsDoc = await metricsRef.get();
-    if (metricsDoc.exists) {
-      const metrics = metricsDoc.data();
-      if (metrics.date === today() && metrics.count >= DAILY_EMAIL_CAP) {
-        return res.status(429).json({
-          error: 'daily_limit',
-          message: 'Too many requests. Try again tomorrow or use Google/Apple sign-in.',
-        });
-      }
-    }
+    const capError = checkDailyEmailCap(metricsDoc, res);
+    if (capError) return capError;
 
-    // Generate and hash OTP
     const code = generateOtp();
     const hashedCode = await bcrypt.hash(code, BCRYPT_ROUNDS);
+    const { requestCount, firstRequestAt } = computeRateLimitFields(otpDoc);
 
-    // Determine rate limit fields
-    let requestCount = 1;
-    let firstRequestAt = Date.now();
-    if (otpDoc.exists) {
-      const data = otpDoc.data();
-      const windowElapsed = Date.now() - (data.firstRequestAt || 0) > OTP_RATE_WINDOW_MS;
-      if (!windowElapsed) {
-        requestCount = (data.requestCount || 0) + 1;
-        firstRequestAt = data.firstRequestAt;
-      }
-    }
-
-    // Store OTP
     await otpRef.set({
       hashedCode,
       expiresAt: Date.now() + OTP_EXPIRY_MS,
@@ -110,17 +120,15 @@ router.post('/auth/otp/send', sensitiveLimiter, async (req, res) => {
       firstRequestAt,
     });
 
-    // Update daily metrics
     const metricsData = metricsDoc.exists ? metricsDoc.data() : null;
     const todayStr = today();
-    const currentCount = metricsData && metricsData.date === todayStr ? metricsData.count : 0;
+    const currentCount = metricsData?.date === todayStr ? metricsData.count : 0;
     await metricsRef.set({ count: currentCount + 1, date: todayStr });
 
     if (currentCount + 1 >= DAILY_EMAIL_WARN) {
       log.warn('auth', `Daily email count at ${currentCount + 1}/${DAILY_EMAIL_CAP}`);
     }
 
-    // Send email
     const template = buildOtpEmail(code);
     if (process.env.NODE_ENV === 'local') {
       log.info('auth', `[OTP-LOCAL] Code for ${emailLower}: ${code}`);
@@ -245,6 +253,38 @@ router.post('/auth/pin/setup', authMiddleware, async (req, res) => {
   }
 });
 
+/** Build a lockout response object. */
+function buildLockoutResponse(lockedUntil, lockoutCount) {
+  const response = {
+    error: 'Account locked',
+    locked: true,
+    lockedUntil,
+    attemptsRemaining: 0,
+  };
+  if (lockoutCount >= 2) response.requiresReauth = true;
+  return response;
+}
+
+/** Handle an invalid PIN attempt. Returns the response sent. */
+async function handleInvalidPin(userRef, user, currentAttempts, res) {
+  const newAttempts = currentAttempts + 1;
+  const updates = { pinAttempts: newAttempts };
+
+  if (newAttempts >= PIN_MAX_ATTEMPTS) {
+    const lockoutCount = (user.pinLockoutCount || 0) + 1;
+    updates.pinLockedUntil = Date.now() + PIN_LOCKOUT_MS;
+    updates.pinLockoutCount = lockoutCount;
+    await userRef.update(updates);
+    return res.status(423).json(buildLockoutResponse(updates.pinLockedUntil, lockoutCount));
+  }
+
+  await userRef.update(updates);
+  return res.status(401).json({
+    error: 'Wrong PIN',
+    attemptsRemaining: PIN_MAX_ATTEMPTS - newAttempts,
+  });
+}
+
 // POST /api/auth/pin/verify
 router.post('/auth/pin/verify', sensitiveLimiter, async (req, res) => {
   try {
@@ -255,79 +295,31 @@ router.post('/auth/pin/verify', sensitiveLimiter, async (req, res) => {
 
     const userRef = db.doc(`users/${uniqueId}`);
     const userDoc = await userRef.get();
-    if (!userDoc.exists) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
 
     const user = userDoc.data();
 
-    // Check lockout
+    // Check active lockout
     if (user.pinLockedUntil && Date.now() < user.pinLockedUntil) {
-      const response = {
-        error: 'Account locked',
-        locked: true,
-        lockedUntil: user.pinLockedUntil,
-        attemptsRemaining: 0,
-      };
-      if ((user.pinLockoutCount || 0) >= 2) {
-        response.requiresReauth = true;
-      }
-      return res.status(423).json(response);
+      return res
+        .status(423)
+        .json(buildLockoutResponse(user.pinLockedUntil, user.pinLockoutCount || 0));
     }
+
+    if (!user.pinHash) return res.status(404).json({ error: 'No PIN set' });
 
     // If lockout expired, reset attempts
-    let currentAttempts = user.pinAttempts || 0;
-    if (user.pinLockedUntil && Date.now() >= user.pinLockedUntil) {
-      currentAttempts = 0;
-    }
-
-    // Verify PIN
-    if (!user.pinHash) {
-      return res.status(404).json({ error: 'No PIN set' });
-    }
+    const currentAttempts =
+      user.pinLockedUntil && Date.now() >= user.pinLockedUntil ? 0 : user.pinAttempts || 0;
 
     const isValid = await bcrypt.compare(pin, user.pinHash);
-    if (!isValid) {
-      const newAttempts = currentAttempts + 1;
-      const updates = { pinAttempts: newAttempts };
-
-      if (newAttempts >= PIN_MAX_ATTEMPTS) {
-        const lockoutCount = (user.pinLockoutCount || 0) + 1;
-        updates.pinLockedUntil = Date.now() + PIN_LOCKOUT_MS;
-        updates.pinLockoutCount = lockoutCount;
-
-        const response = {
-          error: 'Account locked',
-          locked: true,
-          lockedUntil: updates.pinLockedUntil,
-          attemptsRemaining: 0,
-        };
-        if (lockoutCount >= 2) {
-          response.requiresReauth = true;
-        }
-
-        await userRef.update(updates);
-        return res.status(423).json(response);
-      }
-
-      await userRef.update(updates);
-      return res.status(401).json({
-        error: 'Wrong PIN',
-        attemptsRemaining: PIN_MAX_ATTEMPTS - newAttempts,
-      });
-    }
+    if (!isValid) return handleInvalidPin(userRef, user, currentAttempts, res);
 
     // PIN is valid — reset attempts
-    await userRef.update({
-      pinAttempts: 0,
-      pinLockedUntil: null,
-    });
+    await userRef.update({ pinAttempts: 0, pinLockedUntil: null });
 
-    // Get Firebase UID for custom token
     const firebaseUid = user.firebaseUid;
-    if (!firebaseUid) {
-      return res.status(500).json({ error: 'No Firebase UID for user' });
-    }
+    if (!firebaseUid) return res.status(500).json({ error: 'No Firebase UID for user' });
 
     const customToken = await auth.createCustomToken(firebaseUid);
     res.json({ customToken });

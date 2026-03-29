@@ -133,7 +133,7 @@ router.post('/cleanup/system-conversations', async (req, res) => {
       const otherUid = participantIds.find((id) => id !== 'SHYTALK_SYSTEM');
       if (!otherUid) continue;
 
-      const expectedId = [otherUid, 'SHYTALK_SYSTEM'].sort().join('_');
+      const expectedId = [otherUid, 'SHYTALK_SYSTEM'].sort((a, b) => a.localeCompare(b)).join('_');
 
       if (conv.id === expectedId) {
         seen.set(otherUid, conv.id);
@@ -546,6 +546,29 @@ router.post('/cleanup/backfill-user-type', async (req, res) => {
   }
 });
 
+/** Delete R2 media referenced in conversation messages. Returns count of deleted media. */
+async function deleteConversationMedia(convId, CDN_PREFIX) {
+  let mediaDeleted = 0;
+  const msgsSnap = await db.collection(`conversations/${convId}/messages`).get();
+  for (const doc of msgsSnap.docs) {
+    const msg = doc.data();
+    const urls = msg.imageUrls || [];
+    for (const url of urls) {
+      if (!url?.startsWith(CDN_PREFIX)) continue;
+      try {
+        await r2.deleteObject(url.slice(CDN_PREFIX.length));
+        mediaDeleted++;
+      } catch (err) {
+        log.warn('admin-cleanup', 'R2 delete failed', {
+          key: url.slice(CDN_PREFIX.length),
+          error: err.message,
+        });
+      }
+    }
+  }
+  return mediaDeleted;
+}
+
 // ── Delete all private messages (1-on-1 conversations) + R2 media ──
 router.post('/cleanup/all-private-messages', async (req, res) => {
   try {
@@ -570,24 +593,7 @@ router.post('/cleanup/all-private-messages', async (req, res) => {
     let mediaDeleted = 0;
 
     for (const conv of pms) {
-      const msgsSnap = await db.collection(`conversations/${conv.id}/messages`).get();
-      for (const doc of msgsSnap.docs) {
-        const msg = doc.data();
-        const urls = msg.imageUrls || [];
-        for (const url of urls) {
-          if (url && url.startsWith(CDN_PREFIX)) {
-            try {
-              await r2.deleteObject(url.slice(CDN_PREFIX.length));
-              mediaDeleted++;
-            } catch (err) {
-              log.warn('admin-cleanup', 'R2 delete failed', {
-                key: url.slice(CDN_PREFIX.length),
-                error: err.message,
-              });
-            }
-          }
-        }
-      }
+      mediaDeleted += await deleteConversationMedia(conv.id, CDN_PREFIX);
       await deleteConversation(conv.id);
     }
 
@@ -627,7 +633,7 @@ router.post('/cleanup/all-group-chats', async (req, res) => {
     for (const conv of allConvs) {
       // Delete group photo from R2
       const photoUrl = conv.groupPhotoUrl || conv.group_photo_url;
-      if (photoUrl && photoUrl.startsWith(CDN_PREFIX)) {
+      if (photoUrl?.startsWith(CDN_PREFIX)) {
         try {
           await r2.deleteObject(photoUrl.slice(CDN_PREFIX.length));
           mediaDeleted++;
@@ -638,25 +644,7 @@ router.post('/cleanup/all-group-chats', async (req, res) => {
           });
         }
       }
-      // Delete message images
-      const msgsSnap = await db.collection(`conversations/${conv.id}/messages`).get();
-      for (const doc of msgsSnap.docs) {
-        const msg = doc.data();
-        const urls = msg.imageUrls || [];
-        for (const url of urls) {
-          if (url && url.startsWith(CDN_PREFIX)) {
-            try {
-              await r2.deleteObject(url.slice(CDN_PREFIX.length));
-              mediaDeleted++;
-            } catch (err) {
-              log.warn('admin-cleanup', 'R2 delete failed', {
-                key: url.slice(CDN_PREFIX.length),
-                error: err.message,
-              });
-            }
-          }
-        }
-      }
+      mediaDeleted += await deleteConversationMedia(conv.id, CDN_PREFIX);
       await deleteConversation(conv.id);
     }
 
@@ -835,7 +823,7 @@ router.post('/cleanup/device-binding/:uniqueId', async (req, res) => {
     const rawId = req.params.uniqueId;
     const numId = Number(rawId);
     // Query both string and number variants — Firestore equality is type-strict
-    const uniqueId = isNaN(numId) ? rawId : numId;
+    const uniqueId = Number.isNaN(numId) ? rawId : numId;
     log.info('admin-cleanup', 'Deleting device binding for user', {
       adminId: req.auth.uniqueId,
       targetUniqueId: uniqueId,
@@ -910,6 +898,94 @@ router.get('/storage/audit', async (req, res) => {
   }
 });
 
+/** Extract an R2 key from a CDN URL. Returns null if URL doesn't match. */
+function extractR2Key(url, CDN_PREFIX) {
+  if (!url?.startsWith(CDN_PREFIX)) return null;
+  return url.slice(CDN_PREFIX.length);
+}
+
+/** Collect all referenced R2 keys from Firestore data. */
+async function collectReferencedR2Keys(CDN_PREFIX) {
+  const referencedKeys = new Set();
+  referencedKeys.add('system/shytalk_icon.webp');
+
+  // Users
+  const usersSnap = await db.collection('users').orderBy('uid').get();
+  const USER_URL_FIELDS = [
+    'profilePhotoUrl',
+    'coverPhotoUrl',
+    'preSuspensionProfilePhotoUrl',
+    'preSuspensionCoverPhotoUrl',
+    'profile_photo_url',
+    'cover_photo_url',
+    'pre_suspension_profile_photo_url',
+    'pre_suspension_cover_photo_url',
+  ];
+  for (const doc of usersSnap.docs) {
+    const userData = doc.data();
+    for (const field of USER_URL_FIELDS) {
+      const key = extractR2Key(userData[field], CDN_PREFIX);
+      if (key) referencedKeys.add(key);
+    }
+  }
+
+  // Conversations
+  const convsSnap = await db.collection('conversations').limit(2000).get();
+  const convs = convsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  for (const conv of convs) {
+    const key = extractR2Key(conv.groupPhotoUrl ?? conv.group_photo_url, CDN_PREFIX);
+    if (key) referencedKeys.add(key);
+  }
+
+  // Collect image keys from messages (conversations + rooms)
+  await collectImageMessageKeys(convs.slice(0, 30), 'conversations', CDN_PREFIX, referencedKeys);
+  const roomsSnap = await db.collection('rooms').limit(200).get();
+  const rooms = roomsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  await collectImageMessageKeys(rooms.slice(0, 30), 'rooms', CDN_PREFIX, referencedKeys);
+
+  // Reports + archive
+  const [reportsSnap, archiveSnap] = await Promise.all([
+    db.collection('reports').get(),
+    db.collection('reportsArchive').get(),
+  ]);
+  for (const doc of [...reportsSnap.docs, ...archiveSnap.docs]) {
+    const urls = doc.data().evidenceUrls ?? doc.data().evidence_urls;
+    if (!Array.isArray(urls)) continue;
+    for (const url of urls) {
+      const key = extractR2Key(url, CDN_PREFIX);
+      if (key) referencedKeys.add(key);
+    }
+  }
+
+  // Banners
+  const bannersSnap = await db.collection('banners').get();
+  for (const doc of bannersSnap.docs) {
+    const key = extractR2Key(doc.data().imageUrl ?? doc.data().image_url, CDN_PREFIX);
+    if (key) referencedKeys.add(key);
+  }
+
+  return referencedKeys;
+}
+
+/** Collect image message keys from a collection's messages subcollections. */
+async function collectImageMessageKeys(docs, collectionName, CDN_PREFIX, referencedKeys) {
+  for (const item of docs) {
+    const msgsSnap = await db
+      .collection(`${collectionName}/${item.id}/messages`)
+      .where('type', '==', 'IMAGE')
+      .limit(200)
+      .get();
+    for (const doc of msgsSnap.docs) {
+      const urls = doc.data().imageUrls ?? doc.data().image_urls;
+      if (!Array.isArray(urls)) continue;
+      for (const url of urls) {
+        const key = extractR2Key(url, CDN_PREFIX);
+        if (key) referencedKeys.add(key);
+      }
+    }
+  }
+}
+
 // ── Smart R2 orphan cleanup ──
 router.post('/cleanup/orphaned-storage', async (req, res) => {
   try {
@@ -918,108 +994,8 @@ router.post('/cleanup/orphaned-storage', async (req, res) => {
     log.info('admin-cleanup', 'Running orphaned storage cleanup', { adminId: req.auth.uniqueId });
 
     const CDN_PREFIX = r2.CDN_URL + '/';
-    const extractKey = (url) => {
-      if (!url || !url.startsWith(CDN_PREFIX)) return null;
-      return url.slice(CDN_PREFIX.length);
-    };
+    const referencedKeys = await collectReferencedR2Keys(CDN_PREFIX);
 
-    const referencedKeys = new Set();
-    referencedKeys.add('system/shytalk_icon.webp');
-
-    // ── Users ──
-    const usersSnap = await db.collection('users').orderBy('uid').get();
-    for (const doc of usersSnap.docs) {
-      const userData = doc.data();
-      for (const field of [
-        'profilePhotoUrl',
-        'coverPhotoUrl',
-        'preSuspensionProfilePhotoUrl',
-        'preSuspensionCoverPhotoUrl',
-        'profile_photo_url',
-        'cover_photo_url',
-        'pre_suspension_profile_photo_url',
-        'pre_suspension_cover_photo_url',
-      ]) {
-        const storageKey = extractKey(userData[field]);
-        if (storageKey) referencedKeys.add(storageKey);
-      }
-    }
-
-    // ── Conversations (group photo + message images) ──
-    const convsSnap = await db.collection('conversations').limit(2000).get();
-    const convs = convsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    for (const conv of convs) {
-      const storageKey = extractKey(conv.groupPhotoUrl ?? conv.group_photo_url);
-      if (storageKey) referencedKeys.add(storageKey);
-    }
-
-    // ── Conversation messages (IMAGE type) — cap at 30 convs ──
-    const convsToScan = convs.slice(0, 30);
-    for (const conv of convsToScan) {
-      const msgsSnap = await db
-        .collection(`conversations/${conv.id}/messages`)
-        .where('type', '==', 'IMAGE')
-        .limit(200)
-        .get();
-      for (const doc of msgsSnap.docs) {
-        const msg = doc.data();
-        const urls = msg.imageUrls ?? msg.image_urls;
-        if (Array.isArray(urls)) {
-          for (const url of urls) {
-            const imageKey = extractKey(url);
-            if (imageKey) referencedKeys.add(imageKey);
-          }
-        }
-      }
-    }
-
-    // ── Room messages (IMAGE type) — cap at 30 rooms ──
-    const roomsSnap = await db.collection('rooms').limit(200).get();
-    const rooms = roomsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    const roomsToScan = rooms.slice(0, 30);
-    for (const room of roomsToScan) {
-      const msgsSnap = await db
-        .collection(`rooms/${room.id}/messages`)
-        .where('type', '==', 'IMAGE')
-        .limit(200)
-        .get();
-      for (const doc of msgsSnap.docs) {
-        const msg = doc.data();
-        const urls = msg.imageUrls ?? msg.image_urls;
-        if (Array.isArray(urls)) {
-          for (const url of urls) {
-            const imageKey = extractKey(url);
-            if (imageKey) referencedKeys.add(imageKey);
-          }
-        }
-      }
-    }
-
-    // ── Reports + archive ──
-    const [reportsSnap, archiveSnap] = await Promise.all([
-      db.collection('reports').get(),
-      db.collection('reportsArchive').get(),
-    ]);
-    for (const doc of [...reportsSnap.docs, ...archiveSnap.docs]) {
-      const row = doc.data();
-      const urls = row.evidenceUrls ?? row.evidence_urls;
-      if (Array.isArray(urls)) {
-        for (const url of urls) {
-          const evidenceKey = extractKey(url);
-          if (evidenceKey) referencedKeys.add(evidenceKey);
-        }
-      }
-    }
-
-    // ── Banners ──
-    const bannersSnap = await db.collection('banners').get();
-    for (const doc of bannersSnap.docs) {
-      const bannerData = doc.data();
-      const storageKey = extractKey(bannerData.imageUrl ?? bannerData.image_url);
-      if (storageKey) referencedKeys.add(storageKey);
-    }
-
-    // ── List and delete orphans ──
     const folders = [
       'profiles/',
       'covers/',
@@ -1035,11 +1011,7 @@ router.post('/cleanup/orphaned-storage', async (req, res) => {
     for (const folder of folders) {
       const allKeys = await r2.listObjects(folder);
       const toDelete = allKeys.filter((k) => !referencedKeys.has(k));
-
-      if (toDelete.length > 0) {
-        await r2.deleteObjects(toDelete);
-      }
-
+      if (toDelete.length > 0) await r2.deleteObjects(toDelete);
       summary[folder.replace('/', '')] = { total: allKeys.length, deleted: toDelete.length };
       totalDeleted += toDelete.length;
     }

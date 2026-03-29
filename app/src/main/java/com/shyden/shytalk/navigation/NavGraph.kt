@@ -384,10 +384,10 @@ fun NavGraph(
                             voiceService.prewarmToken(room.voiceRoomName, userId)
                         }
                     },
-                    onNavigateToUserProfile = { userId ->
+                    _onNavigateToUserProfile = { userId ->
                         navController.navigate(Screen.UserProfile.createRoute(userId))
                     },
-                    onNavigateToFollowList = { userId, tab ->
+                    _onNavigateToFollowList = { userId, tab ->
                         navController.navigate(Screen.FollowList.createRoute(userId, tab))
                     },
                     onNavigateToSettings = {
@@ -845,7 +845,7 @@ fun NavGraph(
                             }
                         }
                     },
-                    onPurchaseSubscription = { productId ->
+                    _onPurchaseSubscription = { productId ->
                         walletScope.launch {
                             val products =
                                 billingService.queryProducts(

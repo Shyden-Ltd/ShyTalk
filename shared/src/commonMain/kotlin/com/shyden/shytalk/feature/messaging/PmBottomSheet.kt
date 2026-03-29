@@ -36,6 +36,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
+@Suppress("kotlin:S107")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PmBottomSheet(
@@ -174,6 +175,7 @@ private fun PmSheetListView(
     }
 }
 
+@Suppress("kotlin:S107")
 @Composable
 private fun PmSheetChatView(
     otherUserId: String,
@@ -214,6 +216,7 @@ private fun PmSheetChatView(
     }
 }
 
+@Suppress("kotlin:S107")
 @Composable
 private fun PmSheetGroupChatView(
     conversationId: String,

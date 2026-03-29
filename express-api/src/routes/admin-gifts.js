@@ -34,7 +34,7 @@ router.post('/gifts', async (req, res) => {
       expiresAfterDays: body.expiresAfterDays ?? body.expires_after_days ?? null,
       showInStore: body.showInStore !== false && body.show_in_store !== false,
       showOnWheel: body.showOnWheel !== false && body.show_on_wheel !== false,
-      weight: body.weight ?? 1.0,
+      weight: body.weight ?? 1,
     };
 
     await Promise.all([

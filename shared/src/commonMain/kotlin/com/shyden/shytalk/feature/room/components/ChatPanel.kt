@@ -64,6 +64,7 @@ import com.shyden.shytalk.ui.theme.SpeakingGreen
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 
+@Suppress("kotlin:S107", "kotlin:S3776")
 @Composable
 fun ChatPanel(
     messages: List<Message>,
@@ -71,7 +72,7 @@ fun ChatPanel(
     currentRole: RoomRole,
     seats: Map<String, Seat>,
     userMap: Map<String, User>,
-    isOwnerOrHost: Boolean = false,
+    _isOwnerOrHost: Boolean = false,
     isVoiceUnavailable: Boolean = false,
     onToggleMic: (Int) -> Unit = {},
     onSendMessage: (String) -> Unit,

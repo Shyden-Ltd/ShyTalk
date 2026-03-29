@@ -129,7 +129,7 @@ class GachaViewModel(
         viewModelScope.launch {
             when (val result = economyRepository.getCoinPackages()) {
                 is Resource.Success -> _uiState.update { it.copy(coinPackages = result.data) }
-                else -> {}
+                else -> Unit
             }
         }
     }
@@ -139,7 +139,7 @@ class GachaViewModel(
             if (delayMs > 0) kotlinx.coroutines.delay(delayMs)
             when (val result = economyRepository.getAllTransactions("GACHA_PULL")) {
                 is Resource.Success -> _uiState.update { it.copy(spinHistory = result.data) }
-                else -> {}
+                else -> Unit
             }
         }
     }
@@ -224,7 +224,7 @@ class GachaViewModel(
                     logE(TAG, "Gacha pull failed: ${result.message}")
                     _uiState.update { it.copy(isPulling = false, error = UiText.plain(result.message)) }
                 }
-                is Resource.Loading -> {}
+                is Resource.Loading -> Unit
             }
             loadSpinHistory()
         }

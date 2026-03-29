@@ -3,6 +3,7 @@ package com.shyden.shytalk.data.repository
 import com.shyden.shytalk.core.util.Resource
 
 interface ReportRepository {
+    @Suppress("kotlin:S107")
     suspend fun reportMessage(
         reporterId: String,
         reporterName: String,
@@ -17,6 +18,7 @@ interface ReportRepository {
         description: String,
     ): Resource<Unit>
 
+    @Suppress("kotlin:S107")
     suspend fun reportUser(
         reporterId: String,
         reporterName: String,

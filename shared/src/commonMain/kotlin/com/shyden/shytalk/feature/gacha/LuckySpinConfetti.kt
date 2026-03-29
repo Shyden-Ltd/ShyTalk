@@ -40,6 +40,7 @@ private val ConfettiColors =
         Color(0xFFFF6D00),
     )
 
+@Suppress("kotlin:S3776")
 @Composable
 fun LuckySpinConfetti(
     active: Boolean,
