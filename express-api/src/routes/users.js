@@ -909,7 +909,7 @@ router.post('/users/:uniqueId/delete', async (req, res) => {
     }
 
     // Audit log
-    db.doc(`adminAuditLog/${generateId()}`).set({
+    await db.doc(`adminAuditLog/${generateId()}`).set({
       action: 'ACCOUNT_DELETION_SCHEDULED',
       targetUserId: uniqueId,
       triggeredBy: 'self',
@@ -964,7 +964,7 @@ router.post('/users/:uniqueId/cancel-delete', async (req, res) => {
     });
 
     // Audit log
-    db.doc(`adminAuditLog/${generateId()}`).set({
+    await db.doc(`adminAuditLog/${generateId()}`).set({
       action: 'ACCOUNT_DELETION_CANCELLED',
       targetUserId: uniqueId,
       triggeredBy: 'self',

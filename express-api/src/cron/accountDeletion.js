@@ -17,7 +17,10 @@ const r2 = require('../utils/r2');
 const log = require('../utils/log');
 const crypto = require('crypto');
 
-const AUDIT_HASH_SECRET = process.env.AUDIT_HASH_SECRET || 'default-audit-secret';
+const AUDIT_HASH_SECRET = process.env.AUDIT_HASH_SECRET;
+if (!AUDIT_HASH_SECRET && process.env.NODE_ENV === 'production') {
+  log.error('cron', 'AUDIT_HASH_SECRET not set — audit log hashes will be insecure');
+}
 
 /**
  * Hard-delete all data for a single user account.
@@ -57,7 +60,7 @@ async function hardDeleteAccount(userDoc) {
     }
   }
 
-  // Step 3: Delete conversations
+  // Step 3: Cleanup conversations (delete 1-on-1, remove from groups)
   try {
     const convQuery = db
       .collection('conversations')
@@ -65,27 +68,54 @@ async function hardDeleteAccount(userDoc) {
     const convSnap = await convQuery.get();
     for (const convDoc of convSnap.docs) {
       const convId = convDoc.id;
-      const [messages, userSettings, mutes] = await Promise.all([
-        queryDocs(db.collection(`conversations/${convId}/messages`)),
-        queryDocs(db.collection(`conversations/${convId}/userSettings`)),
-        queryDocs(db.collection(`conversations/${convId}/mutes`)),
-      ]);
-      const allDocs = [
-        ...messages.map((m) => `conversations/${convId}/messages/${m.id}`),
-        ...userSettings.map((s) => `conversations/${convId}/userSettings/${s.id}`),
-        ...mutes.map((m) => `conversations/${convId}/mutes/${m.id}`),
-        `conversations/${convId}`,
-      ];
-      for (let i = 0; i < allDocs.length; i += 500) {
-        const batch = db.batch();
-        for (const path of allDocs.slice(i, i + 500)) {
-          batch.delete(db.doc(path));
+      const convData = convDoc.data();
+      const participantCount = (convData.participantIds || []).length;
+
+      if (participantCount <= 2) {
+        // 1-on-1: delete entire conversation + subcollections
+        const [messages, userSettings, mutes] = await Promise.all([
+          queryDocs(db.collection(`conversations/${convId}/messages`)),
+          queryDocs(db.collection(`conversations/${convId}/userSettings`)),
+          queryDocs(db.collection(`conversations/${convId}/mutes`)),
+        ]);
+        const allDocs = [
+          ...messages.map((m) => `conversations/${convId}/messages/${m.id}`),
+          ...userSettings.map((s) => `conversations/${convId}/userSettings/${s.id}`),
+          ...mutes.map((m) => `conversations/${convId}/mutes/${m.id}`),
+          `conversations/${convId}`,
+        ];
+        for (let i = 0; i < allDocs.length; i += 500) {
+          const batch = db.batch();
+          for (const path of allDocs.slice(i, i + 500)) {
+            batch.delete(db.doc(path));
+          }
+          await batch.commit();
         }
-        await batch.commit();
+      } else {
+        // Group chat: remove participant only, keep conversation
+        await db.doc(`conversations/${convId}`).update({
+          participantIds: FieldValue.arrayRemove(Number(uniqueId)),
+        });
+        // Delete this user's settings/mutes in the group
+        const [userSettings, mutes] = await Promise.all([
+          queryDocs(db.collection(`conversations/${convId}/userSettings`)),
+          queryDocs(db.collection(`conversations/${convId}/mutes`)),
+        ]);
+        const toDelete = [
+          ...userSettings
+            .filter((s) => s.userId === String(uniqueId))
+            .map((s) => `conversations/${convId}/userSettings/${s.id}`),
+          ...mutes
+            .filter((m) => m.id === String(uniqueId))
+            .map((m) => `conversations/${convId}/mutes/${m.id}`),
+        ];
+        for (const path of toDelete) {
+          await db.doc(path).delete();
+        }
       }
     }
   } catch (err) {
-    log.error('cron', 'Failed to delete conversations', { uniqueId, error: err.message });
+    log.error('cron', 'Failed to cleanup conversations', { uniqueId, error: err.message });
   }
 
   // Step 4: Cleanup rooms
@@ -176,7 +206,7 @@ async function hardDeleteAccount(userDoc) {
     log.error('cron', 'Failed to cleanup reports/appeals', { uniqueId, error: err.message });
   }
 
-  // Step 7: Auth-related (biometricKeys, otpCodes, emailMetrics)
+  // Step 7: Auth-related (biometricKeys, otpCodes, emailMetrics, purchaseReceipts)
   try {
     const bioSnap = await db
       .collection('biometricKeys')
@@ -185,6 +215,35 @@ async function hardDeleteAccount(userDoc) {
     for (const doc of bioSnap.docs) await db.doc(`biometricKeys/${doc.id}`).delete();
   } catch (err) {
     log.error('cron', 'Failed to cleanup biometric keys', { uniqueId, error: err.message });
+  }
+  // Delete OTP codes (keyed by email)
+  if (user.email) {
+    try {
+      const otpSnap = await db.doc(`otpCodes/${user.email.toLowerCase()}`).get();
+      if (otpSnap.exists) await db.doc(`otpCodes/${user.email.toLowerCase()}`).delete();
+      const metricsSnap = await db.doc(`emailMetrics/${user.email.toLowerCase()}`).get();
+      if (metricsSnap.exists) await db.doc(`emailMetrics/${user.email.toLowerCase()}`).delete();
+    } catch (err) {
+      log.error('cron', 'Failed to cleanup OTP/email data', { uniqueId, error: err.message });
+    }
+  }
+  // Mark purchase receipts for deferred deletion (retain 180 days for financial audit)
+  try {
+    const receiptSnap = await db
+      .collection('purchaseReceipts')
+      .where('userId', '==', uniqueId)
+      .get();
+    for (const doc of receiptSnap.docs) {
+      await db.doc(`purchaseReceipts/${doc.id}`).update({
+        markedForDeletion: true,
+        deletionScheduledAt: now() + 180 * 86400000,
+      });
+    }
+  } catch (err) {
+    log.error('cron', 'Failed to mark purchase receipts for deletion', {
+      uniqueId,
+      error: err.message,
+    });
   }
 
   // Step 8: User doc + subcollections
@@ -243,7 +302,7 @@ async function hardDeleteAccount(userDoc) {
 
   // Step 12: Audit log (zero PII)
   const hashedUniqueId = crypto
-    .createHmac('sha256', AUDIT_HASH_SECRET)
+    .createHmac('sha256', AUDIT_HASH_SECRET || 'dev-audit-secret')
     .update(String(uniqueId))
     .digest('hex');
 

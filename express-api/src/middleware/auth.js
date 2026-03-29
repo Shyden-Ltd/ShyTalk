@@ -101,6 +101,9 @@ async function authMiddleware(req, res, next) {
       const isSuspensionExempt =
         /^\/users\/[^/]+\/appeal$/.test(req.path) ||
         /^\/users\/[^/]+\/lift-suspension$/.test(req.path) ||
+        /^\/users\/[^/]+\/delete$/.test(req.path) ||
+        /^\/users\/[^/]+\/cancel-delete$/.test(req.path) ||
+        /^\/users\/[^/]+\/deletion-status$/.test(req.path) ||
         (req.method === 'POST' && req.path === '/appeals');
       if (!isSuspensionExempt) {
         return res.status(403).json({ error: 'Account suspended' });

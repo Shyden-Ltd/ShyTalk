@@ -1363,11 +1363,12 @@ router.post('/user/:uniqueId/delete', async (req, res) => {
     }
 
     // Audit log
-    db.doc(`adminAuditLog/${generateId()}`).set({
+    const sanitizedReason = (reason || '').substring(0, 500).trim();
+    await db.doc(`adminAuditLog/${generateId()}`).set({
       action: 'ACCOUNT_DELETION_SCHEDULED',
       adminId: req.auth.uid,
       targetUserId: uniqueId,
-      details: reason ? `Admin deletion: ${reason}` : 'Admin deletion',
+      details: sanitizedReason ? `Admin deletion: ${sanitizedReason}` : 'Admin deletion',
       createdAt: timestamp,
     });
 
@@ -1409,7 +1410,7 @@ router.post('/user/:uniqueId/cancel-delete', async (req, res) => {
     });
 
     // Audit log
-    db.doc(`adminAuditLog/${generateId()}`).set({
+    await db.doc(`adminAuditLog/${generateId()}`).set({
       action: 'ACCOUNT_DELETION_CANCELLED',
       adminId: req.auth.uid,
       targetUserId: uniqueId,

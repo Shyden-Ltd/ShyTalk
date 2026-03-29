@@ -70,6 +70,7 @@ app.use('/api/economy/trial-claim', sensitiveLimiter);
 app.use('/api/economy/trial-activate', sensitiveLimiter);
 app.use('/api/reports', sensitiveLimiter);
 app.use('/api/appeals', sensitiveLimiter);
+app.use('/api/users/:uniqueId/delete', sensitiveLimiter);
 
 // Mount route modules
 app.use('/api', require('./routes/config'));
