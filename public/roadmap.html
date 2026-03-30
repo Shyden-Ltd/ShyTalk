@@ -228,6 +228,7 @@
     font-size: 1.2rem;
   }
 </style>
+<script src="/js/language-selector.js" defer></script>
 </head>
 <body>
 
@@ -461,14 +462,34 @@ function renderRoadmap(data) {
 }
 
 // ── Load roadmap from JSON ──
+var roadmapData = null;
+
+function applyRoadmapLanguage() {
+  if (!roadmapData) return;
+  browserLang = (window.ShyTalkLanguage && window.ShyTalkLanguage.get()) || browserLang;
+  t = TRANSLATIONS[browserLang] || TRANSLATIONS.en;
+  renderRoadmap(roadmapData);
+  if (roadmapData.lastUpdated) {
+    document.getElementById('last-updated').textContent =
+      (t.lastUpdated || 'Roadmap last updated') + ': ' + roadmapData.lastUpdated;
+  }
+}
+
+// Called by language-selector.js when user changes language
+window.applyLanguage = function(lang) {
+  browserLang = lang;
+  t = TRANSLATIONS[lang] || TRANSLATIONS.en;
+  applyRoadmapLanguage();
+};
+
 fetch('roadmap-data.json')
   .then(function(res) { return res.json(); })
   .then(function(data) {
-    renderRoadmap(data);
-    if (data.lastUpdated) {
-      document.getElementById('last-updated').textContent =
-        (t.lastUpdated || 'Roadmap last updated') + ': ' + data.lastUpdated;
-    }
+    roadmapData = data;
+    // Use saved language preference
+    browserLang = (window.ShyTalkLanguage && window.ShyTalkLanguage.get()) || browserLang;
+    t = TRANSLATIONS[browserLang] || TRANSLATIONS.en;
+    applyRoadmapLanguage();
   })
   .catch(function() {
     document.getElementById('roadmap-container').innerHTML =
