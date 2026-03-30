@@ -154,6 +154,10 @@ function parseRoadmap(md) {
 }
 
 // ── Main ──
+if (!fs.existsSync(ROADMAP_PATH)) {
+  console.log(`Roadmap source not found at ${ROADMAP_PATH} — skipping generation`);
+  process.exit(0);
+}
 const md = fs.readFileSync(ROADMAP_PATH, 'utf-8');
 const parsed = parseRoadmap(md);
 
