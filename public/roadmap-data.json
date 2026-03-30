@@ -5,63 +5,263 @@
       "title": "Safety & Compliance",
       "status": "active",
       "features": [
-        { "name": "Account Deletion", "description": "Permanently delete your account and all associated data", "status": "done" },
-        { "name": "Data Export", "description": "Download a copy of all your personal data", "status": "next" },
-        { "name": "Age-Based Safety", "description": "Separate spaces for adults and minors", "status": "next" },
-        { "name": "Message Reporting", "description": "Report inappropriate messages from any room", "status": "next" },
-        { "name": "Gambling Self-Exclusion", "description": "Permanently opt out of gambling features", "status": "planned" }
+        {
+          "name": "Account deletion",
+          "description": "GDPR Art.17, Google Play & Apple requirement",
+          "status": "done"
+        },
+        {
+          "name": "Data export",
+          "description": "GDPR Art.20 data portability",
+          "status": "next"
+        },
+        {
+          "name": "Age-based segregation",
+          "description": "UK OSA, adults/minors must not interact",
+          "status": "planned"
+        },
+        {
+          "name": "Room message reporting",
+          "description": "UK OSA, report mechanism on every UGC screen",
+          "status": "planned"
+        },
+        {
+          "name": "Gambling self-exclusion",
+          "description": "responsible gambling regulation, irreversible opt-out",
+          "status": "planned"
+        },
+        {
+          "name": "Privacy policy rewrite",
+          "description": "GDPR, missing data controller, lawful basis, DPO, children's section",
+          "status": "planned"
+        }
       ]
     },
     {
       "title": "Platform & iOS",
       "status": "soon",
       "features": [
-        { "name": "iOS Launch", "description": "Full ShyTalk on iPhone and iPad", "status": "next" },
-        { "name": "Billing Upgrade", "description": "Smoother purchases with latest payment APIs", "status": "planned" }
+        {
+          "name": "iOS build fix",
+          "description": "cinterop errors block all iOS work",
+          "status": "planned"
+        },
+        {
+          "name": "iOS parity",
+          "description": "testers receiving builds with zero enforcement screens",
+          "status": "planned"
+        },
+        {
+          "name": "Billing v7→v8",
+          "description": "Google Play Billing major version, deprecation deadline",
+          "status": "planned"
+        }
       ]
     },
     {
-      "title": "Social & Status",
+      "title": "Revenue & Status",
       "status": "planned",
       "features": [
-        { "name": "Nobility Ranks", "description": "Earn ranks from gifting — unlock perks as you rise", "status": "planned" },
-        { "name": "Relationships", "description": "Friend, partner, and family tiers with exclusive perks", "status": "planned" },
-        { "name": "Decorations", "description": "Profile borders, speech bubbles, entrance effects", "status": "planned" },
-        { "name": "Posts & Stories", "description": "Social feed and disappearing stories", "status": "planned" },
-        { "name": "Leaderboards", "description": "Daily, weekly, and all-time rankings", "status": "planned" },
-        { "name": "User Search", "description": "Discover people with advanced filters", "status": "planned" }
+        {
+          "name": "Nobility system",
+          "description": "ranks from gift value sent, perks per rank",
+          "status": "planned"
+        },
+        {
+          "name": "Relationships",
+          "description": "paid tiers (friend→partner→family), perks, seat connections",
+          "status": "planned"
+        },
+        {
+          "name": "Decorations",
+          "description": "profile decorations, avatar borders, speech bubbles, entrance effects, room backgrounds",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "title": "Social & Discovery",
+      "status": "planned",
+      "features": [
+        {
+          "name": "Posts & Stories",
+          "description": "social feed + ephemeral stories",
+          "status": "planned"
+        },
+        {
+          "name": "User search",
+          "description": "discovery of met/unmet users, advanced filters behind SuperShy",
+          "status": "planned"
+        },
+        {
+          "name": "Leaderboards",
+          "description": "multiple categories, daily/weekly/monthly/all-time",
+          "status": "planned"
+        },
+        {
+          "name": "Hall of Fame",
+          "description": "weekly & monthly top-up leaderboards",
+          "status": "planned"
+        },
+        {
+          "name": "Room rankings",
+          "description": "rooms ranked by gift activity",
+          "status": "planned"
+        },
+        {
+          "name": "Gift wall overhaul",
+          "description": "leaderboard, history, categories, full customization",
+          "status": "planned"
+        }
       ]
     },
     {
       "title": "Quality of Life",
       "status": "planned",
       "features": [
-        { "name": "Auto-Translation", "description": "Real-time message translation", "status": "planned" },
-        { "name": "Pin Chats", "description": "Keep favourite conversations at the top", "status": "planned" },
-        { "name": "Room Filters", "description": "Filter by language, category, or activity", "status": "planned" },
-        { "name": "Gift Wishlist & Collections", "description": "Curate gifts and complete sets for rewards", "status": "planned" },
-        { "name": "Announcements", "description": "Room-wide and global messages", "status": "planned" }
+        {
+          "name": "Auto-translation",
+          "description": "real-time translation in chats, free tier + SuperShy full access",
+          "status": "planned"
+        },
+        {
+          "name": "Pin chats",
+          "description": "pin DMs/group chats to top of list",
+          "status": "planned"
+        },
+        {
+          "name": "Chat toggle",
+          "description": "room owners/hosts disable in-room text chat",
+          "status": "planned"
+        },
+        {
+          "name": "Room filters",
+          "description": "filter rooms by language, category, activity",
+          "status": "planned"
+        },
+        {
+          "name": "Gift wishlist",
+          "description": "users curate desired gifts",
+          "status": "planned"
+        },
+        {
+          "name": "Gift collections",
+          "description": "unlock special gift by completing a set",
+          "status": "planned"
+        },
+        {
+          "name": "Announcements",
+          "description": "room-wide & global messages, gated behind nobility rank",
+          "status": "planned"
+        },
+        {
+          "name": "Granular suspensions",
+          "description": "suspend specific features per user",
+          "status": "planned"
+        },
+        {
+          "name": "Report reliability score",
+          "description": "track report accuracy per user",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "title": "Website & Presence",
+      "status": "planned",
+      "features": [
+        {
+          "name": "Website About section",
+          "description": "service details, GitHub repo link, Allure test reports link, GitHub Issues for bug reporting with template + walkthrough",
+          "status": "planned"
+        },
+        {
+          "name": "Website support section",
+          "description": "FAQ + categorised support contact, matching in-app",
+          "status": "planned"
+        },
+        {
+          "name": "Website interactive demo",
+          "description": "screenshots + simulated video recordings of realistic users",
+          "status": "planned"
+        },
+        {
+          "name": "Website public roadmap",
+          "description": "show upcoming features so users can see what's planned. Keep it high-level (no internal details), update when phases complete",
+          "status": "planned"
+        }
       ]
     },
     {
       "title": "Entertainment",
       "status": "planned",
       "features": [
-        { "name": "Animated Stickers", "description": "Fun overlays on your avatar in rooms", "status": "planned" },
-        { "name": "PK Battles", "description": "Two rooms compete — winners earn bonus beans", "status": "planned" },
-        { "name": "Video & Screen Sharing", "description": "Camera and screen share in voice rooms", "status": "planned" },
-        { "name": "In-Room Games", "description": "Pool, ludo, and more without leaving the room", "status": "planned" },
-        { "name": "Karaoke & Singing", "description": "Sing with background music and audience scoring", "status": "planned" },
-        { "name": "MC Host Games", "description": "Hosts run interactive games with prizes", "status": "planned" }
+        {
+          "name": "Animated stickers",
+          "description": "temporary animated overlays on avatars in room seats",
+          "status": "planned"
+        },
+        {
+          "name": "PK battles",
+          "description": "two rooms compete via gifts, winners get beans bonus",
+          "status": "planned"
+        },
+        {
+          "name": "Video & screen sharing",
+          "description": "camera toggle + screen share in voice rooms",
+          "status": "planned"
+        },
+        {
+          "name": "In-room games",
+          "description": "pool/billiards, ludo playable within voice rooms",
+          "status": "planned"
+        },
+        {
+          "name": "Karaoke",
+          "description": "turn-taking singing, background music, audience scoring",
+          "status": "planned"
+        },
+        {
+          "name": "Singing competitions",
+          "description": "MC Singer role, special rooms, time-limited",
+          "status": "planned"
+        },
+        {
+          "name": "MC Host games",
+          "description": "MC Hosts design/run interactive games, participants win prizes",
+          "status": "planned"
+        },
+        {
+          "name": "Admin events",
+          "description": "one-time events with prizes/gifts for winners",
+          "status": "planned"
+        }
       ]
     },
     {
       "title": "Support & Feedback",
       "status": "planned",
       "features": [
-        { "name": "In-App Help Centre", "description": "FAQ and support contact inside the app", "status": "planned" },
-        { "name": "Feedback & Suggestions", "description": "Submit ideas and vote on what you want", "status": "planned" },
-        { "name": "Teaching Rooms", "description": "Dedicated rooms for language learning", "status": "planned" }
+        {
+          "name": "Help & Support",
+          "description": "FAQ + categorised support contact (in-app)",
+          "status": "planned"
+        },
+        {
+          "name": "Feedback system",
+          "description": "in-app feedback, complaints, appraisals",
+          "status": "planned"
+        },
+        {
+          "name": "Feature requests",
+          "description": "in-app suggestion/voting system",
+          "status": "planned"
+        },
+        {
+          "name": "Teaching rooms",
+          "description": "special room type for language teachers",
+          "status": "planned"
+        }
       ]
     }
   ]
