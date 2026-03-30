@@ -1,0 +1,51 @@
+#!/usr/bin/env sh
+
+# Skip SonarCloud for workflow-only changes
+CHANGED=$(git diff --name-only origin/main...HEAD 2>/dev/null)
+HAS_CODE=false
+echo "$CHANGED" | while IFS= read -r file; do
+  case "$file" in
+    app/*|shared/*|express-api/src/*|express-api/tests/*) HAS_CODE=true ;;
+  esac
+done
+
+if [ "$HAS_CODE" = "false" ]; then
+  echo "No code changes — skipping SonarCloud pre-push scan"
+  exit 0
+fi
+
+# Check for SONAR_TOKEN
+if [ -z "$SONAR_TOKEN" ]; then
+  echo "⚠ SONAR_TOKEN not set — skipping SonarCloud pre-push scan"
+  echo "  Set it with: export SONAR_TOKEN=your_token"
+  exit 0
+fi
+
+echo "Running SonarCloud pre-push scan..."
+
+# Express API tests with coverage
+echo "  → Express tests with coverage..."
+cd express-api && npx jest --coverage --coverageReporters=lcov --forceExit --silent 2>/dev/null
+cd ..
+
+# Kotlin JVM tests (for coverage reports)
+echo "  → Kotlin JVM tests..."
+./gradlew :shared:jvmTest --quiet 2>/dev/null
+
+# Run SonarCloud analysis with quality gate wait
+echo "  → SonarCloud analysis..."
+./gradlew sonar \
+  -Dsonar.token="$SONAR_TOKEN" \
+  -Dsonar.qualitygate.wait=true \
+  -x :app:sonar \
+  --quiet
+
+if [ $? -ne 0 ]; then
+  echo ""
+  echo "✗ SonarCloud quality gate FAILED — push blocked"
+  echo "  Fix the issues and try again."
+  echo "  Dashboard: https://sonarcloud.io/dashboard?id=ShydenMcM_ShyTalk"
+  exit 1
+fi
+
+echo "✓ SonarCloud quality gate passed"
