@@ -2654,7 +2654,7 @@
         {
           "name": "Website public roadmap",
           "description": "show upcoming features so users can see what's planned. Keep it high-level (no internal details), update when phases complete",
-          "status": "planned",
+          "status": "done",
           "i18n": {
             "ar": {
               "n": "خارطة الطريق العامة",
