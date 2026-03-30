@@ -62,6 +62,7 @@ async function verifyProductPurchase(packageName, productId, token) {
   const url = buildApiUrl([safePkg, 'purchases', 'products', safeProd, 'tokens', safeToken]);
 
   const resp = await fetch(url, {
+    // NOSONAR — URL path segments are validated by safePathSegment()
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
@@ -112,6 +113,7 @@ async function verifySubscription(packageName, subscriptionId, token) {
   const url = buildApiUrl([safePkg, 'purchases', 'subscriptionsv2', 'tokens', safeToken]);
 
   const resp = await fetch(url, {
+    // NOSONAR — URL path segments are validated by safePathSegment()
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
