@@ -127,6 +127,36 @@
     opacity: 0.5;
     cursor: default;
   }
+
+  .roadmap-cta {
+    display: inline-block;
+    margin-top: 2rem;
+    padding: 0.9rem 2.2rem;
+    background: linear-gradient(135deg, var(--primary), #9a82db);
+    color: #fff;
+    text-decoration: none;
+    border-radius: 999px;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 4px 20px rgba(103,80,164,0.4);
+  }
+  .roadmap-cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 28px rgba(103,80,164,0.6);
+  }
+  .roadmap-cta .sparkle {
+    margin-right: 0.4rem;
+    font-size: 1.1rem;
+  }
+  .roadmap-label {
+    display: block;
+    margin-top: 0.6rem;
+    font-size: 0.8rem;
+    color: var(--text2);
+    opacity: 0.7;
+  }
 </style>
 <script src="/js/logger.js"></script>
 </head>
@@ -135,6 +165,8 @@
     <div class="logo">Shy<span>Talk</span></div>
     <p class="tagline" data-i18n="tagline">Voice chat rooms, reimagined.</p>
     <div class="badge"><span class="dot"></span><span data-i18n="coming_soon">Coming Soon</span></div>
+    <a href="/roadmap.html" class="roadmap-cta" data-log="roadmap-link"><span class="sparkle" data-i18n="roadmap_sparkle">&#10024;</span><span data-i18n="roadmap_cta">See What's Coming</span></a>
+    <span class="roadmap-label" data-i18n="roadmap_label">Explore our public roadmap</span>
     <div class="links">
       <a href="https://play.google.com/store/apps/details?id=com.shyden.shytalk" rel="noopener noreferrer" data-log="google-play-link">Google Play</a>
       <span class="coming-soon-link" data-i18n="app_store" title="Coming soon to iOS">App Store (Coming Soon)</span>
@@ -149,9 +181,9 @@
 <script>
 (function() {
   var t = {
-    es: { tagline: "Salas de chat de voz, reinventadas.", coming_soon: "Pr\u00f3ximamente", app_store: "App Store (Pr\u00f3ximamente)", app_store_title: "Pr\u00f3ximamente en iOS" },
-    fr: { tagline: "Salons vocaux, r\u00e9invent\u00e9s.", coming_soon: "Bient\u00f4t disponible", app_store: "App Store (Bient\u00f4t)", app_store_title: "Bient\u00f4t sur iOS" },
-    de: { tagline: "Sprachchatr\u00e4ume, neu gedacht.", coming_soon: "Demnächst", app_store: "App Store (Demnächst)", app_store_title: "Bald für iOS" },
+    es: { tagline: "Salas de chat de voz, reinventadas.", coming_soon: "Pr\u00f3ximamente", app_store: "App Store (Pr\u00f3ximamente)", app_store_title: "Pr\u00f3ximamente en iOS", roadmap_cta: "Ver lo que viene", roadmap_label: "Explora nuestra hoja de ruta" },
+    fr: { tagline: "Salons vocaux, r\u00e9invent\u00e9s.", coming_soon: "Bient\u00f4t disponible", app_store: "App Store (Bient\u00f4t)", app_store_title: "Bient\u00f4t sur iOS", roadmap_cta: "Voir ce qui arrive", roadmap_label: "Explorez notre feuille de route" },
+    de: { tagline: "Sprachchatr\u00e4ume, neu gedacht.", coming_soon: "Demnächst", app_store: "App Store (Demnächst)", app_store_title: "Bald für iOS", roadmap_cta: "Entdecke was kommt", roadmap_label: "Unsere \u00f6ffentliche Roadmap" },
     pt: { tagline: "Salas de bate-papo por voz, reinventadas.", coming_soon: "Em breve", app_store: "App Store (Em breve)", app_store_title: "Em breve no iOS" },
     it: { tagline: "Chat vocali, reinventate.", coming_soon: "In arrivo", app_store: "App Store (In arrivo)", app_store_title: "Presto su iOS" },
     ja: { tagline: "\u30dc\u30a4\u30b9\u30c1\u30e3\u30c3\u30c8\u30eb\u30fc\u30e0\u3001\u65b0\u3057\u3044\u5f62\u3067\u3002", coming_soon: "\u8fd1\u65e5\u516c\u958b", app_store: "App Store (\u8fd1\u65e5\u516c\u958b)", app_store_title: "iOS\u7248\u8fd1\u65e5\u516c\u958b" },
