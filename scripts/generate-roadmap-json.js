@@ -169,7 +169,20 @@ const output = {
     })),
 };
 
-fs.writeFileSync(OUTPUT_PATH, JSON.stringify(output, null, 2) + '\n');
+const newJson = JSON.stringify(output, null, 2) + '\n';
+
+// Skip write if nothing changed (compare features, ignore lastUpdated)
+if (fs.existsSync(OUTPUT_PATH)) {
+  const existing = JSON.parse(fs.readFileSync(OUTPUT_PATH, 'utf-8'));
+  const existingWithoutDate = { ...existing, lastUpdated: '' };
+  const newWithoutDate = { ...output, lastUpdated: '' };
+  if (JSON.stringify(existingWithoutDate) === JSON.stringify(newWithoutDate)) {
+    console.log('Roadmap unchanged — skipping write');
+    process.exit(0);
+  }
+}
+
+fs.writeFileSync(OUTPUT_PATH, newJson);
 console.log(
   `Generated ${OUTPUT_PATH} — ${output.phases.length} phases, ${output.phases.reduce((sum, p) => sum + p.features.length, 0)} features`,
 );
