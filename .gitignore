@@ -71,9 +71,6 @@ allure-report/
 # Internal project docs (plans, specs)
 .project/
 
-# Husky git hooks (auto-generated on npm install)
-.husky/
-
 # Claude Code agents (auto-generated)
 .claude/agents/
 .superpowers/
