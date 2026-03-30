@@ -30,7 +30,7 @@ function safePathSegment(value, name) {
 /** Build a Google Play API URL from pre-validated path segments. */
 function buildApiUrl(segments) {
   const path = [API_PREFIX, ...segments].join('/');
-  const url = new URL(path, BASE);
+  const url = new URL(path, BASE); // NOSONAR — segments are validated by safePathSegment()
   return url.href;
 }
 

@@ -14,10 +14,9 @@ const logger = require('./loggerInstance');
 
 function logEntry(level, source, message, context) {
   try {
-    const result = logger.log({ level, source, message, context });
-    if (result && typeof result.catch === 'function') {
-      result.catch(() => {}); // Swallow async errors — never throw from logging
-    }
+    Promise.resolve(logger.log({ level, source, message, context })).catch(
+      () => {}, // Swallow async errors — never throw from logging
+    );
   } catch {
     // Intentionally swallowed — logging must never throw to avoid masking the caller's real error
   }

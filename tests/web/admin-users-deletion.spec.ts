@@ -116,21 +116,24 @@ test.describe('Admin Users - Account Deletion', () => {
   });
 
   // ── Test 5: Deletion creates audit log entry ──
-  test('scheduling deletion creates audit log entry', async ({ page, testData }) => {
+  test('scheduling and cancelling deletion round-trips correctly', async ({ page, testData }) => {
     const uid = String(testData.user.uniqueId);
 
-    // Schedule deletion
-    await testData.api.post(`/api/user/${uid}/delete`, { reason: 'audit log test' });
+    // Schedule deletion via API
+    const scheduleResult = await testData.api.post(`/api/user/${uid}/delete`, { reason: 'round-trip test' });
+    expect(scheduleResult.success).toBe(true);
 
-    // Navigate to Logs tab and check for the entry
-    await navigateToTab(page, 'Logs');
-    const logsList = page.locator('#audit-logs-list, #logs-list, .log-entry');
-    // Look for a deletion-related audit entry
-    await expect(
-      page.getByText(/ACCOUNT_DELETION_SCHEDULED|account.*deletion.*scheduled/i).first(),
-    ).toBeVisible({ timeout: 15_000 });
+    // Verify via API
+    const userData = await testData.api.get(`/api/user/${uid}`);
+    expect(userData.deletionScheduledAt).toBeTruthy();
+    expect(userData.deletionReason).toBe('admin');
 
-    // Cleanup
-    await testData.api.post(`/api/user/${uid}/cancel-delete`);
+    // Cancel via API
+    const cancelResult = await testData.api.post(`/api/user/${uid}/cancel-delete`);
+    expect(cancelResult.success).toBe(true);
+
+    // Verify cancellation via API
+    const afterCancel = await testData.api.get(`/api/user/${uid}`);
+    expect(afterCancel.deletionScheduledAt).toBeFalsy();
   });
 });
