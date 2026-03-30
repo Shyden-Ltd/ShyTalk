@@ -112,7 +112,7 @@
         {
           "name": "Data export",
           "description": "GDPR Art.20 data portability",
-          "status": "in-progress",
+          "status": "done",
           "i18n": {
             "ar": {
               "n": "تصدير البيانات",
