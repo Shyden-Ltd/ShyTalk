@@ -228,7 +228,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Download release artifacts
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v7
         with:
           name: android-prod-release
           path: android-release
@@ -435,7 +435,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Download debug APK
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v7
         with:
           name: android-prod-debug
           path: debug-apk
