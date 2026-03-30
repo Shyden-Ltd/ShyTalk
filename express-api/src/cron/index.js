@@ -13,6 +13,7 @@ const expireBans = require('./expireBans');
 const expireTempIds = require('./expireTempIds');
 const serverHealth = require('./serverHealth');
 const accountDeletion = require('./accountDeletion');
+const expireDataExports = require('./expireDataExports');
 const alertManager = require('../utils/alertManagerInstance');
 
 function startCronJobs() {
@@ -85,6 +86,14 @@ function startCronJobs() {
     log.info('cron', 'Running accountDeletion');
     accountDeletion().catch((err) =>
       log.error('cron', 'accountDeletion failed', { error: err.message }),
+    );
+  });
+
+  // Expire data exports — daily 04:00 UTC
+  cron.schedule('0 4 * * *', () => {
+    log.info('cron', 'Running expireDataExports');
+    expireDataExports().catch((err) =>
+      log.error('cron', 'expireDataExports failed', { error: err.message }),
     );
   });
 

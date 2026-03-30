@@ -71,6 +71,7 @@ app.use('/api/economy/trial-activate', sensitiveLimiter);
 app.use('/api/reports', sensitiveLimiter);
 app.use('/api/appeals', sensitiveLimiter);
 app.use('/api/users/:uniqueId/delete', sensitiveLimiter);
+app.use('/api/users/:uniqueId/data-export', sensitiveLimiter);
 
 // Mount route modules
 app.use('/api', require('./routes/config'));
@@ -80,6 +81,7 @@ app.use('/api', require('./routes/livekit'));
 app.use('/api', require('./routes/reports'));
 app.use('/api', require('./routes/notifications'));
 app.use('/api', require('./routes/rooms'));
+app.use('/api', require('./routes/data-export'));
 app.use('/api', require('./routes/conversations'));
 app.use('/api', require('./routes/banners'));
 app.use('/api', require('./routes/fun-facts'));

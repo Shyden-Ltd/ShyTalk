@@ -29,6 +29,7 @@ jest.mock('../../src/cron/expireBans', () => jest.fn());
 jest.mock('../../src/cron/expireTempIds', () => jest.fn());
 jest.mock('../../src/cron/serverHealth', () => jest.fn());
 jest.mock('../../src/cron/accountDeletion', () => jest.fn());
+jest.mock('../../src/cron/expireDataExports', () => jest.fn());
 const { startCronJobs } = require('../../src/cron/index');
 const log = require('../../src/utils/log');
 
@@ -112,8 +113,8 @@ describe('startCronJobs', () => {
       // Should NOT have dev-only jobs
       expect(schedules).not.toContain('*/30 * * * *'); // testDataCleanup
 
-      // Total: 9 schedules in production (staleRooms + serverHealth share */5, + accountDeletion)
-      expect(mockSchedule).toHaveBeenCalledTimes(9);
+      // Total: 10 schedules in production (staleRooms + serverHealth share */5, + accountDeletion, + expireDataExports)
+      expect(mockSchedule).toHaveBeenCalledTimes(10);
     });
 
     test('does not register testDataCleanup in production', () => {

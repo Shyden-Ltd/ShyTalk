@@ -98,10 +98,24 @@ function buildDeletionCompleteEmail() {
   return { subject: 'Your ShyTalk account has been deleted', html };
 }
 
+function buildDataExportReadyEmail(downloadUrl, expiresAt) {
+  const html = wrapTemplate(`
+    <p style="margin:0 0 8px;color:#d0d0e0;">Hi there,</p>
+    <p style="margin:0 0 12px;color:#d0d0e0;">Your ShyTalk data export is ready for download.</p>
+    <div style="text-align:center;margin:24px 0;">
+      <a href="${downloadUrl}" style="display:inline-block;background:#8b7fff;color:#fff;padding:14px 28px;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;">Download Your Data</a>
+    </div>
+    <p style="margin:0 0 12px;color:#7a7a9e;font-size:13px;">This link expires on ${expiresAt}. After that, you can request a new export.</p>
+    <p style="margin:0;color:#7a7a9e;font-size:13px;">If you have any questions, contact <a href="mailto:shytalk.help@gmail.com" style="color:#8b7fff;">shytalk.help@gmail.com</a></p>
+  `);
+  return { subject: 'Your ShyTalk data export is ready', html };
+}
+
 module.exports = {
   buildOtpEmail,
   buildLockoutEmail,
   buildResetEmail,
   buildDeletionScheduledEmail,
   buildDeletionCompleteEmail,
+  buildDataExportReadyEmail,
 };
