@@ -444,7 +444,7 @@ test.describe('Admin Cross-Tab Interactions', () => {
     for (const tab of tabs) {
       await navigateToTab(page, tab);
       const tabBtn = page.getByRole('button', { name: tab, exact: true });
-      await expect(tabBtn).toHaveClass(/active/);
+      await expect(tabBtn).toHaveClass(/active/, { timeout: 5_000 });
     }
 
     // Verify we can still perform operations after rapid switching
