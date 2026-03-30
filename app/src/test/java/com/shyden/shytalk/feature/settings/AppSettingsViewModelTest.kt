@@ -1024,4 +1024,89 @@ class AppSettingsViewModelTest {
             assertNull(vm.uiState.value.deletionDeleteAt)
             assertNull(vm.uiState.value.deletionError)
         }
+
+    // ===== Data Export =====
+
+    @Test
+    fun `export state defaults to not requesting`() =
+        runTest {
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            assertFalse(vm.uiState.value.isExportRequesting)
+            assertNull(vm.uiState.value.exportStatus)
+            assertNull(vm.uiState.value.exportError)
+        }
+
+    @Test
+    fun `requestDataExport - success sets exportStatus to pending`() =
+        runTest {
+            coEvery { userRepository.requestDataExport(currentUserId) } returns Resource.Success(1000L)
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.requestDataExport()
+            advanceUntilIdle()
+
+            assertFalse(vm.uiState.value.isExportRequesting)
+            assertEquals("pending", vm.uiState.value.exportStatus)
+            assertNull(vm.uiState.value.exportError)
+        }
+
+    @Test
+    fun `requestDataExport - error sets exportError`() =
+        runTest {
+            coEvery { userRepository.requestDataExport(currentUserId) } returns Resource.Error("Rate limited")
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.requestDataExport()
+            advanceUntilIdle()
+
+            assertFalse(vm.uiState.value.isExportRequesting)
+            assertNull(vm.uiState.value.exportStatus)
+            assertEquals(UiText.Plain("Rate limited"), vm.uiState.value.exportError)
+        }
+
+    @Test
+    fun `requestDataExport - clears previous error on new request`() =
+        runTest {
+            // First request fails
+            coEvery { userRepository.requestDataExport(currentUserId) } returns Resource.Error("First error")
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.requestDataExport()
+            advanceUntilIdle()
+            assertEquals(UiText.Plain("First error"), vm.uiState.value.exportError)
+
+            // Second request succeeds — error should be cleared
+            coEvery { userRepository.requestDataExport(currentUserId) } returns Resource.Success(2000L)
+
+            vm.requestDataExport()
+            advanceUntilIdle()
+
+            assertNull(vm.uiState.value.exportError)
+            assertEquals("pending", vm.uiState.value.exportStatus)
+        }
+
+    @Test
+    fun `requestDataExport - sets isExportRequesting during request`() =
+        runTest {
+            coEvery { userRepository.requestDataExport(currentUserId) } returns Resource.Success(0L)
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            assertFalse(vm.uiState.value.isExportRequesting)
+
+            vm.requestDataExport()
+            advanceUntilIdle()
+
+            // After completion, requesting flag should be false
+            assertFalse(vm.uiState.value.isExportRequesting)
+        }
 }

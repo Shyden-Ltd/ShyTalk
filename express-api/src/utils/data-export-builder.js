@@ -97,6 +97,29 @@ async function buildDataExport(uniqueId) {
       id: d.id,
       ...d.data(),
     }));
+
+    // Collect user's own messages from each conversation (max 1000 total)
+    for (const conv of convSnap.docs) {
+      if (userMessages.length >= 1000) break;
+      try {
+        const remaining = 1000 - userMessages.length;
+        const msgSnap = await db
+          .collection(`conversations/${conv.id}/messages`)
+          .where('senderId', '==', uniqueId)
+          .orderBy('createdAt', 'desc')
+          .limit(remaining)
+          .get();
+        for (const m of msgSnap.docs) {
+          userMessages.push({ conversationId: conv.id, id: m.id, ...m.data() });
+        }
+      } catch (msgErr) {
+        log.error('data-export', 'Failed to query messages for conversation', {
+          uniqueId,
+          conversationId: conv.id,
+          error: msgErr.message,
+        });
+      }
+    }
   } catch (err) {
     log.error('data-export', 'Failed to query conversations', {
       uniqueId,

@@ -1,8 +1,3 @@
-v0.60.1
+Data Export — download all your personal data
 
-bump org.json:json from 20231013 to 20251224 (#232)
-- Bumps [org.json:json](https://github.com/douglascrockford/JSON-java) from 20231013 to 20251224.
-- - [Release notes](https://github.com/douglascrockford/JSON-java/releases)
-- - [Changelog](https://github.com/stleary/JSON-java/blob/master/docs/RELEASES.md)
-- - [Commits](https://github.com/douglascrockford/JSON-java/commits)
-- ---
+You can now request a copy of all your personal data from Settings. ShyTalk will prepare a downloadable file containing your profile, messages, followers, economy, and more. A download link is sent to your email once ready. Files are available for 48 hours. You can request a new export once every 24 hours.

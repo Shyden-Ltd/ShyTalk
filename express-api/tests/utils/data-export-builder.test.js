@@ -167,4 +167,83 @@ describe('buildDataExport', () => {
     const { db } = require('../../src/utils/firebase');
     expect(db.collection).toHaveBeenCalledWith('reports');
   });
+
+  test('collects user messages from each conversation', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => testUser,
+    });
+    queryDocs.mockResolvedValue([]);
+
+    const convDoc = { id: 'conv-1', data: () => ({ participantIds: [10000001, 10000002] }) };
+    const msgDoc = {
+      id: 'msg-1',
+      data: () => ({ senderId: '10000001', text: 'hello', createdAt: 1000 }),
+    };
+
+    // First .get() = conversations query returns a conv doc
+    // Second .get() = messages subcollection query returns a message
+    // Subsequent .get() calls = other collections (rooms, reports, etc.)
+    mockCollectionGet
+      .mockResolvedValueOnce({ docs: [convDoc], empty: false }) // conversations
+      .mockResolvedValueOnce({ docs: [msgDoc], empty: false }) // messages for conv-1
+      .mockResolvedValue({ docs: [], empty: true }); // all others
+
+    const result = await buildDataExport('10000001');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+
+    // Verify messages subcollection was queried
+    const { db } = require('../../src/utils/firebase');
+    expect(db.collection).toHaveBeenCalledWith('conversations/conv-1/messages');
+  });
+
+  test('queries messages for multiple conversations', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => testUser,
+    });
+    queryDocs.mockResolvedValue([]);
+
+    const convDoc1 = { id: 'conv-1', data: () => ({ participantIds: [10000001] }) };
+    const convDoc2 = { id: 'conv-2', data: () => ({ participantIds: [10000001] }) };
+
+    mockCollectionGet
+      .mockResolvedValueOnce({ docs: [convDoc1, convDoc2], empty: false }) // conversations
+      .mockResolvedValueOnce({ docs: [], empty: true }) // messages for conv-1
+      .mockResolvedValueOnce({ docs: [], empty: true }) // messages for conv-2
+      .mockResolvedValue({ docs: [], empty: true }); // all others
+
+    const result = await buildDataExport('10000001');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+
+    const { db } = require('../../src/utils/firebase');
+    expect(db.collection).toHaveBeenCalledWith('conversations/conv-1/messages');
+    expect(db.collection).toHaveBeenCalledWith('conversations/conv-2/messages');
+  });
+
+  test('handles message query errors gracefully per conversation', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => testUser,
+    });
+    queryDocs.mockResolvedValue([]);
+
+    const convDoc = { id: 'conv-err', data: () => ({ participantIds: [10000001] }) };
+
+    mockCollectionGet
+      .mockResolvedValueOnce({ docs: [convDoc], empty: false }) // conversations
+      .mockRejectedValueOnce(new Error('Permission denied')) // messages query fails
+      .mockResolvedValue({ docs: [], empty: true }); // all others
+
+    // Should not throw — error is logged and export continues
+    const result = await buildDataExport('10000001');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+
+    const log = require('../../src/utils/log');
+    expect(log.error).toHaveBeenCalledWith(
+      'data-export',
+      'Failed to query messages for conversation',
+      expect.objectContaining({ conversationId: 'conv-err' }),
+    );
+  });
 });

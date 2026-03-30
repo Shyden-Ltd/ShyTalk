@@ -22,7 +22,9 @@ service cloud.firestore {
                      'gcsLastDeductionAt', 'isSuspended', 'suspensionReason',
                      'suspensionEndDate', 'userType', 'uniqueId', 'firebaseUid', 'providers',
                      'pinHash', 'pinSetAt', 'pinAttempts', 'pinLockedUntil', 'pinLockoutCount',
-                     'deletionScheduledAt', 'deletionReason', 'deletionExecuteAt']);
+                     'deletionScheduledAt', 'deletionReason', 'deletionExecuteAt',
+                     'dataExportStatus', 'dataExportR2Key', 'dataExportExpiresAt',
+                     'lastDataExportRequestedAt']);
 
       // Backpack — read own, write only via API
       match /backpack/{giftId} {
