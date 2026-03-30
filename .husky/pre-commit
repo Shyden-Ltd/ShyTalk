@@ -1,2 +1,10 @@
 #!/usr/bin/env sh
+
+# Generate public roadmap JSON from internal roadmap (if source exists)
+ROADMAP_SRC=".project/plans/2026-03-29-feature-roadmap.md"
+if [ -f "$ROADMAP_SRC" ]; then
+  node scripts/generate-roadmap-json.js
+  git add public/roadmap-data.json 2>/dev/null
+fi
+
 npx lint-staged
