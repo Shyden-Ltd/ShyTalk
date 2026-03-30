@@ -839,4 +839,6 @@
     <string name="time_minutes">%1$d минут</string>
     <string name="time_less_than_minute">Менее 1 минуты</string>
     <string name="pin_dots_state">%1$d из %2$d цифр введено</string>
+    <string name="export_data">Export My Data</string>
+    <string name="export_data_pending">Export requested. Check your email for the download link.</string>
 </resources>

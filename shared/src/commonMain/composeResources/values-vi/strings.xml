@@ -839,4 +839,6 @@
     <string name="time_minutes">%1$d phút</string>
     <string name="time_less_than_minute">Ít hơn 1 phút</string>
     <string name="pin_dots_state">Đã nhập %1$d trong %2$d chữ số</string>
+    <string name="export_data">Export My Data</string>
+    <string name="export_data_pending">Export requested. Check your email for the download link.</string>
 </resources>

@@ -839,4 +839,6 @@
     <string name="time_minutes">%1$d분</string>
     <string name="time_less_than_minute">1분 미만</string>
     <string name="pin_dots_state">%2$d자리 중 %1$d자리 입력됨</string>
+    <string name="export_data">Export My Data</string>
+    <string name="export_data_pending">Export requested. Check your email for the download link.</string>
 </resources>

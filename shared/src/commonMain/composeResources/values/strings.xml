@@ -503,6 +503,8 @@
     <string name="delete_account_pin_required">Verify your identity to delete your account</string>
     <string name="delete_account_confirm_title">Are you sure?</string>
     <string name="delete_account_confirm_body">This will permanently delete your account and all associated data after the grace period. This action cannot be undone.</string>
+    <string name="export_data">Export My Data</string>
+    <string name="export_data_pending">Export requested. Check your email for the download link.</string>
     <string name="unblock_confirm">Unblock %1$s?</string>
     <string name="unblock_description">They will be able to view your profile again.</string>
     <string name="dnd_start_time">DND Start Time</string>

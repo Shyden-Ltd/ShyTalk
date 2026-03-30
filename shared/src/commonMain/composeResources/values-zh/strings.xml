@@ -839,4 +839,6 @@
     <string name="time_minutes">%1$d 分钟</string>
     <string name="time_less_than_minute">不到 1 分钟</string>
     <string name="pin_dots_state">已输入 %1$d / %2$d 位数字</string>
+    <string name="export_data">Export My Data</string>
+    <string name="export_data_pending">Export requested. Check your email for the download link.</string>
 </resources>

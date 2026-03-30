@@ -158,6 +158,7 @@ fun AppSettingsScreen(
                     onNavigateToLinkedAccounts = { currentPageName = SettingsPage.LinkedAccounts.name },
                     onRequestDeletion = { pin -> viewModel.requestAccountDeletion(pin) },
                     onCancelDeletion = { viewModel.cancelAccountDeletion() },
+                    onRequestExport = { viewModel.requestDataExport() },
                     snackbarHostState = snackbarHostState,
                 )
             SettingsPage.LinkedAccounts ->
@@ -647,6 +648,7 @@ private fun AccountPage(
     onNavigateToLinkedAccounts: () -> Unit,
     onRequestDeletion: (pin: String) -> Unit,
     onCancelDeletion: () -> Unit,
+    onRequestExport: () -> Unit,
     snackbarHostState: SnackbarHostState,
 ) {
     var showDeleteAccountDialog by remember { mutableStateOf(false) }
@@ -690,6 +692,33 @@ private fun AccountPage(
                 onClick = onNavigateToLinkedAccounts,
             )
             HorizontalDivider()
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Data export
+            OutlinedButton(
+                onClick = { onRequestExport() },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !uiState.isExportRequesting && uiState.exportStatus != "pending",
+            ) {
+                Text(stringResource(Res.string.export_data))
+            }
+            if (uiState.exportStatus == "pending") {
+                Text(
+                    text = stringResource(Res.string.export_data_pending),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            uiState.exportError?.let { error ->
+                Text(
+                    text = error.resolve(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 

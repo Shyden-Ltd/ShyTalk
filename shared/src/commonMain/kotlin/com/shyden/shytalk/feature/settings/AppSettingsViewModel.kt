@@ -70,6 +70,10 @@ data class AppSettingsUiState(
     val deletionScheduled: Boolean = false,
     val deletionDeleteAt: Long? = null,
     val deletionError: UiText? = null,
+    // Data export
+    val isExportRequesting: Boolean = false,
+    val exportStatus: String? = null,
+    val exportError: UiText? = null,
 )
 
 class AppSettingsViewModel(
@@ -487,6 +491,31 @@ class AppSettingsViewModel(
                 is Resource.Error -> {
                     _uiState.update {
                         it.copy(deletionError = UiText.Plain(result.message))
+                    }
+                }
+                is Resource.Loading -> Unit
+            }
+        }
+    }
+
+    fun requestDataExport() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isExportRequesting = true, exportError = null) }
+            when (val result = userRepository.requestDataExport(currentUserId)) {
+                is Resource.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            isExportRequesting = false,
+                            exportStatus = "pending",
+                        )
+                    }
+                }
+                is Resource.Error -> {
+                    _uiState.update {
+                        it.copy(
+                            isExportRequesting = false,
+                            exportError = UiText.Plain(result.message),
+                        )
                     }
                 }
                 is Resource.Loading -> Unit

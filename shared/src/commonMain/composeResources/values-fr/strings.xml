@@ -839,4 +839,6 @@
     <string name="time_minutes">%1$d minutes</string>
     <string name="time_less_than_minute">Moins d\'1 minute</string>
     <string name="pin_dots_state">%1$d sur %2$d chiffres saisis</string>
+    <string name="export_data">Export My Data</string>
+    <string name="export_data_pending">Export requested. Check your email for the download link.</string>
 </resources>
