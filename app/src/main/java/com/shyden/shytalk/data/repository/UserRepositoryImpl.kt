@@ -397,4 +397,20 @@ class UserRepositoryImpl(
                 daysRemaining = if (response.isNull("daysRemaining")) null else response.optInt("daysRemaining"),
             )
         }
+
+    override suspend fun requestDataExport(userId: String): Resource<Long> =
+        firebaseCall("Failed to request data export") {
+            val response = api.post("/api/users/$userId/data-export", JSONObject())
+            response.getLong("requestedAt")
+        }
+
+    override suspend fun getDataExportStatus(userId: String): Resource<UserRepository.DataExportStatus> =
+        firebaseCall("Failed to get export status") {
+            val response = api.get("/api/users/$userId/data-export/status")
+            UserRepository.DataExportStatus(
+                status = response.optString("status", "none"),
+                requestedAt = if (response.isNull("requestedAt")) null else response.optLong("requestedAt"),
+                expiresAt = if (response.isNull("expiresAt")) null else response.optLong("expiresAt"),
+            )
+        }
 }

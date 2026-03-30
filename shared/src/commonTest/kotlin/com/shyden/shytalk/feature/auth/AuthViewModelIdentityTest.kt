@@ -243,6 +243,10 @@ class AuthViewModelIdentityTest {
         override suspend fun cancelAccountDeletion(userId: String) = Resource.Success(Unit)
 
         override suspend fun getAccountDeletionStatus(userId: String) = Resource.Success(UserRepository.DeletionStatus())
+
+        override suspend fun requestDataExport(userId: String) = Resource.Success(0L)
+
+        override suspend fun getDataExportStatus(userId: String) = Resource.Success(UserRepository.DataExportStatus())
     }
 
     private class FakeDeviceRepository : DeviceRepository {

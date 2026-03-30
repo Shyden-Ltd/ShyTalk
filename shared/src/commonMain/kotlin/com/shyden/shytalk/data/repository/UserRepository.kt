@@ -128,4 +128,14 @@ interface UserRepository {
     )
 
     suspend fun getAccountDeletionStatus(userId: String): Resource<DeletionStatus>
+
+    suspend fun requestDataExport(userId: String): Resource<Long>
+
+    data class DataExportStatus(
+        val status: String = "none",
+        val requestedAt: Long? = null,
+        val expiresAt: Long? = null,
+    )
+
+    suspend fun getDataExportStatus(userId: String): Resource<DataExportStatus>
 }

@@ -165,4 +165,9 @@ class FakeUserRepository : UserRepository {
 
     override suspend fun getAccountDeletionStatus(userId: String): Resource<UserRepository.DeletionStatus> =
         Resource.Success(UserRepository.DeletionStatus())
+
+    override suspend fun requestDataExport(userId: String): Resource<Long> = Resource.Success(System.currentTimeMillis())
+
+    override suspend fun getDataExportStatus(userId: String): Resource<UserRepository.DataExportStatus> =
+        Resource.Success(UserRepository.DataExportStatus())
 }
