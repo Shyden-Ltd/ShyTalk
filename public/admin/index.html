@@ -5383,6 +5383,9 @@
       tabLogs.classList.toggle("active", tab === "logs");
       tabDevices.classList.toggle("active", tab === "devices");
       tabStartingScreens.classList.toggle("active", tab === "starting-screens");
+      // Force synchronous layout flush — WebKit batches classList mutations,
+      // which can cause automated tests to read stale class values.
+      void tabUsers.offsetHeight;
       $(".search-bar").style.display = tab === "users" ? "" : "none";
       userForm.style.display = tab === "users" ? "" : "none";
       appealsPanel.classList.toggle("visible", tab === "appeals");
@@ -6684,6 +6687,7 @@
       btn.addEventListener("click", () => {
         for (const b of $$("#report-filter-bar .tab-btn")) b.classList.remove("active");
         btn.classList.add("active");
+        void btn.offsetHeight; // Force layout flush for WebKit
         currentReportFilter = btn.dataset.reportFilter;
         sessionStorage.setItem("admin_report_filter", currentReportFilter);
         loadReports();
