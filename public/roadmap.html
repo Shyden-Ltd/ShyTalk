@@ -255,7 +255,7 @@
     <div class="crawl-section">
       <h2>Episode 2026</h2>
       <p class="episode-intro">
-        The ShyTalk team has been hard at work.<br>
+        ShyTalk has been evolving fast.<br>
         New features are on the horizon, safety<br>
         is being strengthened, and the platform<br>
         grows to welcome users across every device.<br><br>
@@ -350,17 +350,32 @@ window.addEventListener('scroll', function() {
 autoScroll();
 
 // ── Music ──
+var musicStarted = false;
+function startMusic() {
+  if (musicStarted) return;
+  var audio = document.getElementById('bgMusic');
+  var btn = document.getElementById('musicBtn');
+  audio.play().then(function() {
+    musicStarted = true;
+    btn.innerHTML = '&#9646;&#9646; Pause';
+  }).catch(function() {});
+}
 function toggleMusic() {
   var audio = document.getElementById('bgMusic');
   var btn = document.getElementById('musicBtn');
   if (audio.paused) {
     audio.play();
     btn.innerHTML = '&#9646;&#9646; Pause';
+    musicStarted = true;
   } else {
     audio.pause();
     btn.innerHTML = '&#9654; Play Theme';
   }
 }
+// Auto-play on first user interaction (browsers require interaction before audio)
+['scroll', 'click', 'touchstart', 'keydown'].forEach(function(evt) {
+  window.addEventListener(evt, startMusic, { once: true, passive: true });
+});
 
 // ── i18n ──
 var TRANSLATIONS = {
