@@ -3,11 +3,9 @@
 # Skip SonarCloud for workflow-only changes
 CHANGED=$(git diff --name-only origin/main...HEAD 2>/dev/null)
 HAS_CODE=false
-echo "$CHANGED" | while IFS= read -r file; do
-  case "$file" in
-    app/*|shared/*|express-api/src/*|express-api/tests/*) HAS_CODE=true ;;
-  esac
-done
+if echo "$CHANGED" | grep -qE '^(app/|shared/|express-api/src/|express-api/tests/)'; then
+  HAS_CODE=true
+fi
 
 if [ "$HAS_CODE" = "false" ]; then
   echo "No code changes — skipping SonarCloud pre-push scan"
