@@ -16,8 +16,8 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1008.0",
     "archiver": "^7.0.1",
+    "@aws-sdk/client-s3": "^3.1019.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.3.1",
@@ -28,12 +28,12 @@
     "livekit-server-sdk": "^2.15.0",
     "multer": "^2.1.1",
     "node-cron": "^4.2.1",
-    "nodemailer": "^8.0.2",
-    "sharp": "0.34.2"
+    "nodemailer": "^8.0.4",
+    "sharp": "0.34.5"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "eslint": "^10.0.3",
+    "eslint": "^10.1.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-sonarjs": "^4.0.2",
     "globals": "^17.4.0",

@@ -1,8 +1,8 @@
-v0.59.3
+v0.60.1
 
-SonarCloud must pass before E2E/Playwright + pre-push hook (#235)
-- Pipeline change:
--   lint → backend tests → build → SonarCloud → E2E/Playwright/iOS
--   If SonarCloud quality gate fails, E2E/Playwright/iOS are skipped,
--   saving ~20 minutes of runner time.
-- Pre-push hook (.husky/pre-push):
+bump org.json:json from 20231013 to 20251224 (#232)
+- Bumps [org.json:json](https://github.com/douglascrockford/JSON-java) from 20231013 to 20251224.
+- - [Release notes](https://github.com/douglascrockford/JSON-java/releases)
+- - [Changelog](https://github.com/stleary/JSON-java/blob/master/docs/RELEASES.md)
+- - [Commits](https://github.com/douglascrockford/JSON-java/commits)
+- ---

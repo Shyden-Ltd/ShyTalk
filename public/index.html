@@ -159,6 +159,7 @@
   }
 </style>
 <script src="/js/logger.js"></script>
+<script src="/js/language-selector.js" defer></script>
 </head>
 <body>
   <main class="container">
@@ -201,17 +202,29 @@
     nl: { tagline: "Spraakchatrooms, opnieuw uitgevonden.", coming_soon: "Binnenkort", app_store: "App Store (Binnenkort)", app_store_title: "Binnenkort op iOS" },
     sv: { tagline: "R\u00f6stchattrum, nyt\u00e4nkt.", coming_soon: "Kommer snart", app_store: "App Store (Kommer snart)", app_store_title: "Kommer snart till iOS" }
   };
-  var lang = (navigator.language || "en").slice(0, 2);
-  var strings = t[lang];
-  if (strings) {
-    document.documentElement.lang = lang;
-    document.querySelectorAll("[data-i18n]").forEach(function(el) {
-      var key = el.getAttribute("data-i18n");
-      if (strings[key]) el.textContent = strings[key];
-      var titleKey = el.getAttribute("data-i18n-title");
-      if (titleKey && strings[titleKey]) el.title = strings[titleKey];
-    });
-  }
+  window.applyLanguage = function(lang) {
+    var strings = t[lang];
+    if (strings) {
+      document.querySelectorAll("[data-i18n]").forEach(function(el) {
+        var key = el.getAttribute("data-i18n");
+        if (strings[key]) el.textContent = strings[key];
+        var titleKey = el.getAttribute("data-i18n-title");
+        if (titleKey && strings[titleKey]) el.title = strings[titleKey];
+      });
+    } else if (lang === 'en') {
+      // Reset to English defaults
+      document.querySelectorAll("[data-i18n]").forEach(function(el) {
+        if (el.dataset.defaultText) el.textContent = el.dataset.defaultText;
+      });
+    }
+  };
+  // Save default English text for reset
+  document.querySelectorAll("[data-i18n]").forEach(function(el) {
+    el.dataset.defaultText = el.textContent;
+  });
+  // Apply on load using saved preference or browser language
+  var initLang = (window.ShyTalkLanguage && window.ShyTalkLanguage.get()) || (navigator.language || "en").slice(0, 2);
+  window.applyLanguage(initLang);
 })();
   ShyTalkLogger.init({
     source: 'landing-page',
