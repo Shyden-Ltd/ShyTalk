@@ -428,19 +428,27 @@ function renderRoadmap(data) {
     var statusLabel = phase.status === 'active' ? (t.inProgress || 'In Progress') :
                       phase.status === 'soon' ? (t.comingSoon || 'Coming Soon') : (t.planned || 'Planned');
 
+    // Use translated phase title if available
+    var phaseTitle = (phase.titleI18n && phase.titleI18n[browserLang]) || phase.title;
+
     html += '<div class="crawl-divider"></div>';
     html += '<div class="crawl-section">';
-    html += '<h2>' + escapeHtml(phase.title).replace(/&amp;\n/g, '&amp;<br>') + '</h2>';
+    html += '<h2>' + escapeHtml(phaseTitle) + '</h2>';
     html += '<div class="section-status ' + statusCls + '">' + statusLabel + '</div>';
 
     for (var f = 0; f < phase.features.length; f++) {
       var feat = phase.features[f];
       var badge = getStatusBadge(feat.status);
 
+      // Use translated feature name and description if available
+      var featI18n = feat.i18n && feat.i18n[browserLang];
+      var featName = (featI18n && featI18n.n) || feat.name;
+      var featDesc = (featI18n && featI18n.d) || feat.description;
+
       html += '<div class="crawl-feature">';
-      html += '<h3>' + escapeHtml(feat.name) + '</h3>';
-      if (feat.description) {
-        html += '<p>' + escapeHtml(feat.description) + '</p>';
+      html += '<h3>' + escapeHtml(featName) + '</h3>';
+      if (featDesc) {
+        html += '<p>' + escapeHtml(featDesc) + '</p>';
       }
       html += '<span class="feat-badge ' + badge.cls + '">' + badge.label + '</span>';
       html += '</div>';

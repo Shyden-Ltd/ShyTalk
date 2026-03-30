@@ -13,6 +13,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const TRANSLATIONS_PATH = path.join(__dirname, 'roadmap-translations.json');
+const translations = fs.existsSync(TRANSLATIONS_PATH)
+  ? JSON.parse(fs.readFileSync(TRANSLATIONS_PATH, 'utf-8'))
+  : { phases: {}, features: {} };
+
 const ROADMAP_PATH = path.join(
   __dirname,
   '..',
@@ -166,11 +171,18 @@ const output = {
   phases: parsed
     .filter((p) => !SKIP_PHASES.has(p.num))
     .filter((p) => p.features.length > 0)
-    .map((p) => ({
-      title: PHASE_TITLES[p.num] || `Phase ${p.num}`,
-      status: PHASE_STATUS[p.num] || 'planned',
-      features: p.features,
-    })),
+    .map((p) => {
+      const phaseTitle = PHASE_TITLES[p.num] || `Phase ${p.num}`;
+      return {
+        title: phaseTitle,
+        titleI18n: translations.phases[phaseTitle] || {},
+        status: PHASE_STATUS[p.num] || 'planned',
+        features: p.features.map((f) => {
+          const ft = translations.features[f.name] || {};
+          return { ...f, i18n: ft };
+        }),
+      };
+    }),
 };
 
 const newJson = JSON.stringify(output, null, 2) + '\n';
