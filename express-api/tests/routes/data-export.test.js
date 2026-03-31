@@ -75,6 +75,24 @@ jest.mock('../../src/utils/log', () => ({
   error: jest.fn(),
 }));
 
+const { Readable } = require('stream');
+const mockPutObject = jest.fn().mockResolvedValue();
+const mockGetObject = jest.fn();
+const mockDeleteObjects = jest.fn().mockResolvedValue();
+jest.mock('../../src/utils/r2', () => ({
+  putObject: (...args) => mockPutObject(...args),
+  getObject: (...args) => mockGetObject(...args),
+  deleteObjects: (...args) => mockDeleteObjects(...args),
+}));
+
+const mockBuildDataExport = jest.fn();
+jest.mock(
+  '../../src/utils/data-export-builder',
+  () =>
+    (...args) =>
+      mockBuildDataExport(...args),
+);
+
 const mockSendEmail = jest.fn().mockResolvedValue();
 jest.mock('../../src/utils/email', () => ({
   sendEmail: (...args) => mockSendEmail(...args),
@@ -309,16 +327,177 @@ describe('GET /api/users/:uniqueId/data-export/download', () => {
 
   test('returns 404 when no export exists for user', async () => {
     const app = createApp();
+    const crypto = require('node:crypto');
+    const expiresAt = '9999999999999';
+    const token = crypto
+      .createHmac('sha256', 'dev-export-secret')
+      .update(`10000001:${expiresAt}`)
+      .digest('hex');
+
     mockDocGet.mockImplementation((path) => {
       if (path.startsWith('users/'))
         return Promise.resolve(mockUserDoc(10000001, { dataExportR2Key: null }));
       return Promise.resolve({ exists: false });
     });
 
-    // This test needs a valid token — the actual HMAC validation
-    // will be tested with the real implementation
     await request(app)
-      .get('/api/users/10000001/data-export/download?token=test&expiresAt=9999999999999')
-      .expect(401); // Will fail HMAC check first
+      .get(`/api/users/10000001/data-export/download?token=${token}&expiresAt=${expiresAt}`)
+      .expect(404);
+  });
+
+  test('streams ZIP with valid HMAC token', async () => {
+    const app = createApp();
+    const crypto = require('node:crypto');
+    const expiresAt = '9999999999999';
+    const token = crypto
+      .createHmac('sha256', 'dev-export-secret')
+      .update(`10000001:${expiresAt}`)
+      .digest('hex');
+
+    mockDocGet.mockImplementation((path) => {
+      if (path.startsWith('users/'))
+        return Promise.resolve(
+          mockUserDoc(10000001, { dataExportR2Key: 'exports/10000001/test.zip' }),
+        );
+      return Promise.resolve({ exists: false });
+    });
+
+    const zipData = Buffer.from('fake-zip-data');
+    const readable = Readable.from(zipData);
+    mockGetObject.mockResolvedValue({ Body: readable });
+
+    const res = await request(app)
+      .get(`/api/users/10000001/data-export/download?token=${token}&expiresAt=${expiresAt}`)
+      .expect(200);
+
+    expect(res.headers['content-type']).toMatch(/zip/);
+    expect(res.headers['content-disposition']).toContain('shytalk-data-export-10000001.zip');
+    expect(mockGetObject).toHaveBeenCalledWith('exports/10000001/test.zip');
+  });
+
+  test('returns 404 when user not found', async () => {
+    const app = createApp();
+    const crypto = require('node:crypto');
+    const expiresAt = '9999999999999';
+    const token = crypto
+      .createHmac('sha256', 'dev-export-secret')
+      .update(`10000001:${expiresAt}`)
+      .digest('hex');
+
+    mockDocGet.mockResolvedValue({ exists: false });
+
+    await request(app)
+      .get(`/api/users/10000001/data-export/download?token=${token}&expiresAt=${expiresAt}`)
+      .expect(404);
+  });
+
+  test('returns 500 on R2 error', async () => {
+    const app = createApp();
+    const crypto = require('node:crypto');
+    const expiresAt = '9999999999999';
+    const token = crypto
+      .createHmac('sha256', 'dev-export-secret')
+      .update(`10000001:${expiresAt}`)
+      .digest('hex');
+
+    mockDocGet.mockImplementation((path) => {
+      if (path.startsWith('users/'))
+        return Promise.resolve(
+          mockUserDoc(10000001, { dataExportR2Key: 'exports/10000001/test.zip' }),
+        );
+      return Promise.resolve({ exists: false });
+    });
+
+    mockGetObject.mockRejectedValue(new Error('R2 unavailable'));
+
+    await request(app)
+      .get(`/api/users/10000001/data-export/download?token=${token}&expiresAt=${expiresAt}`)
+      .expect(500);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Async export processing (fire-and-forget)
+// ═══════════════════════════════════════════════════════════════
+
+describe('Async export processing', () => {
+  const app = createApp();
+
+  test('builds export and uploads to R2 on success', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path.startsWith('users/')) return Promise.resolve(mockUserDoc(10000001));
+      return Promise.resolve({ exists: false });
+    });
+
+    mockBuildDataExport.mockResolvedValue({ buffer: Buffer.from('zip-data') });
+
+    await request(app).post('/api/users/10000001/data-export').expect(202);
+
+    // Wait for async processing to complete
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(mockBuildDataExport).toHaveBeenCalledWith('10000001');
+    expect(mockPutObject).toHaveBeenCalledWith(
+      expect.stringContaining('exports/10000001/'),
+      expect.any(Buffer),
+      'application/zip',
+      expect.objectContaining({ expiresAt: expect.any(String) }),
+    );
+  });
+
+  test('sends email after successful export', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path.startsWith('users/')) return Promise.resolve(mockUserDoc(10000001));
+      return Promise.resolve({ exists: false });
+    });
+
+    mockBuildDataExport.mockResolvedValue({ buffer: Buffer.from('zip-data') });
+
+    await request(app).post('/api/users/10000001/data-export').expect(202);
+
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      'test@example.com',
+      'Your ShyTalk data export is ready',
+      expect.stringContaining('Download'),
+    );
+  });
+
+  test('updates status to ready after successful export', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path.startsWith('users/')) return Promise.resolve(mockUserDoc(10000001));
+      return Promise.resolve({ exists: false });
+    });
+
+    mockBuildDataExport.mockResolvedValue({ buffer: Buffer.from('zip-data') });
+
+    await request(app).post('/api/users/10000001/data-export').expect(202);
+
+    await new Promise((r) => setTimeout(r, 100));
+
+    // Second update call should set status to ready
+    const readyCall = mockDocUpdate.mock.calls.find(
+      (c) => c[1] && c[1].dataExportStatus === 'ready',
+    );
+    expect(readyCall).toBeDefined();
+  });
+
+  test('updates status to failed on build error', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path.startsWith('users/')) return Promise.resolve(mockUserDoc(10000001));
+      return Promise.resolve({ exists: false });
+    });
+
+    mockBuildDataExport.mockRejectedValue(new Error('Build failed'));
+
+    await request(app).post('/api/users/10000001/data-export').expect(202);
+
+    await new Promise((r) => setTimeout(r, 100));
+
+    const failCall = mockDocUpdate.mock.calls.find(
+      (c) => c[1] && c[1].dataExportStatus === 'failed',
+    );
+    expect(failCall).toBeDefined();
   });
 });
