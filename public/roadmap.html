@@ -1,513 +1,866 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ShyTalk — The Roadmap Awakens</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f1117" />
+    <meta
+      name="description"
+      content="ShyTalk Roadmap — See what we're building next. Track features, vote on suggestions, and follow our progress."
+    />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://shytalk.shyden.co.uk/roadmap" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="ShyTalk Roadmap" />
+    <meta
+      property="og:description"
+      content="Track our progress, see upcoming features, and suggest what we should build next."
+    />
+    <meta property="og:url" content="https://shytalk.shyden.co.uk/roadmap" />
+    <title>ShyTalk — Roadmap</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
 
-  body {
-    background: #000;
-    color: #ffd54f;
-    font-family: 'Inter', system-ui, sans-serif;
-    overflow-y: auto;
-    overflow-x: hidden;
-    min-height: 100vh;
-  }
-
-  .stars {
-    position: fixed;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    z-index: 0;
-  }
-
-  .content {
-    position: relative;
-    z-index: 1;
-  }
-
-  .intro-screen {
-    height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 20px;
-  }
-  .intro-screen p {
-    color: #4fc3f7;
-    font-size: clamp(1.6rem, 5vw, 2.8rem);
-    line-height: 2;
-    font-weight: 400;
-  }
-
-  .logo-screen {
-    height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 20px;
-  }
-  .logo-screen .logo-text {
-    font-size: clamp(4rem, 16vw, 10rem);
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    background: linear-gradient(180deg, #ffd54f 0%, #ff8f00 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 60px rgba(255,213,79,.3));
-    line-height: 1.1;
-  }
-  .logo-screen .logo-sub {
-    font-size: clamp(1rem, 4vw, 2rem);
-    font-weight: 600;
-    letter-spacing: 0.35em;
-    text-transform: uppercase;
-    color: #ffd54f;
-    opacity: .7;
-    margin-top: 16px;
-  }
-
-  .crawl-content {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 0 24px 120px;
-  }
-
-  .crawl-section {
-    margin-bottom: 100px;
-    text-align: center;
-  }
-  .crawl-section h2 {
-    font-size: clamp(2rem, 8vw, 4rem);
-    font-weight: 800;
-    letter-spacing: 0.04em;
-    margin-bottom: 20px;
-    color: #ffd54f;
-    text-transform: uppercase;
-  }
-  .crawl-section .section-status {
-    display: inline-block;
-    font-size: clamp(0.9rem, 2.5vw, 1.2rem);
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    padding: 6px 22px;
-    border-radius: 999px;
-    margin-bottom: 40px;
-    border: 2px solid;
-  }
-  .status-active { color: #66bb6a; border-color: #66bb6a; }
-  .status-soon { color: #ffa726; border-color: #ffa726; }
-  .status-planned { color: #42a5f5; border-color: #42a5f5; }
-
-  .crawl-feature {
-    margin-bottom: 44px;
-  }
-  .crawl-feature h3 {
-    font-size: clamp(1.5rem, 5.5vw, 2.6rem);
-    font-weight: 700;
-    color: #ffd54f;
-    margin-bottom: 8px;
-  }
-  .crawl-feature p {
-    font-size: clamp(1.1rem, 3.5vw, 1.6rem);
-    color: #ffd54f;
-    opacity: .65;
-    line-height: 1.5;
-    font-weight: 400;
-  }
-  .feat-badge {
-    display: inline-block;
-    font-size: clamp(0.8rem, 2vw, 1rem);
-    font-weight: 700;
-    padding: 4px 14px;
-    border-radius: 999px;
-    letter-spacing: .06em;
-    margin-top: 8px;
-  }
-  .feat-done { background: rgba(102,187,106,.2); color: #66bb6a; }
-  .feat-next { background: rgba(255,167,38,.2); color: #ffa726; }
-  .feat-planned { background: rgba(66,165,245,.15); color: #42a5f5; }
-
-  .crawl-divider {
-    width: 60px;
-    height: 2px;
-    background: rgba(255,213,79,.25);
-    margin: 0 auto 100px;
-  }
-
-  .episode-intro {
-    font-size: clamp(1.2rem, 4vw, 1.8rem);
-    line-height: 2;
-    opacity: .75;
-    margin-bottom: 80px;
-    text-align: center;
-  }
-
-  .crawl-footer {
-    text-align: center;
-    padding: 80px 24px 60px;
-    border-top: 1px solid rgba(255,213,79,.1);
-  }
-  .crawl-footer .brand {
-    font-size: clamp(3rem, 10vw, 6rem);
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    background: linear-gradient(180deg, #ffd54f 0%, #ff8f00 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-  .crawl-footer .brand-sub {
-    font-size: clamp(0.9rem, 2.5vw, 1.2rem);
-    color: #ffd54f;
-    opacity: .4;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    margin-top: 12px;
-  }
-  .crawl-footer .brand-note {
-    margin-top: 24px;
-    font-size: clamp(0.85rem, 2vw, 1rem);
-    color: #ffd54f;
-    opacity: .3;
-  }
-
-  .scroll-hint {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 10;
-    color: rgba(255,213,79,.4);
-    font-size: .8rem;
-    letter-spacing: .1em;
-    text-transform: uppercase;
-    transition: opacity .5s;
-    pointer-events: none;
-  }
-  .scroll-hint.hidden { opacity: 0; }
-  .scroll-hint .arrow {
-    display: block;
-    text-align: center;
-    font-size: 1.2rem;
-    animation: bounce 2s ease-in-out infinite;
-  }
-  @keyframes bounce {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(6px); }
-  }
-
-  .music-btn {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 20;
-    background: rgba(255,213,79,.15);
-    border: 1px solid rgba(255,213,79,.3);
-    color: #ffd54f;
-    padding: 8px 16px;
-    border-radius: 999px;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: .85rem;
-    letter-spacing: .05em;
-    transition: background .3s;
-  }
-  .music-btn:hover { background: rgba(255,213,79,.25); }
-
-  .loading-msg {
-    text-align: center;
-    padding: 80px 20px;
-    color: #ffd54f;
-    opacity: .5;
-    font-size: 1.2rem;
-  }
-</style>
-<script src="/js/language-selector.js" defer></script>
-</head>
-<body>
-
-<canvas class="stars" id="stars"></canvas>
-
-<button class="music-btn" id="musicBtn" onclick="toggleMusic()">&#9654; Play Theme</button>
-<audio id="bgMusic" loop preload="auto">
-  <source src="https://images.shytalk.shyden.co.uk/assets/star-wars-theme.mp3" type="audio/mpeg">
-</audio>
-
-<div class="content" id="content">
-
-  <div class="intro-screen">
-    <p id="intro-text">A short time ago, in a codebase<br>not so far away&hellip;</p>
-  </div>
-
-  <div class="logo-screen">
-    <div>
-      <div class="logo-text">SHYTALK</div>
-      <div class="logo-sub" id="subtitle-text">The Roadmap Awakens</div>
-    </div>
-  </div>
-
-  <div class="crawl-content">
-    <div class="crawl-section">
-      <h2>Episode 2026</h2>
-      <p class="episode-intro" id="crawl-text">
-        ShyTalk has been evolving fast.<br>
-        New features are on the horizon, safety<br>
-        is being strengthened, and the platform<br>
-        grows to welcome users across every device.<br><br>
-        Here is what lies ahead&hellip;
-      </p>
-    </div>
-
-    <div id="roadmap-container">
-      <div class="loading-msg">Loading roadmap from GitHub&hellip;</div>
-    </div>
-  </div>
-
-  <div class="crawl-footer">
-    <div class="brand">SHYTALK</div>
-    <div class="brand-sub">Built by Shyden Ltd &middot; 2026</div>
-    <div class="brand-note">Priorities may shift &mdash; we ship what matters most to you first.</div>
-    <div class="brand-note" id="last-updated" style="margin-top:16px;"></div>
-  </div>
-
-</div>
-
-<div class="scroll-hint" id="scrollHint">
-  <span class="arrow">&darr;</span>
-  scroll or wait
-</div>
-
-<script>
-// ── Stars ──
-var canvas = document.getElementById('stars');
-var ctx = canvas.getContext('2d');
-var starsArr = [];
-function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-window.addEventListener('resize', resize); resize();
-for (var i = 0; i < 250; i++) {
-  starsArr.push({
-    x: Math.random() * canvas.width,
-    y: Math.random() * canvas.height,
-    r: Math.random() * 1.6 + 0.3,
-    a: Math.random() * 0.8 + 0.2,
-    ts: Math.random() * 0.015 + 0.003
-  });
-}
-var frame = 0;
-function drawStars() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  frame++;
-  starsArr.forEach(function(s) {
-    var f = Math.sin(frame * s.ts) * 0.25 + 0.75;
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255,255,255,' + (s.a * f) + ')';
-    ctx.fill();
-  });
-  requestAnimationFrame(drawStars);
-}
-drawStars();
-
-// ── Auto-scroll ──
-var autoScrollSpeed = 1.2;
-var isAutoScrolling = true;
-var autoScrollPaused = false;
-var resumeTimer = null;
-
-function autoScroll() {
-  if (isAutoScrolling && !autoScrollPaused) {
-    window.scrollBy(0, autoScrollSpeed);
-    if ((window.innerHeight + window.scrollY) >= document.body.scrollHeight - 10) {
-      isAutoScrolling = false;
-    }
-  }
-  requestAnimationFrame(autoScroll);
-}
-
-window.addEventListener('wheel', function() {
-  autoScrollPaused = true;
-  clearTimeout(resumeTimer);
-  resumeTimer = setTimeout(function() { autoScrollPaused = false; }, 4000);
-}, { passive: true });
-
-window.addEventListener('touchmove', function() {
-  autoScrollPaused = true;
-  clearTimeout(resumeTimer);
-  resumeTimer = setTimeout(function() { autoScrollPaused = false; }, 4000);
-}, { passive: true });
-
-window.addEventListener('scroll', function() {
-  if (window.scrollY > 200) {
-    document.getElementById('scrollHint').classList.add('hidden');
-  }
-});
-
-autoScroll();
-
-// ── Music ──
-var musicStarted = false;
-function startMusic() {
-  if (musicStarted) return;
-  var audio = document.getElementById('bgMusic');
-  var btn = document.getElementById('musicBtn');
-  audio.play().then(function() {
-    musicStarted = true;
-    btn.innerHTML = '&#9646;&#9646; Pause';
-  }).catch(function() {});
-}
-function toggleMusic() {
-  var audio = document.getElementById('bgMusic');
-  var btn = document.getElementById('musicBtn');
-  if (audio.paused) {
-    audio.play();
-    btn.innerHTML = '&#9646;&#9646; Pause';
-    musicStarted = true;
-  } else {
-    audio.pause();
-    btn.innerHTML = '&#9654; Play Theme';
-  }
-}
-// Auto-play on first user interaction (browsers require interaction before audio)
-['scroll', 'click', 'touchstart', 'keydown'].forEach(function(evt) {
-  window.addEventListener(evt, startMusic, { once: true, passive: true });
-});
-
-// ── i18n ──
-var TRANSLATIONS = {
-  en: { inProgress: 'In Progress', comingSoon: 'Coming Soon', planned: 'Planned', done: 'DONE', upNext: 'UP NEXT', inProg: 'IN PROGRESS', plan: 'PLANNED', lastUpdated: 'Roadmap last updated', loading: 'Loading roadmap\u2026', loadFail: 'Could not load roadmap.', visitGithub: 'Visit our GitHub', intro: 'A short time ago, in a codebase<br>not so far away\u2026', subtitle: 'The Roadmap Awakens', scrollHint: 'scroll or wait', playTheme: '\u25B6 Play Theme', pause: '\u23F8 Pause', builtBy: 'Built by Shyden Ltd', note: 'Priorities may shift \u2014 we ship what matters most to you first.' },
-  ar: { inProgress: '\u0642\u064A\u062F \u0627\u0644\u062A\u0646\u0641\u064A\u0630', comingSoon: '\u0642\u0631\u064A\u0628\u064B\u0627', planned: '\u0645\u062E\u0637\u0637', done: '\u0645\u0643\u062A\u0645\u0644', upNext: '\u0627\u0644\u062A\u0627\u0644\u064A', inProg: '\u0642\u064A\u062F \u0627\u0644\u062A\u0646\u0641\u064A\u0630', plan: '\u0645\u062E\u0637\u0637', lastUpdated: '\u0622\u062E\u0631 \u062A\u062D\u062F\u064A\u062B', loading: '\u062C\u0627\u0631\u064A \u0627\u0644\u062A\u062D\u0645\u064A\u0644\u2026', intro: '\u0645\u0646\u0630 \u0648\u0642\u062A \u0642\u0635\u064A\u0631\u060C \u0641\u064A \u0643\u0648\u062F<br>\u0644\u064A\u0633 \u0628\u0639\u064A\u062F\u064B\u0627 \u062C\u062F\u064B\u0627\u2026', subtitle: '\u0627\u0644\u062E\u0627\u0631\u0637\u0629 \u062A\u0633\u062A\u064A\u0642\u0638', crawl: '\u064A\u062A\u0637\u0648\u0631 ShyTalk \u0628\u0633\u0631\u0639\u0629.<br>\u0645\u064A\u0632\u0627\u062A \u062C\u062F\u064A\u062F\u0629 \u0641\u064A \u0627\u0644\u0623\u0641\u0642\u060C \u0648\u0627\u0644\u0623\u0645\u0627\u0646<br>\u064A\u062A\u0639\u0632\u0632\u060C \u0648\u0627\u0644\u0645\u0646\u0635\u0629 \u062A\u0646\u0645\u0648<br>\u0644\u0627\u0633\u062A\u0642\u0628\u0627\u0644 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u064A\u0646 \u0639\u0644\u0649 \u0643\u0644 \u062C\u0647\u0627\u0632.<br><br>\u0625\u0644\u064A\u0643\u0645 \u0645\u0627 \u064A\u0646\u062A\u0638\u0631\u0643\u0645\u2026' },
-  de: { inProgress: 'In Arbeit', comingSoon: 'Kommt bald', planned: 'Geplant', done: 'FERTIG', upNext: 'ALS N\u00C4CHSTES', inProg: 'IN ARBEIT', plan: 'GEPLANT', lastUpdated: 'Zuletzt aktualisiert', loading: 'Roadmap wird geladen\u2026', intro: 'Vor nicht allzu langer Zeit, in einer Codebasis<br>nicht weit entfernt\u2026', subtitle: 'Die Roadmap erwacht', crawl: 'ShyTalk entwickelt sich rasant weiter.<br>Neue Funktionen stehen bevor, die Sicherheit<br>wird verst\u00E4rkt und die Plattform<br>w\u00E4chst f\u00FCr Nutzer auf jedem Ger\u00E4t.<br><br>Hier ist, was kommt\u2026' },
-  es: { inProgress: 'En progreso', comingSoon: 'Pr\u00F3ximamente', planned: 'Planificado', done: 'HECHO', upNext: 'SIGUIENTE', inProg: 'EN PROGRESO', plan: 'PLANIFICADO', lastUpdated: '\u00DAltima actualizaci\u00F3n', loading: 'Cargando\u2026', intro: 'Hace poco tiempo, en un c\u00F3digo<br>no muy lejano\u2026', subtitle: 'La hoja de ruta despierta', crawl: 'ShyTalk evoluciona r\u00E1pidamente.<br>Nuevas funciones est\u00E1n en el horizonte,<br>la seguridad se fortalece y la plataforma<br>crece para todos los dispositivos.<br><br>Esto es lo que viene\u2026' },
-  fr: { inProgress: 'En cours', comingSoon: 'Bient\u00F4t', planned: 'Planifi\u00E9', done: 'FAIT', upNext: 'SUIVANT', inProg: 'EN COURS', plan: 'PLANIFI\u00C9', lastUpdated: 'Derni\u00E8re mise \u00E0 jour', loading: 'Chargement\u2026', intro: 'Il y a peu de temps, dans un code<br>pas si lointain\u2026', subtitle: 'La feuille de route s\u2019\u00E9veille', crawl: 'ShyTalk \u00E9volue rapidement.<br>De nouvelles fonctionnalit\u00E9s arrivent,<br>la s\u00E9curit\u00E9 se renforce et la plateforme<br>s\u2019ouvre \u00E0 tous les appareils.<br><br>Voici ce qui vous attend\u2026' },
-  hi: { inProgress: '\u091C\u093E\u0930\u0940 \u0939\u0948', comingSoon: '\u091C\u0932\u094D\u0926 \u0906 \u0930\u0939\u093E \u0939\u0948', planned: '\u092F\u094B\u091C\u0928\u093E\u092C\u0926\u094D\u0927', done: '\u092A\u0942\u0930\u094D\u0923', upNext: '\u0905\u0917\u0932\u093E', inProg: '\u091C\u093E\u0930\u0940', plan: '\u092F\u094B\u091C\u0928\u093E', lastUpdated: '\u0905\u0902\u0924\u093F\u092E \u0905\u092A\u0921\u0947\u091F', loading: '\u0932\u094B\u0921 \u0939\u094B \u0930\u0939\u093E \u0939\u0948\u2026', intro: '\u0915\u0941\u091B \u0938\u092E\u092F \u092A\u0939\u0932\u0947, \u090F\u0915 \u0915\u094B\u0921 \u092E\u0947\u0902<br>\u092C\u0939\u0941\u0924 \u0926\u0942\u0930 \u0928\u0939\u0940\u0902\u2026', subtitle: '\u0930\u094B\u0921\u092E\u0948\u092A \u091C\u093E\u0917 \u0909\u0920\u0924\u093E \u0939\u0948', crawl: 'ShyTalk \u0924\u0947\u091C\u093C\u0940 \u0938\u0947 \u0935\u093F\u0915\u0938\u093F\u0924 \u0939\u094B \u0930\u0939\u093E \u0939\u0948\u0964<br>\u0928\u0908 \u0938\u0941\u0935\u093F\u0927\u093E\u090F\u0901 \u0906 \u0930\u0939\u0940 \u0939\u0948\u0902, \u0938\u0941\u0930\u0915\u094D\u0937\u093E<br>\u092E\u091C\u093C\u092C\u0942\u0924 \u0939\u094B \u0930\u0939\u0940 \u0939\u0948, \u0914\u0930 \u092A\u094D\u0932\u0947\u091F\u0938\u0942\u0930\u094D\u092E<br>\u0938\u092D\u0940 \u0921\u093F\u0935\u093E\u0907\u0938 \u092A\u0930 \u092C\u0922\u093C \u0930\u0939\u093E \u0939\u0948\u0964<br><br>\u0906\u0917\u0947 \u0915\u094D\u092F\u093E \u0939\u0948\u2026' },
-  id: { inProgress: 'Sedang berjalan', comingSoon: 'Segera hadir', planned: 'Direncanakan', done: 'SELESAI', upNext: 'SELANJUTNYA', inProg: 'SEDANG BERJALAN', plan: 'DIRENCANAKAN', lastUpdated: 'Terakhir diperbarui', loading: 'Memuat\u2026', intro: 'Beberapa waktu lalu, di sebuah kode<br>yang tidak terlalu jauh\u2026', subtitle: 'Peta jalan terbangun', crawl: 'ShyTalk berkembang pesat.<br>Fitur baru di depan mata, keamanan<br>diperkuat, dan platform tumbuh<br>untuk semua perangkat.<br><br>Inilah yang akan datang\u2026' },
-  it: { inProgress: 'In corso', comingSoon: 'Prossimamente', planned: 'Pianificato', done: 'FATTO', upNext: 'PROSSIMO', inProg: 'IN CORSO', plan: 'PIANIFICATO', lastUpdated: 'Ultimo aggiornamento', loading: 'Caricamento\u2026', intro: 'Poco tempo fa, in un codice<br>non molto lontano\u2026', subtitle: 'La roadmap si risveglia', crawl: 'ShyTalk si evolve rapidamente.<br>Nuove funzionalit\u00E0 all\u2019orizzonte,<br>la sicurezza si rafforza e la piattaforma<br>cresce per ogni dispositivo.<br><br>Ecco cosa ci aspetta\u2026' },
-  ja: { inProgress: '\u9032\u884C\u4E2D', comingSoon: '\u8FD1\u65E5\u516C\u958B', planned: '\u8A08\u753B\u4E2D', done: '\u5B8C\u4E86', upNext: '\u6B21', inProg: '\u9032\u884C\u4E2D', plan: '\u8A08\u753B', lastUpdated: '\u6700\u7D42\u66F4\u65B0', loading: '\u8AAD\u307F\u8FBC\u307F\u4E2D\u2026', intro: '\u5C11\u3057\u524D\u3001\u305D\u3046\u9060\u304F\u306A\u3044<br>\u30B3\u30FC\u30C9\u306E\u4E2D\u3067\u2026', subtitle: '\u30ED\u30FC\u30C9\u30DE\u30C3\u30D7\u304C\u76EE\u899A\u3081\u308B', crawl: 'ShyTalk\u306F\u6025\u901F\u306B\u9032\u5316\u4E2D\u3002<br>\u65B0\u6A5F\u80FD\u304C\u8FEB\u308A\u3001\u30BB\u30AD\u30E5\u30EA\u30C6\u30A3\u304C<br>\u5F37\u5316\u3055\u308C\u3001\u3059\u3079\u3066\u306E\u30C7\u30D0\u30A4\u30B9\u3067<br>\u30D7\u30E9\u30C3\u30C8\u30D5\u30A9\u30FC\u30E0\u304C\u6210\u9577\u4E2D\u3002<br><br>\u3053\u308C\u304B\u3089\u306E\u5C55\u671B\u2026' },
-  ko: { inProgress: '\uC9C4\uD589 \uC911', comingSoon: '\uACE7 \uCD9C\uC2DC', planned: '\uACC4\uD68D\uB428', done: '\uC644\uB8CC', upNext: '\uB2E4\uC74C', inProg: '\uC9C4\uD589 \uC911', plan: '\uACC4\uD68D', lastUpdated: '\uB9C8\uC9C0\uB9C9 \uC5C5\uB370\uC774\uD2B8', loading: '\uB85C\uB529\u2026', intro: '\uC5BC\uB9C8 \uC804, \uADF8\uB9AC \uBA40\uC9C0 \uC54A\uC740<br>\uCF54\uB4DC \uC18D\uC5D0\uC11C\u2026', subtitle: '\uB85C\uB4DC\uB9F5\uC774 \uAE68\uC5B4\uB09C\uB2E4', crawl: 'ShyTalk\uC774 \uBE60\uB974\uAC8C \uBC1C\uC804\uD558\uACE0 \uC788\uC2B5\uB2C8\uB2E4.<br>\uC0C8\uB85C\uC6B4 \uAE30\uB2A5\uC774 \uB2E4\uAC00\uC624\uACE0, \uBCF4\uC548\uC774<br>\uAC15\uD654\uB418\uBA70, \uBAA8\uB4E0 \uB514\uBC14\uC774\uC2A4\uC5D0\uC11C<br>\uD50C\uB7AB\uD3FC\uC774 \uC131\uC7A5\uD558\uACE0 \uC788\uC2B5\uB2C8\uB2E4.<br><br>\uC55E\uC73C\uB85C\uC758 \uACC4\uD68D\u2026' },
-  nl: { inProgress: 'Bezig', comingSoon: 'Binnenkort', planned: 'Gepland', done: 'KLAAR', upNext: 'VOLGENDE', inProg: 'BEZIG', plan: 'GEPLAND', lastUpdated: 'Laatst bijgewerkt', loading: 'Laden\u2026', intro: 'Kort geleden, in een codebase<br>niet zo ver weg\u2026', subtitle: 'De roadmap ontwaakt', crawl: 'ShyTalk ontwikkelt zich snel.<br>Nieuwe functies komen eraan, veiligheid<br>wordt versterkt en het platform groeit<br>voor alle apparaten.<br><br>Dit is wat komt\u2026' },
-  pl: { inProgress: 'W toku', comingSoon: 'Wkr\u00F3tce', planned: 'Zaplanowano', done: 'GOTOWE', upNext: 'DALEJ', inProg: 'W TOKU', plan: 'PLAN', lastUpdated: 'Ostatnia aktualizacja', loading: '\u0141adowanie\u2026', intro: 'Niedawno, w kodzie<br>nie tak daleko\u2026', subtitle: 'Mapa drogowa si\u0119 budzi', crawl: 'ShyTalk szybko si\u0119 rozwija.<br>Nowe funkcje s\u0105 na horyzoncie,<br>bezpiecze\u0144stwo jest wzmacniane,<br>a platforma ro\u015Bnie na ka\u017Cdym urz\u0105dzeniu.<br><br>Oto co nadchodzi\u2026' },
-  pt: { inProgress: 'Em andamento', comingSoon: 'Em breve', planned: 'Planejado', done: 'FEITO', upNext: 'PR\u00D3XIMO', inProg: 'EM ANDAMENTO', plan: 'PLANEJADO', lastUpdated: '\u00DAltima atualiza\u00E7\u00E3o', loading: 'Carregando\u2026', intro: 'H\u00E1 pouco tempo, em um c\u00F3digo<br>n\u00E3o muito distante\u2026', subtitle: 'O roadmap desperta', crawl: 'O ShyTalk est\u00E1 evoluindo r\u00E1pido.<br>Novos recursos est\u00E3o chegando,<br>a seguran\u00E7a est\u00E1 sendo refor\u00E7ada<br>e a plataforma cresce para todos.<br><br>Veja o que vem por a\u00ED\u2026' },
-  ru: { inProgress: '\u0412 \u0440\u0430\u0431\u043E\u0442\u0435', comingSoon: '\u0421\u043A\u043E\u0440\u043E', planned: '\u0417\u0430\u043F\u043B\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u043E', done: '\u0413\u041E\u0422\u041E\u0412\u041E', upNext: '\u0414\u0410\u041B\u0415\u0415', inProg: '\u0412 \u0420\u0410\u0411\u041E\u0422\u0415', plan: '\u041F\u041B\u0410\u041D', lastUpdated: '\u041F\u043E\u0441\u043B\u0435\u0434\u043D\u0435\u0435 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435', loading: '\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430\u2026', intro: '\u041D\u0435\u0434\u0430\u0432\u043D\u043E, \u0432 \u043A\u043E\u0434\u0435<br>\u043D\u0435 \u0442\u0430\u043A \u0434\u0430\u043B\u0435\u043A\u043E\u2026', subtitle: '\u0414\u043E\u0440\u043E\u0436\u043D\u0430\u044F \u043A\u0430\u0440\u0442\u0430 \u043F\u0440\u043E\u0431\u0443\u0436\u0434\u0430\u0435\u0442\u0441\u044F', crawl: 'ShyTalk \u0431\u044B\u0441\u0442\u0440\u043E \u0440\u0430\u0437\u0432\u0438\u0432\u0430\u0435\u0442\u0441\u044F.<br>\u041D\u043E\u0432\u044B\u0435 \u0444\u0443\u043D\u043A\u0446\u0438\u0438 \u043D\u0430 \u0433\u043E\u0440\u0438\u0437\u043E\u043D\u0442\u0435,<br>\u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u043E\u0441\u0442\u044C \u0443\u043A\u0440\u0435\u043F\u043B\u044F\u0435\u0442\u0441\u044F,<br>\u043F\u043B\u0430\u0442\u0444\u043E\u0440\u043C\u0430 \u0440\u0430\u0441\u0442\u0451\u0442 \u0434\u043B\u044F \u0432\u0441\u0435\u0445.<br><br>\u0412\u043E\u0442 \u0447\u0442\u043E \u0432\u043F\u0435\u0440\u0435\u0434\u0438\u2026' },
-  sv: { inProgress: 'P\u00E5g\u00E5r', comingSoon: 'Kommer snart', planned: 'Planerat', done: 'KLART', upNext: 'N\u00C4STA', inProg: 'P\u00C5G\u00C5R', plan: 'PLANERAT', lastUpdated: 'Senast uppdaterad', loading: 'Laddar\u2026', intro: 'F\u00F6r inte s\u00E5 l\u00E4nge sedan, i en kodbas<br>inte s\u00E5 l\u00E5ngt bort\u2026', subtitle: 'F\u00E4rdplanen vaknar', crawl: 'ShyTalk utvecklas snabbt.<br>Nya funktioner \u00E4r p\u00E5 v\u00E4g, s\u00E4kerheten<br>st\u00E4rks och plattformen v\u00E4xer<br>f\u00F6r alla enheter.<br><br>H\u00E4r \u00E4r vad som komma skall\u2026' },
-  th: { inProgress: '\u0E01\u0E33\u0E25\u0E31\u0E07\u0E14\u0E33\u0E40\u0E19\u0E34\u0E19\u0E01\u0E32\u0E23', comingSoon: '\u0E40\u0E23\u0E47\u0E27\u0E46 \u0E19\u0E35\u0E49', planned: '\u0E27\u0E32\u0E07\u0E41\u0E1C\u0E19', done: '\u0E40\u0E2A\u0E23\u0E47\u0E08', upNext: '\u0E16\u0E31\u0E14\u0E44\u0E1B', inProg: '\u0E14\u0E33\u0E40\u0E19\u0E34\u0E19\u0E01\u0E32\u0E23', plan: '\u0E27\u0E32\u0E07\u0E41\u0E1C\u0E19', lastUpdated: '\u0E2D\u0E31\u0E1B\u0E40\u0E14\u0E15\u0E25\u0E48\u0E32\u0E2A\u0E38\u0E14', loading: '\u0E01\u0E33\u0E25\u0E31\u0E07\u0E42\u0E2B\u0E25\u0E14\u2026', intro: '\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E44\u0E21\u0E48\u0E19\u0E32\u0E19\u0E21\u0E32\u0E19\u0E35\u0E49 \u0E43\u0E19\u0E42\u0E04\u0E49\u0E14<br>\u0E17\u0E35\u0E48\u0E44\u0E21\u0E48\u0E44\u0E01\u0E25\u0E19\u0E31\u0E01\u2026', subtitle: '\u0E41\u0E1C\u0E19\u0E07\u0E32\u0E19\u0E15\u0E37\u0E48\u0E19\u0E02\u0E36\u0E49\u0E19', crawl: 'ShyTalk \u0E01\u0E33\u0E25\u0E31\u0E07\u0E1E\u0E31\u0E12\u0E19\u0E32\u0E2D\u0E22\u0E48\u0E32\u0E07\u0E23\u0E27\u0E14\u0E40\u0E23\u0E47\u0E27<br>\u0E1F\u0E35\u0E40\u0E08\u0E2D\u0E23\u0E4C\u0E43\u0E2B\u0E21\u0E48\u0E01\u0E33\u0E25\u0E31\u0E07\u0E08\u0E30\u0E21\u0E32 \u0E04\u0E27\u0E32\u0E21\u0E1B\u0E25\u0E2D\u0E14\u0E20\u0E31\u0E22<br>\u0E41\u0E02\u0E47\u0E07\u0E41\u0E01\u0E23\u0E48\u0E07\u0E02\u0E36\u0E49\u0E19 \u0E41\u0E25\u0E30\u0E41\u0E1E\u0E25\u0E15\u0E1F\u0E2D\u0E23\u0E4C\u0E21<br>\u0E40\u0E15\u0E34\u0E1A\u0E42\u0E15\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E17\u0E38\u0E01\u0E2D\u0E38\u0E1B\u0E01\u0E23\u0E13\u0E4C<br><br>\u0E19\u0E35\u0E48\u0E04\u0E37\u0E2D\u0E2A\u0E34\u0E48\u0E07\u0E17\u0E35\u0E48\u0E23\u0E2D\u0E2D\u0E22\u0E39\u0E48\u2026' },
-  tr: { inProgress: 'Devam ediyor', comingSoon: 'Yak\u0131nda', planned: 'Planland\u0131', done: 'TAMAM', upNext: 'S\u0130RADA', inProg: 'DEVAM ED\u0130YOR', plan: 'PLANLANDI', lastUpdated: 'Son g\u00FCncelleme', loading: 'Y\u00FCkleniyor\u2026', intro: 'K\u0131sa bir s\u00FCre \u00F6nce, \u00E7ok uzak olmayan<br>bir kodda\u2026', subtitle: 'Yol haritas\u0131 uyan\u0131yor', crawl: 'ShyTalk h\u0131zla geli\u015Fiyor.<br>Yeni \u00F6zellikler ufukta, g\u00FCvenlik<br>g\u00FC\u00E7lendiriliyor ve platform<br>t\u00FCm cihazlarda b\u00FCy\u00FCyor.<br><br>\u0130\u015Fte \u00F6n\u00FCm\u00FCzdeki\u2026' },
-  uk: { inProgress: '\u0412 \u0440\u043E\u0431\u043E\u0442\u0456', comingSoon: '\u041D\u0435\u0437\u0430\u0431\u0430\u0440\u043E\u043C', planned: '\u0417\u0430\u043F\u043B\u0430\u043D\u043E\u0432\u0430\u043D\u043E', done: '\u0413\u041E\u0422\u041E\u0412\u041E', upNext: '\u0414\u0410\u041B\u0406', inProg: '\u0412 \u0420\u041E\u0411\u041E\u0422\u0406', plan: '\u041F\u041B\u0410\u041D', lastUpdated: '\u041E\u0441\u0442\u0430\u043D\u043D\u0454 \u043E\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u044F', loading: '\u0417\u0430\u0432\u0430\u043D\u0442\u0430\u0436\u0435\u043D\u043D\u044F\u2026', intro: '\u041D\u0435\u0449\u043E\u0434\u0430\u0432\u043D\u043E, \u0443 \u043A\u043E\u0434\u0456<br>\u043D\u0435 \u0442\u0430\u043A \u0434\u0430\u043B\u0435\u043A\u043E\u2026', subtitle: '\u0414\u043E\u0440\u043E\u0436\u043D\u044F \u043A\u0430\u0440\u0442\u0430 \u043F\u0440\u043E\u0431\u0443\u0434\u0436\u0443\u0454\u0442\u044C\u0441\u044F', crawl: 'ShyTalk \u0448\u0432\u0438\u0434\u043A\u043E \u0440\u043E\u0437\u0432\u0438\u0432\u0430\u0454\u0442\u044C\u0441\u044F.<br>\u041D\u043E\u0432\u0456 \u0444\u0443\u043D\u043A\u0446\u0456\u0457 \u043D\u0430 \u043E\u0431\u0440\u0456\u0457,<br>\u0431\u0435\u0437\u043F\u0435\u043A\u0430 \u0437\u043C\u0456\u0446\u043D\u044E\u0454\u0442\u044C\u0441\u044F,<br>\u043F\u043B\u0430\u0442\u0444\u043E\u0440\u043C\u0430 \u0437\u0440\u043E\u0441\u0442\u0430\u0454 \u0434\u043B\u044F \u0432\u0441\u0456\u0445.<br><br>\u041E\u0441\u044C \u0449\u043E \u043F\u043E\u043F\u0435\u0440\u0435\u0434\u0443\u2026' },
-  vi: { inProgress: '\u0110ang ti\u1EBFn h\u00E0nh', comingSoon: 'S\u1EAFp ra m\u1EAFt', planned: '\u0110\u00E3 l\u00EAn k\u1EBF ho\u1EA1ch', done: 'HO\u00C0N TH\u00C0NH', upNext: 'TI\u1EEEP THEO', inProg: '\u0110ANG TI\u1EEEN H\u00C0NH', plan: 'K\u1EBE HO\u1EA0CH', lastUpdated: 'C\u1EADp nh\u1EADt l\u1EA7n cu\u1ED1i', loading: '\u0110ang t\u1EA3i\u2026', intro: 'C\u00E1ch \u0111\u00E2y kh\u00F4ng l\u00E2u, trong m\u1ED9t m\u00E3 ngu\u1ED3n<br>kh\u00F4ng xa l\u1EAFm\u2026', subtitle: 'L\u1ED9 tr\u00ECnh th\u1EE9c t\u1EC9nh', crawl: 'ShyTalk \u0111ang ph\u00E1t tri\u1EC3n nhanh ch\u00F3ng.<br>T\u00EDnh n\u0103ng m\u1EDBi s\u1EAFp ra m\u1EAFt, b\u1EA3o m\u1EADt<br>\u0111\u01B0\u1EE3c t\u0103ng c\u01B0\u1EDDng v\u00E0 n\u1EC1n t\u1EA3ng<br>ph\u00E1t tri\u1EC3n tr\u00EAn m\u1ECDi thi\u1EBFt b\u1ECB.<br><br>\u0110\u00E2y l\u00E0 nh\u1EEFng g\u00EC s\u1EAFp t\u1EDBi\u2026' },
-  zh: { inProgress: '\u8FDB\u884C\u4E2D', comingSoon: '\u5373\u5C06\u63A8\u51FA', planned: '\u5DF2\u8BA1\u5212', done: '\u5B8C\u6210', upNext: '\u4E0B\u4E00\u4E2A', inProg: '\u8FDB\u884C\u4E2D', plan: '\u5DF2\u8BA1\u5212', lastUpdated: '\u6700\u540E\u66F4\u65B0', loading: '\u52A0\u8F7D\u4E2D\u2026', intro: '\u4E0D\u4E45\u524D\uFF0C\u5728\u4E00\u4E2A<br>\u5E76\u4E0D\u9065\u8FDC\u7684\u4EE3\u7801\u4E2D\u2026', subtitle: '\u8DEF\u7EBF\u56FE\u89C9\u9192\u4E86', crawl: 'ShyTalk \u6B63\u5728\u5FEB\u901F\u53D1\u5C55\u3002<br>\u65B0\u529F\u80FD\u5373\u5C06\u63A8\u51FA\uFF0C\u5B89\u5168\u6027<br>\u6B63\u5728\u52A0\u5F3A\uFF0C\u5E73\u53F0\u6B63\u5728<br>\u4E3A\u6240\u6709\u8BBE\u5907\u6210\u957F\u3002<br><br>\u4EE5\u4E0B\u662F\u5373\u5C06\u5230\u6765\u7684\u2026' },
-};
-
-// Detect browser language, fall back to English
-var browserLang = (navigator.language || 'en').split('-')[0];
-var t = TRANSLATIONS[browserLang] || TRANSLATIONS.en;
-
-// ── Roadmap data ──
-
-function escapeHtml(str) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function getStatusBadge(status) {
-  if (!status) return { cls: 'feat-planned', label: t.plan || 'PLANNED' };
-  switch (status) {
-    case 'done': return { cls: 'feat-done', label: t.done || 'DONE' };
-    case 'next': return { cls: 'feat-next', label: t.upNext || 'UP NEXT' };
-    case 'in-progress': return { cls: 'feat-next', label: t.inProg || 'IN PROGRESS' };
-    default: return { cls: 'feat-planned', label: t.plan || 'PLANNED' };
-  }
-}
-
-function renderRoadmap(data) {
-  var container = document.getElementById('roadmap-container');
-  var html = '';
-
-  for (var p = 0; p < data.phases.length; p++) {
-    var phase = data.phases[p];
-    if (phase.features.length === 0) continue;
-
-    var statusCls = 'status-' + phase.status;
-    var statusLabel = phase.status === 'active' ? (t.inProgress || 'In Progress') :
-                      phase.status === 'soon' ? (t.comingSoon || 'Coming Soon') : (t.planned || 'Planned');
-
-    // Use translated phase title if available
-    var phaseTitle = (phase.titleI18n && phase.titleI18n[browserLang]) || phase.title;
-
-    html += '<div class="crawl-divider"></div>';
-    html += '<div class="crawl-section">';
-    html += '<h2>' + escapeHtml(phaseTitle) + '</h2>';
-    html += '<div class="section-status ' + statusCls + '">' + statusLabel + '</div>';
-
-    for (var f = 0; f < phase.features.length; f++) {
-      var feat = phase.features[f];
-      var badge = getStatusBadge(feat.status);
-
-      // Use translated feature name and description if available
-      var featI18n = feat.i18n && feat.i18n[browserLang];
-      var featName = (featI18n && featI18n.n) || feat.name;
-      var featDesc = (featI18n && featI18n.d) || feat.description;
-
-      html += '<div class="crawl-feature">';
-      html += '<h3>' + escapeHtml(featName) + '</h3>';
-      if (featDesc) {
-        html += '<p>' + escapeHtml(featDesc) + '</p>';
+      :root {
+        --bg: #0f1117;
+        --surface: #1a1d27;
+        --surface-hover: #22262f;
+        --border: #2a2e3a;
+        --primary: #7c5cfc;
+        --primary-glow: #9b82ff;
+        --primary-dim: rgba(124, 92, 252, 0.15);
+        --text: #e0e0e0;
+        --text-secondary: #8b8fa3;
+        --done: #4caf50;
+        --done-bg: rgba(76, 175, 80, 0.12);
+        --in-progress: #ff9800;
+        --in-progress-bg: rgba(255, 152, 0, 0.12);
+        --planned: #64b5f6;
+        --planned-bg: rgba(100, 181, 246, 0.1);
+        --radius: 12px;
+        --radius-lg: 16px;
+        --shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+        --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
+        --transition: 0.2s ease;
       }
-      html += '<span class="feat-badge ' + badge.cls + '">' + badge.label + '</span>';
-      html += '</div>';
-    }
 
-    html += '</div>';
-  }
+      *,
+      *::before,
+      *::after {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
 
-  container.innerHTML = html;
-}
+      html {
+        scroll-behavior: smooth;
+        scroll-padding-top: 72px;
+      }
 
-// ── Load roadmap from JSON ──
-var roadmapData = null;
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          "Inter",
+          system-ui,
+          -apple-system,
+          sans-serif;
+        line-height: 1.6;
+        min-height: 100vh;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
 
-function applyRoadmapLanguage() {
-  if (!roadmapData) return;
-  browserLang = (window.ShyTalkLanguage && window.ShyTalkLanguage.get()) || browserLang;
-  t = TRANSLATIONS[browserLang] || TRANSLATIONS.en;
-  renderRoadmap(roadmapData);
-  if (roadmapData.lastUpdated) {
-    document.getElementById('last-updated').textContent =
-      (t.lastUpdated || 'Roadmap last updated') + ': ' + roadmapData.lastUpdated;
-  }
-  // Translate intro/crawl text
-  var introEl = document.getElementById('intro-text');
-  var subtitleEl = document.getElementById('subtitle-text');
-  var crawlEl = document.getElementById('crawl-text');
-  if (introEl && t.intro) introEl.innerHTML = t.intro;
-  if (subtitleEl && t.subtitle) subtitleEl.textContent = t.subtitle;
-  if (crawlEl && t.crawl) crawlEl.innerHTML = t.crawl;
-}
+      /* ── Skip link ── */
+      .skip-link {
+        position: absolute;
+        top: -100%;
+        left: 16px;
+        z-index: 10000;
+        padding: 12px 24px;
+        background: var(--primary);
+        color: #fff;
+        border-radius: var(--radius);
+        font-weight: 600;
+        text-decoration: none;
+        transition: top var(--transition);
+      }
+      .skip-link:focus {
+        top: 16px;
+      }
 
-// Called by language-selector.js when user changes language
-window.applyLanguage = function(lang) {
-  browserLang = lang;
-  t = TRANSLATIONS[lang] || TRANSLATIONS.en;
-  applyRoadmapLanguage();
-};
+      /* ── Header ── */
+      .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 24px;
+        max-width: 960px;
+        margin: 0 auto;
+      }
+      .header-logo {
+        font-size: 1.5rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        background: linear-gradient(
+          135deg,
+          var(--primary) 0%,
+          var(--primary-glow) 100%
+        );
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        text-decoration: none;
+      }
+      .header-logo:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 4px;
+        border-radius: 4px;
+      }
+      .subscribe-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 20px;
+        background: var(--primary);
+        color: #fff;
+        border: none;
+        border-radius: 999px;
+        font-family: inherit;
+        font-size: 0.875rem;
+        font-weight: 600;
+        cursor: pointer;
+        min-height: 44px;
+        min-width: 44px;
+        transition:
+          background var(--transition),
+          transform var(--transition),
+          box-shadow var(--transition);
+      }
+      .subscribe-btn:hover {
+        background: var(--primary-glow);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 16px rgba(124, 92, 252, 0.3);
+      }
+      .subscribe-btn:focus-visible {
+        outline: 2px solid var(--primary-glow);
+        outline-offset: 3px;
+      }
+      .subscribe-btn svg {
+        width: 16px;
+        height: 16px;
+        fill: currentColor;
+      }
 
-fetch('roadmap-data.json')
-  .then(function(res) { return res.json(); })
-  .then(function(data) {
-    roadmapData = data;
-    // Use saved language preference
-    browserLang = (window.ShyTalkLanguage && window.ShyTalkLanguage.get()) || browserLang;
-    t = TRANSLATIONS[browserLang] || TRANSLATIONS.en;
-    applyRoadmapLanguage();
-  })
-  .catch(function() {
-    document.getElementById('roadmap-container').innerHTML =
-      '<div class="loading-msg">Could not load roadmap. <a href="https://github.com/ShydenMcM/ShyTalk" style="color:#4fc3f7;">Visit our GitHub</a></div>';
-  });
-</script>
+      /* ── Stats section ── */
+      .stats-section {
+        max-width: 960px;
+        margin: 24px auto 0;
+        padding: 0 24px;
+      }
+      .stats-card {
+        display: flex;
+        align-items: center;
+        gap: 32px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 32px;
+        box-shadow: var(--shadow);
+      }
+      .donut-container {
+        flex-shrink: 0;
+        position: relative;
+        width: 140px;
+        height: 140px;
+      }
+      .donut-container svg {
+        width: 100%;
+        height: 100%;
+      }
+      .donut-center-text {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+      }
+      .donut-percent {
+        font-size: 1.75rem;
+        font-weight: 800;
+        color: var(--text);
+        line-height: 1;
+      }
+      .donut-label {
+        font-size: 0.7rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-top: 4px;
+      }
+      .stats-legend {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        flex: 1;
+      }
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.9rem;
+      }
+      .legend-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .legend-dot--done {
+        background: var(--done);
+      }
+      .legend-dot--in-progress {
+        background: var(--in-progress);
+      }
+      .legend-dot--planned {
+        background: var(--planned);
+      }
+      .legend-count {
+        font-weight: 700;
+        margin-left: auto;
+        color: var(--text);
+      }
+      .legend-label {
+        color: var(--text-secondary);
+      }
 
-</body>
+      /* ── Sticky nav ── */
+      .sticky-nav {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: rgba(15, 17, 23, 0.92);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 1px solid var(--border);
+        margin-top: 32px;
+      }
+      .sticky-nav-inner {
+        display: flex;
+        align-items: center;
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+      .nav-link {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        padding: 16px 20px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-decoration: none;
+        min-height: 44px;
+        min-width: 44px;
+        transition: color var(--transition);
+      }
+      .nav-link:hover {
+        color: var(--text);
+      }
+      .nav-link.active {
+        color: var(--primary);
+      }
+      .nav-link.active::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 20px;
+        right: 20px;
+        height: 2px;
+        background: var(--primary);
+        border-radius: 1px;
+      }
+      .nav-link:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: -2px;
+        border-radius: 4px;
+      }
+
+      /* ── Main content ── */
+      .main-content {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 0 24px 80px;
+      }
+
+      /* ── Section headings ── */
+      .section-heading {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--text);
+        margin: 48px 0 24px;
+        padding-top: 8px;
+      }
+
+      /* ── Phase card ── */
+      .phase-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        margin-bottom: 16px;
+        overflow: hidden;
+        transition: border-color var(--transition);
+      }
+      .phase-card:hover {
+        border-color: rgba(124, 92, 252, 0.3);
+      }
+      .phase-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 20px 24px;
+        cursor: pointer;
+        user-select: none;
+        min-height: 44px;
+        background: none;
+        border: none;
+        width: 100%;
+        color: inherit;
+        font-family: inherit;
+        text-align: left;
+        transition: background var(--transition);
+      }
+      .phase-header:hover {
+        background: var(--surface-hover);
+      }
+      .phase-header:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: -2px;
+      }
+      .phase-chevron {
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+        color: var(--text-secondary);
+        transition: transform 0.3s ease;
+      }
+      .phase-card.collapsed .phase-chevron {
+        transform: rotate(-90deg);
+      }
+      .phase-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--text);
+        flex: 1;
+      }
+      .phase-status-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 12px;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+      .phase-status-badge--active {
+        background: var(--in-progress-bg);
+        color: var(--in-progress);
+        border: 1px solid rgba(255, 152, 0, 0.25);
+      }
+      .phase-status-badge--soon {
+        background: var(--planned-bg);
+        color: var(--planned);
+        border: 1px solid rgba(100, 181, 246, 0.2);
+      }
+      .phase-status-badge--planned {
+        background: rgba(139, 143, 163, 0.1);
+        color: var(--text-secondary);
+        border: 1px solid rgba(139, 143, 163, 0.15);
+      }
+      .phase-progress {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+      .phase-progress-bar {
+        width: 60px;
+        height: 6px;
+        background: var(--border);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .phase-progress-fill {
+        height: 100%;
+        background: var(--done);
+        border-radius: 3px;
+        transition: width 0.5s ease;
+      }
+      .phase-progress-text {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        white-space: nowrap;
+      }
+      .phase-body {
+        overflow: hidden;
+        transition:
+          max-height 0.35s ease,
+          opacity 0.25s ease;
+        max-height: 2000px;
+        opacity: 1;
+      }
+      .phase-card.collapsed .phase-body {
+        max-height: 0;
+        opacity: 0;
+      }
+      .feature-list {
+        list-style: none;
+        border-top: 1px solid var(--border);
+      }
+      .feature-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 24px;
+        border-bottom: 1px solid rgba(42, 46, 58, 0.5);
+        transition: background var(--transition);
+      }
+      .feature-item:last-child {
+        border-bottom: none;
+      }
+      .feature-item:hover {
+        background: rgba(124, 92, 252, 0.04);
+      }
+      .feature-status-icon {
+        flex-shrink: 0;
+        width: 22px;
+        height: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        margin-top: 2px;
+      }
+      .feature-status-icon--done {
+        color: var(--done);
+      }
+      .feature-status-icon--in-progress {
+        color: var(--in-progress);
+      }
+      .feature-status-icon--planned {
+        color: var(--planned);
+      }
+      .feature-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .feature-name {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--text);
+        line-height: 1.4;
+      }
+      .feature-desc {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        margin-top: 2px;
+        line-height: 1.4;
+      }
+      .feature-bell {
+        flex-shrink: 0;
+        width: 36px;
+        height: 36px;
+        min-width: 44px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: none;
+        border: none;
+        border-radius: 50%;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition:
+          color var(--transition),
+          background var(--transition);
+        margin: -4px -10px -4px 0;
+      }
+      .feature-bell:hover {
+        color: var(--primary);
+        background: var(--primary-dim);
+      }
+      .feature-bell:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 2px;
+      }
+      .feature-bell svg {
+        width: 16px;
+        height: 16px;
+        fill: currentColor;
+      }
+      .feature-bell.subscribed {
+        color: var(--primary);
+      }
+
+      /* ── Suggestions section ── */
+      .suggestions-placeholder {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 48px 24px;
+        text-align: center;
+      }
+      .suggestions-placeholder p {
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+      }
+
+      /* ── Loading / error states ── */
+      .loading-state {
+        text-align: center;
+        padding: 80px 24px;
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+      }
+      .loading-spinner {
+        display: inline-block;
+        width: 32px;
+        height: 32px;
+        border: 3px solid var(--border);
+        border-top-color: var(--primary);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-bottom: 16px;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .error-state {
+        text-align: center;
+        padding: 60px 24px;
+        color: var(--text-secondary);
+      }
+      .error-state a {
+        color: var(--primary);
+        text-decoration: underline;
+      }
+
+      /* ── Footer ── */
+      .footer {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 32px 24px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .footer-copyright {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+      }
+      .footer-disclaimer {
+        font-size: 0.75rem;
+        color: rgba(139, 143, 163, 0.6);
+        max-width: 480px;
+      }
+      .footer-updated {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        width: 100%;
+        margin-top: 4px;
+      }
+
+      /* ── Login prompt toast ── */
+      .login-toast {
+        position: fixed;
+        bottom: 80px;
+        left: 50%;
+        transform: translateX(-50%) translateY(20px);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 14px 24px;
+        color: var(--text);
+        font-size: 0.875rem;
+        box-shadow: var(--shadow-lg);
+        z-index: 200;
+        opacity: 0;
+        pointer-events: none;
+        transition:
+          opacity 0.3s ease,
+          transform 0.3s ease;
+      }
+      .login-toast.visible {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateX(-50%) translateY(0);
+      }
+
+      /* ── Responsive ── */
+      @media (max-width: 640px) {
+        .header {
+          padding: 12px 16px;
+        }
+        .header-logo {
+          font-size: 1.25rem;
+        }
+        .subscribe-btn {
+          padding: 8px 16px;
+          font-size: 0.8rem;
+        }
+
+        .stats-section {
+          padding: 0 16px;
+        }
+        .stats-card {
+          flex-direction: column;
+          gap: 24px;
+          padding: 24px 20px;
+          text-align: center;
+        }
+        .donut-container {
+          width: 120px;
+          height: 120px;
+        }
+        .stats-legend {
+          flex-direction: row;
+          flex-wrap: wrap;
+          gap: 16px;
+          justify-content: center;
+        }
+        .legend-item {
+          gap: 6px;
+        }
+        .legend-count {
+          margin-left: 4px;
+        }
+
+        .sticky-nav-inner {
+          padding: 0 16px;
+        }
+        .nav-link {
+          padding: 14px 16px;
+          font-size: 0.85rem;
+        }
+
+        .main-content {
+          padding: 0 16px 60px;
+        }
+        .section-heading {
+          font-size: 1.25rem;
+          margin: 32px 0 16px;
+        }
+
+        .phase-header {
+          padding: 16px;
+          gap: 10px;
+        }
+        .phase-title {
+          font-size: 1rem;
+        }
+        .phase-progress-bar {
+          width: 40px;
+        }
+        .feature-item {
+          padding: 12px 16px;
+        }
+        .feature-name {
+          font-size: 0.85rem;
+        }
+
+        .footer {
+          padding: 24px 16px;
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
+
+      @media (max-width: 380px) {
+        .phase-status-badge {
+          display: none;
+        }
+        .stats-legend {
+          flex-direction: column;
+          align-items: center;
+        }
+      }
+
+      /* ── Animations ── */
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(16px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .fade-in {
+        animation: fadeInUp 0.4s ease forwards;
+      }
+      .phase-card {
+        animation: fadeInUp 0.4s ease forwards;
+        opacity: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <a href="#roadmap" class="skip-link" data-i18n="skipToContent"
+      >Skip to content</a
+    >
+
+    <!-- ── Header ── -->
+    <header class="header" role="banner">
+      <a href="/" class="header-logo" aria-label="ShyTalk home">ShyTalk</a>
+      <button
+        class="subscribe-btn"
+        id="subscribe-btn"
+        aria-label="Subscribe to updates"
+        data-log="subscribe-btn"
+        data-i18n="subscribe"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"
+          />
+        </svg>
+        Subscribe
+      </button>
+    </header>
+
+    <!-- ── Stats section ── -->
+    <section class="stats-section" aria-label="Progress overview">
+      <div class="stats-card">
+        <div
+          class="donut-container"
+          role="img"
+          aria-label="Overall completion chart"
+        >
+          <svg id="donut-chart" viewBox="0 0 140 140"></svg>
+          <div class="donut-center-text">
+            <span class="donut-percent" id="donut-percent">--</span>
+            <span class="donut-label" data-i18n="complete">Complete</span>
+          </div>
+        </div>
+        <div class="stats-legend" id="stats-legend">
+          <div class="legend-item">
+            <span class="legend-dot legend-dot--done"></span>
+            <span class="legend-label" data-i18n="statusDone">Done</span>
+            <span class="legend-count" id="count-done">--</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-dot legend-dot--in-progress"></span>
+            <span class="legend-label" data-i18n="statusInProgress"
+              >In Progress</span
+            >
+            <span class="legend-count" id="count-in-progress">--</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-dot legend-dot--planned"></span>
+            <span class="legend-label" data-i18n="statusPlanned">Planned</span>
+            <span class="legend-count" id="count-planned">--</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Sticky nav ── -->
+    <nav class="sticky-nav" role="navigation" aria-label="Page sections">
+      <div class="sticky-nav-inner">
+        <a
+          href="#roadmap"
+          class="nav-link active"
+          data-nav="roadmap"
+          data-i18n="navRoadmap"
+          >Roadmap</a
+        >
+        <a
+          href="#suggestions"
+          class="nav-link"
+          data-nav="suggestions"
+          data-i18n="navSuggestions"
+          >Suggestions</a
+        >
+      </div>
+    </nav>
+
+    <!-- ── Main content ── -->
+    <main class="main-content" id="main-content">
+      <!-- Roadmap section -->
+      <section id="roadmap" aria-label="Feature roadmap">
+        <h2 class="section-heading" data-i18n="roadmapHeading">
+          Feature Roadmap
+        </h2>
+        <div id="roadmap-container">
+          <div class="loading-state" role="status">
+            <div class="loading-spinner" aria-hidden="true"></div>
+            <p data-i18n="loading">Loading roadmap...</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Suggestions section -->
+      <section id="suggestions" aria-label="Feature suggestions">
+        <h2 class="section-heading" data-i18n="suggestionsHeading">
+          Suggestions
+        </h2>
+        <div id="suggestions-board">
+          <div class="suggestions-placeholder">
+            <p data-i18n="suggestionsPlaceholder">
+              Feature suggestions board coming soon.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- ── Footer ── -->
+    <footer class="footer" role="contentinfo">
+      <span class="footer-copyright" data-i18n="copyright"
+        >&copy; Shyden Ltd</span
+      >
+      <span class="footer-disclaimer" data-i18n="disclaimer"
+        >Priorities may shift — we ship what matters most to you first.</span
+      >
+      <span class="footer-updated" id="footer-updated"></span>
+    </footer>
+
+    <!-- ── Login toast ── -->
+    <div
+      class="login-toast"
+      id="login-toast"
+      role="alert"
+      aria-live="polite"
+      data-i18n="loginPrompt"
+    >
+      Sign in to the app to get notified about this feature.
+    </div>
+
+    <!-- ── Scripts ── -->
+    <script src="/js/logger.js"></script>
+    <script>
+      ShyTalkLogger.init({
+        source: "roadmap-page",
+        endpoint:
+          (location.hostname.includes("dev")
+            ? "https://dev-api.shytalk.shyden.co.uk"
+            : "https://api.shytalk.shyden.co.uk") + "/api/logs",
+      });
+    </script>
+    <script src="/js/roadmap-app.js" defer></script>
+    <script src="/js/language-selector.js" defer></script>
+  </body>
 </html>
