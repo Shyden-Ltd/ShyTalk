@@ -583,3 +583,249 @@ describe('Subscription Edge Cases', () => {
       .expect(404);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// Additional coverage — uncovered lines and branches
+// ═══════════════════════════════════════════════════════════════
+
+describe('Auth required on remaining endpoints', () => {
+  test('DELETE /api/subscriptions/me/watch/:id without auth returns 401', async () => {
+    const app = createUnauthApp();
+    await request(app).delete('/api/subscriptions/me/watch/some-id').expect(401);
+  });
+
+  test('DELETE /api/subscriptions/push-token without auth returns 401', async () => {
+    const app = createUnauthApp();
+    await request(app).delete('/api/subscriptions/push-token').expect(401);
+  });
+});
+
+describe('POST /api/subscriptions/me/watch — validation', () => {
+  test('returns 400 when type is missing', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/subscriptions/me/watch')
+      .send({ id: 'feature-123' })
+      .expect(400);
+    expect(res.body.error).toBe('Type and ID required');
+  });
+
+  test('returns 400 when id is missing', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/subscriptions/me/watch')
+      .send({ type: 'feature' })
+      .expect(400);
+    expect(res.body.error).toBe('Type and ID required');
+  });
+});
+
+describe('POST /api/subscriptions/push-token — validation', () => {
+  test('returns 400 when token is missing', async () => {
+    const app = createApp();
+    const res = await request(app).post('/api/subscriptions/push-token').send({}).expect(400);
+    expect(res.body.error).toBe('Token required');
+  });
+});
+
+describe('DELETE /api/subscriptions/me/watch/:id — edge cases', () => {
+  test('returns 404 when subscription doc does not exist', async () => {
+    mockDocGet.mockResolvedValue({ exists: false });
+    const app = createApp();
+    const res = await request(app).delete('/api/subscriptions/me/watch/some-id').expect(404);
+    expect(res.body.error).toBe('Not watching this item');
+  });
+
+  test('removes from watchedSuggestions when id is in suggestions list', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('subscriptions/')) {
+        return Promise.resolve(makeSubscriptionDoc(1001, { watchedSuggestions: ['sug-999'] }));
+      }
+      return Promise.resolve({ exists: false });
+    });
+    const app = createApp();
+    await request(app).delete('/api/subscriptions/me/watch/sug-999').expect(200);
+    expect(mockDocUpdate).toHaveBeenCalled();
+  });
+});
+
+describe('PUT /api/subscriptions/me — emailConsent=false branch', () => {
+  test('emailConsent=false disables email in provided channelPreferences', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('subscriptions/')) {
+        return Promise.resolve(makeSubscriptionDoc(1001, { emailConsentAt: 1709913600000 }));
+      }
+      return Promise.resolve({ exists: false });
+    });
+    const app = createApp();
+    await request(app)
+      .put('/api/subscriptions/me')
+      .send({
+        emailConsent: false,
+        channelPreferences: {
+          roadmapUpdate: { email: true, push: false, inApp: true, systemMessage: false },
+        },
+      })
+      .expect(200);
+
+    // The set call should have email disabled in channelPreferences
+    const setCalls = mockDocSet.mock.calls;
+    const updateCall = setCalls.find((c) => c[0] && c[0].includes('subscriptions/'));
+    expect(updateCall).toBeDefined();
+    const savedData = updateCall[1];
+    expect(savedData.emailConsentAt).toBeNull();
+    expect(savedData.channelPreferences.roadmapUpdate.email).toBe(false);
+  });
+});
+
+describe('PUT /api/subscriptions/me — scope update', () => {
+  test('scope is saved when provided', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('subscriptions/')) {
+        return Promise.resolve(makeSubscriptionDoc(1001));
+      }
+      return Promise.resolve({ exists: false });
+    });
+    const app = createApp();
+    await request(app).put('/api/subscriptions/me').send({ scope: 'watched_only' }).expect(200);
+
+    const setCalls = mockDocSet.mock.calls;
+    const updateCall = setCalls.find((c) => c[0] && c[0].includes('subscriptions/'));
+    expect(updateCall).toBeDefined();
+    expect(updateCall[1].scope).toBe('watched_only');
+  });
+});
+
+describe('Error handling — 500 responses', () => {
+  test('GET /api/subscriptions/me returns 500 on Firestore error', async () => {
+    mockDocGet.mockRejectedValue(new Error('Firestore error'));
+    const app = createApp();
+    const res = await request(app).get('/api/subscriptions/me').expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('PUT /api/subscriptions/me returns 500 on Firestore error', async () => {
+    mockDocSet.mockRejectedValueOnce(new Error('Firestore write error'));
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('subscriptions/')) {
+        return Promise.resolve(makeSubscriptionDoc(1001));
+      }
+      return Promise.resolve({ exists: false });
+    });
+    const app = createApp();
+    const res = await request(app).put('/api/subscriptions/me').send({ scope: 'all' }).expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('POST /api/subscriptions/me/watch returns 500 on Firestore error', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path && (path.includes('roadmapFeatures/') || path.includes('suggestions/'))) {
+        return Promise.resolve({ exists: true, data: () => ({ id: 'f1' }) });
+      }
+      return Promise.resolve({ exists: false });
+    });
+    mockDocSet.mockRejectedValueOnce(new Error('Firestore write error'));
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/subscriptions/me/watch')
+      .send({ type: 'feature', id: 'f1' })
+      .expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('DELETE /api/subscriptions/me/watch/:id returns 500 on Firestore error', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('subscriptions/')) {
+        return Promise.resolve(makeSubscriptionDoc(1001, { watchedFeatures: ['f1'] }));
+      }
+      return Promise.resolve({ exists: false });
+    });
+    mockDocUpdate.mockRejectedValueOnce(new Error('Firestore update error'));
+    const app = createApp();
+    const res = await request(app).delete('/api/subscriptions/me/watch/f1').expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('POST /api/subscriptions/push-token returns 500 on Firestore error', async () => {
+    mockDocSet.mockRejectedValueOnce(new Error('Firestore write error'));
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/subscriptions/push-token')
+      .send({ token: 'my-token' })
+      .expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('DELETE /api/subscriptions/push-token returns 500 on Firestore error', async () => {
+    mockDocSet.mockRejectedValueOnce(new Error('Firestore write error'));
+    const app = createApp();
+    const res = await request(app).delete('/api/subscriptions/push-token').expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+});
+
+describe('POST /api/subscriptions/unsubscribe — additional coverage', () => {
+  test('returns 400 when token is missing entirely', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use('/api', subscriptionsRouter);
+    const res = await request(app).post('/api/subscriptions/unsubscribe').send({}).expect(400);
+    expect(res.body.error).toBe('Unsubscribe token required');
+  });
+
+  test('returns 400 when token is whitespace only', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use('/api', subscriptionsRouter);
+    const res = await request(app)
+      .post('/api/subscriptions/unsubscribe')
+      .send({ token: '   ' })
+      .expect(400);
+    expect(res.body.error).toBe('Unsubscribe token required');
+  });
+
+  test('returns 400 when token is non-string', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use('/api', subscriptionsRouter);
+    const res = await request(app)
+      .post('/api/subscriptions/unsubscribe')
+      .send({ token: 99999 })
+      .expect(400);
+    expect(res.body.error).toBe('Unsubscribe token required');
+  });
+
+  test('returns 400 when token is < 10 chars', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use('/api', subscriptionsRouter);
+    const res = await request(app)
+      .post('/api/subscriptions/unsubscribe')
+      .send({ token: 'short' })
+      .expect(400);
+    expect(res.body.error).toBe('Invalid unsubscribe token');
+  });
+
+  test('returns 400 when token >= 10 chars but missing unsubscribe marker', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use('/api', subscriptionsRouter);
+    const res = await request(app)
+      .post('/api/subscriptions/unsubscribe')
+      .send({ token: 'longtokenwithoutmarker' })
+      .expect(400);
+    expect(res.body.error).toBe('Invalid unsubscribe token');
+  });
+
+  test('returns success when token >= 10 chars and includes unsubscribe marker', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use('/api', subscriptionsRouter);
+    const res = await request(app)
+      .post('/api/subscriptions/unsubscribe')
+      .send({ token: 'unsubscribe-abc-123' })
+      .expect(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.message).toBe('Email notifications disabled');
+  });
+});

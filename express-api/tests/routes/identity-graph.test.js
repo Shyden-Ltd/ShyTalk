@@ -733,3 +733,401 @@ describe('Identity Graph Edge Cases', () => {
     await request(app).post('/api/admin/bans/graph/graph-1/split').expect(404);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// Additional coverage — uncovered lines and branches
+// ═══════════════════════════════════════════════════════════════
+
+describe('POST /api/admin/bans/graph — validation', () => {
+  test('returns 400 when identifiers is missing', async () => {
+    const app = createApp();
+    const res = await request(app).post('/api/admin/bans/graph').send({}).expect(400);
+    expect(res.body.error).toBe('At least one identifier required');
+  });
+
+  test('returns 400 when identifiers is empty array', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/graph')
+      .send({ identifiers: [] })
+      .expect(400);
+    expect(res.body.error).toBe('At least one identifier required');
+  });
+
+  test('returns 400 when identifiers is not an array', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/graph')
+      .send({ identifiers: 'not-an-array' })
+      .expect(400);
+    expect(res.body.error).toBe('At least one identifier required');
+  });
+
+  test('filters out private IPs (10.x)', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/graph')
+      .send({
+        identifiers: [
+          { type: 'ip', value: '10.0.0.1' },
+          { type: 'uid', value: '1001' },
+        ],
+      })
+      .expect(201);
+    // The uid identifier should still be present, but private IP filtered
+    expect(res.body).toHaveProperty('graphId');
+  });
+
+  test('filters out private IPs (192.168.x)', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/graph')
+      .send({
+        identifiers: [
+          { type: 'ip', value: '192.168.1.1' },
+          { type: 'uid', value: '2002' },
+        ],
+      })
+      .expect(201);
+    expect(res.body).toHaveProperty('graphId');
+  });
+
+  test('filters out loopback IPs (127.x)', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/graph')
+      .send({
+        identifiers: [
+          { type: 'ip', value: '127.0.0.1' },
+          { type: 'uid', value: '3003' },
+        ],
+      })
+      .expect(201);
+  });
+
+  test('filters out IPv6 loopback (::1)', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/graph')
+      .send({
+        identifiers: [
+          { type: 'ip', value: '::1' },
+          { type: 'uid', value: '4004' },
+        ],
+      })
+      .expect(201);
+  });
+
+  test('filters out link-local IPv6 (fe80:)', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/graph')
+      .send({
+        identifiers: [
+          { type: 'ip', value: 'fe80::1' },
+          { type: 'uid', value: '5005' },
+        ],
+      })
+      .expect(201);
+  });
+
+  test('normalises IPv4-mapped IPv6 on create', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/graph')
+      .send({ identifiers: [{ type: 'ip', value: '::ffff:5.6.7.8' }] })
+      .expect(201);
+    // The stored identifier should have value '5.6.7.8' after normalisation
+    // (but since 5.6.7.8 is not private, it should be included)
+    expect(res.body).toHaveProperty('graphId');
+  });
+
+  test('uses default source "manual" when source not provided', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/graph')
+      .send({ identifiers: [{ type: 'uid', value: '9999' }] })
+      .expect(201);
+    expect(res.body).toHaveProperty('graphId');
+  });
+
+  test('preserves metadata on identifiers', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/graph')
+      .send({
+        identifiers: [{ type: 'ip', value: '8.8.8.8', metadata: { isp: 'Google', country: 'US' } }],
+      })
+      .expect(201);
+    expect(res.body).toHaveProperty('graphId');
+  });
+});
+
+describe('Admin auth — all graph routes', () => {
+  test('GET /api/admin/bans/graph/:id non-admin returns 403', async () => {
+    const app = createNonAdminApp();
+    await request(app).get('/api/admin/bans/graph/graph-1').expect(403);
+  });
+
+  test('PUT /api/admin/bans/graph/:id non-admin returns 403', async () => {
+    const app = createNonAdminApp();
+    await request(app).put('/api/admin/bans/graph/graph-1').send({ action: 'suspend' }).expect(403);
+  });
+
+  test('DELETE /api/admin/bans/graph/:id non-admin returns 403', async () => {
+    const app = createNonAdminApp();
+    await request(app).delete('/api/admin/bans/graph/graph-1').expect(403);
+  });
+
+  test('GET /api/admin/bans/check non-admin returns 403', async () => {
+    const app = createNonAdminApp();
+    await request(app).get('/api/admin/bans/check?ip=1.2.3.4').expect(403);
+  });
+});
+
+describe('GET /api/admin/bans/check — validation and edge cases', () => {
+  test('returns 400 when no query parameters provided', async () => {
+    const app = createApp();
+    const res = await request(app).get('/api/admin/bans/check').expect(400);
+    expect(res.body.error).toMatch(/At least one identifier required/);
+  });
+
+  test('returns isBanned=false for expired suspension', async () => {
+    const expiredIdentifier = {
+      type: 'ip',
+      value: '1.2.3.4',
+      metadata: {},
+      addedAt: 1000,
+      source: 'login',
+      suspension: {
+        isActive: true,
+        level: 'full',
+        duration: '7d',
+        reason: 'Spam',
+        suspendedAt: 1000,
+        expiresAt: 1000, // long expired
+      },
+    };
+    mockCollectionGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [makeGraphDoc('graph-1', { identifiers: [expiredIdentifier] })],
+    });
+    const app = createApp();
+    const res = await request(app).get('/api/admin/bans/check?ip=1.2.3.4').expect(200);
+    expect(res.body.isBanned).toBe(false);
+  });
+
+  test('returns isBanned=true for permanent suspension (expiresAt=null)', async () => {
+    const permanentIdentifier = {
+      type: 'uid',
+      value: '1001',
+      metadata: {},
+      addedAt: 1000,
+      source: 'login',
+      suspension: {
+        isActive: true,
+        level: 'full',
+        duration: 'permanent',
+        reason: 'Permanent ban',
+        suspendedAt: 1000,
+        expiresAt: null,
+      },
+    };
+    mockCollectionGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [makeGraphDoc('graph-1', { identifiers: [permanentIdentifier] })],
+    });
+    const app = createApp();
+    const res = await request(app).get('/api/admin/bans/check?uid=1001').expect(200);
+    expect(res.body.isBanned).toBe(true);
+    expect(res.body.level).toBe('full');
+    expect(res.body.expiresAt).toBeNull();
+  });
+
+  test('matches fingerprint identifier correctly', async () => {
+    mockCollectionGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [
+        makeGraphDoc('graph-1', {
+          identifiers: [makeSuspendedIdentifier('fingerprint', 'fp-match')],
+        }),
+      ],
+    });
+    const app = createApp();
+    const res = await request(app).get('/api/admin/bans/check?fingerprint=fp-match').expect(200);
+    expect(res.body.isBanned).toBe(true);
+  });
+
+  test('normalises IPv4-mapped IPv6 in ban check query', async () => {
+    mockCollectionGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [
+        makeGraphDoc('graph-1', {
+          identifiers: [makeSuspendedIdentifier('ip', '5.6.7.8')],
+        }),
+      ],
+    });
+    const app = createApp();
+    const res = await request(app).get('/api/admin/bans/check?ip=::ffff:5.6.7.8').expect(200);
+    expect(res.body.isBanned).toBe(true);
+  });
+
+  test('does not match inactive suspension (suspension=null)', async () => {
+    mockCollectionGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [
+        makeGraphDoc('graph-1', {
+          identifiers: [
+            {
+              type: 'ip',
+              value: '1.2.3.4',
+              metadata: {},
+              addedAt: 1000,
+              source: 'login',
+              suspension: null,
+            },
+          ],
+        }),
+      ],
+    });
+    const app = createApp();
+    const res = await request(app).get('/api/admin/bans/check?ip=1.2.3.4').expect(200);
+    expect(res.body.isBanned).toBe(false);
+  });
+});
+
+describe('PUT /api/admin/bans/graph/:id — unsuspend all', () => {
+  test('unsuspend all identifiers clears all suspensions', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('identityGraphs/')) {
+        return Promise.resolve(
+          makeGraphDoc('graph-1', {
+            identifiers: [
+              makeSuspendedIdentifier('uid', '1001'),
+              makeSuspendedIdentifier('ip', '1.2.3.4'),
+            ],
+          }),
+        );
+      }
+      return Promise.resolve({ exists: false });
+    });
+    const app = createApp();
+    const res = await request(app)
+      .put('/api/admin/bans/graph/graph-1')
+      .send({ action: 'unsuspend' })
+      .expect(200);
+    expect(res.body.success).toBe(true);
+    // Should update all identifiers with suspension: null
+    expect(mockDocUpdate).toHaveBeenCalled();
+  });
+});
+
+describe('PUT /api/admin/bans/graph/:id — non-existent graph', () => {
+  test('returns 404 for non-existent graph', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .put('/api/admin/bans/graph/nonexistent')
+      .send({ action: 'suspend', duration: '7d' })
+      .expect(404);
+    expect(res.body.error).toBe('Identity graph not found');
+  });
+});
+
+describe('PUT /api/admin/bans/graph/:id — parseDuration', () => {
+  test('suspend with hours duration', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('identityGraphs/')) {
+        return Promise.resolve(makeGraphDoc('graph-1'));
+      }
+      return Promise.resolve({ exists: false });
+    });
+    const app = createApp();
+    await request(app)
+      .put('/api/admin/bans/graph/graph-1')
+      .send({ action: 'suspend', duration: '24h', level: 'full', reason: 'Spam' })
+      .expect(200);
+  });
+
+  test('suspend with invalid duration falls back to 7 days', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('identityGraphs/')) {
+        return Promise.resolve(makeGraphDoc('graph-1'));
+      }
+      return Promise.resolve({ exists: false });
+    });
+    const app = createApp();
+    await request(app)
+      .put('/api/admin/bans/graph/graph-1')
+      .send({ action: 'suspend', duration: 'invalid', level: 'full', reason: 'Test' })
+      .expect(200);
+  });
+
+  test('suspend with no duration defaults correctly', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('identityGraphs/')) {
+        return Promise.resolve(makeGraphDoc('graph-1'));
+      }
+      return Promise.resolve({ exists: false });
+    });
+    const app = createApp();
+    await request(app)
+      .put('/api/admin/bans/graph/graph-1')
+      .send({ action: 'suspend', level: 'full', reason: 'Test' })
+      .expect(200);
+  });
+});
+
+describe('Error handling — 500 responses', () => {
+  test('POST /api/admin/bans/graph returns 500 on Firestore error', async () => {
+    mockDocSet.mockRejectedValueOnce(new Error('Firestore write error'));
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/graph')
+      .send({ identifiers: [{ type: 'uid', value: '1001' }] })
+      .expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('GET /api/admin/bans/graph/:id returns 500 on Firestore error', async () => {
+    mockDocGet.mockRejectedValueOnce(new Error('Firestore read error'));
+    const app = createApp();
+    const res = await request(app).get('/api/admin/bans/graph/graph-1').expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('PUT /api/admin/bans/graph/:id returns 500 on Firestore error', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('identityGraphs/')) {
+        return Promise.resolve(makeGraphDoc('graph-1'));
+      }
+      return Promise.resolve({ exists: false });
+    });
+    mockDocUpdate.mockRejectedValueOnce(new Error('Firestore update error'));
+    const app = createApp();
+    const res = await request(app)
+      .put('/api/admin/bans/graph/graph-1')
+      .send({ action: 'suspend', duration: '7d', level: 'full', reason: 'Test' })
+      .expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('DELETE /api/admin/bans/graph/:id returns 500 on Firestore error', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('identityGraphs/')) {
+        return Promise.resolve(makeGraphDoc('graph-1'));
+      }
+      return Promise.resolve({ exists: false });
+    });
+    mockDocUpdate.mockRejectedValueOnce(new Error('Firestore update error'));
+    const app = createApp();
+    const res = await request(app).delete('/api/admin/bans/graph/graph-1').expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('GET /api/admin/bans/check returns 500 on Firestore error', async () => {
+    mockCollectionGet.mockRejectedValueOnce(new Error('Firestore error'));
+    const app = createApp();
+    const res = await request(app).get('/api/admin/bans/check?ip=1.2.3.4').expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+});

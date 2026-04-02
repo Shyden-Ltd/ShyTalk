@@ -315,3 +315,383 @@ describe('POST /api/admin/bans/unban-all/:uniqueId — deduplication', () => {
     expect(mockWhere).toHaveBeenCalledWith('linkedUniqueId', '==', 789);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// Additional coverage — uncovered lines and branches
+// ═══════════════════════════════════════════════════════════════
+
+describe('Admin auth — all ban routes reject non-admin', () => {
+  test('POST /api/admin/bans/device non-admin returns 403', async () => {
+    const app = createApp(false);
+    const res = await request(app)
+      .post('/api/admin/bans/device')
+      .send({ deviceId: 'dev1', reason: 'Test' })
+      .expect(403);
+    expect(res.body.error).toBeDefined();
+  });
+
+  test('POST /api/admin/bans/network non-admin returns 403', async () => {
+    const app = createApp(false);
+    const res = await request(app)
+      .post('/api/admin/bans/network')
+      .send({ type: 'ip', value: '1.2.3.4', reason: 'Test' })
+      .expect(403);
+    expect(res.body.error).toBeDefined();
+  });
+
+  test('DELETE /api/admin/bans/device/:id non-admin returns 403', async () => {
+    const app = createApp(false);
+    await request(app).delete('/api/admin/bans/device/dev1').expect(403);
+  });
+
+  test('DELETE /api/admin/bans/network/:id non-admin returns 403', async () => {
+    const app = createApp(false);
+    await request(app).delete('/api/admin/bans/network/ban1').expect(403);
+  });
+
+  test('POST /api/admin/bans/unban-all/:id non-admin returns 403', async () => {
+    const app = createApp(false);
+    await request(app).post('/api/admin/bans/unban-all/user1').expect(403);
+  });
+
+  test('GET /api/admin/bans/user/:id non-admin returns 403', async () => {
+    const app = createApp(false);
+    await request(app).get('/api/admin/bans/user/123').expect(403);
+  });
+});
+
+describe('POST /api/admin/bans/device — additional branches', () => {
+  test('permanent ban (no duration): expiresAt is null', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/device')
+      .send({ deviceId: 'dev-perm', reason: 'Permanent' })
+      .expect(200);
+
+    expect(res.body.success).toBe(true);
+    expect(mockSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deviceId: 'dev-perm',
+        duration: 'permanent',
+        expiresAt: null,
+      }),
+    );
+  });
+
+  test('device ban with linkedUniqueId sends system PM', async () => {
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+    const app = createApp();
+    await request(app)
+      .post('/api/admin/bans/device')
+      .send({ deviceId: 'dev-linked', reason: 'Spam', duration: '7d', linkedUniqueId: 'user42' })
+      .expect(200);
+
+    expect(sendSystemPm).toHaveBeenCalledWith(
+      'user42',
+      'A restriction has been placed on your account.',
+    );
+  });
+
+  test('device ban without linkedUniqueId does not send system PM', async () => {
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+    sendSystemPm.mockClear();
+    const app = createApp();
+    await request(app)
+      .post('/api/admin/bans/device')
+      .send({ deviceId: 'dev-no-link', reason: 'Spam', duration: '7d' })
+      .expect(200);
+
+    expect(sendSystemPm).not.toHaveBeenCalled();
+  });
+
+  test('device ban succeeds even when system PM fails', async () => {
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+    sendSystemPm.mockRejectedValueOnce(new Error('PM failed'));
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/device')
+      .send({ deviceId: 'dev-pm-fail', reason: 'Spam', linkedUniqueId: 'user99' })
+      .expect(200);
+    expect(res.body.success).toBe(true);
+  });
+});
+
+describe('POST /api/admin/bans/network — additional branches', () => {
+  test('subnet ban validates CIDR format', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/network')
+      .send({ type: 'subnet', value: 'not-a-cidr', reason: 'Test' })
+      .expect(400);
+    expect(res.body.error).toMatch(/CIDR subnet format/);
+  });
+
+  test('valid subnet ban accepted', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/network')
+      .send({ type: 'subnet', value: '192.168.0.0/24', reason: 'VPN', duration: '30d' })
+      .expect(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  test('ASN validates numeric format', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/network')
+      .send({ type: 'asn', value: 'AS12345', reason: 'Test' })
+      .expect(400);
+    expect(res.body.error).toMatch(/ASN must be numeric/);
+  });
+
+  test('valid ASN ban accepted', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/network')
+      .send({ type: 'asn', value: '12345', reason: 'Bot network' })
+      .expect(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  test('IP format validation rejects malformed IP', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/network')
+      .send({ type: 'ip', value: 'not-an-ip', reason: 'Test' })
+      .expect(400);
+    expect(res.body.error).toMatch(/Invalid IP address format/);
+  });
+
+  test('network ban with linkedUniqueId sends system PM', async () => {
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+    sendSystemPm.mockClear();
+    const app = createApp();
+    await request(app)
+      .post('/api/admin/bans/network')
+      .send({
+        type: 'ip',
+        value: '5.6.7.8',
+        reason: 'Abuse',
+        duration: '24h',
+        linkedUniqueId: 'user55',
+      })
+      .expect(200);
+
+    expect(sendSystemPm).toHaveBeenCalledWith(
+      'user55',
+      'A restriction has been placed on your account.',
+    );
+  });
+
+  test('network ban without linkedUniqueId does not send system PM', async () => {
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+    sendSystemPm.mockClear();
+    const app = createApp();
+    await request(app)
+      .post('/api/admin/bans/network')
+      .send({ type: 'ip', value: '9.9.9.9', reason: 'Spam' })
+      .expect(200);
+
+    expect(sendSystemPm).not.toHaveBeenCalled();
+  });
+
+  test('network ban succeeds even when system PM fails', async () => {
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+    sendSystemPm.mockRejectedValueOnce(new Error('PM failed'));
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/network')
+      .send({ type: 'ip', value: '8.8.4.4', reason: 'Test', linkedUniqueId: 'user77' })
+      .expect(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  test('permanent network ban (no duration): expiresAt is null', async () => {
+    const app = createApp();
+    await request(app)
+      .post('/api/admin/bans/network')
+      .send({ type: 'ip', value: '3.3.3.3', reason: 'Permanent' })
+      .expect(200);
+
+    expect(mockSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        duration: 'permanent',
+        expiresAt: null,
+      }),
+    );
+  });
+
+  test('missing type field returns 400', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/network')
+      .send({ value: '1.2.3.4', reason: 'Test' })
+      .expect(400);
+    expect(res.body.error).toBe('type must be one of: ip, subnet, asn');
+  });
+
+  test('value as non-string returns 400', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/network')
+      .send({ type: 'ip', value: 12345, reason: 'Test' })
+      .expect(400);
+    expect(res.body.error).toBe('value is required');
+  });
+});
+
+describe('GET /api/admin/bans — permanent bans (no expiresAt)', () => {
+  test('includes bans with null expiresAt (permanent)', async () => {
+    mockCollectionGet.mockResolvedValue({
+      docs: [
+        {
+          id: 'perm1',
+          data: () => ({ deviceId: 'perm-device', reason: 'Permanent', expiresAt: null }),
+        },
+      ],
+    });
+
+    const app = createApp();
+    const res = await request(app).get('/api/admin/bans').expect(200);
+    expect(res.body.deviceBans).toHaveLength(1);
+    expect(res.body.deviceBans[0].id).toBe('perm1');
+  });
+
+  test('includes bans with undefined expiresAt', async () => {
+    mockCollectionGet.mockResolvedValue({
+      docs: [{ id: 'perm2', data: () => ({ deviceId: 'perm-device-2', reason: 'No expiry' }) }],
+    });
+
+    const app = createApp();
+    const res = await request(app).get('/api/admin/bans').expect(200);
+    expect(res.body.deviceBans).toHaveLength(1);
+  });
+});
+
+describe('POST /api/admin/bans/unban-all — system PM', () => {
+  test('sends system PM after unbanning', async () => {
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+    sendSystemPm.mockClear();
+    mockWhereGet.mockResolvedValue({ empty: true, docs: [] });
+
+    const app = createApp();
+    await request(app).post('/api/admin/bans/unban-all/user999').expect(200);
+
+    expect(sendSystemPm).toHaveBeenCalledWith(
+      'user999',
+      'A restriction on your account has been lifted.',
+    );
+  });
+
+  test('succeeds even when system PM fails', async () => {
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+    sendSystemPm.mockRejectedValueOnce(new Error('PM send failed'));
+    mockWhereGet.mockResolvedValue({ empty: true, docs: [] });
+
+    const app = createApp();
+    const res = await request(app).post('/api/admin/bans/unban-all/user888').expect(200);
+    expect(res.body.success).toBe(true);
+  });
+});
+
+describe('Error handling — 500 responses', () => {
+  test('GET /api/admin/bans returns 500 on Firestore error', async () => {
+    mockCollectionGet.mockRejectedValueOnce(new Error('Firestore error'));
+    const app = createApp();
+    const res = await request(app).get('/api/admin/bans').expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('POST /api/admin/bans/device returns 500 on Firestore error', async () => {
+    mockSet.mockRejectedValueOnce(new Error('Firestore write error'));
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/device')
+      .send({ deviceId: 'dev-err', reason: 'Test' })
+      .expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('POST /api/admin/bans/network returns 500 on Firestore error', async () => {
+    mockSet.mockRejectedValueOnce(new Error('Firestore write error'));
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/bans/network')
+      .send({ type: 'ip', value: '1.2.3.4', reason: 'Test' })
+      .expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('DELETE /api/admin/bans/device/:id returns 500 on Firestore error', async () => {
+    mockDelete.mockRejectedValueOnce(new Error('Firestore delete error'));
+    const app = createApp();
+    const res = await request(app).delete('/api/admin/bans/device/dev-err').expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('DELETE /api/admin/bans/network/:id returns 500 on Firestore error', async () => {
+    mockDelete.mockRejectedValueOnce(new Error('Firestore delete error'));
+    const app = createApp();
+    const res = await request(app).delete('/api/admin/bans/network/ban-err').expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('POST /api/admin/bans/unban-all returns 500 on Firestore error', async () => {
+    mockWhereGet.mockRejectedValueOnce(new Error('Firestore query error'));
+    const app = createApp();
+    const res = await request(app).post('/api/admin/bans/unban-all/user-err').expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('GET /api/admin/bans/user/:id returns 500 on Firestore error', async () => {
+    mockWhereGet.mockRejectedValueOnce(new Error('Firestore query error'));
+    const app = createApp();
+    const res = await request(app).get('/api/admin/bans/user/user-err').expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+});
+
+describe('parseExpiry helper', () => {
+  test('duration "24h" sets expiry ~24 hours from now', async () => {
+    const app = createApp();
+    await request(app)
+      .post('/api/admin/bans/device')
+      .send({ deviceId: 'dev-24h', reason: 'Test', duration: '24h' })
+      .expect(200);
+
+    const setCall = mockSet.mock.calls.find((c) => c.length > 0 && c[0]?.deviceId === 'dev-24h');
+    expect(setCall).toBeDefined();
+    // expiresAt should be an ISO string ~24h from now
+    expect(setCall[0].expiresAt).toBeTruthy();
+    const expiry = new Date(setCall[0].expiresAt).getTime();
+    const now = Date.now();
+    expect(expiry).toBeGreaterThan(now);
+    expect(expiry).toBeLessThan(now + 25 * 3600000);
+  });
+
+  test('duration "30d" sets expiry ~30 days from now', async () => {
+    const app = createApp();
+    await request(app)
+      .post('/api/admin/bans/device')
+      .send({ deviceId: 'dev-30d', reason: 'Test', duration: '30d' })
+      .expect(200);
+
+    const setCall = mockSet.mock.calls.find((c) => c.length > 0 && c[0]?.deviceId === 'dev-30d');
+    expect(setCall).toBeDefined();
+    expect(setCall[0].expiresAt).toBeTruthy();
+  });
+
+  test('invalid duration format: expiresAt is null', async () => {
+    const app = createApp();
+    await request(app)
+      .post('/api/admin/bans/device')
+      .send({ deviceId: 'dev-invalid', reason: 'Test', duration: 'bad' })
+      .expect(200);
+
+    const setCall = mockSet.mock.calls.find(
+      (c) => c.length > 0 && c[0]?.deviceId === 'dev-invalid',
+    );
+    expect(setCall).toBeDefined();
+    expect(setCall[0].expiresAt).toBeNull();
+  });
+});

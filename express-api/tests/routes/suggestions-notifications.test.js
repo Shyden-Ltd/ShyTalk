@@ -403,3 +403,137 @@ describe('Admin Notification of New Suggestions', () => {
     // Admin notification should include who submitted + basic identity info
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// Additional coverage — uncovered lines and branches
+// ═══════════════════════════════════════════════════════════════
+
+describe('GET /api/notifications — error handling', () => {
+  test('returns 500 when Firestore query fails', async () => {
+    mockCollectionGet.mockRejectedValueOnce(new Error('Firestore unavailable'));
+    const app = createApp();
+    const res = await request(app).get('/api/notifications').expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('returns empty list for user with no notifications', async () => {
+    mockCollectionGet.mockResolvedValueOnce({ empty: true, docs: [], size: 0 });
+    const app = createApp();
+    const res = await request(app).get('/api/notifications').expect(200);
+    expect(res.body.notifications).toEqual([]);
+    expect(res.body.unreadCount).toBe(0);
+    expect(res.body.total).toBe(0);
+  });
+
+  test('unreadCount correctly counts only unread notifications', async () => {
+    const docs = [
+      makeNotifDoc('n1', { isRead: false }),
+      makeNotifDoc('n2', { isRead: true }),
+      makeNotifDoc('n3', { isRead: false }),
+    ];
+    mockCollectionGet.mockResolvedValueOnce({ empty: false, docs, size: 3 });
+    const app = createApp();
+    const res = await request(app).get('/api/notifications').expect(200);
+    expect(res.body.unreadCount).toBe(2);
+    expect(res.body.total).toBe(3);
+  });
+});
+
+describe('PUT /api/notifications/read-all — additional coverage', () => {
+  test('returns 401 when unauthenticated', async () => {
+    const app = createUnauthApp();
+    await request(app).put('/api/notifications/read-all').expect(401);
+  });
+
+  test('returns 500 when batch commit fails', async () => {
+    const docs = [makeNotifDoc('n1', { isRead: false })];
+    mockCollectionGet.mockResolvedValueOnce({ empty: false, docs, size: 1 });
+    mockBatchCommit.mockRejectedValueOnce(new Error('Batch commit failed'));
+    const app = createApp();
+    const res = await request(app).put('/api/notifications/read-all').expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('returns updated count of 0 when no unread notifications', async () => {
+    mockCollectionGet.mockResolvedValueOnce({ empty: true, docs: [], size: 0 });
+    const app = createApp();
+    const res = await request(app).put('/api/notifications/read-all').expect(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.updated).toBe(0);
+  });
+});
+
+describe('PUT /api/notifications/:id/read — additional coverage', () => {
+  test('returns 401 when unauthenticated', async () => {
+    const app = createUnauthApp();
+    await request(app).put('/api/notifications/n1/read').expect(401);
+  });
+
+  test('returns 500 when update fails', async () => {
+    mockDocUpdate.mockRejectedValueOnce(new Error('Update failed'));
+    const app = createApp();
+    const res = await request(app).put('/api/notifications/n1/read').expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('calls update with isRead: true on correct doc path', async () => {
+    const app = createApp();
+    await request(app).put('/api/notifications/notif-xyz/read').expect(200);
+    expect(mockDocUpdate).toHaveBeenCalledWith('notifications/notif-xyz', { isRead: true });
+  });
+});
+
+describe('POST /api/subscriptions/unsubscribe — additional coverage', () => {
+  test('returns 400 when token is missing entirely', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use('/api', notificationsRouter);
+    const res = await request(app).post('/api/subscriptions/unsubscribe').send({}).expect(400);
+    expect(res.body.error).toBe('Unsubscribe token required');
+  });
+
+  test('returns 400 when token is whitespace only', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use('/api', notificationsRouter);
+    const res = await request(app)
+      .post('/api/subscriptions/unsubscribe')
+      .send({ token: '   ' })
+      .expect(400);
+    expect(res.body.error).toBe('Unsubscribe token required');
+  });
+
+  test('returns 400 when token is non-string type', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use('/api', notificationsRouter);
+    const res = await request(app)
+      .post('/api/subscriptions/unsubscribe')
+      .send({ token: 12345 })
+      .expect(400);
+    expect(res.body.error).toBe('Unsubscribe token required');
+  });
+
+  test('returns 400 when token is shorter than 10 characters', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use('/api', notificationsRouter);
+    const res = await request(app)
+      .post('/api/subscriptions/unsubscribe')
+      .send({ token: 'short' })
+      .expect(400);
+    expect(res.body.error).toBe('Invalid unsubscribe token');
+  });
+
+  test('returns success for valid token (>= 10 chars)', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use('/api', notificationsRouter);
+    const res = await request(app)
+      .post('/api/subscriptions/unsubscribe')
+      .send({ token: 'valid-token-1234567890' })
+      .expect(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.message).toBe('Email notifications disabled');
+  });
+});

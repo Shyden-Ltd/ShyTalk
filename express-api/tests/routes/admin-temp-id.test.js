@@ -269,3 +269,179 @@ describe('DELETE /api/admin/users/:uniqueId/temp-id', () => {
     expect(res.body.error).toBeDefined();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// Additional coverage — uncovered lines and branches
+// ═══════════════════════════════════════════════════════════════
+
+describe('POST /api/admin/users/:uniqueId/temp-id — admin rejection', () => {
+  test('rejects non-admin (403)', async () => {
+    requireAdmin.mockImplementation((req, res) => {
+      res.status(403).json({ error: 'Admin access required' });
+      return true;
+    });
+
+    const app = createApp(false);
+    const res = await request(app)
+      .post('/api/admin/users/user123/temp-id')
+      .send({ tempUniqueId: 12345678, expiryDate: Date.now() + 86400000 })
+      .expect(403);
+    expect(res.body.error).toBeDefined();
+  });
+});
+
+describe('POST /api/admin/users/:uniqueId/temp-id — active temp ID conflict', () => {
+  test('returns 409 when temp ID is already in use by another active temp assignment', async () => {
+    const futureExpiry = Date.now() + 86400000;
+
+    // First query (real uniqueId): no conflict
+    mockWhereChain.get
+      .mockResolvedValueOnce({ empty: true, docs: [] })
+      // Second query (tempUniqueId): conflict found with active expiry
+      .mockResolvedValueOnce({
+        empty: false,
+        docs: [
+          {
+            data: () => ({
+              uniqueId: 88888888,
+              tempUniqueId: 12345678,
+              tempUniqueIdExpiry: futureExpiry,
+            }),
+          },
+        ],
+      });
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/users/user123/temp-id')
+      .send({ tempUniqueId: 12345678, expiryDate: futureExpiry })
+      .expect(409);
+
+    expect(res.body.error).toMatch(/active temp ID/i);
+  });
+
+  test('allows setting temp ID when existing temp assignment has expired', async () => {
+    const futureExpiry = Date.now() + 86400000;
+    const pastExpiry = Date.now() - 86400000;
+
+    // First query (real uniqueId): no conflict
+    mockWhereChain.get
+      .mockResolvedValueOnce({ empty: true, docs: [] })
+      // Second query (tempUniqueId): found but expired
+      .mockResolvedValueOnce({
+        empty: false,
+        docs: [
+          {
+            data: () => ({
+              uniqueId: 88888888,
+              tempUniqueId: 12345678,
+              tempUniqueIdExpiry: pastExpiry,
+            }),
+          },
+        ],
+      });
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/users/user123/temp-id')
+      .send({ tempUniqueId: 12345678, expiryDate: futureExpiry })
+      .expect(200);
+
+    expect(res.body.success).toBe(true);
+  });
+});
+
+describe('POST /api/admin/users/:uniqueId/temp-id — missing body', () => {
+  test('returns 400 when tempUniqueId is falsy (0)', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/users/user123/temp-id')
+      .send({ tempUniqueId: 0, expiryDate: Date.now() + 86400000 })
+      .expect(400);
+    expect(res.body.error).toBe('Invalid ID');
+  });
+});
+
+describe('GET /api/admin/users/check-id/:id — edge cases', () => {
+  test('returns 400 for non-numeric ID', async () => {
+    const app = createApp();
+    const res = await request(app).get('/api/admin/users/check-id/abc').expect(400);
+    expect(res.body.error).toBe('Invalid ID');
+  });
+
+  test('returns available when temp ID found but has no expiry field', async () => {
+    mockWhereChain.get
+      .mockResolvedValueOnce({ empty: true, docs: [] }) // real uniqueId
+      .mockResolvedValueOnce({
+        empty: false,
+        docs: [
+          {
+            data: () => ({
+              uniqueId: 99999999,
+              tempUniqueId: 12345678,
+              // No tempUniqueIdExpiry field
+            }),
+          },
+        ],
+      });
+
+    const app = createApp();
+    const res = await request(app).get('/api/admin/users/check-id/12345678').expect(200);
+    expect(res.body.available).toBe(true);
+  });
+});
+
+describe('Error handling — 500 responses', () => {
+  test('GET check-id returns 500 on Firestore error', async () => {
+    mockWhereChain.get.mockRejectedValueOnce(new Error('Firestore error'));
+    const app = createApp();
+    const res = await request(app).get('/api/admin/users/check-id/12345678').expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('POST temp-id returns 500 on Firestore error', async () => {
+    mockWhereChain.get
+      .mockResolvedValueOnce({ empty: true, docs: [] })
+      .mockResolvedValueOnce({ empty: true, docs: [] });
+    mockDocUpdate.mockRejectedValueOnce(new Error('Firestore write error'));
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/users/user123/temp-id')
+      .send({ tempUniqueId: 12345678, expiryDate: Date.now() + 86400000 })
+      .expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('DELETE temp-id returns 500 on Firestore error', async () => {
+    mockDocUpdate.mockRejectedValueOnce(new Error('Firestore delete error'));
+    const app = createApp();
+    const res = await request(app).delete('/api/admin/users/user123/temp-id').expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+});
+
+describe('System PM failure handling', () => {
+  test('POST temp-id succeeds even when system PM fails', async () => {
+    const futureExpiry = Date.now() + 86400000;
+    mockWhereChain.get
+      .mockResolvedValueOnce({ empty: true, docs: [] })
+      .mockResolvedValueOnce({ empty: true, docs: [] });
+    sendSystemPm.mockRejectedValueOnce(new Error('PM send failed'));
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/users/user123/temp-id')
+      .send({ tempUniqueId: 12345678, expiryDate: futureExpiry })
+      .expect(200);
+
+    expect(res.body.success).toBe(true);
+  });
+
+  test('DELETE temp-id succeeds even when system PM fails', async () => {
+    sendSystemPm.mockRejectedValueOnce(new Error('PM send failed'));
+
+    const app = createApp();
+    const res = await request(app).delete('/api/admin/users/user123/temp-id').expect(200);
+    expect(res.body.success).toBe(true);
+  });
+});
