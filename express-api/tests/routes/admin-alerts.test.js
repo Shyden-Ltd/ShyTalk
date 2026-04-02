@@ -222,3 +222,442 @@ describe('PATCH /api/admin/alert-config', () => {
     expect(res.status).toBe(400);
   });
 });
+
+// ─── Additional branch coverage ─────────────────────────────────
+
+describe('PATCH /api/admin/alert-config — edge cases', () => {
+  test('rejects non-admin (403)', async () => {
+    const app = createApp(false);
+    const res = await request(app)
+      .patch('/api/admin/alert-config')
+      .send({ errorSpikeThreshold: 20 });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/Admin/i);
+  });
+
+  test('returns 500 on Firestore error during set', async () => {
+    mockSet.mockRejectedValueOnce(new Error('Firestore down'));
+
+    const app = createApp(true);
+    const res = await request(app)
+      .patch('/api/admin/alert-config')
+      .send({ errorSpikeThreshold: 20 });
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('returns merged config after update', async () => {
+    mockGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ errorSpikeThreshold: 20, slowEndpointThresholdMs: 3000 }),
+    });
+
+    const app = createApp(true);
+    const res = await request(app)
+      .patch('/api/admin/alert-config')
+      .send({ errorSpikeThreshold: 20 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.config).toBeDefined();
+    expect(res.body.config.errorSpikeThreshold).toBe(20);
+  });
+
+  test('rejects body with only non-allowed keys (400)', async () => {
+    const app = createApp(true);
+    const res = await request(app).patch('/api/admin/alert-config').send({ foo: 'bar', baz: 123 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('No valid fields to update');
+  });
+
+  test('accepts multiple valid config keys', async () => {
+    mockGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ errorSpikeThreshold: 15, slowEndpointThresholdMs: 5000 }),
+    });
+
+    const app = createApp(true);
+    const res = await request(app)
+      .patch('/api/admin/alert-config')
+      .send({ errorSpikeThreshold: 15, slowEndpointThresholdMs: 5000 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(mockSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorSpikeThreshold: 15,
+        slowEndpointThresholdMs: 5000,
+      }),
+      { merge: true },
+    );
+  });
+});
+
+describe('GET /api/admin/alerts — edge cases', () => {
+  test('returns 500 on Firestore error', async () => {
+    const { db } = require('../../src/utils/firebase');
+    const mockQuery = db.collection('alerts');
+    mockQuery.get.mockRejectedValueOnce(new Error('Firestore down'));
+
+    const app = createApp(true);
+    const res = await request(app).get('/api/admin/alerts');
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('applies type filter', async () => {
+    const { db } = require('../../src/utils/firebase');
+    const mockQuery = db.collection('alerts');
+
+    const app = createApp(true);
+    await request(app).get('/api/admin/alerts?type=error_spike').expect(200);
+
+    expect(mockQuery.where).toHaveBeenCalledWith('type', '==', 'error_spike');
+  });
+
+  test('applies severity filter', async () => {
+    const { db } = require('../../src/utils/firebase');
+    const mockQuery = db.collection('alerts');
+
+    const app = createApp(true);
+    await request(app).get('/api/admin/alerts?severity=critical').expect(200);
+
+    expect(mockQuery.where).toHaveBeenCalledWith('severity', '==', 'critical');
+  });
+
+  test('applies status filter', async () => {
+    const { db } = require('../../src/utils/firebase');
+    const mockQuery = db.collection('alerts');
+
+    const app = createApp(true);
+    await request(app).get('/api/admin/alerts?status=unresolved').expect(200);
+
+    expect(mockQuery.where).toHaveBeenCalledWith('status', '==', 'unresolved');
+  });
+
+  test('applies all filters together', async () => {
+    const { db } = require('../../src/utils/firebase');
+    const mockQuery = db.collection('alerts');
+
+    const app = createApp(true);
+    await request(app)
+      .get('/api/admin/alerts?type=error_spike&severity=critical&status=unresolved')
+      .expect(200);
+
+    expect(mockQuery.where).toHaveBeenCalledWith('type', '==', 'error_spike');
+    expect(mockQuery.where).toHaveBeenCalledWith('severity', '==', 'critical');
+    expect(mockQuery.where).toHaveBeenCalledWith('status', '==', 'unresolved');
+  });
+
+  test('clamps limit below 1 to default', async () => {
+    const { db } = require('../../src/utils/firebase');
+    const mockQuery = db.collection('alerts');
+
+    const app = createApp(true);
+    await request(app).get('/api/admin/alerts?limit=0').expect(200);
+
+    expect(mockQuery.limit).toHaveBeenCalledWith(50);
+  });
+
+  test('clamps limit above MAX_LIMIT to 200', async () => {
+    const { db } = require('../../src/utils/firebase');
+    const mockQuery = db.collection('alerts');
+
+    const app = createApp(true);
+    await request(app).get('/api/admin/alerts?limit=999').expect(200);
+
+    expect(mockQuery.limit).toHaveBeenCalledWith(200);
+  });
+
+  test('handles non-numeric limit gracefully', async () => {
+    const { db } = require('../../src/utils/firebase');
+    const mockQuery = db.collection('alerts');
+
+    const app = createApp(true);
+    await request(app).get('/api/admin/alerts?limit=abc').expect(200);
+
+    // NaN || 50 → 50
+    expect(mockQuery.limit).toHaveBeenCalledWith(50);
+  });
+
+  test('uses custom valid limit', async () => {
+    const { db } = require('../../src/utils/firebase');
+    const mockQuery = db.collection('alerts');
+
+    const app = createApp(true);
+    await request(app).get('/api/admin/alerts?limit=25').expect(200);
+
+    expect(mockQuery.limit).toHaveBeenCalledWith(25);
+  });
+
+  test('returns empty alerts array when no alerts exist', async () => {
+    const { db } = require('../../src/utils/firebase');
+    const mockQuery = db.collection('alerts');
+    mockQuery.get.mockResolvedValueOnce({ docs: [] });
+
+    const app = createApp(true);
+    const res = await request(app).get('/api/admin/alerts').expect(200);
+
+    expect(res.body.alerts).toHaveLength(0);
+  });
+});
+
+describe('POST /api/admin/alerts — all branches', () => {
+  test('creates a new alert (200)', async () => {
+    const app = createApp(true);
+    const res = await request(app)
+      .post('/api/admin/alerts')
+      .send({ type: 'error_spike', severity: 'critical', message: '10 errors in 5 min' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.id).toMatch(/^alert_/);
+    expect(res.body.type).toBe('error_spike');
+    expect(res.body.severity).toBe('critical');
+    expect(res.body.message).toBe('10 errors in 5 min');
+    expect(res.body.status).toBe('new');
+    expect(res.body.createdAt).toBeDefined();
+    expect(mockSet).toHaveBeenCalled();
+  });
+
+  test('uses default severity and status when not provided', async () => {
+    const app = createApp(true);
+    const res = await request(app)
+      .post('/api/admin/alerts')
+      .send({ type: 'error_spike', message: 'Something happened' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.severity).toBe('medium');
+    expect(res.body.status).toBe('new');
+  });
+
+  test('accepts custom status', async () => {
+    const app = createApp(true);
+    const res = await request(app)
+      .post('/api/admin/alerts')
+      .send({ type: 'error_spike', message: 'Alert', status: 'acknowledged' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('acknowledged');
+  });
+
+  test('returns 400 when type is missing', async () => {
+    const app = createApp(true);
+    const res = await request(app).post('/api/admin/alerts').send({ message: 'No type' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('type and message are required');
+  });
+
+  test('returns 400 when message is missing', async () => {
+    const app = createApp(true);
+    const res = await request(app).post('/api/admin/alerts').send({ type: 'error_spike' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('type and message are required');
+  });
+
+  test('returns 400 when both type and message are missing', async () => {
+    const app = createApp(true);
+    const res = await request(app).post('/api/admin/alerts').send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('type and message are required');
+  });
+
+  test('rejects non-admin (403)', async () => {
+    const app = createApp(false);
+    const res = await request(app)
+      .post('/api/admin/alerts')
+      .send({ type: 'error_spike', message: 'Test' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/Admin/i);
+  });
+
+  test('returns 500 on Firestore error', async () => {
+    mockSet.mockRejectedValueOnce(new Error('Firestore down'));
+
+    const app = createApp(true);
+    const res = await request(app)
+      .post('/api/admin/alerts')
+      .send({ type: 'error_spike', message: 'Test' });
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+});
+
+describe('GET /api/admin/alerts/:alertId — all branches', () => {
+  test('returns single alert (200)', async () => {
+    mockGet.mockResolvedValueOnce({
+      exists: true,
+      id: 'alert-123',
+      data: () => ({ type: 'error_spike', severity: 'critical', message: 'Test alert' }),
+    });
+
+    const app = createApp(true);
+    const res = await request(app).get('/api/admin/alerts/alert-123');
+
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe('alert-123');
+    expect(res.body.type).toBe('error_spike');
+  });
+
+  test('returns 404 for non-existent alert', async () => {
+    mockGet.mockResolvedValueOnce({ exists: false });
+
+    const app = createApp(true);
+    const res = await request(app).get('/api/admin/alerts/nonexistent');
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('Alert not found');
+  });
+
+  test('rejects non-admin (403)', async () => {
+    const app = createApp(false);
+    const res = await request(app).get('/api/admin/alerts/alert-123');
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/Admin/i);
+  });
+
+  test('returns 500 on Firestore error', async () => {
+    mockGet.mockRejectedValueOnce(new Error('Firestore down'));
+
+    const app = createApp(true);
+    const res = await request(app).get('/api/admin/alerts/alert-123');
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+});
+
+describe('PATCH /api/admin/alerts/:alertId — edge cases', () => {
+  test('returns 400 when status is missing', async () => {
+    const app = createApp(true);
+    const res = await request(app).patch('/api/admin/alerts/alert1').send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/Invalid status/);
+  });
+
+  test('returns 404 for non-existent alert', async () => {
+    mockGet.mockResolvedValueOnce({ exists: false });
+
+    const app = createApp(true);
+    const res = await request(app)
+      .patch('/api/admin/alerts/nonexistent')
+      .send({ status: 'acknowledged' });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('Alert not found');
+  });
+
+  test('returns 500 on Firestore error during update', async () => {
+    mockGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ status: 'unresolved' }),
+    });
+    mockUpdate.mockRejectedValueOnce(new Error('Firestore down'));
+
+    const app = createApp(true);
+    const res = await request(app)
+      .patch('/api/admin/alerts/alert1')
+      .send({ status: 'acknowledged' });
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('uses uid when uniqueId is not available', async () => {
+    mockGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ status: 'unresolved' }),
+    });
+
+    // Create app with auth that has uid but no uniqueId
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => {
+      req.auth = { uid: 'admin-uid', token: { admin: true } };
+      next();
+    });
+    app.use('/api', adminAlertsRouter);
+
+    const res = await request(app)
+      .patch('/api/admin/alerts/alert1')
+      .send({ status: 'acknowledged' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.acknowledgedBy).toBe('admin-uid');
+  });
+
+  test('resolved status sets resolvedBy and resolvedAt as ISO string', async () => {
+    mockGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ status: 'acknowledged' }),
+    });
+
+    const app = createApp(true);
+    const res = await request(app).patch('/api/admin/alerts/alert1').send({ status: 'resolved' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.resolvedBy).toBe('admin1');
+    expect(res.body.resolvedAt).toBeDefined();
+    // resolvedAt should be an ISO date string
+    expect(new Date(res.body.resolvedAt).toISOString()).toBe(res.body.resolvedAt);
+  });
+});
+
+describe('GET /api/admin/alert-config — edge cases', () => {
+  test('rejects non-admin (403)', async () => {
+    const app = createApp(false);
+    const res = await request(app).get('/api/admin/alert-config');
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/Admin/i);
+  });
+
+  test('returns defaults when config doc does not exist', async () => {
+    mockGet.mockResolvedValueOnce({ exists: false });
+
+    const app = createApp(true);
+    const res = await request(app).get('/api/admin/alert-config');
+
+    expect(res.status).toBe(200);
+    expect(res.body.config).toBeDefined();
+    // Should return all default keys
+    expect(res.body.config.errorSpikeThreshold).toBe(10);
+    expect(res.body.config.slowEndpointThresholdMs).toBe(3000);
+    expect(res.body.config.cronFailureAlert).toBe(true);
+  });
+
+  test('merges stored config with defaults', async () => {
+    mockGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ errorSpikeThreshold: 25 }),
+    });
+
+    const app = createApp(true);
+    const res = await request(app).get('/api/admin/alert-config');
+
+    expect(res.status).toBe(200);
+    expect(res.body.config.errorSpikeThreshold).toBe(25);
+    // Other defaults should still be present
+    expect(res.body.config.slowEndpointThresholdMs).toBe(3000);
+  });
+
+  test('returns 500 on Firestore error', async () => {
+    mockGet.mockRejectedValueOnce(new Error('Firestore down'));
+
+    const app = createApp(true);
+    const res = await request(app).get('/api/admin/alert-config');
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+});
