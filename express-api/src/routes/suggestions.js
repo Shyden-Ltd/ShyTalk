@@ -605,7 +605,7 @@ router.post('/suggestions/:id/vote', async (req, res) => {
     if (requireNotSuspended(req, res)) return;
 
     const { id } = req.params;
-    const { direction, reason, reasonVisibility } = req.body;
+    const { direction, reason, visibility: reasonVisibility } = req.body;
 
     if (!direction || !['up', 'down'].includes(direction)) {
       return res.status(400).json({ error: 'Direction must be "up" or "down"' });
