@@ -544,3 +544,651 @@ describe('POST /api/user/:uniqueId/unsuspend — liftAutoAppliedBans', () => {
     expect(queriedCollections).toContain('networkBans');
   });
 });
+
+// --- Suspend --- validation branches ----------------------------------------
+
+describe('POST /api/user/:uniqueId/suspend --- validation', () => {
+  let app;
+
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+  });
+
+  it('should return 400 when reason is missing', async () => {
+    const res = await request(app).post('/api/user/user-1/suspend').send({ canAppeal: true });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/reason/i);
+  });
+
+  it('should return 400 when canAppeal is not a boolean', async () => {
+    const res = await request(app)
+      .post('/api/user/user-1/suspend')
+      .send({ reason: 'Spam', canAppeal: 'yes' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/canAppeal/i);
+  });
+
+  it('should return 400 when endDate is not a valid date', async () => {
+    const res = await request(app)
+      .post('/api/user/user-1/suspend')
+      .send({ reason: 'Spam', canAppeal: true, endDate: 'not-a-date' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/ISO-8601/i);
+  });
+
+  it('should return 400 when endDate is in the past', async () => {
+    const res = await request(app)
+      .post('/api/user/user-1/suspend')
+      .send({ reason: 'Spam', canAppeal: true, endDate: '2020-01-01T00:00:00Z' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/future/i);
+  });
+
+  it('should return 404 when user does not exist', async () => {
+    mockDocGet.mockResolvedValue({ exists: false });
+
+    const res = await request(app)
+      .post('/api/user/user-1/suspend')
+      .send({
+        reason: 'Spam',
+        canAppeal: true,
+        endDate: new Date(Date.now() + 86400000).toISOString(),
+      });
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/not found/i);
+  });
+
+  it('should skip GCS deduction when user gcsScore is already 0', async () => {
+    const { db } = require('../../src/utils/firebase');
+    const futureDate = new Date(Date.now() + 86400000).toISOString();
+
+    const mockBatchSet = jest.fn();
+    const mockBatchCommit = jest.fn().mockResolvedValue();
+    db.batch.mockReturnValue({ set: mockBatchSet, update: jest.fn(), commit: mockBatchCommit });
+
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: 'user-zero',
+      data: () => ({ displayName: 'Zero GCS', gcsScore: 0 }),
+    });
+
+    db.collection.mockImplementation(() => {
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
+      };
+      return chain;
+    });
+
+    const res = await request(app)
+      .post('/api/user/user-zero/suspend')
+      .send({ reason: 'Ban evasion', canAppeal: false, endDate: futureDate });
+
+    expect(res.status).toBe(200);
+
+    await flushPromises();
+
+    // No warning doc should be created for GCS deduction since GCS is already 0
+    const warningSetCalls = mockDocSet.mock.calls.filter(
+      (call) => typeof call[0] === 'object' && call[0].reason,
+    );
+    expect(warningSetCalls).toHaveLength(0);
+  });
+});
+
+// --- Unsuspend --- validation branches --------------------------------------
+
+describe('POST /api/user/:uniqueId/unsuspend --- validation', () => {
+  let app;
+
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+  });
+
+  it('should return 404 when user does not exist', async () => {
+    mockDocGet.mockResolvedValue({ exists: false });
+
+    const res = await request(app).post('/api/user/nonexistent/unsuspend');
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/not found/i);
+  });
+
+  it('should restore pre-suspension profile data on unsuspend', async () => {
+    const { db } = require('../../src/utils/firebase');
+
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: '42',
+      data: () => ({
+        isSuspended: true,
+        preSuspensionDisplayName: 'Original Name',
+        preSuspensionProfilePhotoUrl: 'https://example.com/photo.jpg',
+        preSuspensionCoverPhotoUrl: 'https://example.com/cover.jpg',
+      }),
+    });
+
+    db.collection.mockImplementation(() => {
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get: jest.fn().mockResolvedValue({ docs: [] }),
+      };
+      return chain;
+    });
+
+    const res = await request(app).post('/api/user/42/unsuspend');
+    expect(res.status).toBe(200);
+
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isSuspended: false,
+        displayName: 'Original Name',
+        profilePhotoUrl: 'https://example.com/photo.jpg',
+        coverPhotoUrl: 'https://example.com/cover.jpg',
+      }),
+    );
+  });
+
+  it('should not restore fields that are null in pre-suspension data', async () => {
+    const { db } = require('../../src/utils/firebase');
+
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: '42',
+      data: () => ({
+        isSuspended: true,
+        preSuspensionDisplayName: null,
+        preSuspensionProfilePhotoUrl: null,
+        preSuspensionCoverPhotoUrl: null,
+      }),
+    });
+
+    db.collection.mockImplementation(() => {
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get: jest.fn().mockResolvedValue({ docs: [] }),
+      };
+      return chain;
+    });
+
+    const res = await request(app).post('/api/user/42/unsuspend');
+    expect(res.status).toBe(200);
+
+    const updateCall = mockDocUpdate.mock.calls[0][0];
+    expect(updateCall.preSuspensionDisplayName).toBeNull();
+    expect(updateCall.preSuspensionProfilePhotoUrl).toBeNull();
+    expect(updateCall.preSuspensionCoverPhotoUrl).toBeNull();
+  });
+});
+
+// --- PATCH /api/user/:uid --- validation branches ---------------------------
+
+describe('PATCH /api/user/:uid --- extended validation', () => {
+  let app;
+
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+  });
+
+  it('should return 400 when displayName exceeds 20 characters', async () => {
+    const res = await request(app)
+      .patch('/api/user/user-1')
+      .send({ displayName: 'A'.repeat(21) });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/displayName must be 20 characters or fewer/);
+  });
+
+  it('should return 400 when description exceeds 200 characters', async () => {
+    const res = await request(app)
+      .patch('/api/user/user-1')
+      .send({ description: 'A'.repeat(201) });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/description must be 200 characters or fewer/);
+  });
+
+  it('should return 400 when nationality exceeds 3 characters', async () => {
+    const res = await request(app).patch('/api/user/user-1').send({ nationality: 'LONG' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/nationality must be 3 characters or fewer/);
+  });
+
+  it('should return 400 when blockedUserIds is not an array', async () => {
+    const res = await request(app).patch('/api/user/user-1').send({ blockedUserIds: 'not-array' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/blockedUserIds must be an array/);
+  });
+
+  it('should return 400 when followingIds is not an array', async () => {
+    const res = await request(app).patch('/api/user/user-1').send({ followingIds: 123 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/followingIds must be an array/);
+  });
+
+  it('should return 400 when followerIds is not an array', async () => {
+    const res = await request(app).patch('/api/user/user-1').send({ followerIds: {} });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/followerIds must be an array/);
+  });
+
+  it('should accept snake_case input and convert to camelCase', async () => {
+    const res = await request(app).patch('/api/user/user-1').send({ display_name: 'Snake Case' });
+    expect(res.status).toBe(200);
+    expect(res.body.updatedFields).toContain('displayName');
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ displayName: 'Snake Case' }),
+    );
+  });
+
+  it('should skip PMs when silent=true query param is set', async () => {
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+
+    const res = await request(app)
+      .patch('/api/user/user-1')
+      .query({ silent: 'true' })
+      .send({ displayName: 'Silently Changed' });
+
+    expect(res.status).toBe(200);
+    expect(sendSystemPm).not.toHaveBeenCalled();
+  });
+
+  it('should send PM when profilePhotoUrl is cleared', async () => {
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+
+    const res = await request(app).patch('/api/user/user-1').send({ profilePhotoUrl: '' });
+
+    expect(res.status).toBe(200);
+    expect(sendSystemPm).toHaveBeenCalledWith(
+      'user-1',
+      'Your profile photo was removed by a moderator.',
+    );
+  });
+
+  it('should send PM when coverPhotoUrl is set to null', async () => {
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+
+    const res = await request(app).patch('/api/user/user-1').send({ coverPhotoUrl: null });
+
+    expect(res.status).toBe(200);
+    expect(sendSystemPm).toHaveBeenCalledWith(
+      'user-1',
+      'Your cover photo was removed by a moderator.',
+    );
+  });
+
+  it('should send PM when description is cleared', async () => {
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+
+    const res = await request(app).patch('/api/user/user-1').send({ description: '' });
+
+    expect(res.status).toBe(200);
+    expect(sendSystemPm).toHaveBeenCalledWith(
+      'user-1',
+      'Your profile description was cleared by a moderator.',
+    );
+  });
+
+  it('should send Super Shy activated PM when isSuperShy is true', async () => {
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+
+    const res = await request(app).patch('/api/user/user-1').send({ isSuperShy: true });
+
+    expect(res.status).toBe(200);
+    expect(sendSystemPm).toHaveBeenCalledWith(
+      'user-1',
+      'Super Shy has been activated on your account.',
+    );
+  });
+
+  it('should send Super Shy removed PM when isSuperShy is false', async () => {
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+
+    const res = await request(app).patch('/api/user/user-1').send({ isSuperShy: false });
+
+    expect(res.status).toBe(200);
+    expect(sendSystemPm).toHaveBeenCalledWith(
+      'user-1',
+      'Super Shy has been removed from your account.',
+    );
+  });
+
+  it('should send PM when superShyExpiry is updated', async () => {
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+    const expiry = Date.now() + 30 * 24 * 60 * 60 * 1000;
+
+    const res = await request(app).patch('/api/user/user-1').send({ superShyExpiry: expiry });
+
+    expect(res.status).toBe(200);
+    expect(sendSystemPm).toHaveBeenCalledWith(
+      'user-1',
+      'Your Super Shy expiry date has been updated.',
+    );
+  });
+
+  it('should accept numeric fields like shyCoins and shyBeans', async () => {
+    const res = await request(app).patch('/api/user/user-1').send({ shyCoins: 999, shyBeans: 500 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.updatedFields).toContain('shyCoins');
+    expect(res.body.updatedFields).toContain('shyBeans');
+  });
+
+  it('should accept gcsScore as an allowed field', async () => {
+    const res = await request(app).patch('/api/user/user-1').send({ gcsScore: 50 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.updatedFields).toContain('gcsScore');
+    expect(mockDocUpdate).toHaveBeenCalledWith(expect.objectContaining({ gcsScore: 50 }));
+  });
+
+  it('should accept luckScore and pityCounter fields', async () => {
+    const res = await request(app)
+      .patch('/api/user/user-1')
+      .send({ luckScore: 75, pityCounter: 3 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.updatedFields).toContain('luckScore');
+    expect(res.body.updatedFields).toContain('pityCounter');
+  });
+
+  it('should accept warningCount and hasActiveWarning fields', async () => {
+    const res = await request(app)
+      .patch('/api/user/user-1')
+      .send({ warningCount: 2, hasActiveWarning: true, warningReason: 'Spam' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.updatedFields).toContain('warningCount');
+    expect(res.body.updatedFields).toContain('hasActiveWarning');
+    expect(res.body.updatedFields).toContain('warningReason');
+  });
+});
+
+// --- POST /api/user/:uniqueId/notify-changes --------------------------------
+
+describe('POST /api/user/:uniqueId/notify-changes', () => {
+  let app;
+
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+  });
+
+  it('should return 400 when fields is not an array', async () => {
+    const res = await request(app)
+      .post('/api/user/user-1/notify-changes')
+      .send({ fields: 'not-array' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/non-empty array/);
+  });
+
+  it('should return 400 when fields is an empty array', async () => {
+    const res = await request(app).post('/api/user/user-1/notify-changes').send({ fields: [] });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/non-empty array/);
+  });
+
+  it('should return success with notified=false when no notifiable fields', async () => {
+    const res = await request(app)
+      .post('/api/user/user-1/notify-changes')
+      .send({ fields: ['shyCoins', 'luckScore'] });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.notified).toBe(false);
+    expect(res.body.reason).toMatch(/no notifiable/i);
+  });
+
+  it('should send system PM and return notified=true for notifiable fields', async () => {
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+
+    const res = await request(app)
+      .post('/api/user/user-1/notify-changes')
+      .send({ fields: ['displayName', 'email', 'shyCoins'] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.notified).toBe(true);
+    expect(res.body.fields).toEqual(['displayName', 'email']);
+    expect(sendSystemPm).toHaveBeenCalledWith(
+      'user-1',
+      expect.stringContaining('display name, email address'),
+    );
+  });
+
+  it('should send PM with friendly names for photo and cover fields', async () => {
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+
+    const res = await request(app)
+      .post('/api/user/user-1/notify-changes')
+      .send({ fields: ['profilePhotoUrl', 'coverPhotoUrl', 'description'] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.notified).toBe(true);
+    expect(sendSystemPm).toHaveBeenCalledWith(
+      'user-1',
+      expect.stringContaining('profile photo, cover photo, profile description'),
+    );
+  });
+});
+
+// --- Suspend --- evictSuspendedUser -----------------------------------------
+
+describe('POST /api/user/:uniqueId/suspend --- room eviction', () => {
+  let app;
+
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+  });
+
+  it('should evict user from active rooms and clear their seat', async () => {
+    const { db } = require('../../src/utils/firebase');
+    const futureDate = new Date(Date.now() + 86400000).toISOString();
+
+    const mockBatchUpdate = jest.fn();
+    const mockBatchSet = jest.fn();
+    const mockBatchCommit = jest.fn().mockResolvedValue();
+    db.batch.mockReturnValue({
+      set: mockBatchSet,
+      update: mockBatchUpdate,
+      commit: mockBatchCommit,
+    });
+
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: 'user-evict',
+      data: () => ({ displayName: 'Evicted User', gcsScore: 50 }),
+    });
+
+    db.collection.mockImplementation((name) => {
+      if (name === 'rooms') {
+        return {
+          where: jest.fn().mockReturnValue({
+            get: jest.fn().mockResolvedValue({
+              empty: false,
+              docs: [
+                {
+                  id: 'room-1',
+                  data: () => ({
+                    participantIds: ['user-evict', 'other-user'],
+                    seats: {
+                      0: { index: 0, status: 'OCCUPIED', userId: 'user-evict', isMuted: false },
+                      1: { index: 1, status: 'OCCUPIED', userId: 'other-user', isMuted: false },
+                    },
+                  }),
+                },
+              ],
+            }),
+          }),
+        };
+      }
+      if (name === 'deviceBindings') {
+        return {
+          where: jest.fn().mockReturnThis(),
+          get: jest.fn().mockResolvedValue({ docs: [] }),
+        };
+      }
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
+      };
+      return chain;
+    });
+
+    const res = await request(app)
+      .post('/api/user/user-evict/suspend')
+      .send({ reason: 'Bad behaviour', canAppeal: true, endDate: futureDate });
+
+    expect(res.status).toBe(200);
+    await flushPromises();
+
+    expect(mockBatchUpdate).toHaveBeenCalled();
+
+    const roomUpdateCall = mockBatchUpdate.mock.calls.find(
+      (call) => call[1]?.participantIds && call[1]?.seats,
+    );
+    expect(roomUpdateCall).toBeDefined();
+    expect(roomUpdateCall[1].participantIds).not.toContain('user-evict');
+    expect(roomUpdateCall[1].seats[0].status).toBe('EMPTY');
+    expect(roomUpdateCall[1].seats[0].userId).toBeNull();
+    expect(roomUpdateCall[1].seats[1].status).toBe('OCCUPIED');
+  });
+});
+
+// --- Suspend --- suspension-match duration for timed bans -------------------
+
+describe('POST /api/user/:uniqueId/suspend --- timed ban duration', () => {
+  let app;
+
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+  });
+
+  it('should set suspension-match duration when endDate is provided', async () => {
+    const { db } = require('../../src/utils/firebase');
+    const futureDate = new Date(Date.now() + 86400000).toISOString();
+
+    const mockBatchSet = jest.fn();
+    const mockBatchCommit = jest.fn().mockResolvedValue();
+    db.batch.mockReturnValue({ set: mockBatchSet, update: jest.fn(), commit: mockBatchCommit });
+
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: 'user-timed',
+      data: () => ({ displayName: 'Timed Ban', gcsScore: 80 }),
+    });
+
+    db.collection.mockImplementation((name) => {
+      if (name === 'deviceBindings') {
+        const chain = {
+          where: jest.fn().mockReturnThis(),
+          get: jest.fn().mockResolvedValue({
+            docs: [{ id: 'device-X', data: () => ({ lastIp: '192.168.1.1' }) }],
+          }),
+        };
+        return chain;
+      }
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
+      };
+      return chain;
+    });
+
+    await request(app)
+      .post('/api/user/user-timed/suspend')
+      .send({ reason: 'Temp ban', canAppeal: true, endDate: futureDate });
+
+    await flushPromises();
+
+    expect(mockBatchSet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        duration: 'suspension-match',
+        expiresAt: expect.any(String),
+      }),
+    );
+  });
+});
+
+// --- GET /api/conversations/:id/messages ------------------------------------
+
+describe('GET /api/conversations/:id/messages', () => {
+  let app;
+
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+  });
+
+  it('should return messages in chronological order', async () => {
+    const { db } = require('../../src/utils/firebase');
+
+    const mockMsgGet = jest.fn().mockResolvedValue({
+      docs: [
+        { id: 'msg-2', data: () => ({ text: 'Second', createdAt: 2000 }) },
+        { id: 'msg-1', data: () => ({ text: 'First', createdAt: 1000 }) },
+      ],
+    });
+
+    db.collection.mockImplementation(() => ({
+      orderBy: jest.fn().mockReturnValue({
+        limit: jest.fn().mockReturnValue({
+          get: mockMsgGet,
+        }),
+      }),
+    }));
+
+    const res = await request(app).get('/api/conversations/conv-1/messages');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(2);
+    expect(res.body[0].id).toBe('msg-1');
+    expect(res.body[1].id).toBe('msg-2');
+  });
+
+  it('should respect the limit query parameter', async () => {
+    const { db } = require('../../src/utils/firebase');
+
+    const mockLimit = jest.fn().mockReturnValue({
+      get: jest.fn().mockResolvedValue({ docs: [] }),
+    });
+    db.collection.mockImplementation(() => ({
+      orderBy: jest.fn().mockReturnValue({
+        limit: mockLimit,
+      }),
+    }));
+
+    await request(app).get('/api/conversations/conv-1/messages?limit=10');
+
+    expect(mockLimit).toHaveBeenCalledWith(10);
+  });
+
+  it('should cap the limit at 200', async () => {
+    const { db } = require('../../src/utils/firebase');
+
+    const mockLimit = jest.fn().mockReturnValue({
+      get: jest.fn().mockResolvedValue({ docs: [] }),
+    });
+    db.collection.mockImplementation(() => ({
+      orderBy: jest.fn().mockReturnValue({
+        limit: mockLimit,
+      }),
+    }));
+
+    await request(app).get('/api/conversations/conv-1/messages?limit=999');
+
+    expect(mockLimit).toHaveBeenCalledWith(200);
+  });
+});

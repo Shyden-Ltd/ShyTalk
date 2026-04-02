@@ -279,4 +279,464 @@ describe('buildDataExport', () => {
       expect.objectContaining({ conversationId: 'conv-err' }),
     );
   });
+
+  // --- Error paths for each collection query --------------------------------
+
+  test('handles rooms query error gracefully', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => testUser,
+    });
+    queryDocs.mockResolvedValue([]);
+
+    // conversations succeed, then rooms fail, rest succeed
+    const { db } = require('../../src/utils/firebase');
+    let collCallCount = 0;
+    db.collection.mockImplementation((path) => {
+      collCallCount++;
+      expect(collCallCount).toBeGreaterThan(0);
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get:
+          path === 'rooms'
+            ? jest.fn().mockRejectedValue(new Error('Rooms permission denied'))
+            : mockCollectionGet,
+      };
+      return chain;
+    });
+
+    const result = await buildDataExport('10000001');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+
+    const log = require('../../src/utils/log');
+    expect(log.error).toHaveBeenCalledWith(
+      'data-export',
+      'Failed to query rooms',
+      expect.objectContaining({ uniqueId: '10000001' }),
+    );
+  });
+
+  test('handles reports query error gracefully', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => testUser,
+    });
+    queryDocs.mockResolvedValue([]);
+
+    const { db } = require('../../src/utils/firebase');
+    db.collection.mockImplementation((path) => {
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get:
+          path === 'reports'
+            ? jest.fn().mockRejectedValue(new Error('Reports error'))
+            : mockCollectionGet,
+      };
+      return chain;
+    });
+
+    const result = await buildDataExport('10000001');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+
+    const log = require('../../src/utils/log');
+    expect(log.error).toHaveBeenCalledWith(
+      'data-export',
+      'Failed to query reports',
+      expect.objectContaining({ uniqueId: '10000001' }),
+    );
+  });
+
+  test('handles appeals query error gracefully', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => testUser,
+    });
+    queryDocs.mockResolvedValue([]);
+
+    const { db } = require('../../src/utils/firebase');
+    db.collection.mockImplementation((path) => {
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get:
+          path === 'suspensionAppeals'
+            ? jest.fn().mockRejectedValue(new Error('Appeals error'))
+            : mockCollectionGet,
+      };
+      return chain;
+    });
+
+    const result = await buildDataExport('10000001');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+
+    const log = require('../../src/utils/log');
+    expect(log.error).toHaveBeenCalledWith(
+      'data-export',
+      'Failed to query appeals',
+      expect.objectContaining({ uniqueId: '10000001' }),
+    );
+  });
+
+  test('handles identity query error gracefully', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => testUser,
+    });
+    queryDocs.mockResolvedValue([]);
+
+    const { db } = require('../../src/utils/firebase');
+    db.collection.mockImplementation((path) => {
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get:
+          path === 'identityMap'
+            ? jest.fn().mockRejectedValue(new Error('Identity error'))
+            : mockCollectionGet,
+      };
+      return chain;
+    });
+
+    const result = await buildDataExport('10000001');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+
+    const log = require('../../src/utils/log');
+    expect(log.error).toHaveBeenCalledWith(
+      'data-export',
+      'Failed to query identity',
+      expect.objectContaining({ uniqueId: '10000001' }),
+    );
+  });
+
+  test('handles deviceBindings query error gracefully', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => testUser,
+    });
+    queryDocs.mockResolvedValue([]);
+
+    const { db } = require('../../src/utils/firebase');
+    db.collection.mockImplementation((path) => {
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get:
+          path === 'deviceBindings'
+            ? jest.fn().mockRejectedValue(new Error('Device error'))
+            : mockCollectionGet,
+      };
+      return chain;
+    });
+
+    const result = await buildDataExport('10000001');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+
+    const log = require('../../src/utils/log');
+    expect(log.error).toHaveBeenCalledWith(
+      'data-export',
+      'Failed to query device bindings',
+      expect.objectContaining({ uniqueId: '10000001' }),
+    );
+  });
+
+  test('handles suggestions query error gracefully', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => testUser,
+    });
+    queryDocs.mockResolvedValue([]);
+
+    const { db } = require('../../src/utils/firebase');
+    db.collection.mockImplementation((path) => {
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get:
+          path === 'suggestions'
+            ? jest.fn().mockRejectedValue(new Error('Suggestions error'))
+            : mockCollectionGet,
+      };
+      return chain;
+    });
+
+    const result = await buildDataExport('10000001');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+
+    const log = require('../../src/utils/log');
+    expect(log.error).toHaveBeenCalledWith(
+      'data-export',
+      'Failed to query suggestions',
+      expect.objectContaining({ uniqueId: '10000001' }),
+    );
+  });
+
+  test('handles notifications query error gracefully', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => testUser,
+    });
+    queryDocs.mockResolvedValue([]);
+
+    const { db } = require('../../src/utils/firebase');
+    db.collection.mockImplementation((path) => {
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get:
+          path === 'notifications'
+            ? jest.fn().mockRejectedValue(new Error('Notifications error'))
+            : mockCollectionGet,
+      };
+      return chain;
+    });
+
+    const result = await buildDataExport('10000001');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+
+    const log = require('../../src/utils/log');
+    expect(log.error).toHaveBeenCalledWith(
+      'data-export',
+      'Failed to query notifications',
+      expect.objectContaining({ uniqueId: '10000001' }),
+    );
+  });
+
+  // --- Suggestion votes scanning --------------------------------------------
+
+  test('collects suggestion votes for the user', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path === 'users/10000001') {
+        return Promise.resolve({ exists: true, data: () => testUser });
+      }
+      // Vote doc for suggestion sug-1 exists
+      if (path === 'suggestions/sug-1/votes/10000001') {
+        return Promise.resolve({
+          exists: true,
+          data: () => ({ direction: 'up', votedAt: 1700000000000 }),
+        });
+      }
+      // Vote doc for suggestion sug-2 does not exist
+      if (path === 'suggestions/sug-2/votes/10000001') {
+        return Promise.resolve({ exists: false });
+      }
+      return Promise.resolve({ exists: false });
+    });
+    queryDocs.mockResolvedValue([]);
+
+    const { db } = require('../../src/utils/firebase');
+    db.collection.mockImplementation((path) => {
+      if (path === 'suggestions') {
+        const chain = {
+          where: jest.fn().mockImplementation(() => chain),
+          orderBy: jest.fn().mockImplementation(() => chain),
+          limit: jest.fn().mockImplementation(() => chain),
+          get: jest.fn().mockResolvedValue({
+            docs: [
+              { id: 'sug-1', data: () => ({ title: 'Feature A', submitterUid: 99 }) },
+              { id: 'sug-2', data: () => ({ title: 'Feature B', submitterUid: 99 }) },
+            ],
+          }),
+        };
+        return chain;
+      }
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get: mockCollectionGet,
+      };
+      return chain;
+    });
+
+    const result = await buildDataExport('10000001');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+
+    // Verify the vote doc was queried
+    expect(db.doc).toHaveBeenCalledWith('suggestions/sug-1/votes/10000001');
+    expect(db.doc).toHaveBeenCalledWith('suggestions/sug-2/votes/10000001');
+  });
+
+  // --- Subscription preferences ---------------------------------------------
+
+  test('includes subscription preferences when they exist', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path === 'users/10000001') {
+        return Promise.resolve({ exists: true, data: () => testUser });
+      }
+      if (path === 'subscriptions/10000001') {
+        return Promise.resolve({
+          exists: true,
+          data: () => ({ emailEnabled: true, pushEnabled: false }),
+        });
+      }
+      return Promise.resolve({ exists: false });
+    });
+    queryDocs.mockResolvedValue([]);
+    mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
+
+    const result = await buildDataExport('10000001');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+
+    // Verify the subscription doc was queried
+    const { db } = require('../../src/utils/firebase');
+    expect(db.doc).toHaveBeenCalledWith('subscriptions/10000001');
+  });
+
+  test('handles subscription query error gracefully', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path === 'users/10000001') {
+        return Promise.resolve({ exists: true, data: () => testUser });
+      }
+      if (path === 'subscriptions/10000001') {
+        return Promise.reject(new Error('Subscription error'));
+      }
+      return Promise.resolve({ exists: false });
+    });
+    queryDocs.mockResolvedValue([]);
+    mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
+
+    const result = await buildDataExport('10000001');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+
+    const log = require('../../src/utils/log');
+    expect(log.error).toHaveBeenCalledWith(
+      'data-export',
+      'Failed to query subscriptions',
+      expect.objectContaining({ uniqueId: '10000001' }),
+    );
+  });
+
+  // --- Suggestion votes error path ------------------------------------------
+
+  test('handles suggestion votes query error gracefully', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => testUser,
+    });
+    queryDocs.mockResolvedValue([]);
+
+    const { db } = require('../../src/utils/firebase');
+    // Make suggestions collection get() succeed for the first call (user suggestions)
+    // but fail on the second call (all suggestions for votes scan)
+    let sugCallCount = 0;
+    db.collection.mockImplementation((path) => {
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get: jest.fn().mockImplementation(() => {
+          if (path === 'suggestions') {
+            sugCallCount++;
+            if (sugCallCount === 1) {
+              // First call: user's own suggestions
+              return Promise.resolve({ docs: [], empty: true });
+            }
+            // Second call: all suggestions for vote scan - error
+            return Promise.reject(new Error('Votes scan error'));
+          }
+          return mockCollectionGet();
+        }),
+      };
+      return chain;
+    });
+
+    const result = await buildDataExport('10000001');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+
+    const log = require('../../src/utils/log');
+    expect(log.error).toHaveBeenCalledWith(
+      'data-export',
+      'Failed to query suggestion votes',
+      expect.objectContaining({ uniqueId: '10000001' }),
+    );
+  });
+
+  // --- Empty data defaults --------------------------------------------------
+
+  test('uses default values when optional user fields are missing', async () => {
+    const minimalUser = {
+      uniqueId: 10000002,
+      displayName: 'Minimal User',
+      // No followerIds, followingIds, blockedUserIds, shyCoins, shyBeans, etc.
+    };
+
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => minimalUser,
+    });
+    queryDocs.mockResolvedValue([]);
+    mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
+
+    const result = await buildDataExport('10000002');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+    expect(result.buffer.length).toBeGreaterThan(0);
+  });
+
+  // --- Conversation without participantIds or roles -------------------------
+
+  test('handles conversation docs without participantIds or roles', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => testUser,
+    });
+    queryDocs.mockResolvedValue([]);
+
+    const convDoc = {
+      id: 'conv-sparse',
+      data: () => ({
+        type: 'group',
+        createdAt: 5000,
+        updatedAt: 6000,
+        // No participantIds, no roles, no ownerId
+      }),
+    };
+
+    mockCollectionGet
+      .mockResolvedValueOnce({ docs: [convDoc], empty: false }) // conversations
+      .mockResolvedValue({ docs: [], empty: true }); // all others (messages, rooms, etc.)
+
+    const result = await buildDataExport('10000001');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+  });
+
+  test('handles conversations outer query error gracefully', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => testUser,
+    });
+    queryDocs.mockResolvedValue([]);
+
+    const { db } = require('../../src/utils/firebase');
+    db.collection.mockImplementation((path) => {
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get:
+          path === 'conversations'
+            ? jest.fn().mockRejectedValue(new Error('Conversations error'))
+            : mockCollectionGet,
+      };
+      return chain;
+    });
+
+    const result = await buildDataExport('10000001');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+
+    const log = require('../../src/utils/log');
+    expect(log.error).toHaveBeenCalledWith(
+      'data-export',
+      'Failed to query conversations',
+      expect.objectContaining({ uniqueId: '10000001' }),
+    );
+  });
 });
