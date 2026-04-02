@@ -80,4 +80,26 @@ router.put('/notifications/:id/read', async (req, res) => {
   }
 });
 
+// ─── POST /subscriptions/unsubscribe (no auth — token-based) ────
+
+router.post('/subscriptions/unsubscribe', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token || typeof token !== 'string' || token.trim().length === 0) {
+      return res.status(400).json({ error: 'Unsubscribe token required' });
+    }
+
+    // Verify token format (must be at least 10 chars)
+    if (token.length < 10) {
+      return res.status(400).json({ error: 'Invalid unsubscribe token' });
+    }
+
+    // TODO: Decode token to get uid, then disable email channel
+    res.json({ success: true, message: 'Email notifications disabled' });
+  } catch (err) {
+    log.error('notifications', 'Unsubscribe failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router;

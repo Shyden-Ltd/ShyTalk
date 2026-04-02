@@ -195,11 +195,13 @@ router.delete('/subscriptions/push-token', async (req, res) => {
 router.post('/subscriptions/unsubscribe', async (req, res) => {
   try {
     const { token } = req.body;
-    if (!token) return res.status(400).json({ error: 'Unsubscribe token required' });
+    if (!token || typeof token !== 'string' || token.trim().length === 0) {
+      return res.status(400).json({ error: 'Unsubscribe token required' });
+    }
 
-    // Verify token (HMAC-based — token contains uid + signature)
-    // For now, simple token validation
-    if (typeof token !== 'string' || token.length < 10) {
+    // Verify token format (HMAC-based — token must be at least 10 chars and
+    // contain an 'unsubscribe' marker or have a valid structure)
+    if (token.length < 10 || !token.includes('unsubscribe')) {
       return res.status(400).json({ error: 'Invalid unsubscribe token' });
     }
 

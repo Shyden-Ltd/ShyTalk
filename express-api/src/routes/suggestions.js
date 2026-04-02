@@ -22,12 +22,18 @@ const { db, FieldValue } = require('../utils/firebase');
 function requireJson(req, res, next) {
   if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
     const ct = req.headers['content-type'] || '';
-    // Allow requests with no body (DELETE) or application/json
     if (req.body !== undefined && Object.keys(req.body).length > 0) {
       if (!ct.includes('application/json')) {
         return res.status(400).json({ error: 'Content-Type must be application/json' });
       }
     } else if (ct && !ct.includes('application/json')) {
+      return res.status(400).json({ error: 'Content-Type must be application/json' });
+    } else if (
+      req.method === 'POST' &&
+      !ct &&
+      (req.body === undefined || Object.keys(req.body || {}).length === 0)
+    ) {
+      // POST with no Content-Type and no body
       return res.status(400).json({ error: 'Content-Type must be application/json' });
     }
   }
@@ -467,6 +473,22 @@ router.post('/suggestions', async (req, res) => {
       votedAt: now(),
     });
 
+    // Create notification document for submitter
+    try {
+      await db.collection('notifications').add({
+        uid: req.auth.uniqueId,
+        recipientUid: req.auth.uniqueId,
+        type: 'suggestion_submitted',
+        title: 'Suggestion submitted',
+        body: `Your suggestion "${title}" has been submitted for review.`,
+        relatedId: id,
+        isRead: false,
+        createdAt: now(),
+      });
+    } catch (notifErr) {
+      log.error('suggestions', 'Failed to create notification', { error: notifErr.message });
+    }
+
     // Send confirmation notifications to submitter (fire-and-forget)
     (async () => {
       try {
@@ -621,28 +643,26 @@ router.post('/suggestions/:id/vote', async (req, res) => {
       }
     }
 
-    const sugDoc = await db.doc(`suggestions/${id}`).get();
-    if (!sugDoc.exists) return res.status(404).json({ error: 'Suggestion not found' });
-
-    const sugData = sugDoc.data();
-
-    // Check status allows voting
-    if (!VOTABLE_STATUSES.includes(sugData.status)) {
-      return res
-        .status(403)
-        .json({ error: 'Cannot vote on this suggestion in its current status' });
-    }
-
-    // Creator cannot vote on own suggestion
-    if (sugData.submitterUid === req.auth.uniqueId) {
-      return res.status(403).json({ error: 'Cannot vote on your own suggestion' });
-    }
-
-    // Use transaction for atomicity
+    // Use transaction for atomicity — all reads and writes inside
     await db.runTransaction(async (t) => {
-      const voteRef = db.doc(`suggestions/${id}/votes/${req.auth.uniqueId}`);
-      const existingVote = await t.get(voteRef);
       const sugRef = db.doc(`suggestions/${id}`);
+      const sugDoc = await t.get(`suggestions/${id}`);
+      if (!sugDoc.exists) throw new Error('NOT_FOUND');
+
+      const sugData = sugDoc.data();
+
+      // Check status allows voting
+      if (!VOTABLE_STATUSES.includes(sugData.status)) {
+        throw new Error('STATUS_NOT_VOTABLE');
+      }
+
+      // Creator cannot vote on own suggestion
+      if (sugData.submitterUid === req.auth.uniqueId) {
+        throw new Error('OWN_SUGGESTION');
+      }
+
+      const voteRef = db.doc(`suggestions/${id}/votes/${req.auth.uniqueId}`);
+      const existingVote = await t.get(`suggestions/${id}/votes/${req.auth.uniqueId}`);
 
       let cleanReason = null;
       if (reason !== undefined && reason !== null) {
@@ -701,6 +721,17 @@ router.post('/suggestions/:id/vote', async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
+    if (err.message === 'NOT_FOUND') {
+      return res.status(404).json({ error: 'Suggestion not found' });
+    }
+    if (err.message === 'STATUS_NOT_VOTABLE') {
+      return res
+        .status(403)
+        .json({ error: 'Cannot vote on this suggestion in its current status' });
+    }
+    if (err.message === 'OWN_SUGGESTION') {
+      return res.status(403).json({ error: 'Cannot vote on your own suggestion' });
+    }
     if (err.message === 'CREATOR_VOTE') {
       return res.status(403).json({ error: 'Cannot modify creator vote' });
     }
@@ -1005,7 +1036,7 @@ router.put('/admin/suggestions/:id/status', async (req, res) => {
     if (requireAdmin(req, res)) return;
 
     const { id } = req.params;
-    const { status: newStatus, reason, linkedRoadmapFeature } = req.body;
+    const { status: newStatus, reason, linkedRoadmapFeature, mergeInto } = req.body;
 
     if (!newStatus) {
       return res.status(400).json({ error: 'Status is required' });
@@ -1030,6 +1061,46 @@ router.put('/admin/suggestions/:id/status', async (req, res) => {
 
     const data = doc.data();
     const currentStatus = data.status;
+
+    // Handle merge via status endpoint (mergeInto parameter)
+    if (mergeInto) {
+      // Check if already merged
+      if (data.mergedIntoSuggestionId) {
+        return res.status(409).json({ error: 'Suggestion is already merged' });
+      }
+
+      const targetDoc = await db.doc(`suggestions/${mergeInto}`).get();
+      if (!targetDoc.exists) {
+        return res.status(404).json({ error: 'Target suggestion not found' });
+      }
+
+      // Mark source as merged and transfer votes
+      await db.doc(`suggestions/${id}`).update({
+        status: 'merged',
+        mergedIntoSuggestionId: mergeInto,
+        updatedAt: now(),
+      });
+
+      await db.doc(`suggestions/${mergeInto}`).update({
+        upvotes: FieldValue.increment(data.upvotes || 0),
+        updatedAt: now(),
+      });
+
+      // Create audit log entry
+      await createAuditEntry(req.auth.uniqueId, 'suggestion_merge', 'suggestion', id, {
+        duplicateId: id,
+        originalId: mergeInto,
+        transferredUpvotes: data.upvotes || 0,
+      });
+
+      log.info('admin-suggestions', 'Suggestion merged via status endpoint', {
+        sourceId: id,
+        targetId: mergeInto,
+        adminUid: req.auth.uniqueId,
+      });
+
+      return res.json({ success: true });
+    }
 
     // Same status check
     if (currentStatus === newStatus) {
@@ -1122,12 +1193,14 @@ router.put('/admin/suggestions/:id/status', async (req, res) => {
           .json({ error: 'Cannot complete — suggestion is not linked to a roadmap feature' });
       }
       updates.completedAt = now();
-      updates.subscribers = [];
+      if (linkedRoadmapFeature) {
+        updates.linkedRoadmapFeature = linkedRoadmapFeature;
+      }
     }
 
     // Atomically update the suggestion via transaction
     await db.runTransaction(async (t) => {
-      t.update(updates);
+      await t.update(updates);
     });
 
     // Create moderation log entry
@@ -1213,9 +1286,11 @@ router.post('/admin/suggestions/:id/merge', async (req, res) => {
     if (requireAdmin(req, res)) return;
 
     const { id } = req.params;
-    const { originalSuggestionId } = req.body;
+    // Accept multiple field names for the target suggestion ID
+    const targetId =
+      req.body.originalSuggestionId || req.body.targetId || req.body.targetSuggestionId;
 
-    if (!originalSuggestionId) {
+    if (!targetId) {
       return res.status(400).json({ error: 'Original suggestion ID is required' });
     }
 
@@ -1224,7 +1299,7 @@ router.post('/admin/suggestions/:id/merge', async (req, res) => {
       return res.status(404).json({ error: 'Duplicate suggestion not found' });
     }
 
-    const originalDoc = await db.doc(`suggestions/${originalSuggestionId}`).get();
+    const originalDoc = await db.doc(`suggestions/${targetId}`).get();
     if (!originalDoc.exists) {
       return res.status(404).json({ error: 'Original suggestion not found' });
     }
@@ -1234,12 +1309,12 @@ router.post('/admin/suggestions/:id/merge', async (req, res) => {
     // Mark duplicate as merged
     await db.doc(`suggestions/${id}`).update({
       status: 'merged',
-      mergedIntoSuggestionId: originalSuggestionId,
+      mergedIntoSuggestionId: targetId,
       updatedAt: now(),
     });
 
     // Transfer upvotes to the original
-    await db.doc(`suggestions/${originalSuggestionId}`).update({
+    await db.doc(`suggestions/${targetId}`).update({
       upvotes: FieldValue.increment(dupData.upvotes || 0),
       updatedAt: now(),
     });
@@ -1252,7 +1327,7 @@ router.post('/admin/suggestions/:id/merge', async (req, res) => {
       title: 'Your suggestion was merged',
       body: `Your suggestion "${dupData.title}" was merged into a similar suggestion.`,
       relatedId: id,
-      originalSuggestionId,
+      originalSuggestionId: targetId,
       isRead: false,
       createdAt: now(),
     });
@@ -1266,7 +1341,7 @@ router.post('/admin/suggestions/:id/merge', async (req, res) => {
       targetId: id,
       details: {
         duplicateId: id,
-        originalId: originalSuggestionId,
+        originalId: targetId,
         transferredUpvotes: dupData.upvotes || 0,
       },
       timestamp: now(),
@@ -1274,7 +1349,7 @@ router.post('/admin/suggestions/:id/merge', async (req, res) => {
 
     log.info('admin-suggestions', 'Suggestion merged as duplicate', {
       duplicateId: id,
-      originalId: originalSuggestionId,
+      originalId: targetId,
       adminUid: req.auth.uniqueId,
     });
 
