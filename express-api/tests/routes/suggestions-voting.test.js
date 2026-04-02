@@ -147,6 +147,13 @@ function createUnauthApp() {
 beforeEach(() => {
   jest.clearAllMocks();
   jest.resetModules();
+  mockDocGet.mockReset();
+  mockCollectionGet.mockReset();
+  mockRunTransaction.mockReset();
+  mockRunTransaction.mockImplementation(async (fn) => {
+    const t = { get: mockDocGet, set: mockDocSet, update: mockDocUpdate, delete: mockDocDelete };
+    return fn(t);
+  });
   mockDocGet.mockResolvedValue({ exists: false });
   mockCollectionGet.mockResolvedValue({ empty: true, docs: [], size: 0 });
 

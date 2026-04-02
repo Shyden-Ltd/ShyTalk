@@ -207,6 +207,8 @@ function _createRawApp({ uniqueId = 1001, isAdmin = false } = {}) {
 beforeEach(() => {
   jest.clearAllMocks();
   jest.resetModules();
+  mockDocGet.mockReset();
+  mockCollectionGet.mockReset();
   mockDocGet.mockResolvedValue({ exists: false });
   mockCollectionGet.mockResolvedValue({ empty: true, docs: [], size: 0 });
 

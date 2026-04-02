@@ -145,6 +145,8 @@ function createAdminApp({ uniqueId = 'admin-1' } = {}) {
 beforeEach(() => {
   jest.clearAllMocks();
   jest.resetModules();
+  mockDocGet.mockReset();
+  mockCollectionGet.mockReset();
   mockDocGet.mockResolvedValue({ exists: false });
   mockCollectionGet.mockResolvedValue({ empty: true, docs: [], size: 0 });
 

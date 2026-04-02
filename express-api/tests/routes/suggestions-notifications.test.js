@@ -120,6 +120,8 @@ function createUnauthApp() {
 beforeEach(() => {
   jest.clearAllMocks();
   jest.resetModules();
+  mockDocGet.mockReset();
+  mockCollectionGet.mockReset();
   mockDocGet.mockResolvedValue({ exists: false });
   mockCollectionGet.mockResolvedValue({ empty: true, docs: [], size: 0 });
   notificationsRouter = require('../../src/routes/suggestions-notifications');

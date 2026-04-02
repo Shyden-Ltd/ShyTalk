@@ -102,6 +102,8 @@ function createUnauthApp() {
 beforeEach(() => {
   jest.clearAllMocks();
   jest.resetModules();
+  mockDocGet.mockReset();
+  mockCollectionGet.mockReset();
   mockDocGet.mockResolvedValue({ exists: false });
   mockCollectionGet.mockResolvedValue({ empty: true, docs: [], size: 0 });
   subscriptionsRouter = require('../../src/routes/subscriptions');

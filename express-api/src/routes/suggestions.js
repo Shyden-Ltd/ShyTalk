@@ -635,7 +635,7 @@ router.post('/suggestions/:id/vote', async (req, res) => {
           vote: direction,
           direction,
           reason: cleanReason,
-          reasonVisibility: reasonVisibility || null,
+          visibility: reasonVisibility || null,
           votedAt: now(),
         });
         // Adjust counts
@@ -657,7 +657,7 @@ router.post('/suggestions/:id/vote', async (req, res) => {
           vote: direction,
           direction,
           reason: cleanReason,
-          reasonVisibility: reasonVisibility || null,
+          visibility: reasonVisibility || null,
           votedAt: now(),
         });
         if (direction === 'up') {
@@ -694,7 +694,13 @@ router.delete('/suggestions/:id/vote', async (req, res) => {
     if (!voteDoc.exists) return res.status(404).json({ error: 'Vote not found' });
 
     const voteData = voteDoc.data();
+
+    // Check if this is the creator's auto-upvote (either by flag or by checking suggestion ownership)
     if (voteData.isCreatorVote) {
+      return res.status(403).json({ error: 'Cannot remove creator vote' });
+    }
+    const sugDoc = await db.doc(`suggestions/${id}`).get();
+    if (sugDoc.exists && sugDoc.data().submitterUid === req.auth.uniqueId) {
       return res.status(403).json({ error: 'Cannot remove creator vote' });
     }
 
