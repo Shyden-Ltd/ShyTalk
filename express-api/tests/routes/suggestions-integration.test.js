@@ -462,7 +462,12 @@ describe('11.31 — Integration Tests Full Flows', () => {
         .send({ status: 'planned', linkedRoadmapFeature: 'feat-1' });
       expect(mockDocUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'planned' }));
       jest.clearAllMocks();
-      setupDocMocks({ 'suggestions/new-id': makeSuggestionDoc('new-id', { status: 'planned' }) });
+      setupDocMocks({
+        'suggestions/new-id': makeSuggestionDoc('new-id', {
+          status: 'planned',
+          linkedRoadmapFeature: 'feat-1',
+        }),
+      });
       await request(adminApp)
         .put('/api/admin/suggestions/new-id/status')
         .send({ status: 'completed' });
@@ -1629,8 +1634,8 @@ describe('11.100 — Notification Pipeline End-to-End', () => {
 
 describe('11.115 — Error Recovery Flows', () => {
   test('Firestore unavailable on creation: returns 500, no partial write', async () => {
-    mockDocSet.mockRejectedValue(new Error('UNAVAILABLE'));
-    mockCollectionAdd.mockRejectedValue(new Error('UNAVAILABLE'));
+    mockDocSet.mockRejectedValueOnce(new Error('UNAVAILABLE'));
+    mockCollectionAdd.mockRejectedValueOnce(new Error('UNAVAILABLE'));
     const res = await request(createApp()).post('/api/suggestions').send(VALID_SUGGESTION);
     expect(res.status).toBe(500);
     expect(sendSystemPm).not.toHaveBeenCalled();

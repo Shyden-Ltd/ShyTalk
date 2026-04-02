@@ -1104,6 +1104,9 @@ describe('11.51 — API Response Format Contracts', () => {
     });
 
     test('429 response contains { error } with rate limit message', async () => {
+      // First call: blocked topics query (empty)
+      mockCollectionGet.mockResolvedValueOnce({ empty: true, docs: [], size: 0 });
+      // Second call: pending count query (10 pending = at limit)
       mockCollectionGet.mockResolvedValueOnce({
         empty: false,
         docs: Array.from({ length: 10 }, (_, i) =>

@@ -71,6 +71,18 @@ router.put('/subscriptions/me', async (req, res) => {
     const updates = { updatedAt: now() };
 
     if (channelPreferences) {
+      // GDPR: if any channel enables email, require either emailConsent in this request
+      // or existing emailConsentAt in the stored subscription doc
+      const wantsEmail = Object.values(channelPreferences).some((ch) => ch && ch.email === true);
+      if (wantsEmail && emailConsent !== true) {
+        const existing = await db.doc(`subscriptions/${req.auth.uniqueId}`).get();
+        const hasConsent = existing.exists && existing.data().emailConsentAt;
+        if (!hasConsent) {
+          return res
+            .status(400)
+            .json({ error: 'Email consent required (GDPR). Set emailConsent: true.' });
+        }
+      }
       updates.channelPreferences = channelPreferences;
     }
 
@@ -110,6 +122,13 @@ router.post('/subscriptions/me/watch', async (req, res) => {
 
     const { type, id } = req.body;
     if (!type || !id) return res.status(400).json({ error: 'Type and ID required' });
+
+    // Validate that the target exists
+    const collection = type === 'feature' ? 'roadmapFeatures' : 'suggestions';
+    const targetDoc = await db.doc(`${collection}/${id}`).get();
+    if (!targetDoc.exists) {
+      return res.status(404).json({ error: `${type} not found` });
+    }
 
     const field = type === 'feature' ? 'watchedFeatures' : 'watchedSuggestions';
     await db

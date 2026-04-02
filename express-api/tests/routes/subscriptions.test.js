@@ -179,6 +179,16 @@ describe('GET /api/subscriptions/me — Get preferences', () => {
 });
 
 describe('PUT /api/subscriptions/me — Update preferences', () => {
+  beforeEach(() => {
+    // Simulate returning user who already has email consent
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('subscriptions/')) {
+        return Promise.resolve(makeSubscriptionDoc(1001, { emailConsentAt: 1709913600000 }));
+      }
+      return Promise.resolve({ exists: false });
+    });
+  });
+
   test('per-event channel control saved', async () => {
     const app = createApp();
     await request(app)
@@ -245,6 +255,16 @@ describe('PUT /api/subscriptions/me — Update preferences', () => {
 });
 
 describe('POST /api/subscriptions/me/watch — Watch feature/suggestion', () => {
+  beforeEach(() => {
+    // By default, features/suggestions exist (for watch validation)
+    mockDocGet.mockImplementation((path) => {
+      if (path && (path.includes('roadmapFeatures/') || path.includes('suggestions/'))) {
+        return Promise.resolve({ exists: true, data: () => ({ id: path.split('/')[1] }) });
+      }
+      return Promise.resolve({ exists: false });
+    });
+  });
+
   test('feature added to watchedFeatures list', async () => {
     const app = createApp();
     await request(app)
@@ -257,6 +277,9 @@ describe('POST /api/subscriptions/me/watch — Watch feature/suggestion', () => 
     mockDocGet.mockImplementation((path) => {
       if (path && path.includes('subscriptions/')) {
         return Promise.resolve(makeSubscriptionDoc(1001, { watchedFeatures: ['feature-123'] }));
+      }
+      if (path && (path.includes('roadmapFeatures/') || path.includes('suggestions/'))) {
+        return Promise.resolve({ exists: true, data: () => ({ id: path.split('/')[1] }) });
       }
       return Promise.resolve({ exists: false });
     });
@@ -362,6 +385,16 @@ describe('Auth required on all subscription endpoints', () => {
 });
 
 describe('GDPR email consent', () => {
+  beforeEach(() => {
+    // Simulate first-time user with no prior email consent
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('subscriptions/')) {
+        return Promise.resolve(makeSubscriptionDoc(1001, { emailConsentAt: null }));
+      }
+      return Promise.resolve({ exists: false });
+    });
+  });
+
   test('enable email without GDPR consent returns 400', async () => {
     const app = createApp();
     await request(app)
@@ -435,6 +468,9 @@ describe('Subscription Edge Cases', () => {
     mockDocGet.mockImplementation((path) => {
       if (path && path.includes('subscriptions/')) {
         return Promise.resolve(makeSubscriptionDoc(1001, { watchedFeatures: ['f1'] }));
+      }
+      if (path && path.includes('roadmapFeatures/')) {
+        return Promise.resolve({ exists: true, data: () => ({ id: 'f1' }) });
       }
       return Promise.resolve({ exists: false });
     });
