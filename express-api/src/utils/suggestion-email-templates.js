@@ -76,8 +76,11 @@ function getSubject(type, language, title) {
   return base;
 }
 
+const SITE_BASE = process.env.SITE_BASE_URL || 'https://shytalk.shyden.co.uk';
+const API_BASE = process.env.API_BASE_URL || 'https://api.shytalk.shyden.co.uk';
+
 function buildHeaders(uid) {
-  const unsubUrl = `https://shytalk.shyden.co.uk/api/subscriptions/unsubscribe?token=${uid}`;
+  const unsubUrl = `${API_BASE}/api/subscriptions/unsubscribe?token=${uid}`;
   return {
     'List-Unsubscribe': `<${unsubUrl}>`,
     'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
@@ -90,7 +93,7 @@ function buildAcceptedEmail(suggestionId, title, language = 'en') {
     html: buildEmailHtml(
       title || 'Your suggestion was accepted',
       'The community can now vote on your idea. View it on the roadmap.',
-      `https://shytalk.shyden.co.uk/roadmap.html#suggestion-${suggestionId}`,
+      `${SITE_BASE}/roadmap.html#suggestion-${suggestionId}`,
       language,
     ),
     headers: buildHeaders(suggestionId),
@@ -103,7 +106,7 @@ function buildRejectedEmail(suggestionId, title, reason, language = 'en') {
     html: buildEmailHtml(
       title || 'Your suggestion was declined',
       reason ? `Reason: ${reason}` : 'Thank you for your suggestion.',
-      `https://shytalk.shyden.co.uk/roadmap.html#suggestions`,
+      `${SITE_BASE}/roadmap.html#suggestions`,
       language,
     ),
     headers: buildHeaders(suggestionId),
@@ -116,7 +119,7 @@ function buildPlannedEmail(suggestionId, title, language = 'en') {
     html: buildEmailHtml(
       title || 'Added to the roadmap',
       'Your suggestion has been added to the official roadmap!',
-      `https://shytalk.shyden.co.uk/roadmap.html#suggestion-${suggestionId}`,
+      `${SITE_BASE}/roadmap.html#suggestion-${suggestionId}`,
       language,
     ),
     headers: buildHeaders(suggestionId),
@@ -129,7 +132,7 @@ function buildCompletedEmail(suggestionId, title, language = 'en') {
     html: buildEmailHtml(
       title || 'Feature shipped!',
       'A feature you suggested has been completed and shipped.',
-      `https://shytalk.shyden.co.uk/roadmap.html#suggestion-${suggestionId}`,
+      `${SITE_BASE}/roadmap.html#suggestion-${suggestionId}`,
       language,
     ),
     headers: buildHeaders(suggestionId),
@@ -142,7 +145,7 @@ function buildMergedEmail(suggestionId, originalId, title, language = 'en') {
     html: buildEmailHtml(
       title || 'Suggestion merged',
       `Your suggestion was merged with an existing one. View the original.`,
-      `https://shytalk.shyden.co.uk/roadmap.html#suggestion-${originalId}`,
+      `${SITE_BASE}/roadmap.html#suggestion-${originalId}`,
       language,
     ),
     headers: buildHeaders(suggestionId),
