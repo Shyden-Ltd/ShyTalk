@@ -107,6 +107,7 @@ app.use('/api', require('./routes/admin-suggestions'));
 app.use('/api', require('./routes/admin-audit-log'));
 app.use('/api', require('./routes/suggestions-maintenance'));
 app.use('/api', require('./routes/identity-graph'));
+app.use('/api', require('./routes/roadmap-auth'));
 
 const { createLogsRouter } = require('./routes/logs');
 app.use('/api', createLogsRouter(logger));
