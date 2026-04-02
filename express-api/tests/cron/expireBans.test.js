@@ -161,4 +161,257 @@ describe('expireBans', () => {
       }),
     );
   });
+
+  test('skips FCM when alertConfig has empty fcmRecipientUserIds', async () => {
+    const pastExpiry = new Date(Date.now() - 86400000).toISOString();
+
+    mockCollectionGet.mockResolvedValueOnce({
+      docs: [
+        {
+          id: 'dev1',
+          data: () => ({ expiresAt: pastExpiry, reason: 'old' }),
+          ref: { path: 'deviceBans/dev1' },
+        },
+      ],
+    });
+    mockCollectionGet.mockResolvedValueOnce({ docs: [] });
+
+    // alertConfig exists but empty recipients
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ fcmRecipientUserIds: [] }),
+    });
+
+    await expireBans();
+
+    expect(mockBatchDelete).toHaveBeenCalledTimes(1);
+    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+  });
+
+  test('skips FCM for recipient user that does not exist', async () => {
+    const pastExpiry = new Date(Date.now() - 86400000).toISOString();
+
+    mockCollectionGet.mockResolvedValueOnce({
+      docs: [
+        {
+          id: 'dev1',
+          data: () => ({ expiresAt: pastExpiry, reason: 'old' }),
+          ref: { path: 'deviceBans/dev1' },
+        },
+      ],
+    });
+    mockCollectionGet.mockResolvedValueOnce({ docs: [] });
+
+    // alertConfig with one recipient
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ fcmRecipientUserIds: ['ghost-user'] }),
+    });
+
+    // user does not exist
+    mockDocGet.mockResolvedValueOnce({ exists: false });
+
+    await expireBans();
+
+    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+  });
+
+  test('skips FCM for recipient user with empty fcmTokens', async () => {
+    const pastExpiry = new Date(Date.now() - 86400000).toISOString();
+
+    mockCollectionGet.mockResolvedValueOnce({
+      docs: [
+        {
+          id: 'dev1',
+          data: () => ({ expiresAt: pastExpiry, reason: 'old' }),
+          ref: { path: 'deviceBans/dev1' },
+        },
+      ],
+    });
+    mockCollectionGet.mockResolvedValueOnce({ docs: [] });
+
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ fcmRecipientUserIds: ['admin1'] }),
+    });
+
+    // user exists but has no FCM tokens
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ fcmTokens: [] }),
+    });
+
+    await expireBans();
+
+    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+  });
+
+  test('skips FCM for recipient user with no fcmTokens field at all', async () => {
+    const pastExpiry = new Date(Date.now() - 86400000).toISOString();
+
+    mockCollectionGet.mockResolvedValueOnce({
+      docs: [
+        {
+          id: 'dev1',
+          data: () => ({ expiresAt: pastExpiry, reason: 'old' }),
+          ref: { path: 'deviceBans/dev1' },
+        },
+      ],
+    });
+    mockCollectionGet.mockResolvedValueOnce({ docs: [] });
+
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ fcmRecipientUserIds: ['admin1'] }),
+    });
+
+    // user exists but fcmTokens is undefined
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({}),
+    });
+
+    await expireBans();
+
+    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+  });
+
+  test('sends FCM to multiple recipients', async () => {
+    const pastExpiry = new Date(Date.now() - 86400000).toISOString();
+
+    mockCollectionGet.mockResolvedValueOnce({
+      docs: [
+        {
+          id: 'dev1',
+          data: () => ({ expiresAt: pastExpiry, reason: 'old' }),
+          ref: { path: 'deviceBans/dev1' },
+        },
+      ],
+    });
+    mockCollectionGet.mockResolvedValueOnce({ docs: [] });
+
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ fcmRecipientUserIds: ['admin1', 'admin2'] }),
+    });
+
+    // admin1 has tokens
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ fcmTokens: ['token-a'] }),
+    });
+
+    // admin2 has tokens
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ fcmTokens: ['token-b'] }),
+    });
+
+    await expireBans();
+
+    expect(mockSendFcmToTokens).toHaveBeenCalledTimes(2);
+    expect(mockCleanupInvalidTokens).toHaveBeenCalledTimes(2);
+  });
+
+  test('handles FCM notification error gracefully', async () => {
+    const pastExpiry = new Date(Date.now() - 86400000).toISOString();
+
+    mockCollectionGet.mockResolvedValueOnce({
+      docs: [
+        {
+          id: 'dev1',
+          data: () => ({ expiresAt: pastExpiry, reason: 'old' }),
+          ref: { path: 'deviceBans/dev1' },
+        },
+      ],
+    });
+    mockCollectionGet.mockResolvedValueOnce({ docs: [] });
+
+    // alertConfig fetch throws
+    mockDocGet.mockRejectedValueOnce(new Error('FCM service down'));
+
+    // Should not throw — error is caught internally
+    await expect(expireBans()).resolves.not.toThrow();
+    expect(mockBatchDelete).toHaveBeenCalledTimes(1);
+  });
+
+  test('handles alertConfig with missing fcmRecipientUserIds field', async () => {
+    const pastExpiry = new Date(Date.now() - 86400000).toISOString();
+
+    mockCollectionGet.mockResolvedValueOnce({
+      docs: [
+        {
+          id: 'dev1',
+          data: () => ({ expiresAt: pastExpiry, reason: 'old' }),
+          ref: { path: 'deviceBans/dev1' },
+        },
+      ],
+    });
+    mockCollectionGet.mockResolvedValueOnce({ docs: [] });
+
+    // alertConfig exists but has no fcmRecipientUserIds field
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({}),
+    });
+
+    await expireBans();
+
+    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+  });
+
+  test('batches deletes when more than 500 expired bans', async () => {
+    const pastExpiry = new Date(Date.now() - 86400000).toISOString();
+
+    // 600 expired device bans
+    const deviceDocs = Array.from({ length: 600 }, (_, i) => ({
+      id: `dev${i}`,
+      data: () => ({ expiresAt: pastExpiry, reason: 'old' }),
+      ref: { path: `deviceBans/dev${i}` },
+    }));
+
+    mockCollectionGet.mockResolvedValueOnce({ docs: deviceDocs });
+    mockCollectionGet.mockResolvedValueOnce({ docs: [] });
+
+    // No alert config
+    mockDocGet.mockResolvedValueOnce({ exists: false });
+
+    await expireBans();
+
+    // Should have 2 batches: 500 + 100
+    expect(mockBatchCommit).toHaveBeenCalledTimes(2);
+    expect(mockBatchDelete).toHaveBeenCalledTimes(600);
+  });
+
+  test('cleans up invalid FCM tokens returned by sendFcmToTokens', async () => {
+    const pastExpiry = new Date(Date.now() - 86400000).toISOString();
+
+    mockCollectionGet.mockResolvedValueOnce({
+      docs: [
+        {
+          id: 'dev1',
+          data: () => ({ expiresAt: pastExpiry, reason: 'old' }),
+          ref: { path: 'deviceBans/dev1' },
+        },
+      ],
+    });
+    mockCollectionGet.mockResolvedValueOnce({ docs: [] });
+
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ fcmRecipientUserIds: ['admin1'] }),
+    });
+
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ fcmTokens: ['valid-token', 'invalid-token'] }),
+    });
+
+    // sendFcmToTokens returns invalid tokens
+    mockSendFcmToTokens.mockResolvedValueOnce(['invalid-token']);
+
+    await expireBans();
+
+    expect(mockCleanupInvalidTokens).toHaveBeenCalledWith(['invalid-token'], 'admin1');
+  });
 });

@@ -199,6 +199,66 @@ describe('Admin Audit Log', () => {
     await request(app).get('/api/admin/audit-log?from=2026-01-01&to=2026-12-31').expect(200);
   });
 
+  test('audit log: invalid from date is ignored', async () => {
+    const docs = [makeAuditDoc('log1', { timestamp: 1709913600000 })];
+    mockCollectionGet.mockResolvedValueOnce({ empty: false, docs, size: 1 });
+    const app = createApp();
+    const res = await request(app).get('/api/admin/audit-log?from=not-a-date').expect(200);
+    // Invalid date → isNaN branch → filter not applied → entry still returned
+    expect(res.body.entries).toHaveLength(1);
+  });
+
+  test('audit log: invalid to date is ignored', async () => {
+    const docs = [makeAuditDoc('log1', { timestamp: 1709913600000 })];
+    mockCollectionGet.mockResolvedValueOnce({ empty: false, docs, size: 1 });
+    const app = createApp();
+    const res = await request(app).get('/api/admin/audit-log?to=not-a-date').expect(200);
+    expect(res.body.entries).toHaveLength(1);
+  });
+
+  test('audit log: from filter excludes entries before date', async () => {
+    const docs = [
+      makeAuditDoc('log1', { timestamp: 1000 }),
+      makeAuditDoc('log2', { timestamp: Date.now() }),
+    ];
+    mockCollectionGet.mockResolvedValueOnce({ empty: false, docs, size: 2 });
+    const app = createApp();
+    const res = await request(app).get('/api/admin/audit-log?from=2026-01-01').expect(200);
+    // Only the recent entry should remain
+    expect(res.body.entries).toHaveLength(1);
+  });
+
+  test('audit log: to filter excludes entries after date', async () => {
+    const farFuture = new Date('2099-01-01').getTime();
+    const docs = [
+      makeAuditDoc('log1', { timestamp: 1000 }),
+      makeAuditDoc('log2', { timestamp: farFuture }),
+    ];
+    mockCollectionGet.mockResolvedValueOnce({ empty: false, docs, size: 2 });
+    const app = createApp();
+    // to=2026-01-02 should only include entries up to end of that day
+    const res = await request(app).get('/api/admin/audit-log?to=2026-01-02').expect(200);
+    expect(res.body.entries).toHaveLength(1);
+  });
+
+  test('audit log: entries with falsy timestamp filtered by from use 0 fallback', async () => {
+    const docs = [makeAuditDoc('log1', { timestamp: null })];
+    mockCollectionGet.mockResolvedValueOnce({ empty: false, docs, size: 1 });
+    const app = createApp();
+    // from far in the future → entry timestamp 0 < from → excluded
+    const res = await request(app).get('/api/admin/audit-log?from=2099-01-01').expect(200);
+    expect(res.body.entries).toHaveLength(0);
+  });
+
+  test('audit log: entries with falsy timestamp filtered by to use 0 fallback', async () => {
+    const docs = [makeAuditDoc('log1', { timestamp: null })];
+    mockCollectionGet.mockResolvedValueOnce({ empty: false, docs, size: 1 });
+    const app = createApp();
+    // to=2026-01-01 → toTs includes up to end of day → 0 <= toTs → included
+    const res = await request(app).get('/api/admin/audit-log?to=2026-01-01').expect(200);
+    expect(res.body.entries).toHaveLength(1);
+  });
+
   test('audit log: combined filters', async () => {
     mockCollectionGet.mockResolvedValueOnce({ empty: true, docs: [], size: 0 });
     const app = createApp();
@@ -223,6 +283,112 @@ describe('Admin Audit Log', () => {
   test('audit log: auth required (admin only)', async () => {
     const app = createNonAdminApp();
     await request(app).get('/api/admin/audit-log').expect(403);
+  });
+
+  test('audit log: export auth required (admin only)', async () => {
+    const app = createNonAdminApp();
+    await request(app).get('/api/admin/audit-log/export').expect(403);
+  });
+
+  test('audit log: actionType filter falls back to e.action field', async () => {
+    const docs = [makeAuditDoc('log1', { actionType: undefined, action: 'ban_create' })];
+    mockCollectionGet.mockResolvedValueOnce({ empty: false, docs, size: 1 });
+    const app = createApp();
+    const res = await request(app).get('/api/admin/audit-log?actionType=ban_create').expect(200);
+    expect(res.body.entries).toHaveLength(1);
+  });
+
+  test('audit log: actionType filter excludes non-matching action fallback', async () => {
+    const docs = [makeAuditDoc('log1', { actionType: undefined, action: 'other_action' })];
+    mockCollectionGet.mockResolvedValueOnce({ empty: false, docs, size: 1 });
+    const app = createApp();
+    const res = await request(app).get('/api/admin/audit-log?actionType=ban_create').expect(200);
+    expect(res.body.entries).toHaveLength(0);
+  });
+
+  test('audit log: pageSize is clamped to maximum 100', async () => {
+    const docs = Array.from({ length: 5 }, (_, i) => makeAuditDoc(`log${i}`));
+    mockCollectionGet.mockResolvedValueOnce({ empty: false, docs, size: 5 });
+    const app = createApp();
+    const res = await request(app).get('/api/admin/audit-log?pageSize=999').expect(200);
+    expect(res.body.pageSize).toBe(100);
+  });
+
+  test('audit log: page defaults to 1 when not provided', async () => {
+    mockCollectionGet.mockResolvedValueOnce({ empty: true, docs: [], size: 0 });
+    const app = createApp();
+    const res = await request(app).get('/api/admin/audit-log').expect(200);
+    expect(res.body.page).toBe(1);
+  });
+
+  test('audit log: pageSize defaults to 50 when not provided', async () => {
+    mockCollectionGet.mockResolvedValueOnce({ empty: true, docs: [], size: 0 });
+    const app = createApp();
+    const res = await request(app).get('/api/admin/audit-log').expect(200);
+    expect(res.body.pageSize).toBe(50);
+  });
+
+  test('audit log: pagination slices correctly for page > 1', async () => {
+    const docs = Array.from({ length: 5 }, (_, i) =>
+      makeAuditDoc(`log${i}`, { adminUid: `admin${i}` }),
+    );
+    mockCollectionGet.mockResolvedValueOnce({ empty: false, docs, size: 5 });
+    const app = createApp();
+    const res = await request(app).get('/api/admin/audit-log?page=2&pageSize=2').expect(200);
+    expect(res.body.entries).toHaveLength(2);
+    expect(res.body.page).toBe(2);
+  });
+
+  test('audit log: list returns 500 on internal error', async () => {
+    mockCollectionGet.mockRejectedValueOnce(new Error('Firestore unavailable'));
+    const app = createApp();
+    const res = await request(app).get('/api/admin/audit-log').expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('audit log: export returns 500 on internal error', async () => {
+    mockCollectionGet.mockRejectedValueOnce(new Error('Firestore unavailable'));
+    const app = createApp();
+    const res = await request(app).get('/api/admin/audit-log/export').expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('audit log: export CSV uses action fallback for entries without actionType', async () => {
+    const docs = [makeAuditDoc('log1', { actionType: undefined, action: 'legacy_action' })];
+    mockCollectionGet.mockResolvedValueOnce({ empty: false, docs, size: 1 });
+    const app = createApp();
+    const res = await request(app).get('/api/admin/audit-log/export').expect(200);
+    expect(res.text).toContain('legacy_action');
+  });
+
+  test('audit log: export CSV handles entries with missing optional fields', async () => {
+    const docs = [
+      makeAuditDoc('log1', {
+        adminUid: undefined,
+        actionType: undefined,
+        action: undefined,
+        targetType: undefined,
+        targetId: undefined,
+        details: undefined,
+        timestamp: undefined,
+      }),
+    ];
+    mockCollectionGet.mockResolvedValueOnce({ empty: false, docs, size: 1 });
+    const app = createApp();
+    const res = await request(app).get('/api/admin/audit-log/export').expect(200);
+    // The CSV row should have empty fallback values and empty details {}
+    const lines = res.text.split('\n');
+    expect(lines.length).toBe(2); // header + 1 data row
+    expect(lines[1]).toContain('{}');
+  });
+
+  test('audit log: total uses snap.size when larger than entries.length', async () => {
+    const docs = [makeAuditDoc('log1')];
+    mockCollectionGet.mockResolvedValueOnce({ empty: false, docs, size: 500 });
+    const app = createApp();
+    const res = await request(app).get('/api/admin/audit-log').expect(200);
+    // snap.size (500) > entries.length (1), so total should be 500
+    expect(res.body.total).toBe(500);
   });
 });
 

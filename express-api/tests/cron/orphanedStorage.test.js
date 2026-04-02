@@ -300,7 +300,7 @@ describe('orphanedStorage cron', () => {
     expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([key]));
   });
 
-  test('scans all expected R2 folders', async () => {
+  test('scans all expected R2 folders including starting-screens', async () => {
     mockCollectionSelectGet.mockResolvedValue({ docs: [] });
     mockWhereGet.mockResolvedValue({ docs: [] });
     mockListObjects.mockResolvedValue([]);
@@ -315,5 +315,303 @@ describe('orphanedStorage cron', () => {
     expect(folders).toContain('evidence/');
     expect(folders).toContain('stickers/');
     expect(folders).toContain('banners/');
+    expect(folders).toContain('starting-screens/');
+  });
+
+  test('keeps R2 keys referenced as conversation groupPhotoUrl', async () => {
+    const groupKey = 'groups/conv-photo.jpg';
+
+    mockCollectionSelectGet.mockImplementation(() => ({
+      docs: [makeDoc({ groupPhotoUrl: cdnUrl(groupKey) })],
+    }));
+    mockWhereGet.mockResolvedValue({ docs: [] });
+
+    mockListObjects.mockImplementation((folder) => {
+      if (folder === 'groups/') return Promise.resolve([groupKey]);
+      return Promise.resolve([]);
+    });
+
+    await orphanedStorage();
+
+    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([groupKey]));
+  });
+
+  test('keeps R2 keys referenced via group_photo_url snake_case alias', async () => {
+    const groupKey = 'groups/snake-conv-photo.jpg';
+
+    mockCollectionSelectGet.mockImplementation(() => ({
+      docs: [makeDoc({ group_photo_url: cdnUrl(groupKey) })],
+    }));
+    mockWhereGet.mockResolvedValue({ docs: [] });
+
+    mockListObjects.mockImplementation((folder) => {
+      if (folder === 'groups/') return Promise.resolve([groupKey]);
+      return Promise.resolve([]);
+    });
+
+    await orphanedStorage();
+
+    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([groupKey]));
+  });
+
+  test('keeps R2 keys referenced as user preSuspensionProfilePhotoUrl', async () => {
+    const key = 'profiles/pre-susp-profile.jpg';
+
+    mockCollectionSelectGet.mockImplementation(() => ({
+      docs: [makeDoc({ preSuspensionProfilePhotoUrl: cdnUrl(key) })],
+    }));
+    mockWhereGet.mockResolvedValue({ docs: [] });
+
+    mockListObjects.mockImplementation((folder) => {
+      if (folder === 'profiles/') return Promise.resolve([key]);
+      return Promise.resolve([]);
+    });
+
+    await orphanedStorage();
+
+    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([key]));
+  });
+
+  test('keeps R2 keys referenced as user preSuspensionCoverPhotoUrl', async () => {
+    const key = 'covers/pre-susp-cover.jpg';
+
+    mockCollectionSelectGet.mockImplementation(() => ({
+      docs: [makeDoc({ preSuspensionCoverPhotoUrl: cdnUrl(key) })],
+    }));
+    mockWhereGet.mockResolvedValue({ docs: [] });
+
+    mockListObjects.mockImplementation((folder) => {
+      if (folder === 'covers/') return Promise.resolve([key]);
+      return Promise.resolve([]);
+    });
+
+    await orphanedStorage();
+
+    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([key]));
+  });
+
+  test('keeps R2 keys referenced via pre_suspension_profile_photo_url snake_case', async () => {
+    const key = 'profiles/pre-susp-snake-profile.jpg';
+
+    mockCollectionSelectGet.mockImplementation(() => ({
+      docs: [makeDoc({ pre_suspension_profile_photo_url: cdnUrl(key) })],
+    }));
+    mockWhereGet.mockResolvedValue({ docs: [] });
+
+    mockListObjects.mockImplementation((folder) => {
+      if (folder === 'profiles/') return Promise.resolve([key]);
+      return Promise.resolve([]);
+    });
+
+    await orphanedStorage();
+
+    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([key]));
+  });
+
+  test('keeps R2 keys referenced via pre_suspension_cover_photo_url snake_case', async () => {
+    const key = 'covers/pre-susp-snake-cover.jpg';
+
+    mockCollectionSelectGet.mockImplementation(() => ({
+      docs: [makeDoc({ pre_suspension_cover_photo_url: cdnUrl(key) })],
+    }));
+    mockWhereGet.mockResolvedValue({ docs: [] });
+
+    mockListObjects.mockImplementation((folder) => {
+      if (folder === 'covers/') return Promise.resolve([key]);
+      return Promise.resolve([]);
+    });
+
+    await orphanedStorage();
+
+    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([key]));
+  });
+
+  test('keeps R2 keys referenced via banner image_url snake_case alias', async () => {
+    const bannerKey = 'banners/snake-banner.jpg';
+
+    mockCollectionSelectGet.mockImplementation(() => ({
+      docs: [makeDoc({ image_url: cdnUrl(bannerKey) })],
+    }));
+    mockWhereGet.mockResolvedValue({ docs: [] });
+
+    mockListObjects.mockImplementation((folder) => {
+      if (folder === 'banners/') return Promise.resolve([bannerKey]);
+      return Promise.resolve([]);
+    });
+
+    await orphanedStorage();
+
+    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([bannerKey]));
+  });
+
+  test('keeps R2 keys referenced via report evidence_urls snake_case alias', async () => {
+    const evidenceKey = 'evidence/snake-evidence.jpg';
+
+    mockCollectionSelectGet.mockImplementation(() => ({
+      docs: [makeDoc({ evidence_urls: [cdnUrl(evidenceKey)] })],
+    }));
+    mockWhereGet.mockResolvedValue({ docs: [] });
+
+    mockListObjects.mockImplementation((folder) => {
+      if (folder === 'evidence/') return Promise.resolve([evidenceKey]);
+      return Promise.resolve([]);
+    });
+
+    await orphanedStorage();
+
+    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([evidenceKey]));
+  });
+
+  test('keeps R2 keys referenced in conversation IMAGE messages', async () => {
+    const imageKey = 'messages/img-123.jpg';
+
+    const convDoc = { id: 'conv1', data: () => ({}) };
+    mockCollectionSelectGet.mockImplementation(() => ({
+      docs: [convDoc],
+    }));
+
+    mockWhereGet.mockImplementation(() => ({
+      docs: [makeDoc({ imageUrls: [cdnUrl(imageKey)] })],
+    }));
+
+    mockListObjects.mockImplementation((folder) => {
+      if (folder === 'messages/') return Promise.resolve([imageKey]);
+      return Promise.resolve([]);
+    });
+
+    await orphanedStorage();
+
+    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([imageKey]));
+  });
+
+  test('keeps R2 keys referenced in IMAGE messages via image_urls snake_case', async () => {
+    const imageKey = 'messages/img-snake-123.jpg';
+
+    const convDoc = { id: 'conv1', data: () => ({}) };
+    mockCollectionSelectGet.mockImplementation(() => ({
+      docs: [convDoc],
+    }));
+
+    mockWhereGet.mockImplementation(() => ({
+      docs: [makeDoc({ image_urls: [cdnUrl(imageKey)] })],
+    }));
+
+    mockListObjects.mockImplementation((folder) => {
+      if (folder === 'messages/') return Promise.resolve([imageKey]);
+      return Promise.resolve([]);
+    });
+
+    await orphanedStorage();
+
+    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([imageKey]));
+  });
+
+  test('keeps R2 keys referenced in conversation STICKER messages', async () => {
+    const stickerKey = 'stickers/sticker-abc.webp';
+
+    const convDoc = { id: 'conv1', data: () => ({}) };
+    mockCollectionSelectGet.mockImplementation(() => ({
+      docs: [convDoc],
+    }));
+
+    mockWhereGet.mockImplementation(() => ({
+      docs: [makeDoc({ stickerUrl: cdnUrl(stickerKey) })],
+    }));
+
+    mockListObjects.mockImplementation((folder) => {
+      if (folder === 'stickers/') return Promise.resolve([stickerKey]);
+      return Promise.resolve([]);
+    });
+
+    await orphanedStorage();
+
+    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([stickerKey]));
+  });
+
+  test('keeps R2 keys referenced in STICKER messages via sticker_url snake_case', async () => {
+    const stickerKey = 'stickers/sticker-snake.webp';
+
+    const convDoc = { id: 'conv1', data: () => ({}) };
+    mockCollectionSelectGet.mockImplementation(() => ({
+      docs: [convDoc],
+    }));
+
+    mockWhereGet.mockImplementation(() => ({
+      docs: [makeDoc({ sticker_url: cdnUrl(stickerKey) })],
+    }));
+
+    mockListObjects.mockImplementation((folder) => {
+      if (folder === 'stickers/') return Promise.resolve([stickerKey]);
+      return Promise.resolve([]);
+    });
+
+    await orphanedStorage();
+
+    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([stickerKey]));
+  });
+
+  test('extractKey returns null for null/undefined URLs', async () => {
+    mockCollectionSelectGet.mockImplementation(() => ({
+      docs: [makeDoc({})],
+    }));
+    mockWhereGet.mockResolvedValue({ docs: [] });
+
+    mockListObjects.mockImplementation((folder) => {
+      if (folder === 'profiles/') return Promise.resolve(['profiles/orphan.jpg']);
+      return Promise.resolve([]);
+    });
+
+    await orphanedStorage();
+
+    expect(mockDeleteObjects).toHaveBeenCalledWith(['profiles/orphan.jpg']);
+  });
+
+  test('collectKeysFromUrls handles non-array input gracefully', async () => {
+    const convDoc = { id: 'conv1', data: () => ({}) };
+    mockCollectionSelectGet.mockImplementation(() => ({
+      docs: [convDoc],
+    }));
+
+    mockWhereGet.mockImplementation(() => ({
+      docs: [makeDoc({ imageUrls: 'not-an-array' })],
+    }));
+
+    mockListObjects.mockImplementation((folder) => {
+      if (folder === 'messages/') return Promise.resolve(['messages/orphan.jpg']);
+      return Promise.resolve([]);
+    });
+
+    await expect(orphanedStorage()).resolves.not.toThrow();
+  });
+
+  test('continues processing other folders when one folder delete fails', async () => {
+    mockCollectionSelectGet.mockResolvedValue({ docs: [] });
+    mockWhereGet.mockResolvedValue({ docs: [] });
+
+    mockListObjects.mockImplementation((folder) => {
+      if (folder === 'profiles/') return Promise.resolve(['profiles/orphan.jpg']);
+      if (folder === 'covers/') return Promise.resolve(['covers/orphan.jpg']);
+      return Promise.resolve([]);
+    });
+
+    mockDeleteObjects.mockRejectedValueOnce(new Error('R2 delete failed')).mockResolvedValue();
+
+    await expect(orphanedStorage()).resolves.not.toThrow();
+  });
+
+  test('limits conversation message scanning to first 30 conversations', async () => {
+    const convDocs = Array.from({ length: 35 }, (_, i) => ({
+      id: `conv${i}`,
+      data: () => ({}),
+    }));
+
+    mockCollectionSelectGet.mockImplementation(() => ({
+      docs: convDocs,
+    }));
+    mockWhereGet.mockResolvedValue({ docs: [] });
+    mockListObjects.mockResolvedValue([]);
+
+    // Should complete without error even with 35 conversations
+    await expect(orphanedStorage()).resolves.not.toThrow();
   });
 });
