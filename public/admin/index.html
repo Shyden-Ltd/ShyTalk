@@ -2903,6 +2903,158 @@
         }
         .backpack-item.editing .backpack-edit-overlay { display: block; }
         .backpack-item.editing { border-color: var(--accent); }
+
+        /* --- Suggestions Panel --- */
+        #suggestions-panel { display: none; }
+        #suggestions-panel.visible { display: block; }
+
+        .suggestions-status-bar {
+          display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;
+        }
+        .suggestions-status-badge {
+          padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: 600;
+        }
+        .suggestions-status-badge.pending { background: var(--warning); color: #000; }
+        .suggestions-status-badge.disputed { background: var(--danger); color: #fff; }
+
+        .suggestions-bulk-bar {
+          display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;
+        }
+        .suggestions-bulk-bar button {
+          padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;
+        }
+        .suggestions-bulk-bar .bulk-approve { background: var(--success); color: #fff; }
+        .suggestions-bulk-bar .bulk-reject { background: var(--danger); color: #fff; }
+
+        .suggestion-card {
+          background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+          padding: 14px; margin-bottom: 10px; display: flex; align-items: flex-start; gap: 12px;
+        }
+        .suggestion-card .sg-checkbox { margin-top: 4px; width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+        .suggestion-card .sg-body { flex: 1; min-width: 0; }
+        .suggestion-card .sg-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+        .suggestion-card .sg-desc { color: var(--text2); font-size: 13px; margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 600px; }
+        .suggestion-card .sg-meta { display: flex; gap: 12px; font-size: 11px; color: var(--text2); flex-wrap: wrap; align-items: center; }
+        .suggestion-card .sg-meta .sg-contact { color: var(--success); font-weight: 600; }
+        .suggestion-card .sg-actions { display: flex; gap: 6px; flex-shrink: 0; align-items: flex-start; flex-wrap: wrap; }
+        .suggestion-card .sg-actions button {
+          padding: 5px 12px; border: none; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600;
+        }
+        .sg-btn-approve { background: var(--success); color: #fff; }
+        .sg-btn-reject { background: var(--danger); color: #fff; }
+        .sg-btn-merge { background: var(--accent); color: #fff; }
+
+        .sg-reject-input {
+          display: none; margin-top: 8px;
+        }
+        .sg-reject-input.visible { display: flex; gap: 6px; align-items: center; }
+        .sg-reject-input input {
+          flex: 1; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+          background: var(--surface2); color: var(--text); font-size: 12px;
+        }
+        .sg-reject-input button {
+          padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer;
+          font-size: 12px; font-weight: 600; background: var(--danger); color: #fff;
+        }
+
+        .sg-merge-search {
+          display: none; margin-top: 8px;
+        }
+        .sg-merge-search.visible { display: flex; gap: 6px; align-items: center; }
+        .sg-merge-search input {
+          flex: 1; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+          background: var(--surface2); color: var(--text); font-size: 12px;
+        }
+        .sg-merge-search button {
+          padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer;
+          font-size: 12px; font-weight: 600; background: var(--accent); color: #fff;
+        }
+
+        .suggestions-section-header {
+          font-size: 16px; font-weight: 600; margin: 20px 0 10px; padding-bottom: 6px;
+          border-bottom: 1px solid var(--border);
+        }
+
+        .dispute-card {
+          background: var(--surface); border: 1px solid var(--danger); border-radius: 8px;
+          padding: 14px; margin-bottom: 10px;
+        }
+        .dispute-card .dispute-meta { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
+        .dispute-card .dispute-actions { display: flex; gap: 8px; }
+        .dispute-card .dispute-actions button {
+          padding: 5px 12px; border: none; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600;
+        }
+        .dispute-uphold { background: var(--success); color: #fff; }
+        .dispute-reject { background: var(--danger); color: #fff; }
+
+        /* --- Identity Graph (inside Bans section) --- */
+        .identity-graph-card {
+          background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+          padding: 14px; margin-top: 14px;
+        }
+        .identity-graph-card h4 { font-size: 14px; margin-bottom: 10px; }
+        .ig-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .ig-table th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); color: var(--text2); font-weight: 600; text-transform: uppercase; font-size: 11px; }
+        .ig-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+        .ig-table .ig-suspended { color: var(--danger); font-weight: 600; }
+        .ig-table .ig-active { color: var(--success); }
+
+        .ig-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
+        .ig-actions button {
+          padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;
+        }
+        .ig-actions select {
+          padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+          background: var(--surface2); color: var(--text); font-size: 12px;
+        }
+        .ig-suspend-btn { background: var(--danger); color: #fff; }
+        .ig-unsuspend-btn { background: var(--success); color: #fff; }
+        .ig-cascade-preview {
+          margin-top: 8px; padding: 8px 12px; background: var(--surface2); border-radius: 6px;
+          font-size: 12px; color: var(--warning); display: none;
+        }
+        .ig-cascade-preview.visible { display: block; }
+
+        /* --- Audit Log (inside Logs panel) --- */
+        .audit-log-section {
+          background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+          margin-top: 16px; overflow: hidden;
+        }
+        .audit-log-section .logs-section-header { padding: 12px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .audit-log-section .logs-section-body { padding: 0 16px 16px; }
+        .audit-log-section.collapsed .logs-section-body { display: none; }
+        .audit-log-section.collapsed .logs-section-toggle { transform: rotate(-90deg); }
+
+        .audit-filters {
+          display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: flex-end;
+        }
+        .audit-filters .audit-filter-group { display: flex; flex-direction: column; gap: 3px; }
+        .audit-filters .audit-filter-group label { font-size: 11px; text-transform: uppercase; color: var(--text2); font-weight: 600; }
+        .audit-filters .audit-filter-group input,
+        .audit-filters .audit-filter-group select {
+          padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+          background: var(--surface2); color: var(--text); font-size: 12px;
+        }
+        .audit-filters button {
+          padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer;
+          font-size: 12px; font-weight: 600; background: var(--accent); color: #fff;
+        }
+
+        .audit-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .audit-table th { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); color: var(--text2); font-weight: 600; text-transform: uppercase; font-size: 11px; }
+        .audit-table td { padding: 8px; border-bottom: 1px solid var(--border); }
+        .audit-table td.audit-details { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text2); font-size: 11px; }
+
+        .audit-pagination {
+          display: flex; justify-content: center; gap: 8px; margin-top: 12px; align-items: center;
+        }
+        .audit-pagination button {
+          padding: 5px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface2);
+          color: var(--text); cursor: pointer; font-size: 12px;
+        }
+        .audit-pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .audit-pagination .audit-page-info { font-size: 12px; color: var(--text2); }
+        .audit-export-btn { margin-left: auto; background: var(--accent); color: #fff; border: none; padding: 5px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; }
     </style>
 <script src="/js/logger.js"></script>
 </head>
@@ -2944,6 +3096,7 @@
             <button class="tab-btn" id="tab-logs" data-i18n="tab_logs">Logs</button>
             <button class="tab-btn" id="tab-devices" data-i18n="tab_devices">Devices</button>
             <button class="tab-btn" id="tab-starting-screens" data-i18n="tab_starting_screens">Starting Screens</button>
+            <button class="tab-btn" id="tab-suggestions" data-i18n="tab_suggestions">Suggestions</button>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
             <button class="alert-bell" id="alert-bell" title="Alerts" aria-label="Alerts">&#128276;<span class="alert-bell-badge" id="alert-bell-badge" style="display:none;">0</span></button>
@@ -3311,6 +3464,40 @@
                         <button type="button" id="bans-ban-last-ip" style="background:#8e44ad;color:#fff;">Ban Last IP</button>
                         <button type="button" id="bans-unban-all" style="background:#2ecc71;color:#fff;">Unban All</button>
                         <button type="button" id="bans-view-logs" style="background:var(--accent);color:#fff;">View Logs</button>
+                    </div>
+
+                    <!-- Identity Graph -->
+                    <div class="identity-graph-card" id="identity-graph-card" style="display:none;">
+                        <h4>Identity Graph</h4>
+                        <table class="ig-table">
+                            <thead>
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Value</th>
+                                    <th>Metadata</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ig-table-body">
+                                <tr><td colspan="4" style="color:var(--text2);font-size:12px;font-style:italic;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                        <div class="ig-cascade-preview" id="ig-cascade-preview"></div>
+                        <div class="ig-actions">
+                            <select id="ig-duration-picker">
+                                <option value="1d">1 Day</option>
+                                <option value="3d">3 Days</option>
+                                <option value="7d">7 Days</option>
+                                <option value="30d">30 Days</option>
+                                <option value="permanent">Permanent</option>
+                            </select>
+                            <select id="ig-scope-picker">
+                                <option value="full">Full Suspension</option>
+                                <option value="suggestions-only">Suggestions Only</option>
+                            </select>
+                            <button class="ig-suspend-btn" id="ig-suspend-btn">Suspend</button>
+                            <button class="ig-unsuspend-btn" id="ig-unsuspend-btn">Unsuspend</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -3826,6 +4013,30 @@
                     <button id="clear-stalkers-btn">Clear All Stalkers</button>
                     <div class="maintenance-result" id="clear-stalkers-result"></div>
                 </div>
+                <div class="maintenance-card">
+                    <h3>Suggestions</h3>
+                    <p>Delete all suggestions (pending, approved, rejected, merged) and their dispute records.</p>
+                    <button id="clear-suggestions-btn">Clear All Suggestions</button>
+                    <div class="maintenance-result" id="clear-suggestions-result"></div>
+                </div>
+                <div class="maintenance-card">
+                    <h3>Subscriptions</h3>
+                    <p>Delete all subscription records and remove active subscription status from all users.</p>
+                    <button id="clear-subscriptions-btn">Clear All Subscriptions</button>
+                    <div class="maintenance-result" id="clear-subscriptions-result"></div>
+                </div>
+                <div class="maintenance-card">
+                    <h3>Notifications</h3>
+                    <p>Delete all notification records from all users.</p>
+                    <button id="clear-notifications-btn">Clear All Notifications</button>
+                    <div class="maintenance-result" id="clear-notifications-result"></div>
+                </div>
+                <div class="maintenance-card nuclear">
+                    <h3>&#9762; Identity Graphs</h3>
+                    <p>Delete ALL identity graph data including linked identifiers, device fingerprints, and network associations. This will break all identity-based suspensions and cannot be undone.</p>
+                    <button id="clear-identity-graphs-btn">Clear All Identity Graphs</button>
+                    <div class="maintenance-result" id="clear-identity-graphs-result"></div>
+                </div>
                 <div class="maintenance-card nuclear" id="migrate-prod-card" style="display:none;">
                     <h3>&#9889; Sync from Production</h3>
                     <p>Wipe ALL dev Firestore data and replace it with a copy of production data.
@@ -3837,7 +4048,7 @@
                 <div class="maintenance-card nuclear">
                     <h3>&#9762; RESET ALL</h3>
                     <p>Runs every maintenance action above in sequence. This will wipe system messages,
-                        reports, warnings, orphaned storage, backpacks, gift walls, coins, beans, spin history, Super Shy, appeals, private messages, group chats, closed rooms, broadcasts, audit logs, and stalkers.</p>
+                        reports, warnings, orphaned storage, backpacks, gift walls, coins, beans, spin history, Super Shy, appeals, private messages, group chats, closed rooms, broadcasts, audit logs, stalkers, suggestions, subscriptions, and notifications.</p>
                     <div class="nuclear-actions">
                         <span>System Messages</span>
                         <span>Reports</span>
@@ -3856,6 +4067,9 @@
                         <span>Broadcasts</span>
                         <span>Audit Logs</span>
                         <span>Stalkers</span>
+                        <span>Suggestions</span>
+                        <span>Subscriptions</span>
+                        <span>Notifications</span>
                     </div>
                     <button id="reset-all-btn">RESET EVERYTHING</button>
                     <div class="maintenance-result" id="reset-all-result"></div>
@@ -3907,6 +4121,9 @@
                     <div class="step" id="np-broadcasts">&#9679; Delete broadcasts</div>
                     <div class="step" id="np-audit-logs">&#9679; Delete audit logs</div>
                     <div class="step" id="np-stalkers">&#9679; Clear stalkers</div>
+                    <div class="step" id="np-suggestions">&#9679; Clear suggestions</div>
+                    <div class="step" id="np-subscriptions">&#9679; Clear subscriptions</div>
+                    <div class="step" id="np-notifications">&#9679; Clear notifications</div>
                 </div>
             </div>
         </div>
@@ -4316,6 +4533,68 @@
                     <button class="log-settings-save" id="log-settings-save-btn">Save Settings</button>
                 </div>
             </div>
+
+            <!-- Admin Audit Log Section -->
+            <div class="audit-log-section collapsed" id="audit-log-section" style="margin-top:16px;">
+                <div class="logs-section-header" onclick="document.getElementById('audit-log-section').classList.toggle('collapsed')">
+                    <h3>Admin Audit Log</h3>
+                    <span class="logs-section-toggle">&#9660;</span>
+                </div>
+                <div class="logs-section-body">
+                    <div class="audit-filters">
+                        <div class="audit-filter-group">
+                            <label>Admin</label>
+                            <input type="text" id="audit-filter-admin" placeholder="Admin name or ID" style="width:140px;">
+                        </div>
+                        <div class="audit-filter-group">
+                            <label>Action Type</label>
+                            <select id="audit-filter-action">
+                                <option value="">ALL</option>
+                                <option value="ban">Ban</option>
+                                <option value="unban">Unban</option>
+                                <option value="suspend">Suspend</option>
+                                <option value="unsuspend">Unsuspend</option>
+                                <option value="delete">Delete</option>
+                                <option value="edit">Edit</option>
+                                <option value="maintenance">Maintenance</option>
+                                <option value="suggestion">Suggestion</option>
+                            </select>
+                        </div>
+                        <div class="audit-filter-group">
+                            <label>Target</label>
+                            <input type="text" id="audit-filter-target" placeholder="User/resource ID" style="width:140px;">
+                        </div>
+                        <div class="audit-filter-group">
+                            <label>From</label>
+                            <input type="datetime-local" id="audit-filter-from" style="width:170px;">
+                        </div>
+                        <div class="audit-filter-group">
+                            <label>To</label>
+                            <input type="datetime-local" id="audit-filter-to" style="width:170px;">
+                        </div>
+                        <button id="audit-search-btn">Search</button>
+                        <button class="audit-export-btn" id="audit-export-csv-btn">Export CSV</button>
+                    </div>
+                    <table class="audit-table">
+                        <thead>
+                            <tr>
+                                <th>Admin</th>
+                                <th>Action</th>
+                                <th>Target</th>
+                                <th>Timestamp</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-tbody"></tbody>
+                    </table>
+                    <div id="audit-empty" style="display:none;color:var(--text2);font-size:13px;font-style:italic;text-align:center;padding:16px;">No audit log entries found.</div>
+                    <div class="audit-pagination" id="audit-pagination" style="display:none;">
+                        <button id="audit-prev-btn" disabled>&larr; Prev</button>
+                        <span class="audit-page-info" id="audit-page-info">Page 1</span>
+                        <button id="audit-next-btn">Next &rarr;</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Devices Panel -->
@@ -4368,6 +4647,36 @@
                 </div>
                 <div id="deleted-screens-list" style="display:none;"></div>
             </div>
+        </div>
+
+        <!-- Suggestions Panel -->
+        <div id="suggestions-panel">
+            <h2 style="margin-bottom: 8px;">Suggestions</h2>
+
+            <!-- Status badges -->
+            <div class="suggestions-status-bar">
+                <span class="suggestions-status-badge pending" id="sg-pending-count">0 Pending</span>
+                <span class="suggestions-status-badge disputed" id="sg-dispute-count">0 Disputes</span>
+            </div>
+
+            <!-- Bulk actions -->
+            <div class="suggestions-bulk-bar">
+                <label style="font-size:13px;color:var(--text2);display:flex;align-items:center;gap:4px;">
+                    <input type="checkbox" id="sg-select-all" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;"> Select All
+                </label>
+                <button class="bulk-approve" id="sg-bulk-approve">Approve Selected</button>
+                <button class="bulk-reject" id="sg-bulk-reject">Reject Selected</button>
+            </div>
+
+            <!-- Pending queue -->
+            <div class="suggestions-section-header">Pending Queue</div>
+            <div id="sg-pending-list"></div>
+            <div id="sg-pending-empty" style="color:var(--text2);font-size:13px;font-style:italic;display:none;">No pending suggestions.</div>
+
+            <!-- Dispute queue -->
+            <div class="suggestions-section-header">Dispute Queue</div>
+            <div id="sg-dispute-list"></div>
+            <div id="sg-dispute-empty" style="color:var(--text2);font-size:13px;font-style:italic;display:none;">No disputed merges.</div>
         </div>
 
         <!-- Fun Fact Add/Edit Dialog -->
@@ -5361,6 +5670,8 @@
     const tabDevices = $("#tab-devices");
     const startingScreensPanel = $("#starting-screens-panel");
     const tabStartingScreens = $("#tab-starting-screens");
+    const suggestionsPanel = $("#suggestions-panel");
+    const tabSuggestions = $("#tab-suggestions");
     let currentTab = "users";
 
     function switchTab(tab) {
@@ -9595,6 +9906,9 @@
             { id: "np-broadcasts", endpoint: "all-broadcasts", label: "Broadcasts" },
             { id: "np-audit-logs", endpoint: "all-audit-logs", label: "Audit logs" },
             { id: "np-stalkers", endpoint: "all-stalkers", label: "Stalkers" },
+            { id: "np-suggestions", endpoint: "all-suggestions", label: "Suggestions" },
+            { id: "np-subscriptions", endpoint: "all-subscriptions", label: "Subscriptions" },
+            { id: "np-notifications", endpoint: "all-notifications", label: "Notifications" },
           ];
 
           let failed = 0;
