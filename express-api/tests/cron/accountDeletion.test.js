@@ -618,4 +618,304 @@ describe('inactivity auto-delete', () => {
     // The query should filter out suspended users
     expect(mockWhere).toHaveBeenCalledWith('isSuspended', '==', false);
   });
+
+  test('logs error when scheduling an individual inactive account fails', async () => {
+    // No pending deletions
+    mockCollectionGet.mockResolvedValueOnce({ docs: [], empty: true });
+
+    // Config with inactivity enabled
+    mockDocGet.mockImplementation((path) => {
+      if (path === 'config/app')
+        return Promise.resolve(makeConfigDoc({ inactiveAccountDeleteMonths: 6 }));
+      return Promise.resolve({ exists: false, data: () => null });
+    });
+
+    // Inactive user found
+    const inactiveUser = {
+      id: '10000006',
+      ref: { path: 'users/10000006' },
+      data: () => ({
+        uniqueId: 10000006,
+        lastActiveAt: Date.now() - 7 * 30 * 86400000,
+        deletionScheduledAt: null,
+        isSuspended: false,
+      }),
+    };
+    mockCollectionGet.mockResolvedValueOnce({
+      docs: [inactiveUser],
+      empty: false,
+    });
+
+    // Make the update fail for this user
+    mockDocUpdate.mockRejectedValueOnce(new Error('Firestore write quota exceeded'));
+
+    await accountDeletion();
+
+    // Should log the error but not crash
+    expect(log.error).toHaveBeenCalledWith(
+      'cron',
+      'Failed to schedule inactive account',
+      expect.objectContaining({ uniqueId: '10000006' }),
+    );
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// hardDeleteAccount — additional uncovered branches
+// ═══════════════════════════════════════════════════════════════════
+
+describe('hardDeleteAccount — additional branches', () => {
+  const hardDeleteAccount = accountDeletion.hardDeleteAccount;
+
+  beforeEach(() => {
+    queryDocs.mockResolvedValue([]);
+    mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
+    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
+  });
+
+  test('Step 1: logs error when sending deletion email fails', async () => {
+    const userWithEmail = makeUserDoc(10000010, { email: 'fail-email@test.com' });
+    mockSendEmail.mockRejectedValueOnce(new Error('SMTP connection refused'));
+
+    await hardDeleteAccount(userWithEmail);
+
+    expect(log.error).toHaveBeenCalledWith(
+      'cron',
+      'Failed to send deletion complete email',
+      expect.objectContaining({ uniqueId: '10000010' }),
+    );
+    // Should continue with deletion despite email failure
+    expect(auth.deleteUser).toHaveBeenCalled();
+  });
+
+  test('Step 2: logs error when R2 listObjects fails for a prefix', async () => {
+    const user = makeUserDoc(10000011);
+    mockListObjects.mockRejectedValueOnce(new Error('R2 service unavailable'));
+
+    await hardDeleteAccount(user);
+
+    expect(log.error).toHaveBeenCalledWith(
+      'cron',
+      'Failed to delete R2 prefix',
+      expect.objectContaining({ prefix: 'profiles/10000011/' }),
+    );
+    // Should continue with deletion despite R2 failure
+    expect(auth.deleteUser).toHaveBeenCalled();
+  });
+
+  test('Step 3: deletes 1-on-1 conversations with subcollections', async () => {
+    const user = makeUserDoc(10000012);
+
+    // Set up the conversation query to return a 1-on-1 conversation (2 participants)
+    const convDoc = {
+      id: 'conv-1on1',
+      data: () => ({ participantIds: [10000012, 10000099] }),
+    };
+    // conversations query
+    mockCollectionGet
+      .mockResolvedValueOnce({ docs: [convDoc], empty: false }) // Step 3: conversations
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 4: rooms
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 5: followerIds
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 5: followingIds
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 5b: giftRankings
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 6: reports reportedUserId
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 6: reports reporterId
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 6: reportsArchive reportedUserId
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 6: reportsArchive reporterId
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 6: suspensionAppeals reportedUserId
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 6: suspensionAppeals reporterId
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 6: suspensionAppeals userId
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 7: biometricKeys
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 7: purchaseReceipts
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 9: identityMap
+      .mockResolvedValueOnce({ docs: [], empty: true }); // Step 10: deviceBindings
+
+    // queryDocs returns subcollection docs for the conversation
+    queryDocs
+      .mockResolvedValueOnce([{ id: 'msg-1' }]) // messages
+      .mockResolvedValueOnce([{ id: 'settings-1' }]) // userSettings
+      .mockResolvedValueOnce([{ id: 'mute-1' }]) // mutes
+      .mockResolvedValue([]); // all remaining
+
+    await hardDeleteAccount(user);
+
+    // Should batch-delete conversation docs
+    expect(mockBatchDelete).toHaveBeenCalled();
+  });
+
+  test('Step 3: removes user from group conversation and deletes user-specific subcollections', async () => {
+    const user = makeUserDoc(10000013);
+
+    // Set up group conversation (3+ participants)
+    const groupConvDoc = {
+      id: 'conv-group',
+      data: () => ({ participantIds: [10000013, 10000098, 10000097] }),
+    };
+    mockCollectionGet
+      .mockResolvedValueOnce({ docs: [groupConvDoc], empty: false }) // Step 3: conversations
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 4: rooms
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 5: followerIds
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 5: followingIds
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 5b: giftRankings
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 6
+      .mockResolvedValueOnce({ docs: [], empty: true })
+      .mockResolvedValueOnce({ docs: [], empty: true })
+      .mockResolvedValueOnce({ docs: [], empty: true })
+      .mockResolvedValueOnce({ docs: [], empty: true })
+      .mockResolvedValueOnce({ docs: [], empty: true })
+      .mockResolvedValueOnce({ docs: [], empty: true })
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 7: biometricKeys
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 7: purchaseReceipts
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 9: identityMap
+      .mockResolvedValueOnce({ docs: [], empty: true }); // Step 10: deviceBindings
+
+    // queryDocs for group conv userSettings + mutes
+    queryDocs
+      .mockResolvedValueOnce([{ id: 'us-1', userId: '10000013' }]) // userSettings
+      .mockResolvedValueOnce([{ id: '10000013' }]) // mutes (id matches uniqueId)
+      .mockResolvedValue([]); // all remaining
+
+    await hardDeleteAccount(user);
+
+    // Should update conversation to remove user from participantIds
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      'conversations/conv-group',
+      expect.objectContaining({
+        participantIds: expect.stringContaining('arrayRemove'),
+      }),
+    );
+    // Should delete user-specific settings/mutes
+    expect(mockDocDelete).toHaveBeenCalledWith('conversations/conv-group/userSettings/us-1');
+    expect(mockDocDelete).toHaveBeenCalledWith('conversations/conv-group/mutes/10000013');
+  });
+
+  test('Step 4: removes user from non-owned room participantIds', async () => {
+    const user = makeUserDoc(10000014);
+
+    // Room owned by someone else
+    const roomDoc = {
+      id: 'room-other',
+      data: () => ({ ownerId: 10000099, participantIds: [10000014, 10000099] }),
+    };
+    mockCollectionGet
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 3: conversations
+      .mockResolvedValueOnce({ docs: [roomDoc], empty: false }) // Step 4: rooms
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 5: followerIds
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 5: followingIds
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 5b: giftRankings
+      .mockResolvedValueOnce({ docs: [], empty: true })
+      .mockResolvedValueOnce({ docs: [], empty: true })
+      .mockResolvedValueOnce({ docs: [], empty: true })
+      .mockResolvedValueOnce({ docs: [], empty: true })
+      .mockResolvedValueOnce({ docs: [], empty: true })
+      .mockResolvedValueOnce({ docs: [], empty: true })
+      .mockResolvedValueOnce({ docs: [], empty: true })
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 7: biometricKeys
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 7: purchaseReceipts
+      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 9: identityMap
+      .mockResolvedValueOnce({ docs: [], empty: true }); // Step 10: deviceBindings
+
+    await hardDeleteAccount(user);
+
+    // Should update room to remove user from participantIds (NOT delete the room)
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      'rooms/room-other',
+      expect.objectContaining({
+        participantIds: expect.stringContaining('arrayRemove'),
+      }),
+    );
+  });
+
+  test('Step 7: deletes OTP codes and email metrics when they exist', async () => {
+    const user = makeUserDoc(10000015, { email: 'otp-user@test.com' });
+
+    mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
+    mockDocGet.mockImplementation((path) => {
+      if (path === 'otpCodes/otp-user@test.com') return Promise.resolve({ exists: true });
+      if (path === 'emailMetrics/otp-user@test.com') return Promise.resolve({ exists: true });
+      return Promise.resolve({ exists: false, data: () => null });
+    });
+
+    await hardDeleteAccount(user);
+
+    expect(mockDocDelete).toHaveBeenCalledWith('otpCodes/otp-user@test.com');
+    expect(mockDocDelete).toHaveBeenCalledWith('emailMetrics/otp-user@test.com');
+  });
+
+  test('Step 7: skips OTP/email metrics deletion when docs do not exist', async () => {
+    const user = makeUserDoc(10000016, { email: 'no-otp@test.com' });
+
+    mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
+    mockDocGet.mockImplementation((path) => {
+      if (path === 'otpCodes/no-otp@test.com') return Promise.resolve({ exists: false });
+      if (path === 'emailMetrics/no-otp@test.com') return Promise.resolve({ exists: false });
+      return Promise.resolve({ exists: false, data: () => null });
+    });
+
+    await hardDeleteAccount(user);
+
+    // Should NOT try to delete non-existent docs
+    expect(mockDocDelete).not.toHaveBeenCalledWith('otpCodes/no-otp@test.com');
+    expect(mockDocDelete).not.toHaveBeenCalledWith('emailMetrics/no-otp@test.com');
+  });
+
+  test('Step 8: logs error when user doc deletion fails', async () => {
+    const user = makeUserDoc(10000017);
+
+    mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
+    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
+    // Make the user doc delete fail
+    mockDocDelete.mockImplementation((path) => {
+      if (path === 'users/10000017') return Promise.reject(new Error('Permission denied'));
+      return Promise.resolve();
+    });
+
+    await hardDeleteAccount(user);
+
+    expect(log.error).toHaveBeenCalledWith(
+      'cron',
+      'Failed to delete user doc',
+      expect.objectContaining({ uniqueId: '10000017' }),
+    );
+    // Should continue with remaining steps
+    expect(auth.deleteUser).toHaveBeenCalled();
+  });
+
+  test('Step 11: logs error when Firebase Auth user deletion fails', async () => {
+    const user = makeUserDoc(10000018);
+    auth.deleteUser.mockRejectedValueOnce(new Error('Auth user not found'));
+
+    mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
+    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
+
+    await hardDeleteAccount(user);
+
+    expect(log.error).toHaveBeenCalledWith(
+      'cron',
+      'Failed to delete Firebase Auth user',
+      expect.objectContaining({ uniqueId: '10000018' }),
+    );
+    // Should still write audit log after auth failure
+    expect(mockDocSet).toHaveBeenCalledWith(
+      expect.stringContaining('adminAuditLog/'),
+      expect.objectContaining({ action: 'account_deleted' }),
+    );
+  });
+
+  test('Step 12: audit log records "unknown" when deletionReason is missing', async () => {
+    const user = makeUserDoc(10000019, { deletionReason: undefined });
+
+    mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
+    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
+
+    await hardDeleteAccount(user);
+
+    expect(mockDocSet).toHaveBeenCalledWith(
+      expect.stringContaining('adminAuditLog/'),
+      expect.objectContaining({
+        action: 'account_deleted',
+        reason: 'unknown',
+      }),
+    );
+  });
 });

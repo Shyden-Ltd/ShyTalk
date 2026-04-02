@@ -424,3 +424,960 @@ describe('GET /api/user/:uniqueId/stalkers', () => {
     expect(res.body.count).toBe(3);
   });
 });
+
+// ─── GET /api/user/:uniqueId — normalizeUser suspended user branches ──
+
+describe('GET /api/user/:uniqueId — normalizeUser for suspended users', () => {
+  it('restores pre-suspension display name, profile photo, and cover photo for admin view', async () => {
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      id: '10000001',
+      data: () => ({
+        uniqueId: 10000001,
+        displayName: 'Suspended Account',
+        profilePhotoUrl: null,
+        coverPhotoUrl: null,
+        isSuspended: true,
+        preSuspensionDisplayName: 'RealName',
+        preSuspensionProfilePhotoUrl: 'https://r2.example.com/profiles/10000001/photo.jpg',
+        preSuspensionCoverPhotoUrl: 'https://r2.example.com/covers/10000001/cover.jpg',
+        gcsScore: 0,
+        gcsLastDeductionAt: null,
+        email: 'suspended@example.com',
+        firebaseUid: 'uid-suspended',
+      }),
+    });
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/user/10000001');
+    expect(res.status).toBe(200);
+    // Admin sees real name, not "Suspended Account"
+    expect(res.body.displayName).toBe('RealName');
+    expect(res.body.profilePhotoUrl).toBe('https://r2.example.com/profiles/10000001/photo.jpg');
+    expect(res.body.coverPhotoUrl).toBe('https://r2.example.com/covers/10000001/cover.jpg');
+    expect(res.body._preSuspension).toEqual({
+      displayName: 'RealName',
+      profilePhotoUrl: 'https://r2.example.com/profiles/10000001/photo.jpg',
+      coverPhotoUrl: 'https://r2.example.com/covers/10000001/cover.jpg',
+    });
+  });
+
+  it('handles suspended user with only partial pre-suspension data', async () => {
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      id: '10000002',
+      data: () => ({
+        uniqueId: 10000002,
+        displayName: 'Suspended Account',
+        profilePhotoUrl: null,
+        coverPhotoUrl: null,
+        isSuspended: true,
+        preSuspensionDisplayName: 'PartialUser',
+        // no preSuspensionProfilePhotoUrl or preSuspensionCoverPhotoUrl
+        gcsScore: 50,
+        gcsLastDeductionAt: null,
+        email: 'partial@example.com',
+        firebaseUid: 'uid-partial',
+      }),
+    });
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/user/10000002');
+    expect(res.status).toBe(200);
+    expect(res.body.displayName).toBe('PartialUser');
+    expect(res.body._preSuspension).toEqual({
+      displayName: 'PartialUser',
+      profilePhotoUrl: null,
+      coverPhotoUrl: null,
+    });
+  });
+});
+
+// ─── GET /api/user/:uniqueId — backfillAuthInfo branch ──
+
+describe('GET /api/user/:uniqueId — backfillAuthInfo', () => {
+  it('backfills email from Firebase Auth when user doc has no email', async () => {
+    const { auth } = require('../../src/utils/firebase');
+    auth.getUser.mockResolvedValueOnce({
+      uid: 'uid-no-email',
+      email: 'backfilled@example.com',
+      providerData: [],
+    });
+
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      id: '10000003',
+      data: () => ({
+        uniqueId: 10000003,
+        displayName: 'NoEmail',
+        gcsScore: 100,
+        gcsLastDeductionAt: null,
+        email: null,
+        firebaseUid: 'uid-no-email',
+      }),
+    });
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/user/10000003');
+    expect(res.status).toBe(200);
+    expect(res.body.email).toBe('backfilled@example.com');
+    // The backfill should also update the Firestore doc (fire-and-forget)
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      'users/10000003',
+      expect.objectContaining({ email: 'backfilled@example.com' }),
+    );
+  });
+
+  it('falls back to provider email when Firebase Auth has no direct email', async () => {
+    const { auth } = require('../../src/utils/firebase');
+    auth.getUser.mockResolvedValueOnce({
+      uid: 'uid-provider',
+      email: null,
+      providerData: [{ providerId: 'google.com', email: 'provider@gmail.com' }],
+    });
+
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      id: '10000004',
+      data: () => ({
+        uniqueId: 10000004,
+        displayName: 'ProviderOnly',
+        gcsScore: 100,
+        gcsLastDeductionAt: null,
+        email: null,
+        firebaseUid: 'uid-provider',
+      }),
+    });
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/user/10000004');
+    expect(res.status).toBe(200);
+    expect(res.body.email).toBe('provider@gmail.com');
+  });
+
+  it('handles Firebase Auth lookup failure gracefully', async () => {
+    const { auth } = require('../../src/utils/firebase');
+    auth.getUser.mockRejectedValueOnce(new Error('Auth service down'));
+
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      id: '10000005',
+      data: () => ({
+        uniqueId: 10000005,
+        displayName: 'AuthFail',
+        gcsScore: 100,
+        gcsLastDeductionAt: null,
+        email: null,
+        firebaseUid: 'uid-auth-fail',
+      }),
+    });
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/user/10000005');
+    expect(res.status).toBe(200);
+    expect(res.body.email).toBeNull();
+  });
+});
+
+// ─── GET /api/user/:uniqueId — 500 error branch ──
+
+describe('GET /api/user/:uniqueId — error handling', () => {
+  it('returns 500 when Firestore throws', async () => {
+    mockDocGet.mockRejectedValueOnce(new Error('Firestore connection failed'));
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/user/10000001');
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/internal server error/i);
+  });
+});
+
+// ─── GET /api/user/:uid/auth-debug ──────────────────────────────────
+
+describe('GET /api/user/:uid/auth-debug', () => {
+  it('returns 403 for non-admin', async () => {
+    blockAdmin();
+    const app = createAdminApp();
+    const res = await request(app).get('/api/user/firebase-uid-1/auth-debug');
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 200 with raw Firebase Auth data for admin', async () => {
+    const { auth } = require('../../src/utils/firebase');
+    auth.getUser.mockResolvedValueOnce({
+      uid: 'firebase-uid-1',
+      email: 'user@example.com',
+      providerData: [{ providerId: 'google.com' }],
+      disabled: false,
+      metadata: { creationTime: '2024-01-01' },
+    });
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/user/firebase-uid-1/auth-debug');
+    expect(res.status).toBe(200);
+    expect(res.body.uid).toBe('firebase-uid-1');
+    expect(res.body.email).toBe('user@example.com');
+    expect(res.body.disabled).toBe(false);
+    expect(res.body.providerData).toEqual([{ providerId: 'google.com' }]);
+    expect(res.body.metadata).toBeDefined();
+  });
+
+  it('returns 500 when Firebase Auth lookup throws', async () => {
+    const { auth } = require('../../src/utils/firebase');
+    auth.getUser.mockRejectedValueOnce(new Error('Auth service unavailable'));
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/user/bad-uid/auth-debug');
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/internal server error/i);
+  });
+});
+
+// ─── PATCH /api/user/:uniqueId — additional branches ────────────────
+
+describe('PATCH /api/user/:uniqueId — additional branches', () => {
+  it('returns 400 when string field exceeds max length', async () => {
+    const app = createAdminApp();
+    const res = await request(app)
+      .patch('/api/user/10000001')
+      .send({ displayName: 'A'.repeat(21) });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/displayName.*20/);
+  });
+
+  it('returns 400 when array field is not an array', async () => {
+    const app = createAdminApp();
+    const res = await request(app)
+      .patch('/api/user/10000001')
+      .send({ blockedUserIds: 'not-an-array' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/blockedUserIds.*array/i);
+  });
+
+  it('accepts snake_case field names and converts to camelCase', async () => {
+    const app = createAdminApp();
+    const res = await request(app).patch('/api/user/10000001').send({ display_name: 'SnakeName' });
+    expect(res.status).toBe(200);
+    expect(res.body.updatedFields).toContain('displayName');
+  });
+
+  it('returns 500 when db.doc().update throws', async () => {
+    mockDocUpdate.mockRejectedValueOnce(new Error('Firestore write failed'));
+
+    const app = createAdminApp();
+    const res = await request(app).patch('/api/user/10000001').send({ displayName: 'Valid' });
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/internal server error/i);
+  });
+
+  it('skips PMs when ?silent=true', async () => {
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+
+    const app = createAdminApp();
+    const res = await request(app)
+      .patch('/api/user/10000001?silent=true')
+      .send({ displayName: 'SilentUpdate' });
+    expect(res.status).toBe(200);
+    expect(sendSystemPm).not.toHaveBeenCalled();
+  });
+});
+
+// ─── POST /api/user/:uniqueId/notify-changes ────────────────────────
+
+describe('POST /api/user/:uniqueId/notify-changes', () => {
+  it('returns 403 for non-admin', async () => {
+    blockAdmin();
+    const app = createAdminApp();
+    const res = await request(app)
+      .post('/api/user/10000001/notify-changes')
+      .send({ fields: ['displayName'] });
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 400 when fields is not a non-empty array', async () => {
+    const app = createAdminApp();
+    const res = await request(app).post('/api/user/10000001/notify-changes').send({ fields: [] });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/fields.*non-empty/i);
+  });
+
+  it('returns 400 when fields is missing', async () => {
+    const app = createAdminApp();
+    const res = await request(app).post('/api/user/10000001/notify-changes').send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('returns notified=false when fields are not notifiable', async () => {
+    const app = createAdminApp();
+    const res = await request(app)
+      .post('/api/user/10000001/notify-changes')
+      .send({ fields: ['shyCoins', 'luckScore'] });
+    expect(res.status).toBe(200);
+    expect(res.body.notified).toBe(false);
+    expect(res.body.reason).toMatch(/no notifiable/i);
+  });
+
+  it('sends system PM for notifiable fields and returns notified=true', async () => {
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+
+    const app = createAdminApp();
+    const res = await request(app)
+      .post('/api/user/10000001/notify-changes')
+      .send({ fields: ['displayName', 'profilePhotoUrl', 'shyCoins'] });
+    expect(res.status).toBe(200);
+    expect(res.body.notified).toBe(true);
+    expect(res.body.fields).toEqual(['displayName', 'profilePhotoUrl']);
+    expect(sendSystemPm).toHaveBeenCalledWith('10000001', expect.stringContaining('display name'));
+  });
+
+  it('returns 500 on error', async () => {
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+    sendSystemPm.mockRejectedValueOnce(new Error('PM failed'));
+
+    const app = createAdminApp();
+    const res = await request(app)
+      .post('/api/user/10000001/notify-changes')
+      .send({ fields: ['displayName'] });
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/internal server error/i);
+  });
+});
+
+// ─── POST /api/user/:uniqueId/warn — additional branches ────────────
+
+describe('POST /api/user/:uniqueId/warn — additional branches', () => {
+  it('returns 500 on unexpected createWarning error', async () => {
+    // Make the user doc fetch succeed, but the set (warning creation) fail
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      id: '10000001',
+      data: () => ({ gcsScore: 90, warningCount: 1 }),
+    });
+    getDoc.mockResolvedValueOnce({ displayName: 'Admin User' });
+    mockDocSet.mockRejectedValueOnce(new Error('Batch write failed'));
+
+    const app = createAdminApp();
+    const res = await request(app)
+      .post('/api/user/10000001/warn')
+      .send({ reason: 'Test error', severity: 2 });
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/internal server error/i);
+  });
+
+  it('defaults severity to 3 when not provided', async () => {
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      id: '10000001',
+      data: () => ({ gcsScore: 100, warningCount: 0 }),
+    });
+    getDoc.mockResolvedValueOnce({ displayName: 'Admin User' });
+
+    const app = createAdminApp();
+    const res = await request(app)
+      .post('/api/user/10000001/warn')
+      .send({ reason: 'Default severity test' });
+    expect(res.status).toBe(200);
+    // severity 3 -> deduction 15
+    expect(res.body.deduction).toBe(15);
+    expect(res.body.newGcs).toBe(85);
+  });
+});
+
+// ─── GET /api/user/:uniqueId/warnings — startAfter branch ──────────
+
+describe('GET /api/user/:uniqueId/warnings — pagination', () => {
+  it('passes startAfter query param for pagination', async () => {
+    mockCollectionGet = jest.fn().mockResolvedValue({
+      docs: [
+        {
+          id: 'warn-5',
+          data: () => ({ reason: 'Older', severity: 1, createdAt: 1709913400000 }),
+        },
+      ],
+    });
+
+    const app = createAdminApp();
+    const res = await request(app).get(
+      '/api/user/10000001/warnings?startAfter=1709913500000&limit=5',
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.warnings).toHaveLength(1);
+    expect(res.body.hasMore).toBe(false);
+  });
+
+  it('returns 500 when Firestore throws during list', async () => {
+    mockCollectionGet = jest.fn().mockRejectedValue(new Error('Query failed'));
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/user/10000001/warnings');
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/internal server error/i);
+  });
+});
+
+// ─── POST /api/user/:uniqueId/warnings/:id/revoke — error branches ─
+
+describe('POST /api/user/:uniqueId/warnings/:warningId/revoke — additional', () => {
+  it('returns 404 when user not found during revoke', async () => {
+    getDoc.mockResolvedValueOnce({
+      id: 'warn-1',
+      revoked: false,
+      gcsDeduction: 10,
+    });
+    mockDocGet.mockResolvedValueOnce({ exists: false });
+
+    const app = createAdminApp();
+    const res = await request(app).post('/api/user/10000001/warnings/warn-1/revoke');
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/user not found/i);
+  });
+
+  it('returns 500 on Firestore error during revoke', async () => {
+    getDoc.mockRejectedValueOnce(new Error('Firestore read error'));
+
+    const app = createAdminApp();
+    const res = await request(app).post('/api/user/10000001/warnings/warn-1/revoke');
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/internal server error/i);
+  });
+});
+
+// ─── POST /api/user/:uniqueId/reset-gcs — error branch ─────────────
+
+describe('POST /api/user/:uniqueId/reset-gcs — error handling', () => {
+  it('returns 500 when Firestore throws', async () => {
+    mockDocUpdate.mockRejectedValueOnce(new Error('Write failed'));
+
+    const app = createAdminApp();
+    const res = await request(app).post('/api/user/10000001/reset-gcs');
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/internal server error/i);
+  });
+});
+
+// ─── GET /api/user/:uniqueId/stalkers — error branch ────────────────
+
+describe('GET /api/user/:uniqueId/stalkers — error handling', () => {
+  it('returns 500 when Firestore throws', async () => {
+    mockCollectionGet = jest.fn().mockRejectedValue(new Error('Stalkers query failed'));
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/user/10000001/stalkers');
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/internal server error/i);
+  });
+});
+
+// ─── GET /api/conversations/:id/messages ────────────────────────────
+
+describe('GET /api/conversations/:id/messages', () => {
+  it('returns 403 for non-admin', async () => {
+    blockAdmin();
+    const app = createAdminApp();
+    const res = await request(app).get('/api/conversations/conv-1/messages');
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 200 with messages in chronological order', async () => {
+    mockCollectionGet = jest.fn().mockResolvedValue({
+      docs: [
+        { id: 'msg-2', data: () => ({ text: 'Second', createdAt: 200 }) },
+        { id: 'msg-1', data: () => ({ text: 'First', createdAt: 100 }) },
+      ],
+    });
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/conversations/conv-1/messages');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(2);
+    // Reversed from desc order -> chronological
+    expect(res.body[0].text).toBe('First');
+    expect(res.body[1].text).toBe('Second');
+  });
+
+  it('returns 500 on Firestore error', async () => {
+    mockCollectionGet = jest.fn().mockRejectedValue(new Error('Messages query failed'));
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/conversations/conv-1/messages');
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/internal server error/i);
+  });
+});
+
+// ─── GET /api/search/uniqueId/:id ───────────────────────────────────
+
+describe('GET /api/search/uniqueId/:id', () => {
+  it('returns 403 for non-admin', async () => {
+    blockAdmin();
+    const app = createAdminApp();
+    const res = await request(app).get('/api/search/uniqueId/10000001');
+    expect(res.status).toBe(403);
+  });
+
+  it('returns user when found by uniqueId', async () => {
+    mockCollectionGet = jest.fn().mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          id: '10000001',
+          data: () => ({
+            uniqueId: 10000001,
+            displayName: 'SearchUser',
+            gcsScore: 100,
+            gcsLastDeductionAt: null,
+            email: 'search@example.com',
+            firebaseUid: 'uid-search',
+          }),
+        },
+      ],
+    });
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/search/uniqueId/10000001');
+    expect(res.status).toBe(200);
+    expect(res.body.displayName).toBe('SearchUser');
+  });
+
+  it('falls back to tempUniqueId when uniqueId search is empty', async () => {
+    // First call: uniqueId search returns empty
+    // Second call: tempUniqueId search returns a result
+    mockCollectionGet = jest
+      .fn()
+      .mockResolvedValueOnce({ empty: true, docs: [] })
+      .mockResolvedValueOnce({
+        empty: false,
+        docs: [
+          {
+            id: '10000099',
+            data: () => ({
+              uniqueId: null,
+              tempUniqueId: 10000099,
+              displayName: 'TempUser',
+              gcsScore: 100,
+              gcsLastDeductionAt: null,
+              email: 'temp@example.com',
+              firebaseUid: 'uid-temp',
+            }),
+          },
+        ],
+      });
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/search/uniqueId/10000099');
+    expect(res.status).toBe(200);
+    expect(res.body.displayName).toBe('TempUser');
+  });
+
+  it('returns 404 when neither uniqueId nor tempUniqueId match', async () => {
+    mockCollectionGet = jest
+      .fn()
+      .mockResolvedValueOnce({ empty: true, docs: [] })
+      .mockResolvedValueOnce({ empty: true, docs: [] });
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/search/uniqueId/99999999');
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/not found/i);
+  });
+
+  it('returns 500 on error', async () => {
+    mockCollectionGet = jest.fn().mockRejectedValue(new Error('Search failed'));
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/search/uniqueId/10000001');
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/internal server error/i);
+  });
+});
+
+// ─── POST /api/resolve/uids-to-uniqueIds ────────────────────────────
+
+describe('POST /api/resolve/uids-to-uniqueIds', () => {
+  it('returns 403 for non-admin', async () => {
+    blockAdmin();
+    const app = createAdminApp();
+    const res = await request(app)
+      .post('/api/resolve/uids-to-uniqueIds')
+      .send({ uids: ['uid-1'] });
+    expect(res.status).toBe(403);
+  });
+
+  it('returns empty object when uids array is empty', async () => {
+    const app = createAdminApp();
+    const res = await request(app).post('/api/resolve/uids-to-uniqueIds').send({ uids: [] });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({});
+  });
+
+  it('resolves UIDs to uniqueIds and display names', async () => {
+    mockDocGet
+      .mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ uniqueId: 10000001, displayName: 'Alice' }),
+      })
+      .mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ uniqueId: 10000002, displayName: 'Bob' }),
+      });
+
+    const app = createAdminApp();
+    const res = await request(app)
+      .post('/api/resolve/uids-to-uniqueIds')
+      .send({ uids: ['uid-alice', 'uid-bob'] });
+    expect(res.status).toBe(200);
+    expect(res.body.mapping['uid-alice']).toEqual({
+      uniqueId: 10000001,
+      displayName: 'Alice',
+    });
+    expect(res.body.mapping['uid-bob']).toEqual({
+      uniqueId: 10000002,
+      displayName: 'Bob',
+    });
+  });
+
+  it('skips non-existent UIDs', async () => {
+    mockDocGet
+      .mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ uniqueId: 10000001, displayName: 'Alice' }),
+      })
+      .mockResolvedValueOnce({ exists: false });
+
+    const app = createAdminApp();
+    const res = await request(app)
+      .post('/api/resolve/uids-to-uniqueIds')
+      .send({ uids: ['uid-alice', 'uid-ghost'] });
+    expect(res.status).toBe(200);
+    expect(res.body.mapping['uid-alice']).toBeDefined();
+    expect(res.body.mapping['uid-ghost']).toBeUndefined();
+  });
+
+  it('returns 500 on error', async () => {
+    mockDocGet.mockRejectedValueOnce(new Error('Firestore read failed'));
+
+    const app = createAdminApp();
+    const res = await request(app)
+      .post('/api/resolve/uids-to-uniqueIds')
+      .send({ uids: ['uid-1'] });
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/internal server error/i);
+  });
+});
+
+// ─── POST /api/resolve/uniqueIds-to-uids ────────────────────────────
+
+describe('POST /api/resolve/uniqueIds-to-uids', () => {
+  it('returns 403 for non-admin', async () => {
+    blockAdmin();
+    const app = createAdminApp();
+    const res = await request(app)
+      .post('/api/resolve/uniqueIds-to-uids')
+      .send({ uniqueIds: [10000001] });
+    expect(res.status).toBe(403);
+  });
+
+  it('returns empty object when uniqueIds array is empty', async () => {
+    const app = createAdminApp();
+    const res = await request(app).post('/api/resolve/uniqueIds-to-uids').send({ uniqueIds: [] });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({});
+  });
+
+  it('resolves uniqueIds to UIDs', async () => {
+    mockCollectionGet = jest
+      .fn()
+      .mockResolvedValueOnce({
+        empty: false,
+        docs: [{ id: '10000001', data: () => ({ uid: 'uid-alice' }) }],
+      })
+      .mockResolvedValueOnce({
+        empty: false,
+        docs: [{ id: '10000002', data: () => ({ uid: 'uid-bob' }) }],
+      });
+
+    const app = createAdminApp();
+    const res = await request(app)
+      .post('/api/resolve/uniqueIds-to-uids')
+      .send({ uniqueIds: [10000001, 10000002] });
+    expect(res.status).toBe(200);
+    expect(res.body.mapping[10000001]).toBe('uid-alice');
+    expect(res.body.mapping[10000002]).toBe('uid-bob');
+  });
+
+  it('uses doc.id as fallback when uid field is missing', async () => {
+    mockCollectionGet = jest.fn().mockResolvedValueOnce({
+      empty: false,
+      docs: [{ id: 'doc-id-fallback', data: () => ({}) }],
+    });
+
+    const app = createAdminApp();
+    const res = await request(app)
+      .post('/api/resolve/uniqueIds-to-uids')
+      .send({ uniqueIds: [10000001] });
+    expect(res.status).toBe(200);
+    expect(res.body.mapping[10000001]).toBe('doc-id-fallback');
+  });
+
+  it('skips unresolvable uniqueIds', async () => {
+    mockCollectionGet = jest.fn().mockResolvedValue({ empty: true, docs: [] });
+
+    const app = createAdminApp();
+    const res = await request(app)
+      .post('/api/resolve/uniqueIds-to-uids')
+      .send({ uniqueIds: [99999999] });
+    expect(res.status).toBe(200);
+    expect(res.body.mapping[99999999]).toBeUndefined();
+  });
+
+  it('returns 500 on error', async () => {
+    mockCollectionGet = jest.fn().mockRejectedValue(new Error('Query failed'));
+
+    const app = createAdminApp();
+    const res = await request(app)
+      .post('/api/resolve/uniqueIds-to-uids')
+      .send({ uniqueIds: [10000001] });
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/internal server error/i);
+  });
+});
+
+// ─── POST /api/report-locks/:uniqueId/lock ──────────────────────────
+
+describe('POST /api/report-locks/:uniqueId/lock', () => {
+  it('returns 403 for non-admin', async () => {
+    blockAdmin();
+    const app = createAdminApp();
+    const res = await request(app).post('/api/report-locks/10000001/lock');
+    expect(res.status).toBe(403);
+  });
+
+  it('creates a report lock with admin display name', async () => {
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ displayName: 'AdminUser' }),
+    });
+
+    const app = createAdminApp();
+    const res = await request(app).post('/api/report-locks/10000001/lock');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.displayName).toBe('AdminUser');
+    expect(mockDocSet).toHaveBeenCalledWith(
+      'reportLocks/10000001',
+      expect.objectContaining({
+        reportId: '10000001',
+        lockedBy: 'admin-uid',
+        displayName: 'AdminUser',
+      }),
+    );
+  });
+
+  it('handles missing admin doc gracefully', async () => {
+    mockDocGet.mockResolvedValueOnce({ exists: false, data: () => null });
+
+    const app = createAdminApp();
+    const res = await request(app).post('/api/report-locks/10000001/lock');
+    expect(res.status).toBe(200);
+    expect(res.body.displayName).toBeNull();
+  });
+
+  it('returns 500 on error', async () => {
+    mockDocGet.mockRejectedValueOnce(new Error('Firestore read failed'));
+
+    const app = createAdminApp();
+    const res = await request(app).post('/api/report-locks/10000001/lock');
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/internal server error/i);
+  });
+});
+
+// ─── DELETE /api/report-locks/:uniqueId ─────────────────────────────
+
+describe('DELETE /api/report-locks/:uniqueId', () => {
+  it('returns 403 for non-admin', async () => {
+    blockAdmin();
+    const app = createAdminApp();
+    const res = await request(app).delete('/api/report-locks/10000001');
+    expect(res.status).toBe(403);
+  });
+
+  it('deletes the report lock', async () => {
+    const app = createAdminApp();
+    const res = await request(app).delete('/api/report-locks/10000001');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(mockDocDelete).toHaveBeenCalledWith('reportLocks/10000001');
+  });
+
+  it('returns 500 on error', async () => {
+    mockDocDelete.mockRejectedValueOnce(new Error('Delete failed'));
+
+    const app = createAdminApp();
+    const res = await request(app).delete('/api/report-locks/10000001');
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/internal server error/i);
+  });
+});
+
+// ─── GET /api/user/:uniqueId/auth-status ────────────────────────────
+
+describe('GET /api/user/:uniqueId/auth-status', () => {
+  it('returns 403 for non-admin', async () => {
+    blockAdmin();
+    const app = createAdminApp();
+    const res = await request(app).get('/api/user/10000001/auth-status');
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 404 when user not found', async () => {
+    getDoc.mockResolvedValueOnce(null);
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/user/10000001/auth-status');
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/user not found/i);
+  });
+
+  it('returns 200 with auth status including biometric keys', async () => {
+    getDoc.mockResolvedValueOnce({
+      pinHash: 'hashed-pin',
+      pinSetAt: 1700000000000,
+      pinAttempts: 2,
+      pinLockedUntil: null,
+      pinLockoutCount: 1,
+    });
+    mockCollectionGet = jest.fn().mockResolvedValue({
+      docs: [
+        {
+          id: '10000001:device-abc',
+          data: () => ({ createdAt: 1700000000000 }),
+        },
+      ],
+    });
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/user/10000001/auth-status');
+    expect(res.status).toBe(200);
+    expect(res.body.pinSet).toBe(true);
+    expect(res.body.pinAttempts).toBe(2);
+    expect(res.body.isLocked).toBe(false);
+    expect(res.body.biometricKeys).toHaveLength(1);
+    expect(res.body.biometricKeys[0].deviceId).toBe('device-abc');
+  });
+
+  it('returns 500 on error', async () => {
+    getDoc.mockRejectedValueOnce(new Error('Read failed'));
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/user/10000001/auth-status');
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/failed to get auth status/i);
+  });
+});
+
+// ─── POST /api/user/:uniqueId/reset-pin-lockout ────────────────────
+
+describe('POST /api/user/:uniqueId/reset-pin-lockout', () => {
+  it('returns 403 for non-admin', async () => {
+    blockAdmin();
+    const app = createAdminApp();
+    const res = await request(app).post('/api/user/10000001/reset-pin-lockout');
+    expect(res.status).toBe(403);
+  });
+
+  it('resets pin lockout fields and returns success', async () => {
+    const app = createAdminApp();
+    const res = await request(app).post('/api/user/10000001/reset-pin-lockout');
+    expect(res.status).toBe(200);
+    expect(res.body.message).toMatch(/pin lockout reset/i);
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      'users/10000001',
+      expect.objectContaining({
+        pinAttempts: 0,
+        pinLockedUntil: null,
+        pinLockoutCount: 0,
+      }),
+    );
+  });
+
+  it('returns 500 on error', async () => {
+    mockDocUpdate.mockRejectedValueOnce(new Error('Update failed'));
+
+    const app = createAdminApp();
+    const res = await request(app).post('/api/user/10000001/reset-pin-lockout');
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/failed to reset lockout/i);
+  });
+});
+
+// ─── DELETE /api/user/:uniqueId/biometric-keys/:deviceId ────────────
+
+describe('DELETE /api/user/:uniqueId/biometric-keys/:deviceId', () => {
+  it('returns 403 for non-admin', async () => {
+    blockAdmin();
+    const app = createAdminApp();
+    const res = await request(app).delete('/api/user/10000001/biometric-keys/device-abc');
+    expect(res.status).toBe(403);
+  });
+
+  it('deletes the biometric key and returns success', async () => {
+    const app = createAdminApp();
+    const res = await request(app).delete('/api/user/10000001/biometric-keys/device-abc');
+    expect(res.status).toBe(200);
+    expect(res.body.message).toMatch(/biometric key revoked/i);
+    expect(mockDocDelete).toHaveBeenCalledWith('biometricKeys/10000001:device-abc');
+  });
+
+  it('returns 500 on error', async () => {
+    mockDocDelete.mockRejectedValueOnce(new Error('Delete failed'));
+
+    const app = createAdminApp();
+    const res = await request(app).delete('/api/user/10000001/biometric-keys/device-abc');
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/failed to revoke key/i);
+  });
+});
+
+// ─── GET /api/metrics/otp ───────────────────────────────────────────
+
+describe('GET /api/metrics/otp', () => {
+  it('returns 403 for non-admin', async () => {
+    blockAdmin();
+    const app = createAdminApp();
+    const res = await request(app).get('/api/metrics/otp');
+    expect(res.status).toBe(403);
+  });
+
+  it('returns default values when metrics doc does not exist', async () => {
+    mockDocGet.mockResolvedValueOnce({ exists: false });
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/metrics/otp');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ count: 0, date: null, limit: 100 });
+  });
+
+  it('returns metrics when doc exists', async () => {
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ count: 42, date: '2026-04-01' }),
+    });
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/metrics/otp');
+    expect(res.status).toBe(200);
+    expect(res.body.count).toBe(42);
+    expect(res.body.date).toBe('2026-04-01');
+    expect(res.body.limit).toBe(100);
+  });
+
+  it('returns 500 on error', async () => {
+    mockDocGet.mockRejectedValueOnce(new Error('Firestore read failed'));
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/metrics/otp');
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/failed to get otp metrics/i);
+  });
+});
