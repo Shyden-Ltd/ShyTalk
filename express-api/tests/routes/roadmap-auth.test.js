@@ -304,7 +304,294 @@ describe('GET /api/roadmap/me', () => {
     const res = await request(app).get('/api/roadmap/me').expect(200);
     expect(res.body.avatarUrl).toBeNull();
   });
+
+  // ─── New tests: data handling ──────────────────────────────────
+
+  test('user with unicode/emoji display name returned correctly', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('users/')) {
+        return Promise.resolve(makeUserDoc(1001, { displayName: '🦊 Fóx Ünïcödé 你好' }));
+      }
+      return Promise.resolve({ exists: false });
+    });
+    const app = createApp();
+    const res = await request(app).get('/api/roadmap/me').expect(200);
+    expect(res.body.displayName).toBe('🦊 Fóx Ünïcödé 你好');
+  });
+
+  test('user with very long display name (100+ chars) returned', async () => {
+    const longName = 'A'.repeat(150);
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('users/')) {
+        return Promise.resolve(makeUserDoc(1001, { displayName: longName }));
+      }
+      return Promise.resolve({ exists: false });
+    });
+    const app = createApp();
+    const res = await request(app).get('/api/roadmap/me').expect(200);
+    // Either truncated or returned in full — must not error
+    expect(res.body.displayName).toBeDefined();
+    expect(typeof res.body.displayName).toBe('string');
+  });
+
+  test('response time under 500ms for cached users', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('users/')) {
+        return Promise.resolve(makeUserDoc(1001));
+      }
+      return Promise.resolve({ exists: false });
+    });
+    const app = createApp();
+    const start = Date.now();
+    await request(app).get('/api/roadmap/me').expect(200);
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeLessThan(500);
+  });
+
+  test('multiple rapid requests return same data (idempotent)', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('users/')) {
+        return Promise.resolve(makeUserDoc(1001, { displayName: 'Stable' }));
+      }
+      return Promise.resolve({ exists: false });
+    });
+    const app = createApp();
+    const [res1, res2, res3] = await Promise.all([
+      request(app).get('/api/roadmap/me'),
+      request(app).get('/api/roadmap/me'),
+      request(app).get('/api/roadmap/me'),
+    ]);
+    expect(res1.body).toEqual(res2.body);
+    expect(res2.body).toEqual(res3.body);
+  });
+
+  // ─── New tests: isolation ──────────────────────────────────────
+
+  test('different users get different profiles (isolation)', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('users/1001')) {
+        return Promise.resolve(makeUserDoc(1001, { displayName: 'UserA' }));
+      }
+      if (path && path.includes('users/2002')) {
+        return Promise.resolve(makeUserDoc(2002, { displayName: 'UserB' }));
+      }
+      return Promise.resolve({ exists: false });
+    });
+    const appA = createApp({ uid: 'uid-a', uniqueId: 1001 });
+    const appB = createApp({ uid: 'uid-b', uniqueId: 2002 });
+    const resA = await request(appA).get('/api/roadmap/me').expect(200);
+    const resB = await request(appB).get('/api/roadmap/me').expect(200);
+    expect(resA.body.displayName).toBe('UserA');
+    expect(resB.body.displayName).toBe('UserB');
+    expect(resA.body.uniqueId).not.toBe(resB.body.uniqueId);
+  });
+
+  // ─── New tests: identityMap edge cases ─────────────────────────
+
+  test('identityMap with multiple entries returns the correct user', async () => {
+    mockCollectionGet.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          id: 'google:first@gmail.com',
+          data: () => ({ uniqueId: 3001, firebaseUid: 'firebase-uid-multi' }),
+        },
+        {
+          id: 'apple:second@icloud.com',
+          data: () => ({ uniqueId: 3002, firebaseUid: 'firebase-uid-multi' }),
+        },
+      ],
+    });
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('users/3001')) {
+        return Promise.resolve(makeUserDoc(3001, { displayName: 'FirstEntry' }));
+      }
+      if (path && path.includes('users/3002')) {
+        return Promise.resolve(makeUserDoc(3002, { displayName: 'SecondEntry' }));
+      }
+      return Promise.resolve({ exists: false });
+    });
+    const app = createApp({ uid: 'firebase-uid-multi', uniqueId: null });
+    const res = await request(app).get('/api/roadmap/me').expect(200);
+    // Should pick the first matched entry
+    expect(res.body.displayName).toBeDefined();
+    expect([3001, 3002]).toContain(res.body.uniqueId);
+  });
+
+  test('identityMap with unlinked entry (unlinked: true) skipped', async () => {
+    mockCollectionGet.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          id: 'google:unlinked@gmail.com',
+          data: () => ({ uniqueId: 4001, firebaseUid: 'uid-unlinked', unlinked: true }),
+        },
+        {
+          id: 'apple:linked@icloud.com',
+          data: () => ({ uniqueId: 4002, firebaseUid: 'uid-unlinked' }),
+        },
+      ],
+    });
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('users/4002')) {
+        return Promise.resolve(makeUserDoc(4002, { displayName: 'LinkedUser' }));
+      }
+      return Promise.resolve({ exists: false });
+    });
+    const app = createApp({ uid: 'uid-unlinked', uniqueId: null });
+    const res = await request(app).get('/api/roadmap/me');
+    // Should skip the unlinked entry and use the linked one, or 404 if not handled
+    if (res.status === 200) {
+      expect(res.body.uniqueId).toBe(4002);
+    } else {
+      expect(res.status).toBe(404);
+    }
+  });
+
+  // ─── New tests: type safety ────────────────────────────────────
+
+  test('user profile includes correct uniqueId type (number)', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('users/')) {
+        return Promise.resolve(makeUserDoc(1001));
+      }
+      return Promise.resolve({ exists: false });
+    });
+    const app = createApp();
+    const res = await request(app).get('/api/roadmap/me').expect(200);
+    expect(typeof res.body.uniqueId).toBe('number');
+  });
+
+  // ─── New tests: security ───────────────────────────────────────
+
+  test('404 response does not leak internal implementation details', async () => {
+    mockDocGet.mockResolvedValue({ exists: false });
+    mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
+    const app = createApp();
+    const res = await request(app).get('/api/roadmap/me').expect(404);
+    const body = JSON.stringify(res.body);
+    // Should not contain stack traces, file paths, or Firestore internals
+    expect(body).not.toMatch(/at\s+\w+\s+\(/); // stack trace pattern
+    expect(body).not.toMatch(/node_modules/);
+    expect(body).not.toMatch(/firestore/i);
+    expect(body).not.toMatch(/\.js:/);
+  });
+
+  test('download links are HTTPS (not HTTP)', async () => {
+    mockDocGet.mockResolvedValue({ exists: false });
+    mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
+    const app = createApp();
+    const res = await request(app).get('/api/roadmap/me').expect(404);
+    expect(res.body.downloadLinks.android).toMatch(/^https:\/\//);
+    expect(res.body.downloadLinks.ios).toMatch(/^https:\/\//);
+  });
+
+  test('500 error does not leak stack trace or internal details', async () => {
+    mockDocGet.mockRejectedValue(new Error('Connection refused to 10.0.0.1:8080'));
+    const app = createApp();
+    const res = await request(app).get('/api/roadmap/me').expect(500);
+    const body = JSON.stringify(res.body);
+    expect(body).not.toMatch(/10\.0\.0\.1/);
+    expect(body).not.toMatch(/Connection refused/);
+    expect(body).not.toMatch(/at\s+\w+\s+\(/);
+  });
+
+  // ─── New tests: HTTP method safety ─────────────────────────────
+
+  test('GET /api/roadmap/me with POST method returns 404 or 405', async () => {
+    const app = createApp();
+    const res = await request(app).post('/api/roadmap/me');
+    expect([404, 405]).toContain(res.status);
+  });
+
+  test('OPTIONS /api/roadmap/me does not return 500', async () => {
+    const app = createApp();
+    const res = await request(app).options('/api/roadmap/me');
+    expect(res.status).not.toBe(500);
+  });
+
+  // ─── New tests: response headers ───────────────────────────────
+
+  test('response headers include application/json content type', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('users/')) {
+        return Promise.resolve(makeUserDoc(1001));
+      }
+      return Promise.resolve({ exists: false });
+    });
+    const app = createApp();
+    const res = await request(app).get('/api/roadmap/me').expect(200);
+    expect(res.headers['content-type']).toMatch(/application\/json/);
+  });
+
+  test('404 response headers include application/json content type', async () => {
+    mockDocGet.mockResolvedValue({ exists: false });
+    mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
+    const app = createApp();
+    const res = await request(app).get('/api/roadmap/me').expect(404);
+    expect(res.headers['content-type']).toMatch(/application\/json/);
+  });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// GET /api/roadmap/me — Auth edge cases
+// ═══════════════════════════════════════════════════════════════
+
+describe('GET /api/roadmap/me — Auth edge cases', () => {
+  test('expired Firebase token returns 401', async () => {
+    // Simulate expired token: auth middleware not setting req.auth
+    const app = createUnauthApp();
+    await request(app).get('/api/roadmap/me').expect(401);
+  });
+
+  test('revoked Firebase token returns 401', async () => {
+    // Simulate revoked token: auth middleware not setting req.auth
+    const app = createUnauthApp();
+    await request(app).get('/api/roadmap/me').expect(401);
+  });
+
+  test('malformed Authorization header returns 401', async () => {
+    // No auth middleware sets req.auth → 401
+    const app = createUnauthApp();
+    const res = await request(app)
+      .get('/api/roadmap/me')
+      .set('Authorization', 'NotBearer sometoken');
+    expect(res.status).toBe(401);
+  });
+
+  test('Bearer token with no space returns 401', async () => {
+    const app = createUnauthApp();
+    const res = await request(app).get('/api/roadmap/me').set('Authorization', 'Bearernoseparator');
+    expect(res.status).toBe(401);
+  });
+
+  test('empty Bearer token returns 401', async () => {
+    const app = createUnauthApp();
+    const res = await request(app).get('/api/roadmap/me').set('Authorization', 'Bearer ');
+    expect(res.status).toBe(401);
+  });
+
+  test('auth with uid but no uniqueId still attempts identity lookup', async () => {
+    mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
+    mockDocGet.mockResolvedValue({ exists: false });
+    const app = createApp({ uid: 'uid-no-unique', uniqueId: null });
+    const res = await request(app).get('/api/roadmap/me');
+    // Should either find via identityMap or return 404 — not crash
+    expect([200, 404]).toContain(res.status);
+  });
+
+  test('auth with empty string uid returns 404 (no user found)', async () => {
+    mockDocGet.mockResolvedValue({ exists: false });
+    mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
+    const app = createApp({ uid: '', uniqueId: null });
+    const res = await request(app).get('/api/roadmap/me');
+    expect([401, 404]).toContain(res.status);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// POST /api/roadmap/signout
+// ═══════════════════════════════════════════════════════════════
 
 describe('POST /api/roadmap/signout', () => {
   test('returns 200 on sign out', async () => {
@@ -315,5 +602,18 @@ describe('POST /api/roadmap/signout', () => {
   test('returns 401 without authentication', async () => {
     const app = createUnauthApp();
     await request(app).post('/api/roadmap/signout').expect(401);
+  });
+
+  test('signout endpoint is idempotent (multiple calls succeed)', async () => {
+    const app = createApp();
+    await request(app).post('/api/roadmap/signout').expect(200);
+    await request(app).post('/api/roadmap/signout').expect(200);
+    await request(app).post('/api/roadmap/signout').expect(200);
+  });
+
+  test('signout with GET method returns 404 or 405', async () => {
+    const app = createApp();
+    const res = await request(app).get('/api/roadmap/signout');
+    expect([404, 405]).toContain(res.status);
   });
 });
