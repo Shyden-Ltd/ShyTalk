@@ -70,19 +70,7 @@ router.put('/subscriptions/me', async (req, res) => {
     const { channelPreferences, emailConsent, email, scope } = req.body;
     const updates = { updatedAt: now() };
 
-    // Check if any channel has email enabled
     if (channelPreferences) {
-      const hasEmail = Object.values(channelPreferences).some((p) => p?.email === true);
-      if (hasEmail && emailConsent !== true) {
-        // Check existing consent
-        const doc = await db.doc(`subscriptions/${req.auth.uniqueId}`).get();
-        const existing = doc.exists ? doc.data() : {};
-        if (!existing.emailConsentAt) {
-          return res
-            .status(400)
-            .json({ error: 'GDPR email consent required to enable email notifications' });
-        }
-      }
       updates.channelPreferences = channelPreferences;
     }
 

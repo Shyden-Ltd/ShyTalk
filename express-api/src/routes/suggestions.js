@@ -462,6 +462,32 @@ router.post('/suggestions', async (req, res) => {
       votedAt: now(),
     });
 
+    // Send confirmation notifications to submitter (fire-and-forget)
+    (async () => {
+      try {
+        // Push notification
+        const userDoc = await db.doc(`users/${req.auth.uniqueId}`).get();
+        if (userDoc.exists) {
+          const tokens = userDoc.data().fcmTokens || [];
+          if (tokens.length > 0) {
+            await sendFcmToTokens(tokens, {
+              type: 'suggestion_submitted',
+              title: 'Suggestion submitted',
+              body: `Your suggestion "${title}" has been submitted for review.`,
+              suggestionId: id,
+            });
+          }
+        }
+        // System message
+        await sendSystemPm(
+          String(req.auth.uniqueId),
+          `Your suggestion "${title}" has been submitted for review. You'll be notified when it's published.`,
+        );
+      } catch (err) {
+        log.error('suggestions', 'Confirmation notification failed', { error: err.message });
+      }
+    })();
+
     log.info('suggestions', 'Suggestion created', { id, submitter: req.auth.uniqueId });
     res.status(201).json({ id, ...suggestion });
   } catch (err) {

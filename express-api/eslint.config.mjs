@@ -37,6 +37,14 @@ export default [
     },
   },
   {
+    // Relax rules for test files — test scaffolding often needs let + reassign patterns
+    files: ['tests/**/*.test.js', 'src/__tests__/**/*.test.js'],
+    rules: {
+      'prefer-const': 'off',
+      'no-undef': 'off',
+    },
+  },
+  {
     ignores: ['node_modules/', 'coverage/', 'eslint.config.mjs'],
   },
 ];
