@@ -1,0 +1,1401 @@
+/**
+ * ShyTalk Suggestions Board
+ *
+ * Renders the interactive suggestions board:
+ * - Suggestion cards with voting, tags, timestamps
+ * - Sort (Most Voted / Newest), filter (status, tag, language), search
+ * - Pagination
+ * - Login-gated actions (vote, suggest, comment, subscribe)
+ * - Suggestion submission with duplicate detection
+ * - Subscribe modal with per-event channel toggles
+ * - Comment section on accepted suggestions
+ * - Error / empty / loading states
+ *
+ * Loaded after roadmap-app.js. Vanilla JS, no frameworks.
+ */
+(function () {
+  "use strict";
+
+  // ── Constants ──
+
+  var API_BASE = location.hostname.includes("dev")
+    ? "https://dev-api.shytalk.shyden.co.uk"
+    : location.hostname === "localhost" || location.hostname === "127.0.0.1"
+      ? "http://localhost:3000"
+      : "https://api.shytalk.shyden.co.uk";
+
+  var PAGE_SIZE = 10;
+  var SEARCH_DEBOUNCE_MS = 300;
+  var SEARCH_MIN_CHARS = 2;
+  var TITLE_MAX = 80;
+  var DESC_MAX = 5000;
+  var DUPLICATE_MIN_CHARS = 3;
+
+  var STATUS_OPTIONS = [
+    { value: "", label: "All statuses" },
+    { value: "pending", label: "Pending" },
+    { value: "accepted", label: "Accepted" },
+    { value: "planned", label: "Planned" },
+    { value: "completed", label: "Completed" },
+    { value: "rejected", label: "Rejected" },
+  ];
+
+  var TAG_OPTIONS = [
+    { value: "", label: "All tags" },
+    { value: "voice", label: "Voice" },
+    { value: "chat", label: "Chat" },
+    { value: "moderation", label: "Moderation" },
+    { value: "ui", label: "UI/UX" },
+    { value: "privacy", label: "Privacy" },
+    { value: "social", label: "Social" },
+    { value: "economy", label: "Economy" },
+    { value: "accessibility", label: "Accessibility" },
+    { value: "other", label: "Other" },
+  ];
+
+  var LANG_OPTIONS = [
+    { value: "", label: "All languages" },
+    { value: "en", label: "English" },
+    { value: "ar", label: "Arabic" },
+    { value: "de", label: "German" },
+    { value: "es", label: "Spanish" },
+    { value: "fr", label: "French" },
+    { value: "hi", label: "Hindi" },
+    { value: "id", label: "Indonesian" },
+    { value: "it", label: "Italian" },
+    { value: "ja", label: "Japanese" },
+    { value: "ko", label: "Korean" },
+    { value: "nl", label: "Dutch" },
+    { value: "pl", label: "Polish" },
+    { value: "pt", label: "Portuguese" },
+    { value: "ru", label: "Russian" },
+    { value: "sv", label: "Swedish" },
+    { value: "th", label: "Thai" },
+    { value: "tr", label: "Turkish" },
+    { value: "uk", label: "Ukrainian" },
+    { value: "vi", label: "Vietnamese" },
+    { value: "zh", label: "Chinese" },
+  ];
+
+  var SUBSCRIBE_EVENTS = [
+    { key: "newSuggestion", label: "New suggestions posted" },
+    { key: "statusChange", label: "Suggestion status changes" },
+    { key: "commentReply", label: "Replies to your comments" },
+    { key: "watchedUpdate", label: "Updates on watched suggestions" },
+  ];
+
+  var SUBSCRIBE_CHANNELS = ["email", "push", "inApp", "systemMessage"];
+
+  var CHANNEL_LABELS = {
+    email: "Email",
+    push: "Push",
+    inApp: "In-App",
+    systemMessage: "System Message",
+  };
+
+  // ── State ──
+
+  var state = {
+    suggestions: [],
+    totalCount: 0,
+    currentPage: 1,
+    sort: "votes",
+    filterStatus: "",
+    filterTag: "",
+    filterLang: "",
+    searchQuery: "",
+    isLoading: false,
+    error: null,
+    myVotes: {},
+    subscriptionPrefs: null,
+    watchList: [],
+  };
+
+  var searchTimer = null;
+  var duplicateTimer = null;
+
+  // ── Helpers ──
+
+  function escapeHtml(str) {
+    if (!str) return "";
+    var div = document.createElement("div");
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+  }
+
+  function $(sel) {
+    return document.querySelector(sel);
+  }
+
+  function $$(sel) {
+    return document.querySelectorAll(sel);
+  }
+
+  function getUser() {
+    return window.shytalkAuth && window.shytalkAuth.currentUser
+      ? window.shytalkAuth.currentUser
+      : null;
+  }
+
+  function getToken() {
+    var user = getUser();
+    if (!user || typeof user.getIdToken !== "function") {
+      return Promise.resolve(null);
+    }
+    return user.getIdToken();
+  }
+
+  function requireAuth(action) {
+    if (getUser()) return true;
+    showLoginPromptModal(action);
+    return false;
+  }
+
+  function apiFetch(path, options) {
+    options = options || {};
+    var headers = options.headers || {};
+    headers["Content-Type"] = "application/json";
+
+    return getToken().then(function (token) {
+      if (token) {
+        headers["Authorization"] = "Bearer " + token;
+      }
+      return fetch(API_BASE + path, {
+        method: options.method || "GET",
+        headers: headers,
+        body: options.body ? JSON.stringify(options.body) : undefined,
+      }).then(function (res) {
+        if (!res.ok) {
+          return res
+            .json()
+            .catch(function () {
+              return { error: "Request failed" };
+            })
+            .then(function (body) {
+              var err = new Error(body.error || "Request failed");
+              err.status = res.status;
+              throw err;
+            });
+        }
+        return res.json();
+      });
+    });
+  }
+
+  function relativeTime(dateStr) {
+    if (!dateStr) return "";
+    var now = Date.now();
+    var then = new Date(dateStr).getTime();
+    var diffSec = Math.floor((now - then) / 1000);
+    if (diffSec < 60) return "just now";
+    var diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return diffMin + "m ago";
+    var diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return diffHr + "h ago";
+    var diffDay = Math.floor(diffHr / 24);
+    if (diffDay < 30) return diffDay + "d ago";
+    var diffMon = Math.floor(diffDay / 30);
+    if (diffMon < 12) return diffMon + "mo ago";
+    var diffYr = Math.floor(diffMon / 12);
+    return diffYr + "y ago";
+  }
+
+  function statusBadgeClass(status) {
+    switch (status) {
+      case "accepted":
+        return "sg-badge--accepted";
+      case "planned":
+        return "sg-badge--planned";
+      case "completed":
+        return "sg-badge--completed";
+      case "rejected":
+        return "sg-badge--rejected";
+      default:
+        return "sg-badge--pending";
+    }
+  }
+
+  function isVotingDisabled(status) {
+    return (
+      status === "planned" || status === "completed" || status === "rejected"
+    );
+  }
+
+  // ── API calls ──
+
+  function fetchSuggestions() {
+    state.isLoading = true;
+    state.error = null;
+    renderBoard();
+
+    var params = "?page=" + state.currentPage + "&limit=" + PAGE_SIZE;
+    params += "&sort=" + state.sort;
+    if (state.filterStatus)
+      params += "&status=" + encodeURIComponent(state.filterStatus);
+    if (state.filterTag)
+      params += "&tag=" + encodeURIComponent(state.filterTag);
+    if (state.filterLang)
+      params += "&lang=" + encodeURIComponent(state.filterLang);
+
+    var path = state.searchQuery
+      ? "/api/suggestions/search" +
+        params +
+        "&q=" +
+        encodeURIComponent(state.searchQuery)
+      : "/api/suggestions" + params;
+
+    apiFetch(path)
+      .then(function (data) {
+        state.suggestions = data.suggestions || [];
+        state.totalCount = data.total || 0;
+        if (data.myVotes) {
+          state.myVotes = data.myVotes;
+        }
+        state.isLoading = false;
+        state.error = null;
+        renderBoard();
+      })
+      .catch(function (err) {
+        state.isLoading = false;
+        state.error = err.message || "Failed to load suggestions";
+        renderBoard();
+      });
+  }
+
+  function submitVote(suggestionId, direction) {
+    if (!requireAuth("vote on suggestions")) return;
+
+    var currentVote = state.myVotes[suggestionId];
+    var method;
+    var body;
+
+    if (currentVote === direction) {
+      // Toggle off
+      method = "DELETE";
+      body = undefined;
+    } else {
+      method = "POST";
+      body = { direction: direction };
+    }
+
+    apiFetch("/api/suggestions/" + suggestionId + "/vote", {
+      method: method,
+      body: body,
+    })
+      .then(function (data) {
+        if (method === "DELETE") {
+          delete state.myVotes[suggestionId];
+        } else {
+          state.myVotes[suggestionId] = direction;
+        }
+        // Update the suggestion in-place
+        for (var i = 0; i < state.suggestions.length; i++) {
+          if (state.suggestions[i].id === suggestionId) {
+            state.suggestions[i].score = data.score;
+            state.suggestions[i].upvotes = data.upvotes;
+            state.suggestions[i].downvotes = data.downvotes;
+            break;
+          }
+        }
+        renderBoard();
+      })
+      .catch(function (err) {
+        showToast("Vote failed: " + (err.message || "Unknown error"));
+      });
+  }
+
+  function submitSuggestion(title, description, tag, lang, contactOptIn) {
+    return apiFetch("/api/suggestions", {
+      method: "POST",
+      body: {
+        title: title,
+        description: description,
+        tag: tag,
+        language: lang,
+        contactOptIn: contactOptIn,
+      },
+    });
+  }
+
+  function searchDuplicates(query) {
+    return apiFetch(
+      "/api/suggestions/search?q=" + encodeURIComponent(query) + "&limit=3",
+    );
+  }
+
+  function checkBlockedTopics(query) {
+    return apiFetch("/api/suggestions/blocked?q=" + encodeURIComponent(query));
+  }
+
+  function submitComment(suggestionId, text) {
+    return apiFetch("/api/suggestions/" + suggestionId + "/comments", {
+      method: "POST",
+      body: { text: text },
+    });
+  }
+
+  function fetchSubscriptionPrefs() {
+    return apiFetch("/api/subscriptions/me");
+  }
+
+  function saveSubscriptionPrefs(prefs) {
+    return apiFetch("/api/subscriptions/me", {
+      method: "PUT",
+      body: prefs,
+    });
+  }
+
+  function watchSuggestion(suggestionId) {
+    return apiFetch("/api/subscriptions/me/watch", {
+      method: "POST",
+      body: { suggestionId: suggestionId },
+    });
+  }
+
+  // ── Toast ──
+
+  var toastTimer = null;
+
+  function showToast(msg) {
+    var toast = document.getElementById("login-toast");
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.classList.add("visible");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () {
+      toast.classList.remove("visible");
+    }, 3500);
+  }
+
+  // ── Login prompt modal ──
+
+  function showLoginPromptModal(action) {
+    var existing = document.getElementById("sg-login-modal-overlay");
+    if (existing) existing.remove();
+
+    var html =
+      '<div class="sg-modal-overlay" id="sg-login-modal-overlay" data-testid="login-modal-overlay">' +
+      '<div class="sg-modal" role="dialog" aria-modal="true" aria-label="Sign in required">' +
+      '<div class="sg-modal-header">' +
+      "<h3>Sign in required</h3>" +
+      '<button class="sg-modal-close" data-testid="login-modal-close" aria-label="Close">&times;</button>' +
+      "</div>" +
+      '<div class="sg-modal-body">' +
+      "<p>You need to sign in to the ShyTalk app to " +
+      escapeHtml(action || "perform this action") +
+      ".</p>" +
+      "<p>Download ShyTalk and create an account to participate.</p>" +
+      "</div>" +
+      '<div class="sg-modal-footer">' +
+      '<button class="sg-btn sg-btn--secondary" data-testid="login-modal-dismiss">Got it</button>' +
+      "</div>" +
+      "</div>" +
+      "</div>";
+
+    document.body.insertAdjacentHTML("beforeend", html);
+
+    var overlay = document.getElementById("sg-login-modal-overlay");
+    var closeBtn = overlay.querySelector(".sg-modal-close");
+    var dismissBtn = overlay.querySelector(
+      '[data-testid="login-modal-dismiss"]',
+    );
+
+    function close() {
+      overlay.remove();
+    }
+
+    closeBtn.addEventListener("click", close);
+    dismissBtn.addEventListener("click", close);
+    overlay.addEventListener("click", function (e) {
+      if (e.target === overlay) close();
+    });
+    document.addEventListener("keydown", function handler(e) {
+      if (e.key === "Escape") {
+        close();
+        document.removeEventListener("keydown", handler);
+      }
+    });
+  }
+
+  // ── Subscribe modal ──
+
+  function openSubscribeModal(featureId) {
+    if (!requireAuth("manage subscriptions")) return;
+
+    var existing = document.getElementById("sg-subscribe-overlay");
+    if (existing) existing.remove();
+
+    var html =
+      '<div class="sg-modal-overlay" id="sg-subscribe-overlay" data-testid="subscribe-modal-overlay">' +
+      '<div class="sg-modal sg-modal--wide" role="dialog" aria-modal="true" aria-label="Subscribe to updates">' +
+      '<div class="sg-modal-header">' +
+      "<h3>Subscribe</h3>" +
+      '<button class="sg-modal-close" data-testid="subscribe-modal-close" aria-label="Close">&times;</button>' +
+      "</div>" +
+      '<div class="sg-modal-body" id="sg-subscribe-body">' +
+      '<div class="sg-loading">Loading preferences...</div>' +
+      "</div>" +
+      '<div class="sg-modal-footer">' +
+      '<div class="sg-gdpr-consent">' +
+      '<label class="sg-checkbox-label" data-testid="subscribe-gdpr-checkbox">' +
+      '<input type="checkbox" id="sg-gdpr-checkbox" />' +
+      " I consent to receiving email notifications about roadmap updates (GDPR)" +
+      "</label>" +
+      "</div>" +
+      '<div class="sg-modal-actions">' +
+      '<button class="sg-btn sg-btn--secondary" data-testid="subscribe-modal-cancel">Cancel</button>' +
+      '<button class="sg-btn sg-btn--primary" data-testid="subscribe-modal-save" disabled>Save</button>' +
+      "</div>" +
+      "</div>" +
+      "</div>" +
+      "</div>";
+
+    document.body.insertAdjacentHTML("beforeend", html);
+
+    var overlay = document.getElementById("sg-subscribe-overlay");
+    var closeBtn = overlay.querySelector(".sg-modal-close");
+    var cancelBtn = overlay.querySelector(
+      '[data-testid="subscribe-modal-cancel"]',
+    );
+    var saveBtn = overlay.querySelector('[data-testid="subscribe-modal-save"]');
+    var gdprCheckbox = document.getElementById("sg-gdpr-checkbox");
+    var body = document.getElementById("sg-subscribe-body");
+
+    function close() {
+      overlay.remove();
+    }
+
+    closeBtn.addEventListener("click", close);
+    cancelBtn.addEventListener("click", close);
+    overlay.addEventListener("click", function (e) {
+      if (e.target === overlay) close();
+    });
+
+    gdprCheckbox.addEventListener("change", function () {
+      saveBtn.disabled = !gdprCheckbox.checked;
+    });
+
+    // Load preferences
+    fetchSubscriptionPrefs()
+      .then(function (prefs) {
+        state.subscriptionPrefs = prefs.preferences || {};
+        state.watchList = prefs.watchList || [];
+        renderSubscribeBody(body, featureId);
+      })
+      .catch(function () {
+        state.subscriptionPrefs = {};
+        state.watchList = [];
+        renderSubscribeBody(body, featureId);
+      });
+
+    saveBtn.addEventListener("click", function () {
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Saving...";
+
+      // Collect toggled values
+      var prefs = {};
+      for (var e = 0; e < SUBSCRIBE_EVENTS.length; e++) {
+        var evt = SUBSCRIBE_EVENTS[e];
+        prefs[evt.key] = {};
+        for (var c = 0; c < SUBSCRIBE_CHANNELS.length; c++) {
+          var ch = SUBSCRIBE_CHANNELS[c];
+          var checkbox = overlay.querySelector(
+            '[data-testid="subscribe-toggle-' + evt.key + "-" + ch + '"]',
+          );
+          prefs[evt.key][ch] = checkbox ? checkbox.checked : false;
+        }
+      }
+
+      saveSubscriptionPrefs({ preferences: prefs, gdprEmailConsent: true })
+        .then(function () {
+          showToast("Subscription preferences saved");
+          close();
+        })
+        .catch(function (err) {
+          showToast("Failed to save: " + (err.message || "Unknown error"));
+          saveBtn.disabled = false;
+          saveBtn.textContent = "Save";
+        });
+    });
+  }
+
+  function renderSubscribeBody(container, featureId) {
+    var prefs = state.subscriptionPrefs || {};
+    var html = "";
+
+    // Event toggles table
+    html += '<div class="sg-subscribe-grid">';
+    html += '<div class="sg-subscribe-row sg-subscribe-row--header">';
+    html +=
+      '<div class="sg-subscribe-cell sg-subscribe-cell--event">Event</div>';
+    for (var c = 0; c < SUBSCRIBE_CHANNELS.length; c++) {
+      html +=
+        '<div class="sg-subscribe-cell sg-subscribe-cell--channel">' +
+        escapeHtml(CHANNEL_LABELS[SUBSCRIBE_CHANNELS[c]]) +
+        "</div>";
+    }
+    html += "</div>";
+
+    for (var e = 0; e < SUBSCRIBE_EVENTS.length; e++) {
+      var evt = SUBSCRIBE_EVENTS[e];
+      var evtPrefs = prefs[evt.key] || {};
+      html += '<div class="sg-subscribe-row">';
+      html +=
+        '<div class="sg-subscribe-cell sg-subscribe-cell--event">' +
+        escapeHtml(evt.label) +
+        "</div>";
+      for (var ci = 0; ci < SUBSCRIBE_CHANNELS.length; ci++) {
+        var ch = SUBSCRIBE_CHANNELS[ci];
+        var checked = evtPrefs[ch] ? " checked" : "";
+        html +=
+          '<div class="sg-subscribe-cell sg-subscribe-cell--channel">' +
+          '<label class="sg-toggle-label">' +
+          '<input type="checkbox" data-testid="subscribe-toggle-' +
+          evt.key +
+          "-" +
+          ch +
+          '"' +
+          checked +
+          " />" +
+          '<span class="sg-toggle-visual"></span>' +
+          "</label>" +
+          "</div>";
+      }
+      html += "</div>";
+    }
+    html += "</div>";
+
+    // Watch list
+    html += '<div class="sg-watch-section">';
+    html += "<h4>Watch list</h4>";
+    if (state.watchList.length === 0) {
+      html +=
+        '<p class="sg-text-muted">No watched suggestions yet. Click the bell icon on a suggestion to watch it.</p>';
+    } else {
+      html += '<ul class="sg-watch-list">';
+      for (var w = 0; w < state.watchList.length; w++) {
+        var item = state.watchList[w];
+        html +=
+          '<li class="sg-watch-item">' +
+          "<span>" +
+          escapeHtml(item.title || item.suggestionId) +
+          "</span>" +
+          "</li>";
+      }
+      html += "</ul>";
+    }
+    html += "</div>";
+
+    container.innerHTML = html;
+  }
+
+  // ── Suggestion form modal ──
+
+  function openSuggestModal() {
+    if (!requireAuth("submit suggestions")) return;
+
+    var existing = document.getElementById("sg-suggest-overlay");
+    if (existing) existing.remove();
+
+    var tagOpts = "";
+    for (var t = 1; t < TAG_OPTIONS.length; t++) {
+      tagOpts +=
+        '<option value="' +
+        TAG_OPTIONS[t].value +
+        '">' +
+        escapeHtml(TAG_OPTIONS[t].label) +
+        "</option>";
+    }
+
+    var langOpts = "";
+    for (var l = 1; l < LANG_OPTIONS.length; l++) {
+      langOpts +=
+        '<option value="' +
+        LANG_OPTIONS[l].value +
+        '">' +
+        escapeHtml(LANG_OPTIONS[l].label) +
+        "</option>";
+    }
+
+    var html =
+      '<div class="sg-modal-overlay" id="sg-suggest-overlay" data-testid="suggest-modal-overlay">' +
+      '<div class="sg-modal sg-modal--wide" role="dialog" aria-modal="true" aria-label="Suggest a feature">' +
+      '<div class="sg-modal-header">' +
+      "<h3>Suggest a feature</h3>" +
+      '<button class="sg-modal-close" data-testid="suggest-modal-close" aria-label="Close">&times;</button>' +
+      "</div>" +
+      '<div class="sg-modal-body">' +
+      '<div class="sg-form-group">' +
+      '<label for="sg-suggest-title" class="sg-label">Title</label>' +
+      '<input type="text" id="sg-suggest-title" class="sg-input" maxlength="' +
+      TITLE_MAX +
+      '" placeholder="Brief title for your suggestion" data-testid="suggest-title-input" />' +
+      '<span class="sg-char-count" id="sg-title-count" data-testid="suggest-title-count">0/' +
+      TITLE_MAX +
+      "</span>" +
+      "</div>" +
+      '<div id="sg-duplicate-results" class="sg-duplicate-results" data-testid="suggest-duplicates"></div>' +
+      '<div class="sg-form-group">' +
+      '<label for="sg-suggest-desc" class="sg-label">Description</label>' +
+      '<textarea id="sg-suggest-desc" class="sg-textarea" maxlength="' +
+      DESC_MAX +
+      '" rows="4" placeholder="Describe the feature in detail..." data-testid="suggest-desc-input"></textarea>' +
+      '<span class="sg-char-count" id="sg-desc-count" data-testid="suggest-desc-count">0/' +
+      DESC_MAX +
+      "</span>" +
+      "</div>" +
+      '<div class="sg-form-row">' +
+      '<div class="sg-form-group sg-form-group--half">' +
+      '<label for="sg-suggest-tag" class="sg-label">Tag</label>' +
+      '<select id="sg-suggest-tag" class="sg-select" data-testid="suggest-tag-select">' +
+      '<option value="">Select a tag</option>' +
+      tagOpts +
+      "</select>" +
+      "</div>" +
+      '<div class="sg-form-group sg-form-group--half">' +
+      '<label for="sg-suggest-lang" class="sg-label">Language</label>' +
+      '<select id="sg-suggest-lang" class="sg-select" data-testid="suggest-lang-select">' +
+      langOpts +
+      "</select>" +
+      "</div>" +
+      "</div>" +
+      '<label class="sg-checkbox-label" data-testid="suggest-contact-optin">' +
+      '<input type="checkbox" id="sg-suggest-contact" />' +
+      " ShyTalk may contact me for feedback on this suggestion" +
+      "</label>" +
+      "</div>" +
+      '<div class="sg-modal-footer">' +
+      '<div class="sg-modal-actions">' +
+      '<button class="sg-btn sg-btn--secondary" data-testid="suggest-modal-cancel">Cancel</button>' +
+      '<button class="sg-btn sg-btn--primary" data-testid="suggest-modal-submit" disabled>Submit</button>' +
+      "</div>" +
+      "</div>" +
+      "</div>" +
+      "</div>";
+
+    document.body.insertAdjacentHTML("beforeend", html);
+
+    var overlay = document.getElementById("sg-suggest-overlay");
+    var closeBtn = overlay.querySelector(".sg-modal-close");
+    var cancelBtn = overlay.querySelector(
+      '[data-testid="suggest-modal-cancel"]',
+    );
+    var submitBtn = overlay.querySelector(
+      '[data-testid="suggest-modal-submit"]',
+    );
+    var titleInput = document.getElementById("sg-suggest-title");
+    var descInput = document.getElementById("sg-suggest-desc");
+    var tagSelect = document.getElementById("sg-suggest-tag");
+    var langSelect = document.getElementById("sg-suggest-lang");
+    var contactCheckbox = document.getElementById("sg-suggest-contact");
+    var titleCount = document.getElementById("sg-title-count");
+    var descCount = document.getElementById("sg-desc-count");
+    var duplicateResults = document.getElementById("sg-duplicate-results");
+
+    // Pre-select language
+    var currentLang =
+      window.ShyTalkLanguage && typeof window.ShyTalkLanguage.get === "function"
+        ? window.ShyTalkLanguage.get()
+        : "en";
+    langSelect.value = currentLang;
+
+    function close() {
+      overlay.remove();
+    }
+
+    function validateForm() {
+      var valid = titleInput.value.trim().length >= 3 && tagSelect.value !== "";
+      submitBtn.disabled = !valid;
+    }
+
+    closeBtn.addEventListener("click", close);
+    cancelBtn.addEventListener("click", close);
+    overlay.addEventListener("click", function (e) {
+      if (e.target === overlay) close();
+    });
+
+    // Character counters
+    titleInput.addEventListener("input", function () {
+      titleCount.textContent = titleInput.value.length + "/" + TITLE_MAX;
+      validateForm();
+
+      // Duplicate detection
+      clearTimeout(duplicateTimer);
+      var query = titleInput.value.trim();
+      if (query.length >= DUPLICATE_MIN_CHARS) {
+        duplicateTimer = setTimeout(function () {
+          searchDuplicates(query)
+            .then(function (data) {
+              var suggestions = data.suggestions || [];
+              if (suggestions.length === 0) {
+                duplicateResults.innerHTML = "";
+                return;
+              }
+              var dHtml =
+                '<div class="sg-duplicate-banner">' +
+                '<p class="sg-duplicate-title">Similar suggestions found:</p>';
+              for (var i = 0; i < Math.min(suggestions.length, 3); i++) {
+                var s = suggestions[i];
+                dHtml +=
+                  '<div class="sg-duplicate-item" data-testid="duplicate-item-' +
+                  i +
+                  '">' +
+                  '<div class="sg-duplicate-item-text">' +
+                  "<strong>" +
+                  escapeHtml(s.title) +
+                  "</strong>" +
+                  '<span class="sg-text-muted"> — ' +
+                  escapeHtml((s.description || "").substring(0, 80)) +
+                  "</span>" +
+                  "</div>" +
+                  '<div class="sg-duplicate-actions">' +
+                  '<button class="sg-btn sg-btn--xs sg-btn--primary sg-duplicate-match" data-id="' +
+                  s.id +
+                  '" data-testid="duplicate-match-' +
+                  i +
+                  '">Yes, this is what I meant</button>' +
+                  '<button class="sg-btn sg-btn--xs sg-btn--secondary sg-duplicate-diff" data-testid="duplicate-diff-' +
+                  i +
+                  '">No, my idea is different</button>' +
+                  "</div>" +
+                  "</div>";
+              }
+              dHtml += "</div>";
+              duplicateResults.innerHTML = dHtml;
+
+              // Handle "Yes this is what I meant" — navigate to that suggestion
+              var matchBtns = duplicateResults.querySelectorAll(
+                ".sg-duplicate-match",
+              );
+              for (var m = 0; m < matchBtns.length; m++) {
+                matchBtns[m].addEventListener("click", function () {
+                  close();
+                  showToast("Redirecting to existing suggestion");
+                });
+              }
+
+              // Handle "No my idea is different"
+              var diffBtns =
+                duplicateResults.querySelectorAll(".sg-duplicate-diff");
+              for (var d = 0; d < diffBtns.length; d++) {
+                diffBtns[d].addEventListener("click", function () {
+                  duplicateResults.innerHTML = "";
+                });
+              }
+            })
+            .catch(function () {
+              duplicateResults.innerHTML = "";
+            });
+        }, SEARCH_DEBOUNCE_MS);
+      } else {
+        duplicateResults.innerHTML = "";
+      }
+    });
+
+    descInput.addEventListener("input", function () {
+      descCount.textContent = descInput.value.length + "/" + DESC_MAX;
+    });
+
+    tagSelect.addEventListener("change", validateForm);
+
+    submitBtn.addEventListener("click", function () {
+      if (submitBtn.disabled) return;
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Submitting...";
+
+      // Check blocked topics first
+      checkBlockedTopics(titleInput.value.trim())
+        .then(function (data) {
+          if (data.blocked) {
+            showToast("This topic is not allowed: " + (data.reason || ""));
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Submit";
+            return;
+          }
+
+          return submitSuggestion(
+            titleInput.value.trim(),
+            descInput.value.trim(),
+            tagSelect.value,
+            langSelect.value,
+            contactCheckbox.checked,
+          ).then(function () {
+            showToast(
+              "Suggestion submitted! It will be reviewed before publishing.",
+            );
+            close();
+            fetchSuggestions();
+          });
+        })
+        .catch(function (err) {
+          showToast("Failed to submit: " + (err.message || "Unknown error"));
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Submit";
+        });
+    });
+  }
+
+  // ── Comment section ──
+
+  function renderCommentSection(suggestion) {
+    if (suggestion.status !== "accepted") return "";
+    var comments = suggestion.comments || [];
+
+    var html =
+      '<div class="sg-comments" data-testid="comments-section-' +
+      suggestion.id +
+      '">';
+    html += '<h4 class="sg-comments-heading">Comments</h4>';
+
+    // Comment form
+    html +=
+      '<div class="sg-comment-form">' +
+      '<textarea class="sg-textarea sg-textarea--sm" placeholder="Add a comment..." ' +
+      'data-testid="comment-input-' +
+      suggestion.id +
+      '" ' +
+      'data-suggestion-id="' +
+      suggestion.id +
+      '"></textarea>' +
+      '<button class="sg-btn sg-btn--primary sg-btn--sm sg-comment-submit" ' +
+      'data-testid="comment-submit-' +
+      suggestion.id +
+      '" ' +
+      'data-suggestion-id="' +
+      suggestion.id +
+      '">Post</button>' +
+      "</div>";
+
+    // Existing comments
+    if (comments.length > 0) {
+      html += '<div class="sg-comment-list">';
+      for (var i = 0; i < comments.length; i++) {
+        var c = comments[i];
+        html +=
+          '<div class="sg-comment" data-testid="comment-' +
+          (c.id || i) +
+          '">' +
+          '<div class="sg-comment-meta">' +
+          '<span class="sg-comment-author">' +
+          escapeHtml(c.authorName || "User") +
+          "</span>" +
+          '<span class="sg-text-muted"> ' +
+          relativeTime(c.createdAt) +
+          "</span>" +
+          "</div>" +
+          '<div class="sg-comment-text">' +
+          escapeHtml(c.text) +
+          "</div>" +
+          "</div>";
+      }
+      html += "</div>";
+    } else {
+      html +=
+        '<p class="sg-text-muted sg-comment-empty">No comments yet. Be the first!</p>';
+    }
+
+    html += "</div>";
+    return html;
+  }
+
+  // ── Main board rendering ──
+
+  function renderBoard() {
+    var container = document.getElementById("suggestions-board");
+    if (!container) return;
+
+    var html = "";
+
+    // Info banner
+    html +=
+      '<div class="sg-info-banner" data-testid="suggestions-info-banner">' +
+      '<svg class="sg-info-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>' +
+      "<span>All suggestions are reviewed before publishing. Be respectful and constructive.</span>" +
+      "</div>";
+
+    // Toolbar: search + suggest button
+    html += '<div class="sg-toolbar" data-testid="suggestions-toolbar">';
+    html +=
+      '<div class="sg-search-wrap">' +
+      '<input type="text" class="sg-search-input" placeholder="Search suggestions..." ' +
+      'value="' +
+      escapeHtml(state.searchQuery) +
+      '" ' +
+      'data-testid="suggestions-search-input" />' +
+      "</div>";
+    html +=
+      '<button class="sg-btn sg-btn--primary sg-suggest-btn" data-testid="suggest-btn">+ Suggest</button>';
+    html += "</div>";
+
+    // Sort + filter controls
+    html += '<div class="sg-controls" data-testid="suggestions-controls">';
+
+    // Sort buttons
+    html += '<div class="sg-sort-group" data-testid="suggestions-sort">';
+    html +=
+      '<button class="sg-sort-btn' +
+      (state.sort === "votes" ? " sg-sort-btn--active" : "") +
+      '" data-sort="votes" data-testid="sort-most-voted">Most Voted</button>';
+    html +=
+      '<button class="sg-sort-btn' +
+      (state.sort === "newest" ? " sg-sort-btn--active" : "") +
+      '" data-sort="newest" data-testid="sort-newest">Newest</button>';
+    html += "</div>";
+
+    // Filters
+    html += '<div class="sg-filter-group" data-testid="suggestions-filters">';
+
+    // Status filter
+    html +=
+      '<select class="sg-filter-select" data-filter="status" data-testid="filter-status">';
+    for (var si = 0; si < STATUS_OPTIONS.length; si++) {
+      var sel =
+        state.filterStatus === STATUS_OPTIONS[si].value ? " selected" : "";
+      html +=
+        '<option value="' +
+        STATUS_OPTIONS[si].value +
+        '"' +
+        sel +
+        ">" +
+        escapeHtml(STATUS_OPTIONS[si].label) +
+        "</option>";
+    }
+    html += "</select>";
+
+    // Tag filter
+    html +=
+      '<select class="sg-filter-select" data-filter="tag" data-testid="filter-tag">';
+    for (var ti = 0; ti < TAG_OPTIONS.length; ti++) {
+      var tsel = state.filterTag === TAG_OPTIONS[ti].value ? " selected" : "";
+      html +=
+        '<option value="' +
+        TAG_OPTIONS[ti].value +
+        '"' +
+        tsel +
+        ">" +
+        escapeHtml(TAG_OPTIONS[ti].label) +
+        "</option>";
+    }
+    html += "</select>";
+
+    // Language filter
+    html +=
+      '<select class="sg-filter-select" data-filter="lang" data-testid="filter-lang">';
+    for (var li = 0; li < LANG_OPTIONS.length; li++) {
+      var lsel = state.filterLang === LANG_OPTIONS[li].value ? " selected" : "";
+      html +=
+        '<option value="' +
+        LANG_OPTIONS[li].value +
+        '"' +
+        lsel +
+        ">" +
+        escapeHtml(LANG_OPTIONS[li].label) +
+        "</option>";
+    }
+    html += "</select>";
+
+    html += "</div>"; // sg-filter-group
+    html += "</div>"; // sg-controls
+
+    // Loading
+    if (state.isLoading) {
+      html +=
+        '<div class="sg-loading-state" data-testid="suggestions-loading">' +
+        '<div class="loading-spinner" aria-hidden="true"></div>' +
+        "<p>Loading suggestions...</p>" +
+        "</div>";
+      container.innerHTML = html;
+      attachBoardListeners(container);
+      return;
+    }
+
+    // Error
+    if (state.error) {
+      html +=
+        '<div class="sg-error-state" data-testid="suggestions-error">' +
+        "<p>" +
+        escapeHtml(state.error) +
+        "</p>" +
+        '<button class="sg-btn sg-btn--primary sg-retry-btn" data-testid="suggestions-retry">Retry</button>' +
+        "</div>";
+      container.innerHTML = html;
+      attachBoardListeners(container);
+      return;
+    }
+
+    // Empty state
+    if (state.suggestions.length === 0) {
+      var emptyMsg =
+        state.searchQuery ||
+        state.filterStatus ||
+        state.filterTag ||
+        state.filterLang
+          ? "No results match your filters."
+          : "No suggestions yet. Be the first to share your idea!";
+      html +=
+        '<div class="sg-empty-state" data-testid="suggestions-empty">' +
+        "<p>" +
+        escapeHtml(emptyMsg) +
+        "</p>" +
+        "</div>";
+      container.innerHTML = html;
+      attachBoardListeners(container);
+      return;
+    }
+
+    // Suggestion cards
+    html += '<div class="sg-card-list" data-testid="suggestions-list">';
+    for (var i = 0; i < state.suggestions.length; i++) {
+      html += renderSuggestionCard(state.suggestions[i]);
+    }
+    html += "</div>";
+
+    // Pagination
+    var totalPages = Math.ceil(state.totalCount / PAGE_SIZE);
+    if (totalPages > 1) {
+      html +=
+        '<div class="sg-pagination" data-testid="suggestions-pagination">';
+      // Previous
+      html +=
+        '<button class="sg-page-btn" data-page="' +
+        (state.currentPage - 1) +
+        '"' +
+        (state.currentPage <= 1 ? " disabled" : "") +
+        ' data-testid="page-prev">&laquo; Prev</button>';
+
+      // Page numbers
+      var startPage = Math.max(1, state.currentPage - 2);
+      var endPage = Math.min(totalPages, state.currentPage + 2);
+      for (var p = startPage; p <= endPage; p++) {
+        html +=
+          '<button class="sg-page-btn' +
+          (p === state.currentPage ? " sg-page-btn--active" : "") +
+          '" data-page="' +
+          p +
+          '" data-testid="page-' +
+          p +
+          '">' +
+          p +
+          "</button>";
+      }
+
+      // Next
+      html +=
+        '<button class="sg-page-btn" data-page="' +
+        (state.currentPage + 1) +
+        '"' +
+        (state.currentPage >= totalPages ? " disabled" : "") +
+        ' data-testid="page-next">Next &raquo;</button>';
+      html += "</div>";
+    }
+
+    container.innerHTML = html;
+    attachBoardListeners(container);
+  }
+
+  function renderSuggestionCard(s) {
+    var myVote = state.myVotes[s.id] || null;
+    var votingDisabled = isVotingDisabled(s.status);
+    var score = s.score != null ? s.score : 0;
+    var desc = s.description || "";
+    var truncated = desc.length > 200;
+    var displayDesc = truncated ? desc.substring(0, 200) + "..." : desc;
+
+    var html =
+      '<div class="sg-card" data-testid="suggestion-card-' +
+      s.id +
+      '" data-id="' +
+      s.id +
+      '">';
+
+    // Vote column
+    html += '<div class="sg-vote-col">';
+    html +=
+      '<button class="sg-vote-btn sg-vote-btn--up' +
+      (myVote === "up" ? " sg-vote-btn--active" : "") +
+      '"' +
+      (votingDisabled ? " disabled" : "") +
+      ' data-testid="vote-up-' +
+      s.id +
+      '" data-id="' +
+      s.id +
+      '" data-dir="up" aria-label="Upvote">' +
+      '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M8 4l-5 6h10z"/></svg>' +
+      "</button>";
+    html +=
+      '<span class="sg-vote-score" data-testid="vote-score-' +
+      s.id +
+      '">' +
+      score +
+      "</span>";
+    html +=
+      '<button class="sg-vote-btn sg-vote-btn--down' +
+      (myVote === "down" ? " sg-vote-btn--active" : "") +
+      '"' +
+      (votingDisabled ? " disabled" : "") +
+      ' data-testid="vote-down-' +
+      s.id +
+      '" data-id="' +
+      s.id +
+      '" data-dir="down" aria-label="Downvote">' +
+      '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M8 12l-5-6h10z"/></svg>' +
+      "</button>";
+    html += "</div>";
+
+    // Content column
+    html += '<div class="sg-card-content">';
+
+    // Title row
+    html += '<div class="sg-card-title-row">';
+    html +=
+      '<h3 class="sg-card-title" data-testid="suggestion-title-' +
+      s.id +
+      '">' +
+      escapeHtml(s.title) +
+      "</h3>";
+    html +=
+      '<button class="sg-bell-btn" data-testid="suggestion-bell-' +
+      s.id +
+      '" data-id="' +
+      s.id +
+      '" aria-label="Watch this suggestion">' +
+      '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>' +
+      "</button>";
+    html += "</div>";
+
+    // Description
+    html +=
+      '<div class="sg-card-desc" data-testid="suggestion-desc-' + s.id + '">';
+    html += escapeHtml(displayDesc);
+    if (truncated) {
+      html +=
+        ' <button class="sg-expand-btn" data-testid="suggestion-expand-' +
+        s.id +
+        '" data-id="' +
+        s.id +
+        '">Show more</button>';
+    }
+    html += "</div>";
+
+    // Meta row: tags, language, status, timestamp
+    html += '<div class="sg-card-meta">';
+    if (s.tag) {
+      html +=
+        '<span class="sg-tag" data-testid="suggestion-tag-' +
+        s.id +
+        '">' +
+        escapeHtml(s.tag) +
+        "</span>";
+    }
+    if (s.language) {
+      html +=
+        '<span class="sg-lang-tag" data-testid="suggestion-lang-' +
+        s.id +
+        '">' +
+        escapeHtml(s.language) +
+        "</span>";
+    }
+    html +=
+      '<span class="sg-badge ' +
+      statusBadgeClass(s.status) +
+      '" data-testid="suggestion-status-' +
+      s.id +
+      '">' +
+      escapeHtml(s.status || "pending") +
+      "</span>";
+    html +=
+      '<span class="sg-timestamp" data-testid="suggestion-time-' +
+      s.id +
+      '">' +
+      relativeTime(s.createdAt) +
+      "</span>";
+    html += "</div>";
+
+    // Comments section (only for accepted)
+    html += renderCommentSection(s);
+
+    html += "</div>"; // sg-card-content
+    html += "</div>"; // sg-card
+
+    return html;
+  }
+
+  // ── Event delegation ──
+
+  function attachBoardListeners(container) {
+    // Sort buttons
+    var sortBtns = container.querySelectorAll(".sg-sort-btn");
+    for (var i = 0; i < sortBtns.length; i++) {
+      sortBtns[i].addEventListener("click", function () {
+        var newSort = this.getAttribute("data-sort");
+        if (state.sort !== newSort) {
+          state.sort = newSort;
+          state.currentPage = 1;
+          fetchSuggestions();
+        }
+      });
+    }
+
+    // Filter selects
+    var filterSelects = container.querySelectorAll(".sg-filter-select");
+    for (var f = 0; f < filterSelects.length; f++) {
+      filterSelects[f].addEventListener("change", function () {
+        var filterType = this.getAttribute("data-filter");
+        if (filterType === "status") state.filterStatus = this.value;
+        else if (filterType === "tag") state.filterTag = this.value;
+        else if (filterType === "lang") state.filterLang = this.value;
+        state.currentPage = 1;
+        fetchSuggestions();
+      });
+    }
+
+    // Search
+    var searchInput = container.querySelector(".sg-search-input");
+    if (searchInput) {
+      searchInput.addEventListener("input", function () {
+        clearTimeout(searchTimer);
+        var q = searchInput.value.trim();
+        searchTimer = setTimeout(function () {
+          if (q.length >= SEARCH_MIN_CHARS || q.length === 0) {
+            state.searchQuery = q;
+            state.currentPage = 1;
+            fetchSuggestions();
+          }
+        }, SEARCH_DEBOUNCE_MS);
+      });
+    }
+
+    // Suggest button
+    var suggestBtn = container.querySelector(".sg-suggest-btn");
+    if (suggestBtn) {
+      suggestBtn.addEventListener("click", function () {
+        openSuggestModal();
+      });
+    }
+
+    // Retry button
+    var retryBtn = container.querySelector(".sg-retry-btn");
+    if (retryBtn) {
+      retryBtn.addEventListener("click", function () {
+        fetchSuggestions();
+      });
+    }
+
+    // Vote buttons
+    var voteBtns = container.querySelectorAll(".sg-vote-btn");
+    for (var v = 0; v < voteBtns.length; v++) {
+      voteBtns[v].addEventListener("click", function () {
+        var id = this.getAttribute("data-id");
+        var dir = this.getAttribute("data-dir");
+        submitVote(id, dir);
+      });
+    }
+
+    // Bell buttons (watch / subscribe)
+    var bellBtns = container.querySelectorAll(".sg-bell-btn");
+    for (var b = 0; b < bellBtns.length; b++) {
+      bellBtns[b].addEventListener("click", function () {
+        var id = this.getAttribute("data-id");
+        openSubscribeModal(id);
+      });
+    }
+
+    // Expand description buttons
+    var expandBtns = container.querySelectorAll(".sg-expand-btn");
+    for (var e = 0; e < expandBtns.length; e++) {
+      expandBtns[e].addEventListener("click", function () {
+        var id = this.getAttribute("data-id");
+        for (var s = 0; s < state.suggestions.length; s++) {
+          if (state.suggestions[s].id === id) {
+            var descEl = this.closest(".sg-card-desc");
+            if (descEl) {
+              descEl.innerHTML = escapeHtml(
+                state.suggestions[s].description || "",
+              );
+            }
+            break;
+          }
+        }
+      });
+    }
+
+    // Pagination buttons
+    var pageBtns = container.querySelectorAll(".sg-page-btn");
+    for (var p = 0; p < pageBtns.length; p++) {
+      pageBtns[p].addEventListener("click", function () {
+        if (this.disabled) return;
+        var page = parseInt(this.getAttribute("data-page"), 10);
+        if (page >= 1) {
+          state.currentPage = page;
+          fetchSuggestions();
+          // Scroll to top of suggestions
+          var suggestionsSection = document.getElementById("suggestions");
+          if (suggestionsSection) {
+            suggestionsSection.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+          }
+        }
+      });
+    }
+
+    // Comment submit buttons
+    var commentBtns = container.querySelectorAll(".sg-comment-submit");
+    for (var c = 0; c < commentBtns.length; c++) {
+      commentBtns[c].addEventListener("click", function () {
+        if (!requireAuth("post comments")) return;
+        var suggestionId = this.getAttribute("data-suggestion-id");
+        var textarea = container.querySelector(
+          'textarea[data-suggestion-id="' + suggestionId + '"]',
+        );
+        if (!textarea) return;
+        var text = textarea.value.trim();
+        if (!text) return;
+
+        var btn = this;
+        btn.disabled = true;
+        btn.textContent = "Posting...";
+
+        submitComment(suggestionId, text)
+          .then(function () {
+            showToast("Comment posted");
+            fetchSuggestions();
+          })
+          .catch(function (err) {
+            showToast(
+              "Failed to post comment: " + (err.message || "Unknown error"),
+            );
+            btn.disabled = false;
+            btn.textContent = "Post";
+          });
+      });
+    }
+  }
+
+  // ── Header subscribe button integration ──
+
+  function setupHeaderSubscribe() {
+    var btn = document.getElementById("subscribe-btn");
+    if (!btn) return;
+    // Replace the default handler from roadmap-app.js
+    btn.replaceWith(btn.cloneNode(true));
+    btn = document.getElementById("subscribe-btn");
+    btn.addEventListener("click", function () {
+      openSubscribeModal(null);
+    });
+  }
+
+  // ── Init ──
+
+  function init() {
+    setupHeaderSubscribe();
+    fetchSuggestions();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
