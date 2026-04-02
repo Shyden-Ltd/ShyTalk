@@ -205,6 +205,54 @@ async function buildDataExport(uniqueId) {
     });
   }
 
+  // Suggestions (GDPR: include all user's suggestions)
+  let suggestions = [];
+  try {
+    const sugSnap = await db
+      .collection('suggestions')
+      .where('submitterUid', '==', Number.parseInt(uniqueId, 10))
+      .get();
+    suggestions = sugSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    log.error('data-export', 'Failed to query suggestions', { uniqueId, error: err.message });
+  }
+
+  // Suggestion votes by this user
+  const suggestionVotes = [];
+  try {
+    // Query all suggestions where user has voted (scan — GDPR requires completeness)
+    const allSugSnap = await db.collection('suggestions').get();
+    for (const sDoc of allSugSnap.docs) {
+      const voteSnap = await db.doc(`suggestions/${sDoc.id}/votes/${uniqueId}`).get();
+      if (voteSnap.exists) {
+        suggestionVotes.push({ suggestionId: sDoc.id, ...voteSnap.data() });
+      }
+    }
+  } catch (err) {
+    log.error('data-export', 'Failed to query suggestion votes', { uniqueId, error: err.message });
+  }
+
+  // Subscription preferences
+  let subscriptionPrefs = null;
+  try {
+    const subSnap = await db.doc(`subscriptions/${uniqueId}`).get();
+    if (subSnap.exists) subscriptionPrefs = subSnap.data();
+  } catch (err) {
+    log.error('data-export', 'Failed to query subscriptions', { uniqueId, error: err.message });
+  }
+
+  // Notification history
+  let notificationHistory = [];
+  try {
+    const notifSnap = await db
+      .collection('notifications')
+      .where('uid', '==', Number.parseInt(uniqueId, 10))
+      .get();
+    notificationHistory = notifSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    log.error('data-export', 'Failed to query notifications', { uniqueId, error: err.message });
+  }
+
   // Build ZIP
   const buffer = await new Promise((resolve, reject) => {
     const chunks = [];
@@ -282,6 +330,20 @@ async function buildDataExport(uniqueId) {
     });
     archive.append(JSON.stringify(warnings, null, 2), {
       name: 'moderation/warnings.json',
+    });
+    archive.append(JSON.stringify(suggestions, null, 2), {
+      name: 'suggestions/suggestions.json',
+    });
+    archive.append(JSON.stringify(suggestionVotes, null, 2), {
+      name: 'suggestions/votes.json',
+    });
+    if (subscriptionPrefs) {
+      archive.append(JSON.stringify(subscriptionPrefs, null, 2), {
+        name: 'suggestions/subscription-preferences.json',
+      });
+    }
+    archive.append(JSON.stringify(notificationHistory, null, 2), {
+      name: 'suggestions/notifications.json',
     });
 
     archive.finalize();

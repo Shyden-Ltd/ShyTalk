@@ -15,6 +15,7 @@ const serverHealth = require('./serverHealth');
 const accountDeletion = require('./accountDeletion');
 const expireDataExports = require('./expireDataExports');
 const alertManager = require('../utils/alertManagerInstance');
+const dispatchNotifications = require('./notification-dispatch');
 
 function startCronJobs() {
   const isProd = process.env.NODE_ENV === 'production';
@@ -101,6 +102,13 @@ function startCronJobs() {
   cron.schedule('*/5 * * * *', () => {
     serverHealth(alertManager).catch((err) =>
       log.error('cron', 'serverHealth failed', { error: err.message }),
+    );
+  });
+
+  // Dispatch queued suggestion notifications — every 2 minutes
+  cron.schedule('*/2 * * * *', () => {
+    dispatchNotifications().catch((err) =>
+      log.error('cron', 'notification-dispatch failed', { error: err.message }),
     );
   });
 
