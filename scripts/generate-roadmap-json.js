@@ -158,11 +158,15 @@ function parseRoadmap(md) {
   return phases;
 }
 
+// Export for testing
+module.exports = { parseRoadmap, SKIP_PHASES, PHASE_STATUS, PHASE_TITLES };
+
 // ── Main ──
+
 if (!fs.existsSync(ROADMAP_PATH)) {
   console.log(`Roadmap source not found at ${ROADMAP_PATH} — skipping generation`);
-  process.exit(0);
-}
+  if (require.main === module) process.exit(0);
+} else {
 const md = fs.readFileSync(ROADMAP_PATH, 'utf-8');
 const parsed = parseRoadmap(md);
 
@@ -194,7 +198,7 @@ if (fs.existsSync(OUTPUT_PATH)) {
   const newWithoutDate = { ...output, lastUpdated: '' };
   if (JSON.stringify(existingWithoutDate) === JSON.stringify(newWithoutDate)) {
     console.log('Roadmap unchanged — skipping write');
-    process.exit(0);
+    if (require.main === module) process.exit(0);
   }
 }
 
@@ -202,3 +206,5 @@ fs.writeFileSync(OUTPUT_PATH, newJson);
 console.log(
   `Generated ${OUTPUT_PATH} — ${output.phases.length} phases, ${output.phases.reduce((sum, p) => sum + p.features.length, 0)} features`,
 );
+
+} // end else (ROADMAP_PATH exists)
