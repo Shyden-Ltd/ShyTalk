@@ -100,6 +100,13 @@ app.use('/api', require('./routes/admin-devices'));
 app.use('/api', require('./routes/admin-temp-id'));
 app.use('/api', require('./routes/admin-alerts'));
 app.use('/api', require('./routes/translate'));
+app.use('/api', require('./routes/suggestions'));
+app.use('/api', require('./routes/subscriptions'));
+app.use('/api', require('./routes/suggestions-notifications'));
+app.use('/api', require('./routes/admin-suggestions'));
+app.use('/api', require('./routes/admin-audit-log'));
+app.use('/api', require('./routes/suggestions-maintenance'));
+app.use('/api', require('./routes/identity-graph'));
 
 const { createLogsRouter } = require('./routes/logs');
 app.use('/api', createLogsRouter(logger));

@@ -147,3 +147,8 @@ In-app support and niche room types.
 | B10 | Playwright BDD upgrade | 104 tests need functional conversion |
 | B11 | Branded sign-in (Apple browser) | Accepted as Firebase limitation |
 | B12 | Email sign-in | Blocked on self-hosted mail server |
+| B13 | **Contact form** — private feedback/bug reports/safety concerns sent to admin panel. Separate from suggestions board. Needs category dropdown, optional email for replies | |
+| B14 | **Contact support page for suspended users** — suspended users need a way to reach support even when locked out of all services | |
+| B15 | **VPN detection and blocking** — prevent VPN connections to app and website. **IMMEDIATE NEXT after roadmap redesign** — cascading ban system risks banning innocent users sharing VPN exit nodes with banned users | |
+| B16 | **Cross-device E2E testing (HIGH PRIORITY)** — comprehensive test suite where admin actions (suspension, moderation, ban cascade) are performed in admin panel and verified in the app on real/emulated device. Proves full pipeline end-to-end. Needs planning and discussion | |
+| B18 | **Admin panel restructure** — break 12,000+ line index.html into modular components. Also listed as #41 in Phase 0 | |

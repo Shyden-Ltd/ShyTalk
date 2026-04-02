@@ -176,7 +176,6 @@ describe('CORS middleware', () => {
   });
 });
 
-/* eslint-disable sonarjs/no-clear-text-protocols -- testing http://localhost CORS */
 describe('CORS localhost in local mode', () => {
   test('NODE_ENV=local allows http://localhost:5500', async () => {
     const app = createApp(undefined, 'local');
