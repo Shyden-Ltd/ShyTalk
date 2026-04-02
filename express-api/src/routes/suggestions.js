@@ -303,6 +303,11 @@ router.get('/suggestions', async (req, res) => {
     const snap = await query.get();
     let suggestions = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
+    // Enforce status filter client-side (Firestore where may not filter in all environments)
+    if (!status) {
+      suggestions = suggestions.filter((s) => PUBLIC_STATUSES.includes(s.status));
+    }
+
     // Apply tag filter (client-side — Firestore limitation with array-contains + in)
     if (tag) {
       const tags = Array.isArray(tag) ? tag : [tag];
