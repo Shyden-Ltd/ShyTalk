@@ -297,4 +297,452 @@ describe('POST /api/device-info', () => {
     expect(secondCallDoc).not.toHaveProperty('firstSeen');
     expect(secondCallDoc).not.toHaveProperty('boundAt');
   });
+
+  // ─── Additional branch coverage tests ───────────────────────────
+
+  describe('IP extraction', () => {
+    test('falls back to req.ip when no x-forwarded-for header', async () => {
+      const app = createApp();
+
+      const res = await request(app).post('/api/device-info').send(validBody).expect(200);
+
+      expect(res.body.success).toBe(true);
+      // Without x-forwarded-for, req.ip is used (typically ::ffff:127.0.0.1 in supertest).
+      // Since that's IPv6, getIpGeo returns {} without calling fetch, but the route still succeeds.
+      expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ deviceId: 'abc-xyz' }), {
+        merge: true,
+      });
+    });
+  });
+
+  describe('empty/null body edge cases', () => {
+    test('rejects empty body (400)', async () => {
+      const app = createApp();
+
+      const res = await request(app).post('/api/device-info').send({}).expect(400);
+
+      expect(res.body.error).toBe('deviceId is required');
+    });
+
+    test('stores null for all optional fields when not provided', async () => {
+      const app = createApp();
+
+      await request(app)
+        .post('/api/device-info')
+        .set('x-forwarded-for', '203.0.113.1')
+        .send({ deviceId: 'minimal-device' })
+        .expect(200);
+
+      expect(mockSet).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deviceId: 'minimal-device',
+          manufacturer: null,
+          model: null,
+          osVersion: null,
+          screenResolution: null,
+          screenDensity: null,
+          totalRamMb: null,
+          appVersion: null,
+          buildNumber: null,
+          locale: null,
+          networkType: null,
+          carrierName: null,
+          firebaseInstallationId: null,
+        }),
+        { merge: true },
+      );
+    });
+  });
+
+  describe('getIpGeo branches', () => {
+    test('returns empty geo for non-IPv4 address', async () => {
+      global.fetch = jest.fn();
+
+      const app = createApp();
+
+      const res = await request(app)
+        .post('/api/device-info')
+        .set('x-forwarded-for', '2001:db8::1')
+        .send(validBody)
+        .expect(200);
+
+      // fetch should NOT be called for non-IPv4
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(res.body.success).toBe(true);
+      // Geo fields should be null
+      expect(mockSet).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isp: null,
+          asn: null,
+          country: null,
+          region: null,
+        }),
+        { merge: true },
+      );
+    });
+
+    test('returns empty geo when ip-api returns non-ok response', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+      });
+
+      const app = createApp();
+
+      const res = await request(app)
+        .post('/api/device-info')
+        .set('x-forwarded-for', '203.0.113.1')
+        .send(validBody)
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(mockSet).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isp: null,
+          asn: null,
+          country: null,
+          region: null,
+        }),
+        { merge: true },
+      );
+    });
+
+    test('handles missing fields in geo response', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({}),
+      });
+
+      const app = createApp();
+
+      const res = await request(app)
+        .post('/api/device-info')
+        .set('x-forwarded-for', '203.0.113.1')
+        .send(validBody)
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(mockSet).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isp: null,
+          asn: null,
+          country: null,
+          region: null,
+        }),
+        { merge: true },
+      );
+    });
+  });
+
+  describe('network ban types', () => {
+    test('detects subnet network ban', async () => {
+      mockDocGet.mockResolvedValue({ exists: false });
+
+      mockCollectionGet.mockResolvedValue({
+        empty: false,
+        docs: [
+          {
+            data: () => ({
+              type: 'subnet',
+              value: '203.0.113.0/24',
+              reason: 'Banned subnet',
+              expiresAt: null, // permanent ban
+            }),
+          },
+        ],
+      });
+
+      const app = createApp();
+
+      const res = await request(app)
+        .post('/api/device-info')
+        .set('x-forwarded-for', '203.0.113.50')
+        .send(validBody)
+        .expect(200);
+
+      expect(res.body.banStatus.isBanned).toBe(true);
+      expect(res.body.banStatus.banType).toBe('network_subnet');
+      expect(res.body.banStatus.reason).toBe('Banned subnet');
+      expect(res.body.banStatus.expiresAt).toBeNull();
+    });
+
+    test('detects ASN network ban', async () => {
+      mockDocGet.mockResolvedValue({ exists: false });
+
+      mockCollectionGet.mockResolvedValue({
+        empty: false,
+        docs: [
+          {
+            data: () => ({
+              type: 'asn',
+              value: 'AS2856',
+              reason: 'Banned ASN',
+              expiresAt: Date.now() + 86400000,
+            }),
+          },
+        ],
+      });
+
+      const app = createApp();
+
+      const res = await request(app)
+        .post('/api/device-info')
+        .set('x-forwarded-for', '203.0.113.1')
+        .send(validBody)
+        .expect(200);
+
+      expect(res.body.banStatus.isBanned).toBe(true);
+      expect(res.body.banStatus.banType).toBe('network_asn');
+      expect(res.body.banStatus.reason).toBe('Banned ASN');
+    });
+
+    test('ignores network ban with unknown type', async () => {
+      mockDocGet.mockResolvedValue({ exists: false });
+
+      mockCollectionGet.mockResolvedValue({
+        empty: false,
+        docs: [
+          {
+            data: () => ({
+              type: 'unknown_type',
+              value: 'something',
+              reason: 'Should not match',
+              expiresAt: Date.now() + 86400000,
+            }),
+          },
+        ],
+      });
+
+      const app = createApp();
+
+      const res = await request(app)
+        .post('/api/device-info')
+        .set('x-forwarded-for', '203.0.113.1')
+        .send(validBody)
+        .expect(200);
+
+      expect(res.body.banStatus.isBanned).toBe(false);
+    });
+  });
+
+  describe('permanent bans (no expiresAt)', () => {
+    test('permanent device ban (no expiresAt) is active', async () => {
+      let docGetCallCount = 0;
+      mockDocGet.mockImplementation(() => {
+        docGetCallCount++;
+        if (docGetCallCount === 1) {
+          return Promise.resolve({ exists: false });
+        }
+        return Promise.resolve({
+          exists: true,
+          data: () => ({
+            reason: 'Permanent ban',
+            // no expiresAt — should be treated as active
+          }),
+        });
+      });
+
+      const app = createApp();
+
+      const res = await request(app)
+        .post('/api/device-info')
+        .set('x-forwarded-for', '203.0.113.1')
+        .send(validBody)
+        .expect(200);
+
+      expect(res.body.banStatus.isBanned).toBe(true);
+      expect(res.body.banStatus.banType).toBe('device');
+      expect(res.body.banStatus.reason).toBe('Permanent ban');
+      expect(res.body.banStatus.expiresAt).toBeNull();
+    });
+  });
+
+  describe('isIpInSubnet edge cases', () => {
+    test('subnet check with /0 prefix (matches all IPs)', async () => {
+      mockDocGet.mockResolvedValue({ exists: false });
+
+      mockCollectionGet.mockResolvedValue({
+        empty: false,
+        docs: [
+          {
+            data: () => ({
+              type: 'subnet',
+              value: '0.0.0.0/0',
+              reason: 'Global ban',
+              expiresAt: null,
+            }),
+          },
+        ],
+      });
+
+      const app = createApp();
+
+      const res = await request(app)
+        .post('/api/device-info')
+        .set('x-forwarded-for', '203.0.113.50')
+        .send(validBody)
+        .expect(200);
+
+      expect(res.body.banStatus.isBanned).toBe(true);
+      expect(res.body.banStatus.banType).toBe('network_subnet');
+    });
+
+    test('subnet check with invalid CIDR falls back safely', async () => {
+      mockDocGet.mockResolvedValue({ exists: false });
+
+      mockCollectionGet.mockResolvedValue({
+        empty: false,
+        docs: [
+          {
+            data: () => ({
+              type: 'subnet',
+              value: 'not-a-cidr',
+              reason: 'Bad CIDR',
+              expiresAt: null,
+            }),
+          },
+        ],
+      });
+
+      const app = createApp();
+
+      const res = await request(app)
+        .post('/api/device-info')
+        .set('x-forwarded-for', '203.0.113.50')
+        .send(validBody)
+        .expect(200);
+
+      // isIpInSubnet should catch the error and return false
+      expect(res.body.banStatus.isBanned).toBe(false);
+    });
+  });
+
+  describe('checkBans error handling', () => {
+    test('returns noBan when checkBans throws', async () => {
+      // First call (deviceBindings) succeeds
+      // Second call (deviceBans) throws
+      let docGetCallCount = 0;
+      mockDocGet.mockImplementation(() => {
+        docGetCallCount++;
+        if (docGetCallCount === 1) {
+          return Promise.resolve({ exists: false });
+        }
+        throw new Error('Firestore connection lost');
+      });
+
+      const app = createApp();
+
+      const res = await request(app)
+        .post('/api/device-info')
+        .set('x-forwarded-for', '203.0.113.1')
+        .send(validBody)
+        .expect(200);
+
+      // Should gracefully return noBan
+      expect(res.body.banStatus.isBanned).toBe(false);
+      expect(res.body.banStatus.banType).toBeNull();
+    });
+  });
+
+  describe('main route error handling', () => {
+    test('returns 500 when Firestore set throws', async () => {
+      mockSet.mockRejectedValueOnce(new Error('Write failed'));
+
+      const app = createApp();
+
+      const res = await request(app)
+        .post('/api/device-info')
+        .set('x-forwarded-for', '203.0.113.1')
+        .send(validBody)
+        .expect(500);
+
+      expect(res.body.error).toBe('Internal server error');
+    });
+  });
+
+  describe('non-matching network bans', () => {
+    test('IP ban does not match different IP', async () => {
+      mockDocGet.mockResolvedValue({ exists: false });
+
+      mockCollectionGet.mockResolvedValue({
+        empty: false,
+        docs: [
+          {
+            data: () => ({
+              type: 'ip',
+              value: '10.0.0.1',
+              reason: 'Wrong IP',
+              expiresAt: Date.now() + 86400000,
+            }),
+          },
+        ],
+      });
+
+      const app = createApp();
+
+      const res = await request(app)
+        .post('/api/device-info')
+        .set('x-forwarded-for', '203.0.113.50')
+        .send(validBody)
+        .expect(200);
+
+      expect(res.body.banStatus.isBanned).toBe(false);
+    });
+
+    test('subnet ban does not match IP outside range', async () => {
+      mockDocGet.mockResolvedValue({ exists: false });
+
+      mockCollectionGet.mockResolvedValue({
+        empty: false,
+        docs: [
+          {
+            data: () => ({
+              type: 'subnet',
+              value: '10.0.0.0/8',
+              reason: 'Internal subnet ban',
+              expiresAt: null,
+            }),
+          },
+        ],
+      });
+
+      const app = createApp();
+
+      const res = await request(app)
+        .post('/api/device-info')
+        .set('x-forwarded-for', '203.0.113.50')
+        .send(validBody)
+        .expect(200);
+
+      expect(res.body.banStatus.isBanned).toBe(false);
+    });
+
+    test('ASN ban does not match different ASN', async () => {
+      mockDocGet.mockResolvedValue({ exists: false });
+
+      mockCollectionGet.mockResolvedValue({
+        empty: false,
+        docs: [
+          {
+            data: () => ({
+              type: 'asn',
+              value: 'AS99999',
+              reason: 'Different ASN',
+              expiresAt: Date.now() + 86400000,
+            }),
+          },
+        ],
+      });
+
+      const app = createApp();
+
+      const res = await request(app)
+        .post('/api/device-info')
+        .set('x-forwarded-for', '203.0.113.1')
+        .send(validBody)
+        .expect(200);
+
+      expect(res.body.banStatus.isBanned).toBe(false);
+    });
+  });
 });
