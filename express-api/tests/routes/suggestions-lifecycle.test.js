@@ -118,7 +118,7 @@ jest.mock('../../src/utils/fcm', () => ({
 
 // ─── App setup ──────────────────────────────────────────────────
 
-let suggestionsRouter;
+const suggestionsRouter = require('../../src/routes/suggestions');
 
 function createApp({ uniqueId = 1001, isAdmin = false, isSuspended = false } = {}) {
   const app = express();
@@ -144,14 +144,15 @@ function createAdminApp({ uniqueId = 'admin-1' } = {}) {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.resetModules();
   mockDocGet.mockReset();
   mockCollectionGet.mockReset();
+  mockRunTransaction.mockReset();
+  mockRunTransaction.mockImplementation(async (fn) => {
+    const t = { get: mockDocGet, set: mockDocSet, update: mockDocUpdate, delete: mockDocDelete };
+    return fn(t);
+  });
   mockDocGet.mockResolvedValue({ exists: false });
   mockCollectionGet.mockResolvedValue({ empty: true, docs: [], size: 0 });
-
-  // Re-require router after mocks are set up
-  suggestionsRouter = require('../../src/routes/suggestions');
 });
 
 // ─── Helpers ────────────────────────────────────────────────────

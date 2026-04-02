@@ -75,7 +75,7 @@ jest.mock('../../src/utils/log', () => ({
 
 // ─── App setup ──────────────────────────────────────────────────
 
-let subscriptionsRouter;
+const subscriptionsRouter = require('../../src/routes/subscriptions');
 
 function createApp({ uniqueId = 1001, isAdmin = false } = {}) {
   const app = express();
@@ -101,12 +101,10 @@ function createUnauthApp() {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.resetModules();
   mockDocGet.mockReset();
   mockCollectionGet.mockReset();
   mockDocGet.mockResolvedValue({ exists: false });
   mockCollectionGet.mockResolvedValue({ empty: true, docs: [], size: 0 });
-  subscriptionsRouter = require('../../src/routes/subscriptions');
 });
 
 // ─── Helpers ────────────────────────────────────────────────────

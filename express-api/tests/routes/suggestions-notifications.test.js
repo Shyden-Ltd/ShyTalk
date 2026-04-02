@@ -97,7 +97,7 @@ jest.mock('../../src/utils/email', () => ({
 
 // ─── App setup ──────────────────────────────────────────────────
 
-let notificationsRouter;
+const notificationsRouter = require('../../src/routes/suggestions-notifications');
 
 function createApp({ uniqueId = 1001, isAdmin = false } = {}) {
   const app = express();
@@ -119,12 +119,10 @@ function createUnauthApp() {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.resetModules();
   mockDocGet.mockReset();
   mockCollectionGet.mockReset();
   mockDocGet.mockResolvedValue({ exists: false });
   mockCollectionGet.mockResolvedValue({ empty: true, docs: [], size: 0 });
-  notificationsRouter = require('../../src/routes/suggestions-notifications');
 });
 
 // ─── Helpers ────────────────────────────────────────────────────

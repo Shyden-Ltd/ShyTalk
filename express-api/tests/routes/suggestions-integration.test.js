@@ -149,7 +149,7 @@ jest.mock('../../src/utils/email', () => ({
 
 // --- App setup ---------------------------------------------------------------
 
-let suggestionsRouter;
+const suggestionsRouter = require('../../src/routes/suggestions');
 
 function createApp({ uniqueId = 1001, isAdmin = false, isSuspended = false } = {}) {
   const app = express();
@@ -178,12 +178,15 @@ function _createUnauthApp() {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.resetModules();
   mockDocGet.mockReset();
   mockCollectionGet.mockReset();
+  mockRunTransaction.mockReset();
+  mockRunTransaction.mockImplementation(async (fn) => {
+    const t = { get: mockDocGet, set: mockDocSet, update: mockDocUpdate, delete: mockDocDelete };
+    return fn(t);
+  });
   mockDocGet.mockResolvedValue({ exists: false });
   mockCollectionGet.mockResolvedValue({ empty: true, docs: [], size: 0 });
-  suggestionsRouter = require('../../src/routes/suggestions');
 });
 
 // --- Helpers -----------------------------------------------------------------

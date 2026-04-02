@@ -116,7 +116,7 @@ jest.mock('../../src/utils/fcm', () => ({
 
 // ─── App setup ──────────────────────────────────────────────────
 
-let suggestionsRouter;
+const suggestionsRouter = require('../../src/routes/suggestions');
 
 function createApp({ uniqueId = 1001, isAdmin = false, isSuspended = false } = {}) {
   const app = express();
@@ -146,7 +146,6 @@ function createUnauthApp() {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.resetModules();
   mockDocGet.mockReset();
   mockCollectionGet.mockReset();
   mockRunTransaction.mockReset();
@@ -156,9 +155,6 @@ beforeEach(() => {
   });
   mockDocGet.mockResolvedValue({ exists: false });
   mockCollectionGet.mockResolvedValue({ empty: true, docs: [], size: 0 });
-
-  // Re-require router after mocks are set up
-  suggestionsRouter = require('../../src/routes/suggestions');
 });
 
 // ─── Helpers ────────────────────────────────────────────────────
@@ -487,9 +483,7 @@ describe('Vote Count Atomicity', () => {
       return fn(t);
     });
 
-    // Re-require router to pick up updated mock
-    jest.resetModules();
-    suggestionsRouter = require('../../src/routes/suggestions');
+    // Mock already updated — no re-require needed with static import
 
     const app1 = createApp({ uniqueId: 2001 });
     const app2 = createApp({ uniqueId: 2002 });
@@ -538,8 +532,7 @@ describe('Vote Count Atomicity', () => {
       return fn(t);
     });
 
-    jest.resetModules();
-    suggestionsRouter = require('../../src/routes/suggestions');
+    // Mock already updated — no re-require needed with static import
 
     const appUp = createApp({ uniqueId: 3001 });
     const appDown = createApp({ uniqueId: 3002 });
@@ -593,8 +586,7 @@ describe('Vote Count Atomicity', () => {
       return fn(t);
     });
 
-    jest.resetModules();
-    suggestionsRouter = require('../../src/routes/suggestions');
+    // Mock already updated — no re-require needed with static import
 
     const app = createApp({ uniqueId: 1001 });
 
@@ -639,8 +631,7 @@ describe('Vote Count Atomicity', () => {
       return fn(t);
     });
 
-    jest.resetModules();
-    suggestionsRouter = require('../../src/routes/suggestions');
+    // Mock already updated — no re-require needed with static import
 
     const app = createApp({ uniqueId: 1001 });
     const res = await request(app).delete('/api/suggestions/sug1/vote');
