@@ -17,6 +17,23 @@
 
 const router = require('express').Router();
 const { db, FieldValue } = require('../utils/firebase');
+
+// Content-Type validation for write endpoints
+function requireJson(req, res, next) {
+  if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
+    const ct = req.headers['content-type'] || '';
+    // Allow requests with no body (DELETE) or application/json
+    if (req.body !== undefined && Object.keys(req.body).length > 0) {
+      if (!ct.includes('application/json')) {
+        return res.status(400).json({ error: 'Content-Type must be application/json' });
+      }
+    } else if (ct && !ct.includes('application/json')) {
+      return res.status(400).json({ error: 'Content-Type must be application/json' });
+    }
+  }
+  next();
+}
+router.use(requireJson);
 const { generateId, now } = require('../utils/helpers');
 const log = require('../utils/log');
 const { sanitise, sanitiseTitle } = require('../utils/text-sanitiser');
@@ -97,8 +114,7 @@ function validateSuggestionId(id) {
 // ─── GET /suggestions/tags ──────────────────────────────────────
 
 router.get('/suggestions/tags', (_req, res) => {
-  const tags = VALID_TAGS.map((t) => ({ id: t, name: t, category: t }));
-  res.json({ tags });
+  res.json({ tags: VALID_TAGS });
 });
 
 // ─── GET /suggestions/mine ──────────────────────────────────────
@@ -459,6 +475,7 @@ router.post('/suggestions', async (req, res) => {
 router.put('/suggestions/:id', async (req, res) => {
   try {
     if (requireAuth(req, res)) return;
+    if (requireNotSuspended(req, res)) return;
 
     const { id } = req.params;
     const doc = await db.doc(`suggestions/${id}`).get();
@@ -525,6 +542,7 @@ router.put('/suggestions/:id', async (req, res) => {
 router.delete('/suggestions/:id', async (req, res) => {
   try {
     if (requireAuth(req, res)) return;
+    if (requireNotSuspended(req, res)) return;
 
     const { id } = req.params;
     const doc = await db.doc(`suggestions/${id}`).get();
