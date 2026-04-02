@@ -5693,6 +5693,7 @@
       tabLogs.classList.toggle("active", tab === "logs");
       tabDevices.classList.toggle("active", tab === "devices");
       tabStartingScreens.classList.toggle("active", tab === "starting-screens");
+      tabSuggestions.classList.toggle("active", tab === "suggestions");
       // Force synchronous layout flush — WebKit batches classList mutations,
       // which can cause automated tests to read stale class values.
       void tabUsers.offsetHeight;
@@ -5710,6 +5711,7 @@
       logsPanel.classList.toggle("visible", tab === "logs");
       devicesPanel.classList.toggle("visible", tab === "devices");
       startingScreensPanel.classList.toggle("visible", tab === "starting-screens");
+      suggestionsPanel.classList.toggle("visible", tab === "suggestions");
 
       if (tab === "devices") loadDevices();
       if (tab === "backups") loadBackups();
@@ -5731,6 +5733,7 @@
       if (tab === "banners") loadBanners();
       if (tab === "funfacts") loadFunFacts();
       if (tab === "starting-screens") loadStartingScreens();
+      if (tab === "suggestions") loadSuggestions();
     }
 
     tabUsers.addEventListener("click", () => switchTab("users"));
@@ -5746,6 +5749,7 @@
     tabLogs.addEventListener("click", () => switchTab("logs"));
     tabDevices.addEventListener("click", () => switchTab("devices"));
     tabStartingScreens.addEventListener("click", () => switchTab("starting-screens"));
+    tabSuggestions.addEventListener("click", () => switchTab("suggestions"));
 
     // --- Starting Screens ---
     const startingScreensList = $("#starting-screens-list");
@@ -12627,6 +12631,582 @@
       } finally {
         btn.disabled = false; btn.textContent = "Recover Photos from R2";
       }
+    });
+
+    // ══════════════════════════════════════════════════════════════
+    // SUGGESTIONS TAB
+    // ══════════════════════════════════════════════════════════════
+
+    async function loadSuggestions() {
+      const pendingList = $("#sg-pending-list");
+      const disputeList = $("#sg-dispute-list");
+      const pendingEmpty = $("#sg-pending-empty");
+      const disputeEmpty = $("#sg-dispute-empty");
+      const pendingCount = $("#sg-pending-count");
+      const disputeCount = $("#sg-dispute-count");
+
+      pendingList.innerHTML = '<div style="color:var(--text2);font-size:12px;">Loading suggestions...</div>';
+      disputeList.innerHTML = '<div style="color:var(--text2);font-size:12px;">Loading disputes...</div>';
+
+      try {
+        const [suggestionsData, disputesData] = await Promise.all([
+          apiCall("GET", "/api/admin/suggestions"),
+          apiCall("GET", "/api/admin/suggestions/disputes"),
+        ]);
+
+        const suggestions = suggestionsData.suggestions || [];
+        const pending = suggestions.filter(s => s.status === "pending");
+        const disputes = disputesData.disputes || [];
+
+        pendingCount.textContent = pending.length + " Pending";
+        disputeCount.textContent = disputes.length + " Disputes";
+
+        // Render pending suggestions
+        pendingList.textContent = "";
+        if (pending.length === 0) {
+          pendingEmpty.style.display = "block";
+        } else {
+          pendingEmpty.style.display = "none";
+          pending.forEach(sg => {
+            pendingList.appendChild(renderSuggestionCard(sg));
+          });
+        }
+
+        // Render disputes
+        disputeList.textContent = "";
+        if (disputes.length === 0) {
+          disputeEmpty.style.display = "block";
+        } else {
+          disputeEmpty.style.display = "none";
+          disputes.forEach(d => {
+            disputeList.appendChild(renderDisputeCard(d));
+          });
+        }
+      } catch (err) {
+        pendingList.innerHTML = '<div style="color:var(--danger);font-size:12px;">Failed to load: ' + escapeHtml(err.message) + '</div>';
+        disputeList.innerHTML = '<div style="color:var(--danger);font-size:12px;">Failed to load</div>';
+      }
+    }
+
+    function renderSuggestionCard(sg) {
+      const card = document.createElement("div");
+      card.className = "suggestion-card";
+      card.dataset.id = sg.id;
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.className = "sg-checkbox";
+      cb.dataset.sgId = sg.id;
+      card.appendChild(cb);
+
+      const body = document.createElement("div");
+      body.className = "sg-body";
+
+      const title = document.createElement("div");
+      title.className = "sg-title";
+      title.textContent = sg.title || "(No title)";
+      body.appendChild(title);
+
+      const desc = document.createElement("div");
+      desc.className = "sg-desc";
+      desc.textContent = sg.description || "";
+      desc.title = sg.description || "";
+      body.appendChild(desc);
+
+      const meta = document.createElement("div");
+      meta.className = "sg-meta";
+      meta.innerHTML = '<span>By: ' + escapeHtml(sg.submitterId || "Unknown") + '</span>' +
+        '<span>' + (sg.createdAt ? new Date(sg.createdAt).toLocaleString() : "Unknown date") + '</span>' +
+        (sg.contactOptIn ? '<span class="sg-contact">Contact OK</span>' : '');
+      body.appendChild(meta);
+
+      // Reject reason input (hidden by default)
+      const rejectWrap = document.createElement("div");
+      rejectWrap.className = "sg-reject-input";
+      rejectWrap.innerHTML = '<input type="text" placeholder="Rejection reason...">' +
+        '<button>Confirm Reject</button>';
+      body.appendChild(rejectWrap);
+
+      // Merge search input (hidden by default)
+      const mergeWrap = document.createElement("div");
+      mergeWrap.className = "sg-merge-search";
+      mergeWrap.innerHTML = '<input type="text" placeholder="Original suggestion ID to merge into...">' +
+        '<button>Confirm Merge</button>';
+      body.appendChild(mergeWrap);
+
+      card.appendChild(body);
+
+      const actions = document.createElement("div");
+      actions.className = "sg-actions";
+
+      const approveBtn = document.createElement("button");
+      approveBtn.className = "sg-btn-approve";
+      approveBtn.textContent = "Approve";
+      approveBtn.addEventListener("click", async () => {
+        try {
+          await apiCall("PUT", `/api/admin/suggestions/${sg.id}/status`, { status: "approved" });
+          showToast("Suggestion approved", "success");
+          loadSuggestions();
+        } catch (err) { showToast(err.message, "error"); }
+      });
+
+      const rejectBtn = document.createElement("button");
+      rejectBtn.className = "sg-btn-reject";
+      rejectBtn.textContent = "Reject";
+      rejectBtn.addEventListener("click", () => {
+        rejectWrap.classList.toggle("visible");
+        mergeWrap.classList.remove("visible");
+      });
+
+      rejectWrap.querySelector("button").addEventListener("click", async () => {
+        const reason = rejectWrap.querySelector("input").value.trim();
+        try {
+          await apiCall("PUT", `/api/admin/suggestions/${sg.id}/status`, { status: "rejected", reason });
+          showToast("Suggestion rejected", "success");
+          loadSuggestions();
+        } catch (err) { showToast(err.message, "error"); }
+      });
+
+      const mergeBtn = document.createElement("button");
+      mergeBtn.className = "sg-btn-merge";
+      mergeBtn.textContent = "Merge";
+      mergeBtn.addEventListener("click", () => {
+        mergeWrap.classList.toggle("visible");
+        rejectWrap.classList.remove("visible");
+      });
+
+      mergeWrap.querySelector("button").addEventListener("click", async () => {
+        const targetId = mergeWrap.querySelector("input").value.trim();
+        if (!targetId) { showToast("Enter a target suggestion ID", "error"); return; }
+        try {
+          await apiCall("POST", `/api/admin/suggestions/${sg.id}/merge`, { targetId });
+          showToast("Suggestion merged", "success");
+          loadSuggestions();
+        } catch (err) { showToast(err.message, "error"); }
+      });
+
+      actions.appendChild(approveBtn);
+      actions.appendChild(rejectBtn);
+      actions.appendChild(mergeBtn);
+      card.appendChild(actions);
+
+      return card;
+    }
+
+    function renderDisputeCard(d) {
+      const card = document.createElement("div");
+      card.className = "dispute-card";
+
+      const meta = document.createElement("div");
+      meta.className = "dispute-meta";
+      meta.innerHTML = '<strong>Dispute #' + escapeHtml(d.id || "") + '</strong> | ' +
+        'Original: ' + escapeHtml(d.originalId || "") + ' | ' +
+        'Merged into: ' + escapeHtml(d.targetId || "") + ' | ' +
+        (d.createdAt ? new Date(d.createdAt).toLocaleString() : "");
+      card.appendChild(meta);
+
+      if (d.reason) {
+        const reason = document.createElement("div");
+        reason.style.cssText = "font-size:13px;margin-bottom:8px;color:var(--text);";
+        reason.textContent = "Reason: " + d.reason;
+        card.appendChild(reason);
+      }
+
+      const actions = document.createElement("div");
+      actions.className = "dispute-actions";
+
+      const upholdBtn = document.createElement("button");
+      upholdBtn.className = "dispute-uphold";
+      upholdBtn.textContent = "Uphold Merge";
+      upholdBtn.addEventListener("click", async () => {
+        try {
+          await apiCall("PUT", `/api/admin/suggestions/disputes/${d.id}`, { resolution: "upheld" });
+          showToast("Dispute resolved - merge upheld", "success");
+          loadSuggestions();
+        } catch (err) { showToast(err.message, "error"); }
+      });
+
+      const revertBtn = document.createElement("button");
+      revertBtn.className = "dispute-reject";
+      revertBtn.textContent = "Revert Merge";
+      revertBtn.addEventListener("click", async () => {
+        try {
+          await apiCall("PUT", `/api/admin/suggestions/disputes/${d.id}`, { resolution: "reverted" });
+          showToast("Dispute resolved - merge reverted", "success");
+          loadSuggestions();
+        } catch (err) { showToast(err.message, "error"); }
+      });
+
+      actions.appendChild(upholdBtn);
+      actions.appendChild(revertBtn);
+      card.appendChild(actions);
+
+      return card;
+    }
+
+    // Select All checkbox
+    $("#sg-select-all").addEventListener("change", (e) => {
+      const checked = e.target.checked;
+      for (const cb of $$("#sg-pending-list .sg-checkbox")) {
+        cb.checked = checked;
+      }
+    });
+
+    // Bulk approve
+    $("#sg-bulk-approve").addEventListener("click", async () => {
+      const selected = [...$$("#sg-pending-list .sg-checkbox:checked")].map(cb => cb.dataset.sgId);
+      if (selected.length === 0) { showToast("No suggestions selected", "error"); return; }
+      if (!confirm(`Approve ${selected.length} suggestion(s)?`)) return;
+      try {
+        await Promise.all(selected.map(id =>
+          apiCall("PUT", `/api/admin/suggestions/${id}/status`, { status: "approved" })
+        ));
+        showToast(`Approved ${selected.length} suggestion(s)`, "success");
+        loadSuggestions();
+      } catch (err) { showToast(err.message, "error"); }
+    });
+
+    // Bulk reject
+    $("#sg-bulk-reject").addEventListener("click", async () => {
+      const selected = [...$$("#sg-pending-list .sg-checkbox:checked")].map(cb => cb.dataset.sgId);
+      if (selected.length === 0) { showToast("No suggestions selected", "error"); return; }
+      const reason = prompt("Rejection reason (optional):") || "";
+      if (!confirm(`Reject ${selected.length} suggestion(s)?`)) return;
+      try {
+        await Promise.all(selected.map(id =>
+          apiCall("PUT", `/api/admin/suggestions/${id}/status`, { status: "rejected", reason })
+        ));
+        showToast(`Rejected ${selected.length} suggestion(s)`, "success");
+        loadSuggestions();
+      } catch (err) { showToast(err.message, "error"); }
+    });
+
+    // ══════════════════════════════════════════════════════════════
+    // IDENTITY GRAPH (inside Users > Bans & Restrictions)
+    // ══════════════════════════════════════════════════════════════
+
+    async function loadIdentityGraph(uid) {
+      const card = $("#identity-graph-card");
+      const tbody = $("#ig-table-body");
+      const cascadePreview = $("#ig-cascade-preview");
+
+      card.style.display = "block";
+      tbody.innerHTML = '<tr><td colspan="4" style="color:var(--text2);font-size:12px;">Loading...</td></tr>';
+      cascadePreview.classList.remove("visible");
+
+      try {
+        const data = await apiCall("GET", `/api/admin/bans/graph/${uid}`);
+        const identifiers = data.identifiers || [];
+
+        if (identifiers.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" style="color:var(--text2);font-size:12px;font-style:italic;">No identity graph data</td></tr>';
+        } else {
+          tbody.textContent = "";
+          identifiers.forEach(ident => {
+            const tr = document.createElement("tr");
+
+            const tdType = document.createElement("td");
+            tdType.textContent = ident.type || "unknown";
+            tr.appendChild(tdType);
+
+            const tdValue = document.createElement("td");
+            tdValue.textContent = ident.value || "";
+            tdValue.style.cssText = "font-family:monospace;font-size:11px;word-break:break-all;";
+            tr.appendChild(tdValue);
+
+            const tdMeta = document.createElement("td");
+            tdMeta.textContent = ident.metadata || "";
+            tdMeta.style.cssText = "font-size:11px;color:var(--text2);";
+            tr.appendChild(tdMeta);
+
+            const tdStatus = document.createElement("td");
+            if (ident.suspended) {
+              tdStatus.className = "ig-suspended";
+              tdStatus.textContent = "Suspended" + (ident.suspendedUntil ? " until " + new Date(ident.suspendedUntil).toLocaleDateString() : " (permanent)");
+            } else {
+              tdStatus.className = "ig-active";
+              tdStatus.textContent = "Active";
+            }
+            tr.appendChild(tdStatus);
+
+            tbody.appendChild(tr);
+          });
+        }
+
+        // Cascade preview
+        if (data.cascadeInfo) {
+          cascadePreview.textContent = "This will also affect: " +
+            (data.cascadeInfo.devices || 0) + " devices, " +
+            (data.cascadeInfo.networks || 0) + " networks, " +
+            (data.cascadeInfo.accounts || 0) + " accounts";
+          cascadePreview.classList.add("visible");
+        }
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="4" style="color:var(--danger);font-size:12px;">Failed to load: ' + escapeHtml(err.message) + '</td></tr>';
+      }
+    }
+
+    $("#ig-suspend-btn").addEventListener("click", async () => {
+      if (!currentUid) return;
+      const duration = $("#ig-duration-picker").value;
+      const scope = $("#ig-scope-picker").value;
+      if (!confirm(`Suspend identity graph for this user (${duration}, ${scope})?`)) return;
+      try {
+        await apiCall("PUT", `/api/admin/bans/graph/${currentUid}`, { action: "suspend", duration, scope });
+        showToast("Identity graph suspended", "success");
+        loadIdentityGraph(currentUid);
+      } catch (err) { showToast(err.message, "error"); }
+    });
+
+    $("#ig-unsuspend-btn").addEventListener("click", async () => {
+      if (!currentUid) return;
+      if (!confirm("Unsuspend identity graph for this user?")) return;
+      try {
+        await apiCall("PUT", `/api/admin/bans/graph/${currentUid}`, { action: "unsuspend" });
+        showToast("Identity graph unsuspended", "success");
+        loadIdentityGraph(currentUid);
+      } catch (err) { showToast(err.message, "error"); }
+    });
+
+    // Hook into populateBansSection to also load identity graph
+    const _origPopulateBansForIG = populateBansSection;
+    populateBansSection = async function(uid) {
+      await _origPopulateBansForIG(uid);
+      loadIdentityGraph(uid);
+    };
+
+    // ══════════════════════════════════════════════════════════════
+    // ADMIN AUDIT LOG (inside Logs tab)
+    // ══════════════════════════════════════════════════════════════
+
+    let auditCurrentPage = 1;
+    const AUDIT_PAGE_SIZE = 25;
+    let auditLastPageToken = null;
+    let auditPageTokens = [null]; // index 0 = page 1 token (null = first page)
+
+    async function loadAuditLog(page) {
+      const tbody = $("#audit-tbody");
+      const emptyMsg = $("#audit-empty");
+      const pagination = $("#audit-pagination");
+      const pageInfo = $("#audit-page-info");
+
+      tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text2);font-size:12px;">Loading...</td></tr>';
+      emptyMsg.style.display = "none";
+
+      const params = new URLSearchParams();
+      params.set("limit", AUDIT_PAGE_SIZE);
+      if (page > 1 && auditPageTokens[page - 1]) {
+        params.set("pageToken", auditPageTokens[page - 1]);
+      }
+
+      const admin = $("#audit-filter-admin").value.trim();
+      const action = $("#audit-filter-action").value;
+      const target = $("#audit-filter-target").value.trim();
+      const from = $("#audit-filter-from").value;
+      const to = $("#audit-filter-to").value;
+
+      if (admin) params.set("admin", admin);
+      if (action) params.set("action", action);
+      if (target) params.set("target", target);
+      if (from) params.set("from", new Date(from).toISOString());
+      if (to) params.set("to", new Date(to).toISOString());
+
+      try {
+        const data = await apiCall("GET", `/api/admin/audit-log?${params.toString()}`);
+        const entries = data.entries || [];
+
+        if (entries.length === 0 && page === 1) {
+          tbody.textContent = "";
+          emptyMsg.style.display = "block";
+          pagination.style.display = "none";
+          return;
+        }
+
+        emptyMsg.style.display = "none";
+        tbody.textContent = "";
+
+        entries.forEach(entry => {
+          const tr = document.createElement("tr");
+
+          const tdAdmin = document.createElement("td");
+          tdAdmin.textContent = entry.adminName || entry.adminId || "Unknown";
+          tr.appendChild(tdAdmin);
+
+          const tdAction = document.createElement("td");
+          tdAction.textContent = entry.action || "";
+          tr.appendChild(tdAction);
+
+          const tdTarget = document.createElement("td");
+          tdTarget.textContent = entry.target || "";
+          tdTarget.style.cssText = "font-family:monospace;font-size:11px;";
+          tr.appendChild(tdTarget);
+
+          const tdTime = document.createElement("td");
+          tdTime.textContent = entry.timestamp ? new Date(entry.timestamp).toLocaleString() : "";
+          tr.appendChild(tdTime);
+
+          const tdDetails = document.createElement("td");
+          tdDetails.className = "audit-details";
+          tdDetails.textContent = typeof entry.details === "object" ? JSON.stringify(entry.details) : (entry.details || "");
+          tdDetails.title = tdDetails.textContent;
+          tr.appendChild(tdDetails);
+
+          tbody.appendChild(tr);
+        });
+
+        // Pagination
+        auditCurrentPage = page;
+        auditLastPageToken = data.nextPageToken || null;
+        if (auditLastPageToken && !auditPageTokens[page]) {
+          auditPageTokens[page] = auditLastPageToken;
+        }
+
+        pagination.style.display = "flex";
+        pageInfo.textContent = "Page " + page;
+        $("#audit-prev-btn").disabled = page <= 1;
+        $("#audit-next-btn").disabled = !auditLastPageToken;
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="5" style="color:var(--danger);font-size:12px;">Failed: ' + escapeHtml(err.message) + '</td></tr>';
+      }
+    }
+
+    $("#audit-search-btn").addEventListener("click", () => {
+      auditCurrentPage = 1;
+      auditPageTokens = [null];
+      loadAuditLog(1);
+    });
+
+    $("#audit-prev-btn").addEventListener("click", () => {
+      if (auditCurrentPage > 1) {
+        loadAuditLog(auditCurrentPage - 1);
+      }
+    });
+
+    $("#audit-next-btn").addEventListener("click", () => {
+      if (auditLastPageToken) {
+        loadAuditLog(auditCurrentPage + 1);
+      }
+    });
+
+    $("#audit-export-csv-btn").addEventListener("click", async () => {
+      try {
+        const token = await currentUser.getIdToken();
+        const params = new URLSearchParams();
+        const admin = $("#audit-filter-admin").value.trim();
+        const action = $("#audit-filter-action").value;
+        const target = $("#audit-filter-target").value.trim();
+        const from = $("#audit-filter-from").value;
+        const to = $("#audit-filter-to").value;
+        if (admin) params.set("admin", admin);
+        if (action) params.set("action", action);
+        if (target) params.set("target", target);
+        if (from) params.set("from", new Date(from).toISOString());
+        if (to) params.set("to", new Date(to).toISOString());
+
+        const res = await fetch(`${API_BASE}/api/admin/audit-log/export?${params.toString()}`, {
+          headers: { "Authorization": `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error("Export failed: HTTP " + res.status);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "audit-log-" + new Date().toISOString().slice(0, 10) + ".csv";
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast("Audit log exported", "success");
+      } catch (err) {
+        showToast("Export failed: " + err.message, "error");
+      }
+    });
+
+    // ══════════════════════════════════════════════════════════════
+    // NEW MAINTENANCE CARDS
+    // ══════════════════════════════════════════════════════════════
+
+    $("#clear-suggestions-btn").addEventListener("click", async () => {
+      const btn = $("#clear-suggestions-btn");
+      const result = $("#clear-suggestions-result");
+      if (!confirm("Delete ALL suggestions (pending, approved, rejected, merged) and disputes? This cannot be undone.")) return;
+      btn.disabled = true;
+      btn.textContent = "Deleting...";
+      result.style.display = "none";
+      try {
+        const data = await apiCall("POST", "/api/admin/maintenance/clear-suggestions");
+        result.className = "maintenance-result success";
+        result.textContent = JSON.stringify(data, null, 2);
+        result.style.display = "block";
+      } catch (err) {
+        result.className = "maintenance-result error";
+        result.textContent = err.message;
+        result.style.display = "block";
+      }
+      btn.disabled = false;
+      btn.textContent = "Clear All Suggestions";
+    });
+
+    $("#clear-subscriptions-btn").addEventListener("click", async () => {
+      const btn = $("#clear-subscriptions-btn");
+      const result = $("#clear-subscriptions-result");
+      if (!confirm("Delete ALL subscription records? This cannot be undone.")) return;
+      btn.disabled = true;
+      btn.textContent = "Deleting...";
+      result.style.display = "none";
+      try {
+        const data = await apiCall("POST", "/api/admin/maintenance/clear-subscriptions");
+        result.className = "maintenance-result success";
+        result.textContent = JSON.stringify(data, null, 2);
+        result.style.display = "block";
+      } catch (err) {
+        result.className = "maintenance-result error";
+        result.textContent = err.message;
+        result.style.display = "block";
+      }
+      btn.disabled = false;
+      btn.textContent = "Clear All Subscriptions";
+    });
+
+    $("#clear-notifications-btn").addEventListener("click", async () => {
+      const btn = $("#clear-notifications-btn");
+      const result = $("#clear-notifications-result");
+      if (!confirm("Delete ALL notification records? This cannot be undone.")) return;
+      btn.disabled = true;
+      btn.textContent = "Deleting...";
+      result.style.display = "none";
+      try {
+        const data = await apiCall("POST", "/api/admin/maintenance/clear-notifications");
+        result.className = "maintenance-result success";
+        result.textContent = JSON.stringify(data, null, 2);
+        result.style.display = "block";
+      } catch (err) {
+        result.className = "maintenance-result error";
+        result.textContent = err.message;
+        result.style.display = "block";
+      }
+      btn.disabled = false;
+      btn.textContent = "Clear All Notifications";
+    });
+
+    $("#clear-identity-graphs-btn").addEventListener("click", async () => {
+      const btn = $("#clear-identity-graphs-btn");
+      const result = $("#clear-identity-graphs-result");
+      if (!confirm("WARNING: This will delete ALL identity graph data.\n\nThis breaks all identity-based suspensions and cross-device/network tracking. This CANNOT be undone.\n\nAre you absolutely sure?")) return;
+      if (!confirm("FINAL CONFIRMATION: Delete ALL identity graphs? Type OK to confirm.")) return;
+      btn.disabled = true;
+      btn.textContent = "Deleting...";
+      result.style.display = "none";
+      try {
+        const data = await apiCall("POST", "/api/admin/maintenance/clear-identity-graphs");
+        result.className = "maintenance-result success";
+        result.textContent = JSON.stringify(data, null, 2);
+        result.style.display = "block";
+      } catch (err) {
+        result.className = "maintenance-result error";
+        result.textContent = err.message;
+        result.style.display = "block";
+      }
+      btn.disabled = false;
+      btn.textContent = "Clear All Identity Graphs";
     });
 </script>
 <script src="/js/language-selector.js"></script>
