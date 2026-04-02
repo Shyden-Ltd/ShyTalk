@@ -606,15 +606,16 @@ router.post('/suggestions/:id/vote', async (req, res) => {
         if (prev.isCreatorVote) {
           throw new Error('CREATOR_VOTE');
         }
-        if (prev.vote === direction) {
+        if ((prev.vote || prev.direction) === direction) {
           throw new Error('DUPLICATE_VOTE');
         }
         // Toggle: remove old, apply new
-        const oldDir = prev.vote;
+        const oldDir = prev.vote || prev.direction;
         t.set(voteRef, {
           voterId: req.auth.uniqueId,
           isCreatorVote: false,
           vote: direction,
+          direction,
           reason: cleanReason,
           reasonVisibility: reasonVisibility || null,
           votedAt: now(),
@@ -636,6 +637,7 @@ router.post('/suggestions/:id/vote', async (req, res) => {
           voterId: req.auth.uniqueId,
           isCreatorVote: false,
           vote: direction,
+          direction,
           reason: cleanReason,
           reasonVisibility: reasonVisibility || null,
           votedAt: now(),
@@ -681,7 +683,7 @@ router.delete('/suggestions/:id/vote', async (req, res) => {
     await db.runTransaction(async (t) => {
       t.delete(voteRef);
       const sugRef = db.doc(`suggestions/${id}`);
-      if (voteData.vote === 'up') {
+      if ((voteData.vote || voteData.direction) === 'up') {
         t.update(sugRef, { upvotes: FieldValue.increment(-1) });
       } else {
         t.update(sugRef, { downvotes: FieldValue.increment(-1) });
