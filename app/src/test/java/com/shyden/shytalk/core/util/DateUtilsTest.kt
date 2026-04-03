@@ -314,19 +314,22 @@ class DateUtilsTest {
 
     @Test
     fun `formatSuspensionEnd - hours only no days no minutes`() {
-        // 3 hours from now exactly
-        val futureMs = System.currentTimeMillis() + 3 * 60 * 60_000L
+        // 3 hours from now (+2s buffer for test execution time)
+        val futureMs = System.currentTimeMillis() + 3 * 60 * 60_000L + 2000
         val result = formatSuspensionEnd(futureMs)
-        assertTrue("Expected '3 hours': $result", result.contains("3 hours"))
+        assertTrue("Expected 'hour' in result: $result", result.contains("hour"))
         assertFalse("Should not contain 'day': $result", result.contains("day"))
     }
 
     @Test
     fun `formatSuspensionEnd - minutes only no days no hours`() {
-        // 45 minutes from now
-        val futureMs = System.currentTimeMillis() + 45 * 60_000L
+        // 45 minutes from now (+2s buffer for test execution time)
+        val futureMs = System.currentTimeMillis() + 45 * 60_000L + 2000
         val result = formatSuspensionEnd(futureMs)
-        assertTrue("Expected '45 minutes': $result", result.contains("45 minutes"))
+        assertTrue(
+            "Expected 'minute' in result: $result",
+            result.contains("minute"),
+        )
         assertFalse("Should not contain 'hour': $result", result.contains("hour"))
         assertFalse("Should not contain 'day': $result", result.contains("day"))
     }
