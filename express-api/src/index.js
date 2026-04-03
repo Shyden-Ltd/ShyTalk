@@ -47,7 +47,17 @@ app.use('/api', (req, res, next) => {
     req.path.startsWith('/auth/') ||
     (req.method === 'GET' && req.path === '/config/startingScreens') ||
     (req.path.startsWith('/test/') && process.env.NODE_ENV !== 'production') ||
-    (req.method === 'GET' && /^\/users\/[^/]+\/data-export\/download$/.test(req.path))
+    (req.method === 'GET' && /^\/users\/[^/]+\/data-export\/download$/.test(req.path)) ||
+    // Public suggestion endpoints (browsing without login)
+    (req.method === 'GET' && req.path === '/suggestions') ||
+    (req.method === 'GET' && req.path === '/suggestions/search') ||
+    (req.method === 'GET' && req.path === '/suggestions/blocked') ||
+    (req.method === 'GET' && req.path === '/suggestions/tags') ||
+    (req.method === 'GET' &&
+      /^\/suggestions\/[^/]+$/.test(req.path) &&
+      req.path !== '/suggestions/mine') ||
+    // One-click email unsubscribe (token-based, no auth)
+    (req.method === 'POST' && req.path === '/subscriptions/unsubscribe')
   )
     return next();
   authMiddleware(req, res, next);
