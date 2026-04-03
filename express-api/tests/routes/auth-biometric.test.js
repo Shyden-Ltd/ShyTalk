@@ -287,4 +287,233 @@ describe('Biometric Routes', () => {
       expect(res.status).toBe(401);
     });
   });
+
+  // ─── Biometric verify — additional coverage ───────────────────
+
+  describe('POST /api/auth/biometric/verify — additional error/branch coverage', () => {
+    it('should return 410 for expired challenge', async () => {
+      const { publicKey } = crypto.generateKeyPairSync('ec', {
+        namedCurve: 'prime256v1',
+        publicKeyEncoding: { type: 'spki', format: 'pem' },
+        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+      });
+
+      // Use unique IDs to avoid collision with other tests
+      const uid = 'exp-user-' + Date.now();
+      const did = 'dev-exp-' + Date.now();
+
+      // Register key and get challenge
+      mockDocGet.mockResolvedValueOnce({ exists: true, data: () => ({ publicKey }) });
+      const app = buildApp(null);
+
+      const challengeRes = await request(app)
+        .get('/api/auth/biometric/challenge')
+        .query({ uniqueId: uid, deviceId: did });
+
+      expect(challengeRes.status).toBe(200);
+
+      // Expire the challenge by advancing Date.now
+      const originalNow = Date.now;
+      Date.now = () => originalNow() + 120 * 1000; // 2 minutes in future
+
+      try {
+        const verifyRes = await request(app)
+          .post('/api/auth/biometric/verify')
+          .send({ uniqueId: uid, deviceId: did, signature: 'sig' });
+
+        expect(verifyRes.status).toBe(410);
+        expect(verifyRes.body.error).toMatch(/expired/i);
+      } finally {
+        Date.now = originalNow;
+      }
+    });
+
+    it('should return 404 when user doc not found after valid signature', async () => {
+      const { publicKey, privateKey } = crypto.generateKeyPairSync('ec', {
+        namedCurve: 'prime256v1',
+        publicKeyEncoding: { type: 'spki', format: 'pem' },
+        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+      });
+
+      const uid = 'nouser-' + Date.now();
+      const did = 'dev-nouser-' + Date.now();
+
+      // Get challenge
+      mockDocGet.mockResolvedValueOnce({ exists: true, data: () => ({ publicKey }) });
+      const app = buildApp(null);
+
+      const challengeRes = await request(app)
+        .get('/api/auth/biometric/challenge')
+        .query({ uniqueId: uid, deviceId: did });
+
+      expect(challengeRes.status).toBe(200);
+
+      // Sign the challenge
+      const sign = crypto.createSign('SHA256');
+      sign.update(challengeRes.body.challenge);
+      const signature = sign.sign(privateKey, 'base64');
+
+      // Key doc exists, but user doc doesn't
+      mockDocGet
+        .mockResolvedValueOnce({ exists: true, data: () => ({ publicKey }) })
+        .mockResolvedValueOnce({ exists: false }); // user doc
+
+      const verifyRes = await request(app)
+        .post('/api/auth/biometric/verify')
+        .send({ uniqueId: uid, deviceId: did, signature });
+
+      expect(verifyRes.status).toBe(404);
+      expect(verifyRes.body.error).toMatch(/user not found/i);
+    });
+
+    it('should verify with DER-encoded public key (Base64 SPKI)', async () => {
+      const { publicKey: pemKey, privateKey } = crypto.generateKeyPairSync('ec', {
+        namedCurve: 'prime256v1',
+        publicKeyEncoding: { type: 'spki', format: 'pem' },
+        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+      });
+
+      // Convert PEM to DER Base64 (how Android Keystore sends it)
+      const derBuffer = crypto.createPublicKey(pemKey).export({ type: 'spki', format: 'der' });
+      const derBase64 = derBuffer.toString('base64');
+
+      const uid = 'der-user-' + Date.now();
+      const did = 'dev-der-' + Date.now();
+
+      // Get challenge with DER key
+      mockDocGet.mockResolvedValueOnce({ exists: true, data: () => ({ publicKey: derBase64 }) });
+      const app = buildApp(null);
+
+      const challengeRes = await request(app)
+        .get('/api/auth/biometric/challenge')
+        .query({ uniqueId: uid, deviceId: did });
+
+      expect(challengeRes.status).toBe(200);
+
+      // Sign
+      const sign = crypto.createSign('SHA256');
+      sign.update(challengeRes.body.challenge);
+      const signature = sign.sign(privateKey, 'base64');
+
+      // Verify with DER key
+      mockDocGet
+        .mockResolvedValueOnce({ exists: true, data: () => ({ publicKey: derBase64 }) })
+        .mockResolvedValueOnce({ exists: true, data: () => ({ firebaseUid: 'fb-uid-der' }) });
+
+      const verifyRes = await request(app)
+        .post('/api/auth/biometric/verify')
+        .send({ uniqueId: uid, deviceId: did, signature });
+
+      expect(verifyRes.status).toBe(200);
+      expect(verifyRes.body.customToken).toBe('bio-custom-token');
+    });
+
+    it('should return 500 for invalid public key format', async () => {
+      const uid = 'badkey-' + Date.now();
+      const did = 'dev-bad-' + Date.now();
+
+      // Get challenge — key value doesn't affect challenge generation
+      mockDocGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ publicKey: 'not-a-pem-and-not-valid-base64-der!!' }),
+      });
+      const app = buildApp(null);
+
+      const challengeRes = await request(app)
+        .get('/api/auth/biometric/challenge')
+        .query({ uniqueId: uid, deviceId: did });
+
+      expect(challengeRes.status).toBe(200);
+
+      // Verify — should fail on key parsing
+      mockDocGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ publicKey: 'not-a-pem-and-not-valid-base64-der!!' }),
+      });
+
+      const verifyRes = await request(app)
+        .post('/api/auth/biometric/verify')
+        .send({ uniqueId: uid, deviceId: did, signature: 'anysig' });
+
+      expect(verifyRes.status).toBe(500);
+      expect(verifyRes.body.error).toMatch(/invalid biometric key/i);
+    });
+
+    it('should return 500 on unexpected Firestore error during verify', async () => {
+      const { publicKey } = crypto.generateKeyPairSync('ec', {
+        namedCurve: 'prime256v1',
+        publicKeyEncoding: { type: 'spki', format: 'pem' },
+        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+      });
+
+      const uid = 'err-user-' + Date.now();
+      const did = 'dev-err-' + Date.now();
+
+      // Get challenge
+      mockDocGet.mockResolvedValueOnce({ exists: true, data: () => ({ publicKey }) });
+      const app = buildApp(null);
+
+      const challengeRes = await request(app)
+        .get('/api/auth/biometric/challenge')
+        .query({ uniqueId: uid, deviceId: did });
+
+      expect(challengeRes.status).toBe(200);
+
+      // Firestore throws during verify (when fetching biometric key doc)
+      mockDocGet.mockRejectedValueOnce(new Error('Firestore down'));
+
+      const verifyRes = await request(app)
+        .post('/api/auth/biometric/verify')
+        .send({ uniqueId: uid, deviceId: did, signature: 'sig' });
+
+      expect(verifyRes.status).toBe(500);
+      expect(verifyRes.body.error).toMatch(/failed/i);
+    });
+  });
+
+  // ─── Biometric register — additional coverage ─────────────────
+
+  describe('POST /api/auth/biometric/register — additional error/branch coverage', () => {
+    it('should return 500 on Firestore set error', async () => {
+      mockDocSet.mockRejectedValueOnce(new Error('Firestore unavailable'));
+      const app = buildApp({ uniqueId: 12345678 });
+
+      const res = await request(app)
+        .post('/api/auth/biometric/register')
+        .send({ publicKey: 'key', deviceId: 'dev-1' });
+
+      expect(res.status).toBe(500);
+      expect(res.body.error).toMatch(/failed/i);
+    });
+  });
+
+  // ─── Biometric challenge — additional coverage ────────────────
+
+  describe('GET /api/auth/biometric/challenge — additional error/branch coverage', () => {
+    it('should return 500 on Firestore error', async () => {
+      mockDocGet.mockRejectedValueOnce(new Error('Firestore unavailable'));
+      const app = buildApp(null);
+
+      const res = await request(app)
+        .get('/api/auth/biometric/challenge')
+        .query({ uniqueId: '12345678', deviceId: 'dev-1' });
+
+      expect(res.status).toBe(500);
+      expect(res.body.error).toMatch(/failed/i);
+    });
+  });
+
+  // ─── Biometric revoke — additional coverage ───────────────────
+
+  describe('DELETE /api/auth/biometric/:deviceId — additional error/branch coverage', () => {
+    it('should return 500 on Firestore delete error', async () => {
+      mockDocDelete.mockRejectedValueOnce(new Error('Firestore unavailable'));
+      const app = buildApp({ uniqueId: 12345678 });
+
+      const res = await request(app).delete('/api/auth/biometric/dev-1');
+
+      expect(res.status).toBe(500);
+      expect(res.body.error).toMatch(/failed/i);
+    });
+  });
 });

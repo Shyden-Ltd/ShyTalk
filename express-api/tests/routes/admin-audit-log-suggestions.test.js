@@ -620,3 +620,92 @@ describe('Health Check Integration', () => {
     expect(Date.now() - start).toBeLessThan(1000);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// Maintenance Endpoints — additional coverage
+// ═══════════════════════════════════════════════════════════════
+
+describe('Maintenance Endpoints — error paths', () => {
+  test('clear-suggestions: returns 500 on Firestore error', async () => {
+    mockCollectionGet.mockRejectedValueOnce(new Error('Firestore unavailable'));
+    const app = createApp();
+    const res = await request(app).post('/api/admin/maintenance/clear-suggestions').expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('clear-subscriptions: returns 500 on Firestore error', async () => {
+    mockCollectionGet.mockRejectedValueOnce(new Error('Firestore unavailable'));
+    const app = createApp();
+    const res = await request(app).post('/api/admin/maintenance/clear-subscriptions').expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('clear-notifications: returns 500 on Firestore error', async () => {
+    mockCollectionGet.mockRejectedValueOnce(new Error('Firestore unavailable'));
+    const app = createApp();
+    const res = await request(app).post('/api/admin/maintenance/clear-notifications').expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('clear-identity-graphs: returns 500 on Firestore error', async () => {
+    mockCollectionGet.mockRejectedValueOnce(new Error('Firestore unavailable'));
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/maintenance/clear-identity-graphs')
+      .send({ confirmDangerous: true })
+      .expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('clear-audit-log: returns 500 on Firestore error', async () => {
+    mockCollectionGet.mockRejectedValueOnce(new Error('Firestore unavailable'));
+    const app = createApp();
+    const res = await request(app).post('/api/admin/maintenance/clear-audit-log').expect(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('clear-identity-graphs: non-admin gets 403', async () => {
+    const app = createNonAdminApp();
+    const res = await request(app)
+      .post('/api/admin/maintenance/clear-identity-graphs')
+      .send({ confirmDangerous: true })
+      .expect(403);
+    expect(res.body.error).toBe('Admin access required');
+  });
+
+  test('requireAdmin: rejects when req.auth is missing entirely', async () => {
+    const app = express();
+    app.use(express.json());
+    // No auth middleware — req.auth is undefined
+    if (maintenanceRouter) app.use('/api', maintenanceRouter);
+    const res = await request(app).post('/api/admin/maintenance/clear-suggestions').expect(403);
+    expect(res.body.error).toBe('Admin access required');
+  });
+
+  test('requireAdmin: rejects when req.auth.token is missing', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => {
+      req.auth = { uid: 'user1', uniqueId: 1001 };
+      next();
+    });
+    if (maintenanceRouter) app.use('/api', maintenanceRouter);
+    const res = await request(app).post('/api/admin/maintenance/clear-suggestions').expect(403);
+    expect(res.body.error).toBe('Admin access required');
+  });
+
+  test('clear-suggestions: batch deletes multiple docs', async () => {
+    const docs = [
+      { id: 'sug1', ref: {} },
+      { id: 'sug2', ref: {} },
+      { id: 'sug3', ref: {} },
+    ];
+    mockCollectionGet.mockResolvedValueOnce({ empty: false, docs, size: 3 });
+    const app = createApp();
+    const res = await request(app).post('/api/admin/maintenance/clear-suggestions').expect(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.deleted).toBe(3);
+    expect(mockBatchDelete).toHaveBeenCalledTimes(3);
+    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+  });
+});

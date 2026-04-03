@@ -351,5 +351,157 @@ describe('PIN Routes', () => {
 
       expect(res.status).toBe(401);
     });
+
+    it('should reject PIN shorter than 4 digits on reset', async () => {
+      const app = buildApp({ uniqueId: 12345678 });
+
+      const res = await request(app).post('/api/auth/pin/reset').send({ pin: '12' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/4-8/);
+    });
+
+    it('should reject PIN longer than 8 digits on reset', async () => {
+      const app = buildApp({ uniqueId: 12345678 });
+
+      const res = await request(app).post('/api/auth/pin/reset').send({ pin: '123456789' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/4-8/);
+    });
+
+    it('should reject missing PIN on reset', async () => {
+      const app = buildApp({ uniqueId: 12345678 });
+
+      const res = await request(app).post('/api/auth/pin/reset').send({});
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/numeric/i);
+    });
+  });
+
+  // ─── PIN verify — additional coverage ─────────────────────────
+
+  describe('POST /api/auth/pin/verify — additional error/branch coverage', () => {
+    const validUser = {
+      pinHash: '$2b$10$existinghash',
+      pinAttempts: 0,
+      pinLockedUntil: null,
+      pinLockoutCount: 0,
+      firebaseUid: 'fb-uid-123',
+    };
+
+    it('should return 500 when user has no firebaseUid', async () => {
+      bcrypt.compare.mockResolvedValueOnce(true);
+      mockDocGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ ...validUser, firebaseUid: null }),
+      });
+
+      const app = buildApp(null);
+      const res = await request(app)
+        .post('/api/auth/pin/verify')
+        .send({ uniqueId: 12345678, deviceId: 'dev-1', pin: '1234' });
+
+      expect(res.status).toBe(500);
+      expect(res.body.error).toMatch(/Firebase UID/i);
+    });
+
+    it('should return 500 on unexpected Firestore error', async () => {
+      mockDocGet.mockRejectedValueOnce(new Error('Firestore unavailable'));
+
+      const app = buildApp(null);
+      const res = await request(app)
+        .post('/api/auth/pin/verify')
+        .send({ uniqueId: 12345678, deviceId: 'dev-1', pin: '1234' });
+
+      expect(res.status).toBe(500);
+      expect(res.body.error).toMatch(/failed/i);
+    });
+
+    it('should reset attempts when lockout expired and wrong PIN entered', async () => {
+      bcrypt.compare.mockResolvedValueOnce(false);
+      mockDocGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({
+          ...validUser,
+          pinLockedUntil: Date.now() - 1000, // expired
+          pinAttempts: 5,
+          pinLockoutCount: 1,
+        }),
+      });
+
+      const app = buildApp(null);
+      const res = await request(app)
+        .post('/api/auth/pin/verify')
+        .send({ uniqueId: 12345678, deviceId: 'dev-1', pin: '0000' });
+
+      expect(res.status).toBe(401);
+      // currentAttempts should have been reset to 0, so newAttempts is 1
+      expect(res.body.attemptsRemaining).toBe(4);
+    });
+
+    it('should include requiresReauth on lockout response when lockoutCount >= 2', async () => {
+      mockDocGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({
+          ...validUser,
+          pinLockedUntil: Date.now() + 10 * 60 * 1000,
+          pinAttempts: 5,
+          pinLockoutCount: 2,
+        }),
+      });
+
+      const app = buildApp(null);
+      const res = await request(app)
+        .post('/api/auth/pin/verify')
+        .send({ uniqueId: 12345678, deviceId: 'dev-1', pin: '1234' });
+
+      expect(res.status).toBe(423);
+      expect(res.body.requiresReauth).toBe(true);
+    });
+
+    it('should not include requiresReauth on first lockout', async () => {
+      mockDocGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({
+          ...validUser,
+          pinLockedUntil: Date.now() + 10 * 60 * 1000,
+          pinAttempts: 5,
+          pinLockoutCount: 1,
+        }),
+      });
+
+      const app = buildApp(null);
+      const res = await request(app)
+        .post('/api/auth/pin/verify')
+        .send({ uniqueId: 12345678, deviceId: 'dev-1', pin: '1234' });
+
+      expect(res.status).toBe(423);
+      expect(res.body.requiresReauth).toBeUndefined();
+    });
+  });
+
+  // ─── PIN setup — additional coverage ──────────────────────────
+
+  describe('POST /api/auth/pin/setup — additional error/branch coverage', () => {
+    it('should return 500 on Firestore update error', async () => {
+      mockDocUpdate.mockRejectedValueOnce(new Error('Firestore unavailable'));
+      const app = buildApp({ uniqueId: 12345678 });
+
+      const res = await request(app).post('/api/auth/pin/setup').send({ pin: '1234' });
+
+      expect(res.status).toBe(500);
+      expect(res.body.error).toMatch(/failed/i);
+    });
+
+    it('should reject numeric type PIN (must be string)', async () => {
+      const app = buildApp({ uniqueId: 12345678 });
+
+      const res = await request(app).post('/api/auth/pin/setup').send({ pin: 1234 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/numeric/i);
+    });
   });
 });

@@ -566,4 +566,231 @@ describe('OTP Routes', () => {
       expect(sendEmail).not.toHaveBeenCalled();
     });
   });
+
+  // ─── OTP send — additional coverage ────────────────────────────
+
+  describe('POST /api/auth/otp/send — additional error/branch coverage', () => {
+    it('should return 500 when sendEmail throws', async () => {
+      const { sendEmail: sendMock } = require('../../src/utils/email');
+      sendMock.mockRejectedValueOnce(new Error('SMTP down'));
+      mockDocGet.mockResolvedValueOnce({ exists: false }).mockResolvedValueOnce({ exists: false });
+
+      const res = await request(app).post('/api/auth/otp/send').send({ email: 'user@example.com' });
+
+      expect(res.status).toBe(500);
+      expect(res.body.error).toMatch(/failed/i);
+    });
+
+    it('should log warning at daily email warning threshold (80)', async () => {
+      mockDocGet
+        .mockResolvedValueOnce({ exists: false }) // otpCodes
+        .mockResolvedValueOnce({
+          exists: true,
+          data: () => ({
+            count: 79, // will become 80 after this request
+            date: new Date().toISOString().slice(0, 10),
+          }),
+        });
+
+      const res = await request(app).post('/api/auth/otp/send').send({ email: 'user@example.com' });
+
+      expect(res.status).toBe(200);
+      expect(log.warn).toHaveBeenCalledWith('auth', expect.stringContaining('80'));
+    });
+
+    it('should increment requestCount within rate limit window', async () => {
+      mockDocGet
+        .mockResolvedValueOnce({
+          exists: true,
+          data: () => ({
+            requestCount: 2,
+            firstRequestAt: Date.now() - 10 * 60 * 1000, // 10 min ago
+          }),
+        })
+        .mockResolvedValueOnce({ exists: false }); // emailMetrics
+
+      const res = await request(app).post('/api/auth/otp/send').send({ email: 'user@example.com' });
+
+      expect(res.status).toBe(200);
+      // Should have set requestCount to 3 (2 + 1)
+      expect(mockDocSet).toHaveBeenCalledWith(
+        'otpCodes/user@example.com',
+        expect.objectContaining({ requestCount: 3 }),
+      );
+    });
+
+    it('should reset requestCount when rate limit window has elapsed', async () => {
+      mockDocGet
+        .mockResolvedValueOnce({
+          exists: true,
+          data: () => ({
+            requestCount: 5,
+            firstRequestAt: Date.now() - 2 * 60 * 60 * 1000, // 2 hours ago
+          }),
+        })
+        .mockResolvedValueOnce({ exists: false });
+
+      const res = await request(app).post('/api/auth/otp/send').send({ email: 'user@example.com' });
+
+      expect(res.status).toBe(200);
+      // Should have reset requestCount to 1
+      expect(mockDocSet).toHaveBeenCalledWith(
+        'otpCodes/user@example.com',
+        expect.objectContaining({ requestCount: 1 }),
+      );
+    });
+
+    it('should increment existing metrics count for same day', async () => {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      mockDocGet
+        .mockResolvedValueOnce({ exists: false }) // otpCodes
+        .mockResolvedValueOnce({
+          exists: true,
+          data: () => ({
+            count: 10,
+            date: todayStr,
+          }),
+        }); // emailMetrics
+
+      const res = await request(app).post('/api/auth/otp/send').send({ email: 'user@example.com' });
+
+      expect(res.status).toBe(200);
+      // Should set count to 11
+      expect(mockDocSet).toHaveBeenCalledWith(
+        'emailMetrics/daily',
+        expect.objectContaining({ count: 11, date: todayStr }),
+      );
+    });
+
+    it('should reset metrics count for a new day', async () => {
+      mockDocGet
+        .mockResolvedValueOnce({ exists: false }) // otpCodes
+        .mockResolvedValueOnce({
+          exists: true,
+          data: () => ({
+            count: 50,
+            date: '2020-01-01', // old date
+          }),
+        }); // emailMetrics
+
+      const res = await request(app).post('/api/auth/otp/send').send({ email: 'user@example.com' });
+
+      expect(res.status).toBe(200);
+      const todayStr = new Date().toISOString().slice(0, 10);
+      expect(mockDocSet).toHaveBeenCalledWith(
+        'emailMetrics/daily',
+        expect.objectContaining({ count: 1, date: todayStr }),
+      );
+    });
+
+    it('should normalize email to lowercase', async () => {
+      mockDocGet.mockResolvedValueOnce({ exists: false }).mockResolvedValueOnce({ exists: false });
+
+      const res = await request(app).post('/api/auth/otp/send').send({ email: 'User@Example.COM' });
+
+      expect(res.status).toBe(200);
+      expect(sendEmail).toHaveBeenCalledWith(
+        'user@example.com',
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+  });
+
+  // ─── OTP verify — additional coverage ──────────────────────────
+
+  describe('POST /api/auth/otp/verify — additional error/branch coverage', () => {
+    it('should return 500 when an unexpected Firebase error occurs during user lookup', async () => {
+      bcrypt.compare.mockResolvedValueOnce(true);
+      auth.getUserByEmail.mockRejectedValueOnce(new Error('Firebase internal error'));
+
+      mockDocGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({
+          hashedCode: '$2b$10$hashedcode',
+          expiresAt: Date.now() + 5 * 60 * 1000,
+          attempts: 0,
+        }),
+      });
+
+      const res = await request(app)
+        .post('/api/auth/otp/verify')
+        .send({ email: 'user@example.com', code: '123456' });
+
+      expect(res.status).toBe(500);
+      expect(res.body.error).toMatch(/failed/i);
+    });
+
+    it('should allow OTP for user with empty provider list', async () => {
+      bcrypt.compare.mockResolvedValueOnce(true);
+      auth.getUserByEmail.mockResolvedValueOnce({
+        uid: 'uid-empty-providers',
+        providerData: [],
+      });
+
+      mockDocGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({
+          hashedCode: '$2b$10$hashedcode',
+          expiresAt: Date.now() + 5 * 60 * 1000,
+          attempts: 0,
+        }),
+      });
+
+      const res = await request(app)
+        .post('/api/auth/otp/verify')
+        .send({ email: 'user@example.com', code: '123456' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.customToken).toBe('custom-token-abc');
+    });
+
+    it('should allow OTP for user with email provider', async () => {
+      bcrypt.compare.mockResolvedValueOnce(true);
+      auth.getUserByEmail.mockResolvedValueOnce({
+        uid: 'uid-email-provider',
+        providerData: [{ providerId: 'email' }, { providerId: 'google.com' }],
+      });
+
+      mockDocGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({
+          hashedCode: '$2b$10$hashedcode',
+          expiresAt: Date.now() + 5 * 60 * 1000,
+          attempts: 0,
+        }),
+      });
+
+      const res = await request(app)
+        .post('/api/auth/otp/verify')
+        .send({ email: 'user@example.com', code: '123456' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.customToken).toBe('custom-token-abc');
+    });
+
+    it('should allow OTP for user with no providerData field', async () => {
+      bcrypt.compare.mockResolvedValueOnce(true);
+      auth.getUserByEmail.mockResolvedValueOnce({
+        uid: 'uid-no-providers',
+        // providerData is undefined
+      });
+
+      mockDocGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({
+          hashedCode: '$2b$10$hashedcode',
+          expiresAt: Date.now() + 5 * 60 * 1000,
+          attempts: 0,
+        }),
+      });
+
+      const res = await request(app)
+        .post('/api/auth/otp/verify')
+        .send({ email: 'user@example.com', code: '123456' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.customToken).toBe('custom-token-abc');
+    });
+  });
 });

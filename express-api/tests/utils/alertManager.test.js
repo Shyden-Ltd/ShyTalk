@@ -245,4 +245,272 @@ describe('alertManager', () => {
       expect(config.serverMemoryWarningPercent).toBe(85);
     });
   });
+
+  // ─── Additional coverage ─────────────────────────────────────
+
+  describe('createAlert — additional coverage', () => {
+    test('skips non-existing user when sending FCM', async () => {
+      // Config with two recipients, first doesn't exist
+      getResponses.push({
+        exists: true,
+        data: () => ({ fcmRecipientUserIds: ['ghost', 'admin1'] }),
+      });
+      // Ghost user does not exist
+      getResponses.push({ exists: false });
+      // Admin1 user with token
+      getResponses.push({
+        exists: true,
+        data: () => ({ fcmToken: 'real-token' }),
+      });
+
+      const manager = createAlertManager(db, messaging);
+      await manager.createAlert('test', 'info', 'Title', 'Body');
+
+      // Should still have written the alert doc
+      expect(setFn).toHaveBeenCalledTimes(1);
+      // Should have sent to the second (existing) user only
+      expect(messaging.send).toHaveBeenCalledTimes(1);
+      expect(messaging.send).toHaveBeenCalledWith(expect.objectContaining({ token: 'real-token' }));
+    });
+
+    test('handles user with no tokens (neither fcmTokens nor fcmToken)', async () => {
+      getResponses.push({
+        exists: true,
+        data: () => ({ fcmRecipientUserIds: ['admin1'] }),
+      });
+      getResponses.push({
+        exists: true,
+        data: () => ({ name: 'Admin' }), // no token fields
+      });
+
+      const manager = createAlertManager(db, messaging);
+      await manager.createAlert('test', 'info', 'Title', 'Body');
+
+      expect(setFn).toHaveBeenCalledTimes(1);
+      expect(messaging.send).not.toHaveBeenCalled();
+    });
+
+    test('handles empty fcmRecipientUserIds', async () => {
+      getResponses.push({
+        exists: true,
+        data: () => ({ fcmRecipientUserIds: [] }),
+      });
+
+      const manager = createAlertManager(db, messaging);
+      await manager.createAlert('test', 'info', 'Title', 'Body');
+
+      expect(setFn).toHaveBeenCalledTimes(1);
+      expect(messaging.send).not.toHaveBeenCalled();
+    });
+
+    test('handles missing fcmRecipientUserIds in config', async () => {
+      getResponses.push({
+        exists: true,
+        data: () => ({}), // no fcmRecipientUserIds key
+      });
+
+      const manager = createAlertManager(db, messaging);
+      await manager.createAlert('test', 'info', 'Title', 'Body');
+
+      expect(setFn).toHaveBeenCalledTimes(1);
+      expect(messaging.send).not.toHaveBeenCalled();
+    });
+
+    test('never throws when alert doc write fails', async () => {
+      setFn.mockRejectedValueOnce(new Error('Firestore write failed'));
+
+      const manager = createAlertManager(db, messaging);
+
+      await expect(manager.createAlert('test', 'info', 'Title', 'Body')).resolves.toBeUndefined();
+    });
+
+    test('never throws when user lookup fails', async () => {
+      getResponses.push({
+        exists: true,
+        data: () => ({ fcmRecipientUserIds: ['admin1'] }),
+      });
+      // User lookup throws
+      _getFn.mockRejectedValueOnce(new Error('Firestore read error'));
+
+      const manager = createAlertManager(db, messaging);
+
+      await expect(manager.createAlert('test', 'info', 'Title', 'Body')).resolves.toBeUndefined();
+    });
+
+    test('default context is empty object', async () => {
+      getResponses.push({
+        exists: true,
+        data: () => ({ fcmRecipientUserIds: [] }),
+      });
+
+      const manager = createAlertManager(db, messaging);
+      await manager.createAlert('test', 'info', 'Title', 'Body');
+
+      const alertDoc = setFn.mock.calls[0][0];
+      expect(alertDoc.context).toEqual({});
+    });
+  });
+
+  describe('loadConfig — additional coverage', () => {
+    test('uses cached config within TTL', async () => {
+      getResponses.push({
+        exists: true,
+        data: () => ({
+          errorSpikeThreshold: 5,
+          fcmRecipientUserIds: [],
+        }),
+      });
+
+      const manager = createAlertManager(db, messaging);
+
+      // First call loads config from Firestore
+      await manager.trackError('/api/test');
+      const firstCallCount = _getFn.mock.calls.length;
+
+      // Second call should use cache
+      await manager.trackError('/api/test');
+      const secondCallCount = _getFn.mock.calls.length;
+
+      // No additional Firestore get calls for config
+      expect(secondCallCount).toBe(firstCallCount);
+    });
+
+    test('falls back to defaults when Firestore is unavailable and no cache exists', async () => {
+      _getFn.mockRejectedValue(new Error('Firestore unavailable'));
+
+      const manager = createAlertManager(db, messaging);
+      const config = manager.getConfig();
+
+      // Before any async call, getConfig returns defaults
+      expect(config.errorSpikeThreshold).toBe(10);
+    });
+
+    test('uses defaults when config doc does not exist', async () => {
+      getResponses.push({ exists: false });
+
+      const manager = createAlertManager(db, messaging);
+      // Trigger loadConfig via trackError
+      await manager.trackError('/api/test');
+
+      const config = manager.getConfig();
+      expect(config.errorSpikeThreshold).toBe(10);
+    });
+  });
+
+  describe('trackError — additional coverage', () => {
+    test('tracks errors independently per route', async () => {
+      getResponses.push({
+        exists: true,
+        data: () => ({
+          errorSpikeThreshold: 2,
+          errorSpikeWindowMinutes: 5,
+          fcmRecipientUserIds: [],
+        }),
+      });
+
+      const manager = createAlertManager(db, messaging);
+
+      await manager.trackError('/api/route-a');
+      await manager.trackError('/api/route-b');
+
+      // Neither should trigger alert (only 1 error each, threshold is 2)
+      expect(setFn).not.toHaveBeenCalled();
+
+      // Second error on route-a triggers alert
+      await manager.trackError('/api/route-a');
+      expect(setFn).toHaveBeenCalledTimes(1);
+      expect(setFn.mock.calls[0][0].context.route).toBe('/api/route-a');
+    });
+
+    test('never throws even when internal error occurs', async () => {
+      _getFn.mockRejectedValue(new Error('Firestore unavailable'));
+
+      const manager = createAlertManager(db, messaging);
+
+      // Should not throw
+      await expect(manager.trackError('/api/test')).resolves.toBeUndefined();
+    });
+  });
+
+  describe('trackSlowEndpoint — additional coverage', () => {
+    test('does not alert when duration equals threshold exactly', async () => {
+      getResponses.push({
+        exists: true,
+        data: () => ({ slowEndpointThresholdMs: 3000, fcmRecipientUserIds: [] }),
+      });
+
+      const manager = createAlertManager(db, messaging);
+      await manager.trackSlowEndpoint('/api/rooms', 3000);
+
+      expect(setFn).not.toHaveBeenCalled();
+    });
+
+    test('tracks different routes independently', async () => {
+      getResponses.push({
+        exists: true,
+        data: () => ({ slowEndpointThresholdMs: 1000, fcmRecipientUserIds: [] }),
+      });
+
+      const manager = createAlertManager(db, messaging);
+      await manager.trackSlowEndpoint('/api/route-a', 5000);
+      await manager.trackSlowEndpoint('/api/route-b', 5000);
+
+      // Both routes should trigger (different dedup keys)
+      expect(setFn).toHaveBeenCalledTimes(2);
+    });
+
+    test('never throws even when createAlert fails internally', async () => {
+      getResponses.push({
+        exists: true,
+        data: () => ({ slowEndpointThresholdMs: 1000, fcmRecipientUserIds: [] }),
+      });
+      setFn.mockRejectedValue(new Error('Write failed'));
+
+      const manager = createAlertManager(db, messaging);
+
+      await expect(manager.trackSlowEndpoint('/api/test', 5000)).resolves.toBeUndefined();
+    });
+  });
+
+  describe('_clearState', () => {
+    test('resets all internal state and error windows', async () => {
+      getResponses.push({
+        exists: true,
+        data: () => ({
+          errorSpikeThreshold: 2,
+          errorSpikeWindowMinutes: 5,
+          fcmRecipientUserIds: [],
+        }),
+      });
+
+      const manager = createAlertManager(db, messaging);
+
+      // Accumulate state — 2 errors triggers alert
+      await manager.trackError('/api/test');
+      await manager.trackError('/api/test');
+      expect(setFn).toHaveBeenCalledTimes(1);
+
+      // Clear all internal state
+      manager._clearState();
+
+      // After clear, getConfig returns defaults (cachedConfig is null)
+      const config = manager.getConfig();
+      expect(config.errorSpikeThreshold).toBe(10);
+
+      // After clear, config cache is null so next trackError reloads config
+      getResponses.push({
+        exists: true,
+        data: () => ({
+          errorSpikeThreshold: 2,
+          errorSpikeWindowMinutes: 5,
+          fcmRecipientUserIds: [],
+        }),
+      });
+
+      setFn.mockClear();
+      // Only 1 error after clear — error windows were reset, so no alert
+      await manager.trackError('/api/test');
+      expect(setFn).not.toHaveBeenCalled();
+    });
+  });
 });

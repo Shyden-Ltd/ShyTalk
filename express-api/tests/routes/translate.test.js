@@ -266,6 +266,280 @@ describe('POST /api/translate', () => {
     const { FieldValue } = require('../../src/utils/firebase');
     expect(FieldValue.increment).toHaveBeenCalledWith(1);
   });
+
+  test('returns cached translation when available', async () => {
+    let callCount = 0;
+    mockDocGet.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        // Parent conversation doc with participant
+        return Promise.resolve({
+          exists: true,
+          data: () => ({ participantIds: [12345] }),
+        });
+      }
+      if (callCount === 2) {
+        // Message doc with cached translation
+        return Promise.resolve({
+          exists: true,
+          data: () => ({ translations: { es: 'Hola cached' } }),
+        });
+      }
+      return Promise.resolve({
+        exists: true,
+        data: () => ({ isSuperShy: false, translationsToday: 0, translationDate: '' }),
+      });
+    });
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/translate')
+      .send({
+        text: 'Hello',
+        targetLang: 'es',
+        messagePath: 'conversations/conv-1/messages/msg-1',
+      })
+      .expect(200);
+
+    expect(res.body.translatedText).toBe('Hola cached');
+    expect(res.body.cached).toBe(true);
+    // Should NOT have called LibreTranslate
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  test('returns 429 when daily quota is exceeded for non-SuperShy user', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        isSuperShy: false,
+        translationsToday: 50,
+        translationDate: today,
+      }),
+    });
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/translate')
+      .send({ text: 'Hello', targetLang: 'es' })
+      .expect(429);
+
+    expect(res.body.error).toMatch(/limit/i);
+    expect(res.body.limit).toBe(50);
+    expect(res.body.upgradePrompt).toBe(true);
+  });
+
+  test('SuperShy user bypasses daily quota', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        isSuperShy: true,
+        translationsToday: 999,
+        translationDate: today,
+      }),
+    });
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/translate')
+      .send({ text: 'Hello', targetLang: 'es' })
+      .expect(200);
+
+    expect(res.body.translatedText).toBe('Hola');
+    expect(res.body.cached).toBe(false);
+  });
+
+  test('returns 502 when LibreTranslate is unavailable', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: () => Promise.resolve('Service Unavailable'),
+    });
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/translate')
+      .send({ text: 'Hello', targetLang: 'es' })
+      .expect(502);
+
+    expect(res.body.error).toMatch(/unavailable/i);
+  });
+
+  test('skips participant verification for invalid messagePath', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        isSuperShy: false,
+        translationsToday: 0,
+        translationDate: '',
+      }),
+    });
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/translate')
+      .send({ text: 'Hello', targetLang: 'es', messagePath: 'invalid/path' })
+      .expect(200);
+
+    expect(res.body.translatedText).toBe('Hola');
+    expect(res.body.cached).toBe(false);
+  });
+
+  test('skips cache when user is not a participant', async () => {
+    let callCount = 0;
+    mockDocGet.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        // Parent doc — user NOT in participantIds
+        return Promise.resolve({
+          exists: true,
+          data: () => ({ participantIds: [99999] }),
+        });
+      }
+      return Promise.resolve({
+        exists: true,
+        data: () => ({ isSuperShy: false, translationsToday: 0, translationDate: '' }),
+      });
+    });
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/translate')
+      .send({
+        text: 'Hello',
+        targetLang: 'es',
+        messagePath: 'conversations/conv-1/messages/msg-1',
+      })
+      .expect(200);
+
+    expect(res.body.translatedText).toBe('Hola');
+    expect(res.body.cached).toBe(false);
+  });
+
+  test('skips cache when parent doc does not exist', async () => {
+    let callCount = 0;
+    mockDocGet.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        // Parent doc does not exist
+        return Promise.resolve({ exists: false });
+      }
+      return Promise.resolve({
+        exists: true,
+        data: () => ({ isSuperShy: false, translationsToday: 0, translationDate: '' }),
+      });
+    });
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/translate')
+      .send({
+        text: 'Hello',
+        targetLang: 'es',
+        messagePath: 'rooms/room-1/messages/msg-1',
+      })
+      .expect(200);
+
+    expect(res.body.translatedText).toBe('Hola');
+    expect(res.body.cached).toBe(false);
+  });
+
+  test('resets counter for different-day translation (sets translationsToday to 1)', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        isSuperShy: false,
+        translationsToday: 45,
+        translationDate: '2020-01-01', // stale date
+      }),
+    });
+
+    const app = createApp();
+    await request(app).post('/api/translate').send({ text: 'Hello', targetLang: 'es' }).expect(200);
+
+    // Should set translationsToday to 1 (not increment) because date changed
+    expect(mockDocUpdate).toHaveBeenCalledWith(expect.objectContaining({ translationsToday: 1 }));
+  });
+
+  test('returns 500 on unexpected error', async () => {
+    mockDocGet.mockRejectedValue(new Error('Unexpected'));
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/translate')
+      .send({ text: 'Hello', targetLang: 'es' })
+      .expect(500);
+
+    expect(res.body.error).toBe('Translation failed');
+  });
+
+  test('handles detectedLanguage being null', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          translatedText: 'Hola',
+          detectedLanguage: null,
+        }),
+    });
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/translate')
+      .send({ text: 'Hello', targetLang: 'es' })
+      .expect(200);
+
+    expect(res.body.translatedText).toBe('Hola');
+    expect(res.body.detectedSourceLang).toBe('unknown');
+  });
+
+  test('accepts 3-letter language code', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/translate')
+      .send({ text: 'Hello', targetLang: 'fil' })
+      .expect(200);
+
+    expect(res.body.translatedText).toBe('Hola');
+  });
+
+  test('does not increment counter for SuperShy user', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        isSuperShy: true,
+        translationsToday: 0,
+        translationDate: '',
+      }),
+    });
+
+    const app = createApp();
+    await request(app).post('/api/translate').send({ text: 'Hello', targetLang: 'es' }).expect(200);
+
+    // mockDocUpdate should NOT be called for quota counter (only potentially for cache)
+    // Since no valid messagePath, no cache write either
+    expect(mockDocUpdate).not.toHaveBeenCalled();
+  });
+
+  test('quota resets when translationDate is from a different day', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        isSuperShy: false,
+        translationsToday: 50, // would be over limit, but date is old
+        translationDate: '2020-01-01',
+      }),
+    });
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/translate')
+      .send({ text: 'Hello', targetLang: 'es' })
+      .expect(200);
+
+    expect(res.body.translatedText).toBe('Hola');
+  });
 });
 
 describe('GET /api/translate/quota', () => {
@@ -302,5 +576,62 @@ describe('GET /api/translate/quota', () => {
 
     expect(res.body.unlimited).toBe(true);
     expect(res.body.limit).toBe(-1);
+  });
+
+  test('resets used count when translationDate is from a different day', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        isSuperShy: false,
+        translationsToday: 40,
+        translationDate: '2020-01-01', // old date
+      }),
+    });
+
+    const app = createApp();
+    const res = await request(app).get('/api/translate/quota').expect(200);
+
+    expect(res.body.used).toBe(0);
+    expect(res.body.limit).toBe(50);
+  });
+
+  test('returns 500 on Firestore error', async () => {
+    mockDocGet.mockRejectedValue(new Error('Firestore unavailable'));
+
+    const app = createApp();
+    const res = await request(app).get('/api/translate/quota').expect(500);
+
+    expect(res.body.error).toBe('Failed to check quota');
+  });
+
+  test('handles user doc with no data (defaults)', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => null,
+    });
+
+    const app = createApp();
+    const res = await request(app).get('/api/translate/quota').expect(200);
+
+    expect(res.body.used).toBe(0);
+    expect(res.body.unlimited).toBe(false);
+    expect(res.body.limit).toBe(50);
+  });
+
+  test('handles missing translationsToday field', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        isSuperShy: false,
+        translationDate: today,
+        // translationsToday is undefined
+      }),
+    });
+
+    const app = createApp();
+    const res = await request(app).get('/api/translate/quota').expect(200);
+
+    expect(res.body.used).toBe(0);
   });
 });

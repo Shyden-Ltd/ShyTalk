@@ -240,3 +240,108 @@ describe('PATCH /api/notifications/settings', () => {
     });
   });
 });
+
+// ─── Error paths ───────────────────────────────────────────────
+
+describe('POST /api/notifications/token — error paths', () => {
+  test('returns 500 when Firestore update fails', async () => {
+    mockDocUpdate.mockRejectedValueOnce(new Error('Firestore unavailable'));
+    const app = createApp();
+    const res = await request(app).post('/api/notifications/token').send({ token: 'valid-token' });
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+});
+
+describe('DELETE /api/notifications/token — error paths', () => {
+  test('returns 500 when Firestore update fails', async () => {
+    mockDocUpdate.mockRejectedValueOnce(new Error('Firestore unavailable'));
+    const app = createApp();
+    const res = await request(app)
+      .delete('/api/notifications/token')
+      .send({ token: 'valid-token' });
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('rejects numeric token (400)', async () => {
+    const app = createApp();
+    const res = await request(app).delete('/api/notifications/token').send({ token: 12345 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/non-empty string/);
+    expect(mockDocUpdate).not.toHaveBeenCalled();
+  });
+
+  test('rejects null token (400)', async () => {
+    const app = createApp();
+    const res = await request(app).delete('/api/notifications/token').send({ token: null });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/non-empty string/);
+    expect(mockDocUpdate).not.toHaveBeenCalled();
+  });
+
+  test('rejects array token (400)', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .delete('/api/notifications/token')
+      .send({ token: ['a', 'b'] });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/non-empty string/);
+    expect(mockDocUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe('PATCH /api/notifications/settings — error paths', () => {
+  test('returns 500 when Firestore update fails', async () => {
+    mockDocUpdate.mockRejectedValueOnce(new Error('Firestore unavailable'));
+    const app = createApp();
+    const res = await request(app)
+      .patch('/api/notifications/settings')
+      .send({ pmNotificationsEnabled: true });
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('Internal server error');
+  });
+
+  test('accepts all five allowed fields', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .patch('/api/notifications/settings')
+      .send({
+        pmNotificationsEnabled: true,
+        pmSoundEnabled: false,
+        pmShowTimestamps: true,
+        pmShowDateSeparators: false,
+        pmNotificationPreview: true,
+      })
+      .expect(200);
+
+    expect(res.body).toEqual({ success: true });
+    expect(mockDocUpdate).toHaveBeenCalledWith({
+      pmNotificationsEnabled: true,
+      pmSoundEnabled: false,
+      pmShowTimestamps: true,
+      pmShowDateSeparators: false,
+      pmNotificationPreview: true,
+    });
+  });
+
+  test('coerces falsy values to false', async () => {
+    const app = createApp();
+    await request(app)
+      .patch('/api/notifications/settings')
+      .send({ pmNotificationsEnabled: 0, pmSoundEnabled: '', pmShowTimestamps: null })
+      .expect(200);
+
+    expect(mockDocUpdate).toHaveBeenCalledWith({
+      pmNotificationsEnabled: false,
+      pmSoundEnabled: false,
+      pmShowTimestamps: false,
+    });
+  });
+});
