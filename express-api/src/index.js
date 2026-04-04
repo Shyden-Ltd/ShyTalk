@@ -44,6 +44,7 @@ app.use('/api', (req, res, next) => {
   if (
     req.path === '/health' ||
     req.path === '/log-config' ||
+    req.path === '/logs' ||
     req.path === '/firebase-config' ||
     req.path.startsWith('/auth/') ||
     (req.method === 'GET' && req.path === '/config/startingScreens') ||

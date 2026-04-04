@@ -203,7 +203,7 @@
           }
         }
 
-        var method = (init.method || 'GET').toUpperCase();
+        var method = ((init && init.method) || 'GET').toUpperCase();
         var startTime = Date.now();
 
         return self._originalFetch.call(window, input, init).then(function (response) {
