@@ -342,6 +342,16 @@ jobs:
           DEST="gh-pages/android-e2e/${REPORT_ENV}/runs/${DATE}-run-${RUN_ID}"
           cp -r gh-pages/android-e2e/${REPORT_ENV}/latest "$DEST" 2>/dev/null || true
 
+      - name: Prune old report runs (keep last 10)
+        env:
+          REPORT_ENV: ${{ inputs.report_env || 'pr' }}
+        run: |
+          RUNS_DIR="gh-pages/android-e2e/${REPORT_ENV}/runs"
+          if [ -d "$RUNS_DIR" ]; then
+            ls -1d "$RUNS_DIR"/*/ 2>/dev/null | sort | head -n -10 | xargs rm -rf 2>/dev/null || true
+            echo "Pruned old runs, kept last 10"
+          fi
+
       - name: Write metadata.json
         env:
           REPORT_ENV: ${{ inputs.report_env || 'pr' }}
