@@ -63,10 +63,16 @@ const MOCK_IDENTITY_GRAPH = {
  * which go through Playwright's APIRequestContext).
  */
 async function setupApiMocks(page: Page): Promise<void> {
-  // ── GET /api/admin/suggestions (list, with optional status/filter query params) ──
-  await page.route('**/api/admin/suggestions?*', async (route) => {
+  // Routes are evaluated in reverse registration order (last registered = tried first).
+  // Register generic catch-all first (lowest priority), then specific sub-routes after.
+
+  // ── GET /api/admin/suggestions (list — catches both bare path and with query string) ──
+  await page.route('**/api/admin/suggestions*', async (route) => {
     const url = route.request().url();
     if (route.request().method() !== 'GET') { await route.fallback(); return; }
+    // Only handle the list endpoint (path is exactly /api/admin/suggestions)
+    const path = new URL(url).pathname.replace(/\/$/, '');
+    if (path !== '/api/admin/suggestions') { await route.fallback(); return; }
     const params = new URL(url).searchParams;
     const status = params.get('status');
     const filtered = status
@@ -79,13 +85,19 @@ async function setupApiMocks(page: Page): Promise<void> {
     });
   });
 
-  // ── GET /api/admin/suggestions (no query string) ──
-  await page.route('**/api/admin/suggestions', async (route) => {
+  // ── GET /api/admin/suggestions/:id (individual by ID) ──
+  await page.route('**/api/admin/suggestions/*', async (route) => {
+    const url = route.request().url();
     if (route.request().method() !== 'GET') { await route.fallback(); return; }
+    // Skip sub-routes handled by more specific handlers below
+    if (url.includes('/disputes') || url.includes('/history')) { await route.fallback(); return; }
+    const segments = new URL(url).pathname.split('/');
+    const id = segments[segments.length - 1];
+    const found = MOCK_SUGGESTIONS.find((s) => s.id === id);
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ suggestions: MOCK_SUGGESTIONS, total: MOCK_SUGGESTIONS.length }),
+      body: JSON.stringify(found || { id, title: 'Mock suggestion', description: 'Mock', status: 'pending', submitterUid: 1001, createdAt: 1709913600000, voteCount: 0 }),
     });
   });
 
@@ -119,22 +131,6 @@ async function setupApiMocks(page: Page): Promise<void> {
           { action: 'completed', timestamp: 1709928000000, adminName: 'admin' },
         ],
       }),
-    });
-  });
-
-  // ── GET /api/admin/suggestions/:id (individual) ──
-  await page.route('**/api/admin/suggestions/*', async (route) => {
-    const url = route.request().url();
-    if (route.request().method() !== 'GET') { await route.fallback(); return; }
-    // Skip dispute/history sub-routes (already handled above)
-    if (url.includes('/disputes') || url.includes('/history')) { await route.fallback(); return; }
-    const segments = new URL(url).pathname.split('/');
-    const id = segments[segments.length - 1];
-    const found = MOCK_SUGGESTIONS.find((s) => s.id === id);
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(found || { id, title: 'Mock suggestion', description: 'Mock', status: 'pending', submitterUid: 1001, createdAt: 1709913600000, voteCount: 0 }),
     });
   });
 
@@ -175,6 +171,16 @@ async function setupApiMocks(page: Page): Promise<void> {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ notifications: [{ id: 'notif-1', type: 'suggestion_merged', suggestionId: 'sug-3', userId: 3003, createdAt: 1709913600000 }] }),
+    });
+  });
+
+  // ── GET /api/user/:id (user profile lookups for identity graph) ──
+  await page.route('**/api/user/*', async (route) => {
+    if (route.request().method() !== 'GET') { await route.fallback(); return; }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ uid: 'u1', uniqueId: 1001, displayName: 'Test User', isSuspended: false }),
     });
   });
 }
