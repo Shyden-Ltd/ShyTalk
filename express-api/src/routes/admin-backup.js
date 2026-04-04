@@ -284,7 +284,7 @@ router.post('/admin/backups/restore/:date', async (req, res) => {
     // Determine which collections to restore
     const collectionsToRestore = mode === 'collection' ? [collection] : [...RESTORABLE_COLLECTIONS];
 
-    const results = {};
+    const results = Object.create(null);
 
     for (const collName of collectionsToRestore) {
       const restoredCount = await restoreCollection(date, collName, mode, results);

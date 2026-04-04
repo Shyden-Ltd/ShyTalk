@@ -12207,14 +12207,23 @@
               const banInfo = document.createElement("div");
               banInfo.style.cssText = "margin-top:8px;padding:8px;background:rgba(231,76,60,0.1);border-radius:6px;font-size:12px;";
               const reasonDiv = document.createElement("div");
-              reasonDiv.innerHTML = "<strong>Reason:</strong> " + escapeHtml(ban.reason || "No reason");
+              const reasonLabel = document.createElement("strong");
+              reasonLabel.textContent = "Reason: ";
+              reasonDiv.appendChild(reasonLabel);
+              reasonDiv.appendChild(document.createTextNode(ban.reason || "No reason"));
               const durationDiv = document.createElement("div");
-              durationDiv.innerHTML = "<strong>Duration:</strong> " + escapeHtml(ban.duration || "Permanent");
+              const durationLabel = document.createElement("strong");
+              durationLabel.textContent = "Duration: ";
+              durationDiv.appendChild(durationLabel);
+              durationDiv.appendChild(document.createTextNode(ban.duration || "Permanent"));
               banInfo.appendChild(reasonDiv);
               banInfo.appendChild(durationDiv);
               if (ban.createdAt) {
                 const createdDiv = document.createElement("div");
-                createdDiv.innerHTML = "<strong>Banned:</strong> " + escapeHtml(new Date(ban.createdAt).toLocaleString());
+                const createdLabel = document.createElement("strong");
+                createdLabel.textContent = "Banned: ";
+                createdDiv.appendChild(createdLabel);
+                createdDiv.appendChild(document.createTextNode(new Date(ban.createdAt).toLocaleString()));
                 banInfo.appendChild(createdDiv);
               }
               body.appendChild(banInfo);
