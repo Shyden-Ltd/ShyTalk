@@ -150,3 +150,12 @@ jobs:
           publish_dir: allure-report
           destination_dir: ${{ inputs.suite_name }}/${{ inputs.report_env }}/latest
           keep_files: false
+
+      - name: Post report URL in summary
+        if: steps.check-existing.outputs.skip != 'true'
+        run: |
+          REPO="${{ github.repository }}"
+          OWNER="${REPO%%/*}"
+          echo "## Allure Report (${{ inputs.suite_name }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "[View Report](https://${OWNER}.github.io/${REPO##*/}/${{ inputs.suite_name }}/${{ inputs.report_env }}/latest/)" >> "$GITHUB_STEP_SUMMARY"
