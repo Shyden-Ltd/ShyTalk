@@ -947,7 +947,7 @@ test.describe('Admin Moderation Edge Cases (11.30)', () => {
     await navigateToSuggestions(page); await waitForPendingQueueLoaded(page);
     await page.locator('#suggestions-sort-select').selectOption('newest');
     await waitForPendingQueueLoaded(page);
-    expect(await page.locator('#suggestions-pending-queue .suggestion-card').first().locator('.suggestion-title').textContent()).toContain('SortTest Second');
+    expect(await page.locator('#suggestions-pending-queue .suggestion-card').first().locator('.sg-title').textContent()).toContain('SortTest Second');
   });
 
   test('bulk approve 10 suggestions: all transitioned, all audit logged', async ({ page, testData }) => {
@@ -1196,14 +1196,14 @@ test.describe('Admin Bulk Operations (11.93)', () => {
     await page.reload(); await adminLogin(page); await navigateToSuggestions(page); await waitForPendingQueueLoaded(page);
     const cards = page.locator('#suggestions-pending-queue .suggestion-card');
     if (await cards.count() === 0) { test.skip(true, 'No cards'); return; }
-    for (let i = 0; i < Math.min(await cards.count(), 5); i++) await expect(cards.nth(i).locator('input[type="checkbox"].suggestion-select')).toBeAttached();
+    for (let i = 0; i < Math.min(await cards.count(), 5); i++) await expect(cards.nth(i).locator('input[type="checkbox"].sg-checkbox')).toBeAttached();
   });
 
   test('bulk select all: header checkbox selects visible page', async ({ page, testData }) => {
     seededIds.push(...await seedMultipleSuggestions(testData, 3));
     await page.reload(); await adminLogin(page); await navigateToSuggestions(page); await waitForPendingQueueLoaded(page);
     await page.locator('#suggestions-select-all').check();
-    const cbs = page.locator('#suggestions-pending-queue .suggestion-select');
+    const cbs = page.locator('#suggestions-pending-queue .sg-checkbox');
     for (let i = 0; i < await cbs.count(); i++) await expect(cbs.nth(i)).toBeChecked();
   });
 

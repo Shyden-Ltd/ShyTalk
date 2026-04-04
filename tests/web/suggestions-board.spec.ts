@@ -572,7 +572,7 @@ test.describe('Suggestions Board — Submission Flow', () => {
 
   test('form displays description field with 5000 char limit visible', async ({ page }) => {
     const descField = page.locator('[data-testid="suggest-desc-input"]');
-    const descLimit = page.locator('[data-testid="desc-char-limit"], .desc-char-limit');
+    const descLimit = page.locator('[data-testid="suggest-desc-count"]');
     // Description field should show 5000 char limit
   });
 
