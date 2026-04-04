@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 
 /**
  * Suggestions board tests.
@@ -16,11 +16,180 @@ import { test, expect } from '@playwright/test';
  */
 
 // ═══════════════════════════════════════════════════════════════
+// Shared mock data and route interception
+// ═══════════════════════════════════════════════════════════════
+
+const MOCK_SUGGESTIONS = [
+  {
+    id: 'test-sug-1',
+    title: 'Add dark mode',
+    description: 'Dark mode would be great for night use',
+    tag: 'quality-of-life',
+    tags: ['quality-of-life'],
+    language: 'en',
+    status: 'accepted',
+    upvotes: 15,
+    downvotes: 2,
+    score: 13,
+    netScore: 13,
+    submitterUid: 1001,
+    createdAt: 1709913600000,
+  },
+  {
+    id: 'test-sug-2',
+    title: 'Video calls',
+    description: 'Add video calling to voice rooms',
+    tag: 'entertainment',
+    tags: ['entertainment'],
+    language: 'en',
+    status: 'planned',
+    upvotes: 8,
+    downvotes: 1,
+    score: 7,
+    netScore: 7,
+    submitterUid: 2002,
+    createdAt: 1709827200000,
+  },
+  {
+    id: 'test-sug-3',
+    title: 'Voice chat improvements',
+    description: 'Better audio quality and noise cancellation for voice rooms',
+    tag: 'quality-of-life',
+    tags: ['quality-of-life'],
+    language: 'en',
+    status: 'completed',
+    upvotes: 25,
+    downvotes: 0,
+    score: 25,
+    netScore: 25,
+    submitterUid: 3003,
+    createdAt: 1709740800000,
+  },
+  {
+    id: 'test-sug-4',
+    title: 'Remove chat limits',
+    description: 'Let users send unlimited messages',
+    tag: 'entertainment',
+    tags: ['entertainment'],
+    language: 'en',
+    status: 'rejected',
+    upvotes: 3,
+    downvotes: 12,
+    score: -9,
+    netScore: -9,
+    submitterUid: 4004,
+    createdAt: 1709654400000,
+    declineReason: 'This would increase moderation burden significantly.',
+  },
+];
+
+const MOCK_TAGS = [
+  { value: 'quality-of-life', label: 'Quality of Life' },
+  { value: 'entertainment', label: 'Entertainment' },
+  { value: 'social', label: 'Social' },
+];
+
+const MOCK_SUGGESTIONS_RESPONSE = {
+  suggestions: MOCK_SUGGESTIONS,
+  total: MOCK_SUGGESTIONS.length,
+  page: 1,
+  pageSize: 20,
+};
+
+/**
+ * Sets up API route interception so tests get consistent mock data
+ * instead of relying on the dev database. Must be called BEFORE page.goto().
+ */
+async function setupSuggestionsMocks(page: Page) {
+  // Mock the main suggestions list endpoint (also covers search via query params)
+  await page.route('**/api/suggestions/search*', (route) => {
+    const url = new URL(route.request().url());
+    const query = url.searchParams.get('q') || '';
+    const status = url.searchParams.get('status') || '';
+    let filtered = MOCK_SUGGESTIONS;
+    if (query) {
+      filtered = filtered.filter(
+        (s) =>
+          s.title.toLowerCase().includes(query.toLowerCase()) ||
+          s.description.toLowerCase().includes(query.toLowerCase()),
+      );
+    }
+    if (status) {
+      filtered = filtered.filter((s) => s.status === status);
+    }
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ suggestions: filtered, total: filtered.length, page: 1, pageSize: 20 }),
+    });
+  });
+
+  await page.route('**/api/suggestions/blocked*', (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ blocked: false }),
+    });
+  });
+
+  // Mock vote endpoints
+  await page.route('**/api/suggestions/*/vote', (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ score: 14, upvotes: 16, downvotes: 2 }),
+    });
+  });
+
+  // Mock comment endpoints
+  await page.route('**/api/suggestions/*/comments', (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ comments: [], total: 0 }),
+    });
+  });
+
+  // Mock subscription/watch endpoints
+  await page.route('**/api/subscriptions/**', (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ preferences: {}, watchList: [] }),
+    });
+  });
+
+  // Main suggestions endpoint (must be registered AFTER more-specific routes above)
+  await page.route('**/api/suggestions*', (route) => {
+    const url = new URL(route.request().url());
+    const status = url.searchParams.get('status') || '';
+    const tag = url.searchParams.get('tag') || '';
+    const lang = url.searchParams.get('lang') || '';
+    let filtered = MOCK_SUGGESTIONS;
+    if (status) {
+      filtered = filtered.filter((s) => s.status === status);
+    }
+    if (tag) {
+      filtered = filtered.filter((s) => s.tag === tag || (s.tags && s.tags.includes(tag)));
+    }
+    if (lang) {
+      filtered = filtered.filter((s) => s.language === lang);
+    }
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ suggestions: filtered, total: filtered.length, page: 1, pageSize: 20 }),
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
 // 11.11 — Public Browsing (No Login)
 // ═══════════════════════════════════════════════════════════════
 
 test.describe('Suggestions Board — Public Browsing', () => {
   test.beforeEach(async ({ page }) => {
+    await setupSuggestionsMocks(page);
     await page.goto('/roadmap.html');
   });
 
@@ -333,6 +502,7 @@ test.describe('Suggestions Board — Public Browsing', () => {
 
 test.describe('Suggestions Board — Login Gate', () => {
   test.beforeEach(async ({ page }) => {
+    await setupSuggestionsMocks(page);
     await page.goto('/roadmap.html');
   });
 
@@ -387,6 +557,7 @@ test.describe('Suggestions Board — Login Gate', () => {
 
 test.describe('Suggestions Board — Submission Flow', () => {
   test.beforeEach(async ({ page }) => {
+    await setupSuggestionsMocks(page);
     await page.goto('/roadmap.html');
   });
 
@@ -581,6 +752,7 @@ test.describe('Suggestions Board — Submission Flow', () => {
 
 test.describe('Suggestions Board — Voting Flow', () => {
   test.beforeEach(async ({ page }) => {
+    await setupSuggestionsMocks(page);
     await page.goto('/roadmap.html');
   });
 
@@ -688,6 +860,7 @@ test.describe('Suggestions Board — Voting Flow', () => {
 
 test.describe('Suggestions Board — Comment Flow', () => {
   test.beforeEach(async ({ page }) => {
+    await setupSuggestionsMocks(page);
     await page.goto('/roadmap.html');
   });
 
@@ -758,6 +931,7 @@ test.describe('Suggestions Board — Comment Flow', () => {
 
 test.describe('Suggestion Submission Edge Cases', () => {
   test.beforeEach(async ({ page }) => {
+    await setupSuggestionsMocks(page);
     await page.goto('/roadmap.html');
   });
 
@@ -940,6 +1114,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
 
 test.describe('Voting Edge Cases', () => {
   test.beforeEach(async ({ page }) => {
+    await setupSuggestionsMocks(page);
     await page.goto('/roadmap.html');
   });
 
@@ -1059,6 +1234,7 @@ test.describe('Voting Edge Cases', () => {
 
 test.describe('Mobile-Specific Interactions', () => {
   test.beforeEach(async ({ page }) => {
+    await setupSuggestionsMocks(page);
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto('/roadmap.html');
   });
@@ -1165,6 +1341,7 @@ test.describe('Mobile-Specific Interactions', () => {
 
 test.describe('Suggestion Card UI States', () => {
   test.beforeEach(async ({ page }) => {
+    await setupSuggestionsMocks(page);
     await page.goto('/roadmap.html');
   });
 
@@ -1376,6 +1553,7 @@ test.describe('Suggestion Card UI States', () => {
 
 test.describe('Filter & Search Combination Edge Cases', () => {
   test.beforeEach(async ({ page }) => {
+    await setupSuggestionsMocks(page);
     await page.goto('/roadmap.html');
   });
 
@@ -1547,6 +1725,7 @@ test.describe('Filter & Search Combination Edge Cases', () => {
 
 test.describe('Suggestion Description Display', () => {
   test.beforeEach(async ({ page }) => {
+    await setupSuggestionsMocks(page);
     await page.goto('/roadmap.html');
   });
 
@@ -1641,6 +1820,7 @@ test.describe('Suggestion Description Display', () => {
 
 test.describe('Empty & Extreme States', () => {
   test.beforeEach(async ({ page }) => {
+    await setupSuggestionsMocks(page);
     await page.goto('/roadmap.html');
   });
 
@@ -1853,6 +2033,10 @@ test.describe('Empty & Extreme States', () => {
 // ═══════════════════════════════════════════════════════════════
 
 test.describe('URL & Navigation Edge Cases', () => {
+  test.beforeEach(async ({ page }) => {
+    await setupSuggestionsMocks(page);
+  });
+
   test('/roadmap loads correctly', async ({ page }) => {
     await page.goto('/roadmap.html');
     await expect(page.locator('body')).toBeVisible();

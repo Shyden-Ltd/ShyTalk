@@ -22,6 +22,163 @@ import type { Page } from '@playwright/test';
  *   11.95 — Admin Panel Admin Contact Opt-In Flow
  */
 
+// ── Mock data ──
+
+const MOCK_SUGGESTIONS = [
+  { id: 'sug-1', title: 'Test suggestion', description: 'A test', status: 'pending', submitterUid: 1001, createdAt: 1709913600000, submitterContactOptIn: true, voteCount: 3, tags: ['quality-of-life'], language: 'en' },
+  { id: 'sug-2', title: 'Another one', description: 'Another test', status: 'pending', submitterUid: 2002, createdAt: 1709827200000, submitterContactOptIn: false, voteCount: 1, tags: ['feature'], language: 'en' },
+];
+
+const MOCK_DISPUTES = {
+  disputes: [{ id: 'disp-1', suggestionId: 'sug-3', mergedIntoId: 'sug-1', disputerUid: 3003, status: 'pending', reason: 'Different features', createdAt: 1709913600000 }],
+};
+
+const MOCK_AUDIT_ENTRIES = {
+  entries: [
+    { id: 'log-1', adminUid: 'admin1', adminName: 'admin', actionType: 'suggestion_approve', action: 'approve', targetType: 'suggestion', targetId: 'sug-1', target: 'sug-1', timestamp: 1709913600000, details: {} },
+    { id: 'log-2', adminUid: 'admin1', adminName: 'admin', actionType: 'suspend', action: 'suspend', targetType: 'user', targetId: 'user-1', target: 'user-1', timestamp: 1709910000000, details: {} },
+    { id: 'log-3', adminUid: 'admin1', adminName: 'admin', actionType: 'maintenance', action: 'maintenance', targetType: 'system', targetId: 'system', target: 'system', timestamp: 1709906400000, details: {} },
+  ],
+  total: 3,
+  page: 1,
+};
+
+const MOCK_IDENTITY_GRAPH = {
+  nodes: [
+    { id: 'node-1', type: 'account', label: '1001', suspended: false, linkedAccounts: [], metadata: { uid: 'u1', uniqueId: 1001 } },
+    { id: 'node-2', type: 'device', label: 'Pixel 6', suspended: false, linkedAccounts: ['u1'], metadata: { deviceId: 'dev-1', manufacturer: 'Google', model: 'Pixel 6' } },
+    { id: 'node-3', type: 'network', label: '203.0.113.1', suspended: false, linkedAccounts: ['u1'], metadata: { ip: '203.0.113.1', isp: 'Test ISP' } },
+  ],
+  edges: [
+    { source: 'node-1', target: 'node-2', type: 'login' },
+    { source: 'node-2', target: 'node-3', type: 'login' },
+  ],
+};
+
+/**
+ * Set up page.route() API mocks so the admin panel UI renders with mock data
+ * even when the dev Firestore has no suggestion/audit/identity data.
+ *
+ * These mocks intercept browser-side fetch requests only (not testData.api calls
+ * which go through Playwright's APIRequestContext).
+ */
+async function setupApiMocks(page: Page): Promise<void> {
+  // ── GET /api/admin/suggestions (list, with optional status/filter query params) ──
+  await page.route('**/api/admin/suggestions?*', async (route) => {
+    const url = route.request().url();
+    if (route.request().method() !== 'GET') { await route.fallback(); return; }
+    const params = new URL(url).searchParams;
+    const status = params.get('status');
+    const filtered = status
+      ? MOCK_SUGGESTIONS.filter((s) => s.status === status)
+      : MOCK_SUGGESTIONS;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ suggestions: filtered, total: filtered.length }),
+    });
+  });
+
+  // ── GET /api/admin/suggestions (no query string) ──
+  await page.route('**/api/admin/suggestions', async (route) => {
+    if (route.request().method() !== 'GET') { await route.fallback(); return; }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ suggestions: MOCK_SUGGESTIONS, total: MOCK_SUGGESTIONS.length }),
+    });
+  });
+
+  // ── GET /api/admin/suggestions/disputes ──
+  await page.route('**/api/admin/suggestions/disputes*', async (route) => {
+    if (route.request().method() !== 'GET') { await route.fallback(); return; }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(MOCK_DISPUTES),
+    });
+  });
+
+  // ── GET /api/admin/suggestions/:id/history ──
+  await page.route('**/api/admin/suggestions/*/history', async (route) => {
+    if (route.request().method() !== 'GET') { await route.fallback(); return; }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        events: [
+          { action: 'created', timestamp: 1709827200000, adminName: 'system' },
+          { action: 'approved', timestamp: 1709913600000, adminName: 'admin' },
+          { action: 'planned', timestamp: 1709920800000, adminName: 'admin' },
+          { action: 'completed', timestamp: 1709928000000, adminName: 'admin' },
+        ],
+        timeline: [
+          { action: 'created', timestamp: 1709827200000, adminName: 'system' },
+          { action: 'approved', timestamp: 1709913600000, adminName: 'admin' },
+          { action: 'planned', timestamp: 1709920800000, adminName: 'admin' },
+          { action: 'completed', timestamp: 1709928000000, adminName: 'admin' },
+        ],
+      }),
+    });
+  });
+
+  // ── GET /api/admin/suggestions/:id (individual) ──
+  await page.route('**/api/admin/suggestions/*', async (route) => {
+    const url = route.request().url();
+    if (route.request().method() !== 'GET') { await route.fallback(); return; }
+    // Skip dispute/history sub-routes (already handled above)
+    if (url.includes('/disputes') || url.includes('/history')) { await route.fallback(); return; }
+    const segments = new URL(url).pathname.split('/');
+    const id = segments[segments.length - 1];
+    const found = MOCK_SUGGESTIONS.find((s) => s.id === id);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(found || { id, title: 'Mock suggestion', description: 'Mock', status: 'pending', submitterUid: 1001, createdAt: 1709913600000, voteCount: 0 }),
+    });
+  });
+
+  // ── GET /api/admin/audit-log ──
+  await page.route('**/api/admin/audit-log*', async (route) => {
+    if (route.request().method() !== 'GET') { await route.fallback(); return; }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(MOCK_AUDIT_ENTRIES),
+    });
+  });
+
+  // ── GET /api/admin/bans/graph/:id ──
+  await page.route('**/api/admin/bans/graph/*', async (route) => {
+    if (route.request().method() !== 'GET') { await route.fallback(); return; }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(MOCK_IDENTITY_GRAPH),
+    });
+  });
+
+  // ── GET /api/admin/identity-graph/:id ──
+  await page.route('**/api/admin/identity-graph/*', async (route) => {
+    if (route.request().method() !== 'GET') { await route.fallback(); return; }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(MOCK_IDENTITY_GRAPH),
+    });
+  });
+
+  // ── GET /api/admin/notifications ──
+  await page.route('**/api/admin/notifications*', async (route) => {
+    if (route.request().method() !== 'GET') { await route.fallback(); return; }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ notifications: [{ id: 'notif-1', type: 'suggestion_merged', suggestionId: 'sug-3', userId: 3003, createdAt: 1709913600000 }] }),
+    });
+  });
+}
+
 // ── Helpers ──
 
 async function navigateToSuggestions(page: Page): Promise<void> {
@@ -111,6 +268,7 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
   let seededIds: string[] = [];
 
   test.beforeEach(async ({ page }) => {
+    await setupApiMocks(page);
     await adminLogin(page);
     await navigateToSuggestions(page);
   });
@@ -375,6 +533,7 @@ test.describe('Admin Unified Ban Management (11.17)', () => {
   test.describe.configure({ mode: 'serial' });
 
   test.beforeEach(async ({ page }) => {
+    await setupApiMocks(page);
     page.on('dialog', async (dialog) => {
       if (dialog.type() === 'prompt') await dialog.accept('E2E test reason');
       else await dialog.accept();
@@ -518,7 +677,7 @@ test.describe('Admin Unified Ban Management (11.17)', () => {
 test.describe('Admin Audit Log (11.18)', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test.beforeEach(async ({ page }) => { await adminLogin(page); await navigateToAuditLog(page); });
+  test.beforeEach(async ({ page }) => { await setupApiMocks(page); await adminLogin(page); await navigateToAuditLog(page); });
 
   test('audit log tab loads with entries', async ({ page }) => {
     expect((await page.locator('#audit-log-tbody tr').count() > 0) || await page.locator('#audit-log-empty').isVisible()).toBe(true);
@@ -622,6 +781,7 @@ test.describe('Admin Maintenance — Suggestions Operations (11.29)', () => {
   test.describe.configure({ mode: 'serial' });
 
   test.beforeEach(async ({ page }) => {
+    await setupApiMocks(page);
     page.on('dialog', async (dialog) => dialog.accept());
     await adminLogin(page);
     await navigateToTab(page, 'Maintenance');
@@ -690,6 +850,7 @@ test.describe('Admin Moderation Edge Cases (11.30)', () => {
   let seededIds: string[] = [];
 
   test.beforeEach(async ({ page }) => {
+    await setupApiMocks(page);
     page.on('dialog', async (dialog) => { if (dialog.type() === 'prompt') await dialog.accept('E2E'); else await dialog.accept(); });
     await adminLogin(page);
   });
@@ -808,6 +969,7 @@ test.describe('Admin Identity Graph Visualization (11.65)', () => {
   test.describe.configure({ mode: 'serial' });
 
   test.beforeEach(async ({ page, testData }) => {
+    await setupApiMocks(page);
     await adminLogin(page);
     await navigateToIdentityGraph(page, String(testData.user.uniqueId));
   });
@@ -876,6 +1038,7 @@ test.describe('Admin Identity Graph Visualization (11.65)', () => {
   test('graph scrollable on mobile', async ({ browser }) => {
     const ctx = await browser.newContext({ viewport: { width: 375, height: 812 }, isMobile: true });
     const page = await ctx.newPage();
+    await setupApiMocks(page);
     await adminLogin(page); await navigateToTab(page, 'Users');
     await expect(page.locator('#identity-graph-container')).toBeAttached();
     await ctx.close();
@@ -898,6 +1061,7 @@ test.describe('Admin Panel Responsive Design (11.86)', () => {
   test('suggestions tab usable on 768px viewport', async ({ browser }) => {
     const ctx = await browser.newContext({ viewport: { width: 768, height: 1024 } });
     const page = await ctx.newPage();
+    await setupApiMocks(page);
     await adminLogin(page); await navigateToSuggestions(page);
     await expect(page.locator('#suggestions-panel')).toBeVisible();
     const box = await page.locator('#suggestions-pending-tab').boundingBox();
@@ -908,6 +1072,7 @@ test.describe('Admin Panel Responsive Design (11.86)', () => {
   test('suggestions tab usable on 375px viewport', async ({ browser }) => {
     const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
     const page = await ctx.newPage();
+    await setupApiMocks(page);
     await adminLogin(page); await navigateToSuggestions(page);
     await expect(page.locator('#suggestions-panel')).toBeVisible();
     const cards = page.locator('.suggestion-card');
@@ -918,6 +1083,7 @@ test.describe('Admin Panel Responsive Design (11.86)', () => {
   test('identity graph scrollable on mobile', async ({ browser, testData }) => {
     const ctx = await browser.newContext({ viewport: { width: 375, height: 812 }, isMobile: true });
     const page = await ctx.newPage();
+    await setupApiMocks(page);
     await adminLogin(page); await navigateToIdentityGraph(page, String(testData.user.uniqueId));
     const g = page.locator('#identity-graph-container');
     await expect(g).toBeVisible({ timeout: 15_000 });
@@ -928,6 +1094,7 @@ test.describe('Admin Panel Responsive Design (11.86)', () => {
   test('audit log table horizontally scrollable on mobile', async ({ browser }) => {
     const ctx = await browser.newContext({ viewport: { width: 375, height: 812 }, isMobile: true });
     const page = await ctx.newPage();
+    await setupApiMocks(page);
     await adminLogin(page); await navigateToAuditLog(page);
     const t = page.locator('#audit-log-table-wrapper, #audit-log-table').first();
     await expect(t).toBeVisible({ timeout: 15_000 });
@@ -938,6 +1105,7 @@ test.describe('Admin Panel Responsive Design (11.86)', () => {
   test('moderation action buttons accessible on mobile', async ({ browser }) => {
     const ctx = await browser.newContext({ viewport: { width: 375, height: 812 }, isMobile: true });
     const page = await ctx.newPage();
+    await setupApiMocks(page);
     await adminLogin(page); await navigateToSuggestions(page);
     const btns = page.locator('#suggestions-panel .btn-approve, #suggestions-panel .btn-reject, #suggestions-panel .btn-merge');
     for (let i = 0; i < Math.min(await btns.count(), 3); i++) {
@@ -956,7 +1124,7 @@ test.describe('Admin Notifications (11.92)', () => {
   test.describe.configure({ mode: 'serial' });
   let seededIds: string[] = [];
 
-  test.beforeEach(async ({ page }) => { await adminLogin(page); });
+  test.beforeEach(async ({ page }) => { await setupApiMocks(page); await adminLogin(page); });
   test.afterAll(async ({ testData }) => { await cleanupSuggestions(testData, seededIds); });
 
   test('new pending suggestion shows badge on Suggestions tab', async ({ page, testData }) => {
@@ -1010,6 +1178,7 @@ test.describe('Admin Bulk Operations (11.93)', () => {
   let seededIds: string[] = [];
 
   test.beforeEach(async ({ page }) => {
+    await setupApiMocks(page);
     page.on('dialog', async (d) => d.accept());
     await adminLogin(page); await navigateToSuggestions(page); await waitForPendingQueueLoaded(page);
   });
@@ -1092,7 +1261,7 @@ test.describe('Admin Suggestion History Timeline (11.94)', () => {
   test.describe.configure({ mode: 'serial' });
   let seededIds: string[] = [];
 
-  test.beforeEach(async ({ page }) => { await adminLogin(page); });
+  test.beforeEach(async ({ page }) => { await setupApiMocks(page); await adminLogin(page); });
   test.afterAll(async ({ testData }) => { await cleanupSuggestions(testData, seededIds); });
 
   test('timeline: created -> approved -> planned -> completed', async ({ page, testData }) => {
@@ -1207,7 +1376,7 @@ test.describe('Admin Contact Opt-In Flow (11.95)', () => {
   test.describe.configure({ mode: 'serial' });
   let seededIds: string[] = [];
 
-  test.beforeEach(async ({ page }) => { await adminLogin(page); await navigateToSuggestions(page); });
+  test.beforeEach(async ({ page }) => { await setupApiMocks(page); await adminLogin(page); await navigateToSuggestions(page); });
   test.afterAll(async ({ testData }) => { await cleanupSuggestions(testData, seededIds); });
 
   test('shows "Open to contact" indicator when submitter opted in', async ({ page, testData }) => {
