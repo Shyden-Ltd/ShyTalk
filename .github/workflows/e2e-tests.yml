@@ -281,5 +281,3 @@ jobs:
       suite_name: android-e2e
       report_env: ${{ inputs.report_env || 'pr' }}
       artifact_pattern: allure-results-*
-    permissions:
-      contents: write

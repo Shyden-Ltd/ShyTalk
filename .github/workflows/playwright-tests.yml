@@ -301,5 +301,3 @@ jobs:
       suite_name: playwright
       report_env: ${{ inputs.report_env || 'pr' }}
       artifact_pattern: allure-results-*
-    permissions:
-      contents: write
