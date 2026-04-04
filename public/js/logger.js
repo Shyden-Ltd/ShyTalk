@@ -184,18 +184,23 @@
           return self._originalFetch.call(window, input, init);
         }
 
-        // Add trace header
-        init = init || {};
-        if (!init.headers) {
-          init.headers = {};
-        }
-        // Handle Headers object
-        if (init.headers instanceof Headers) {
-          init.headers.set('x-session-trace-id', self._sessionTraceId);
-        } else if (Array.isArray(init.headers)) {
-          init.headers.push(['x-session-trace-id', self._sessionTraceId]);
-        } else {
-          init.headers['x-session-trace-id'] = self._sessionTraceId;
+        // Only add trace header to same-origin or our own API requests.
+        // Adding custom headers to cross-origin requests triggers CORS
+        // preflight which breaks Firebase SDK calls to googleapis.com.
+        var isOwnApi = url.indexOf('/api/') !== -1 &&
+          (url.indexOf(location.origin) === 0 || url.charAt(0) === '/');
+        if (isOwnApi) {
+          init = init || {};
+          if (!init.headers) {
+            init.headers = {};
+          }
+          if (init.headers instanceof Headers) {
+            init.headers.set('x-session-trace-id', self._sessionTraceId);
+          } else if (Array.isArray(init.headers)) {
+            init.headers.push(['x-session-trace-id', self._sessionTraceId]);
+          } else {
+            init.headers['x-session-trace-id'] = self._sessionTraceId;
+          }
         }
 
         var method = (init.method || 'GET').toUpperCase();
