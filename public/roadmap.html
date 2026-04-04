@@ -1766,10 +1766,7 @@
     <script>
       ShyTalkLogger.init({
         source: "roadmap-page",
-        endpoint:
-          (location.hostname.includes("dev")
-            ? "https://dev-api.shytalk.shyden.co.uk"
-            : "https://api.shytalk.shyden.co.uk") + "/api/logs",
+        endpoint: (location.hostname === "localhost" || location.hostname === "127.0.0.1" ? "http://localhost:3000" : location.hostname.includes("dev") ? "https://dev-api.shytalk.shyden.co.uk" : "https://api.shytalk.shyden.co.uk") + "/api/logs",
       });
     </script>
     <!-- Firebase SDK (compat) for auth -->

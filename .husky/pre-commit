@@ -22,4 +22,21 @@ if [ -n "$SECRETS_FOUND" ]; then
   exit 1
 fi
 
+# Environment isolation — block environment URLs without localhost fallback
+# Lines containing shytalk.shyden.co.uk MUST also contain "localhost" on the same line
+# This ensures every URL resolution handles local development
+UNSAFE_URLS=$(git diff --cached --diff-filter=d -U0 -- '*.html' '*.js' '*.ts' '*.mjs' '*.cjs' | grep '^+' | grep -v '^+++' | grep -v '^\+\s*//' | grep -E "shytalk\.shyden\.co\.uk" | grep -v "localhost" || true)
+if [ -n "$UNSAFE_URLS" ]; then
+  echo ""
+  echo "╔══════════════════════════════════════════════════════╗"
+  echo "║  ENV URL WITHOUT LOCALHOST FALLBACK — BLOCKED        ║"
+  echo "╚══════════════════════════════════════════════════════╝"
+  echo ""
+  echo "$UNSAFE_URLS"
+  echo ""
+  echo "Every line with a shytalk URL must also handle localhost."
+  echo "Use env vars or: localhost ? local : dev ? dev-url : prod-url"
+  exit 1
+fi
+
 npx lint-staged
