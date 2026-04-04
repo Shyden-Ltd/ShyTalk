@@ -1478,6 +1478,12 @@
         .sg-duplicate-actions {
           flex-direction: column;
         }
+        /* Mobile touch targets — WCAG 2.5.8 minimum 44×44 */
+        .sg-btn--sm,
+        .sg-btn--xs {
+          min-height: 44px;
+          min-width: 44px;
+        }
       }
     </style>
   </head>
@@ -1493,6 +1499,7 @@
         class="subscribe-btn"
         id="subscribe-btn"
         aria-label="Subscribe to updates"
+        data-testid="subscribe-btn"
         data-log="subscribe-btn"
         data-i18n="subscribe"
       >
@@ -1509,9 +1516,10 @@
     <section class="stats-section" aria-label="Progress overview">
       <div class="stats-card">
         <div
-          class="donut-container"
+          class="donut-container ring-chart"
           role="img"
           aria-label="Overall completion chart"
+          data-testid="ring-chart"
         >
           <svg id="donut-chart" viewBox="0 0 140 140"></svg>
           <div class="donut-center-text">
@@ -1595,15 +1603,16 @@
       <span class="footer-disclaimer" data-i18n="disclaimer"
         >Priorities may shift — we ship what matters most to you first.</span
       >
-      <span class="footer-updated" id="footer-updated"></span>
+      <span class="footer-updated last-updated" id="footer-updated" data-testid="last-updated"></span>
     </footer>
 
     <!-- ── Login toast ── -->
     <div
-      class="login-toast"
+      class="login-toast login-prompt"
       id="login-toast"
       role="alert"
       aria-live="polite"
+      data-testid="login-prompt"
       data-i18n="loginPrompt"
     >
       Sign in to the app to get notified about this feature.

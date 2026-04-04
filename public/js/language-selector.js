@@ -91,9 +91,10 @@
 
   // ── Inject button ──
   var btn = document.createElement('button');
-  btn.className = 'stl-lang-btn';
+  btn.className = 'stl-lang-btn lang-selector';
   btn.setAttribute('aria-label', 'Change language');
   btn.setAttribute('title', 'Change language');
+  btn.setAttribute('data-testid', 'language-selector');
   btn.innerHTML = '&#127760;';
   btn.addEventListener('click', openModal);
   document.body.appendChild(btn);

@@ -95,6 +95,17 @@
 
   // ── State ──
 
+  var PHASE_OPTIONS = [
+    { value: "", label: "All phases" },
+    { value: "compliance", label: "Compliance & Legal" },
+    { value: "platform", label: "Platform Foundation" },
+    { value: "revenue", label: "Revenue Engine" },
+    { value: "social", label: "Core Social" },
+    { value: "qol", label: "Quality of Life" },
+    { value: "entertainment", label: "Entertainment" },
+    { value: "support", label: "Support & Specialised" },
+  ];
+
   var state = {
     suggestions: [],
     totalCount: 0,
@@ -103,6 +114,7 @@
     filterStatus: "",
     filterTag: "",
     filterLang: "",
+    filterPhase: "",
     searchQuery: "",
     isLoading: false,
     error: null,
@@ -236,6 +248,8 @@
       params += "&tag=" + encodeURIComponent(state.filterTag);
     if (state.filterLang)
       params += "&lang=" + encodeURIComponent(state.filterLang);
+    if (state.filterPhase)
+      params += "&phase=" + encodeURIComponent(state.filterPhase);
 
     var path = state.searchQuery
       ? "/api/suggestions/search" +
@@ -374,7 +388,7 @@
     if (existing) existing.remove();
 
     var html =
-      '<div class="sg-modal-overlay" id="sg-login-modal-overlay" data-testid="login-modal-overlay">' +
+      '<div class="sg-modal-overlay login-prompt" id="sg-login-modal-overlay" data-testid="login-prompt">' +
       '<div class="sg-modal" role="dialog" aria-modal="true" aria-label="Sign in required">' +
       '<div class="sg-modal-header">' +
       "<h3>Sign in required</h3>" +
@@ -426,7 +440,7 @@
     if (existing) existing.remove();
 
     var html =
-      '<div class="sg-modal-overlay" id="sg-subscribe-overlay" data-testid="subscribe-modal-overlay">' +
+      '<div class="sg-modal-overlay subscribe-modal" id="sg-subscribe-overlay" data-testid="subscribe-modal">' +
       '<div class="sg-modal sg-modal--wide" role="dialog" aria-modal="true" aria-label="Subscribe to updates">' +
       '<div class="sg-modal-header">' +
       "<h3>Subscribe</h3>" +
@@ -994,6 +1008,22 @@
     }
     html += "</select>";
 
+    // Phase filter
+    html +=
+      '<select class="sg-filter-select" data-filter="phase" data-testid="phase-filter">';
+    for (var pi = 0; pi < PHASE_OPTIONS.length; pi++) {
+      var psel = state.filterPhase === PHASE_OPTIONS[pi].value ? " selected" : "";
+      html +=
+        '<option value="' +
+        PHASE_OPTIONS[pi].value +
+        '"' +
+        psel +
+        ">" +
+        escapeHtml(PHASE_OPTIONS[pi].label) +
+        "</option>";
+    }
+    html += "</select>";
+
     html += "</div>"; // sg-filter-group
     html += "</div>"; // sg-controls
 
@@ -1110,36 +1140,38 @@
 
     // Vote column
     html += '<div class="sg-vote-col">';
-    html +=
-      '<button class="sg-vote-btn sg-vote-btn--up' +
-      (myVote === "up" ? " sg-vote-btn--active" : "") +
-      '"' +
-      (votingDisabled ? " disabled" : "") +
-      ' data-testid="vote-up-' +
-      s.id +
-      '" data-id="' +
-      s.id +
-      '" data-dir="up" aria-label="Upvote">' +
-      '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M8 4l-5 6h10z"/></svg>' +
-      "</button>";
+    if (!votingDisabled) {
+      html +=
+        '<button class="sg-vote-btn sg-vote-btn--up' +
+        (myVote === "up" ? " sg-vote-btn--active" : "") +
+        '"' +
+        ' data-testid="vote-up-' +
+        s.id +
+        '" data-id="' +
+        s.id +
+        '" data-dir="up" aria-label="Upvote">' +
+        '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M8 4l-5 6h10z"/></svg>' +
+        "</button>";
+    }
     html +=
       '<span class="sg-vote-score" data-testid="vote-score-' +
       s.id +
       '">' +
       score +
       "</span>";
-    html +=
-      '<button class="sg-vote-btn sg-vote-btn--down' +
-      (myVote === "down" ? " sg-vote-btn--active" : "") +
-      '"' +
-      (votingDisabled ? " disabled" : "") +
-      ' data-testid="vote-down-' +
-      s.id +
-      '" data-id="' +
-      s.id +
-      '" data-dir="down" aria-label="Downvote">' +
-      '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M8 12l-5-6h10z"/></svg>' +
-      "</button>";
+    if (!votingDisabled) {
+      html +=
+        '<button class="sg-vote-btn sg-vote-btn--down' +
+        (myVote === "down" ? " sg-vote-btn--active" : "") +
+        '"' +
+        ' data-testid="vote-down-' +
+        s.id +
+        '" data-id="' +
+        s.id +
+        '" data-dir="down" aria-label="Downvote">' +
+        '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M8 12l-5-6h10z"/></svg>' +
+        "</button>";
+    }
     html += "</div>";
 
     // Content column
@@ -1254,6 +1286,7 @@
         if (filterType === "status") state.filterStatus = this.value;
         else if (filterType === "tag") state.filterTag = this.value;
         else if (filterType === "lang") state.filterLang = this.value;
+        else if (filterType === "phase") state.filterPhase = this.value;
         state.currentPage = 1;
         fetchSuggestions();
       });

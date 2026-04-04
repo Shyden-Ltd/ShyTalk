@@ -490,7 +490,8 @@
         (isCollapsed ? " collapsed" : "") +
         '" data-phase="' +
         p +
-        '" style="animation-delay:' +
+        '" data-testid="phase-card"' +
+        ' style="animation-delay:' +
         delay +
         's">';
 
@@ -525,7 +526,7 @@
 
       // Body
       html += '<div class="phase-body">';
-      html += '<ul class="feature-list">';
+      html += '<ul class="feature-list" data-testid="feature-list">';
 
       for (var fi = 0; fi < features.length; fi++) {
         var feat = features[fi];
@@ -551,7 +552,8 @@
         html +=
           '<button class="feature-bell" aria-label="Notify me about ' +
           escapeHtml(featName) +
-          '" data-log="bell-' +
+          '" data-testid="feature-bell"' +
+          ' data-log="bell-' +
           escapeHtml(feat.name) +
           '">' +
           BELL_SVG +
