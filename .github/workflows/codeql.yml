@@ -46,6 +46,19 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
+      - name: Decode google-services.json
+        env:
+          GOOGLE_SERVICES_DEV_BASE64: ${{ secrets.GOOGLE_SERVICES_DEV_BASE64 }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_DEV_BASE64" ]; then
+            echo "$GOOGLE_SERVICES_DEV_BASE64" | base64 -d > app/src/dev/google-services.json
+            echo "$GOOGLE_SERVICES_DEV_BASE64" | base64 -d > app/src/prod/google-services.json
+          else
+            echo '{"project_info":{"project_number":"0","project_id":"placeholder"},"client":[{"client_info":{"mobilesdk_app_id":"1:0:android:0","android_client_info":{"package_name":"com.shyden.shytalk"}},"api_key":[{"current_key":"placeholder"}]},{"client_info":{"mobilesdk_app_id":"1:0:android:0","android_client_info":{"package_name":"com.shyden.shytalk.dev"}},"api_key":[{"current_key":"placeholder"}]}]}' > app/src/dev/google-services.json
+            cp app/src/dev/google-services.json app/src/prod/google-services.json
+          fi
+          cp app/src/dev/google-services.json app/src/local/google-services.json
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@ff0a06e83cb2de871e5a09832bc6a81e7276941f # v3
         with:
