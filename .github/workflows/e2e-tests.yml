@@ -36,7 +36,7 @@ on:
         default: 'pr'
 
 permissions:
-  contents: read
+  contents: write       # needed by allure-report.yml (gh-pages deploy)
 
 # Only one Android E2E run at a time — prevents emulator resource contention
 concurrency:
