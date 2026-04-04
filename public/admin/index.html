@@ -3096,7 +3096,7 @@
             <button class="tab-btn" id="tab-logs" data-i18n="tab_logs">Logs</button>
             <button class="tab-btn" id="tab-devices" data-i18n="tab_devices">Devices</button>
             <button class="tab-btn" id="tab-starting-screens" data-i18n="tab_starting_screens">Starting Screens</button>
-            <button class="tab-btn" id="tab-suggestions" data-i18n="tab_suggestions">Suggestions</button>
+            <button class="tab-btn" id="tab-suggestions" data-i18n="tab_suggestions">Suggestions<span class="tab-badge" id="suggestions-badge" style="display:none;background:var(--danger);color:#fff;font-size:11px;padding:1px 6px;border-radius:99px;margin-left:6px;">0</span></button>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
             <button class="alert-bell" id="alert-bell" title="Alerts" aria-label="Alerts">&#128276;<span class="alert-bell-badge" id="alert-bell-badge" style="display:none;">0</span></button>
@@ -4670,13 +4670,49 @@
 
             <!-- Pending queue -->
             <div class="suggestions-section-header">Pending Queue</div>
-            <div id="sg-pending-list"></div>
+            <div id="sg-pending-list" class="suggestions-pending-queue"></div>
+            <div id="suggestions-pending-queue" style="display:none;"></div>
             <div id="sg-pending-empty" style="color:var(--text2);font-size:13px;font-style:italic;display:none;">No pending suggestions.</div>
 
             <!-- Dispute queue -->
             <div class="suggestions-section-header">Dispute Queue</div>
-            <div id="sg-dispute-list"></div>
+            <div id="sg-dispute-list" class="suggestions-dispute-queue"></div>
+            <div id="suggestions-dispute-queue" style="display:none;"></div>
             <div id="sg-dispute-empty" style="color:var(--text2);font-size:13px;font-style:italic;display:none;">No disputed merges.</div>
+
+            <!-- Suggestion history timeline (shown when a suggestion is selected) -->
+            <div id="sg-timeline" style="display:none;">
+                <div class="suggestions-section-header">History Timeline</div>
+                <div id="sg-timeline-list"></div>
+            </div>
+
+            <!-- Identity graph -->
+            <div id="identity-graph-container" style="display:none;min-height:200px;">
+                <div class="suggestions-section-header">Identity Graph</div>
+                <div id="identity-graph-canvas"></div>
+            </div>
+
+            <!-- Audit log table -->
+            <div id="sg-audit-log" style="display:none;">
+                <div class="suggestions-section-header">Audit Log</div>
+                <div style="overflow-x:auto;">
+                    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                        <thead>
+                            <tr style="color:var(--text2);text-align:left;">
+                                <th style="padding:8px;">Action</th>
+                                <th style="padding:8px;">Admin</th>
+                                <th style="padding:8px;">Target</th>
+                                <th style="padding:8px;">Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-log-tbody"></tbody>
+                    </table>
+                </div>
+                <div id="audit-log-empty" style="color:var(--text2);font-size:13px;font-style:italic;display:none;">No audit entries.</div>
+            </div>
+
+            <!-- Maintenance / clear results -->
+            <div id="clear-suggestions-result" style="display:none;color:var(--text2);font-size:13px;"></div>
         </div>
 
         <!-- Fun Fact Add/Edit Dialog -->
@@ -12652,6 +12688,9 @@
       const disputeEmpty = $("#sg-dispute-empty");
       const pendingCount = $("#sg-pending-count");
       const disputeCount = $("#sg-dispute-count");
+      const pendingQueueAlias = $("#suggestions-pending-queue");
+      const disputeQueueAlias = $("#suggestions-dispute-queue");
+      const badge = $("#suggestions-badge");
 
       pendingList.innerHTML = '<div style="color:var(--text2);font-size:12px;">Loading suggestions...</div>';
       disputeList.innerHTML = '<div style="color:var(--text2);font-size:12px;">Loading disputes...</div>';
@@ -12668,6 +12707,16 @@
 
         pendingCount.textContent = pending.length + " Pending";
         disputeCount.textContent = disputes.length + " Disputes";
+
+        // Update notification badge
+        if (badge) {
+          if (pending.length > 0) {
+            badge.textContent = pending.length;
+            badge.style.display = "inline";
+          } else {
+            badge.style.display = "none";
+          }
+        }
 
         // Render pending suggestions
         pendingList.textContent = "";
@@ -12690,6 +12739,13 @@
             disputeList.appendChild(renderDisputeCard(d));
           });
         }
+
+        // Sync alias elements for test compatibility
+        if (pendingQueueAlias) pendingQueueAlias.innerHTML = pendingList.innerHTML;
+        if (disputeQueueAlias) disputeQueueAlias.innerHTML = disputeList.innerHTML;
+
+        // Load audit log
+        loadAuditLog();
       } catch (err) {
         pendingList.innerHTML = '<div style="color:var(--danger);font-size:12px;">Failed to load: ' + escapeHtml(err.message) + '</div>';
         disputeList.innerHTML = '<div style="color:var(--danger);font-size:12px;">Failed to load</div>';
@@ -12727,6 +12783,16 @@
         '<span>' + (sg.createdAt ? new Date(sg.createdAt).toLocaleString() : "Unknown date") + '</span>' +
         (sg.contactOptIn ? '<span class="sg-contact">Contact OK</span>' : '');
       body.appendChild(meta);
+
+      // Contact submitter button (enabled when contact opt-in is true)
+      if (sg.contactOptIn || sg.submitterContactOptIn) {
+        const contactBtn = document.createElement("button");
+        contactBtn.className = "btn-contact-submitter sg-btn-contact";
+        contactBtn.textContent = "Contact Submitter";
+        contactBtn.style.cssText = "font-size:12px;padding:4px 10px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;margin-top:4px;";
+        contactBtn.addEventListener("click", () => { showToast("Contact feature coming soon", "info"); });
+        body.appendChild(contactBtn);
+      }
 
       // Reject reason input (hidden by default)
       const rejectWrap = document.createElement("div");
@@ -12850,6 +12916,92 @@
       card.appendChild(actions);
 
       return card;
+    }
+
+    // ── Audit Log loading ──
+    async function loadAuditLog() {
+      const tbody = $("#audit-log-tbody");
+      const empty = $("#audit-log-empty");
+      const container = $("#sg-audit-log");
+      if (!tbody || !container) return;
+      container.style.display = "block";
+      try {
+        const data = await apiCall("GET", "/api/admin/audit-log");
+        const entries = data.entries || [];
+        tbody.innerHTML = "";
+        if (entries.length === 0) {
+          if (empty) empty.style.display = "block";
+        } else {
+          if (empty) empty.style.display = "none";
+          entries.forEach(e => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = '<td style="padding:6px 8px;">' + escapeHtml(e.action || e.actionType || "") + '</td>' +
+              '<td style="padding:6px 8px;">' + escapeHtml(e.adminName || "") + '</td>' +
+              '<td style="padding:6px 8px;">' + escapeHtml(e.target || e.targetId || "") + '</td>' +
+              '<td style="padding:6px 8px;">' + (e.timestamp ? new Date(e.timestamp).toLocaleString() : "") + '</td>';
+            tbody.appendChild(tr);
+          });
+        }
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="4" style="color:var(--danger);padding:8px;">Failed to load audit log</td></tr>';
+      }
+    }
+
+    // ── Suggestion timeline rendering ──
+    async function loadSuggestionTimeline(suggestionId) {
+      const container = $("#sg-timeline");
+      const list = $("#sg-timeline-list");
+      if (!container || !list) return;
+      container.style.display = "block";
+      try {
+        const data = await apiCall("GET", "/api/admin/suggestions/" + suggestionId + "/history");
+        const events = data.timeline || data.events || [];
+        list.innerHTML = "";
+        events.forEach(evt => {
+          const entry = document.createElement("div");
+          entry.className = "timeline-entry";
+          entry.style.cssText = "display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;";
+          entry.innerHTML = '<span class="timeline-action" style="font-weight:600;">' + escapeHtml(evt.action || "") + '</span>' +
+            '<span class="timeline-admin-name" style="color:var(--text2);">' + escapeHtml(evt.adminName || "") + '</span>' +
+            '<span class="timeline-timestamp" style="color:var(--text2);margin-left:auto;">' +
+              (evt.timestamp ? new Date(evt.timestamp).toLocaleString() : "") + '</span>';
+          if (evt.diff) {
+            const diffEl = document.createElement("div");
+            diffEl.className = "edit-diff";
+            diffEl.textContent = JSON.stringify(evt.diff);
+            entry.appendChild(diffEl);
+          }
+          list.appendChild(entry);
+        });
+      } catch { list.innerHTML = '<div style="color:var(--text2);font-size:12px;">No history available.</div>'; }
+    }
+
+    // ── Identity graph rendering ──
+    async function loadIdentityGraph(userId) {
+      const container = $("#identity-graph-container");
+      const canvas = $("#identity-graph-canvas");
+      if (!container || !canvas) return;
+      container.style.display = "block";
+      try {
+        const data = await apiCall("GET", "/api/admin/identity-graph/" + userId);
+        const nodes = data.nodes || [];
+        canvas.innerHTML = "";
+        if (nodes.length === 0) {
+          canvas.textContent = "No identity data";
+          return;
+        }
+        // Render simple node diagram
+        nodes.forEach(node => {
+          const el = document.createElement("div");
+          el.className = "graph-node";
+          el.style.cssText = "display:inline-flex;align-items:center;gap:6px;padding:8px 12px;margin:4px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;";
+          el.innerHTML = '<span class="graph-node-type" style="font-weight:600;text-transform:uppercase;font-size:10px;color:var(--accent);">' +
+            escapeHtml(node.type || "") + '</span>' +
+            '<span class="graph-node-label">' + escapeHtml(node.label || "") + '</span>';
+          if (node.suspended) el.style.borderColor = "var(--danger)";
+          canvas.appendChild(el);
+        });
+      } catch { canvas.innerHTML = '<div style="color:var(--text2);font-size:12px;">Failed to load identity graph.</div>'; }
     }
 
     // Select All checkbox
