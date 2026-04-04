@@ -194,72 +194,72 @@ test.describe('Suggestions Board — Public Browsing', () => {
   });
 
   test('suggestions list loads with cards', async ({ page }) => {
-    const cards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+    const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     await cards.first().waitFor({ timeout: 10_000 });
     const count = await cards.count();
     expect(count).toBeGreaterThan(0);
   });
 
   test('card shows title', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
-    const title = card.locator('[data-testid="suggestion-title"], .suggestion-title');
+    const title = card.locator('[data-testid^="suggestion-title"], .sg-card-title');
     await expect(title).toBeVisible();
     const text = await title.textContent();
     expect(text!.trim().length).toBeGreaterThan(0);
   });
 
   test('card shows description', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
-    const desc = card.locator('[data-testid="suggestion-description"], .suggestion-description');
+    const desc = card.locator('[data-testid^="suggestion-desc"], .sg-card-desc');
     await expect(desc).toBeVisible();
   });
 
   test('card shows vote count', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
-    const voteCount = card.locator('[data-testid="vote-count"], .vote-count');
+    const voteCount = card.locator('[data-testid^="vote-score"], .sg-vote-score');
     await expect(voteCount).toBeVisible();
     const text = await voteCount.textContent();
     expect(text).toMatch(/-?\d+/);
   });
 
   test('card shows tags', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
-    const tags = card.locator('[data-testid="suggestion-tags"], .suggestion-tags');
+    const tags = card.locator('[data-testid^="suggestion-tag"], .sg-tag');
     // Tags are optional, but the container should exist
     await expect(tags).toBeAttached();
   });
 
   test('card shows language tag', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
-    const langTag = card.locator('[data-testid="language-tag"], .language-tag');
+    const langTag = card.locator('[data-testid^="suggestion-lang"], .sg-lang-tag');
     await expect(langTag).toBeVisible();
   });
 
   test('card shows timestamp', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
-    const timestamp = card.locator('[data-testid="suggestion-timestamp"], .suggestion-timestamp');
+    const timestamp = card.locator('[data-testid^="suggestion-time"], .sg-timestamp');
     await expect(timestamp).toBeVisible();
   });
 
   test('card shows status badge', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
-    const badge = card.locator('[data-testid="status-badge"], .status-badge');
+    const badge = card.locator('[data-testid^="suggestion-status"], .sg-badge');
     await expect(badge).toBeVisible();
   });
 
   test('sort "Most Voted" works (verify order)', async ({ page }) => {
-    const sortSelect = page.locator('[data-testid="sort-select"], .sort-select');
-    await sortSelect.waitFor({ timeout: 10_000 });
-    await sortSelect.selectOption({ label: 'Most Voted' });
+    const sortBtn = page.locator('[data-testid="sort-most-voted"]');
+    await sortBtn.waitFor({ timeout: 10_000 });
+    await sortBtn.click();
     await page.waitForTimeout(500);
-    const voteCounts = page.locator('[data-testid="vote-count"], .vote-count');
+    const voteCounts = page.locator('[data-testid^="vote-score"], .sg-vote-score');
     const count = await voteCounts.count();
     if (count >= 2) {
       const first = parseInt((await voteCounts.nth(0).textContent()) || '0');
@@ -269,25 +269,25 @@ test.describe('Suggestions Board — Public Browsing', () => {
   });
 
   test('sort "Newest" works (verify order)', async ({ page }) => {
-    const sortSelect = page.locator('[data-testid="sort-select"], .sort-select');
-    await sortSelect.waitFor({ timeout: 10_000 });
-    await sortSelect.selectOption({ label: 'Newest' });
+    const sortBtn = page.locator('[data-testid="sort-newest"]');
+    await sortBtn.waitFor({ timeout: 10_000 });
+    await sortBtn.click();
     await page.waitForTimeout(500);
-    const timestamps = page.locator('[data-testid="suggestion-timestamp"], .suggestion-timestamp');
+    const timestamps = page.locator('[data-testid^="suggestion-time"], .sg-timestamp');
     const count = await timestamps.count();
     expect(count).toBeGreaterThan(0);
     // Verify newest appear first (timestamps should be in descending order)
   });
 
   test('filter by status works (each status individually)', async ({ page }) => {
-    const statusFilter = page.locator('[data-testid="status-filter"], .status-filter');
+    const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
 
     const statuses = ['Accepted', 'Planned', 'Completed', 'Rejected'];
     for (const status of statuses) {
       await statusFilter.selectOption({ label: status });
       await page.waitForTimeout(500);
-      const badges = page.locator('[data-testid="status-badge"], .status-badge');
+      const badges = page.locator('[data-testid^="suggestion-status"], .sg-badge');
       const count = await badges.count();
       for (let i = 0; i < count; i++) {
         const text = await badges.nth(i).textContent();
@@ -297,7 +297,7 @@ test.describe('Suggestions Board — Public Browsing', () => {
   });
 
   test('filter by tag works', async ({ page }) => {
-    const tagFilter = page.locator('[data-testid="tag-filter"], .tag-filter');
+    const tagFilter = page.locator('[data-testid="filter-tag"]');
     await tagFilter.waitFor({ timeout: 10_000 });
     // Select the first available tag option (skip "All")
     const options = tagFilter.locator('option');
@@ -306,11 +306,11 @@ test.describe('Suggestions Board — Public Browsing', () => {
       const tagValue = await options.nth(1).getAttribute('value');
       await tagFilter.selectOption(tagValue!);
       await page.waitForTimeout(500);
-      const cards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+      const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
       const cardCount = await cards.count();
       // All displayed cards should have the selected tag
       for (let i = 0; i < cardCount; i++) {
-        const tags = cards.nth(i).locator('[data-testid="suggestion-tags"], .suggestion-tags');
+        const tags = cards.nth(i).locator('[data-testid^="suggestion-tag"], .sg-tag');
         const tagText = await tags.textContent();
         expect(tagText!.toLowerCase()).toContain(tagValue!.toLowerCase());
       }
@@ -318,7 +318,7 @@ test.describe('Suggestions Board — Public Browsing', () => {
   });
 
   test('filter by language works', async ({ page }) => {
-    const langFilter = page.locator('[data-testid="language-filter"], .language-filter');
+    const langFilter = page.locator('[data-testid="filter-lang"]');
     await langFilter.waitFor({ timeout: 10_000 });
     const options = langFilter.locator('option');
     const optionCount = await options.count();
@@ -326,7 +326,7 @@ test.describe('Suggestions Board — Public Browsing', () => {
       const langValue = await options.nth(1).getAttribute('value');
       await langFilter.selectOption(langValue!);
       await page.waitForTimeout(500);
-      const langTags = page.locator('[data-testid="language-tag"], .language-tag');
+      const langTags = page.locator('[data-testid^="suggestion-lang"], .sg-lang-tag');
       const count = await langTags.count();
       for (let i = 0; i < count; i++) {
         const text = await langTags.nth(i).textContent();
@@ -344,15 +344,15 @@ test.describe('Suggestions Board — Public Browsing', () => {
       const phaseValue = await options.nth(1).getAttribute('value');
       await phaseFilter.selectOption(phaseValue!);
       await page.waitForTimeout(500);
-      const cards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+      const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
       expect(await cards.count()).toBeGreaterThanOrEqual(0);
     }
   });
 
   test('combined filters work (status + tag + language)', async ({ page }) => {
-    const statusFilter = page.locator('[data-testid="status-filter"], .status-filter');
-    const tagFilter = page.locator('[data-testid="tag-filter"], .tag-filter');
-    const langFilter = page.locator('[data-testid="language-filter"], .language-filter');
+    const statusFilter = page.locator('[data-testid="filter-status"]');
+    const tagFilter = page.locator('[data-testid="filter-tag"]');
+    const langFilter = page.locator('[data-testid="filter-lang"]');
     await statusFilter.waitFor({ timeout: 10_000 });
 
     await statusFilter.selectOption({ label: 'Accepted' });
@@ -371,7 +371,7 @@ test.describe('Suggestions Board — Public Browsing', () => {
     await page.waitForTimeout(500);
 
     // All displayed cards should match all criteria
-    const badges = page.locator('[data-testid="status-badge"], .status-badge');
+    const badges = page.locator('[data-testid^="suggestion-status"], .sg-badge');
     const count = await badges.count();
     for (let i = 0; i < count; i++) {
       const text = await badges.nth(i).textContent();
@@ -380,12 +380,12 @@ test.describe('Suggestions Board — Public Browsing', () => {
   });
 
   test('search by text works (results match query)', async ({ page }) => {
-    const searchInput = page.locator('[data-testid="search-input"], .search-input');
+    const searchInput = page.locator('[data-testid="suggestions-search-input"]');
     await searchInput.waitFor({ timeout: 10_000 });
     // Type a search query
     await searchInput.fill('test');
     await page.waitForTimeout(500);
-    const cards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+    const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     const count = await cards.count();
     // Each visible card title or description should contain the query
     for (let i = 0; i < count; i++) {
@@ -395,28 +395,28 @@ test.describe('Suggestions Board — Public Browsing', () => {
   });
 
   test('pagination: page 1 loads, clicking page 2 loads next set', async ({ page }) => {
-    const page1 = page.locator('[data-testid="pagination"] [data-page="1"], .pagination .page-1');
-    const page2 = page.locator('[data-testid="pagination"] [data-page="2"], .pagination .page-2');
+    const page1 = page.locator('[data-testid="suggestions-pagination"] [data-page="1"]');
+    const page2 = page.locator('[data-testid="suggestions-pagination"] [data-page="2"]');
     if (await page2.count() > 0) {
-      const firstPageCards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
-      const firstPageFirstTitle = await firstPageCards.first().locator('[data-testid="suggestion-title"], .suggestion-title').textContent();
+      const firstPageCards = page.locator('[data-testid^="suggestion-card"], .sg-card');
+      const firstPageFirstTitle = await firstPageCards.first().locator('[data-testid^="suggestion-title"], .sg-card-title').textContent();
 
       await page2.click();
       await page.waitForTimeout(500);
 
-      const secondPageFirstTitle = await firstPageCards.first().locator('[data-testid="suggestion-title"], .suggestion-title').textContent();
+      const secondPageFirstTitle = await firstPageCards.first().locator('[data-testid^="suggestion-title"], .sg-card-title').textContent();
       // Different pages should show different content
       expect(secondPageFirstTitle).not.toBe(firstPageFirstTitle);
     }
   });
 
   test('rejected suggestion shows decline reason (if provided)', async ({ page }) => {
-    const statusFilter = page.locator('[data-testid="status-filter"], .status-filter');
+    const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await statusFilter.selectOption({ label: 'Rejected' });
     await page.waitForTimeout(500);
 
-    const rejectedCards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+    const rejectedCards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     if ((await rejectedCards.count()) > 0) {
       const declineReason = rejectedCards.first().locator('[data-testid="decline-reason"], .decline-reason');
       // Decline reason may or may not be present (depends on whether admin provided one)
@@ -429,12 +429,12 @@ test.describe('Suggestions Board — Public Browsing', () => {
   });
 
   test('rejected suggestion without reason shows no reason text', async ({ page }) => {
-    const statusFilter = page.locator('[data-testid="status-filter"], .status-filter');
+    const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await statusFilter.selectOption({ label: 'Rejected' });
     await page.waitForTimeout(500);
 
-    const rejectedCards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+    const rejectedCards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     if ((await rejectedCards.count()) > 0) {
       // At least some rejected cards may not have a reason — verify no crash
       const cards = await rejectedCards.count();
@@ -443,29 +443,29 @@ test.describe('Suggestions Board — Public Browsing', () => {
   });
 
   test('completed suggestion shows "Shipped!" badge', async ({ page }) => {
-    const statusFilter = page.locator('[data-testid="status-filter"], .status-filter');
+    const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await statusFilter.selectOption({ label: 'Completed' });
     await page.waitForTimeout(500);
 
-    const completedCards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+    const completedCards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     if ((await completedCards.count()) > 0) {
-      const badge = completedCards.first().locator('[data-testid="status-badge"], .status-badge');
+      const badge = completedCards.first().locator('[data-testid^="suggestion-status"], .sg-badge');
       await expect(badge).toContainText(/Shipped!/i);
     }
   });
 
   test('planned suggestion shows "Planned" badge, no vote arrows', async ({ page }) => {
-    const statusFilter = page.locator('[data-testid="status-filter"], .status-filter');
+    const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await statusFilter.selectOption({ label: 'Planned' });
     await page.waitForTimeout(500);
 
-    const plannedCards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+    const plannedCards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     if ((await plannedCards.count()) > 0) {
-      const badge = plannedCards.first().locator('[data-testid="status-badge"], .status-badge');
+      const badge = plannedCards.first().locator('[data-testid^="suggestion-status"], .sg-badge');
       await expect(badge).toContainText(/Planned/i);
-      const voteArrows = plannedCards.first().locator('[data-testid="upvote-btn"], [data-testid="downvote-btn"], .vote-up, .vote-down');
+      const voteArrows = plannedCards.first().locator('[data-testid^="vote-up"], [data-testid^="vote-down"]');
       // Vote arrows should be hidden or not present for planned suggestions
       const arrowCount = await voteArrows.count();
       if (arrowCount > 0) {
@@ -477,7 +477,7 @@ test.describe('Suggestions Board — Public Browsing', () => {
   });
 
   test('info banner visible with moderation and duplicate warning text', async ({ page }) => {
-    const infoBanner = page.locator('[data-testid="suggestions-info-banner"], .suggestions-info-banner');
+    const infoBanner = page.locator('[data-testid="suggestions-info-banner"]');
     await infoBanner.waitFor({ timeout: 10_000 });
     await expect(infoBanner).toBeVisible();
     const text = await infoBanner.textContent();
@@ -487,11 +487,11 @@ test.describe('Suggestions Board — Public Browsing', () => {
 
   test('empty state: no suggestions shows appropriate message', async ({ page }) => {
     // Apply a filter combination unlikely to have results
-    const searchInput = page.locator('[data-testid="search-input"], .search-input');
+    const searchInput = page.locator('[data-testid="suggestions-search-input"]');
     await searchInput.waitFor({ timeout: 10_000 });
     await searchInput.fill('zzzzzzzzzzzzzzzzzznonexistent');
     await page.waitForTimeout(500);
-    const emptyState = page.locator('[data-testid="suggestions-empty"], .suggestions-empty');
+    const emptyState = page.locator('[data-testid="suggestions-empty"]');
     await expect(emptyState).toBeVisible();
   });
 });
@@ -507,44 +507,44 @@ test.describe('Suggestions Board — Login Gate', () => {
   });
 
   test('click vote without login shows login prompt', async ({ page }) => {
-    const upvoteBtn = page.locator('[data-testid="upvote-btn"], .vote-up').first();
+    const upvoteBtn = page.locator('[data-testid^="vote-up"]').first();
     await upvoteBtn.waitFor({ timeout: 10_000 });
     await upvoteBtn.click();
-    const loginPrompt = page.locator('[data-testid="login-prompt"], .login-prompt');
+    const loginPrompt = page.locator('[data-testid="login-modal-overlay"]');
     await expect(loginPrompt).toBeVisible({ timeout: 5_000 });
   });
 
   test('click "+ Suggest" without login shows login prompt', async ({ page }) => {
-    const suggestBtn = page.locator('[data-testid="suggest-btn"], .suggest-btn');
+    const suggestBtn = page.locator('[data-testid="suggest-btn"]');
     await suggestBtn.waitFor({ timeout: 10_000 });
     await suggestBtn.click();
-    const loginPrompt = page.locator('[data-testid="login-prompt"], .login-prompt');
+    const loginPrompt = page.locator('[data-testid="login-modal-overlay"]');
     await expect(loginPrompt).toBeVisible({ timeout: 5_000 });
   });
 
   test('click comment without login shows login prompt', async ({ page }) => {
-    const commentBtn = page.locator('[data-testid="comment-btn"], .comment-btn').first();
+    const commentBtn = page.locator('[data-testid^="comment-submit"]').first();
     if (await commentBtn.count() > 0) {
       await commentBtn.click();
-      const loginPrompt = page.locator('[data-testid="login-prompt"], .login-prompt');
+      const loginPrompt = page.locator('[data-testid="login-modal-overlay"]');
       await expect(loginPrompt).toBeVisible({ timeout: 5_000 });
     }
   });
 
   test('click subscribe bell without login shows login prompt', async ({ page }) => {
-    const bell = page.locator('[data-testid="suggestion-bell"], .suggestion-bell').first();
+    const bell = page.locator('[data-testid^="suggestion-bell"]').first();
     if (await bell.count() > 0) {
       await bell.click();
-      const loginPrompt = page.locator('[data-testid="login-prompt"], .login-prompt');
+      const loginPrompt = page.locator('[data-testid="login-modal-overlay"]');
       await expect(loginPrompt).toBeVisible({ timeout: 5_000 });
     }
   });
 
   test('after login, user returned to previous action context', async ({ page }) => {
-    const upvoteBtn = page.locator('[data-testid="upvote-btn"], .vote-up').first();
+    const upvoteBtn = page.locator('[data-testid^="vote-up"]').first();
     await upvoteBtn.waitFor({ timeout: 10_000 });
     await upvoteBtn.click();
-    const loginPrompt = page.locator('[data-testid="login-prompt"], .login-prompt');
+    const loginPrompt = page.locator('[data-testid="login-modal-overlay"]');
     await expect(loginPrompt).toBeVisible({ timeout: 5_000 });
     // After login the user should be returned to the suggestions section context
     // The login prompt should reference the action they were attempting
@@ -562,38 +562,38 @@ test.describe('Suggestions Board — Submission Flow', () => {
   });
 
   test('form displays title field with 80 char limit visible', async ({ page }) => {
-    const suggestBtn = page.locator('[data-testid="suggest-btn"], .suggest-btn');
+    const suggestBtn = page.locator('[data-testid="suggest-btn"]');
     await suggestBtn.waitFor({ timeout: 10_000 });
     // Form should show title field with character limit
-    const titleField = page.locator('[data-testid="suggestion-title-input"], .suggestion-title-input');
-    const titleLimit = page.locator('[data-testid="title-char-limit"], .title-char-limit');
+    const titleField = page.locator('[data-testid="suggest-title-input"]');
+    const titleLimit = page.locator('[data-testid="suggest-title-count"]');
     // These will be visible once form is opened (may require login first)
   });
 
   test('form displays description field with 5000 char limit visible', async ({ page }) => {
-    const descField = page.locator('[data-testid="suggestion-desc-input"], .suggestion-desc-input');
+    const descField = page.locator('[data-testid="suggest-desc-input"]');
     const descLimit = page.locator('[data-testid="desc-char-limit"], .desc-char-limit');
     // Description field should show 5000 char limit
   });
 
   test('form displays tags selection', async ({ page }) => {
-    const tagsField = page.locator('[data-testid="suggestion-tags-input"], .suggestion-tags-input');
+    const tagsField = page.locator('[data-testid="suggest-tag-select"]');
     // Tags picker should be present in the form
   });
 
   test('form displays language dropdown pre-selected from user pref', async ({ page }) => {
-    const langDropdown = page.locator('[data-testid="suggestion-lang-select"], .suggestion-lang-select');
+    const langDropdown = page.locator('[data-testid="suggest-lang-select"]');
     // Language should be pre-selected based on user's language preference
   });
 
   test('form displays contact opt-in checkbox', async ({ page }) => {
-    const optIn = page.locator('[data-testid="contact-optin"], .contact-optin');
+    const optIn = page.locator('[data-testid="suggest-contact-optin"]');
     // Contact opt-in checkbox should be present
   });
 
   test('character counter updates as user types in title', async ({ page }) => {
-    const titleInput = page.locator('[data-testid="suggestion-title-input"], .suggestion-title-input');
-    const titleCounter = page.locator('[data-testid="title-char-counter"], .title-char-counter');
+    const titleInput = page.locator('[data-testid="suggest-title-input"]');
+    const titleCounter = page.locator('[data-testid="suggest-title-count"]');
     if (await titleInput.count() > 0) {
       await titleInput.fill('Hello');
       await expect(titleCounter).toContainText('5/80');
@@ -601,8 +601,8 @@ test.describe('Suggestions Board — Submission Flow', () => {
   });
 
   test('title at 80 chars: counter shows 80/80, cannot type more', async ({ page }) => {
-    const titleInput = page.locator('[data-testid="suggestion-title-input"], .suggestion-title-input');
-    const titleCounter = page.locator('[data-testid="title-char-counter"], .title-char-counter');
+    const titleInput = page.locator('[data-testid="suggest-title-input"]');
+    const titleCounter = page.locator('[data-testid="suggest-title-count"]');
     if (await titleInput.count() > 0) {
       const eightyChars = 'A'.repeat(80);
       await titleInput.fill(eightyChars);
@@ -615,8 +615,8 @@ test.describe('Suggestions Board — Submission Flow', () => {
   });
 
   test('description at 5000 chars: counter shows 5000/5000', async ({ page }) => {
-    const descInput = page.locator('[data-testid="suggestion-desc-input"], .suggestion-desc-input');
-    const descCounter = page.locator('[data-testid="desc-char-counter"], .desc-char-counter');
+    const descInput = page.locator('[data-testid="suggest-desc-input"]');
+    const descCounter = page.locator('[data-testid="suggest-desc-count"]');
     if (await descInput.count() > 0) {
       const fiveThousandChars = 'B'.repeat(5000);
       await descInput.fill(fiveThousandChars);
@@ -625,11 +625,11 @@ test.describe('Suggestions Board — Submission Flow', () => {
   });
 
   test('duplicate detection: typing title shows similar suggestions after 3+ chars', async ({ page }) => {
-    const titleInput = page.locator('[data-testid="suggestion-title-input"], .suggestion-title-input');
+    const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if (await titleInput.count() > 0) {
       await titleInput.fill('Vo');
       await page.waitForTimeout(500);
-      const duplicates = page.locator('[data-testid="duplicate-results"], .duplicate-results');
+      const duplicates = page.locator('[data-testid="suggest-duplicates"]');
       // At 2 chars, no results should show
       await expect(duplicates).not.toBeVisible();
 
@@ -640,26 +640,26 @@ test.describe('Suggestions Board — Submission Flow', () => {
   });
 
   test('duplicate detection: "Yes, this is what I meant" redirects to original', async ({ page }) => {
-    const titleInput = page.locator('[data-testid="suggestion-title-input"], .suggestion-title-input');
+    const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if (await titleInput.count() > 0) {
       await titleInput.fill('Voice chat');
       await page.waitForTimeout(500);
-      const yesBtn = page.locator('[data-testid="duplicate-yes"], .duplicate-yes').first();
+      const yesBtn = page.locator('[data-testid^="duplicate-match"]').first();
       if (await yesBtn.count() > 0) {
         await yesBtn.click();
         // Should redirect to the existing suggestion for upvoting
-        const upvoteFlow = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+        const upvoteFlow = page.locator('[data-testid^="suggestion-card"], .sg-card');
         await expect(upvoteFlow.first()).toBeVisible({ timeout: 5_000 });
       }
     }
   });
 
   test('duplicate detection: "No, my idea is different" continues form', async ({ page }) => {
-    const titleInput = page.locator('[data-testid="suggestion-title-input"], .suggestion-title-input');
+    const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if (await titleInput.count() > 0) {
       await titleInput.fill('Voice chat');
       await page.waitForTimeout(500);
-      const noBtn = page.locator('[data-testid="duplicate-no"], .duplicate-no');
+      const noBtn = page.locator('[data-testid^="duplicate-diff"]');
       if (await noBtn.count() > 0) {
         await noBtn.click();
         // Form should remain visible and user can continue
@@ -669,16 +669,16 @@ test.describe('Suggestions Board — Submission Flow', () => {
   });
 
   test('duplicate detection: "Load more" shows 3 more results', async ({ page }) => {
-    const titleInput = page.locator('[data-testid="suggestion-title-input"], .suggestion-title-input');
+    const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if (await titleInput.count() > 0) {
       await titleInput.fill('Voice chat rooms');
       await page.waitForTimeout(500);
-      const loadMore = page.locator('[data-testid="duplicate-load-more"], .duplicate-load-more');
+      const loadMore = page.locator('[data-testid="duplicate-load-more"]');
       if (await loadMore.count() > 0) {
-        const initialCount = await page.locator('[data-testid="duplicate-item"], .duplicate-item').count();
+        const initialCount = await page.locator('[data-testid^="duplicate-item"]').count();
         await loadMore.click();
         await page.waitForTimeout(500);
-        const newCount = await page.locator('[data-testid="duplicate-item"], .duplicate-item').count();
+        const newCount = await page.locator('[data-testid^="duplicate-item"]').count();
         expect(newCount).toBeGreaterThan(initialCount);
         expect(newCount - initialCount).toBeLessThanOrEqual(3);
       }
@@ -686,11 +686,11 @@ test.describe('Suggestions Board — Submission Flow', () => {
   });
 
   test('duplicate detection: all results exhausted, "Load more" disappears', async ({ page }) => {
-    const titleInput = page.locator('[data-testid="suggestion-title-input"], .suggestion-title-input');
+    const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if (await titleInput.count() > 0) {
       await titleInput.fill('Voice chat rooms');
       await page.waitForTimeout(500);
-      const loadMore = page.locator('[data-testid="duplicate-load-more"], .duplicate-load-more');
+      const loadMore = page.locator('[data-testid="duplicate-load-more"]');
       // Keep clicking load more until exhausted
       while (await loadMore.count() > 0 && await loadMore.isVisible()) {
         await loadMore.click();
@@ -731,11 +731,11 @@ test.describe('Suggestions Board — Submission Flow', () => {
   });
 
   test('cannot edit/withdraw accepted/planned/completed/rejected (buttons not shown)', async ({ page }) => {
-    const statusFilter = page.locator('[data-testid="status-filter"], .status-filter');
+    const statusFilter = page.locator('[data-testid="filter-status"]');
     if (await statusFilter.count() > 0) {
       await statusFilter.selectOption({ label: 'Accepted' });
       await page.waitForTimeout(500);
-      const cards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+      const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
       if ((await cards.count()) > 0) {
         const editBtn = cards.first().locator('[data-testid="edit-suggestion-btn"], .edit-suggestion-btn');
         const withdrawBtn = cards.first().locator('[data-testid="withdraw-suggestion-btn"], .withdraw-suggestion-btn');
@@ -757,10 +757,10 @@ test.describe('Suggestions Board — Voting Flow', () => {
   });
 
   test('upvote: arrow highlights, count increments', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
-    const upvoteBtn = card.locator('[data-testid="upvote-btn"], .vote-up');
-    const voteCount = card.locator('[data-testid="vote-count"], .vote-count');
+    const upvoteBtn = card.locator('[data-testid^="vote-up"]');
+    const voteCount = card.locator('[data-testid^="vote-score"], .sg-vote-score');
     const initialCount = parseInt((await voteCount.textContent()) || '0');
     await upvoteBtn.click();
     // If login prompt appears, that's expected for unauthenticated users
@@ -768,19 +768,19 @@ test.describe('Suggestions Board — Voting Flow', () => {
   });
 
   test('downvote: arrow highlights, count decrements', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
-    const downvoteBtn = card.locator('[data-testid="downvote-btn"], .vote-down');
-    const voteCount = card.locator('[data-testid="vote-count"], .vote-count');
+    const downvoteBtn = card.locator('[data-testid^="vote-down"]');
+    const voteCount = card.locator('[data-testid^="vote-score"], .sg-vote-score');
     await downvoteBtn.click();
     // When authenticated, count should decrement
   });
 
   test('toggle: clicking opposite arrow switches vote, counts update', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
-    const upvoteBtn = card.locator('[data-testid="upvote-btn"], .vote-up');
-    const downvoteBtn = card.locator('[data-testid="downvote-btn"], .vote-down');
+    const upvoteBtn = card.locator('[data-testid^="vote-up"]');
+    const downvoteBtn = card.locator('[data-testid^="vote-down"]');
     // Click upvote, then downvote — should toggle
     await upvoteBtn.click();
     await page.waitForTimeout(300);
@@ -790,9 +790,9 @@ test.describe('Suggestions Board — Voting Flow', () => {
   });
 
   test('remove vote: clicking same arrow again removes vote', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
-    const upvoteBtn = card.locator('[data-testid="upvote-btn"], .vote-up');
+    const upvoteBtn = card.locator('[data-testid^="vote-up"]');
     // Click upvote twice — should toggle off
     await upvoteBtn.click();
     await page.waitForTimeout(300);
@@ -802,9 +802,9 @@ test.describe('Suggestions Board — Voting Flow', () => {
   });
 
   test('vote reason: optional modal appears, can choose public/private', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
-    const upvoteBtn = card.locator('[data-testid="upvote-btn"], .vote-up');
+    const upvoteBtn = card.locator('[data-testid^="vote-up"]');
     await upvoteBtn.click();
     await page.waitForTimeout(300);
     const reasonModal = page.locator('[data-testid="vote-reason-modal"], .vote-reason-modal');
@@ -818,14 +818,14 @@ test.describe('Suggestions Board — Voting Flow', () => {
   });
 
   test('planned suggestion: vote arrows disabled/hidden', async ({ page }) => {
-    const statusFilter = page.locator('[data-testid="status-filter"], .status-filter');
+    const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await statusFilter.selectOption({ label: 'Planned' });
     await page.waitForTimeout(500);
-    const cards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+    const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     if ((await cards.count()) > 0) {
-      const voteUp = cards.first().locator('[data-testid="upvote-btn"], .vote-up');
-      const voteDown = cards.first().locator('[data-testid="downvote-btn"], .vote-down');
+      const voteUp = cards.first().locator('[data-testid^="vote-up"]');
+      const voteDown = cards.first().locator('[data-testid^="vote-down"]');
       if (await voteUp.count() > 0) {
         await expect(voteUp).toBeDisabled();
       }
@@ -836,14 +836,14 @@ test.describe('Suggestions Board — Voting Flow', () => {
   });
 
   test('completed suggestion: vote arrows disabled/hidden', async ({ page }) => {
-    const statusFilter = page.locator('[data-testid="status-filter"], .status-filter');
+    const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await statusFilter.selectOption({ label: 'Completed' });
     await page.waitForTimeout(500);
-    const cards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+    const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     if ((await cards.count()) > 0) {
-      const voteUp = cards.first().locator('[data-testid="upvote-btn"], .vote-up');
-      const voteDown = cards.first().locator('[data-testid="downvote-btn"], .vote-down');
+      const voteUp = cards.first().locator('[data-testid^="vote-up"]');
+      const voteDown = cards.first().locator('[data-testid^="vote-down"]');
       if (await voteUp.count() > 0) {
         await expect(voteUp).toBeDisabled();
       }
@@ -865,13 +865,13 @@ test.describe('Suggestions Board — Comment Flow', () => {
   });
 
   test('comment form visible on accepted suggestions', async ({ page }) => {
-    const statusFilter = page.locator('[data-testid="status-filter"], .status-filter');
+    const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await statusFilter.selectOption({ label: 'Accepted' });
     await page.waitForTimeout(500);
-    const cards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+    const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     if ((await cards.count()) > 0) {
-      const commentForm = cards.first().locator('[data-testid="comment-form"], .comment-form');
+      const commentForm = cards.first().locator('[data-testid^="comments-section"]');
       if (await commentForm.count() > 0) {
         await expect(commentForm).toBeVisible();
       }
@@ -879,37 +879,37 @@ test.describe('Suggestions Board — Comment Flow', () => {
   });
 
   test('planned suggestions: "Comments are read-only" label, no form', async ({ page }) => {
-    const statusFilter = page.locator('[data-testid="status-filter"], .status-filter');
+    const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await statusFilter.selectOption({ label: 'Planned' });
     await page.waitForTimeout(500);
-    const cards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+    const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     if ((await cards.count()) > 0) {
       const readOnlyLabel = cards.first().locator('[data-testid="comments-read-only"], .comments-read-only');
       if (await readOnlyLabel.count() > 0) {
         await expect(readOnlyLabel).toBeVisible();
       }
-      const commentForm = cards.first().locator('[data-testid="comment-form"], .comment-form');
+      const commentForm = cards.first().locator('[data-testid^="comments-section"]');
       expect(await commentForm.count()).toBe(0);
     }
   });
 
   test('submit comment: appears in comment list', async ({ page }) => {
-    const commentInput = page.locator('[data-testid="comment-input"], .comment-input').first();
-    const commentSubmit = page.locator('[data-testid="comment-submit"], .comment-submit').first();
+    const commentInput = page.locator('[data-testid^="comment-input"]').first();
+    const commentSubmit = page.locator('[data-testid^="comment-submit"]').first();
     if (await commentInput.count() > 0) {
       await commentInput.fill('Great idea!');
       await commentSubmit.click();
       await page.waitForTimeout(500);
-      const comments = page.locator('[data-testid="comment-item"], .comment-item');
+      const comments = page.locator('.sg-comment');
       // Comment should appear in the list
     }
   });
 
   test('anonymous label on public comments', async ({ page }) => {
-    const commentItems = page.locator('[data-testid="comment-item"], .comment-item');
+    const commentItems = page.locator('.sg-comment');
     if ((await commentItems.count()) > 0) {
-      const authorLabel = commentItems.first().locator('[data-testid="comment-author"], .comment-author');
+      const authorLabel = commentItems.first().locator('.sg-comment-author');
       if (await authorLabel.count() > 0) {
         const text = await authorLabel.textContent();
         // Public comments should show "Anonymous" label
@@ -936,14 +936,14 @@ test.describe('Suggestion Submission Edge Cases', () => {
   });
 
   test('submit with exactly 80 char title: succeeds', async ({ page }) => {
-    const titleInput = page.locator('[data-testid="suggestion-title-input"], .suggestion-title-input');
+    const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if (await titleInput.count() > 0) {
       const eightyChars = 'A'.repeat(80);
       await titleInput.fill(eightyChars);
       const value = await titleInput.inputValue();
       expect(value.length).toBe(80);
       // Form should allow submission
-      const submitBtn = page.locator('[data-testid="suggestion-submit-btn"], .suggestion-submit-btn');
+      const submitBtn = page.locator('[data-testid="suggest-modal-submit"]');
       if (await submitBtn.count() > 0) {
         await expect(submitBtn).not.toBeDisabled();
       }
@@ -951,7 +951,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
   });
 
   test('submit with 81 char title: prevented by form (client-side validation)', async ({ page }) => {
-    const titleInput = page.locator('[data-testid="suggestion-title-input"], .suggestion-title-input');
+    const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if (await titleInput.count() > 0) {
       const eightyOneChars = 'A'.repeat(81);
       await titleInput.fill(eightyOneChars);
@@ -962,7 +962,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
   });
 
   test('submit with exactly 5000 char description: succeeds', async ({ page }) => {
-    const descInput = page.locator('[data-testid="suggestion-desc-input"], .suggestion-desc-input');
+    const descInput = page.locator('[data-testid="suggest-desc-input"]');
     if (await descInput.count() > 0) {
       const fiveThousandChars = 'B'.repeat(5000);
       await descInput.fill(fiveThousandChars);
@@ -972,7 +972,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
   });
 
   test('submit with 5001 char description: prevented by form', async ({ page }) => {
-    const descInput = page.locator('[data-testid="suggestion-desc-input"], .suggestion-desc-input');
+    const descInput = page.locator('[data-testid="suggest-desc-input"]');
     if (await descInput.count() > 0) {
       const overLimit = 'B'.repeat(5001);
       await descInput.fill(overLimit);
@@ -982,8 +982,8 @@ test.describe('Suggestion Submission Edge Cases', () => {
   });
 
   test('submit with only whitespace title: form validation error', async ({ page }) => {
-    const titleInput = page.locator('[data-testid="suggestion-title-input"], .suggestion-title-input');
-    const submitBtn = page.locator('[data-testid="suggestion-submit-btn"], .suggestion-submit-btn');
+    const titleInput = page.locator('[data-testid="suggest-title-input"]');
+    const submitBtn = page.locator('[data-testid="suggest-modal-submit"]');
     if (await titleInput.count() > 0 && await submitBtn.count() > 0) {
       await titleInput.fill('   ');
       await submitBtn.click();
@@ -993,7 +993,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
   });
 
   test('submit with emoji in title: succeeds, displayed correctly', async ({ page }) => {
-    const titleInput = page.locator('[data-testid="suggestion-title-input"], .suggestion-title-input');
+    const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if (await titleInput.count() > 0) {
       await titleInput.fill('Add dark mode toggle 🌙');
       const value = await titleInput.inputValue();
@@ -1002,7 +1002,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
   });
 
   test('submit with RTL text (Arabic): layout correct, language tag set', async ({ page }) => {
-    const titleInput = page.locator('[data-testid="suggestion-title-input"], .suggestion-title-input');
+    const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if (await titleInput.count() > 0) {
       await titleInput.fill('إضافة الوضع المظلم');
       const value = await titleInput.inputValue();
@@ -1011,23 +1011,23 @@ test.describe('Suggestion Submission Edge Cases', () => {
   });
 
   test('duplicate detection: no matches shows no "Load more"', async ({ page }) => {
-    const titleInput = page.locator('[data-testid="suggestion-title-input"], .suggestion-title-input');
+    const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if (await titleInput.count() > 0) {
       await titleInput.fill('zzzzuniquezzzznotexist');
       await page.waitForTimeout(500);
-      const loadMore = page.locator('[data-testid="duplicate-load-more"], .duplicate-load-more');
+      const loadMore = page.locator('[data-testid="duplicate-load-more"]');
       await expect(loadMore).not.toBeVisible();
     }
   });
 
   test('duplicate detection: exactly 3 matches shown, no "Load more"', async ({ page }) => {
     // When there are exactly 3 matches, all should show and no load more button
-    const titleInput = page.locator('[data-testid="suggestion-title-input"], .suggestion-title-input');
+    const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if (await titleInput.count() > 0) {
       await titleInput.fill('Voice');
       await page.waitForTimeout(500);
-      const items = page.locator('[data-testid="duplicate-item"], .duplicate-item');
-      const loadMore = page.locator('[data-testid="duplicate-load-more"], .duplicate-load-more');
+      const items = page.locator('[data-testid^="duplicate-item"]');
+      const loadMore = page.locator('[data-testid="duplicate-load-more"]');
       const count = await items.count();
       if (count === 3) {
         await expect(loadMore).not.toBeVisible();
@@ -1036,12 +1036,12 @@ test.describe('Suggestion Submission Edge Cases', () => {
   });
 
   test('duplicate detection: 4+ matches shows 3 initially, "Load more" appears', async ({ page }) => {
-    const titleInput = page.locator('[data-testid="suggestion-title-input"], .suggestion-title-input');
+    const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if (await titleInput.count() > 0) {
       await titleInput.fill('Voice');
       await page.waitForTimeout(500);
-      const items = page.locator('[data-testid="duplicate-item"], .duplicate-item');
-      const loadMore = page.locator('[data-testid="duplicate-load-more"], .duplicate-load-more');
+      const items = page.locator('[data-testid^="duplicate-item"]');
+      const loadMore = page.locator('[data-testid="duplicate-load-more"]');
       if (await loadMore.count() > 0) {
         expect(await items.count()).toBe(3);
         await expect(loadMore).toBeVisible();
@@ -1050,16 +1050,16 @@ test.describe('Suggestion Submission Edge Cases', () => {
   });
 
   test('duplicate detection: click "Yes, this is what I meant" on 2nd page upvotes correct suggestion', async ({ page }) => {
-    const titleInput = page.locator('[data-testid="suggestion-title-input"], .suggestion-title-input');
+    const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if (await titleInput.count() > 0) {
       await titleInput.fill('Voice');
       await page.waitForTimeout(500);
-      const loadMore = page.locator('[data-testid="duplicate-load-more"], .duplicate-load-more');
+      const loadMore = page.locator('[data-testid="duplicate-load-more"]');
       if (await loadMore.count() > 0) {
         await loadMore.click();
         await page.waitForTimeout(300);
         // Click "Yes" on a result from the second page
-        const yesButtons = page.locator('[data-testid="duplicate-yes"], .duplicate-yes');
+        const yesButtons = page.locator('[data-testid^="duplicate-match"]');
         const count = await yesButtons.count();
         if (count > 3) {
           await yesButtons.nth(3).click();
@@ -1070,7 +1070,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
   });
 
   test('back button during submission: form state preserved', async ({ page }) => {
-    const titleInput = page.locator('[data-testid="suggestion-title-input"], .suggestion-title-input');
+    const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if (await titleInput.count() > 0) {
       await titleInput.fill('Test suggestion title');
       await page.goBack();
@@ -1082,8 +1082,8 @@ test.describe('Suggestion Submission Edge Cases', () => {
   test('network error during submit: error message shown, form not cleared', async ({ page }) => {
     // Simulate network failure
     await page.route('**/api/suggestions', (route) => route.abort());
-    const titleInput = page.locator('[data-testid="suggestion-title-input"], .suggestion-title-input');
-    const submitBtn = page.locator('[data-testid="suggestion-submit-btn"], .suggestion-submit-btn');
+    const titleInput = page.locator('[data-testid="suggest-title-input"]');
+    const submitBtn = page.locator('[data-testid="suggest-modal-submit"]');
     if (await titleInput.count() > 0 && await submitBtn.count() > 0) {
       await titleInput.fill('Test suggestion');
       await submitBtn.click();
@@ -1099,7 +1099,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
   });
 
   test('double-click submit button: only one submission created', async ({ page }) => {
-    const submitBtn = page.locator('[data-testid="suggestion-submit-btn"], .suggestion-submit-btn');
+    const submitBtn = page.locator('[data-testid="suggest-modal-submit"]');
     if (await submitBtn.count() > 0) {
       await submitBtn.dblclick();
       await page.waitForTimeout(500);
@@ -1119,10 +1119,10 @@ test.describe('Voting Edge Cases', () => {
   });
 
   test('rapid-fire voting (click up, click down, click up quickly): final state correct', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
-    const upvoteBtn = card.locator('[data-testid="upvote-btn"], .vote-up');
-    const downvoteBtn = card.locator('[data-testid="downvote-btn"], .vote-down');
+    const upvoteBtn = card.locator('[data-testid^="vote-up"]');
+    const downvoteBtn = card.locator('[data-testid^="vote-down"]');
 
     // Rapid clicks
     await upvoteBtn.click();
@@ -1136,9 +1136,9 @@ test.describe('Voting Edge Cases', () => {
   });
 
   test('vote on suggestion, navigate away, come back: vote state preserved', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
-    const upvoteBtn = card.locator('[data-testid="upvote-btn"], .vote-up');
+    const upvoteBtn = card.locator('[data-testid^="vote-up"]');
     await upvoteBtn.click();
     await page.waitForTimeout(300);
 
@@ -1154,33 +1154,33 @@ test.describe('Voting Edge Cases', () => {
   });
 
   test('two browser tabs: vote in one, other tab reflects updated count on refresh', async ({ page, context }) => {
-    await page.locator('[data-testid="suggestion-card"], .suggestion-card').first().waitFor({ timeout: 10_000 });
-    const voteCount = page.locator('[data-testid="vote-count"], .vote-count').first();
+    await page.locator('[data-testid^="suggestion-card"], .sg-card').first().waitFor({ timeout: 10_000 });
+    const voteCount = page.locator('[data-testid^="vote-score"], .sg-vote-score').first();
     const initialCount = await voteCount.textContent();
 
     // Open second tab
     const page2 = await context.newPage();
     await page2.goto('/roadmap.html');
-    await page2.locator('[data-testid="suggestion-card"], .suggestion-card').first().waitFor({ timeout: 10_000 });
+    await page2.locator('[data-testid^="suggestion-card"], .sg-card').first().waitFor({ timeout: 10_000 });
 
     // Vote in first tab
-    const upvoteBtn = page.locator('[data-testid="upvote-btn"], .vote-up').first();
+    const upvoteBtn = page.locator('[data-testid^="vote-up"]').first();
     await upvoteBtn.click();
     await page.waitForTimeout(500);
 
     // Refresh second tab and check count
     await page2.reload();
-    await page2.locator('[data-testid="suggestion-card"], .suggestion-card').first().waitFor({ timeout: 10_000 });
-    const updatedCount = await page2.locator('[data-testid="vote-count"], .vote-count').first().textContent();
+    await page2.locator('[data-testid^="suggestion-card"], .sg-card').first().waitFor({ timeout: 10_000 });
+    const updatedCount = await page2.locator('[data-testid^="vote-score"], .sg-vote-score').first().textContent();
     // Count should reflect the vote from the first tab
 
     await page2.close();
   });
 
   test('downvote: count goes negative (net score can be negative)', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
-    const voteCount = card.locator('[data-testid="vote-count"], .vote-count');
+    const voteCount = card.locator('[data-testid^="vote-score"], .sg-vote-score');
     const text = await voteCount.textContent();
     // Net score can be negative — verify the UI supports displaying negative numbers
     const score = parseInt(text || '0');
@@ -1189,9 +1189,9 @@ test.describe('Voting Edge Cases', () => {
   });
 
   test('vote reason with 0 chars: accepted (no reason)', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
-    const upvoteBtn = card.locator('[data-testid="upvote-btn"], .vote-up');
+    const upvoteBtn = card.locator('[data-testid^="vote-up"]');
     await upvoteBtn.click();
     await page.waitForTimeout(300);
     const reasonModal = page.locator('[data-testid="vote-reason-modal"], .vote-reason-modal');
@@ -1204,9 +1204,9 @@ test.describe('Voting Edge Cases', () => {
   });
 
   test('vote reason with max chars: accepted', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
-    const upvoteBtn = card.locator('[data-testid="upvote-btn"], .vote-up');
+    const upvoteBtn = card.locator('[data-testid^="vote-up"]');
     await upvoteBtn.click();
     await page.waitForTimeout(300);
     const reasonModal = page.locator('[data-testid="vote-reason-modal"], .vote-reason-modal');
@@ -1220,7 +1220,7 @@ test.describe('Voting Edge Cases', () => {
 
   test('toggle vote reason visibility after submission: not possible (immutable)', async ({ page }) => {
     // Once a vote reason is submitted with a visibility choice, it cannot be changed
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
     // After voting, the visibility toggle should not be available on the existing reason
     const changeVisibility = card.locator('[data-testid="change-reason-visibility"], .change-reason-visibility');
@@ -1240,14 +1240,14 @@ test.describe('Mobile-Specific Interactions', () => {
   });
 
   test('touch: tap vote arrow registers vote', async ({ page }) => {
-    const upvoteBtn = page.locator('[data-testid="upvote-btn"], .vote-up').first();
+    const upvoteBtn = page.locator('[data-testid^="vote-up"]').first();
     await upvoteBtn.waitFor({ timeout: 10_000 });
     await upvoteBtn.tap();
     // Vote should register (or login prompt appears if unauthenticated)
   });
 
   test('touch: long press on suggestion card does not trigger context menu', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
 
     // Long press should not open browser context menu
@@ -1283,7 +1283,7 @@ test.describe('Mobile-Specific Interactions', () => {
   });
 
   test('soft keyboard: suggestion form scrolls to keep input visible when keyboard opens', async ({ page }) => {
-    const titleInput = page.locator('[data-testid="suggestion-title-input"], .suggestion-title-input');
+    const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if (await titleInput.count() > 0) {
       await titleInput.focus();
       await page.waitForTimeout(500);
@@ -1294,7 +1294,7 @@ test.describe('Mobile-Specific Interactions', () => {
   });
 
   test('soft keyboard: description field does not get hidden behind keyboard', async ({ page }) => {
-    const descInput = page.locator('[data-testid="suggestion-desc-input"], .suggestion-desc-input');
+    const descInput = page.locator('[data-testid="suggest-desc-input"]');
     if (await descInput.count() > 0) {
       await descInput.focus();
       await page.waitForTimeout(500);
@@ -1313,7 +1313,7 @@ test.describe('Mobile-Specific Interactions', () => {
     const scrollWidth = await page.evaluate(() => document.body.scrollWidth);
     const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
     expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 5);
-    const cards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+    const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     if ((await cards.count()) > 0) {
       await expect(cards.first()).toBeVisible({ timeout: 10_000 });
     }
@@ -1346,11 +1346,11 @@ test.describe('Suggestion Card UI States', () => {
   });
 
   test('card: default state (no user interaction)', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
     await expect(card).toBeVisible();
     // No active/highlighted state on vote arrows
-    const upvote = card.locator('[data-testid="upvote-btn"], .vote-up');
+    const upvote = card.locator('[data-testid^="vote-up"]');
     if (await upvote.count() > 0) {
       const isActive = await upvote.evaluate((el) => el.classList.contains('active'));
       expect(isActive).toBe(false);
@@ -1358,7 +1358,7 @@ test.describe('Suggestion Card UI States', () => {
   });
 
   test('card: hovered state (desktop only — subtle highlight)', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
     await card.hover();
     // Card should show a subtle highlight on hover
@@ -1367,9 +1367,9 @@ test.describe('Suggestion Card UI States', () => {
   });
 
   test('card: user has upvoted (arrow highlighted, count reflects)', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
-    const upvoteBtn = card.locator('[data-testid="upvote-btn"], .vote-up');
+    const upvoteBtn = card.locator('[data-testid^="vote-up"]');
     if (await upvoteBtn.count() > 0) {
       // When user has upvoted, the upvote arrow should have an active class
       const ariaPressed = await upvoteBtn.getAttribute('aria-pressed');
@@ -1379,9 +1379,9 @@ test.describe('Suggestion Card UI States', () => {
   });
 
   test('card: user has downvoted (arrow highlighted, count reflects)', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
-    const downvoteBtn = card.locator('[data-testid="downvote-btn"], .vote-down');
+    const downvoteBtn = card.locator('[data-testid^="vote-down"]');
     if (await downvoteBtn.count() > 0) {
       const isActive = await downvoteBtn.evaluate((el) => el.classList.contains('active') || el.classList.contains('downvoted'));
       // Verify the state can be detected
@@ -1397,32 +1397,32 @@ test.describe('Suggestion Card UI States', () => {
   });
 
   test('card: accepted status (default card style)', async ({ page }) => {
-    const statusFilter = page.locator('[data-testid="status-filter"], .status-filter');
+    const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await statusFilter.selectOption({ label: 'Accepted' });
     await page.waitForTimeout(500);
-    const cards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+    const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     if ((await cards.count()) > 0) {
-      const badge = cards.first().locator('[data-testid="status-badge"], .status-badge');
+      const badge = cards.first().locator('[data-testid^="suggestion-status"], .sg-badge');
       await expect(badge).toContainText(/Accepted/i);
     }
   });
 
   test('card: planned status (accent border, "Planned" badge, vote arrows hidden)', async ({ page }) => {
-    const statusFilter = page.locator('[data-testid="status-filter"], .status-filter');
+    const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await statusFilter.selectOption({ label: 'Planned' });
     await page.waitForTimeout(500);
-    const cards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+    const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     if ((await cards.count()) > 0) {
       const card = cards.first();
-      const badge = card.locator('[data-testid="status-badge"], .status-badge');
+      const badge = card.locator('[data-testid^="suggestion-status"], .sg-badge');
       await expect(badge).toContainText(/Planned/i);
       // Accent border
       const border = await card.evaluate((el) => getComputedStyle(el).borderColor || getComputedStyle(el).borderLeftColor);
       expect(border).toBeDefined();
       // Vote arrows should be hidden
-      const voteUp = card.locator('[data-testid="upvote-btn"], .vote-up');
+      const voteUp = card.locator('[data-testid^="vote-up"]');
       if (await voteUp.count() > 0) {
         const isHidden = await voteUp.evaluate((el) => {
           const style = getComputedStyle(el);
@@ -1434,14 +1434,14 @@ test.describe('Suggestion Card UI States', () => {
   });
 
   test('card: completed status ("Shipped!" badge, vote arrows hidden, green accent)', async ({ page }) => {
-    const statusFilter = page.locator('[data-testid="status-filter"], .status-filter');
+    const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await statusFilter.selectOption({ label: 'Completed' });
     await page.waitForTimeout(500);
-    const cards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+    const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     if ((await cards.count()) > 0) {
       const card = cards.first();
-      const badge = card.locator('[data-testid="status-badge"], .status-badge');
+      const badge = card.locator('[data-testid^="suggestion-status"], .sg-badge');
       await expect(badge).toContainText(/Shipped!/i);
       // Green accent
       const cardClasses = await card.getAttribute('class');
@@ -1451,7 +1451,7 @@ test.describe('Suggestion Card UI States', () => {
       });
       expect(hasGreenAccent).toBeDefined();
       // Vote arrows hidden
-      const voteUp = card.locator('[data-testid="upvote-btn"], .vote-up');
+      const voteUp = card.locator('[data-testid^="vote-up"]');
       if (await voteUp.count() > 0) {
         const isHidden = await voteUp.evaluate((el) => {
           const style = getComputedStyle(el);
@@ -1463,11 +1463,11 @@ test.describe('Suggestion Card UI States', () => {
   });
 
   test('card: rejected status (dimmed, decline reason expanded, vote arrows hidden)', async ({ page }) => {
-    const statusFilter = page.locator('[data-testid="status-filter"], .status-filter');
+    const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await statusFilter.selectOption({ label: 'Rejected' });
     await page.waitForTimeout(500);
-    const cards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+    const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     if ((await cards.count()) > 0) {
       const card = cards.first();
       // Card should be dimmed
@@ -1480,7 +1480,7 @@ test.describe('Suggestion Card UI States', () => {
         await expect(declineReason).toBeVisible();
       }
       // Vote arrows hidden
-      const voteUp = card.locator('[data-testid="upvote-btn"], .vote-up');
+      const voteUp = card.locator('[data-testid^="vote-up"]');
       if (await voteUp.count() > 0) {
         const isHidden = await voteUp.evaluate((el) => {
           const style = getComputedStyle(el);
@@ -1493,7 +1493,7 @@ test.describe('Suggestion Card UI States', () => {
 
   test('card: merged/duplicate (hidden from public view)', async ({ page }) => {
     // Merged/duplicate suggestions should not be visible to the public
-    const mergedCards = page.locator('[data-testid="suggestion-card"][data-status="merged"], .suggestion-card.merged');
+    const mergedCards = page.locator('.sg-card[data-status="merged"], [data-testid^="suggestion-card"][data-status="merged"]');
     expect(await mergedCards.count()).toBe(0);
   });
 
@@ -1507,11 +1507,11 @@ test.describe('Suggestion Card UI States', () => {
   });
 
   test('card: truncated description expands on click', async ({ page }) => {
-    const card = page.locator('[data-testid="suggestion-card"], .suggestion-card').first();
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
-    const desc = card.locator('[data-testid="suggestion-description"], .suggestion-description');
+    const desc = card.locator('[data-testid^="suggestion-desc"], .sg-card-desc');
     if (await desc.count() > 0) {
-      const expandBtn = card.locator('[data-testid="expand-description"], .expand-description, .read-more');
+      const expandBtn = card.locator('[data-testid^="suggestion-expand"], .sg-expand-btn');
       if (await expandBtn.count() > 0) {
         const beforeHeight = (await desc.boundingBox())?.height || 0;
         await expandBtn.click();
@@ -1524,10 +1524,10 @@ test.describe('Suggestion Card UI States', () => {
   });
 
   test('card: tags overflow wraps to next line (no horizontal scroll)', async ({ page }) => {
-    const tags = page.locator('[data-testid="suggestion-tags"], .suggestion-tags').first();
+    const tags = page.locator('[data-testid^="suggestion-tag"], .sg-tag').first();
     if (await tags.count() > 0) {
       const box = await tags.boundingBox();
-      const cardBox = await page.locator('[data-testid="suggestion-card"], .suggestion-card').first().boundingBox();
+      const cardBox = await page.locator('[data-testid^="suggestion-card"], .sg-card').first().boundingBox();
       if (box && cardBox) {
         // Tags should not exceed the card width
         expect(box.width).toBeLessThanOrEqual(cardBox.width + 5);
@@ -1539,7 +1539,7 @@ test.describe('Suggestion Card UI States', () => {
   });
 
   test('card: language tag displayed with flag emoji', async ({ page }) => {
-    const langTag = page.locator('[data-testid="language-tag"], .language-tag').first();
+    const langTag = page.locator('[data-testid^="suggestion-lang"], .sg-lang-tag').first();
     await langTag.waitFor({ timeout: 10_000 });
     const text = await langTag.textContent();
     // Language tag should contain a flag emoji or language code
@@ -1558,11 +1558,11 @@ test.describe('Filter & Search Combination Edge Cases', () => {
   });
 
   test('all filters active simultaneously: results match ALL criteria', async ({ page }) => {
-    const statusFilter = page.locator('[data-testid="status-filter"], .status-filter');
-    const tagFilter = page.locator('[data-testid="tag-filter"], .tag-filter');
-    const langFilter = page.locator('[data-testid="language-filter"], .language-filter');
+    const statusFilter = page.locator('[data-testid="filter-status"]');
+    const tagFilter = page.locator('[data-testid="filter-tag"]');
+    const langFilter = page.locator('[data-testid="filter-lang"]');
     const phaseFilter = page.locator('[data-testid="phase-filter"], .phase-filter');
-    const searchInput = page.locator('[data-testid="search-input"], .search-input');
+    const searchInput = page.locator('[data-testid="suggestions-search-input"]');
 
     await statusFilter.waitFor({ timeout: 10_000 });
 
@@ -1591,16 +1591,16 @@ test.describe('Filter & Search Combination Edge Cases', () => {
     await page.waitForTimeout(500);
 
     // All results should match ALL active filters
-    const cards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+    const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     const count = await cards.count();
     for (let i = 0; i < count; i++) {
-      const badge = cards.nth(i).locator('[data-testid="status-badge"], .status-badge');
+      const badge = cards.nth(i).locator('[data-testid^="suggestion-status"], .sg-badge');
       await expect(badge).toContainText(/Accepted/i);
     }
   });
 
   test('clear all filters: resets to default view', async ({ page }) => {
-    const statusFilter = page.locator('[data-testid="status-filter"], .status-filter');
+    const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await statusFilter.selectOption({ label: 'Accepted' });
     await page.waitForTimeout(300);
@@ -1617,12 +1617,12 @@ test.describe('Filter & Search Combination Edge Cases', () => {
   });
 
   test('filter produces 0 results: "No suggestions match your filters" message with clear button', async ({ page }) => {
-    const searchInput = page.locator('[data-testid="search-input"], .search-input');
+    const searchInput = page.locator('[data-testid="suggestions-search-input"]');
     await searchInput.waitFor({ timeout: 10_000 });
     await searchInput.fill('xxxxxxxxxnonexistentsuggestion');
     await page.waitForTimeout(500);
 
-    const emptyState = page.locator('[data-testid="filter-empty"], [data-testid="suggestions-empty"], .suggestions-empty');
+    const emptyState = page.locator('[data-testid="filter-empty"], [data-testid="suggestions-empty"]');
     await expect(emptyState).toBeVisible({ timeout: 5_000 });
     const text = await emptyState.textContent();
     expect(text!.toLowerCase()).toMatch(/no suggestions|no results/);
@@ -1634,45 +1634,45 @@ test.describe('Filter & Search Combination Edge Cases', () => {
   });
 
   test('search + filter: search narrows within filtered results', async ({ page }) => {
-    const statusFilter = page.locator('[data-testid="status-filter"], .status-filter');
+    const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await statusFilter.selectOption({ label: 'Accepted' });
     await page.waitForTimeout(300);
 
-    const filteredCount = await page.locator('[data-testid="suggestion-card"], .suggestion-card').count();
+    const filteredCount = await page.locator('[data-testid^="suggestion-card"], .sg-card').count();
 
-    const searchInput = page.locator('[data-testid="search-input"], .search-input');
+    const searchInput = page.locator('[data-testid="suggestions-search-input"]');
     await searchInput.fill('voice');
     await page.waitForTimeout(500);
 
-    const searchedCount = await page.locator('[data-testid="suggestion-card"], .suggestion-card').count();
+    const searchedCount = await page.locator('[data-testid^="suggestion-card"], .sg-card').count();
     // Search should narrow results (or keep same if all match)
     expect(searchedCount).toBeLessThanOrEqual(filteredCount);
   });
 
   test('search with 1 character: no search triggered (minimum 2 chars)', async ({ page }) => {
-    const searchInput = page.locator('[data-testid="search-input"], .search-input');
+    const searchInput = page.locator('[data-testid="suggestions-search-input"]');
     await searchInput.waitFor({ timeout: 10_000 });
-    const initialCards = await page.locator('[data-testid="suggestion-card"], .suggestion-card').count();
+    const initialCards = await page.locator('[data-testid^="suggestion-card"], .sg-card').count();
     await searchInput.fill('a');
     await page.waitForTimeout(500);
-    const afterCards = await page.locator('[data-testid="suggestion-card"], .suggestion-card').count();
+    const afterCards = await page.locator('[data-testid^="suggestion-card"], .sg-card').count();
     // With only 1 character, card count should remain the same (no filtering)
     expect(afterCards).toBe(initialCards);
   });
 
   test('search with 2 characters: search triggered', async ({ page }) => {
-    const searchInput = page.locator('[data-testid="search-input"], .search-input');
+    const searchInput = page.locator('[data-testid="suggestions-search-input"]');
     await searchInput.waitFor({ timeout: 10_000 });
     await searchInput.fill('vo');
     await page.waitForTimeout(500);
     // Search should be triggered at 2 chars
-    const cards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+    const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     // Results should be filtered (may be fewer or same, but search was executed)
   });
 
   test('search debounce: typing fast does not fire request per keystroke (300ms debounce)', async ({ page }) => {
-    const searchInput = page.locator('[data-testid="search-input"], .search-input');
+    const searchInput = page.locator('[data-testid="suggestions-search-input"]');
     await searchInput.waitFor({ timeout: 10_000 });
 
     const requests: string[] = [];
@@ -1691,7 +1691,7 @@ test.describe('Filter & Search Combination Edge Cases', () => {
   });
 
   test('filter state preserved on page reload (URL params or sessionStorage)', async ({ page }) => {
-    const statusFilter = page.locator('[data-testid="status-filter"], .status-filter');
+    const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await statusFilter.selectOption({ label: 'Accepted' });
     await page.waitForTimeout(300);
@@ -1705,7 +1705,7 @@ test.describe('Filter & Search Combination Edge Cases', () => {
   });
 
   test('filter badge counts: show number of active filters', async ({ page }) => {
-    const statusFilter = page.locator('[data-testid="status-filter"], .status-filter');
+    const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await statusFilter.selectOption({ label: 'Accepted' });
     await page.waitForTimeout(300);
@@ -1730,7 +1730,7 @@ test.describe('Suggestion Description Display', () => {
   });
 
   test('plain text with newlines: rendered with line breaks', async ({ page }) => {
-    const desc = page.locator('[data-testid="suggestion-description"], .suggestion-description').first();
+    const desc = page.locator('[data-testid^="suggestion-desc"], .sg-card-desc').first();
     if (await desc.count() > 0) {
       await desc.waitFor({ timeout: 10_000 });
       // Description should render newlines as line breaks
@@ -1744,7 +1744,7 @@ test.describe('Suggestion Description Display', () => {
   });
 
   test('plain text with URLs: displayed as clickable links', async ({ page }) => {
-    const descriptions = page.locator('[data-testid="suggestion-description"], .suggestion-description');
+    const descriptions = page.locator('[data-testid^="suggestion-desc"], .sg-card-desc');
     const count = await descriptions.count();
     for (let i = 0; i < Math.min(count, 10); i++) {
       const links = descriptions.nth(i).locator('a[href]');
@@ -1758,7 +1758,7 @@ test.describe('Suggestion Description Display', () => {
   });
 
   test('plain text with very long URL: truncated in display', async ({ page }) => {
-    const links = page.locator('[data-testid="suggestion-description"] a, .suggestion-description a');
+    const links = page.locator('[data-testid^="suggestion-desc"] a, .sg-card-desc a');
     if (await links.count() > 0) {
       for (let i = 0; i < await links.count(); i++) {
         const linkText = await links.nth(i).textContent();
@@ -1773,7 +1773,7 @@ test.describe('Suggestion Description Display', () => {
   });
 
   test('description with 5000 chars: scrollable within card', async ({ page }) => {
-    const descriptions = page.locator('[data-testid="suggestion-description"], .suggestion-description');
+    const descriptions = page.locator('[data-testid^="suggestion-desc"], .sg-card-desc');
     if (await descriptions.count() > 0) {
       for (let i = 0; i < await descriptions.count(); i++) {
         const desc = descriptions.nth(i);
@@ -1792,7 +1792,7 @@ test.describe('Suggestion Description Display', () => {
 
   test('description in RTL language: text aligned right', async ({ page }) => {
     // Filter for Arabic language suggestions
-    const langFilter = page.locator('[data-testid="language-filter"], .language-filter');
+    const langFilter = page.locator('[data-testid="filter-lang"]');
     if (await langFilter.count() > 0) {
       const options = langFilter.locator('option');
       for (let i = 0; i < await options.count(); i++) {
@@ -1800,7 +1800,7 @@ test.describe('Suggestion Description Display', () => {
         if (val === 'ar' || (await options.nth(i).textContent())?.toLowerCase().includes('arabic')) {
           await langFilter.selectOption(val!);
           await page.waitForTimeout(500);
-          const desc = page.locator('[data-testid="suggestion-description"], .suggestion-description').first();
+          const desc = page.locator('[data-testid^="suggestion-desc"], .sg-card-desc').first();
           if (await desc.count() > 0) {
             const direction = await desc.evaluate((el) => getComputedStyle(el).direction);
             const textAlign = await desc.evaluate((el) => getComputedStyle(el).textAlign);
@@ -1896,7 +1896,7 @@ test.describe('Empty & Extreme States', () => {
     );
     await page.goto('/roadmap.html');
     await page.waitForTimeout(2000);
-    const emptyState = page.locator('[data-testid="suggestions-empty"], .suggestions-empty');
+    const emptyState = page.locator('[data-testid="suggestions-empty"]');
     if (await emptyState.count() > 0) {
       await expect(emptyState).toBeVisible();
       const text = await emptyState.textContent();
@@ -1926,10 +1926,10 @@ test.describe('Empty & Extreme States', () => {
     );
     await page.goto('/roadmap.html');
     await page.waitForTimeout(2000);
-    const cards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+    const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     if (await cards.count() > 0) {
       expect(await cards.count()).toBe(1);
-      const title = cards.first().locator('[data-testid="suggestion-title"], .suggestion-title');
+      const title = cards.first().locator('[data-testid^="suggestion-title"], .sg-card-title');
       await expect(title).toContainText('Single Suggestion');
     }
   });
@@ -1937,10 +1937,10 @@ test.describe('Empty & Extreme States', () => {
   test('suggestions 1000 items: pagination, loads < 3s', async ({ page }) => {
     const start = Date.now();
     await page.goto('/roadmap.html');
-    await page.locator('[data-testid="suggestion-card"], .suggestion-card').first().waitFor({ timeout: 10_000 });
+    await page.locator('[data-testid^="suggestion-card"], .sg-card').first().waitFor({ timeout: 10_000 });
     const loadTime = Date.now() - start;
     // With 1000 suggestions, pagination should exist
-    const pagination = page.locator('[data-testid="pagination"], .pagination');
+    const pagination = page.locator('[data-testid="suggestions-pagination"]');
     if (await pagination.count() > 0) {
       await expect(pagination).toBeVisible();
     }
@@ -1950,9 +1950,9 @@ test.describe('Empty & Extreme States', () => {
 
   test('suggestion 0 votes (besides auto): shows score 1', async ({ page }) => {
     // A suggestion with only the creator's auto-upvote should show score 1
-    const cards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+    const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     if ((await cards.count()) > 0) {
-      const voteCounts = page.locator('[data-testid="vote-count"], .vote-count');
+      const voteCounts = page.locator('[data-testid^="vote-score"], .sg-vote-score');
       for (let i = 0; i < await voteCounts.count(); i++) {
         const text = await voteCounts.nth(i).textContent();
         const score = parseInt(text || '0');
@@ -1967,7 +1967,7 @@ test.describe('Empty & Extreme States', () => {
   test('suggestion 500 up, 499 down: shows net 1', async ({ page }) => {
     // Net score = 500 - 499 = 1
     // Verify the UI displays net score correctly
-    const voteCounts = page.locator('[data-testid="vote-count"], .vote-count');
+    const voteCounts = page.locator('[data-testid^="vote-score"], .sg-vote-score');
     if ((await voteCounts.count()) > 0) {
       const text = await voteCounts.first().textContent();
       // Net score can be any integer value
@@ -1977,7 +1977,7 @@ test.describe('Empty & Extreme States', () => {
 
   test('suggestion 0 up, 100 down: shows net -100', async ({ page }) => {
     // Verify the UI can display negative net scores
-    const voteCounts = page.locator('[data-testid="vote-count"], .vote-count');
+    const voteCounts = page.locator('[data-testid^="vote-score"], .sg-vote-score');
     if ((await voteCounts.count()) > 0) {
       // The format should support negative numbers
       for (let i = 0; i < await voteCounts.count(); i++) {
@@ -1988,9 +1988,9 @@ test.describe('Empty & Extreme States', () => {
   });
 
   test('comments 0: "No comments yet"', async ({ page }) => {
-    const cards = page.locator('[data-testid="suggestion-card"], .suggestion-card');
+    const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     if ((await cards.count()) > 0) {
-      const commentSection = cards.first().locator('[data-testid="comment-section"], .comment-section');
+      const commentSection = cards.first().locator('[data-testid^="comments-section"]');
       if (await commentSection.count() > 0) {
         const noComments = commentSection.locator('[data-testid="no-comments"], .no-comments');
         if (await noComments.count() > 0) {
@@ -2088,8 +2088,8 @@ test.describe('URL & Navigation Edge Cases', () => {
 
   test('back button after voting: state preserved', async ({ page }) => {
     await page.goto('/roadmap.html');
-    await page.locator('[data-testid="suggestion-card"], .suggestion-card').first().waitFor({ timeout: 10_000 });
-    const upvoteBtn = page.locator('[data-testid="upvote-btn"], .vote-up').first();
+    await page.locator('[data-testid^="suggestion-card"], .sg-card').first().waitFor({ timeout: 10_000 });
+    const upvoteBtn = page.locator('[data-testid^="vote-up"]').first();
     await upvoteBtn.click();
     await page.waitForTimeout(300);
 
@@ -2127,13 +2127,13 @@ test.describe('URL & Navigation Edge Cases', () => {
 
   test('refresh mid-submission: form cleared, no duplicate', async ({ page }) => {
     await page.goto('/roadmap.html');
-    const titleInput = page.locator('[data-testid="suggestion-title-input"], .suggestion-title-input');
+    const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if (await titleInput.count() > 0) {
       await titleInput.fill('Draft suggestion');
       await page.reload();
       await page.waitForTimeout(1000);
       // After refresh, form should be cleared (no stale draft)
-      const newTitleInput = page.locator('[data-testid="suggestion-title-input"], .suggestion-title-input');
+      const newTitleInput = page.locator('[data-testid="suggest-title-input"]');
       if (await newTitleInput.count() > 0) {
         const value = await newTitleInput.inputValue();
         expect(value).toBe('');

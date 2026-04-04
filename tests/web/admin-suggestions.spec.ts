@@ -288,10 +288,10 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
     await waitForPendingQueueLoaded(page);
     const card = page.locator('#suggestions-pending-queue .suggestion-card').first();
     await expect(card).toBeVisible();
-    await expect(card.locator('.suggestion-title')).toBeVisible();
-    await expect(card.locator('.suggestion-description')).toBeVisible();
-    await expect(card.locator('.suggestion-submitter')).toBeVisible();
-    await expect(card.locator('.suggestion-timestamp')).toBeVisible();
+    await expect(card.locator('.sg-title')).toBeVisible();
+    await expect(card.locator('.sg-desc')).toBeVisible();
+    await expect(card.locator('.sg-meta')).toBeVisible();
+    await expect(card.locator('.sg-meta')).toBeVisible();
   });
 
   test('approve button moves suggestion to accepted and removes from queue', async ({ page, testData }) => {
@@ -301,7 +301,7 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
     await waitForPendingQueueLoaded(page);
     const card = page.locator(`#suggestions-pending-queue .suggestion-card[data-id="${result.id}"]`);
     await expect(card).toBeVisible();
-    await card.locator('.btn-approve').click();
+    await card.locator('.sg-btn-approve').click();
     await expect(card).toBeHidden({ timeout: 10_000 });
     expect((await testData.api.get(`/api/admin/suggestions/${result.id}`)).status).toBe('accepted');
   });
@@ -313,7 +313,7 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
     await waitForPendingQueueLoaded(page);
     const card = page.locator(`#suggestions-pending-queue .suggestion-card[data-id="${result.id}"]`);
     await expect(card).toBeVisible();
-    await card.locator('.btn-reject').click();
+    await card.locator('.sg-btn-reject').click();
     const rejectDialog = page.locator('#suggestion-reject-dialog');
     await expect(rejectDialog).toBeVisible();
     await rejectDialog.locator('#reject-reason-input').fill('Duplicate of an existing feature');
@@ -330,7 +330,7 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
     await page.reload(); await adminLogin(page); await navigateToSuggestions(page);
     await waitForPendingQueueLoaded(page);
     const card = page.locator(`#suggestions-pending-queue .suggestion-card[data-id="${result.id}"]`);
-    await card.locator('.btn-reject').click();
+    await card.locator('.sg-btn-reject').click();
     const rejectDialog = page.locator('#suggestion-reject-dialog');
     await expect(rejectDialog).toBeVisible();
     await rejectDialog.locator('.btn-confirm-reject').click();
@@ -344,7 +344,7 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
     await page.reload(); await adminLogin(page); await navigateToSuggestions(page);
     await waitForPendingQueueLoaded(page);
     const card = page.locator(`#suggestions-pending-queue .suggestion-card[data-id="${result.id}"]`);
-    await card.locator('.btn-reject').click();
+    await card.locator('.sg-btn-reject').click();
     const rejectDialog = page.locator('#suggestion-reject-dialog');
     await expect(rejectDialog).toBeVisible();
     const placeholder = await rejectDialog.locator('#reject-reason-input').getAttribute('placeholder');
@@ -360,7 +360,7 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
     await waitForPendingQueueLoaded(page);
     const card = page.locator(`#suggestions-pending-queue .suggestion-card[data-id="${duplicate.id}"]`);
     await expect(card).toBeVisible();
-    await card.locator('.btn-merge').click();
+    await card.locator('.sg-btn-merge').click();
     const mergeDialog = page.locator('#suggestion-merge-dialog');
     await expect(mergeDialog).toBeVisible();
     await mergeDialog.locator('#merge-search-input').fill('Original Suggestion E2E');
@@ -935,7 +935,7 @@ test.describe('Admin Moderation Edge Cases (11.30)', () => {
     await waitForPendingQueueLoaded(page);
     const cards = page.locator('#suggestions-pending-queue .suggestion-card');
     for (let i = 0; i < Math.min(await cards.count(), 5); i++) {
-      expect(await cards.nth(i).locator('.suggestion-submitter').textContent()).toContain(String(testData.user.uniqueId));
+      expect(await cards.nth(i).locator('.sg-meta').textContent()).toContain(String(testData.user.uniqueId));
     }
   });
 
@@ -1113,7 +1113,7 @@ test.describe('Admin Panel Responsive Design (11.86)', () => {
     const page = await ctx.newPage();
     await setupApiMocks(page);
     await adminLogin(page); await navigateToSuggestions(page);
-    const btns = page.locator('#suggestions-panel .btn-approve, #suggestions-panel .btn-reject, #suggestions-panel .btn-merge');
+    const btns = page.locator('#suggestions-panel .sg-btn-approve, #suggestions-panel .sg-btn-reject, #suggestions-panel .sg-btn-merge');
     for (let i = 0; i < Math.min(await btns.count(), 3); i++) {
       const b = await btns.nth(i).boundingBox();
       if (b) { expect(b.height).toBeGreaterThanOrEqual(36); expect(b.width).toBeGreaterThanOrEqual(36); }
