@@ -446,14 +446,18 @@ test.describe('Admin Cross-Tab Interactions', () => {
     }
 
     // Verify we can still perform operations after rapid switching.
-    // Wait between navigations to allow webkit to settle DOM state.
-    await page.waitForTimeout(500);
+    // Navigate to Users and wait for the panel to be ready before searching.
     await navigateToTab(page, 'Users');
-    await page.waitForTimeout(500);
+    const searchInput = page.locator('[data-field="uniqueId"], #user-search, input[type="number"]').first();
+    await expect(searchInput).toBeVisible();
+    await expect(searchInput).toBeEnabled();
+
     await searchUser(page, String(testData.user.uniqueId));
-    // Wait for the correct user to load — webkit may still be processing
+
+    // Wait for the user data to load by checking a specific field appears with content
     const displayNameInput = page.locator('[data-field="displayName"]');
-    await expect(displayNameInput).toBeVisible({ timeout: 10_000 });
-    await expect(displayNameInput).toHaveValue(testData.user.displayName, { timeout: 15_000 });
+    await expect(displayNameInput).toBeVisible();
+    await expect(displayNameInput).not.toHaveValue('');
+    await expect(displayNameInput).toHaveValue(testData.user.displayName);
   });
 });
