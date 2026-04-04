@@ -392,13 +392,19 @@ jobs:
           mkdir -p allure-report/history
           cp -r allure-report/history gh-pages/playwright/${REPORT_ENV}/history 2>/dev/null || true
 
+      - name: Trim report size (remove heavy attachments to stay under GitHub Pages limit)
+        run: |
+          rm -rf allure-report/data/attachments 2>/dev/null || true
+          find allure-report/data/test-cases -type f -size +100k -delete 2>/dev/null || true
+          echo "Report size: $(du -sh allure-report | cut -f1)"
+
       - name: Deploy report to GitHub Pages
         uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: allure-report
           destination_dir: playwright/${{ inputs.report_env || 'pr' }}/latest
-          keep_files: true
+          keep_files: false
 
       - name: Generate and deploy landing page
         run: |
