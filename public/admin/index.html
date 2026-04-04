@@ -4670,14 +4670,12 @@
 
             <!-- Pending queue -->
             <div class="suggestions-section-header">Pending Queue</div>
-            <div id="sg-pending-list" class="suggestions-pending-queue"></div>
-            <div id="suggestions-pending-queue" style="display:none;"></div>
+            <div id="suggestions-pending-queue"></div>
             <div id="sg-pending-empty" style="color:var(--text2);font-size:13px;font-style:italic;display:none;">No pending suggestions.</div>
 
             <!-- Dispute queue -->
             <div class="suggestions-section-header">Dispute Queue</div>
-            <div id="sg-dispute-list" class="suggestions-dispute-queue"></div>
-            <div id="suggestions-dispute-queue" style="display:none;"></div>
+            <div id="suggestions-dispute-queue"></div>
             <div id="sg-dispute-empty" style="color:var(--text2);font-size:13px;font-style:italic;display:none;">No disputed merges.</div>
 
             <!-- Suggestion history timeline (shown when a suggestion is selected) -->
@@ -12682,14 +12680,12 @@
     // ══════════════════════════════════════════════════════════════
 
     async function loadSuggestions() {
-      const pendingList = $("#sg-pending-list");
-      const disputeList = $("#sg-dispute-list");
+      const pendingList = $("#suggestions-pending-queue");
+      const disputeList = $("#suggestions-dispute-queue");
       const pendingEmpty = $("#sg-pending-empty");
       const disputeEmpty = $("#sg-dispute-empty");
       const pendingCount = $("#sg-pending-count");
       const disputeCount = $("#sg-dispute-count");
-      const pendingQueueAlias = $("#suggestions-pending-queue");
-      const disputeQueueAlias = $("#suggestions-dispute-queue");
       const badge = $("#suggestions-badge");
 
       pendingList.innerHTML = '<div style="color:var(--text2);font-size:12px;">Loading suggestions...</div>';
@@ -12739,10 +12735,6 @@
             disputeList.appendChild(renderDisputeCard(d));
           });
         }
-
-        // Sync alias elements for test compatibility
-        if (pendingQueueAlias) pendingQueueAlias.innerHTML = pendingList.innerHTML;
-        if (disputeQueueAlias) disputeQueueAlias.innerHTML = disputeList.innerHTML;
 
         // Load audit log
         loadAuditLog();
@@ -13007,14 +12999,14 @@
     // Select All checkbox
     $("#sg-select-all").addEventListener("change", (e) => {
       const checked = e.target.checked;
-      for (const cb of $$("#sg-pending-list .sg-checkbox")) {
+      for (const cb of $$("#suggestions-pending-queue .sg-checkbox")) {
         cb.checked = checked;
       }
     });
 
     // Bulk approve
     $("#sg-bulk-approve").addEventListener("click", async () => {
-      const selected = [...$$("#sg-pending-list .sg-checkbox:checked")].map(cb => cb.dataset.sgId);
+      const selected = [...$$("#suggestions-pending-queue .sg-checkbox:checked")].map(cb => cb.dataset.sgId);
       if (selected.length === 0) { showToast("No suggestions selected", "error"); return; }
       if (!confirm(`Approve ${selected.length} suggestion(s)?`)) return;
       try {
@@ -13028,7 +13020,7 @@
 
     // Bulk reject
     $("#sg-bulk-reject").addEventListener("click", async () => {
-      const selected = [...$$("#sg-pending-list .sg-checkbox:checked")].map(cb => cb.dataset.sgId);
+      const selected = [...$$("#suggestions-pending-queue .sg-checkbox:checked")].map(cb => cb.dataset.sgId);
       if (selected.length === 0) { showToast("No suggestions selected", "error"); return; }
       const reason = prompt("Rejection reason (optional):") || "";
       if (!confirm(`Reject ${selected.length} suggestion(s)?`)) return;
