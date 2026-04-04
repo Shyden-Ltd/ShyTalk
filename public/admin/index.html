@@ -4733,9 +4733,17 @@
     import { getFirestore as getClientFirestore, connectFirestoreEmulator, collection, query, where, onSnapshot, getDocs, orderBy, limit, doc, Timestamp }
       from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 
-    // --- Config (loaded from config.js) ---
-    const FIREBASE_CONFIG = window.SHYTALK_CONFIG.FIREBASE_CONFIG;
+    // --- Config (loaded from config.js, or fetched from API) ---
     const API_BASE = window.SHYTALK_CONFIG.API_BASE;
+    let FIREBASE_CONFIG = window.SHYTALK_CONFIG.FIREBASE_CONFIG;
+    if (!FIREBASE_CONFIG) {
+      try {
+        const cfgRes = await fetch(API_BASE + '/api/firebase-config');
+        FIREBASE_CONFIG = await cfgRes.json();
+      } catch (e) {
+        console.error('Failed to load Firebase config from API:', e);
+      }
+    }
 
     const app = initializeApp(FIREBASE_CONFIG);
     const auth = getAuth(app);

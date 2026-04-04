@@ -60,6 +60,44 @@ function createApp() {
 
 // ─── Tests ───────────────────────────────────────────────────────
 
+describe('GET /api/firebase-config', () => {
+  test('returns Firebase web config when FIREBASE_WEB_API_KEY is set', async () => {
+    process.env.FIREBASE_WEB_API_KEY = 'test-firebase-key';
+    process.env.GCLOUD_PROJECT = 'shytalk-test';
+    const app = createApp();
+    const res = await request(app).get('/api/firebase-config');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      apiKey: 'test-firebase-key',
+      authDomain: 'shytalk-test.firebaseapp.com',
+      projectId: 'shytalk-test',
+    });
+    delete process.env.FIREBASE_WEB_API_KEY;
+    delete process.env.GCLOUD_PROJECT;
+  });
+
+  test('returns 503 when FIREBASE_WEB_API_KEY is not set', async () => {
+    delete process.env.FIREBASE_WEB_API_KEY;
+    const app = createApp();
+    const res = await request(app).get('/api/firebase-config');
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('Firebase config not available');
+  });
+
+  test('uses FIREBASE_PROJECT_ID fallback for projectId', async () => {
+    process.env.FIREBASE_WEB_API_KEY = 'test-key';
+    delete process.env.GCLOUD_PROJECT;
+    process.env.FIREBASE_PROJECT_ID = 'custom-project';
+    const app = createApp();
+    const res = await request(app).get('/api/firebase-config');
+    expect(res.status).toBe(200);
+    expect(res.body.projectId).toBe('custom-project');
+    expect(res.body.authDomain).toBe('custom-project.firebaseapp.com');
+    delete process.env.FIREBASE_WEB_API_KEY;
+    delete process.env.FIREBASE_PROJECT_ID;
+  });
+});
+
 describe('GET /api/config/:key', () => {
   test('route is reachable (no double /api prefix)', async () => {
     mockDocGet.mockResolvedValue({

@@ -22,12 +22,8 @@
       ? 'http://localhost:3000'
       : 'https://api.shytalk.shyden.co.uk';
 
-  // Firebase config
-  var firebaseConfig = window.SHYTALK_FIREBASE_CONFIG || {
-    apiKey: isDev ? 'AIzaSyDev-placeholder' : 'AIzaSyProd-placeholder',
-    authDomain: isDev ? 'shytalk-dev.firebaseapp.com' : 'shytalk-7ba69.firebaseapp.com',
-    projectId: isDev ? 'shytalk-dev' : 'shytalk-7ba69',
-  };
+  // Firebase config — loaded from API via firebase-config-ready event
+  var firebaseConfig = null;
 
   var auth = null;
   var currentUser = null;
@@ -104,6 +100,13 @@
   function initAuth() {
     if (typeof firebase === 'undefined') {
       console.warn('Firebase SDK not loaded — auth features disabled');
+      renderAuthUI();
+      return;
+    }
+
+    firebaseConfig = window.SHYTALK_FIREBASE_CONFIG;
+    if (!firebaseConfig) {
+      // Config not loaded yet — render unauthenticated UI
       renderAuthUI();
       return;
     }
@@ -210,9 +213,18 @@
 
   window.shytalkAuth = { currentUser: null, profile: null, getToken: getToken, API_BASE: API_BASE };
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initAuth);
-  } else {
+  // Wait for Firebase config from API before initializing
+  if (window.SHYTALK_FIREBASE_CONFIG) {
     initAuth();
+  } else {
+    document.addEventListener('firebase-config-ready', function () {
+      initAuth();
+    });
+    // Also render unauthenticated UI immediately so the page isn't blank
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', renderAuthUI);
+    } else {
+      renderAuthUI();
+    }
   }
 })();

@@ -1,6 +1,7 @@
 /**
  * Config routes — read-only app/economy/moderation configuration.
  *
+ * GET /api/firebase-config  -> Public Firebase web config (no secrets)
  * GET /api/config/:key     -> Get a config value (app, economy, moderation)
  * PUT /api/config/:key     -> Admin update config (merge)
  * GET /api/gifts           -> Get gift catalog (store-visible)
@@ -18,6 +19,21 @@ const { db } = require('../utils/firebase');
 const { requireAdmin } = require('../middleware/auth');
 const { queryDocs } = require('../utils/firestore-helpers');
 const log = require('../utils/log');
+
+// -- Public Firebase web config (contains no secrets) --
+
+router.get('/firebase-config', (req, res) => {
+  const apiKey = process.env.FIREBASE_WEB_API_KEY;
+  const projectId =
+    process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID || 'shytalk-7ba69';
+  const authDomain = projectId + '.firebaseapp.com';
+
+  if (!apiKey) {
+    return res.status(503).json({ error: 'Firebase config not available' });
+  }
+
+  res.json({ apiKey, authDomain, projectId });
+});
 
 // -- Starting screens helpers --
 

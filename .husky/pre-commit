@@ -7,4 +7,19 @@ if [ -f "$ROADMAP_SRC" ]; then
   git add public/roadmap-data.json 2>/dev/null
 fi
 
+# Secret scanning — block commits containing API keys, tokens, or credentials
+# Only scan ADDED lines (starting with +) to avoid false positives on removals
+SECRETS_FOUND=$(git diff --cached --diff-filter=d -U0 | grep '^+' | grep -v '^+++' | grep -iE '(AIzaSy[A-Za-z0-9_-]{33}|sk-[A-Za-z0-9]{48}|ghp_[A-Za-z0-9]{36}|AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----|password\s*[:=]\s*["\x27][^"\x27]{8,})' || true)
+if [ -n "$SECRETS_FOUND" ]; then
+  echo ""
+  echo "╔══════════════════════════════════════════════╗"
+  echo "║  SECRET DETECTED IN STAGED FILES — BLOCKED   ║"
+  echo "╚══════════════════════════════════════════════╝"
+  echo ""
+  echo "$SECRETS_FOUND"
+  echo ""
+  echo "Remove the secret and use environment variables instead."
+  exit 1
+fi
+
 npx lint-staged

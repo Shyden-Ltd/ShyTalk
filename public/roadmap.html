@@ -1633,22 +1633,28 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script>
-      // Environment-aware Firebase config
+      // Fetch Firebase config from API — never hardcode API keys
       (function () {
         var isDev =
           location.hostname.includes("dev") ||
           location.hostname === "localhost";
-        window.SHYTALK_FIREBASE_CONFIG = isDev
-          ? {
-              apiKey: "AIzaSyCV5wJCA6BSWVW53bUfqw39lLXqBQ4Mzs8",
-              authDomain: "shytalk-dev.firebaseapp.com",
-              projectId: "shytalk-dev",
-            }
-          : {
-              apiKey: "AIzaSyDM0uE3PotYJ4SXfomM0_mn3SRzodNl55w",
-              authDomain: "shytalk-7ba69.firebaseapp.com",
-              projectId: "shytalk-7ba69",
-            };
+        var isLocal =
+          location.hostname === "localhost" ||
+          location.hostname === "127.0.0.1";
+        var apiBase = isLocal
+          ? "http://localhost:3000"
+          : isDev
+            ? "https://dev-api.shytalk.shyden.co.uk"
+            : "https://api.shytalk.shyden.co.uk";
+        fetch(apiBase + "/api/firebase-config")
+          .then(function (r) { return r.json(); })
+          .then(function (config) {
+            window.SHYTALK_FIREBASE_CONFIG = config;
+            document.dispatchEvent(new Event("firebase-config-ready"));
+          })
+          .catch(function () {
+            console.warn("Failed to load Firebase config — auth features disabled");
+          });
       })();
     </script>
     <script src="/js/roadmap-auth.js"></script>
