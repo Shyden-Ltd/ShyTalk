@@ -355,7 +355,12 @@ router.post('/test/create-user', async (req, res) => {
     }
     const { name, skipIdentity } = req.body || {};
     const uid = 'test_noidentity_' + Date.now();
-    const uniqueId = 900000000 + Math.floor(Math.random() * 99999999);
+    // Use crypto.randomInt rather than Math.random — it's cryptographically
+    // secure and avoids SonarCloud's "pseudorandom number generator" hotspot
+    // warning. The unique id doesn't need to be unpredictable here (it's a
+    // test user), but using the secure API keeps the security gate clean.
+    const crypto = require('crypto');
+    const uniqueId = 900000000 + crypto.randomInt(99999999);
     await db.doc(`users/${uid}`).set({
       uid,
       uniqueId,
