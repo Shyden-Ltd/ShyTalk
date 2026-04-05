@@ -193,6 +193,8 @@
       currentUser: currentUser,
       profile: shytalkProfile,
       getToken: getToken,
+      signInWithGoogle: signInWithGoogle,
+      signInWithApple: signInWithApple,
       API_BASE: API_BASE,
     };
     document.dispatchEvent(new CustomEvent('shytalk-auth-changed', {

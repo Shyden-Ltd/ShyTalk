@@ -621,8 +621,12 @@
     for (var i = 0; i < bells.length; i++) {
       bells[i].addEventListener("click", function (e) {
         e.stopPropagation();
-        // No user auth on web roadmap page — show login prompt
-        showLoginToast();
+        // Show login modal (from suggestions-board.js) instead of toast
+        if (window.shytalkShowLoginModal) {
+          window.shytalkShowLoginModal("subscribe to feature updates");
+        } else {
+          showLoginToast();
+        }
       });
     }
   }
