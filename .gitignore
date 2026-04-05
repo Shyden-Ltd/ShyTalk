@@ -22,6 +22,9 @@ worker-api/node_modules/
 worker-api/.wrangler/
 .env
 
+# Manual QA failure screenshots (never commit)
+.project/test-plans/failures/
+
 # Local development
 local/firebase-emulator-data/
 express-api/.env.local

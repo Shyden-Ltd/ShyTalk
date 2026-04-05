@@ -72,13 +72,17 @@ if [ "$HAS_WEB" = "true" ]; then
     echo "  To enable: npx serve public -l 8888 &"
   else
     echo "Running Playwright pre-push (chromium only)..."
+    # Use --reporter=list: writes one line per test result and flushes per-line.
+    # Do NOT use --reporter=line here: it uses ANSI cursor movement that gets
+    # swallowed when stdout is captured/piped, producing 0-byte output files.
+    # Do NOT pipe to `tail -N`: tail buffers until EOF, hiding live progress.
     API_BASE_URL=http://localhost:3000 \
     WEB_BASE_URL=http://localhost:8888 \
     ADMIN_EMAIL=claude-test@shytalk.dev \
     ADMIN_PASSWORD=localdev123 \
     TEST_API_KEY=local-test-key \
-    npx playwright test --project=chromium --reporter=line 2>&1 | tail -30
-    if [ ${PIPESTATUS[0]} -ne 0 ]; then
+    npx playwright test --project=chromium --reporter=list
+    if [ $? -ne 0 ]; then
       echo ""
       echo "✗ Playwright chromium tests FAILED — push blocked"
       echo "  ALL failing tests must be fixed (including pre-existing failures)."

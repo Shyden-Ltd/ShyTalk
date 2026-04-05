@@ -1290,6 +1290,7 @@
         align-items: center;
         justify-content: center;
         animation: fadeInUp 0.2s ease;
+        pointer-events: none;
       }
       .sg-modal {
         background: var(--surface);
@@ -1302,6 +1303,7 @@
         flex-direction: column;
         overflow: hidden;
         box-shadow: var(--shadow-lg);
+        pointer-events: auto;
       }
       .sg-modal--wide {
         max-width: 560px;
@@ -1763,11 +1765,11 @@
 
     <!-- ── Login toast ── -->
     <div
-      class="login-toast login-prompt"
+      class="login-toast"
       id="login-toast"
       role="alert"
       aria-live="polite"
-      data-testid="login-prompt"
+      data-testid="login-toast"
       data-i18n="loginPrompt"
     >
       Sign in to the app to get notified about this feature.

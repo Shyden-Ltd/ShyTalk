@@ -695,15 +695,12 @@
   function handleDeepLink() {
     var hash = window.location.hash;
     if (!hash || hash.length < 2) return;
-
-    // Small delay to ensure DOM is rendered
-    setTimeout(function () {
-      var targetId = hash.substring(1);
-      var target = document.getElementById(targetId);
-      if (target) {
-        target.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    }, 100);
+    var targetId = hash.substring(1);
+    var target = document.getElementById(targetId);
+    if (target) {
+      // Use instant scroll so the initial position is set before scroll spy runs
+      target.scrollIntoView({ behavior: "auto", block: "start" });
+    }
   }
 
   // ── Subscribe button ──
@@ -751,8 +748,10 @@
         roadmapData = data;
         currentLang = resolveLanguage();
         renderPhases(data);
-        setupScrollSpy();
+        // Deep link FIRST — scrolls to target before scroll spy overwrites hash
         handleDeepLink();
+        // Scroll spy last — runs updateActiveNav() which reads the now-scrolled position
+        setupScrollSpy();
       })
       .catch(function () {
         if (container) {

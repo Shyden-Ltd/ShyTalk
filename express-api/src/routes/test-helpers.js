@@ -351,6 +351,7 @@ router.post('/test/write/:collection', async (req, res) => {
       'reports',
       'suspensionAppeals',
       'alerts',
+      'suggestions',
     ];
     if (!ALLOWED_COLLECTIONS.includes(collection)) {
       return res.status(400).json({ error: 'Collection not allowed' });

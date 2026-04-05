@@ -3096,7 +3096,7 @@
             <button class="tab-btn" id="tab-logs" data-i18n="tab_logs">Logs</button>
             <button class="tab-btn" id="tab-devices" data-i18n="tab_devices">Devices</button>
             <button class="tab-btn" id="tab-starting-screens" data-i18n="tab_starting_screens">Starting Screens</button>
-            <button class="tab-btn" id="tab-suggestions" data-i18n="tab_suggestions">Suggestions<span class="tab-badge" id="suggestions-badge" style="display:none;background:var(--danger);color:#fff;font-size:11px;padding:1px 6px;border-radius:99px;margin-left:6px;">0</span></button>
+            <button class="tab-btn" id="tab-suggestions" data-i18n="tab_suggestions" aria-label="Suggestions">Suggestions<span class="tab-badge" id="suggestions-badge" aria-hidden="true" style="display:none;background:var(--danger);color:#fff;font-size:11px;padding:1px 6px;border-radius:99px;margin-left:6px;">0</span></button>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
             <button class="alert-bell" id="alert-bell" title="Alerts" aria-label="Alerts">&#128276;<span class="alert-bell-badge" id="alert-bell-badge" style="display:none;">0</span></button>
@@ -4672,6 +4672,10 @@
             <div class="suggestions-section-header">Pending Queue</div>
             <div id="suggestions-pending-queue"></div>
             <div id="sg-pending-empty" style="color:var(--text2);font-size:13px;font-style:italic;display:none;">No pending suggestions.</div>
+
+            <!-- Shared "Contact Submitter" info popup. One per page (not per card)
+                 to keep the DOM unique-id-safe. Populated by .btn-contact-submitter clicks. -->
+            <div id="submitter-contact-info" class="contact-submitter-popup" style="display:none;margin-top:8px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:13px;"></div>
 
             <!-- Dispute queue -->
             <div class="suggestions-section-header">Dispute Queue</div>
@@ -12780,20 +12784,40 @@
 
       const meta = document.createElement("div");
       meta.className = "sg-meta";
+      const hasContactOptIn = sg.contactOptIn || sg.submitterContactOptIn;
       meta.innerHTML = '<span>By: ' + escapeHtml(sg.submitterId || "Unknown") + '</span>' +
         '<span>' + (sg.createdAt ? new Date(sg.createdAt).toLocaleString() : "Unknown date") + '</span>' +
-        (sg.contactOptIn ? '<span class="sg-contact">Contact OK</span>' : '');
+        (hasContactOptIn
+          ? '<span class="sg-contact contact-opt-in-indicator">Open to contact</span>'
+          : '<span class="sg-no-contact contact-opt-in-indicator contact-opt-in-indicator--none">No contact</span>');
       body.appendChild(meta);
 
-      // Contact submitter button (enabled when contact opt-in is true)
-      if (sg.contactOptIn || sg.submitterContactOptIn) {
-        const contactBtn = document.createElement("button");
-        contactBtn.className = "btn-contact-submitter sg-btn-contact";
-        contactBtn.textContent = "Contact Submitter";
-        contactBtn.style.cssText = "font-size:12px;padding:4px 10px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;margin-top:4px;";
-        contactBtn.addEventListener("click", () => { showToast("Contact feature coming soon", "info"); });
-        body.appendChild(contactBtn);
+      // Contact submitter button — always rendered, disabled when submitter did not opt in.
+      // Clicking the enabled button reveals a single shared popup (see
+      // #submitter-contact-info below the suggestions panel) with the
+      // submitter's uniqueId so the admin can look them up in the Users tab.
+      // The popup is shared (not per-card) to keep the DOM unique-id-safe and
+      // to satisfy Playwright strict mode when asserting visibility.
+      const contactBtn = document.createElement("button");
+      contactBtn.className = "btn-contact-submitter sg-btn-contact";
+      contactBtn.textContent = "Contact Submitter";
+      contactBtn.style.cssText = "font-size:12px;padding:4px 10px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;margin-top:4px;";
+      if (!hasContactOptIn) {
+        contactBtn.disabled = true;
+        contactBtn.style.opacity = "0.5";
+        contactBtn.style.cursor = "not-allowed";
+        contactBtn.title = "Submitter did not opt in to admin contact";
       }
+      contactBtn.addEventListener("click", () => {
+        if (contactBtn.disabled) return;
+        const uid = sg.submitterUniqueId || sg.submitterId || "Unknown";
+        const popup = document.getElementById("submitter-contact-info");
+        if (popup) {
+          popup.textContent = "Submitter uniqueId: " + uid + " — look up in Users tab";
+          popup.style.display = "block";
+        }
+      });
+      body.appendChild(contactBtn);
 
       // Reject reason input (hidden by default)
       const rejectWrap = document.createElement("div");

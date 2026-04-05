@@ -29,6 +29,19 @@ const MOCK_SUGGESTIONS = [
   { id: 'sug-2', title: 'Another one', description: 'Another test', status: 'pending', submitterUid: 2002, createdAt: 1709827200000, submitterContactOptIn: false, voteCount: 1, tags: ['feature'], language: 'en' },
 ];
 
+/**
+ * Module-level mutable store of suggestions seeded during the current test.
+ * seedSuggestion() writes to Firestore via testWrite AND appends here so the
+ * page.route mock for /api/admin/suggestions can return the fresh data to the
+ * admin panel UI — otherwise the mock would only ever return MOCK_SUGGESTIONS
+ * and tests that assert on seeded IDs would never find their cards.
+ *
+ * Reset in beforeEach via resetSeededSuggestions(). Safe because Playwright
+ * is configured workers:1 so tests run serially (no cross-test race).
+ */
+const DYNAMIC_SEEDED: Array<Record<string, any>> = [];
+function resetSeededSuggestions(): void { DYNAMIC_SEEDED.length = 0; }
+
 const MOCK_DISPUTES = {
   disputes: [{ id: 'disp-1', suggestionId: 'sug-3', mergedIntoId: 'sug-1', disputerUid: 3003, status: 'pending', reason: 'Different features', createdAt: 1709913600000 }],
 };
@@ -63,6 +76,11 @@ const MOCK_IDENTITY_GRAPH = {
  * which go through Playwright's APIRequestContext).
  */
 async function setupApiMocks(page: Page): Promise<void> {
+  // Clear any suggestions seeded by a previous test so they don't leak into
+  // this test's mocked list. Safe because Playwright runs tests serially
+  // (workers:1) — setupApiMocks is called from every beforeEach.
+  resetSeededSuggestions();
+
   // Routes are evaluated in reverse registration order (last registered = tried first).
   // Register generic catch-all first (lowest priority), then specific sub-routes after.
 
@@ -75,9 +93,10 @@ async function setupApiMocks(page: Page): Promise<void> {
     if (path !== '/api/admin/suggestions') { await route.fallback(); return; }
     const params = new URL(url).searchParams;
     const status = params.get('status');
-    const filtered = status
-      ? MOCK_SUGGESTIONS.filter((s) => s.status === status)
-      : MOCK_SUGGESTIONS;
+    // Return both static mock data AND dynamically-seeded test data so tests
+    // that seed via seedSuggestion() can find their cards in the UI.
+    const all = [...MOCK_SUGGESTIONS, ...DYNAMIC_SEEDED];
+    const filtered = status ? all.filter((s) => s.status === status) : all;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -93,7 +112,7 @@ async function setupApiMocks(page: Page): Promise<void> {
     if (url.includes('/disputes') || url.includes('/history')) { await route.fallback(); return; }
     const segments = new URL(url).pathname.split('/');
     const id = segments[segments.length - 1];
-    const found = MOCK_SUGGESTIONS.find((s) => s.id === id);
+    const found = [...MOCK_SUGGESTIONS, ...DYNAMIC_SEEDED].find((s) => s.id === id);
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -229,14 +248,32 @@ async function waitForIdentityGraphLoaded(page: Page): Promise<void> {
 }
 
 async function seedSuggestion(testData: TestData, overrides: Record<string, any> = {}): Promise<{ id: string }> {
-  const result = await testData.api.post('/api/admin/suggestions', {
+  // Use test/write helper rather than the public POST /suggestions endpoint.
+  // The public endpoint requires the caller to be authenticated as the
+  // submitter, enforces a pending-per-user limit, and checks blocked topics —
+  // all friction that's inappropriate for seeding admin-panel tests. The
+  // test/write helper writes directly to Firestore with X-Test-API-Key.
+  const payload = {
     title: `E2E Test Suggestion ${Date.now()}`,
     description: 'Automated test suggestion for admin panel testing',
-    tags: ['quality-of-life'], language: 'en',
-    submitterUid: testData.user.uid, submitterUniqueId: testData.user.uniqueId,
-    status: 'pending', contactOptIn: false, ...overrides,
-  });
-  return { id: result.id || result.suggestionId };
+    tags: ['quality-of-life'],
+    language: 'en',
+    submitterUid: testData.user.uid,
+    submitterUniqueId: testData.user.uniqueId,
+    submitterContactOptIn: overrides.contactOptIn ?? false,
+    status: 'pending',
+    contactOptIn: false,
+    voteCount: 0,
+    upvotes: 0,
+    downvotes: 0,
+    createdAt: Date.now(),
+    ...overrides,
+  };
+  const result = await testData.api.testWrite('suggestions', payload);
+  // Also push into the mock dataset so the page.route handler returns this
+  // suggestion when the admin panel UI calls GET /api/admin/suggestions.
+  DYNAMIC_SEEDED.push({ ...payload, id: result.id });
+  return { id: result.id };
 }
 
 async function seedMultipleSuggestions(testData: TestData, count: number, overrides: Record<string, any> = {}): Promise<string[]> {

@@ -283,15 +283,23 @@ test.describe('Suggestions Board — Public Browsing', () => {
     const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
 
-    const statuses = ['Accepted', 'Planned', 'Completed', 'Rejected'];
-    for (const status of statuses) {
-      await statusFilter.selectOption({ label: status });
+    // Dropdown labels (user-facing) vs canonical status values (stable contract
+    // on the badge's data-status attribute). Visible badge text may differ from
+    // the dropdown label (e.g., "Shipped!" instead of "Completed") — the
+    // data-status attribute is the stable assertion target.
+    const statuses: Array<{ label: string; canonical: string }> = [
+      { label: 'Accepted', canonical: 'accepted' },
+      { label: 'Planned', canonical: 'planned' },
+      { label: 'Completed', canonical: 'completed' },
+      { label: 'Rejected', canonical: 'rejected' },
+    ];
+    for (const { label, canonical } of statuses) {
+      await statusFilter.selectOption({ label });
       await page.waitForTimeout(500);
-      const badges = page.locator('[data-testid^="suggestion-status"], .sg-badge');
+      const badges = page.locator('[data-testid^="suggestion-status"]');
       const count = await badges.count();
       for (let i = 0; i < count; i++) {
-        const text = await badges.nth(i).textContent();
-        expect(text!.toLowerCase()).toContain(status.toLowerCase());
+        await expect(badges.nth(i)).toHaveAttribute('data-status', canonical);
       }
     }
   });
