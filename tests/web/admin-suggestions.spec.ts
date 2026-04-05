@@ -216,8 +216,23 @@ async function setupApiMocks(page: Page): Promise<void> {
   });
 
   // ── GET /api/admin/audit-log ──
+  // Proxy to the real backend first so filters by admin/action/target/date
+  // are honoured. Fall back to MOCK_AUDIT_ENTRIES only if the backend is
+  // unreachable or returns no data.
   await page.route('**/api/admin/audit-log*', async (route) => {
     if (route.request().method() !== 'GET') { await route.fallback(); return; }
+    try {
+      const real = await route.fetch();
+      if (real.ok()) {
+        const body = await real.json();
+        if ((body.entries || []).length > 0) {
+          await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+          return;
+        }
+      }
+    } catch {
+      // Fall through to static mock
+    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

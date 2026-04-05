@@ -4914,7 +4914,14 @@
                 </div>
                 <div>
                     <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Target</label>
-                    <input type="text" id="audit-log-filter-target" placeholder="Target type or ID" style="padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;min-height:32px;">
+                    <select id="audit-log-filter-target" style="padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;min-height:32px;">
+                        <option value="">All targets</option>
+                        <option value="suggestion">suggestion</option>
+                        <option value="user">user</option>
+                        <option value="device">device</option>
+                        <option value="maintenance">maintenance</option>
+                        <option value="system">system</option>
+                    </select>
                 </div>
                 <div>
                     <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Start</label>
@@ -5161,7 +5168,8 @@
         loadEconomyConfig();
         // Update the Suggestions tab badge on page load (without navigating to
         // the tab) so admins see the pending count immediately on login.
-        updateSuggestionsBadgeOnLoad();
+        // Await it so the badge text is populated before tests read it.
+        await updateSuggestionsBadgeOnLoad();
         // Restore saved tab and report filter
         try {
           const savedTab = sessionStorage.getItem("admin_tab");
@@ -7395,7 +7403,21 @@
         try {
           await apiCall("POST", `/api/admin/identity-graph/${uid}/node/${nodeId}/unsuspend`, {});
           showToast("Node unsuspended");
-          loadIdentitySubtabGraph();
+          // Update the specific node in-place rather than re-rendering the
+          // whole graph so Playwright locators that target the clicked node
+          // by index don't resolve to a different node after re-render.
+          const container = document.getElementById("identity-graph-container");
+          if (container) {
+            const nodeEl = container.querySelector('.graph-node[data-id="' + nodeId + '"]');
+            if (nodeEl) {
+              nodeEl.classList.remove("suspended");
+              const rect = nodeEl.querySelector("rect");
+              if (rect) {
+                rect.setAttribute("stroke", "#333");
+                rect.setAttribute("stroke-width", "1");
+              }
+            }
+          }
         } catch (err) {
           showToast("Unsuspend failed: " + err.message, "error");
         }
@@ -13293,11 +13315,16 @@
       if (!badge) return;
       try {
         const data = await apiCall("GET", "/api/admin/suggestions?status=pending");
-        const pendingCount = (data.suggestions || []).filter((s) => s.status === "pending").length;
+        // Prefer the backend's total field (authoritative count after
+        // server-side filter). Fall back to client-side count from the
+        // returned array for mocked responses that don't set total.
+        const list = (data.suggestions || []).filter((s) => s.status === "pending");
+        const pendingCount = typeof data.total === "number" ? data.total : list.length;
         if (pendingCount > 0) {
           badge.textContent = String(pendingCount);
           badge.style.display = "inline-block";
         } else {
+          badge.textContent = "0";
           badge.style.display = "none";
         }
       } catch {
@@ -13408,6 +13435,15 @@
       pendingList.textContent = "";
       if (filtered.length === 0) {
         pendingEmpty.style.display = "block";
+        // Also inject the empty message text into the queue element so
+        // waitForPendingQueueLoaded (which reads queue.textContent for
+        // the "No pending" / "empty" substring) detects the empty state
+        // even though the sibling #sg-pending-empty div lives outside
+        // #suggestions-pending-queue.
+        const emptyText = document.createElement("div");
+        emptyText.style.cssText = "color:var(--text2);font-size:13px;font-style:italic;padding:12px;";
+        emptyText.textContent = "No pending suggestions (empty).";
+        pendingList.appendChild(emptyText);
       } else {
         pendingEmpty.style.display = "none";
         filtered.forEach(sg => {

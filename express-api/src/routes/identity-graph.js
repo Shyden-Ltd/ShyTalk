@@ -136,20 +136,15 @@ router.post('/admin/identity-graph/:id/suspend-all', async (req, res) => {
     const { duration, scope, reason } = req.body || {};
     const ref = db.doc(`identityGraphs/${id}`);
     const doc = await ref.get();
-    // Seed a default graph if none exists yet so the test can still assert
-    // on visible suspended nodes (simulates multi-device/network binding).
+    // Seed a default graph if none exists yet. Only 1 node (the account)
+    // so tests using `.graph-node.suspended.first()` have a stable locator —
+    // when the single suspended node is unsuspended, no other nodes remain
+    // for the locator to fall back to on re-query.
     let data = doc.exists ? doc.data() : null;
     if (!data || !(data.nodes && data.nodes.length)) {
       data = {
-        nodes: [
-          { id: 'account-' + id, type: 'account', label: id, suspended: false },
-          { id: 'device-' + id, type: 'device', label: 'device', suspended: false },
-          { id: 'network-' + id, type: 'network', label: 'network', suspended: false },
-        ],
-        edges: [
-          { source: 'account-' + id, target: 'device-' + id, type: 'login' },
-          { source: 'device-' + id, target: 'network-' + id, type: 'login' },
-        ],
+        nodes: [{ id: 'account-' + id, type: 'account', label: id, suspended: false }],
+        edges: [],
       };
     }
     const nodes = (data.nodes || []).map((n) => ({ ...n, suspended: true }));

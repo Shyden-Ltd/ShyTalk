@@ -117,9 +117,14 @@ router.get('/admin/audit-log', async (req, res) => {
       entries = entries.filter((e) => e.targetType === targetType);
     }
     if (targetId) {
+      // `target` query param is overloaded: the UI's filter dropdown can send
+      // a target TYPE (e.g. "suggestion") or a specific target ID substring.
+      // Match either: exact targetType OR substring id.
       entries = entries.filter(
         (e) =>
-          String(e.targetId || '').includes(targetId) || String(e.target || '').includes(targetId),
+          e.targetType === targetId ||
+          String(e.targetId || '').includes(targetId) ||
+          String(e.target || '').includes(targetId),
       );
     }
     if (from) {
