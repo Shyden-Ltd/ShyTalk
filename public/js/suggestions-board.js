@@ -414,8 +414,6 @@
       "</div>" +
       '<p style="color:var(--text-secondary,#888);font-size:0.8rem;text-align:center;">Don\'t have an account? Download ShyTalk to create one.</p>' +
       "</div>" +
-      '<div class="sg-modal-footer">' +
-      '<button class="sg-btn sg-btn--secondary" data-testid="login-modal-dismiss">"+sgT("cancel")+"</button>' +
       "</div>" +
       "</div>" +
       "</div>";
@@ -442,16 +440,12 @@
 
     var overlay = document.getElementById("sg-login-modal-overlay");
     var closeBtn = overlay.querySelector(".sg-modal-close");
-    var dismissBtn = overlay.querySelector(
-      '[data-testid="login-modal-dismiss"]',
-    );
 
     function close() {
       overlay.remove();
     }
 
     closeBtn.addEventListener("click", close);
-    dismissBtn.addEventListener("click", close);
     overlay.addEventListener("click", function (e) {
       if (e.target === overlay) close();
     });
@@ -481,7 +475,6 @@
       '<div class="sg-modal-body" id="sg-subscribe-body">' +
       '<div class="sg-loading">Loading preferences...</div>' +
       "</div>" +
-      '<div class="sg-modal-footer">' +
       '<div class="sg-gdpr-consent">' +
       '<label class="sg-checkbox-label" data-testid="subscribe-gdpr-checkbox">' +
       '<input type="checkbox" id="sg-gdpr-checkbox" />' +
@@ -710,7 +703,6 @@
       " ShyTalk may contact me for feedback on this suggestion" +
       "</label>" +
       "</div>" +
-      '<div class="sg-modal-footer">' +
       '<div class="sg-modal-actions">' +
       '<button class="sg-btn sg-btn--secondary" data-testid="suggest-modal-cancel">"+sgT("cancel")+"</button>' +
       '<button class="sg-btn sg-btn--primary" data-testid="suggest-modal-submit" disabled>Submit</button>' +
