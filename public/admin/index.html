@@ -12745,8 +12745,8 @@
           });
         }
 
-        // Load audit log
-        loadAuditLog();
+        // Load audit log (page 1)
+        loadAuditLog(1);
       } catch (err) {
         pendingList.innerHTML = '<div style="color:var(--danger);font-size:12px;">Failed to load: ' + escapeHtml(err.message) + '</div>';
         disputeList.innerHTML = '<div style="color:var(--danger);font-size:12px;">Failed to load</div>';
@@ -12917,35 +12917,6 @@
       card.appendChild(actions);
 
       return card;
-    }
-
-    // ── Audit Log loading ──
-    async function loadAuditLog() {
-      const tbody = $("#audit-log-tbody");
-      const empty = $("#audit-log-empty");
-      const container = $("#sg-audit-log");
-      if (!tbody || !container) return;
-      container.style.display = "block";
-      try {
-        const data = await apiCall("GET", "/api/admin/audit-log");
-        const entries = data.entries || [];
-        tbody.innerHTML = "";
-        if (entries.length === 0) {
-          if (empty) empty.style.display = "block";
-        } else {
-          if (empty) empty.style.display = "none";
-          entries.forEach(e => {
-            const tr = document.createElement("tr");
-            tr.innerHTML = '<td style="padding:6px 8px;">' + escapeHtml(e.action || e.actionType || "") + '</td>' +
-              '<td style="padding:6px 8px;">' + escapeHtml(e.adminName || "") + '</td>' +
-              '<td style="padding:6px 8px;">' + escapeHtml(e.target || e.targetId || "") + '</td>' +
-              '<td style="padding:6px 8px;">' + (e.timestamp ? new Date(e.timestamp).toLocaleString() : "") + '</td>';
-            tbody.appendChild(tr);
-          });
-        }
-      } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="4" style="color:var(--danger);padding:8px;">Failed to load audit log</td></tr>';
-      }
     }
 
     // ── Suggestion timeline rendering ──
