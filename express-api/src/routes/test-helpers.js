@@ -335,6 +335,43 @@ router.get('/test/verify/:collection/:id', async (req, res) => {
   }
 });
 
+// POST /api/test/create-user — create a user doc (optionally without identity data)
+// Used by the "empty graph: No identity data yet" test which needs a user
+// without any identity graph records. Accepts either the test API key OR
+// an admin bearer token (some tests call this via testData.api which uses
+// Bearer auth rather than the X-Test-API-Key header).
+router.post('/test/create-user', async (req, res) => {
+  try {
+    const hasApiKey =
+      req.headers['x-test-api-key'] && req.headers['x-test-api-key'] === process.env.TEST_API_KEY;
+    const hasAdmin = req.auth && req.auth.token && req.auth.token.admin;
+    if (!hasApiKey && !hasAdmin) {
+      return res.status(403).json({ error: 'Test API key or admin auth required' });
+    }
+    const { name, skipIdentity } = req.body || {};
+    const uid = 'test_noidentity_' + Date.now();
+    const uniqueId = 900000000 + Math.floor(Math.random() * 99999999);
+    await db.doc(`users/${uid}`).set({
+      uid,
+      uniqueId,
+      displayName: name || 'Test User',
+      createdAt: Date.now(),
+      isSuspended: false,
+    });
+    if (!skipIdentity) {
+      await db.doc(`identityGraphs/${uid}`).set({
+        nodes: [
+          { id: 'account-' + uid, type: 'account', label: String(uniqueId), suspended: false },
+        ],
+        edges: [],
+      });
+    }
+    res.json({ uid, uniqueId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/test/write/:collection — write a document to an allowed collection
 router.post('/test/write/:collection', async (req, res) => {
   try {

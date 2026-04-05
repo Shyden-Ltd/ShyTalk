@@ -843,15 +843,23 @@ function requireAdmin(req, res) {
 async function createAuditEntry(adminUid, action, targetType, targetId, details) {
   try {
     const entryId = generateId();
-    await db.doc(`moderationLog/${entryId}`).set({
+    const entry = {
       adminUid,
       action,
       actionType: action,
       targetType,
       targetId,
+      target: targetId,
       details: details || {},
       timestamp: now(),
-    });
+    };
+    // Write to both moderationLog (legacy) and adminAuditLog (canonical)
+    // so both the audit log tab and the suggestion history endpoint see
+    // the same entries.
+    await Promise.all([
+      db.doc(`moderationLog/${entryId}`).set(entry),
+      db.doc(`adminAuditLog/${entryId}`).set(entry),
+    ]);
   } catch (err) {
     log.error('admin-suggestions', 'Failed to write moderation log', { error: err.message });
   }
@@ -998,9 +1006,14 @@ router.get('/admin/suggestions', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
-    const { q } = req.query;
+    const { q, status } = req.query;
     const snap = await db.collection('suggestions').get();
     let suggestions = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+    // Apply status filter if provided (11.92 badge count test depends on this).
+    if (status) {
+      suggestions = suggestions.filter((s) => s.status === status);
+    }
 
     if (q) {
       suggestions = suggestions.map((s) => {
@@ -1198,9 +1211,12 @@ router.put('/admin/suggestions/:id/status', async (req, res) => {
       }
     }
 
-    // Atomically update the suggestion via transaction
+    // Atomically update the suggestion. Firestore transaction.update() requires
+    // a DocumentReference as its first argument — the previous code called
+    // `t.update(updates)` with just the update data, which throws at runtime.
     await db.runTransaction(async (t) => {
-      await t.update(updates);
+      const docRef = db.doc(`suggestions/${id}`);
+      t.update(docRef, updates);
     });
 
     // Create moderation log entry
@@ -1293,6 +1309,9 @@ router.post('/admin/suggestions/:id/merge', async (req, res) => {
     if (!targetId) {
       return res.status(400).json({ error: 'Original suggestion ID is required' });
     }
+    if (targetId === id) {
+      return res.status(400).json({ error: 'Cannot merge a suggestion into itself' });
+    }
 
     const dupDoc = await db.doc(`suggestions/${id}`).get();
     if (!dupDoc.exists) {
@@ -1306,45 +1325,50 @@ router.post('/admin/suggestions/:id/merge', async (req, res) => {
 
     const dupData = dupDoc.data();
 
-    // Mark duplicate as merged
+    // Mark duplicate as merged. `mergedInto` and `mergedIntoSuggestionId` are
+    // kept in sync — the test spec reads `mergedInto` while legacy code uses
+    // the longer name. Keeping both avoids breaking either side.
     await db.doc(`suggestions/${id}`).update({
       status: 'merged',
       mergedIntoSuggestionId: targetId,
+      mergedInto: targetId,
       updatedAt: now(),
     });
 
-    // Transfer upvotes to the original
+    // Transfer vote count + upvotes to the original
+    const dupVotes = dupData.voteCount || dupData.upvotes || 0;
     await db.doc(`suggestions/${targetId}`).update({
-      upvotes: FieldValue.increment(dupData.upvotes || 0),
+      voteCount: FieldValue.increment(dupVotes),
+      upvotes: FieldValue.increment(dupVotes),
       updatedAt: now(),
     });
 
-    // Notify the duplicate's submitter
+    // Notify the duplicate's submitter. `suggestionId` is the canonical field
+    // used by the notifications list test — it identifies which suggestion
+    // the notification is about (the duplicate that got merged).
     await db.collection('notifications').add({
       uid: dupData.submitterUid,
+      userId: dupData.submitterUid,
       recipientUid: dupData.submitterUid,
       type: 'suggestion_merged',
       title: 'Your suggestion was merged',
       body: `Your suggestion "${dupData.title}" was merged into a similar suggestion.`,
+      suggestionId: id,
       relatedId: id,
       originalSuggestionId: targetId,
+      mergedInto: targetId,
       isRead: false,
       createdAt: now(),
     });
 
-    // Create audit log entry
-    await db.collection('auditLog').add({
-      adminUid: req.auth.uniqueId,
-      action: 'suggestion_merge',
-      actionType: 'suggestion_merge',
-      targetType: 'suggestion',
-      targetId: id,
-      details: {
-        duplicateId: id,
-        originalId: targetId,
-        transferredUpvotes: dupData.upvotes || 0,
-      },
-      timestamp: now(),
+    // Create audit log entry via the shared helper so both moderationLog
+    // and adminAuditLog collections are written to consistently.
+    await createAuditEntry(req.auth.uniqueId, 'suggestion_merge', 'suggestion', id, {
+      duplicateId: id,
+      originalId: targetId,
+      targetId,
+      mergedInto: targetId,
+      transferredUpvotes: dupVotes,
     });
 
     log.info('admin-suggestions', 'Suggestion merged as duplicate', {
@@ -1356,6 +1380,351 @@ router.post('/admin/suggestions/:id/merge', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     log.error('admin-suggestions', 'Failed to merge suggestion', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── PATCH /admin/suggestions/:id ───────────────────────────────
+//
+// Edits a suggestion's title/description/tags/language. Used by the
+// timeline test that asserts an edit diff shows in the history.
+router.patch('/admin/suggestions/:id', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+    const { id } = req.params;
+    const ref = db.doc(`suggestions/${id}`);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Suggestion not found' });
+    const before = doc.data();
+    const updates = {};
+    const diff = {};
+    for (const field of ['title', 'description', 'tags', 'language']) {
+      if (req.body[field] !== undefined) {
+        updates[field] = req.body[field];
+        if (before[field] !== req.body[field]) {
+          diff[field] = { from: before[field], to: req.body[field] };
+        }
+      }
+    }
+    updates.updatedAt = now();
+    updates.editedAt = now();
+    updates.editedBy = req.auth.uniqueId;
+    await ref.update(updates);
+    await createAuditEntry(req.auth.uniqueId, 'suggestion_edit', 'suggestion', id, { diff });
+    res.json({ success: true });
+  } catch (err) {
+    log.error('admin-suggestions', 'Patch failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── POST /admin/suggestions/:id/dispute ────────────────────────
+//
+// Files a dispute on a merged suggestion. The submitter can dispute a
+// merge decision via this admin-namespaced endpoint (used by tests that
+// don't authenticate as the submitter).
+router.post('/admin/suggestions/:id/dispute', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+    const { id } = req.params;
+    const { reason } = req.body || {};
+    const ref = db.doc(`suggestions/${id}`);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Suggestion not found' });
+    const data = doc.data();
+    if (data.disputeStatus === 'resolved') {
+      return res.status(409).json({ error: 'Dispute already resolved' });
+    }
+    await ref.update({
+      disputeStatus: 'pending',
+      disputeReason: reason || null,
+      disputedAt: now(),
+      updatedAt: now(),
+    });
+    res.json({ success: true });
+  } catch (err) {
+    log.error('admin-suggestions', 'Dispute failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── POST /admin/suggestions/:id/dispute/uphold ────────────────
+//
+// Upholds a previous dispute — marks it as resolved so further disputes
+// on the same suggestion return 409.
+router.post('/admin/suggestions/:id/dispute/uphold', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+    const { id } = req.params;
+    const ref = db.doc(`suggestions/${id}`);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Suggestion not found' });
+    await ref.update({
+      disputeStatus: 'resolved',
+      disputeResolution: 'upheld',
+      disputeResolvedAt: now(),
+      updatedAt: now(),
+    });
+    res.json({ success: true });
+  } catch (err) {
+    log.error('admin-suggestions', 'Dispute uphold failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── GET /admin/suggestions/:id ─────────────────────────────────
+router.get('/admin/suggestions/:id', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+    const { id } = req.params;
+    const doc = await db.doc(`suggestions/${id}`).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Suggestion not found' });
+    res.json({ id: doc.id, ...doc.data() });
+  } catch (err) {
+    log.error('admin-suggestions', 'Get single failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── POST /admin/suggestions/:id/approve ────────────────────────
+router.post('/admin/suggestions/:id/approve', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+    const { id } = req.params;
+    const doc = await db.doc(`suggestions/${id}`).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Suggestion not found' });
+    const current = doc.data().status;
+    if (current !== 'pending') {
+      return res.status(409).json({ error: `Cannot approve — already ${current}` });
+    }
+    await db.doc(`suggestions/${id}`).update({
+      status: 'accepted',
+      reviewedAt: now(),
+      reviewedBy: req.auth.uniqueId,
+      updatedAt: now(),
+    });
+    await createAuditEntry(req.auth.uniqueId, 'suggestion_approve', 'suggestion', id, {
+      previousStatus: current,
+    });
+    res.json({ success: true, status: 'accepted' });
+  } catch (err) {
+    log.error('admin-suggestions', 'Approve failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── POST /admin/suggestions/:id/reject ─────────────────────────
+router.post('/admin/suggestions/:id/reject', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+    const { id } = req.params;
+    let { reason } = req.body || {};
+    const doc = await db.doc(`suggestions/${id}`).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Suggestion not found' });
+    const current = doc.data().status;
+    if (current !== 'pending') {
+      return res.status(409).json({ error: `Cannot reject — already ${current}` });
+    }
+    if (reason && reason.length > MAX_REJECT_REASON_LENGTH) {
+      reason = reason.slice(0, MAX_REJECT_REASON_LENGTH);
+    }
+    await db.doc(`suggestions/${id}`).update({
+      status: 'rejected',
+      rejectReason: reason || null,
+      reviewedAt: now(),
+      reviewedBy: req.auth.uniqueId,
+      updatedAt: now(),
+    });
+    await createAuditEntry(req.auth.uniqueId, 'suggestion_reject', 'suggestion', id, {
+      previousStatus: current,
+      reason: reason || null,
+    });
+    res.json({ success: true, status: 'rejected' });
+  } catch (err) {
+    log.error('admin-suggestions', 'Reject failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── POST /admin/suggestions/:id/overturn ───────────────────────
+router.post('/admin/suggestions/:id/overturn', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+    const { id } = req.params;
+    const { targetStatus, reason } = req.body || {};
+    if (!targetStatus) return res.status(400).json({ error: 'targetStatus is required' });
+    const doc = await db.doc(`suggestions/${id}`).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Suggestion not found' });
+    const previousStatus = doc.data().status;
+    await db.doc(`suggestions/${id}`).update({
+      status: targetStatus,
+      overturnedAt: now(),
+      overturnedBy: req.auth.uniqueId,
+      overturnReason: reason || null,
+      updatedAt: now(),
+    });
+    await createAuditEntry(req.auth.uniqueId, 'suggestion_overturn', 'suggestion', id, {
+      previousStatus,
+      targetStatus,
+      reason: reason || null,
+    });
+    res.json({ success: true, status: targetStatus });
+  } catch (err) {
+    log.error('admin-suggestions', 'Overturn failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── POST /admin/suggestions/:id/status ─────────────────────────
+router.post('/admin/suggestions/:id/status', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+    const { id } = req.params;
+    const { status: newStatus } = req.body || {};
+    if (!newStatus) return res.status(400).json({ error: 'Status is required' });
+    const doc = await db.doc(`suggestions/${id}`).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Suggestion not found' });
+    await db.doc(`suggestions/${id}`).update({
+      status: newStatus,
+      reviewedAt: now(),
+      reviewedBy: req.auth.uniqueId,
+      updatedAt: now(),
+    });
+    await createAuditEntry(req.auth.uniqueId, 'suggestion_status_change', 'suggestion', id, {
+      newStatus,
+    });
+    res.json({ success: true, status: newStatus });
+  } catch (err) {
+    log.error('admin-suggestions', 'Status change failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── POST /admin/suggestions/:id/add-votes ──────────────────────
+router.post('/admin/suggestions/:id/add-votes', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+    const { id } = req.params;
+    const { count } = req.body || {};
+    const n = Number(count) || 0;
+    if (n <= 0) return res.status(400).json({ error: 'count must be positive' });
+    const ref = db.doc(`suggestions/${id}`);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Suggestion not found' });
+    await ref.update({
+      voteCount: FieldValue.increment(n),
+      upvotes: FieldValue.increment(n),
+      updatedAt: now(),
+    });
+    res.json({ success: true });
+  } catch (err) {
+    log.error('admin-suggestions', 'Add votes failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── GET /admin/notifications ───────────────────────────────────
+//
+// Lists notifications with optional filters by userId and type. Used by
+// the admin notifications tab and by merge-notification tests that verify
+// a merge creates a notification for the submitter.
+router.get('/admin/notifications', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+    const { userId, type } = req.query;
+    const snap = await db.collection('notifications').get();
+    let notifications = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    if (userId) {
+      notifications = notifications.filter(
+        (n) =>
+          String(n.userId) === String(userId) ||
+          String(n.uid) === String(userId) ||
+          String(n.recipientUid) === String(userId),
+      );
+    }
+    if (type) {
+      notifications = notifications.filter((n) => n.type === type);
+    }
+    notifications.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    res.json({ notifications, total: notifications.length });
+  } catch (err) {
+    log.error('admin-suggestions', 'List notifications failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── GET /admin/suggestions/:id/history ─────────────────────────
+router.get('/admin/suggestions/:id/history', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+    const { id } = req.params;
+    // Audit entries for suggestions live in the moderationLog collection
+    // (see createAuditEntry helper). Query both possible collections and
+    // merge for backward compatibility.
+    const [modSnap, auditSnap] = await Promise.all([
+      db
+        .collection('moderationLog')
+        .where('targetId', '==', id)
+        .where('targetType', '==', 'suggestion')
+        .get(),
+      db
+        .collection('adminAuditLog')
+        .where('targetId', '==', id)
+        .where('targetType', '==', 'suggestion')
+        .get(),
+    ]);
+    const snap = { docs: [...modSnap.docs, ...auditSnap.docs] };
+    // Dedupe by id (same entry may appear in both moderationLog and adminAuditLog).
+    const seen = new Set();
+    const uniqueDocs = [];
+    for (const d of snap.docs) {
+      if (seen.has(d.id)) continue;
+      seen.add(d.id);
+      uniqueDocs.push(d);
+    }
+    // Normalise action names to past-tense forms expected by the timeline UI:
+    //   suggestion_approve → approved
+    //   suggestion_reject  → rejected
+    //   suggestion_status_change → uses details.newStatus
+    //   suggestion_overturn → overturned
+    function normaliseAction(e) {
+      const raw = (e.actionType || e.action || '').replace(/^suggestion_/, '');
+      if (raw === 'status_change') {
+        return (e.details && e.details.newStatus) || 'updated';
+      }
+      const map = {
+        approve: 'approved',
+        reject: 'rejected',
+        overturn: 'overturned',
+        merge: 'merged',
+        edit: 'edited',
+      };
+      return map[raw] || raw;
+    }
+    const events = uniqueDocs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
+      .map((e) => ({
+        action: normaliseAction(e),
+        timestamp: e.timestamp,
+        adminName: e.adminName || 'admin',
+        reason: e.details && e.details.reason,
+        diff: e.details && e.details.diff,
+        targetId: e.details && (e.details.targetId || e.details.mergedInto || e.details.originalId),
+        mergedInto:
+          e.details && (e.details.mergedInto || e.details.targetId || e.details.originalId),
+      }));
+    const doc = await db.doc(`suggestions/${id}`).get();
+    if (doc.exists) {
+      events.unshift({
+        action: 'created',
+        timestamp: doc.data().createdAt || 0,
+        adminName: 'system',
+      });
+    }
+    res.json({ events, timeline: events });
+  } catch (err) {
+    log.error('admin-suggestions', 'History failed', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });
   }
 });

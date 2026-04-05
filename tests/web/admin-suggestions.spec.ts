@@ -91,11 +91,53 @@ async function setupApiMocks(page: Page): Promise<void> {
     // Only handle the list endpoint (path is exactly /api/admin/suggestions)
     const path = new URL(url).pathname.replace(/\/$/, '');
     if (path !== '/api/admin/suggestions') { await route.fallback(); return; }
+    // Proxy to the real backend first. If the backend returns data, use
+    // it as-is — do NOT merge with MOCK_SUGGESTIONS, because tests that
+    // count entries (e.g., the badge count test) would get an inflated
+    // count if the mocks were added on top of real data. MOCK_SUGGESTIONS
+    // is used only as a fallback when the backend has no data at all.
+    let realSuggestions: any[] = [];
+    let realTotal = 0;
+    let gotRealData = false;
+    try {
+      const real = await route.fetch();
+      if (real.ok()) {
+        const realBody = await real.json();
+        realSuggestions = realBody.suggestions || [];
+        realTotal = realBody.total || realSuggestions.length;
+        gotRealData = true;
+      }
+    } catch {
+      // Backend unreachable — fall back to mocks
+    }
     const params = new URL(url).searchParams;
     const status = params.get('status');
-    // Return both static mock data AND dynamically-seeded test data so tests
-    // that seed via seedSuggestion() can find their cards in the UI.
-    const all = [...MOCK_SUGGESTIONS, ...DYNAMIC_SEEDED];
+
+    if (gotRealData) {
+      // Backend is authoritative. Include DYNAMIC_SEEDED entries that the
+      // real backend doesn't know about yet (in case the test seeded via
+      // a code path the backend can't see, e.g., browser-only state). Do
+      // NOT add MOCK_SUGGESTIONS — those would inflate counts.
+      const byId = new Map<string, any>();
+      for (const s of realSuggestions) byId.set(s.id, s);
+      for (const s of DYNAMIC_SEEDED) {
+        if (!byId.has(s.id)) byId.set(s.id, s);
+      }
+      const all = Array.from(byId.values());
+      const filtered = status ? all.filter((s) => s.status === status) : all;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ suggestions: filtered, total: filtered.length }),
+      });
+      return;
+    }
+
+    // Backend unreachable: fall back to static mock + seeded data.
+    const byId = new Map<string, any>();
+    for (const s of MOCK_SUGGESTIONS) byId.set(s.id, s);
+    for (const s of DYNAMIC_SEEDED) byId.set(s.id, s);
+    const all = Array.from(byId.values());
     const filtered = status ? all.filter((s) => s.status === status) : all;
     await route.fulfill({
       status: 200,
@@ -131,8 +173,28 @@ async function setupApiMocks(page: Page): Promise<void> {
   });
 
   // ── GET /api/admin/suggestions/:id/history ──
+  // Proxy to real backend so we see the actual audit log entries for
+  // suggestions whose status was changed via POST /approve /reject etc.
+  // Fallback to hardcoded mock data only if the backend call fails.
   await page.route('**/api/admin/suggestions/*/history', async (route) => {
     if (route.request().method() !== 'GET') { await route.fallback(); return; }
+    try {
+      const real = await route.fetch();
+      if (real.ok()) {
+        const body = await real.json();
+        const events = body.events || body.timeline || [];
+        if (events.length > 0) {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ events, timeline: events }),
+          });
+          return;
+        }
+      }
+    } catch {
+      // Fall through to mock
+    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -164,24 +226,38 @@ async function setupApiMocks(page: Page): Promise<void> {
   });
 
   // ── GET /api/admin/bans/graph/:id ──
-  await page.route('**/api/admin/bans/graph/*', async (route) => {
+  // Proxy to real backend so suspend state set via POST suspend-all is
+  // reflected in the mock response. Fallback to MOCK_IDENTITY_GRAPH if the
+  // backend returns no data (which happens for fresh test users who haven't
+  // had an identity graph seeded yet).
+  async function serveIdentityGraph(route: any) {
     if (route.request().method() !== 'GET') { await route.fallback(); return; }
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(MOCK_IDENTITY_GRAPH),
-    });
-  });
-
-  // ── GET /api/admin/identity-graph/:id ──
-  await page.route('**/api/admin/identity-graph/*', async (route) => {
-    if (route.request().method() !== 'GET') { await route.fallback(); return; }
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(MOCK_IDENTITY_GRAPH),
-    });
-  });
+    const uid = new URL(route.request().url()).pathname.split('/').pop() || '';
+    // Try real backend first
+    try {
+      const real = await route.fetch();
+      if (real.ok()) {
+        const body = await real.json();
+        if ((body.nodes && body.nodes.length > 0) || (body.identifiers && body.identifiers.length > 0)) {
+          await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+          return;
+        }
+      }
+    } catch {
+      // fall through
+    }
+    // Fall back to static mock with the path's uid substituted in
+    const graph = JSON.parse(JSON.stringify(MOCK_IDENTITY_GRAPH));
+    for (const n of graph.nodes || []) {
+      if (n.type === 'account') {
+        n.label = uid;
+        if (n.metadata) n.metadata.uniqueId = uid;
+      }
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(graph) });
+  }
+  await page.route('**/api/admin/bans/graph/*', serveIdentityGraph);
+  await page.route('**/api/admin/identity-graph/*', serveIdentityGraph);
 
   // ── GET /api/admin/notifications ──
   await page.route('**/api/admin/notifications*', async (route) => {
@@ -202,6 +278,26 @@ async function setupApiMocks(page: Page): Promise<void> {
       body: JSON.stringify({ uid: 'u1', uniqueId: 1001, displayName: 'Test User', isSuspended: false }),
     });
   });
+
+  // ── POST /api/admin/maintenance/* (stub: return success with count) ──
+  // The real maintenance endpoints require admin claims on the backend
+  // which are not always set in the test user. Stubbing here lets tests
+  // assert on the UI's behaviour when these succeed.
+  await page.route('**/api/admin/maintenance/*', async (route) => {
+    if (route.request().method() !== 'POST') { await route.fallback(); return; }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, deleted: 5, count: 5 }),
+    });
+  });
+
+  // NOTE: POST /api/admin/suggestions/:id/{approve,reject,status,overturn,merge}
+  // are NOT mocked — they go to the real backend so that state changes
+  // (approve → accepted, reject → rejected) are persisted to Firestore.
+  // This is critical because after a POST mutation, the UI re-fetches
+  // GET /api/admin/suggestions which is proxied to the real backend, so
+  // the UI sees the updated state.
 }
 
 // ── Helpers ──

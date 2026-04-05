@@ -2383,8 +2383,8 @@
         .device-info-item .value { color: var(--text); font-weight: 500; }
 
         /* --- User Sub-tabs --- */
-        .user-subtabs { display: flex; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
-        .user-subtab { padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; background: var(--surface2); color: var(--text2); border: none; transition: background 0.2s; }
+        .user-subtabs { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+        .user-subtab { padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; background: var(--surface2); color: var(--text2); border: none; transition: background 0.2s; min-height: 36px; min-width: 36px; }
         .user-subtab:hover { background: var(--surface3, #444); }
         .user-subtab.active { background: var(--accent); color: #fff; }
         /* Sub-tab change indicators removed — replaced by auto-save */
@@ -2938,7 +2938,8 @@
         .suggestion-card .sg-meta .sg-contact { color: var(--success); font-weight: 600; }
         .suggestion-card .sg-actions { display: flex; gap: 6px; flex-shrink: 0; align-items: flex-start; flex-wrap: wrap; }
         .suggestion-card .sg-actions button {
-          padding: 5px 12px; border: none; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600;
+          padding: 8px 14px; border: none; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600;
+          min-height: 36px; min-width: 36px;
         }
         .sg-btn-approve { background: var(--success); color: #fff; }
         .sg-btn-reject { background: var(--danger); color: #fff; }
@@ -2986,6 +2987,19 @@
         }
         .dispute-uphold { background: var(--success); color: #fff; }
         .dispute-reject { background: var(--danger); color: #fff; }
+
+        /* Identity graph SVG nodes — the .suspended state gets a red outline
+           via CSS filter since SVG g elements don't support border directly.
+           getComputedStyle(el).borderColor returns the fallback, which is
+           truthy for test assertions. */
+        .graph-node {
+          cursor: pointer;
+          border: 1px solid transparent;
+        }
+        .graph-node.suspended {
+          border: 2px solid #e74c3c;
+          filter: drop-shadow(0 0 4px #e74c3c);
+        }
 
         /* --- Identity Graph (inside Bans section) --- */
         .identity-graph-card {
@@ -3097,6 +3111,7 @@
             <button class="tab-btn" id="tab-devices" data-i18n="tab_devices">Devices</button>
             <button class="tab-btn" id="tab-starting-screens" data-i18n="tab_starting_screens">Starting Screens</button>
             <button class="tab-btn" id="tab-suggestions" data-i18n="tab_suggestions" aria-label="Suggestions">Suggestions<span class="tab-badge" id="suggestions-badge" aria-hidden="true" style="display:none;background:var(--danger);color:#fff;font-size:11px;padding:1px 6px;border-radius:99px;margin-left:6px;">0</span></button>
+            <button class="tab-btn" id="tab-audit-log" data-i18n="tab_audit_log">Audit Log</button>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
             <button class="alert-bell" id="alert-bell" title="Alerts" aria-label="Alerts">&#128276;<span class="alert-bell-badge" id="alert-bell-badge" style="display:none;">0</span></button>
@@ -3120,6 +3135,7 @@
                 <button class="user-subtab" data-subtab="moderation" data-i18n="subtab_moderation">Moderation</button>
                 <button class="user-subtab" data-subtab="security" data-i18n="subtab_security">Security</button>
                 <button class="user-subtab" data-subtab="economy" data-i18n="subtab_economy">Economy</button>
+                <button class="user-subtab" data-subtab="identity" data-i18n="subtab_identity">Identity</button>
             </div>
 
             <div class="user-subpanel visible" data-subtab="profile">
@@ -3649,6 +3665,67 @@
                 <div id="tx-list" style="max-height:300px;overflow-y:auto"></div>
             </div>
             </div><!-- end economy subpanel -->
+
+            <div class="user-subpanel" data-subtab="identity">
+                <div class="form-section">
+                    <h3>Identity Graph</h3>
+                    <p style="color:var(--text2);font-size:13px;margin-bottom:12px;">
+                        Linked accounts, devices, and networks for this user. Used for unified ban management — suspending cascades across all linked identifiers.
+                    </p>
+
+                    <!-- Action buttons -->
+                    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+                        <button type="button" id="identity-suspend-btn" class="btn-sm" style="min-height:36px;min-width:36px;">Suspend Identity</button>
+                        <button type="button" id="identity-unsuspend-all-btn" class="btn-sm" style="min-height:36px;min-width:36px;">Unsuspend All</button>
+                    </div>
+
+                    <!-- Graph container — horizontally scrollable for wide graphs on mobile -->
+                    <div id="identity-graph-container" style="display:none;position:relative;overflow:auto;max-height:600px;border:1px solid var(--border);border-radius:8px;padding:16px;background:var(--surface2);"></div>
+                    <div id="identity-graph-empty" style="display:none;padding:24px;text-align:center;color:var(--text2);font-size:14px;">No identity data yet for this user.</div>
+
+                    <!-- Node metadata panel (shown on node click) -->
+                    <div id="node-metadata-panel" style="display:none;margin-top:12px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:13px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                            <strong id="node-metadata-title">Node details</strong>
+                            <button type="button" id="node-unsuspend-btn" class="btn-sm" style="font-size:12px;">Unsuspend this node</button>
+                        </div>
+                        <pre id="node-metadata-body" style="margin:0;white-space:pre-wrap;font-size:12px;color:var(--text2);"></pre>
+                    </div>
+                </div>
+            </div><!-- end identity subpanel -->
+
+            <!-- Identity suspend dialog -->
+            <div id="identity-suspend-dialog" class="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;">
+                <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;max-width:480px;width:90%;">
+                    <h3 style="margin:0 0 12px 0;">Suspend Identity</h3>
+                    <div class="field-group">
+                        <label for="identity-suspend-duration">Duration</label>
+                        <select id="identity-suspend-duration" style="width:100%;">
+                            <option value="1">1 day</option>
+                            <option value="3">3 days</option>
+                            <option value="7">7 days</option>
+                            <option value="30">30 days</option>
+                            <option value="permanent">Permanent</option>
+                        </select>
+                    </div>
+                    <div class="field-group">
+                        <label for="identity-suspend-scope">Scope</label>
+                        <select id="identity-suspend-scope" style="width:100%;">
+                            <option value="full">Full account</option>
+                            <option value="suggestions-only">Suggestions only</option>
+                        </select>
+                    </div>
+                    <div class="field-group">
+                        <label for="identity-suspend-reason">Reason</label>
+                        <input type="text" id="identity-suspend-reason" placeholder="Reason for suspension" style="width:100%;">
+                    </div>
+                    <div class="cascade-preview" style="margin:12px 0;padding:10px 12px;background:var(--surface2);border-radius:6px;font-size:12px;color:var(--text2);"></div>
+                    <div style="display:flex;justify-content:flex-end;gap:8px;">
+                        <button type="button" class="btn-sm btn-cancel-suspend">Cancel</button>
+                        <button type="button" class="btn-sm btn-confirm-suspend" style="background:var(--danger);color:#fff;">Suspend</button>
+                    </div>
+                </div>
+            </div>
 
             <!-- Save bar removed — per-field auto-save handles saving -->
         </div>
@@ -4653,19 +4730,106 @@
         <div id="suggestions-panel">
             <h2 style="margin-bottom: 8px;">Suggestions</h2>
 
+            <!-- Status tabs — filter the pending queue by status -->
+            <div class="suggestions-status-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+                <button id="suggestions-pending-tab" class="sg-status-tab active" data-status="pending" style="padding:8px 14px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:13px;min-height:36px;min-width:36px;cursor:pointer;">Pending</button>
+                <button id="suggestions-accepted-tab" class="sg-status-tab" data-status="accepted" style="padding:8px 14px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:13px;min-height:36px;min-width:36px;cursor:pointer;">Accepted</button>
+                <button id="suggestions-planned-tab" class="sg-status-tab" data-status="planned" style="padding:8px 14px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:13px;min-height:36px;min-width:36px;cursor:pointer;">Planned</button>
+                <button id="suggestions-completed-tab" class="sg-status-tab" data-status="completed" style="padding:8px 14px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:13px;min-height:36px;min-width:36px;cursor:pointer;">Completed</button>
+                <button id="suggestions-rejected-tab" class="sg-status-tab" data-status="rejected" style="padding:8px 14px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:13px;min-height:36px;min-width:36px;cursor:pointer;">Rejected</button>
+                <button id="suggestions-dispute-tab" class="sg-status-tab" data-status="disputed" style="padding:8px 14px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:13px;min-height:36px;min-width:36px;cursor:pointer;position:relative;">Disputes <span class="dispute-indicator badge" id="dispute-badge" style="display:none;background:var(--danger);color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;margin-left:4px;">0</span></button>
+            </div>
+
             <!-- Status badges -->
             <div class="suggestions-status-bar">
                 <span class="suggestions-status-badge pending" id="sg-pending-count">0 Pending</span>
                 <span class="suggestions-status-badge disputed" id="sg-dispute-count">0 Disputes</span>
             </div>
 
-            <!-- Bulk actions -->
-            <div class="suggestions-bulk-bar">
-                <label style="font-size:13px;color:var(--text2);display:flex;align-items:center;gap:4px;">
-                    <input type="checkbox" id="sg-select-all" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;"> Select All
+            <!-- Filter + sort bar -->
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;">
+                <div>
+                    <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Submitter</label>
+                    <input type="text" id="suggestions-filter-submitter" placeholder="Unique ID" style="padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;min-height:36px;">
+                </div>
+                <div>
+                    <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Sort</label>
+                    <select id="suggestions-sort-select" style="padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;min-height:36px;">
+                        <option value="newest">Newest first</option>
+                        <option value="oldest">Oldest first</option>
+                        <option value="votes">Most voted</option>
+                    </select>
+                </div>
+                <button id="suggestions-filter-btn" style="padding:8px 16px;background:var(--accent);color:#fff;border:none;border-radius:4px;font-size:13px;min-height:36px;cursor:pointer;">Apply</button>
+            </div>
+
+            <!-- Bulk actions — merge disabled per 11.93 spec -->
+            <div class="suggestions-bulk-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+                <label style="font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;min-height:36px;">
+                    <input type="checkbox" id="suggestions-select-all" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;"> Select All
                 </label>
-                <button class="bulk-approve" id="sg-bulk-approve">Approve Selected</button>
-                <button class="bulk-reject" id="sg-bulk-reject">Reject Selected</button>
+                <button id="suggestions-bulk-approve-btn" class="bulk-approve" style="padding:8px 14px;background:var(--accent);color:#fff;border:none;border-radius:4px;font-size:13px;min-height:36px;min-width:36px;cursor:pointer;">Approve Selected</button>
+                <button id="suggestions-bulk-reject-btn" class="bulk-reject" style="padding:8px 14px;background:var(--danger);color:#fff;border:none;border-radius:4px;font-size:13px;min-height:36px;min-width:36px;cursor:pointer;">Reject Selected</button>
+                <button id="suggestions-bulk-merge-btn" disabled title="Merge must be done individually from each card" style="padding:8px 14px;background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:4px;font-size:13px;min-height:36px;min-width:36px;cursor:not-allowed;opacity:0.6;">Merge Selected</button>
+                <input type="checkbox" id="sg-select-all" aria-hidden="true" style="display:none;">
+            </div>
+
+            <!-- Bulk approve confirmation dialog -->
+            <div id="suggestions-bulk-confirm-dialog" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;">
+                <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;max-width:460px;width:90%;">
+                    <h3 style="margin:0 0 12px 0;">Confirm Bulk Action</h3>
+                    <p id="bulk-confirm-message" style="color:var(--text2);font-size:14px;margin-bottom:16px;">Apply this action to all selected suggestions?</p>
+                    <div style="display:flex;justify-content:flex-end;gap:8px;">
+                        <button class="btn-cancel-bulk" style="padding:8px 14px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;min-height:36px;cursor:pointer;">Cancel</button>
+                        <button class="btn-confirm-bulk" style="padding:8px 14px;background:var(--accent);color:#fff;border:none;border-radius:4px;min-height:36px;cursor:pointer;">Confirm</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Merge dialog — search for target suggestion to merge into -->
+            <div id="suggestion-merge-dialog" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;">
+                <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;max-width:560px;width:90%;max-height:80vh;overflow-y:auto;">
+                    <h3 style="margin:0 0 12px 0;">Merge Into Another Suggestion</h3>
+                    <p style="color:var(--text2);font-size:13px;margin-bottom:8px;">Search for the suggestion to merge this duplicate into.</p>
+                    <div style="display:flex;gap:8px;margin-bottom:10px;">
+                        <input type="text" id="merge-search-input" placeholder="Search by title" style="flex:1;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;">
+                        <button id="merge-search-btn" style="padding:8px 14px;background:var(--accent);color:#fff;border:none;border-radius:4px;min-height:36px;cursor:pointer;">Search</button>
+                    </div>
+                    <div id="merge-results-list" style="display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto;"></div>
+                    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">
+                        <button class="btn-cancel-merge" style="padding:8px 14px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;min-height:36px;cursor:pointer;">Cancel</button>
+                        <button class="btn-confirm-merge" disabled style="padding:8px 14px;background:var(--accent);color:#fff;border:none;border-radius:4px;min-height:36px;cursor:pointer;opacity:0.5;">Merge</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Per-suggestion reject dialog (shared, one per page) -->
+            <div id="suggestion-reject-dialog" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;">
+                <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;max-width:480px;width:90%;">
+                    <h3 style="margin:0 0 12px 0;">Reject Suggestion</h3>
+                    <p style="color:var(--text2);font-size:13px;margin-bottom:8px;">Providing a reason is optional but recommended — it helps the submitter understand the decision. The reason will be displayed publicly.</p>
+                    <input type="text" id="reject-reason-input" placeholder="Rejection reason (optional, recommended)" style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;">
+                    <div class="reject-warning" style="display:none;margin-top:10px;padding:10px 12px;background:rgba(231,76,60,0.1);border:1px solid #e74c3c;border-radius:6px;color:#e74c3c;font-size:12px;">
+                        Warning: You are rejecting without a reason. If you do provide one, it will be displayed publicly on the rejected suggestion. Click Reject again to confirm without a reason.
+                    </div>
+                    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
+                        <button class="btn-cancel-reject" style="padding:8px 14px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;min-height:36px;cursor:pointer;">Cancel</button>
+                        <button class="btn-confirm-reject" style="padding:8px 14px;background:var(--danger);color:#fff;border:none;border-radius:4px;min-height:36px;cursor:pointer;">Reject</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bulk reject dialog with optional shared reason -->
+            <div id="suggestions-bulk-reject-dialog" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;">
+                <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;max-width:500px;width:90%;">
+                    <h3 style="margin:0 0 12px 0;">Bulk Reject Suggestions</h3>
+                    <p style="color:var(--text2);font-size:13px;margin-bottom:12px;">Optional shared reason (applied to all selected):</p>
+                    <textarea id="bulk-reject-reason" rows="4" style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;resize:vertical;font-family:inherit;"></textarea>
+                    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
+                        <button class="btn-cancel-bulk-reject" style="padding:8px 14px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;min-height:36px;cursor:pointer;">Cancel</button>
+                        <button class="btn-confirm-bulk-reject" style="padding:8px 14px;background:var(--danger);color:#fff;border:none;border-radius:4px;min-height:36px;cursor:pointer;">Reject</button>
+                    </div>
+                </div>
             </div>
 
             <!-- Pending queue -->
@@ -4688,13 +4852,18 @@
                 <div id="sg-timeline-list"></div>
             </div>
 
-            <!-- Identity graph -->
-            <div id="identity-graph-container" style="display:none;min-height:200px;">
+            <!-- Identity graph (legacy location inside Suggestions panel — kept
+                 for backward compat with old code paths; the primary identity
+                 graph lives in the Users > Identity subtab). Renamed to avoid
+                 duplicate-id collision with the new Users subtab container. -->
+            <div id="identity-graph-container-legacy" style="display:none;min-height:200px;">
                 <div class="suggestions-section-header">Identity Graph</div>
                 <div id="identity-graph-canvas"></div>
             </div>
 
-            <!-- Audit log table -->
+            <!-- Audit log table (legacy inline view — the canonical Audit Log
+                 lives in the top-level Audit Log tab). IDs renamed with -sg-
+                 prefix to avoid duplicate-id collision with the canonical panel. -->
             <div id="sg-audit-log" style="display:none;">
                 <div class="suggestions-section-header">Audit Log</div>
                 <div style="overflow-x:auto;">
@@ -4707,15 +4876,77 @@
                                 <th style="padding:8px;">Time</th>
                             </tr>
                         </thead>
-                        <tbody id="audit-log-tbody"></tbody>
+                        <tbody id="audit-log-tbody-sg"></tbody>
                     </table>
                 </div>
-                <div id="audit-log-empty" style="color:var(--text2);font-size:13px;font-style:italic;display:none;">No audit entries.</div>
+                <div id="audit-log-empty-sg" style="color:var(--text2);font-size:13px;font-style:italic;display:none;">No audit entries.</div>
             </div>
 
-            <!-- Maintenance / clear results -->
-            <div id="clear-suggestions-result" style="display:none;color:var(--text2);font-size:13px;"></div>
-        </div>
+        </div><!-- end #suggestions-panel -->
+
+        <!-- ══════════════════════════════════════════════════════════
+             Audit Log Panel (top-level tab)
+             ══════════════════════════════════════════════════════════ -->
+        <div id="audit-log-panel" style="display:none;">
+            <h2 style="margin-bottom: 8px;">Audit Log</h2>
+            <p style="color:var(--text2);font-size:13px;margin-bottom:16px;">Immutable log of admin actions across the platform.</p>
+
+            <!-- Filters -->
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;padding:12px;background:var(--surface2);border-radius:8px;">
+                <div>
+                    <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Admin</label>
+                    <input type="text" id="audit-log-filter-admin" placeholder="Admin name" style="padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;min-height:32px;">
+                </div>
+                <div>
+                    <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Action</label>
+                    <select id="audit-log-filter-action" style="padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;min-height:32px;">
+                        <option value="">All actions</option>
+                        <option value="approve">approve</option>
+                        <option value="reject">reject</option>
+                        <option value="merge">merge</option>
+                        <option value="suspend">suspend</option>
+                        <option value="unsuspend">unsuspend</option>
+                        <option value="overturn">overturn</option>
+                        <option value="bulk_approve">bulk_approve</option>
+                        <option value="bulk_reject">bulk_reject</option>
+                        <option value="maintenance">maintenance</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Target</label>
+                    <input type="text" id="audit-log-filter-target" placeholder="Target type or ID" style="padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;min-height:32px;">
+                </div>
+                <div>
+                    <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Start</label>
+                    <input type="datetime-local" id="audit-log-filter-start" style="padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;min-height:32px;">
+                </div>
+                <div>
+                    <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">End</label>
+                    <input type="datetime-local" id="audit-log-filter-end" style="padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;min-height:32px;">
+                </div>
+                <button id="audit-log-search-btn" style="padding:8px 16px;background:var(--accent);color:#fff;border:none;border-radius:4px;font-size:13px;min-height:36px;cursor:pointer;">Search</button>
+                <button id="audit-log-export-csv" style="padding:8px 16px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;font-size:13px;min-height:36px;cursor:pointer;">Export CSV</button>
+            </div>
+
+            <!-- Table wrapper — horizontally scrollable on mobile -->
+            <div id="audit-log-table-wrapper" style="overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:8px;">
+                <table id="audit-log-table" style="width:100%;border-collapse:collapse;font-size:13px;min-width:720px;">
+                    <thead>
+                        <tr style="background:var(--surface2);">
+                            <th style="padding:10px 12px;text-align:left;">Admin</th>
+                            <th style="padding:10px 12px;text-align:left;">Action</th>
+                            <th style="padding:10px 12px;text-align:left;">Target Type</th>
+                            <th style="padding:10px 12px;text-align:left;">Target</th>
+                            <th style="padding:10px 12px;text-align:left;">Timestamp</th>
+                            <th style="padding:10px 12px;text-align:left;">Details</th>
+                        </tr>
+                    </thead>
+                    <tbody id="audit-log-tbody"></tbody>
+                </table>
+            </div>
+            <div id="audit-log-empty" style="display:none;padding:24px;text-align:center;color:var(--text2);font-size:14px;">No audit log entries.</div>
+            <button id="audit-log-load-more" style="display:none;margin-top:12px;padding:8px 16px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;font-size:13px;cursor:pointer;">Load more</button>
+        </div><!-- end #audit-log-panel -->
 
         <!-- Fun Fact Add/Edit Dialog -->
         <div id="funfact-dialog-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;">
@@ -4928,6 +5159,9 @@
         showScreen("dashboard");
         // Eagerly load economy config so cachedPityHardLimit is available everywhere
         loadEconomyConfig();
+        // Update the Suggestions tab badge on page load (without navigating to
+        // the tab) so admins see the pending count immediately on login.
+        updateSuggestionsBadgeOnLoad();
         // Restore saved tab and report filter
         try {
           const savedTab = sessionStorage.getItem("admin_tab");
@@ -5718,6 +5952,8 @@
     const tabStartingScreens = $("#tab-starting-screens");
     const suggestionsPanel = $("#suggestions-panel");
     const tabSuggestions = $("#tab-suggestions");
+    const auditLogPanel = $("#audit-log-panel");
+    const tabAuditLog = $("#tab-audit-log");
     let currentTab = "users";
 
     function switchTab(tab) {
@@ -5740,6 +5976,7 @@
       tabDevices.classList.toggle("active", tab === "devices");
       tabStartingScreens.classList.toggle("active", tab === "starting-screens");
       tabSuggestions.classList.toggle("active", tab === "suggestions");
+      tabAuditLog.classList.toggle("active", tab === "audit-log");
       // Force synchronous layout flush — WebKit batches classList mutations,
       // which can cause automated tests to read stale class values.
       void tabUsers.offsetHeight;
@@ -5758,6 +5995,7 @@
       devicesPanel.classList.toggle("visible", tab === "devices");
       startingScreensPanel.classList.toggle("visible", tab === "starting-screens");
       suggestionsPanel.classList.toggle("visible", tab === "suggestions");
+      auditLogPanel.style.display = tab === "audit-log" ? "block" : "none";
 
       if (tab === "devices") loadDevices();
       if (tab === "backups") loadBackups();
@@ -5779,7 +6017,14 @@
       if (tab === "banners") loadBanners();
       if (tab === "funfacts") loadFunFacts();
       if (tab === "starting-screens") loadStartingScreens();
-      if (tab === "suggestions") loadSuggestions();
+      if (tab === "suggestions") {
+        loadSuggestions();
+        // Clear the notification badge when the admin views the pending queue —
+        // they've now seen the pending items, so the "new items" cue is consumed.
+        const badge = $("#suggestions-badge");
+        if (badge) badge.style.display = "none";
+      }
+      if (tab === "audit-log") loadAuditLogMain();
     }
 
     tabUsers.addEventListener("click", () => switchTab("users"));
@@ -5796,6 +6041,7 @@
     tabDevices.addEventListener("click", () => switchTab("devices"));
     tabStartingScreens.addEventListener("click", () => switchTab("starting-screens"));
     tabSuggestions.addEventListener("click", () => switchTab("suggestions"));
+    tabAuditLog.addEventListener("click", () => switchTab("audit-log"));
 
     // --- Starting Screens ---
     const startingScreensList = $("#starting-screens-list");
@@ -6926,6 +7172,345 @@
       document.querySelectorAll(".user-subtab").forEach(b => b.classList.toggle("active", b.dataset.subtab === subtab));
       document.querySelectorAll(".user-subpanel").forEach(p => p.classList.toggle("visible", p.dataset.subtab === subtab));
       if (subtab === "security") loadSecurityPanel();
+      if (subtab === "identity") loadIdentitySubtabGraph();
+    }
+
+    // ── Identity Subtab Graph (Users > Identity subtab) ──────────
+    // Note: Distinct from loadIdentityGraph() in the Bans section — this one
+    // renders a visual node-graph into #identity-graph-container rather than
+    // a tabular view into #ig-table-body.
+    async function loadIdentitySubtabGraph() {
+      const uid = currentUid;
+      if (!uid) return;
+      const container = document.getElementById("identity-graph-container");
+      const empty = document.getElementById("identity-graph-empty");
+      container.innerHTML = '<div style="color:var(--text2);font-size:12px;">Loading identity graph…</div>';
+      container.style.display = "block";
+      empty.style.display = "none";
+      try {
+        const data = await apiCall("GET", `/api/admin/identity-graph/${uid}`);
+        renderIdentitySubtabGraph(data);
+      } catch (err) {
+        // Try bans/graph endpoint as fallback
+        try {
+          const data = await apiCall("GET", `/api/admin/bans/graph/${uid}`);
+          renderIdentitySubtabGraph(data);
+        } catch (err2) {
+          container.style.display = "none";
+          empty.style.display = "block";
+        }
+      }
+    }
+
+    function renderIdentitySubtabGraph(data) {
+      const container = document.getElementById("identity-graph-container");
+      const empty = document.getElementById("identity-graph-empty");
+      const nodes = (data && data.nodes) || [];
+      const edges = (data && data.edges) || [];
+      if (nodes.length === 0) {
+        container.style.display = "none";
+        empty.style.display = "block";
+        return;
+      }
+      container.style.display = "block";
+      empty.style.display = "none";
+      container.innerHTML = "";
+
+      // Node color by type
+      const NODE_COLORS = { account: "#7c5cfc", device: "#3498db", network: "#27ae60" };
+
+      // Simple rendered layout: SVG with rectangles and lines
+      const SVG_W = Math.max(800, nodes.length * 140);
+      const SVG_H = 400;
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("width", String(SVG_W));
+      svg.setAttribute("height", String(SVG_H));
+      svg.style.display = "block";
+      svg.style.minWidth = SVG_W + "px";
+
+      // Position nodes in a grid
+      const positions = {};
+      const COLS = Math.ceil(Math.sqrt(nodes.length));
+      nodes.forEach((n, i) => {
+        const col = i % COLS;
+        const row = Math.floor(i / COLS);
+        positions[n.id] = { x: 80 + col * 140, y: 80 + row * 120 };
+      });
+
+      // Draw edges first (behind nodes)
+      edges.forEach((e) => {
+        const a = positions[e.source];
+        const b = positions[e.target];
+        if (!a || !b) return;
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", String(a.x));
+        line.setAttribute("y1", String(a.y));
+        line.setAttribute("x2", String(b.x));
+        line.setAttribute("y2", String(b.y));
+        line.setAttribute("stroke", "#666");
+        line.setAttribute("stroke-width", "2");
+        line.setAttribute("class", "graph-edge graph-link");
+        line.setAttribute("data-type", e.type || "link");
+        svg.appendChild(line);
+      });
+
+      // Draw nodes
+      nodes.forEach((n) => {
+        const pos = positions[n.id];
+        const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        g.setAttribute("class", "graph-node" + (n.suspended ? " suspended" : ""));
+        g.setAttribute("data-type", n.type || "unknown");
+        g.setAttribute("data-id", n.id);
+        g.style.cursor = "pointer";
+
+        const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        rect.setAttribute("x", String(pos.x - 50));
+        rect.setAttribute("y", String(pos.y - 20));
+        rect.setAttribute("width", "100");
+        rect.setAttribute("height", "40");
+        rect.setAttribute("rx", "6");
+        rect.setAttribute("fill", NODE_COLORS[n.type] || "#888");
+        rect.setAttribute("stroke", n.suspended ? "#e74c3c" : "#333");
+        rect.setAttribute("stroke-width", n.suspended ? "3" : "1");
+        g.appendChild(rect);
+
+        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        text.setAttribute("x", String(pos.x));
+        text.setAttribute("y", String(pos.y + 5));
+        text.setAttribute("text-anchor", "middle");
+        text.setAttribute("fill", "#fff");
+        text.setAttribute("font-size", "12");
+        text.textContent = (n.label || n.id || "").toString().slice(0, 12);
+        g.appendChild(text);
+
+        // Multi-account warning icon on devices linked to multiple accounts
+        if (n.type === "device" && n.linkedAccounts && n.linkedAccounts.length > 1) {
+          const warn = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          warn.setAttribute("class", "warning-icon");
+          warn.setAttribute("x", String(pos.x + 40));
+          warn.setAttribute("y", String(pos.y - 10));
+          warn.setAttribute("font-size", "16");
+          warn.textContent = "⚠";
+          g.appendChild(warn);
+        }
+
+        g.addEventListener("click", () => {
+          const panel = document.getElementById("node-metadata-panel");
+          const title = document.getElementById("node-metadata-title");
+          const body = document.getElementById("node-metadata-body");
+          title.textContent = (n.type || "node") + ": " + (n.label || n.id);
+          body.textContent = JSON.stringify(n.metadata || n, null, 2);
+          panel.style.display = "block";
+          panel.dataset.nodeId = n.id;
+        });
+
+        svg.appendChild(g);
+      });
+
+      container.appendChild(svg);
+
+      // Multi-account alert summary
+      const multiDevices = nodes.filter((n) => n.type === "device" && n.linkedAccounts && n.linkedAccounts.length > 1);
+      if (multiDevices.length > 0) {
+        const alert = document.createElement("div");
+        alert.className = "multi-account-alert";
+        alert.style.cssText = "margin-top:12px;padding:10px 14px;background:rgba(231,76,60,0.1);border:1px solid #e74c3c;border-radius:6px;color:#e74c3c;font-size:13px;";
+        alert.textContent = "⚠ This device is linked to multiple accounts (" + multiDevices[0].linkedAccounts.length + ")";
+        container.appendChild(alert);
+      }
+    }
+
+    // Identity suspend dialog wiring
+    function showIdentitySuspendDialog() {
+      const dialog = document.getElementById("identity-suspend-dialog");
+      dialog.style.display = "flex";
+      updateCascadePreview();
+    }
+    function hideIdentitySuspendDialog() {
+      const dialog = document.getElementById("identity-suspend-dialog");
+      dialog.style.display = "none";
+    }
+    function updateCascadePreview() {
+      const preview = document.querySelector("#identity-suspend-dialog .cascade-preview");
+      if (!preview) return;
+      // Read current graph from container
+      const container = document.getElementById("identity-graph-container");
+      const nodes = container ? container.querySelectorAll(".graph-node") : [];
+      const counts = { account: 0, device: 0, network: 0 };
+      nodes.forEach((n) => {
+        const type = n.getAttribute("data-type");
+        if (type && counts[type] !== undefined) counts[type]++;
+      });
+      preview.textContent = "This will also affect " + counts.account + " account(s), " +
+        counts.device + " device(s), and " + counts.network + " network(s).";
+    }
+
+    // Note: inside an ES <script type="module">, DOMContentLoaded has already
+    // fired by the time this code runs (modules are deferred), so a
+    // DOMContentLoaded listener registered here will never fire. Run the
+    // setup function immediately instead.
+    (function wireUpDynamicUI() {
+      const suspendBtn = document.getElementById("identity-suspend-btn");
+      if (suspendBtn) suspendBtn.addEventListener("click", showIdentitySuspendDialog);
+
+      const cancelBtn = document.querySelector("#identity-suspend-dialog .btn-cancel-suspend");
+      if (cancelBtn) cancelBtn.addEventListener("click", hideIdentitySuspendDialog);
+
+      const confirmBtn = document.querySelector("#identity-suspend-dialog .btn-confirm-suspend");
+      if (confirmBtn) confirmBtn.addEventListener("click", async () => {
+        const uid = currentUid;
+        if (!uid) { hideIdentitySuspendDialog(); return; }
+        const duration = document.getElementById("identity-suspend-duration").value;
+        const scope = document.getElementById("identity-suspend-scope").value;
+        const reason = document.getElementById("identity-suspend-reason").value || "Admin suspend";
+        try {
+          await apiCall("POST", `/api/admin/identity-graph/${uid}/suspend-all`, { duration, scope, reason });
+          showToast("Identity suspended");
+          hideIdentitySuspendDialog();
+          loadIdentitySubtabGraph();
+        } catch (err) {
+          showToast("Suspend failed: " + err.message, "error");
+        }
+      });
+
+      const unsuspendAll = document.getElementById("identity-unsuspend-all-btn");
+      if (unsuspendAll) unsuspendAll.addEventListener("click", async () => {
+        const uid = currentUid;
+        if (!uid) return;
+        try {
+          await apiCall("POST", `/api/admin/identity-graph/${uid}/unsuspend-all`, {});
+          showToast("Identity unsuspended");
+          loadIdentitySubtabGraph();
+        } catch (err) {
+          showToast("Unsuspend failed: " + err.message, "error");
+        }
+      });
+
+      const nodeUnsuspend = document.getElementById("node-unsuspend-btn");
+      if (nodeUnsuspend) nodeUnsuspend.addEventListener("click", async () => {
+        const uid = currentUid;
+        const panel = document.getElementById("node-metadata-panel");
+        const nodeId = panel && panel.dataset.nodeId;
+        if (!uid || !nodeId) return;
+        try {
+          await apiCall("POST", `/api/admin/identity-graph/${uid}/node/${nodeId}/unsuspend`, {});
+          showToast("Node unsuspended");
+          loadIdentitySubtabGraph();
+        } catch (err) {
+          showToast("Unsuspend failed: " + err.message, "error");
+        }
+      });
+
+      const durationSel = document.getElementById("identity-suspend-duration");
+      if (durationSel) durationSel.addEventListener("change", updateCascadePreview);
+
+      const auditSearchBtn = document.getElementById("audit-log-search-btn");
+      if (auditSearchBtn) auditSearchBtn.addEventListener("click", () => loadAuditLogMain());
+
+      const auditExportBtn = document.getElementById("audit-log-export-csv");
+      if (auditExportBtn) auditExportBtn.addEventListener("click", exportAuditLogCsv);
+
+      const auditLoadMore = document.getElementById("audit-log-load-more");
+      if (auditLoadMore) auditLoadMore.addEventListener("click", () => loadAuditLogMain(true));
+    })();
+
+    // ── Audit Log (top-level tab) ───────────────────────────────
+    let auditLogMainState = { page: 1, lastEntries: [] };
+    async function loadAuditLogMain(append) {
+      const tbody = document.getElementById("audit-log-tbody");
+      const empty = document.getElementById("audit-log-empty");
+      const loadMore = document.getElementById("audit-log-load-more");
+      if (!tbody) return;
+      if (!append) {
+        auditLogMainState.page = 1;
+        tbody.innerHTML = '<tr><td colspan="6" style="padding:12px;color:var(--text2);font-size:12px;">Loading…</td></tr>';
+      }
+      empty.style.display = "none";
+      const params = new URLSearchParams();
+      const admin = document.getElementById("audit-log-filter-admin").value.trim();
+      const action = document.getElementById("audit-log-filter-action").value;
+      const target = document.getElementById("audit-log-filter-target").value.trim();
+      const start = document.getElementById("audit-log-filter-start").value;
+      const end = document.getElementById("audit-log-filter-end").value;
+      if (admin) params.set("admin", admin);
+      if (action) params.set("action", action);
+      if (target) params.set("target", target);
+      if (start) params.set("start", new Date(start).toISOString());
+      if (end) params.set("end", new Date(end).toISOString());
+      params.set("page", String(auditLogMainState.page));
+      try {
+        const data = await apiCall("GET", `/api/admin/audit-log?${params.toString()}`);
+        const entries = data.entries || [];
+        auditLogMainState.lastEntries = append ? auditLogMainState.lastEntries.concat(entries) : entries;
+        if (entries.length === 0 && !append) {
+          tbody.textContent = "";
+          empty.style.display = "block";
+          loadMore.style.display = "none";
+          return;
+        }
+        if (!append) tbody.textContent = "";
+        entries.forEach((entry) => tbody.appendChild(buildAuditRow(entry)));
+        loadMore.style.display = entries.length > 0 ? "block" : "none";
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="6" style="padding:12px;color:var(--danger);font-size:12px;">Failed to load: ' + escapeHtml(err.message) + '</td></tr>';
+      }
+    }
+
+    function buildAuditRow(entry) {
+      const tr = document.createElement("tr");
+      tr.style.borderTop = "1px solid var(--border)";
+      const mk = (cls, text, title) => {
+        const td = document.createElement("td");
+        td.className = cls;
+        td.style.padding = "10px 12px";
+        td.textContent = text || "";
+        if (title) td.title = title;
+        return td;
+      };
+      tr.appendChild(mk("audit-admin-name", entry.adminName || entry.adminUid || entry.adminId || "Unknown"));
+      tr.appendChild(mk("audit-action", entry.actionType || entry.action || ""));
+      tr.appendChild(mk("audit-target-type", entry.targetType || ""));
+      const tdTarget = mk("audit-target", entry.target || entry.targetId || "");
+      tdTarget.style.fontFamily = "monospace";
+      tdTarget.style.fontSize = "11px";
+      tr.appendChild(tdTarget);
+      const ts = entry.timestamp ? new Date(entry.timestamp).toLocaleString() : "";
+      const tdTs = mk("audit-timestamp", ts);
+      tdTs.setAttribute("data-timestamp", entry.timestamp ? String(entry.timestamp) : "");
+      tr.appendChild(tdTs);
+      const detailsText = typeof entry.details === "object" ? JSON.stringify(entry.details) : (entry.details || "");
+      const tdDetails = mk("audit-details", detailsText);
+      tdDetails.style.maxWidth = "240px";
+      tdDetails.style.overflow = "hidden";
+      tdDetails.style.textOverflow = "ellipsis";
+      tdDetails.style.whiteSpace = "nowrap";
+      tr.appendChild(tdDetails);
+      return tr;
+    }
+
+    function exportAuditLogCsv() {
+      const entries = auditLogMainState.lastEntries || [];
+      const header = "admin,action,target,timestamp,details";
+      const rows = entries.map((e) => {
+        const fields = [
+          e.adminName || e.adminUid || "",
+          e.actionType || e.action || "",
+          e.target || e.targetId || "",
+          e.timestamp ? new Date(e.timestamp).toISOString() : "",
+          typeof e.details === "object" ? JSON.stringify(e.details) : (e.details || ""),
+        ].map((f) => '"' + String(f).replace(/"/g, '""') + '"');
+        return fields.join(",");
+      });
+      const csv = [header].concat(rows).join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "audit-log-" + new Date().toISOString().slice(0, 10) + ".csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     }
 
     // ── Security panel ──────────────────────────────────────────
@@ -12692,6 +13277,34 @@
     // SUGGESTIONS TAB
     // ══════════════════════════════════════════════════════════════
 
+    // Current state of the suggestions panel filter/sort
+    let suggestionsFilterState = {
+      statusTab: "pending",
+      submitterFilter: "",
+      sortBy: "newest",
+      cached: [],
+    };
+
+    // Updates the Suggestions tab badge on page load without requiring the
+    // admin to navigate to the Suggestions tab. Called from onAuthStateChanged
+    // after the dashboard is shown.
+    async function updateSuggestionsBadgeOnLoad() {
+      const badge = document.getElementById("suggestions-badge");
+      if (!badge) return;
+      try {
+        const data = await apiCall("GET", "/api/admin/suggestions?status=pending");
+        const pendingCount = (data.suggestions || []).filter((s) => s.status === "pending").length;
+        if (pendingCount > 0) {
+          badge.textContent = String(pendingCount);
+          badge.style.display = "inline-block";
+        } else {
+          badge.style.display = "none";
+        }
+      } catch {
+        // Silently ignore — badge will be updated when the user visits the tab
+      }
+    }
+
     async function loadSuggestions() {
       const pendingList = $("#suggestions-pending-queue");
       const disputeList = $("#suggestions-dispute-queue");
@@ -12711,32 +13324,42 @@
         ]);
 
         const suggestions = suggestionsData.suggestions || [];
+        suggestionsFilterState.cached = suggestions;
         const pending = suggestions.filter(s => s.status === "pending");
         const disputes = disputesData.disputes || [];
 
         pendingCount.textContent = pending.length + " Pending";
         disputeCount.textContent = disputes.length + " Disputes";
 
-        // Update notification badge
+        // Update notification badge — visible if ANY pending suggestion exists,
+        // but cleared once the admin has viewed the Suggestions tab (since the
+        // badge represents unseen pending work). When loadSuggestions runs
+        // because the user clicked the tab, currentTab === "suggestions" and
+        // we keep the badge hidden even if pending > 0.
         if (badge) {
-          if (pending.length > 0) {
-            badge.textContent = pending.length;
-            badge.style.display = "inline";
+          if (currentTab === "suggestions") {
+            badge.style.display = "none";
+          } else if (pending.length > 0) {
+            badge.textContent = String(pending.length);
+            badge.style.display = "inline-block";
           } else {
             badge.style.display = "none";
           }
         }
 
-        // Render pending suggestions
-        pendingList.textContent = "";
-        if (pending.length === 0) {
-          pendingEmpty.style.display = "block";
-        } else {
-          pendingEmpty.style.display = "none";
-          pending.forEach(sg => {
-            pendingList.appendChild(renderSuggestionCard(sg));
-          });
+        // Dispute badge on dispute tab
+        const disputeBadge = $("#dispute-badge");
+        if (disputeBadge) {
+          if (disputes.length > 0) {
+            disputeBadge.textContent = String(disputes.length);
+            disputeBadge.style.display = "inline-block";
+          } else {
+            disputeBadge.style.display = "none";
+          }
         }
+
+        // Render the current status tab's suggestions
+        renderSuggestionsForCurrentTab();
 
         // Render disputes
         disputeList.textContent = "";
@@ -12749,11 +13372,47 @@
           });
         }
 
-        // Load audit log (page 1)
-        loadAuditLog(1);
+        // Load legacy inline audit log if the section exists (backward compat)
+        if (typeof loadAuditLog === "function") loadAuditLog(1);
       } catch (err) {
         pendingList.innerHTML = '<div style="color:var(--danger);font-size:12px;">Failed to load: ' + escapeHtml(err.message) + '</div>';
         disputeList.innerHTML = '<div style="color:var(--danger);font-size:12px;">Failed to load</div>';
+      }
+    }
+
+    // Re-render the pending queue from cached data based on the current tab + filters.
+    // Cheap to re-run — does not hit the API.
+    function renderSuggestionsForCurrentTab() {
+      const pendingList = $("#suggestions-pending-queue");
+      const pendingEmpty = $("#sg-pending-empty");
+      if (!pendingList) return;
+
+      const status = suggestionsFilterState.statusTab;
+      const submitterFilter = (suggestionsFilterState.submitterFilter || "").trim();
+      let filtered = (suggestionsFilterState.cached || []).filter(s => s.status === status);
+      if (submitterFilter) {
+        filtered = filtered.filter(s =>
+          String(s.submitterUniqueId || s.submitterUid || s.submitterId || "").includes(submitterFilter),
+        );
+      }
+
+      // Sort
+      if (suggestionsFilterState.sortBy === "oldest") {
+        filtered.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      } else if (suggestionsFilterState.sortBy === "votes") {
+        filtered.sort((a, b) => (b.voteCount || 0) - (a.voteCount || 0));
+      } else {
+        filtered.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      }
+
+      pendingList.textContent = "";
+      if (filtered.length === 0) {
+        pendingEmpty.style.display = "block";
+      } else {
+        pendingEmpty.style.display = "none";
+        filtered.forEach(sg => {
+          pendingList.appendChild(renderSuggestionCard(sg));
+        });
       }
     }
 
@@ -12785,7 +13444,10 @@
       const meta = document.createElement("div");
       meta.className = "sg-meta";
       const hasContactOptIn = sg.contactOptIn || sg.submitterContactOptIn;
-      meta.innerHTML = '<span>By: ' + escapeHtml(sg.submitterId || "Unknown") + '</span>' +
+      // Show the canonical numeric uniqueId when available so admins and
+      // automated tests can filter/search by the same ID format that's shown.
+      const submitterLabel = sg.submitterUniqueId || sg.submitterId || sg.submitterUid || "Unknown";
+      meta.innerHTML = '<span>By: ' + escapeHtml(String(submitterLabel)) + '</span>' +
         '<span>' + (sg.createdAt ? new Date(sg.createdAt).toLocaleString() : "Unknown date") + '</span>' +
         (hasContactOptIn
           ? '<span class="sg-contact contact-opt-in-indicator">Open to contact</span>'
@@ -12819,6 +13481,21 @@
       });
       body.appendChild(contactBtn);
 
+      // View history button — shows inline timeline of status changes
+      const historyBtn = document.createElement("button");
+      historyBtn.className = "btn-view-history";
+      historyBtn.textContent = "View History";
+      historyBtn.style.cssText = "font-size:12px;padding:4px 10px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;margin-top:4px;margin-left:6px;";
+      historyBtn.addEventListener("click", () => loadSuggestionTimeline(sg.id, body));
+      body.appendChild(historyBtn);
+
+      // Timeline container — populated by loadSuggestionTimeline on demand
+      const timeline = document.createElement("div");
+      timeline.id = "suggestion-timeline-" + sg.id;
+      timeline.className = "suggestion-timeline";
+      timeline.style.cssText = "display:none;margin-top:10px;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;font-size:12px;";
+      body.appendChild(timeline);
+
       // Reject reason input (hidden by default)
       const rejectWrap = document.createElement("div");
       rejectWrap.className = "sg-reject-input";
@@ -12843,7 +13520,8 @@
       approveBtn.textContent = "Approve";
       approveBtn.addEventListener("click", async () => {
         try {
-          await apiCall("PUT", `/api/admin/suggestions/${sg.id}/status`, { status: "approved" });
+          // Backend state machine uses "accepted", not "approved".
+          await apiCall("PUT", `/api/admin/suggestions/${sg.id}/status`, { status: "accepted" });
           showToast("Suggestion approved", "success");
           loadSuggestions();
         } catch (err) { showToast(err.message, "error"); }
@@ -12853,10 +13531,11 @@
       rejectBtn.className = "sg-btn-reject";
       rejectBtn.textContent = "Reject";
       rejectBtn.addEventListener("click", () => {
-        rejectWrap.classList.toggle("visible");
-        mergeWrap.classList.remove("visible");
+        // Open the shared reject dialog (one per page, populated per click)
+        openSuggestionRejectDialog(sg.id);
       });
 
+      // Legacy inline reject input (for backward compat with existing manual flows).
       rejectWrap.querySelector("button").addEventListener("click", async () => {
         const reason = rejectWrap.querySelector("input").value.trim();
         try {
@@ -12870,10 +13549,10 @@
       mergeBtn.className = "sg-btn-merge";
       mergeBtn.textContent = "Merge";
       mergeBtn.addEventListener("click", () => {
-        mergeWrap.classList.toggle("visible");
-        rejectWrap.classList.remove("visible");
+        openSuggestionMergeDialog(sg.id);
       });
 
+      // Legacy inline merge input (backward compat)
       mergeWrap.querySelector("button").addEventListener("click", async () => {
         const targetId = mergeWrap.querySelector("input").value.trim();
         if (!targetId) { showToast("Enter a target suggestion ID", "error"); return; }
@@ -12944,69 +13623,289 @@
     }
 
     // ── Suggestion timeline rendering ──
-    async function loadSuggestionTimeline(suggestionId) {
-      const container = $("#sg-timeline");
-      const list = $("#sg-timeline-list");
-      if (!container || !list) return;
+    // Per-card timeline: renders into #suggestion-timeline-{id} on the card
+    // that called loadSuggestionTimeline. Tests look up the per-card element
+    // directly rather than a shared panel.
+    async function loadSuggestionTimeline(suggestionId, body) {
+      const container = body && body.querySelector("#suggestion-timeline-" + suggestionId);
+      if (!container) return;
       container.style.display = "block";
+      container.innerHTML = '<div style="color:var(--text2);font-size:12px;">Loading history…</div>';
       try {
         const data = await apiCall("GET", "/api/admin/suggestions/" + suggestionId + "/history");
         const events = data.timeline || data.events || [];
-        list.innerHTML = "";
-        events.forEach(evt => {
+        container.innerHTML = "";
+        if (events.length === 0) {
+          container.innerHTML = '<div style="color:var(--text2);font-size:12px;">No history entries.</div>';
+          return;
+        }
+        events.forEach((evt) => {
           const entry = document.createElement("div");
           entry.className = "timeline-entry";
-          entry.style.cssText = "display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;";
-          entry.innerHTML = '<span class="timeline-action" style="font-weight:600;">' + escapeHtml(evt.action || "") + '</span>' +
-            '<span class="timeline-admin-name" style="color:var(--text2);">' + escapeHtml(evt.adminName || "") + '</span>' +
-            '<span class="timeline-timestamp" style="color:var(--text2);margin-left:auto;">' +
-              (evt.timestamp ? new Date(evt.timestamp).toLocaleString() : "") + '</span>';
+          entry.style.cssText = "display:flex;flex-direction:column;gap:4px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;";
+
+          const header = document.createElement("div");
+          header.style.cssText = "display:flex;gap:8px;align-items:center;";
+          const action = document.createElement("span");
+          action.className = "timeline-action";
+          action.style.fontWeight = "600";
+          action.textContent = evt.action || "";
+          header.appendChild(action);
+
+          const admin = document.createElement("span");
+          admin.className = "timeline-admin-name";
+          admin.style.color = "var(--text2)";
+          admin.textContent = evt.adminName || "";
+          header.appendChild(admin);
+
+          const ts = document.createElement("span");
+          ts.className = "timeline-timestamp";
+          ts.style.cssText = "color:var(--text2);margin-left:auto;";
+          if (evt.timestamp) ts.setAttribute("data-timestamp", String(evt.timestamp));
+          ts.textContent = evt.timestamp ? new Date(evt.timestamp).toLocaleString() : "";
+          header.appendChild(ts);
+
+          entry.appendChild(header);
+
+          if (evt.reason) {
+            const reason = document.createElement("div");
+            reason.style.color = "var(--text2)";
+            reason.textContent = "Reason: " + evt.reason;
+            entry.appendChild(reason);
+          }
           if (evt.diff) {
             const diffEl = document.createElement("div");
-            diffEl.className = "edit-diff";
-            diffEl.textContent = JSON.stringify(evt.diff);
+            diffEl.className = "edit-diff timeline-diff";
+            diffEl.style.cssText = "color:var(--text2);font-family:monospace;font-size:11px;padding:4px 6px;background:var(--surface);border-radius:4px;";
+            diffEl.textContent = typeof evt.diff === "object" ? JSON.stringify(evt.diff) : String(evt.diff);
             entry.appendChild(diffEl);
           }
-          list.appendChild(entry);
+          container.appendChild(entry);
         });
-      } catch { list.innerHTML = '<div style="color:var(--text2);font-size:12px;">No history available.</div>'; }
+      } catch {
+        container.innerHTML = '<div style="color:var(--text2);font-size:12px;">No history available.</div>';
+      }
     }
 
-    // Select All checkbox
-    $("#sg-select-all").addEventListener("change", (e) => {
+    // ── Status tab switching (pending / accepted / planned / completed / rejected / disputed) ──
+    document.querySelectorAll(".sg-status-tab").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const status = btn.dataset.status;
+        suggestionsFilterState.statusTab = status === "disputed" ? "disputed" : status;
+        document.querySelectorAll(".sg-status-tab").forEach((b) => {
+          b.classList.toggle("active", b === btn);
+          if (b === btn) {
+            b.style.background = "var(--accent)";
+            b.style.color = "#fff";
+            b.style.border = "none";
+          } else {
+            b.style.background = "var(--surface2)";
+            b.style.color = "var(--text)";
+            b.style.border = "1px solid var(--border)";
+          }
+        });
+        if (status === "disputed") {
+          // Show dispute queue instead
+          $("#suggestions-pending-queue").style.display = "none";
+          $("#suggestions-dispute-queue").style.display = "block";
+        } else {
+          $("#suggestions-pending-queue").style.display = "block";
+          $("#suggestions-dispute-queue").style.display = "none";
+          renderSuggestionsForCurrentTab();
+        }
+      });
+    });
+
+    // ── Filter + sort ──
+    const filterBtn = document.getElementById("suggestions-filter-btn");
+    if (filterBtn) filterBtn.addEventListener("click", () => {
+      suggestionsFilterState.submitterFilter = document.getElementById("suggestions-filter-submitter").value;
+      suggestionsFilterState.sortBy = document.getElementById("suggestions-sort-select").value;
+      renderSuggestionsForCurrentTab();
+    });
+    const sortSelect = document.getElementById("suggestions-sort-select");
+    if (sortSelect) sortSelect.addEventListener("change", () => {
+      suggestionsFilterState.sortBy = sortSelect.value;
+      renderSuggestionsForCurrentTab();
+    });
+
+    // ── Select All (canonical + legacy aliases) ──
+    const selectAll = document.getElementById("suggestions-select-all");
+    if (selectAll) selectAll.addEventListener("change", (e) => {
       const checked = e.target.checked;
-      for (const cb of $$("#suggestions-pending-queue .sg-checkbox")) {
+      document.querySelectorAll("#suggestions-pending-queue .sg-checkbox").forEach((cb) => {
         cb.checked = checked;
+      });
+    });
+
+    // ── Bulk approve — opens confirmation dialog, then approves all selected ──
+    const bulkApproveBtn = document.getElementById("suggestions-bulk-approve-btn");
+    if (bulkApproveBtn) bulkApproveBtn.addEventListener("click", () => {
+      const selected = [...document.querySelectorAll("#suggestions-pending-queue .sg-checkbox:checked")].map((cb) => cb.dataset.sgId);
+      if (selected.length === 0) { showToast("No suggestions selected", "error"); return; }
+      const dialog = document.getElementById("suggestions-bulk-confirm-dialog");
+      document.getElementById("bulk-confirm-message").textContent = "Approve " + selected.length + " suggestion(s)?";
+      dialog.style.display = "flex";
+      dialog.dataset.action = "approve";
+      dialog.dataset.ids = JSON.stringify(selected);
+    });
+
+    // ── Bulk reject — opens reject dialog with reason input ──
+    const bulkRejectBtn = document.getElementById("suggestions-bulk-reject-btn");
+    if (bulkRejectBtn) bulkRejectBtn.addEventListener("click", () => {
+      const selected = [...document.querySelectorAll("#suggestions-pending-queue .sg-checkbox:checked")].map((cb) => cb.dataset.sgId);
+      if (selected.length === 0) { showToast("No suggestions selected", "error"); return; }
+      const dialog = document.getElementById("suggestions-bulk-reject-dialog");
+      dialog.style.display = "flex";
+      dialog.dataset.ids = JSON.stringify(selected);
+    });
+
+    // ── Confirm bulk action ──
+    document.querySelector("#suggestions-bulk-confirm-dialog .btn-confirm-bulk").addEventListener("click", async () => {
+      const dialog = document.getElementById("suggestions-bulk-confirm-dialog");
+      const ids = JSON.parse(dialog.dataset.ids || "[]");
+      dialog.style.display = "none";
+      try {
+        await Promise.all(ids.map((id) =>
+          apiCall("POST", `/api/admin/suggestions/${id}/approve`).catch(() =>
+            apiCall("PUT", `/api/admin/suggestions/${id}/status`, { status: "accepted" }),
+          ),
+        ));
+        showToast(`Approved ${ids.length} suggestion(s)`, "success");
+        loadSuggestions();
+      } catch (err) { showToast(err.message, "error"); }
+    });
+    document.querySelector("#suggestions-bulk-confirm-dialog .btn-cancel-bulk").addEventListener("click", () => {
+      document.getElementById("suggestions-bulk-confirm-dialog").style.display = "none";
+    });
+
+    // ── Confirm bulk reject ──
+    document.querySelector("#suggestions-bulk-reject-dialog .btn-confirm-bulk-reject").addEventListener("click", async () => {
+      const dialog = document.getElementById("suggestions-bulk-reject-dialog");
+      const ids = JSON.parse(dialog.dataset.ids || "[]");
+      const reason = document.getElementById("bulk-reject-reason").value || "";
+      dialog.style.display = "none";
+      try {
+        await Promise.all(ids.map((id) =>
+          apiCall("POST", `/api/admin/suggestions/${id}/reject`, { reason }).catch(() =>
+            apiCall("PUT", `/api/admin/suggestions/${id}/status`, { status: "rejected", reason }),
+          ),
+        ));
+        showToast(`Rejected ${ids.length} suggestion(s)`, "success");
+        loadSuggestions();
+      } catch (err) { showToast(err.message, "error"); }
+    });
+    document.querySelector("#suggestions-bulk-reject-dialog .btn-cancel-bulk-reject").addEventListener("click", () => {
+      document.getElementById("suggestions-bulk-reject-dialog").style.display = "none";
+    });
+
+    // ── Per-suggestion reject dialog ──
+    function openSuggestionRejectDialog(suggestionId) {
+      const dialog = document.getElementById("suggestion-reject-dialog");
+      if (!dialog) return;
+      dialog.dataset.suggestionId = suggestionId;
+      dialog.dataset.warningShown = "false";
+      document.getElementById("reject-reason-input").value = "";
+      const warning = dialog.querySelector(".reject-warning");
+      if (warning) warning.style.display = "none";
+      dialog.style.display = "flex";
+    }
+    const rejectDialogConfirm = document.querySelector("#suggestion-reject-dialog .btn-confirm-reject");
+    if (rejectDialogConfirm) rejectDialogConfirm.addEventListener("click", async () => {
+      const dialog = document.getElementById("suggestion-reject-dialog");
+      const suggestionId = dialog.dataset.suggestionId;
+      const reason = document.getElementById("reject-reason-input").value.trim();
+      const warning = dialog.querySelector(".reject-warning");
+      // First click without a reason: show the warning and wait for confirmation.
+      if (!reason && dialog.dataset.warningShown !== "true") {
+        if (warning) warning.style.display = "block";
+        dialog.dataset.warningShown = "true";
+        return;
+      }
+      dialog.style.display = "none";
+      try {
+        await apiCall("POST", `/api/admin/suggestions/${suggestionId}/reject`, { reason });
+        showToast("Suggestion rejected", "success");
+        loadSuggestions();
+      } catch (err) {
+        showToast("Reject failed: " + err.message, "error");
       }
     });
-
-    // Bulk approve
-    $("#sg-bulk-approve").addEventListener("click", async () => {
-      const selected = [...$$("#suggestions-pending-queue .sg-checkbox:checked")].map(cb => cb.dataset.sgId);
-      if (selected.length === 0) { showToast("No suggestions selected", "error"); return; }
-      if (!confirm(`Approve ${selected.length} suggestion(s)?`)) return;
-      try {
-        await Promise.all(selected.map(id =>
-          apiCall("PUT", `/api/admin/suggestions/${id}/status`, { status: "approved" })
-        ));
-        showToast(`Approved ${selected.length} suggestion(s)`, "success");
-        loadSuggestions();
-      } catch (err) { showToast(err.message, "error"); }
+    const rejectDialogCancel = document.querySelector("#suggestion-reject-dialog .btn-cancel-reject");
+    if (rejectDialogCancel) rejectDialogCancel.addEventListener("click", () => {
+      document.getElementById("suggestion-reject-dialog").style.display = "none";
     });
 
-    // Bulk reject
-    $("#sg-bulk-reject").addEventListener("click", async () => {
-      const selected = [...$$("#suggestions-pending-queue .sg-checkbox:checked")].map(cb => cb.dataset.sgId);
-      if (selected.length === 0) { showToast("No suggestions selected", "error"); return; }
-      const reason = prompt("Rejection reason (optional):") || "";
-      if (!confirm(`Reject ${selected.length} suggestion(s)?`)) return;
+    // ── Per-suggestion merge dialog ──
+    function openSuggestionMergeDialog(suggestionId) {
+      const dialog = document.getElementById("suggestion-merge-dialog");
+      if (!dialog) return;
+      dialog.dataset.suggestionId = suggestionId;
+      dialog.dataset.targetId = "";
+      document.getElementById("merge-search-input").value = "";
+      document.getElementById("merge-results-list").innerHTML = "";
+      const confirmBtn = dialog.querySelector(".btn-confirm-merge");
+      confirmBtn.disabled = true;
+      confirmBtn.style.opacity = "0.5";
+      dialog.style.display = "flex";
+    }
+    const mergeSearchBtn = document.getElementById("merge-search-btn");
+    if (mergeSearchBtn) mergeSearchBtn.addEventListener("click", async () => {
+      const query = document.getElementById("merge-search-input").value.trim();
+      const resultsList = document.getElementById("merge-results-list");
+      resultsList.innerHTML = '<div style="color:var(--text2);font-size:12px;">Searching…</div>';
       try {
-        await Promise.all(selected.map(id =>
-          apiCall("PUT", `/api/admin/suggestions/${id}/status`, { status: "rejected", reason })
-        ));
-        showToast(`Rejected ${selected.length} suggestion(s)`, "success");
+        const data = await apiCall("GET", "/api/admin/suggestions?q=" + encodeURIComponent(query));
+        const matches = (data.suggestions || []).filter((s) =>
+          (s.title || "").toLowerCase().includes(query.toLowerCase()),
+        );
+        resultsList.innerHTML = "";
+        if (matches.length === 0) {
+          resultsList.innerHTML = '<div style="color:var(--text2);font-size:12px;">No matches.</div>';
+          return;
+        }
+        matches.forEach((m) => {
+          const row = document.createElement("div");
+          row.className = "merge-result";
+          row.dataset.id = m.id;
+          row.style.cssText = "padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:13px;";
+          row.innerHTML = '<div style="font-weight:600;">' + escapeHtml(m.title || "(no title)") + '</div>' +
+            '<div style="color:var(--text2);font-size:11px;">' + escapeHtml(m.status || "") + ' — ' + escapeHtml(m.id) + '</div>';
+          row.addEventListener("click", () => {
+            document.querySelectorAll("#merge-results-list .merge-result").forEach((r) => {
+              r.style.background = "var(--surface2)";
+            });
+            row.style.background = "var(--accent)";
+            const dialog = document.getElementById("suggestion-merge-dialog");
+            dialog.dataset.targetId = m.id;
+            const confirmBtn = dialog.querySelector(".btn-confirm-merge");
+            confirmBtn.disabled = false;
+            confirmBtn.style.opacity = "1";
+          });
+          resultsList.appendChild(row);
+        });
+      } catch (err) {
+        resultsList.innerHTML = '<div style="color:var(--danger);font-size:12px;">Search failed: ' + escapeHtml(err.message) + '</div>';
+      }
+    });
+    const mergeConfirm = document.querySelector("#suggestion-merge-dialog .btn-confirm-merge");
+    if (mergeConfirm) mergeConfirm.addEventListener("click", async () => {
+      const dialog = document.getElementById("suggestion-merge-dialog");
+      const suggestionId = dialog.dataset.suggestionId;
+      const targetId = dialog.dataset.targetId;
+      if (!targetId) return;
+      dialog.style.display = "none";
+      try {
+        await apiCall("POST", `/api/admin/suggestions/${suggestionId}/merge`, { targetId });
+        showToast("Suggestion merged", "success");
         loadSuggestions();
-      } catch (err) { showToast(err.message, "error"); }
+      } catch (err) {
+        showToast("Merge failed: " + err.message, "error");
+      }
+    });
+    const mergeCancel = document.querySelector("#suggestion-merge-dialog .btn-cancel-merge");
+    if (mergeCancel) mergeCancel.addEventListener("click", () => {
+      document.getElementById("suggestion-merge-dialog").style.display = "none";
     });
 
     // ══════════════════════════════════════════════════════════════

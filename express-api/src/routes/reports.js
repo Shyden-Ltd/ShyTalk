@@ -1159,43 +1159,12 @@ router.patch('/appeals/:id', async (req, res) => {
   }
 });
 
-// ══════════════════════════════════════════════════════════════
-// AUDIT LOG (admin)
-// ══════════════════════════════════════════════════════════════
-
-router.get('/admin/audit-log', async (req, res) => {
-  try {
-    if (requireAdmin(req, res)) return;
-
-    const limit = Math.min(Number.parseInt(req.query.limit, 10) || 50, 200);
-
-    const entries = await queryDocs(
-      db.collection('adminAuditLog').orderBy('createdAt', 'desc').limit(limit),
-    );
-
-    // Enrich with admin display name
-    const adminIds = [...new Set(entries.map((e) => e.adminId).filter(Boolean))];
-    const adminDocs = await Promise.all(adminIds.map((id) => getDoc(`users/${id}`)));
-
-    const adminNameMap = {};
-    for (let i = 0; i < adminIds.length; i++) {
-      const doc = adminDocs[i];
-      if (doc) {
-        adminNameMap[adminIds[i]] = doc.displayName ?? doc.display_name ?? null;
-      }
-    }
-
-    const enriched = entries.map((e) => ({
-      ...e,
-      adminName: adminNameMap[e.adminId] || null,
-    }));
-
-    res.json(enriched);
-  } catch (err) {
-    log.error('reports', 'GET /api/admin/audit-log failed', { error: err.message });
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+// NOTE: the legacy /admin/audit-log handler used to live here, but it was
+// shadowing the canonical implementation in admin-audit-log.js (which
+// supports filtering by admin, action, target, and date range). The
+// filtered version is required by the 11.18 audit log tests, so the
+// legacy non-filtered handler has been removed. admin-audit-log.js is now
+// the single source of truth for /admin/audit-log.
 
 // ══════════════════════════════════════════════════════════════
 // HELPERS

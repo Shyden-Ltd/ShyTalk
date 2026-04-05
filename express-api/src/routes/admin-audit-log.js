@@ -56,23 +56,71 @@ router.get('/admin/audit-log', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
-    const { adminUid, actionType, targetType, from, to } = req.query;
+    // Accept both canonical and shortened query param names so the admin
+    // panel frontend (which uses `action`, `admin`, `target`, `start`, `end`)
+    // and the test infra can both call this endpoint.
+    const adminUid = req.query.adminUid || req.query.admin;
+    const actionType = req.query.actionType || req.query.action;
+    const targetType = req.query.targetType;
+    const targetId = req.query.target;
+    const from = req.query.from || req.query.start;
+    const to = req.query.to || req.query.end;
     const page = parseInt(req.query.page, 10) || 1;
     const pageSize = Math.min(parseInt(req.query.pageSize, 10) || 50, 100);
 
-    const snap = await db.collection('auditLog').orderBy('timestamp', 'desc').get();
+    // Query both auditLog (legacy) and adminAuditLog (canonical) so all
+    // admin actions show in the audit log regardless of which collection
+    // they were historically written to.
+    const [auditSnap, adminSnap] = await Promise.all([
+      db.collection('auditLog').orderBy('timestamp', 'desc').get(),
+      db.collection('adminAuditLog').orderBy('timestamp', 'desc').get(),
+    ]);
+    const seen = new Set();
+    const merged = [];
+    for (const d of [...adminSnap.docs, ...auditSnap.docs]) {
+      if (seen.has(d.id)) continue;
+      seen.add(d.id);
+      merged.push({ id: d.id, ...d.data() });
+    }
+    merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    const snap = { size: merged.length, docs: merged.map((e) => ({ id: e.id, data: () => e })) };
 
-    let entries = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    let entries = merged;
 
-    // Apply filters client-side (Firestore limitation with multiple inequalities)
+    // Apply filters client-side (Firestore limitation with multiple inequalities).
+    // Admin filter uses case-insensitive substring match across both
+    // adminUid and adminName so searching for "admin" matches entries
+    // with adminUid="admin1" or adminName="admin".
     if (adminUid) {
-      entries = entries.filter((e) => e.adminUid === adminUid);
+      const needle = adminUid.toLowerCase();
+      entries = entries.filter(
+        (e) =>
+          String(e.adminUid || '')
+            .toLowerCase()
+            .includes(needle) ||
+          String(e.adminName || '')
+            .toLowerCase()
+            .includes(needle),
+      );
     }
     if (actionType) {
-      entries = entries.filter((e) => (e.actionType || e.action) === actionType);
+      // Match either the exact action or any action whose last segment
+      // matches (e.g. "suggestion_approve" matches "approve" filter).
+      entries = entries.filter((e) => {
+        const act = e.actionType || e.action || '';
+        if (act === actionType) return true;
+        const tail = act.split('_').pop();
+        return tail === actionType;
+      });
     }
     if (targetType) {
       entries = entries.filter((e) => e.targetType === targetType);
+    }
+    if (targetId) {
+      entries = entries.filter(
+        (e) =>
+          String(e.targetId || '').includes(targetId) || String(e.target || '').includes(targetId),
+      );
     }
     if (from) {
       const fromTs = new Date(from).getTime();
