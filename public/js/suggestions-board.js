@@ -392,7 +392,7 @@
     if (existing) existing.remove();
 
     var html =
-      '<div class="sg-modal-overlay login-prompt" id="sg-login-modal-overlay" data-testid="login-prompt">' +
+      '<div class="sg-modal-overlay login-prompt" id="sg-login-modal-overlay" data-testid="login-modal">' +
       '<div class="sg-modal" role="dialog" aria-modal="true" aria-label="Sign in required">' +
       '<div class="sg-modal-header">' +
       "<h3>Sign in required</h3>" +

@@ -63,23 +63,13 @@ test.describe('Roadmap Auth — Login Prompt', () => {
 
   // ── Login modal: appears when user tries an auth-gated action ──
 
-  test('clicking Suggest button shows login modal with Google/Apple buttons', async ({ page }) => {
+  test('clicking Suggest button shows login modal', async ({ page }) => {
     const suggestBtn = page.locator('[data-testid="suggest-btn"]');
     await suggestBtn.waitFor({ timeout: 10_000 });
     await suggestBtn.click();
-    // Login modal should appear with sign-in options
-    const loginModal = page.locator('[data-testid="login-prompt"], .login-prompt');
+    // Login modal should appear with sign-in info
+    const loginModal = page.locator('[data-testid="login-modal"], #sg-login-modal-overlay');
     await expect(loginModal).toBeVisible({ timeout: 5_000 });
-  });
-
-  test('login modal has Google sign-in button with branding', async ({ page }) => {
-    const suggestBtn = page.locator('[data-testid="suggest-btn"]');
-    await suggestBtn.waitFor({ timeout: 10_000 });
-    await suggestBtn.click();
-    const loginModal = page.locator('[data-testid="login-prompt"], .login-prompt');
-    await expect(loginModal).toBeVisible({ timeout: 5_000 });
-    // Google button should be in the suggestions-board login modal (not auth container)
-    // The login modal is rendered by suggestions-board.js requireAuth()
   });
 
   test('download links have correct branded styling', async ({ page }) => {
