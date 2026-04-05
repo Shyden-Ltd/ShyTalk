@@ -93,6 +93,30 @@ test.describe('Roadmap Auth — Login Prompt', () => {
     await expect(appleBtn).toContainText(/apple/i);
   });
 
+  test('login modal has close (X) button but no Cancel button', async ({ page }) => {
+    const suggestBtn = page.locator('[data-testid="suggest-btn"]');
+    await suggestBtn.waitFor({ timeout: 10_000 });
+    await suggestBtn.click();
+    const loginModal = page.locator('[data-testid="login-modal"]');
+    await expect(loginModal).toBeVisible({ timeout: 5_000 });
+    // Close (X) button in header exists and is visible
+    const closeBtn = loginModal.locator('[data-testid="login-modal-close"]');
+    await expect(closeBtn).toBeVisible();
+    // Cancel/dismiss button should NOT exist
+    const cancelBtn = loginModal.locator('[data-testid="login-modal-dismiss"]');
+    expect(await cancelBtn.count()).toBe(0);
+  });
+
+  test('clicking X closes the login modal', async ({ page }) => {
+    const suggestBtn = page.locator('[data-testid="suggest-btn"]');
+    await suggestBtn.waitFor({ timeout: 10_000 });
+    await suggestBtn.click();
+    const loginModal = page.locator('[data-testid="login-modal"]');
+    await expect(loginModal).toBeVisible({ timeout: 5_000 });
+    await loginModal.locator('[data-testid="login-modal-close"]').click();
+    await expect(loginModal).not.toBeVisible({ timeout: 3_000 });
+  });
+
   test('download links have correct branded styling', async ({ page }) => {
     const playLink = page.locator('[data-testid="download-android"]');
     await expect(playLink).toBeVisible({ timeout: 10_000 });
