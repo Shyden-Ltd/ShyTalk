@@ -720,18 +720,25 @@
       }
       .download-link {
         padding: 10px 20px;
-        background: var(--primary);
         color: #fff;
         text-decoration: none;
-        border-radius: 4px;
+        border-radius: 8px;
         font-size: 0.875rem;
         font-weight: 600;
         min-height: 44px;
         display: inline-flex;
         align-items: center;
+        gap: 8px;
+        transition: opacity 0.2s;
       }
       .download-link:hover {
-        opacity: 0.9;
+        opacity: 0.85;
+      }
+      .download-link[data-testid="download-android"] {
+        background: #01875f;
+      }
+      .download-link[data-testid="download-ios"] {
+        background: #000;
       }
       .auth-dismiss-btn {
         padding: 8px 16px;

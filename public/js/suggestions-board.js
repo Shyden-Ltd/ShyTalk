@@ -149,6 +149,10 @@
       : null;
   }
 
+  function hasValidAccount() {
+    return !!(window.shytalkAuth && window.shytalkAuth.profile);
+  }
+
   function getToken() {
     var user = getUser();
     if (!user || typeof user.getIdToken !== "function") {
@@ -937,8 +941,10 @@
       '" ' +
       'data-testid="suggestions-search-input" />' +
       "</div>";
-    html +=
-      '<button class="sg-btn sg-btn--primary sg-suggest-btn" data-testid="suggest-btn">+ Suggest</button>';
+    if (hasValidAccount()) {
+      html +=
+        '<button class="sg-btn sg-btn--primary sg-suggest-btn" data-testid="suggest-btn">+ Suggest</button>';
+    }
     html += "</div>";
 
     // Sort + filter controls
@@ -1434,6 +1440,11 @@
   function init() {
     setupHeaderSubscribe();
     fetchSuggestions();
+
+    // Re-render when auth state changes (show/hide suggest button)
+    document.addEventListener("shytalk-auth-changed", function () {
+      renderBoard();
+    });
   }
 
   if (document.readyState === "loading") {
