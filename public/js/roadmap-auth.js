@@ -79,10 +79,10 @@
             '</a>' +
           '</div>' +
         '</div>';
-      // Auto sign-out after 5 seconds — user can't use the site without a ShyTalk account
-      setTimeout(function () {
-        signOut();
-      }, 5000);
+      // Sign out Firebase (they don't have a ShyTalk account) but keep the message visible
+      if (auth) auth.signOut().catch(function () {});
+      currentUser = null;
+      updateGlobalAuth();
     } else {
       // Not logged in — show login prompt
       container.innerHTML =
