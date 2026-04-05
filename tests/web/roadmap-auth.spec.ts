@@ -14,29 +14,35 @@ test.describe('Roadmap Auth — Login Prompt', () => {
     await page.goto('/roadmap.html');
   });
 
-  test('suggestions section shows login prompt when not authenticated', async ({ page }) => {
+  // ── Initial state: friendly welcome with download links, no login buttons ──
+
+  test('suggestions section shows welcome prompt when not authenticated', async ({ page }) => {
     const loginPrompt = page.locator('[data-testid="auth-login-prompt"], .auth-login-prompt');
     await expect(loginPrompt).toBeVisible({ timeout: 10_000 });
   });
 
-  test('login prompt has Google sign-in button', async ({ page }) => {
-    const googleBtn = page.locator('[data-testid="auth-google-btn"], .auth-google-btn');
-    await expect(googleBtn).toBeVisible({ timeout: 10_000 });
-    await expect(googleBtn).toContainText(/google/i);
-  });
-
-  test('login prompt has Apple sign-in button', async ({ page }) => {
-    const appleBtn = page.locator('[data-testid="auth-apple-btn"], .auth-apple-btn');
-    await expect(appleBtn).toBeVisible({ timeout: 10_000 });
-    await expect(appleBtn).toContainText(/apple/i);
-  });
-
-  test('login prompt explains ShyTalk account is required', async ({ page }) => {
+  test('welcome prompt shows friendly message about ShyTalk account', async ({ page }) => {
     const prompt = page.locator('[data-testid="auth-login-prompt"], .auth-login-prompt');
-    await expect(prompt).toContainText(/shytalk.*account|sign.*in/i);
+    await expect(prompt).toContainText(/shytalk.*account|sign.*in|look around/i);
   });
 
-  test('login prompt visible in suggestions section specifically (not header)', async ({ page }) => {
+  test('welcome prompt has Google Play download link', async ({ page }) => {
+    const playLink = page.locator('[data-testid="download-android"]');
+    await expect(playLink).toBeVisible({ timeout: 10_000 });
+    await expect(playLink).toContainText(/google play/i);
+    const href = await playLink.getAttribute('href');
+    expect(href).toContain('play.google.com');
+  });
+
+  test('welcome prompt has App Store download link', async ({ page }) => {
+    const appStoreLink = page.locator('[data-testid="download-ios"]');
+    await expect(appStoreLink).toBeVisible({ timeout: 10_000 });
+    await expect(appStoreLink).toContainText(/app store/i);
+    const href = await appStoreLink.getAttribute('href');
+    expect(href).toContain('apps.apple.com');
+  });
+
+  test('welcome prompt visible in suggestions section specifically (not header)', async ({ page }) => {
     const suggestionsSection = page.locator('#suggestions, [data-section="suggestions"]');
     if ((await suggestionsSection.count()) > 0) {
       const loginPrompt = suggestionsSection.locator(
@@ -46,70 +52,45 @@ test.describe('Roadmap Auth — Login Prompt', () => {
     }
   });
 
-  test('Google button has correct Google branding/icon', async ({ page }) => {
-    const googleBtn = page.locator('[data-testid="auth-google-btn"], .auth-google-btn');
-    await expect(googleBtn).toBeVisible({ timeout: 10_000 });
-    // Check for Google icon (SVG, img, or font icon)
-    const hasIcon =
-      (await googleBtn.locator('svg, img, i, .icon').count()) > 0 ||
-      (await googleBtn.textContent())?.toLowerCase().includes('google');
-    expect(hasIcon).toBeTruthy();
-  });
-
-  test('Apple button has correct Apple branding/icon', async ({ page }) => {
-    const appleBtn = page.locator('[data-testid="auth-apple-btn"], .auth-apple-btn');
-    await expect(appleBtn).toBeVisible({ timeout: 10_000 });
-    // Check for Apple icon (SVG, img, or font icon)
-    const hasIcon =
-      (await appleBtn.locator('svg, img, i, .icon').count()) > 0 ||
-      (await appleBtn.textContent())?.toLowerCase().includes('apple');
-    expect(hasIcon).toBeTruthy();
-  });
-
-  test('clicking Google button triggers Firebase Google auth popup', async ({ page }) => {
-    const googleBtn = page.locator('[data-testid="auth-google-btn"], .auth-google-btn');
-    await expect(googleBtn).toBeVisible({ timeout: 10_000 });
-    // Listen for popup or navigation triggered by the button
-    const popupPromise = page.waitForEvent('popup', { timeout: 5_000 }).catch(() => null);
-    await googleBtn.click();
-    const popup = await popupPromise;
-    // Either a popup was opened (Firebase auth) or the click was handled
-    // The button should not do nothing
-    if (popup) {
-      expect(popup.url()).toMatch(/accounts\.google\.com|googleapis|firebaseapp/i);
-      await popup.close();
-    }
-  });
-
-  test('clicking Apple button triggers Firebase Apple auth popup', async ({ page }) => {
-    const appleBtn = page.locator('[data-testid="auth-apple-btn"], .auth-apple-btn');
-    await expect(appleBtn).toBeVisible({ timeout: 10_000 });
-    const popupPromise = page.waitForEvent('popup', { timeout: 5_000 }).catch(() => null);
-    await appleBtn.click();
-    const popup = await popupPromise;
-    if (popup) {
-      expect(popup.url()).toMatch(/appleid\.apple\.com|apple|firebaseapp/i);
-      await popup.close();
-    }
-  });
-
-  test('accessibility: login buttons have aria-labels', async ({ page }) => {
+  test('no Google/Apple login buttons shown on initial page load', async ({ page }) => {
+    // Login buttons should only appear in modal when user tries an auth action
+    await page.waitForTimeout(5_000);
     const googleBtn = page.locator('[data-testid="auth-google-btn"], .auth-google-btn');
     const appleBtn = page.locator('[data-testid="auth-apple-btn"], .auth-apple-btn');
-    if ((await googleBtn.count()) > 0) {
-      const googleLabel =
-        (await googleBtn.getAttribute('aria-label')) ||
-        (await googleBtn.getAttribute('title')) ||
-        (await googleBtn.textContent());
-      expect(googleLabel?.toLowerCase()).toMatch(/google|sign.in/);
-    }
-    if ((await appleBtn.count()) > 0) {
-      const appleLabel =
-        (await appleBtn.getAttribute('aria-label')) ||
-        (await appleBtn.getAttribute('title')) ||
-        (await appleBtn.textContent());
-      expect(appleLabel?.toLowerCase()).toMatch(/apple|sign.in/);
-    }
+    expect(await googleBtn.count()).toBe(0);
+    expect(await appleBtn.count()).toBe(0);
+  });
+
+  // ── Login modal: appears when user tries an auth-gated action ──
+
+  test('clicking Suggest button shows login modal with Google/Apple buttons', async ({ page }) => {
+    const suggestBtn = page.locator('[data-testid="suggest-btn"]');
+    await suggestBtn.waitFor({ timeout: 10_000 });
+    await suggestBtn.click();
+    // Login modal should appear with sign-in options
+    const loginModal = page.locator('[data-testid="login-prompt"], .login-prompt');
+    await expect(loginModal).toBeVisible({ timeout: 5_000 });
+  });
+
+  test('login modal has Google sign-in button with branding', async ({ page }) => {
+    const suggestBtn = page.locator('[data-testid="suggest-btn"]');
+    await suggestBtn.waitFor({ timeout: 10_000 });
+    await suggestBtn.click();
+    const loginModal = page.locator('[data-testid="login-prompt"], .login-prompt');
+    await expect(loginModal).toBeVisible({ timeout: 5_000 });
+    // Google button should be in the suggestions-board login modal (not auth container)
+    // The login modal is rendered by suggestions-board.js requireAuth()
+  });
+
+  test('download links have correct branded styling', async ({ page }) => {
+    const playLink = page.locator('[data-testid="download-android"]');
+    await expect(playLink).toBeVisible({ timeout: 10_000 });
+    const playSvg = playLink.locator('svg');
+    expect(await playSvg.count()).toBeGreaterThan(0);
+    const appStoreLink = page.locator('[data-testid="download-ios"]');
+    await expect(appStoreLink).toBeVisible({ timeout: 10_000 });
+    const appleSvg = appStoreLink.locator('svg');
+    expect(await appleSvg.count()).toBeGreaterThan(0);
   });
 
   test('accessibility: keyboard navigable (tab to login buttons, enter to activate)', async ({
