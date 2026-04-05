@@ -88,7 +88,7 @@ test.describe('Roadmap Page — Theme & Layout', () => {
     await bell.waitFor({ timeout: 10_000 });
     await bell.click();
     // Should show login modal (not just a toast) with actual sign-in buttons
-    const loginModal = page.locator('[data-testid="login-modal"], #sg-login-modal-overlay');
+    const loginModal = page.locator('[data-testid="login-modal-overlay"], #sg-login-modal-overlay');
     await expect(loginModal).toBeVisible({ timeout: 5_000 });
     // Modal must have Google and Apple sign-in buttons
     const googleBtn = loginModal.locator('[data-testid="auth-google-btn"]');

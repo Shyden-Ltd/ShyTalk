@@ -67,7 +67,7 @@ test.describe('Roadmap Auth — Login Prompt', () => {
     const suggestBtn = page.locator('[data-testid="suggest-btn"]');
     await suggestBtn.waitFor({ timeout: 10_000 });
     await suggestBtn.click();
-    const loginModal = page.locator('[data-testid="login-modal"], #sg-login-modal-overlay');
+    const loginModal = page.locator('[data-testid="login-modal-overlay"], #sg-login-modal-overlay');
     await expect(loginModal).toBeVisible({ timeout: 5_000 });
   });
 
@@ -75,7 +75,7 @@ test.describe('Roadmap Auth — Login Prompt', () => {
     const suggestBtn = page.locator('[data-testid="suggest-btn"]');
     await suggestBtn.waitFor({ timeout: 10_000 });
     await suggestBtn.click();
-    const loginModal = page.locator('[data-testid="login-modal"]');
+    const loginModal = page.locator('[data-testid="login-modal-overlay"]');
     await expect(loginModal).toBeVisible({ timeout: 5_000 });
     const googleBtn = loginModal.locator('[data-testid="auth-google-btn"]');
     await expect(googleBtn).toBeVisible();
@@ -86,7 +86,7 @@ test.describe('Roadmap Auth — Login Prompt', () => {
     const suggestBtn = page.locator('[data-testid="suggest-btn"]');
     await suggestBtn.waitFor({ timeout: 10_000 });
     await suggestBtn.click();
-    const loginModal = page.locator('[data-testid="login-modal"]');
+    const loginModal = page.locator('[data-testid="login-modal-overlay"]');
     await expect(loginModal).toBeVisible({ timeout: 5_000 });
     const appleBtn = loginModal.locator('[data-testid="auth-apple-btn"]');
     await expect(appleBtn).toBeVisible();
@@ -97,7 +97,7 @@ test.describe('Roadmap Auth — Login Prompt', () => {
     const suggestBtn = page.locator('[data-testid="suggest-btn"]');
     await suggestBtn.waitFor({ timeout: 10_000 });
     await suggestBtn.click();
-    const loginModal = page.locator('[data-testid="login-modal"]');
+    const loginModal = page.locator('[data-testid="login-modal-overlay"]');
     await expect(loginModal).toBeVisible({ timeout: 5_000 });
     // Close (X) button in header exists and is visible
     const closeBtn = loginModal.locator('[data-testid="login-modal-close"]');
@@ -111,7 +111,7 @@ test.describe('Roadmap Auth — Login Prompt', () => {
     const suggestBtn = page.locator('[data-testid="suggest-btn"]');
     await suggestBtn.waitFor({ timeout: 10_000 });
     await suggestBtn.click();
-    const loginModal = page.locator('[data-testid="login-modal"]');
+    const loginModal = page.locator('[data-testid="login-modal-overlay"]');
     await expect(loginModal).toBeVisible({ timeout: 5_000 });
     await loginModal.locator('[data-testid="login-modal-close"]').click();
     await expect(loginModal).not.toBeVisible({ timeout: 3_000 });

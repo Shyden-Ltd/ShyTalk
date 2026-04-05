@@ -117,11 +117,25 @@
       return;
     }
 
-    if (!firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
+    // Skip Firebase init if the API key is obviously fake (local/CI test env)
+    if (!firebaseConfig.apiKey || firebaseConfig.apiKey.indexOf('fake') !== -1 || firebaseConfig.apiKey.indexOf('placeholder') !== -1) {
+      authStateKnown = true;
+      renderAuthUI();
+      return;
     }
 
-    auth = firebase.auth();
+    try {
+      if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+      }
+      auth = firebase.auth();
+    } catch (err) {
+      console.info('Firebase auth unavailable:', err && err.code);
+      authStateKnown = true;
+      renderAuthUI();
+      return;
+    }
+
     auth.onAuthStateChanged(function (user) {
       authStateKnown = true;
       currentUser = user;

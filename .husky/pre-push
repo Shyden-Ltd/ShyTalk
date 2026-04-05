@@ -53,3 +53,37 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "✓ SonarCloud quality gate passed"
+
+# Run Playwright against a single browser (chromium) if web files changed
+HAS_WEB=false
+if echo "$CHANGED" | grep -qE '^(public/|tests/web/)'; then
+  HAS_WEB=true
+fi
+
+if [ "$HAS_WEB" = "true" ]; then
+  # Check local stack is running (Express API at :3000, web server at :8888)
+  if ! curl -s -o /dev/null http://localhost:3000/api/health; then
+    echo ""
+    echo "⚠ Web changes detected but local stack not running — skipping Playwright pre-push"
+    echo "  To enable: bash local/start.sh && cd express-api && npm run local"
+  elif ! curl -s -o /dev/null http://localhost:8888/; then
+    echo ""
+    echo "⚠ Web changes detected but web server not running on :8888 — skipping Playwright pre-push"
+    echo "  To enable: npx serve public -l 8888 &"
+  else
+    echo "Running Playwright pre-push (chromium only)..."
+    API_BASE_URL=http://localhost:3000 \
+    WEB_BASE_URL=http://localhost:8888 \
+    ADMIN_EMAIL=claude-test@shytalk.dev \
+    ADMIN_PASSWORD=localdev123 \
+    TEST_API_KEY=local-test-key \
+    npx playwright test --project=chromium --reporter=line 2>&1 | tail -30
+    if [ ${PIPESTATUS[0]} -ne 0 ]; then
+      echo ""
+      echo "✗ Playwright chromium tests FAILED — push blocked"
+      echo "  ALL failing tests must be fixed (including pre-existing failures)."
+      exit 1
+    fi
+    echo "✓ Playwright chromium tests passed"
+  fi
+fi

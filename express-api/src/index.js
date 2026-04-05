@@ -65,8 +65,13 @@ app.use('/api', (req, res, next) => {
   authMiddleware(req, res, next);
 });
 
-// General rate limit on all API routes
-app.use('/api', generalLimiter);
+// General rate limit on all API routes (except /test/* in non-prod)
+app.use('/api', (req, res, next) => {
+  if (req.path.startsWith('/test/') && process.env.NODE_ENV !== 'production') {
+    return next();
+  }
+  return generalLimiter(req, res, next);
+});
 
 // Stricter limits on write-heavy routes
 app.use('/api/conversations', writeLimiter);
