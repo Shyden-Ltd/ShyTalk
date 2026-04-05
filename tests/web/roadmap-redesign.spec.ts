@@ -83,12 +83,18 @@ test.describe('Roadmap Page — Theme & Layout', () => {
     expect(count).toBeGreaterThan(0);
   });
 
-  test('clicking bell without login shows login prompt', async ({ page }) => {
+  test('clicking bell without login shows login modal with sign-in buttons', async ({ page }) => {
     const bell = page.locator('.feature-bell, [data-testid="feature-bell"]').first();
     await bell.waitFor({ timeout: 10_000 });
     await bell.click();
-    const loginPrompt = page.locator('.login-prompt, [data-testid="login-prompt"]');
-    await expect(loginPrompt).toBeVisible({ timeout: 5_000 });
+    // Should show login modal (not just a toast) with actual sign-in buttons
+    const loginModal = page.locator('[data-testid="login-modal"], #sg-login-modal-overlay');
+    await expect(loginModal).toBeVisible({ timeout: 5_000 });
+    // Modal must have Google and Apple sign-in buttons
+    const googleBtn = loginModal.locator('[data-testid="auth-google-btn"]');
+    const appleBtn = loginModal.locator('[data-testid="auth-apple-btn"]');
+    await expect(googleBtn).toBeVisible();
+    await expect(appleBtn).toBeVisible();
   });
 
   test('sticky nav visible when scrolling', async ({ page }) => {
