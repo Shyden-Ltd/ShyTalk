@@ -28,6 +28,7 @@
   var auth = null;
   var currentUser = null;
   var shytalkProfile = null;
+  var authStateKnown = false;
 
   // ─── Auth state container rendering ───────────────────────────
 
@@ -41,6 +42,12 @@
       container.id = 'auth-container';
       container.className = 'auth-container';
       sugBoard.parentNode.insertBefore(container, sugBoard);
+    }
+
+    // Don't render login buttons until we know the auth state (prevents flash)
+    if (!authStateKnown) {
+      container.innerHTML = '<div class="auth-loading" style="text-align:center;padding:16px;color:var(--text-secondary,#888);font-size:0.875rem;">Loading...</div>';
+      return;
     }
 
     if (shytalkProfile) {
@@ -119,6 +126,7 @@
 
     auth = firebase.auth();
     auth.onAuthStateChanged(function (user) {
+      authStateKnown = true;
       currentUser = user;
       if (user) {
         checkShyTalkAccount(user);
@@ -222,11 +230,18 @@
     document.addEventListener('firebase-config-ready', function () {
       initAuth();
     });
-    // Also render unauthenticated UI immediately so the page isn't blank
+    // Show loading state while waiting for Firebase config
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', renderAuthUI);
     } else {
       renderAuthUI();
     }
+    // If config never loads (API down), show login buttons after 3s
+    setTimeout(function () {
+      if (!authStateKnown) {
+        authStateKnown = true;
+        renderAuthUI();
+      }
+    }, 3000);
   }
 })();

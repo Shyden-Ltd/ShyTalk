@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.google.com https://recaptcha.net; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob: http://localhost:*; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://*.shytalk.shyden.co.uk wss://*.shytalk.shyden.co.uk https://recaptcha.net http://localhost:* ws://localhost:*;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.google.com https://recaptcha.net https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob: http://localhost:*; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://*.shytalk.shyden.co.uk wss://*.shytalk.shyden.co.uk https://recaptcha.net http://localhost:* ws://localhost:*;">
     <meta name="theme-color" content="#0f1117">
     <title>ShyTalk Admin</title>
     <style>
@@ -12975,34 +12975,6 @@
           list.appendChild(entry);
         });
       } catch { list.innerHTML = '<div style="color:var(--text2);font-size:12px;">No history available.</div>'; }
-    }
-
-    // ── Identity graph rendering ──
-    async function loadIdentityGraph(userId) {
-      const container = $("#identity-graph-container");
-      const canvas = $("#identity-graph-canvas");
-      if (!container || !canvas) return;
-      container.style.display = "block";
-      try {
-        const data = await apiCall("GET", "/api/admin/identity-graph/" + userId);
-        const nodes = data.nodes || [];
-        canvas.innerHTML = "";
-        if (nodes.length === 0) {
-          canvas.textContent = "No identity data";
-          return;
-        }
-        // Render simple node diagram
-        nodes.forEach(node => {
-          const el = document.createElement("div");
-          el.className = "graph-node";
-          el.style.cssText = "display:inline-flex;align-items:center;gap:6px;padding:8px 12px;margin:4px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;";
-          el.innerHTML = '<span class="graph-node-type" style="font-weight:600;text-transform:uppercase;font-size:10px;color:var(--accent);">' +
-            escapeHtml(node.type || "") + '</span>' +
-            '<span class="graph-node-label">' + escapeHtml(node.label || "") + '</span>';
-          if (node.suspended) el.style.borderColor = "var(--danger)";
-          canvas.appendChild(el);
-        });
-      } catch { canvas.innerHTML = '<div style="color:var(--text2);font-size:12px;">Failed to load identity graph.</div>'; }
     }
 
     // Select All checkbox

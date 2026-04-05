@@ -162,7 +162,7 @@
   }
 
   function requireAuth(action) {
-    if (getUser()) return true;
+    if (getUser() && hasValidAccount()) return true;
     showLoginPromptModal(action);
     return false;
   }
@@ -941,10 +941,8 @@
       '" ' +
       'data-testid="suggestions-search-input" />' +
       "</div>";
-    if (hasValidAccount()) {
-      html +=
-        '<button class="sg-btn sg-btn--primary sg-suggest-btn" data-testid="suggest-btn">+ Suggest</button>';
-    }
+    html +=
+      '<button class="sg-btn sg-btn--primary sg-suggest-btn" data-testid="suggest-btn">+ Suggest</button>';
     html += "</div>";
 
     // Sort + filter controls
