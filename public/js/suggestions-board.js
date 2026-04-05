@@ -32,7 +32,7 @@
   var DUPLICATE_MIN_CHARS = 3;
 
   var STATUS_OPTIONS = [
-    { value: "", label: "All statuses" },
+    { value: "", label: sgT("allStatuses") },
     { value: "pending", label: "Pending" },
     { value: "accepted", label: "Accepted" },
     { value: "planned", label: "Planned" },
@@ -41,7 +41,7 @@
   ];
 
   var TAG_OPTIONS = [
-    { value: "", label: "All tags" },
+    { value: "", label: sgT("allTags") },
     { value: "voice", label: "Voice" },
     { value: "chat", label: "Chat" },
     { value: "moderation", label: "Moderation" },
@@ -54,7 +54,7 @@
   ];
 
   var LANG_OPTIONS = [
-    { value: "", label: "All languages" },
+    { value: "", label: sgT("allLanguages") },
     { value: "en", label: "English" },
     { value: "ar", label: "Arabic" },
     { value: "de", label: "German" },
@@ -96,7 +96,7 @@
   // ── State ──
 
   var PHASE_OPTIONS = [
-    { value: "", label: "All phases" },
+    { value: "", label: sgT("allPhases") },
     { value: "compliance", label: "Compliance & Legal" },
     { value: "platform", label: "Platform Foundation" },
     { value: "revenue", label: "Revenue Engine" },
@@ -395,7 +395,7 @@
       '<div class="sg-modal-overlay login-prompt" id="sg-login-modal-overlay" data-testid="login-modal">' +
       '<div class="sg-modal" role="dialog" aria-modal="true" aria-label="Sign in required">' +
       '<div class="sg-modal-header">' +
-      "<h3>Sign in required</h3>" +
+      "<h3>"+sgT("signInRequired")+"</h3>" +
       '<button class="sg-modal-close" data-testid="login-modal-close" aria-label="Close">&times;</button>' +
       "</div>" +
       '<div class="sg-modal-body">' +
@@ -415,7 +415,7 @@
       '<p style="color:var(--text-secondary,#888);font-size:0.8rem;text-align:center;">Don\'t have an account? Download ShyTalk to create one.</p>' +
       "</div>" +
       '<div class="sg-modal-footer">' +
-      '<button class="sg-btn sg-btn--secondary" data-testid="login-modal-dismiss">Cancel</button>' +
+      '<button class="sg-btn sg-btn--secondary" data-testid="login-modal-dismiss">"+sgT("cancel")+"</button>' +
       "</div>" +
       "</div>" +
       "</div>";
@@ -489,7 +489,7 @@
       "</label>" +
       "</div>" +
       '<div class="sg-modal-actions">' +
-      '<button class="sg-btn sg-btn--secondary" data-testid="subscribe-modal-cancel">Cancel</button>' +
+      '<button class="sg-btn sg-btn--secondary" data-testid="subscribe-modal-cancel">"+sgT("cancel")+"</button>' +
       '<button class="sg-btn sg-btn--primary" data-testid="subscribe-modal-save" disabled>Save</button>' +
       "</div>" +
       "</div>" +
@@ -712,7 +712,7 @@
       "</div>" +
       '<div class="sg-modal-footer">' +
       '<div class="sg-modal-actions">' +
-      '<button class="sg-btn sg-btn--secondary" data-testid="suggest-modal-cancel">Cancel</button>' +
+      '<button class="sg-btn sg-btn--secondary" data-testid="suggest-modal-cancel">"+sgT("cancel")+"</button>' +
       '<button class="sg-btn sg-btn--primary" data-testid="suggest-modal-submit" disabled>Submit</button>' +
       "</div>" +
       "</div>" +
@@ -963,14 +963,14 @@
     html += '<div class="sg-toolbar" data-testid="suggestions-toolbar">';
     html +=
       '<div class="sg-search-wrap">' +
-      '<input type="text" class="sg-search-input" placeholder="Search suggestions..." ' +
+      '<input type="text" class="sg-search-input" placeholder=sgT("search") ' +
       'value="' +
       escapeHtml(state.searchQuery) +
       '" ' +
       'data-testid="suggestions-search-input" />' +
       "</div>";
     html +=
-      '<button class="sg-btn sg-btn--primary sg-suggest-btn" data-testid="suggest-btn">+ Suggest</button>';
+      '<button class="sg-btn sg-btn--primary sg-suggest-btn" data-testid="suggest-btn">"+sgT("suggest")+"</button>';
     html += "</div>";
 
     // Sort + filter controls
@@ -981,11 +981,11 @@
     html +=
       '<button class="sg-sort-btn' +
       (state.sort === "votes" ? " sg-sort-btn--active" : "") +
-      '" data-sort="votes" data-testid="sort-most-voted">Most Voted</button>';
+      '" data-sort="votes" data-testid="sort-most-voted">"+sgT("mostVoted")+"</button>';
     html +=
       '<button class="sg-sort-btn' +
       (state.sort === "newest" ? " sg-sort-btn--active" : "") +
-      '" data-sort="newest" data-testid="sort-newest">Newest</button>';
+      '" data-sort="newest" data-testid="sort-newest">"+sgT("newest")+"</button>';
     html += "</div>";
 
     // Filters
