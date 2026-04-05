@@ -67,9 +67,30 @@ test.describe('Roadmap Auth — Login Prompt', () => {
     const suggestBtn = page.locator('[data-testid="suggest-btn"]');
     await suggestBtn.waitFor({ timeout: 10_000 });
     await suggestBtn.click();
-    // Login modal should appear with sign-in info
     const loginModal = page.locator('[data-testid="login-modal"], #sg-login-modal-overlay');
     await expect(loginModal).toBeVisible({ timeout: 5_000 });
+  });
+
+  test('login modal has Google sign-in button', async ({ page }) => {
+    const suggestBtn = page.locator('[data-testid="suggest-btn"]');
+    await suggestBtn.waitFor({ timeout: 10_000 });
+    await suggestBtn.click();
+    const loginModal = page.locator('[data-testid="login-modal"]');
+    await expect(loginModal).toBeVisible({ timeout: 5_000 });
+    const googleBtn = loginModal.locator('[data-testid="auth-google-btn"]');
+    await expect(googleBtn).toBeVisible();
+    await expect(googleBtn).toContainText(/google/i);
+  });
+
+  test('login modal has Apple sign-in button', async ({ page }) => {
+    const suggestBtn = page.locator('[data-testid="suggest-btn"]');
+    await suggestBtn.waitFor({ timeout: 10_000 });
+    await suggestBtn.click();
+    const loginModal = page.locator('[data-testid="login-modal"]');
+    await expect(loginModal).toBeVisible({ timeout: 5_000 });
+    const appleBtn = loginModal.locator('[data-testid="auth-apple-btn"]');
+    await expect(appleBtn).toBeVisible();
+    await expect(appleBtn).toContainText(/apple/i);
   });
 
   test('download links have correct branded styling', async ({ page }) => {
