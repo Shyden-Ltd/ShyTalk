@@ -1382,19 +1382,8 @@ describe('PATCH /api/appeals/:id - edge cases', () => {
   });
 });
 
-// =================================================================
-// GET /api/admin/audit-log - error (lines 1191-1192)
-// =================================================================
-describe('GET /api/admin/audit-log - error', () => {
-  it('returns 500 on error', async () => {
-    const app = createApp();
-    jest.clearAllMocks();
-    require('../../src/middleware/auth').requireAdmin.mockReturnValue(false);
-    require('../../src/utils/firestore-helpers').queryDocs.mockRejectedValueOnce(new Error('fail'));
-    const res = await request(app).get('/api/admin/audit-log');
-    expect(res.status).toBe(500);
-  });
-});
+// GET /api/admin/audit-log — removed from reports.js; now served by
+// admin-audit-log.js. See admin-audit-log-suggestions.test.js.
 
 // =================================================================
 // evictSuspendedUser (lines 1214-1277) - via suspend endpoint
@@ -2023,29 +2012,8 @@ describe('PATCH /api/appeals/:id - requireAdmin blocks + user_id fallback', () =
   });
 });
 
-describe('GET /api/admin/audit-log - admin name enrichment fallback', () => {
-  let app, queryDocs, getDoc;
-  beforeEach(() => {
-    app = createApp();
-    jest.clearAllMocks();
-    ({ queryDocs, getDoc } = require('../../src/utils/firestore-helpers'));
-    require('../../src/middleware/auth').requireAdmin.mockReturnValue(false);
-  });
-
-  it('uses display_name fallback and handles null admin doc', async () => {
-    queryDocs.mockResolvedValueOnce([
-      { id: 'l1', adminId: 'admin1', action: 'SUSPEND', targetUserId: 'u1', createdAt: 1700e9 },
-      { id: 'l2', adminId: 'admin2', action: 'UNSUSPEND', targetUserId: 'u2', createdAt: 1699e9 },
-    ]);
-    getDoc
-      .mockResolvedValueOnce({ id: 'admin1', display_name: 'SnakeAdmin' })
-      .mockResolvedValueOnce(null);
-    const res = await request(app).get('/api/admin/audit-log');
-    expect(res.status).toBe(200);
-    expect(res.body[0].adminName).toBe('SnakeAdmin');
-    expect(res.body[1].adminName).toBeNull();
-  });
-});
+// GET /api/admin/audit-log - admin name enrichment — removed from reports.js;
+// now served by admin-audit-log.js. See admin-audit-log-suggestions.test.js.
 
 describe('GET /api/reports/stats - no resolved reports + edge cases', () => {
   let app, queryDocs;

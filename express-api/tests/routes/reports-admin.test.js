@@ -405,63 +405,6 @@ describe('POST /api/reports/resolve-all/:userId', () => {
   });
 });
 
-describe('GET /api/admin/audit-log', () => {
-  let app;
-  let queryDocs;
-  let getDoc;
-  let requireAdmin;
-
-  beforeEach(() => {
-    app = createApp();
-    jest.clearAllMocks();
-    ({ queryDocs, getDoc } = require('../../src/utils/firestore-helpers'));
-    ({ requireAdmin } = require('../../src/middleware/auth'));
-    requireAdmin.mockReturnValue(false);
-  });
-
-  it('returns recent entries enriched with admin display name', async () => {
-    queryDocs.mockResolvedValueOnce([
-      {
-        id: 'log-1',
-        adminId: 'admin-firebase-uid',
-        action: 'SUSPEND',
-        targetUserId: 'user-123',
-        details: 'Spam',
-        createdAt: 1700000000000,
-      },
-      {
-        id: 'log-2',
-        adminId: 'admin-firebase-uid',
-        action: 'RESOLVE_REPORT',
-        targetUserId: 'user-456',
-        details: 'Report r1: dismissed',
-        createdAt: 1699990000000,
-      },
-    ]);
-
-    // getDoc for admin user enrichment
-    getDoc.mockResolvedValueOnce({
-      id: 'admin-firebase-uid',
-      displayName: 'Admin User',
-    });
-
-    const res = await request(app).get('/api/admin/audit-log');
-
-    expect(res.status).toBe(200);
-    expect(Array.isArray(res.body)).toBe(true);
-    expect(res.body).toHaveLength(2);
-    expect(res.body[0].adminName).toBe('Admin User');
-    expect(res.body[0].action).toBe('SUSPEND');
-  });
-
-  it('returns 403 for non-admin', async () => {
-    requireAdmin.mockImplementation((_req, res) => {
-      res.status(403).json({ error: 'Forbidden' });
-      return true;
-    });
-
-    const res = await request(app).get('/api/admin/audit-log');
-
-    expect(res.status).toBe(403);
-  });
-});
+// GET /api/admin/audit-log — removed from reports.js; now served by
+// admin-audit-log.js which supports filtering, pagination, and reads
+// from all three audit collections. See admin-audit-log-suggestions.test.js.

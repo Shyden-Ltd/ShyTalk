@@ -1166,8 +1166,9 @@ test.describe('Voting Edge Cases', () => {
     const voteCount = page.locator('[data-testid^="vote-score"], .sg-vote-score').first();
     const initialCount = await voteCount.textContent();
 
-    // Open second tab
+    // Open second tab — must apply the same mocks
     const page2 = await context.newPage();
+    await setupSuggestionsMocks(page2);
     await page2.goto('/roadmap.html');
     await page2.locator('[data-testid^="suggestion-card"], .sg-card').first().waitFor({ timeout: 10_000 });
 
@@ -1247,7 +1248,8 @@ test.describe('Mobile-Specific Interactions', () => {
     await page.goto('/roadmap.html');
   });
 
-  test('touch: tap vote arrow registers vote', async ({ page }) => {
+  test('touch: tap vote arrow registers vote', async ({ page, browserName }) => {
+    test.skip(browserName === 'firefox' || browserName === 'webkit', 'Firefox/WebKit do not support touch/tap events reliably');
     const upvoteBtn = page.locator('[data-testid^="vote-up"]').first();
     await upvoteBtn.waitFor({ timeout: 10_000 });
     await upvoteBtn.tap();

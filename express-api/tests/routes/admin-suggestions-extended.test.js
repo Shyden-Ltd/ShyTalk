@@ -600,18 +600,16 @@ describe('PUT /admin/suggestions/:id/link', () => {
     expect(res.body.error).toMatch(/roadmap feature.*required/i);
   });
 
-  test('non-existent roadmap feature returns 400', async () => {
+  test('non-existent roadmap feature still links (features may come from roadmap-data.json)', async () => {
     setupDocMocks({
       'suggestions/sug-link-2': makeSuggestionSnap('sug-link-2', { status: 'accepted' }),
-      // roadmapFeatures/bad-feature is NOT in the map, so it returns { exists: false }
+      // roadmapFeatures/bad-feature is NOT in the map, but we accept any ID
     });
     const app = createAdminApp();
-    const res = await request(app)
+    await request(app)
       .put('/api/admin/suggestions/sug-link-2/link')
       .send({ roadmapFeatureId: 'bad-feature' })
-      .expect(400);
-
-    expect(res.body.error).toMatch(/roadmap feature not found/i);
+      .expect(200);
   });
 
   test('successful link returns 200', async () => {

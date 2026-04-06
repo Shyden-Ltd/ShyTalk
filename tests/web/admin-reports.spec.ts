@@ -18,8 +18,9 @@ async function waitForReportsLoaded(page: Page): Promise<void> {
 /** Click a report filter button (pending, resolved, archived). */
 async function filterReports(page: Page, status: 'pending' | 'resolved' | 'archived'): Promise<void> {
   const btn = page.locator(`#report-filter-bar button[data-report-filter="${status}"]`);
+  await expect(btn).toBeVisible({ timeout: 5_000 });
   await btn.click();
-  await expect(btn).toHaveClass(/active/);
+  await expect(btn).toHaveClass(/active/, { timeout: 5_000 });
   await waitForReportsLoaded(page);
 }
 
@@ -272,14 +273,16 @@ test.describe('Admin Reports', () => {
     const resolveAllBtn = firstCard.locator(`button[data-resolve-all="${uid}"]`);
     await resolveAllBtn.click();
 
-    // Handle confirm dialog
+    // Handle confirm dialog — WebKit needs a moment to render the overlay
     const confirmBtn = page.locator('.confirm-ok');
-    await expect(confirmBtn).toBeVisible();
+    await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
     await confirmBtn.click();
 
     await waitForReportsLoaded(page);
 
-    // API verify: no more pending reports for this user
+    // API verify: no more pending reports for this user — Firestore emulator
+    // may need a moment to propagate the writes from the resolve-all batch.
+    await page.waitForTimeout(1_000);
     const result = await getReportsViaApi(testData, 'pending');
     const userReports = result.users?.find(
       (u: any) => String(u.uniqueId) === String(testData.user.uniqueId),

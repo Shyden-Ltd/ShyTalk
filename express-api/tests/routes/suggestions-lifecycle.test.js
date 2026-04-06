@@ -1093,18 +1093,16 @@ describe('11.103 — Admin Suggestion Edge Cases Extended', () => {
     );
   });
 
-  test('admin links suggestion to non-existent roadmap feature: returns 400', async () => {
+  test('admin links suggestion to non-existent roadmap feature: still succeeds (features may come from roadmap-data.json)', async () => {
     setupDocMocks({
       'suggestions/sug-1': makeSuggestionSnap('sug-1', { status: 'accepted' }),
-      // roadmapFeatures/nonexistent does NOT exist
+      // roadmapFeatures/nonexistent does NOT exist, but we accept any ID
     });
     const app = createAdminApp();
-    const res = await request(app)
+    await request(app)
       .put('/api/admin/suggestions/sug-1/link')
       .send({ roadmapFeatureId: 'nonexistent' })
-      .expect(400);
-
-    expect(res.body.error).toMatch(/roadmap|feature|not found/i);
+      .expect(200);
   });
 
   test('admin completes suggestion not linked to roadmap: returns 400', async () => {

@@ -23,9 +23,19 @@ router.get('/admin/audit-log/export', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
 
-    const snap = await db.collection('auditLog').orderBy('timestamp', 'desc').get();
-
-    const entries = snap.docs.map((d) => d.data());
+    const [auditSnap, adminSnap, modSnap] = await Promise.all([
+      db.collection('auditLog').orderBy('timestamp', 'desc').get(),
+      db.collection('adminAuditLog').orderBy('timestamp', 'desc').get(),
+      db.collection('moderationLog').orderBy('timestamp', 'desc').get(),
+    ]);
+    const seen = new Set();
+    const entries = [];
+    for (const d of [...adminSnap.docs, ...auditSnap.docs, ...modSnap.docs]) {
+      if (seen.has(d.id)) continue;
+      seen.add(d.id);
+      entries.push(d.data());
+    }
+    entries.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
     const csv = ['adminUid,actionType,targetType,targetId,details,timestamp'];
     for (const e of entries) {
@@ -68,17 +78,20 @@ router.get('/admin/audit-log', async (req, res) => {
     const page = parseInt(req.query.page, 10) || 1;
     const pageSize = Math.min(parseInt(req.query.pageSize, 10) || 50, 100);
 
-    // Query both auditLog (legacy) and adminAuditLog (canonical) so all
-    // admin actions show in the audit log regardless of which collection
-    // they were historically written to.
-    const [auditSnap, adminSnap] = await Promise.all([
+    // Query all three audit collections so every admin action is visible
+    // regardless of which collection it was written to:
+    //   - auditLog: merge actions, legacy entries
+    //   - adminAuditLog: canonical admin actions
+    //   - moderationLog: suggestion approve/reject/overturn/edit actions
+    const [auditSnap, adminSnap, modSnap] = await Promise.all([
       db.collection('auditLog').orderBy('timestamp', 'desc').get(),
       db.collection('adminAuditLog').orderBy('timestamp', 'desc').get(),
+      db.collection('moderationLog').orderBy('timestamp', 'desc').get(),
     ]);
-    const totalSize = Math.max(auditSnap.size || 0, adminSnap.size || 0);
+    const totalSize = Math.max(auditSnap.size || 0, adminSnap.size || 0, modSnap.size || 0);
     const seen = new Set();
     const merged = [];
-    for (const d of [...adminSnap.docs, ...auditSnap.docs]) {
+    for (const d of [...adminSnap.docs, ...auditSnap.docs, ...modSnap.docs]) {
       if (seen.has(d.id)) continue;
       seen.add(d.id);
       merged.push({ id: d.id, ...d.data() });

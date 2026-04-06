@@ -1159,37 +1159,8 @@ router.patch('/appeals/:id', async (req, res) => {
   }
 });
 
-// ─── GET /admin/audit-log ────────────────────────────────────────
-
-router.get('/admin/audit-log', async (req, res) => {
-  try {
-    if (requireAdmin(req, res)) return;
-
-    const entries = await queryDocs(
-      db.collection('auditLog').orderBy('createdAt', 'desc').limit(100),
-    );
-
-    const adminIds = [...new Set(entries.map((e) => e.adminId).filter(Boolean))];
-    const adminDocs = await Promise.all(adminIds.map((id) => getDoc(`users/${id}`)));
-    const adminMap = {};
-    adminIds.forEach((id, i) => {
-      adminMap[id] = adminDocs[i];
-    });
-
-    const enriched = entries.map((e) => {
-      const adminDoc = adminMap[e.adminId];
-      return {
-        ...e,
-        adminName: adminDoc ? adminDoc.displayName || adminDoc.display_name || null : null,
-      };
-    });
-
-    res.json(enriched);
-  } catch (err) {
-    log.error('reports', 'GET /admin/audit-log failed', { error: err.message });
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+// GET /admin/audit-log — removed: superseded by admin-audit-log.js which
+// supports filtering, pagination, and reads from all audit collections.
 
 // ══════════════════════════════════════════════════════════════
 // HELPERS

@@ -66,25 +66,35 @@ test.describe('Admin Backups Tab', () => {
     // Button should show "Backing up..." while processing
     await expect(triggerBtn).toHaveText('Backing up...');
 
-    // Wait for the button to return to normal (backup complete)
-    await expect(triggerBtn).toHaveText('Backup Now');
+    // Wait for the button to return to normal (backup complete) — can take
+    // a while on the local emulator where Firestore writes are slower.
+    await expect(triggerBtn).toHaveText('Backup Now', { timeout: 15_000 });
 
     // Verify toast appeared with success message
     const toast = page.locator('#toast');
-    await expect(toast).toContainText('Backup complete');
+    await expect(toast).toContainText('Backup complete', { timeout: 10_000 });
 
-    // Wait for list to refresh
+    // Refresh the list to show the new/updated backup
+    const refreshBtn = page.locator('#backup-refresh-btn');
+    if (await refreshBtn.count() > 0) {
+      await refreshBtn.click();
+    } else {
+      await navigateToTab(page, 'Backups');
+    }
     await waitForBackupsLoaded(page);
 
-    // Verify a new backup appears in the list
+    // Verify at least one backup is in the list (a backup for today may
+    // already exist from a previous test run, so count may not increase —
+    // the endpoint overwrites same-day backups rather than creating new ones).
     const rows = backupRows(page);
-    const countAfter = await rows.count();
-    expect(countAfter).toBeGreaterThan(countBefore);
+    expect(await rows.count()).toBeGreaterThanOrEqual(1);
 
-    // API verify: new backup exists
+    // API verify: today's backup exists
     const dataAfter = await testData.api.get('/api/admin/backups');
     const backupsAfter = dataAfter.backups || [];
-    expect(backupsAfter.length).toBeGreaterThan(countBefore);
+    expect(backupsAfter.length).toBeGreaterThanOrEqual(1);
+    const today = new Date().toISOString().slice(0, 10);
+    expect(backupsAfter.some((b: any) => b.date === today)).toBe(true);
   });
 
   // ── Test 3: Refresh list ──

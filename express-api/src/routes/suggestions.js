@@ -1255,14 +1255,22 @@ router.put('/admin/suggestions/:id/link', async (req, res) => {
       return res.status(404).json({ error: 'Suggestion not found' });
     }
 
-    // Verify the roadmap feature exists
+    // Verify the roadmap feature exists (in Firestore or roadmap-data.json).
+    // Skip validation if the feature ID looks like a roadmap-data.json ID
+    // (those are string slugs like "voice-rooms", not Firestore doc IDs).
     const featureDoc = await db.doc(`roadmapFeatures/${roadmapFeatureId}`).get();
     if (!featureDoc.exists) {
-      return res.status(400).json({ error: 'Roadmap feature not found' });
+      // Accept any non-empty ID — roadmap features may come from
+      // roadmap-data.json rather than a Firestore collection.
+      log.info('admin-suggestions', 'Linking to roadmap feature not in Firestore', {
+        roadmapFeatureId,
+      });
     }
 
     await db.doc(`suggestions/${id}`).update({
       linkedRoadmapFeature: roadmapFeatureId,
+      linkedRoadmapId: roadmapFeatureId,
+      status: 'planned',
       updatedAt: now(),
     });
 
@@ -1454,15 +1462,58 @@ router.post('/admin/suggestions/:id/dispute/uphold', async (req, res) => {
     const ref = db.doc(`suggestions/${id}`);
     const doc = await ref.get();
     if (!doc.exists) return res.status(404).json({ error: 'Suggestion not found' });
+    const data = doc.data();
     await ref.update({
       disputeStatus: 'resolved',
       disputeResolution: 'upheld',
       disputeResolvedAt: now(),
       updatedAt: now(),
     });
+    // Notify the submitter that their dispute was resolved
+    if (data.submitterUid) {
+      await db.collection('notifications').add({
+        uid: data.submitterUid,
+        userId: data.submitterUid,
+        recipientUid: data.submitterUid,
+        type: 'dispute_resolved',
+        title: 'Dispute resolved',
+        body: `Your dispute on "${data.title || 'a suggestion'}" was reviewed and upheld.`,
+        suggestionId: id,
+        resolution: 'upheld',
+        isRead: false,
+        createdAt: now(),
+      });
+    }
     res.json({ success: true });
   } catch (err) {
     log.error('admin-suggestions', 'Dispute uphold failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── POST /admin/suggestions/:id/dispute/reject ────────────────
+//
+// Rejects a dispute — restores the suggestion to pending so it can be
+// reviewed again independently.
+router.post('/admin/suggestions/:id/dispute/reject', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+    const { id } = req.params;
+    const ref = db.doc(`suggestions/${id}`);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Suggestion not found' });
+    await ref.update({
+      status: 'pending',
+      disputeStatus: 'resolved',
+      disputeResolution: 'rejected',
+      disputeResolvedAt: now(),
+      mergedIntoSuggestionId: null,
+      mergedInto: null,
+      updatedAt: now(),
+    });
+    res.json({ success: true });
+  } catch (err) {
+    log.error('admin-suggestions', 'Dispute reject failed', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1653,10 +1704,11 @@ router.get('/admin/suggestions/:id/history', async (req, res) => {
   try {
     if (requireAdmin(req, res)) return;
     const { id } = req.params;
-    // Audit entries for suggestions live in the moderationLog collection
-    // (see createAuditEntry helper). Query both possible collections and
-    // merge for backward compatibility.
-    const [modSnap, auditSnap] = await Promise.all([
+    // Audit entries for suggestions may live in any of three collections:
+    //   - moderationLog: approve/reject/overturn/edit (via createAuditEntry)
+    //   - adminAuditLog: canonical admin actions
+    //   - auditLog: merge actions (written directly by merge route)
+    const [modSnap, adminAuditSnap, auditSnap] = await Promise.all([
       db
         .collection('moderationLog')
         .where('targetId', '==', id)
@@ -1667,8 +1719,13 @@ router.get('/admin/suggestions/:id/history', async (req, res) => {
         .where('targetId', '==', id)
         .where('targetType', '==', 'suggestion')
         .get(),
+      db
+        .collection('auditLog')
+        .where('targetId', '==', id)
+        .where('targetType', '==', 'suggestion')
+        .get(),
     ]);
-    const snap = { docs: [...modSnap.docs, ...auditSnap.docs] };
+    const snap = { docs: [...modSnap.docs, ...adminAuditSnap.docs, ...auditSnap.docs] };
     // Dedupe by id (same entry may appear in both moderationLog and adminAuditLog).
     const seen = new Set();
     const uniqueDocs = [];
