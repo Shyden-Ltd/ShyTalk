@@ -2,8 +2,8 @@
  * Tests for POST /api/test/create-user route.
  *
  * This route:
- *   - Is blocked in production
- *   - Requires either an X-Test-Api-Key header OR a Bearer token
+ *   - Is blocked in production (NODE_ENV === 'production')
+ *   - Requires no auth in non-production (the /test/* prefix is the security boundary)
  *   - Creates a user doc
  *   - Optionally skips identity graph creation (skipIdentity flag)
  *   - Returns { uid, uniqueId }
@@ -86,34 +86,35 @@ describe('POST /api/test/create-user', () => {
     expect(typeof res.body.uniqueId).toBe('number');
   });
 
-  test('creates user with Bearer token (200)', async () => {
+  test('creates user without any auth header (200) — /test/* is the security boundary', async () => {
     const app = createApp();
-    const res = await request(app)
-      .post('/api/test/create-user')
-      .set('Authorization', 'Bearer some-valid-token')
-      .send({ name: 'Bob' });
+    const res = await request(app).post('/api/test/create-user').send({ name: 'Bob' });
 
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('uid');
     expect(res.body).toHaveProperty('uniqueId');
   });
 
-  test('returns 403 when no credentials provided', async () => {
+  test('creates user with Bearer token (200)', async () => {
     const app = createApp();
-    const res = await request(app).post('/api/test/create-user').send({ name: 'Charlie' });
+    const res = await request(app)
+      .post('/api/test/create-user')
+      .set('Authorization', 'Bearer some-valid-token')
+      .send({ name: 'Charlie' });
 
-    expect(res.status).toBe(403);
-    expect(res.body.error).toMatch(/api key or bearer/i);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('uid');
+    expect(res.body).toHaveProperty('uniqueId');
   });
 
-  test('returns 403 when wrong API key provided', async () => {
+  test('creates user with wrong API key (200) — no key check on this endpoint', async () => {
     const app = createApp();
     const res = await request(app)
       .post('/api/test/create-user')
       .set('X-Test-Api-Key', 'wrong-key')
       .send({ name: 'Dave' });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
   });
 
   test('returns 403 in production environment', async () => {

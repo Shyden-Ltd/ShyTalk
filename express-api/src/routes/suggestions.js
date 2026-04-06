@@ -1351,6 +1351,17 @@ router.post('/admin/suggestions/:id/merge', async (req, res) => {
       createdAt: now(),
     });
 
+    // Write to moderationLog via createAuditEntry so the history endpoint
+    // (which queries moderationLog and adminAuditLog) can find this entry.
+    // Also write to auditLog for the audit-log tab query.
+    const mergeDetails = {
+      duplicateId: id,
+      originalId: targetId,
+      targetId,
+      mergedInto: targetId,
+      transferredUpvotes: dupVotes,
+    };
+    await createAuditEntry(req.auth.uniqueId, 'suggestion_merge', 'suggestion', id, mergeDetails);
     await db.collection('auditLog').add({
       adminUid: req.auth.uniqueId,
       action: 'suggestion_merge',
@@ -1358,13 +1369,7 @@ router.post('/admin/suggestions/:id/merge', async (req, res) => {
       targetType: 'suggestion',
       targetId: id,
       target: id,
-      details: {
-        duplicateId: id,
-        originalId: targetId,
-        targetId,
-        mergedInto: targetId,
-        transferredUpvotes: dupVotes,
-      },
+      details: mergeDetails,
       timestamp: now(),
     });
 

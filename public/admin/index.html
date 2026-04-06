@@ -4914,14 +4914,7 @@
                 </div>
                 <div>
                     <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Target</label>
-                    <select id="audit-log-filter-target" style="padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;min-height:32px;">
-                        <option value="">All targets</option>
-                        <option value="suggestion">suggestion</option>
-                        <option value="user">user</option>
-                        <option value="device">device</option>
-                        <option value="maintenance">maintenance</option>
-                        <option value="system">system</option>
-                    </select>
+                    <input type="text" id="audit-log-filter-target" placeholder="target ID or type" style="padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;min-height:32px;width:160px;">
                 </div>
                 <div>
                     <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Start</label>
@@ -7534,6 +7527,12 @@
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     }
+
+    // Poll for new audit log entries every 3 seconds when the Audit Log tab is active.
+    // This allows the admin to see newly created entries without a page refresh.
+    setInterval(function () {
+      if (currentTab === "audit-log") loadAuditLogMain();
+    }, 3000);
 
     // ── Security panel ──────────────────────────────────────────
     async function loadSecurityPanel() {

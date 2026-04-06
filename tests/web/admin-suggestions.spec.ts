@@ -858,7 +858,7 @@ test.describe('Admin Audit Log (11.18)', () => {
   });
 
   test('filter by target type works', async ({ page }) => {
-    await page.locator('#audit-log-filter-target').selectOption('suggestion');
+    await page.locator('#audit-log-filter-target').fill('suggestion');
     await page.locator('#audit-log-search-btn').click();
     await waitForAuditLogLoaded(page);
     const rows = page.locator('#audit-log-tbody tr');

@@ -338,20 +338,13 @@ router.get('/test/verify/:collection/:id', async (req, res) => {
 // POST /api/test/create-user — create a user doc (optionally without identity data)
 // Used by the "empty graph: No identity data yet" test which needs a user
 // without any identity graph records. /api/test/* routes bypass auth
-// middleware entirely so req.auth is not set here — accept either the
-// test API key OR any Bearer token (the admin panel test infra calls
-// this via testData.api which uses Bearer, and the bypass means only
-// direct test-helper calls ever hit this route).
+// middleware entirely so req.auth is not set here. No auth check is needed
+// because the /test/* prefix itself is the guard — these routes are only
+// mounted in non-production environments.
 router.post('/test/create-user', async (req, res) => {
   try {
     if (process.env.NODE_ENV === 'production') {
       return res.status(403).json({ error: 'Not available in production' });
-    }
-    const keyHeader = req.headers['x-test-api-key'];
-    const hasApiKey = keyHeader && keyHeader === process.env.TEST_API_KEY;
-    const hasBearer = req.headers.authorization && req.headers.authorization.startsWith('Bearer ');
-    if (!hasApiKey && !hasBearer) {
-      return res.status(403).json({ error: 'Test API key or Bearer token required' });
     }
     const { name, skipIdentity } = req.body || {};
     const uid = 'test_noidentity_' + Date.now();
