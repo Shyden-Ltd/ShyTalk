@@ -264,7 +264,10 @@ describe('11.2 — Lifecycle Transitions', () => {
         .expect(200);
 
       expect(res.body.success).toBe(true);
-      expect(mockDocUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'accepted' }));
+      expect(mockDocUpdate).toHaveBeenCalledWith(
+        expect.stringContaining('suggestions/'),
+        expect.objectContaining({ status: 'accepted' }),
+      );
     });
 
     test('non-admin returns 403', async () => {
@@ -327,6 +330,7 @@ describe('11.2 — Lifecycle Transitions', () => {
 
       expect(res.body.success).toBe(true);
       expect(mockDocUpdate).toHaveBeenCalledWith(
+        expect.stringContaining('suggestions/'),
         expect.objectContaining({
           status: 'rejected',
           rejectReason: 'Duplicate of existing feature',
@@ -345,7 +349,10 @@ describe('11.2 — Lifecycle Transitions', () => {
         .expect(200);
 
       expect(res.body.success).toBe(true);
-      expect(mockDocUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'rejected' }));
+      expect(mockDocUpdate).toHaveBeenCalledWith(
+        expect.stringContaining('suggestions/'),
+        expect.objectContaining({ status: 'rejected' }),
+      );
     });
 
     test('reason stored in rejectReason field', async () => {
@@ -455,6 +462,7 @@ describe('11.2 — Lifecycle Transitions', () => {
 
       expect(res.body.success).toBe(true);
       expect(mockDocUpdate).toHaveBeenCalledWith(
+        expect.stringContaining('suggestions/'),
         expect.objectContaining({
           status: 'planned',
           linkedRoadmapFeature: 'feat-1',
@@ -473,7 +481,10 @@ describe('11.2 — Lifecycle Transitions', () => {
         .send({ status: 'planned', linkedRoadmapFeature: 'feat-1' })
         .expect(200);
 
-      expect(mockDocUpdate).toHaveBeenCalledWith(expect.objectContaining({ votingLocked: true }));
+      expect(mockDocUpdate).toHaveBeenCalledWith(
+        expect.stringContaining('suggestions/'),
+        expect.objectContaining({ votingLocked: true }),
+      );
     });
 
     test('comments locked to read-only on planned suggestion', async () => {
@@ -487,7 +498,10 @@ describe('11.2 — Lifecycle Transitions', () => {
         .send({ status: 'planned', linkedRoadmapFeature: 'feat-1' })
         .expect(200);
 
-      expect(mockDocUpdate).toHaveBeenCalledWith(expect.objectContaining({ commentsLocked: true }));
+      expect(mockDocUpdate).toHaveBeenCalledWith(
+        expect.stringContaining('suggestions/'),
+        expect.objectContaining({ commentsLocked: true }),
+      );
     });
 
     test('audit log entry created on plan', async () => {
@@ -550,6 +564,7 @@ describe('11.2 — Lifecycle Transitions', () => {
 
       expect(res.body.success).toBe(true);
       expect(mockDocUpdate).toHaveBeenCalledWith(
+        expect.stringContaining('suggestions/'),
         expect.objectContaining({
           status: 'completed',
           completedAt: expect.anything(),
@@ -669,7 +684,10 @@ describe('11.2 — Lifecycle Transitions', () => {
         .expect(200);
 
       expect(res.body.success).toBe(true);
-      expect(mockDocUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'accepted' }));
+      expect(mockDocUpdate).toHaveBeenCalledWith(
+        expect.stringContaining('suggestions/'),
+        expect.objectContaining({ status: 'accepted' }),
+      );
       // blockedTopics document should have been deleted
       expect(mockDocDelete).toHaveBeenCalled();
     });
@@ -691,6 +709,7 @@ describe('11.2 — Lifecycle Transitions', () => {
 
       expect(res.body.success).toBe(true);
       expect(mockDocUpdate).toHaveBeenCalledWith(
+        expect.stringContaining('suggestions/'),
         expect.objectContaining({
           status: 'accepted',
           votingLocked: false,
@@ -715,6 +734,7 @@ describe('11.2 — Lifecycle Transitions', () => {
 
       expect(res.body.success).toBe(true);
       expect(mockDocUpdate).toHaveBeenCalledWith(
+        expect.stringContaining('suggestions/'),
         expect.objectContaining({
           status: 'planned',
           completedAt: null,
@@ -737,6 +757,7 @@ describe('11.2 — Lifecycle Transitions', () => {
 
       expect(res.body.success).toBe(true);
       expect(mockDocUpdate).toHaveBeenCalledWith(
+        expect.stringContaining('suggestions/'),
         expect.objectContaining({
           status: 'rejected',
           rejectReason: 'Violates platform guidelines',
@@ -763,6 +784,7 @@ describe('11.2 — Lifecycle Transitions', () => {
 
       expect(res.body.success).toBe(true);
       expect(mockDocUpdate).toHaveBeenCalledWith(
+        expect.stringContaining('suggestions/'),
         expect.objectContaining({
           status: 'planned',
           linkedRoadmapFeature: 'feat-2',
@@ -802,6 +824,7 @@ describe('11.2 — Lifecycle Transitions', () => {
         .expect(200);
       expect(res2.body.success).toBe(true);
       expect(mockDocUpdate).toHaveBeenCalledWith(
+        expect.stringContaining('suggestions/'),
         expect.objectContaining({
           status: 'accepted',
           votingLocked: false,
@@ -1064,7 +1087,10 @@ describe('11.103 — Admin Suggestion Edge Cases Extended', () => {
       .expect(200);
 
     expect(res.body.success).toBe(true);
-    expect(mockDocUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'rejected' }));
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      expect.stringContaining('suggestions/'),
+      expect.objectContaining({ status: 'rejected' }),
+    );
   });
 
   test('admin links suggestion to non-existent roadmap feature: returns 400', async () => {
@@ -1272,7 +1298,10 @@ describe('11.106 — Concurrent Admin Operations Extended', () => {
 
     expect(res.body.success).toBe(true);
     // The rejection should go through regardless of concurrent edit
-    expect(mockDocUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'rejected' }));
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      expect.stringContaining('suggestions/'),
+      expect.objectContaining({ status: 'rejected' }),
+    );
   });
 
   test('admin merges while another admin approves: first wins, second gets 409', async () => {

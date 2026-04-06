@@ -447,7 +447,10 @@ describe('11.31 — Integration Tests Full Flows', () => {
       await request(adminApp)
         .put('/api/admin/suggestions/new-id/status')
         .send({ status: 'accepted' });
-      expect(mockDocUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'accepted' }));
+      expect(mockDocUpdate).toHaveBeenCalledWith(
+        expect.stringContaining('suggestions/'),
+        expect.objectContaining({ status: 'accepted' }),
+      );
       jest.clearAllMocks();
       setupDocMocks({ 'suggestions/new-id': makeSuggestionDoc('new-id', { status: 'accepted' }) });
       const voterApp = createApp({ uniqueId: 2002 });
@@ -460,7 +463,10 @@ describe('11.31 — Integration Tests Full Flows', () => {
       await request(adminApp)
         .put('/api/admin/suggestions/new-id/status')
         .send({ status: 'planned', linkedRoadmapFeature: 'feat-1' });
-      expect(mockDocUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'planned' }));
+      expect(mockDocUpdate).toHaveBeenCalledWith(
+        expect.stringContaining('suggestions/'),
+        expect.objectContaining({ status: 'planned' }),
+      );
       jest.clearAllMocks();
       setupDocMocks({
         'suggestions/new-id': makeSuggestionDoc('new-id', {
@@ -471,7 +477,10 @@ describe('11.31 — Integration Tests Full Flows', () => {
       await request(adminApp)
         .put('/api/admin/suggestions/new-id/status')
         .send({ status: 'completed' });
-      expect(mockDocUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }));
+      expect(mockDocUpdate).toHaveBeenCalledWith(
+        expect.stringContaining('suggestions/'),
+        expect.objectContaining({ status: 'completed' }),
+      );
     });
   });
 
@@ -492,6 +501,7 @@ describe('11.31 — Integration Tests Full Flows', () => {
         .put('/api/admin/suggestions/new-id/status')
         .send({ status: 'rejected', reason: 'Not in scope' });
       expect(mockDocUpdate).toHaveBeenCalledWith(
+        expect.stringContaining('suggestions/'),
         expect.objectContaining({ status: 'rejected', rejectReason: 'Not in scope' }),
       );
     });
@@ -789,7 +799,10 @@ describe('11.38 — Network Failure Resilience', () => {
       .put('/api/admin/suggestions/sug-1/status')
       .send({ status: 'accepted' });
     if (res.status === 200) {
-      expect(mockDocUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'accepted' }));
+      expect(mockDocUpdate).toHaveBeenCalledWith(
+        expect.stringContaining('suggestions/'),
+        expect.objectContaining({ status: 'accepted' }),
+      );
     }
   });
   test('Firestore transaction failure on vote: returns 500', async () => {

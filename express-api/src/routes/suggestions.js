@@ -1205,9 +1205,7 @@ router.put('/admin/suggestions/:id/status', async (req, res) => {
       }
     }
 
-    await db.runTransaction(async (t) => {
-      await t.update(updates);
-    });
+    await db.doc(`suggestions/${id}`).update(updates);
 
     // Create moderation log entry
     await createAuditEntry(

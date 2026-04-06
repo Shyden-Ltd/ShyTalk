@@ -527,6 +527,7 @@ describe('PUT /admin/suggestions/:id/status — blocked topic cleanup on overtur
 
     // The transaction update should include rejectReason: null (first arg is path or data)
     expect(mockDocUpdate).toHaveBeenCalledWith(
+      expect.stringContaining('suggestions/'),
       expect.objectContaining({
         status: 'accepted',
         rejectReason: null,
@@ -551,6 +552,7 @@ describe('PUT /admin/suggestions/:id/status — blocked topic cleanup on overtur
       .expect(200);
 
     expect(mockDocUpdate).toHaveBeenCalledWith(
+      expect.stringContaining('suggestions/'),
       expect.objectContaining({
         votingLocked: false,
         commentsLocked: false,
