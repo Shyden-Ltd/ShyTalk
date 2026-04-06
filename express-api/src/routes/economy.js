@@ -422,7 +422,7 @@ function rollWeightedGift(weights, winnableGifts) {
   const total = weights.reduce((s, w) => s + w, 0);
   if (total <= 0) return { gift: winnableGifts[0], fallback: true };
 
-  const roll = Math.random() * total;
+  const roll = (require('crypto').randomInt(1_000_000) / 1_000_000) * total;
   let cumulative = 0,
     selectedIndex = 0;
   for (let j = 0; j < weights.length; j++) {

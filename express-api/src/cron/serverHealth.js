@@ -42,6 +42,7 @@ async function serverHealth(alertManager) {
     try {
       await new Promise((resolve) => {
         execFile('pm2', ['jlist'], { timeout: 10000 }, (err, stdout) => {
+          // NOSONAR: PATH is inherited from the server process which runs under a managed service account
           if (err || !stdout) {
             resolve();
             return;
