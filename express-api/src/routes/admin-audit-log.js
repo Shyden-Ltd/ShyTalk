@@ -75,6 +75,7 @@ router.get('/admin/audit-log', async (req, res) => {
       db.collection('auditLog').orderBy('timestamp', 'desc').get(),
       db.collection('adminAuditLog').orderBy('timestamp', 'desc').get(),
     ]);
+    const totalSize = Math.max(auditSnap.size || 0, adminSnap.size || 0);
     const seen = new Set();
     const merged = [];
     for (const d of [...adminSnap.docs, ...auditSnap.docs]) {
@@ -83,7 +84,6 @@ router.get('/admin/audit-log', async (req, res) => {
       merged.push({ id: d.id, ...d.data() });
     }
     merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-    const snap = { size: merged.length, docs: merged.map((e) => ({ id: e.id, data: () => e })) };
 
     let entries = merged;
 
@@ -142,7 +142,7 @@ router.get('/admin/audit-log', async (req, res) => {
 
     // Use snap.size for total when available (supports large collections
     // where not all docs are returned in the docs array)
-    const total = Math.max(snap.size || 0, entries.length);
+    const total = Math.max(totalSize, entries.length);
     const offset = (page - 1) * pageSize;
     const paged = entries.slice(offset, offset + pageSize);
 

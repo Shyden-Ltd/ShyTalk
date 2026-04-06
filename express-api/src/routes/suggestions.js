@@ -853,13 +853,7 @@ async function createAuditEntry(adminUid, action, targetType, targetId, details)
       details: details || {},
       timestamp: now(),
     };
-    // Write to both moderationLog (legacy) and adminAuditLog (canonical)
-    // so both the audit log tab and the suggestion history endpoint see
-    // the same entries.
-    await Promise.all([
-      db.doc(`moderationLog/${entryId}`).set(entry),
-      db.doc(`adminAuditLog/${entryId}`).set(entry),
-    ]);
+    await db.doc(`moderationLog/${entryId}`).set(entry);
   } catch (err) {
     log.error('admin-suggestions', 'Failed to write moderation log', { error: err.message });
   }
@@ -1211,12 +1205,8 @@ router.put('/admin/suggestions/:id/status', async (req, res) => {
       }
     }
 
-    // Atomically update the suggestion. Firestore transaction.update() requires
-    // a DocumentReference as its first argument — the previous code called
-    // `t.update(updates)` with just the update data, which throws at runtime.
     await db.runTransaction(async (t) => {
-      const docRef = db.doc(`suggestions/${id}`);
-      t.update(docRef, updates);
+      await t.update(updates);
     });
 
     // Create moderation log entry
@@ -1361,14 +1351,21 @@ router.post('/admin/suggestions/:id/merge', async (req, res) => {
       createdAt: now(),
     });
 
-    // Create audit log entry via the shared helper so both moderationLog
-    // and adminAuditLog collections are written to consistently.
-    await createAuditEntry(req.auth.uniqueId, 'suggestion_merge', 'suggestion', id, {
-      duplicateId: id,
-      originalId: targetId,
-      targetId,
-      mergedInto: targetId,
-      transferredUpvotes: dupVotes,
+    await db.collection('auditLog').add({
+      adminUid: req.auth.uniqueId,
+      action: 'suggestion_merge',
+      actionType: 'suggestion_merge',
+      targetType: 'suggestion',
+      targetId: id,
+      target: id,
+      details: {
+        duplicateId: id,
+        originalId: targetId,
+        targetId,
+        mergedInto: targetId,
+        transferredUpvotes: dupVotes,
+      },
+      timestamp: now(),
     });
 
     log.info('admin-suggestions', 'Suggestion merged as duplicate', {
