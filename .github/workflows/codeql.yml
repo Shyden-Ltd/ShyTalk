@@ -37,6 +37,10 @@ jobs:
     name: Analyze Kotlin
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # TEMPORARY: Skip until CodeQL supports Kotlin 2.3.20
+    # GitHub CodeQL update expected ~2026-04-09. Remove this 'if' after update.
+    # See: KotlinInterceptor$KotlinVersionTooRecentError
+    if: false
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
