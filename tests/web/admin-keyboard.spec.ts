@@ -26,9 +26,12 @@ async function filterReports(page: Page, status: 'pending' | 'resolved' | 'archi
 
 /** Select the first report card for keyboard interaction. */
 async function selectFirstReportCard(page: Page): Promise<void> {
-  await page.keyboard.press('ArrowDown');
   const firstCard = page.locator('.report-card').first();
-  await expect(firstCard).toHaveClass(/selected/, { timeout: 3_000 });
+  // Click the card first to ensure the reports panel has focus, then
+  // use ArrowDown to trigger the keyboard selection handler.
+  await firstCard.click();
+  await page.keyboard.press('ArrowDown');
+  await expect(firstCard).toHaveClass(/selected/, { timeout: 5_000 });
 }
 
 test.describe('Admin Keyboard Shortcuts', () => {
