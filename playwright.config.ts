@@ -39,10 +39,12 @@ export default defineConfig({
     {
       name: 'mobile-chrome',
       use: { ...devices['Pixel 5'] },
+      timeout: 40_000, // Mobile viewports render slower — avoid 20s timeouts
     },
     {
       name: 'mobile-safari',
       use: { ...devices['iPhone 13'] },
+      timeout: 40_000,
     },
   ],
 });
