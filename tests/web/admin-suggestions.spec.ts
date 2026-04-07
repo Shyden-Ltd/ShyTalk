@@ -2,6 +2,7 @@ import { test, expect, TestData } from './fixtures/admin';
 import { adminLogin, navigateToTab } from './helpers/admin-auth';
 import type { Page } from '@playwright/test';
 
+
 /**
  * Admin Panel — Suggestions Moderation, Unified Ban Management,
  * Audit Log, Maintenance, Moderation Edge Cases, Identity Graph,
@@ -425,6 +426,15 @@ async function cleanupSuggestions(testData: TestData, ids: string[]): Promise<vo
   for (const id of ids) { try { await testData.api.delete(`/api/admin/suggestions/${id}`); } catch { /* ignore */ } }
 }
 
+/** Refresh the suggestions list without a full page reload.
+ * Switches away from and back to the Suggestions tab, which triggers
+ * loadSuggestions() in the admin panel JS. Much faster than reload+login. */
+async function refreshSuggestionsList(page: Page): Promise<void> {
+  await navigateToTab(page, 'Users');
+  await navigateToSuggestions(page);
+  await waitForPendingQueueLoaded(page);
+}
+
 async function navigateToAuditLog(page: Page): Promise<void> {
   await navigateToTab(page, 'Audit Log');
   await waitForAuditLogLoaded(page);
@@ -457,8 +467,7 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
   test('pending queue loads with suggestion cards showing title, description, submitter, timestamp', async ({ page, testData }) => {
     const result = await seedSuggestion(testData);
     seededIds.push(result.id);
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page);
-    await waitForPendingQueueLoaded(page);
+    await refreshSuggestionsList(page);
     const card = page.locator('#suggestions-pending-queue .suggestion-card').first();
     await expect(card).toBeVisible();
     // Use toBeAttached for inner elements — on mobile viewports the card may
@@ -472,8 +481,7 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
   test('approve button moves suggestion to accepted and removes from queue', async ({ page, testData }) => {
     const result = await seedSuggestion(testData);
     seededIds.push(result.id);
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page);
-    await waitForPendingQueueLoaded(page);
+    await refreshSuggestionsList(page);
     const card = page.locator(`#suggestions-pending-queue .suggestion-card[data-id="${result.id}"]`);
     await expect(card).toBeVisible();
     await card.locator('.sg-btn-approve').click();
@@ -484,8 +492,7 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
   test('reject button with reason stores the reason', async ({ page, testData }) => {
     const result = await seedSuggestion(testData);
     seededIds.push(result.id);
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page);
-    await waitForPendingQueueLoaded(page);
+    await refreshSuggestionsList(page);
     const card = page.locator(`#suggestions-pending-queue .suggestion-card[data-id="${result.id}"]`);
     await expect(card).toBeVisible();
     await card.locator('.sg-btn-reject').click();
@@ -502,8 +509,7 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
   test('reject without reason shows warning that reason will be displayed publicly', async ({ page, testData }) => {
     const result = await seedSuggestion(testData);
     seededIds.push(result.id);
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page);
-    await waitForPendingQueueLoaded(page);
+    await refreshSuggestionsList(page);
     const card = page.locator(`#suggestions-pending-queue .suggestion-card[data-id="${result.id}"]`);
     await card.locator('.sg-btn-reject').click();
     const rejectDialog = page.locator('#suggestion-reject-dialog');
@@ -516,8 +522,7 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
   test('reject reason field is optional but UI makes encouragement clear', async ({ page, testData }) => {
     const result = await seedSuggestion(testData);
     seededIds.push(result.id);
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page);
-    await waitForPendingQueueLoaded(page);
+    await refreshSuggestionsList(page);
     const card = page.locator(`#suggestions-pending-queue .suggestion-card[data-id="${result.id}"]`);
     await card.locator('.sg-btn-reject').click();
     const rejectDialog = page.locator('#suggestion-reject-dialog');
@@ -531,8 +536,7 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
     const original = await seedSuggestion(testData, { title: 'Original Suggestion E2E', status: 'accepted' });
     const duplicate = await seedSuggestion(testData, { title: 'Duplicate Suggestion E2E' });
     seededIds.push(original.id, duplicate.id);
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page);
-    await waitForPendingQueueLoaded(page);
+    await refreshSuggestionsList(page);
     const card = page.locator(`#suggestions-pending-queue .suggestion-card[data-id="${duplicate.id}"]`);
     await expect(card).toBeVisible();
     await card.locator('.sg-btn-merge').click();
@@ -578,7 +582,7 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
     const duplicate = await seedSuggestion(testData, { title: 'DisputeQ Dup E2E', status: 'merged' });
     seededIds.push(original.id, duplicate.id);
     await testData.api.post(`/api/admin/suggestions/${duplicate.id}/dispute`, { reason: 'Different features' });
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page);
+    await refreshSuggestionsList(page);
     await page.locator('#suggestions-dispute-tab').click();
     await waitForDisputeQueueLoaded(page);
     await expect(page.locator('#suggestions-dispute-queue .dispute-card').first()).toBeVisible();
@@ -610,8 +614,7 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
     test.setTimeout(40_000);
     const result = await seedSuggestion(testData, { status: 'accepted' });
     seededIds.push(result.id);
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page);
-    await waitForPendingQueueLoaded(page);
+    await refreshSuggestionsList(page);
     const acceptedTab = page.locator('#suggestions-accepted-tab');
     await acceptedTab.click();
     await expect(acceptedTab).toHaveClass(/active/, { timeout: 5_000 });
@@ -634,7 +637,7 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
   test('complete button with confirmation dialog', async ({ page, testData }) => {
     const result = await seedSuggestion(testData, { status: 'planned', linkedRoadmapFeature: 'voice-rooms', linkedRoadmapId: 'voice-rooms' });
     seededIds.push(result.id);
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page);
+    await refreshSuggestionsList(page);
     await page.locator('#suggestions-planned-tab').click();
     const card = page.locator(`.suggestion-card[data-id="${result.id}"]`);
     await expect(card).toBeVisible({ timeout: 10_000 });
@@ -649,7 +652,7 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
   test('overturn available on all non-pending states with correct state transitions', async ({ page, testData }) => {
     const result = await seedSuggestion(testData, { status: 'rejected' });
     seededIds.push(result.id);
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page);
+    await refreshSuggestionsList(page);
     await page.locator('#suggestions-rejected-tab').click();
     const card = page.locator(`.suggestion-card[data-id="${result.id}"]`);
     await expect(card).toBeVisible({ timeout: 10_000 });
@@ -667,7 +670,7 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
     const result = await seedSuggestion(testData, { status: 'accepted' });
     seededIds.push(result.id);
     await testData.api.post(`/api/admin/suggestions/${result.id}/status`, { status: 'planned' });
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page);
+    await refreshSuggestionsList(page);
     await page.locator('#suggestions-planned-tab').click();
     const card = page.locator(`.suggestion-card[data-id="${result.id}"]`);
     await expect(card).toBeVisible({ timeout: 10_000 });
@@ -681,8 +684,7 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
     test.setTimeout(40_000);
     const result = await seedSuggestion(testData);
     seededIds.push(result.id);
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page);
-    await waitForPendingQueueLoaded(page);
+    await refreshSuggestionsList(page);
     const card = page.locator(`#suggestions-pending-queue .suggestion-card[data-id="${result.id}"]`);
     await expect(card).toBeVisible();
     const identityLink = card.locator('.submitter-identity-link');
@@ -704,8 +706,7 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
     const existing = await seedSuggestion(testData, { title: 'Dark Mode Support', status: 'accepted' });
     const pending = await seedSuggestion(testData, { title: 'Dark Mode Feature Request' });
     seededIds.push(existing.id, pending.id);
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page);
-    await waitForPendingQueueLoaded(page);
+    await refreshSuggestionsList(page);
     const card = page.locator(`#suggestions-pending-queue .suggestion-card[data-id="${pending.id}"]`);
     await expect(card).toBeVisible();
     await expect(card.locator('.duplicate-highlight')).toBeVisible();
@@ -715,8 +716,7 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
   test('contact opt-in indicator visible on suggestion card', async ({ page, testData }) => {
     const result = await seedSuggestion(testData, { contactOptIn: true });
     seededIds.push(result.id);
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page);
-    await waitForPendingQueueLoaded(page);
+    await refreshSuggestionsList(page);
     const card = page.locator(`#suggestions-pending-queue .suggestion-card[data-id="${result.id}"]`);
     await expect(card).toBeVisible();
     await expect(card.locator('.contact-opt-in-indicator')).toBeVisible();
@@ -1396,7 +1396,7 @@ test.describe('Admin Notifications (11.92)', () => {
     const dup = await seedSuggestion(testData, { status: 'merged' });
     seededIds.push(orig.id, dup.id);
     await testData.api.post(`/api/admin/suggestions/${dup.id}/dispute`, { reason: 'Not dup' });
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page);
+    await refreshSuggestionsList(page);
     await expect(page.locator('#suggestions-dispute-tab').locator('.dispute-indicator, .badge')).toBeVisible({ timeout: 10_000 });
   });
 
@@ -1439,7 +1439,7 @@ test.describe('Admin Bulk Operations (11.93)', () => {
 
   test('bulk select: checkbox on each suggestion card', async ({ page, testData }) => {
     const r = await seedSuggestion(testData); seededIds.push(r.id);
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page); await waitForPendingQueueLoaded(page);
+    await refreshSuggestionsList(page);
     const cards = page.locator('#suggestions-pending-queue .suggestion-card');
     if (await cards.count() === 0) { test.skip(true, 'No cards'); return; }
     for (let i = 0; i < Math.min(await cards.count(), 5); i++) await expect(cards.nth(i).locator('input[type="checkbox"].sg-checkbox')).toBeAttached();
@@ -1447,7 +1447,7 @@ test.describe('Admin Bulk Operations (11.93)', () => {
 
   test('bulk select all: header checkbox selects visible page', async ({ page, testData }) => {
     seededIds.push(...await seedMultipleSuggestions(testData, 3));
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page); await waitForPendingQueueLoaded(page);
+    await refreshSuggestionsList(page);
     await page.locator('#suggestions-select-all').check();
     const cbs = page.locator('#suggestions-pending-queue .sg-checkbox');
     for (let i = 0; i < await cbs.count(); i++) await expect(cbs.nth(i)).toBeChecked();
@@ -1456,7 +1456,7 @@ test.describe('Admin Bulk Operations (11.93)', () => {
   test('bulk approve: confirmation dialog, all transitioned', async ({ page, testData }) => {
     test.setTimeout(40_000);
     const ids = await seedMultipleSuggestions(testData, 3); seededIds.push(...ids);
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page); await waitForPendingQueueLoaded(page);
+    await refreshSuggestionsList(page);
     await page.locator('#suggestions-select-all').check();
     await page.locator('#suggestions-bulk-approve-btn').click();
     await expect(page.locator('#suggestions-bulk-confirm-dialog')).toBeVisible();
@@ -1467,7 +1467,7 @@ test.describe('Admin Bulk Operations (11.93)', () => {
 
   test('bulk reject: confirmation dialog, optional shared reason', async ({ page, testData }) => {
     const ids = await seedMultipleSuggestions(testData, 3); seededIds.push(...ids);
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page); await waitForPendingQueueLoaded(page);
+    await refreshSuggestionsList(page);
     await page.locator('#suggestions-select-all').check();
     await page.locator('#suggestions-bulk-reject-btn').click();
     const dlg = page.locator('#suggestions-bulk-reject-dialog');
@@ -1480,7 +1480,7 @@ test.describe('Admin Bulk Operations (11.93)', () => {
 
   test('bulk merge: disabled (must be done individually)', async ({ page, testData }) => {
     seededIds.push((await seedSuggestion(testData)).id);
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page); await waitForPendingQueueLoaded(page);
+    await refreshSuggestionsList(page);
     await page.locator('#suggestions-select-all').check();
     await expect(page.locator('#suggestions-bulk-merge-btn')).toBeDisabled();
   });
@@ -1504,7 +1504,7 @@ test.describe('Admin Bulk Operations (11.93)', () => {
 
   test('bulk action: progress indicator for large batches', async ({ page, testData }) => {
     seededIds.push(...await seedMultipleSuggestions(testData, 5));
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page); await waitForPendingQueueLoaded(page);
+    await refreshSuggestionsList(page);
     await page.locator('#suggestions-select-all').check();
     await page.locator('#suggestions-bulk-approve-btn').click();
     await expect(page.locator('#suggestions-bulk-confirm-dialog')).toBeVisible();
@@ -1642,7 +1642,7 @@ test.describe('Admin Contact Opt-In Flow (11.95)', () => {
 
   test('shows "Open to contact" indicator when submitter opted in', async ({ page, testData }) => {
     const r = await seedSuggestion(testData, { contactOptIn: true }); seededIds.push(r.id);
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page); await waitForPendingQueueLoaded(page);
+    await refreshSuggestionsList(page);
     const card = page.locator(`#suggestions-pending-queue .suggestion-card[data-id="${r.id}"]`);
     await expect(card).toBeVisible();
     await expect(card.locator('.contact-opt-in-indicator')).toBeVisible();
@@ -1651,7 +1651,7 @@ test.describe('Admin Contact Opt-In Flow (11.95)', () => {
 
   test('shows "No contact" when submitter did not opt in', async ({ page, testData }) => {
     const r = await seedSuggestion(testData, { contactOptIn: false }); seededIds.push(r.id);
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page); await waitForPendingQueueLoaded(page);
+    await refreshSuggestionsList(page);
     const card = page.locator(`#suggestions-pending-queue .suggestion-card[data-id="${r.id}"]`);
     await expect(card).toBeVisible();
     await expect(card.locator('.contact-opt-in-indicator')).toContainText(/no contact/i);
@@ -1659,7 +1659,7 @@ test.describe('Admin Contact Opt-In Flow (11.95)', () => {
 
   test('admin clicks "Contact submitter": shows uniqueId to look up in Users tab', async ({ page, testData }) => {
     const r = await seedSuggestion(testData, { contactOptIn: true }); seededIds.push(r.id);
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page); await waitForPendingQueueLoaded(page);
+    await refreshSuggestionsList(page);
     const card = page.locator(`#suggestions-pending-queue .suggestion-card[data-id="${r.id}"]`);
     await expect(card).toBeVisible();
     const btn = card.locator('.btn-contact-submitter');
@@ -1673,7 +1673,7 @@ test.describe('Admin Contact Opt-In Flow (11.95)', () => {
 
   test('contact button disabled when submitter did not opt in', async ({ page, testData }) => {
     const r = await seedSuggestion(testData, { contactOptIn: false }); seededIds.push(r.id);
-    await page.reload(); await adminLogin(page); await navigateToSuggestions(page); await waitForPendingQueueLoaded(page);
+    await refreshSuggestionsList(page);
     const card = page.locator(`#suggestions-pending-queue .suggestion-card[data-id="${r.id}"]`);
     await expect(card).toBeVisible();
     await expect(card.locator('.btn-contact-submitter')).toBeDisabled();

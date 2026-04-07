@@ -37,7 +37,10 @@ async function selectFirstReportCard(page: Page): Promise<void> {
 test.describe('Admin Keyboard Shortcuts', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, browserName }) => {
+    // Keyboard shortcuts are desktop-only — skip on mobile viewports
+    const projectName = test.info().project.name;
+    test.skip(projectName.includes('mobile'), 'Keyboard shortcuts not applicable on mobile viewports');
     await adminLogin(page);
   });
 
