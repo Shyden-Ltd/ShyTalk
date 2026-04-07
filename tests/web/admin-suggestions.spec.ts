@@ -1178,8 +1178,14 @@ test.describe('Admin Moderation Edge Cases (11.30)', () => {
     // Bulk approve calls individual approve endpoints, so audit entries use 'approve' action
     await page.locator('#audit-log-filter-action').selectOption('approve');
     await page.locator('#audit-log-search-btn').click();
-    await waitForAuditLogLoaded(page);
-    expect(await page.locator('#audit-log-tbody tr').count()).toBeGreaterThanOrEqual(10);
+    await page.waitForFunction(() => {
+      const tbody = document.getElementById('audit-log-tbody');
+      if (!tbody) return false;
+      const rows = tbody.querySelectorAll('tr');
+      if (rows.length < 10) return false;
+      const firstAction = rows[0].querySelector('.audit-action');
+      return firstAction && firstAction.textContent!.toLowerCase().includes('approve');
+    }, { timeout: 15_000 });
   });
 });
 
@@ -1485,8 +1491,15 @@ test.describe('Admin Bulk Operations (11.93)', () => {
     await navigateToAuditLog(page);
     await page.locator('#audit-log-filter-action').selectOption('approve');
     await page.locator('#audit-log-search-btn').click();
-    await waitForAuditLogLoaded(page);
-    expect(await page.locator('#audit-log-tbody tr').count()).toBeGreaterThanOrEqual(3);
+    // Wait for filtered results with approve entries to load
+    await page.waitForFunction(() => {
+      const tbody = document.getElementById('audit-log-tbody');
+      if (!tbody) return false;
+      const rows = tbody.querySelectorAll('tr');
+      if (rows.length < 3) return false;
+      const firstAction = rows[0].querySelector('.audit-action');
+      return firstAction && firstAction.textContent!.toLowerCase().includes('approve');
+    }, { timeout: 10_000 });
   });
 
   test('bulk action: progress indicator for large batches', async ({ page, testData }) => {

@@ -70,8 +70,10 @@ test.describe('Admin Fun Facts', () => {
 
   // ── Test 1: Seeded fact appears in list — API verify ──
   test('seeded fact appears in list with API verification', async ({ page, testData }) => {
-    // The seeded fact text should be visible in the list
-    const card = factCard(page, testData.funFact.text);
+    // The seeded fact text should be visible in the list.
+    // Use .first() because previous test runs may have left duplicate entries
+    // with the same prefix pattern (the emulator accumulates across runs).
+    const card = factCard(page, testData.funFact.text).first();
     await expect(card).toBeVisible({ timeout: 15_000 });
 
     // Card should show category badge "Science" and emoji
