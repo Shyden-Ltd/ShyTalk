@@ -16,6 +16,7 @@ if (process.env.ALLURE_ENABLED === 'true') {
 }
 
 export default defineConfig({
+  globalSetup: './tests/web/global-setup.ts',
   testDir: './tests/web',
   testIgnore: ['**/auth.setup.ts'],
   timeout: 20_000,

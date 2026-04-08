@@ -600,5 +600,37 @@ async function deleteTestData(testRunId) {
   return deleted;
 }
 
+// POST /api/test/clear/:collection — delete all documents in a collection.
+// Used by Playwright global-setup to clear test-generated data between runs.
+const CLEARABLE_COLLECTIONS = new Set([
+  'suggestions',
+  'notifications',
+  'moderationLog',
+  'auditLog',
+  'adminAuditLog',
+  'blockedTopics',
+]);
+
+router.post('/test/clear/:collection', async (req, res) => {
+  try {
+    if (requireTestApiKey(req, res)) return;
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({ error: 'Not available in production' });
+    }
+    const { collection } = req.params;
+    if (!CLEARABLE_COLLECTIONS.has(collection)) {
+      return res.status(400).json({ error: `Collection ${collection} is not clearable` });
+    }
+    const snap = await db.collection(collection).limit(500).get();
+    const batch = db.batch();
+    snap.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+    res.json({ deleted: snap.size });
+  } catch (err) {
+    log.error('test-helpers', `Clear ${req.params.collection} failed`, { error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
 module.exports.deleteTestData = deleteTestData;

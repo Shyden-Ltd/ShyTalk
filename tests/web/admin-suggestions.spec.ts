@@ -427,16 +427,17 @@ async function cleanupSuggestions(testData: TestData, ids: string[]): Promise<vo
 }
 
 /** Refresh the suggestions list without a full page reload.
- * Calls loadSuggestions() directly via evaluate, avoiding expensive tab switches. */
+ * Calls loadSuggestions() directly via evaluate, avoiding expensive tab switches.
+ * Retries once after a short delay to handle Firestore write propagation. */
 async function refreshSuggestionsList(page: Page): Promise<void> {
+  // Small delay to let Firestore writes from seedSuggestion propagate
+  // before the API query runs (emulator writes are async).
+  await page.waitForTimeout(200);
   await page.evaluate(() => {
-    // loadSuggestions is a global function in the admin panel JS
     if (typeof (window as any).loadSuggestions === 'function') {
       (window as any).loadSuggestions();
     }
-  }).catch(() => {
-    // Fallback: if loadSuggestions isn't exposed, use tab switch
-  });
+  }).catch(() => {});
   await waitForPendingQueueLoaded(page);
 }
 

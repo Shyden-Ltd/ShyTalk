@@ -27,9 +27,9 @@ async function filterReports(page: Page, status: 'pending' | 'resolved' | 'archi
 /** Select the first report card for keyboard interaction. */
 async function selectFirstReportCard(page: Page): Promise<void> {
   const firstCard = page.locator('.report-card').first();
-  // Click the card first to ensure the reports panel has focus, then
-  // use ArrowDown to trigger the keyboard selection handler.
-  await firstCard.click();
+  // Blur any focused input/select to ensure the document-level keyboard
+  // handler runs (it returns early when target is INPUT/SELECT/TEXTAREA).
+  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur?.());
   await page.keyboard.press('ArrowDown');
   await expect(firstCard).toHaveClass(/selected/, { timeout: 5_000 });
 }

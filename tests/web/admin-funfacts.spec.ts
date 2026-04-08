@@ -164,9 +164,12 @@ test.describe('Admin Fun Facts', () => {
 
   // ── Test 4: Delete fun fact — confirm, verify removed, reload, re-seed ──
   test('delete fun fact removes it permanently', async ({ page, testData }) => {
-    const factText = testData.funFact.text;
+    // Create a dedicated fun fact to delete — do NOT delete the seeded one,
+    // as serial block retries would then fail on the "seeded fact appears" test.
+    const factText = `e2e-delete-${Date.now()}`;
+    await testData.api.testWrite('funFacts', { text: factText, category: 'Science', emoji: '🧪', isActive: true });
+    await reloadAndReturn(page);
 
-    // Ensure the card is visible
     const card = factCard(page, factText);
     await expect(card).toBeVisible({ timeout: 15_000 });
 
