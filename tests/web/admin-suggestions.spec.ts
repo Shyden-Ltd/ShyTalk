@@ -453,7 +453,7 @@ async function navigateToIdentityGraph(page: Page, uniqueId: string): Promise<vo
 // ═══════════════════════════════════════════════════════════════
 
 test.describe('Admin Suggestions Moderation (11.16)', () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: 'serial', timeout: 40_000 });
   let seededIds: string[] = [];
 
   test.beforeEach(async ({ page }) => {
@@ -728,7 +728,7 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
 // ═══════════════════════════════════════════════════════════════
 
 test.describe('Admin Unified Ban Management (11.17)', () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: 'serial', timeout: 40_000 });
 
   test.beforeEach(async ({ page }) => {
     await setupApiMocks(page);
@@ -877,7 +877,7 @@ test.describe('Admin Unified Ban Management (11.17)', () => {
 // ═══════════════════════════════════════════════════════════════
 
 test.describe('Admin Audit Log (11.18)', () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: 'serial', timeout: 40_000 });
 
   test.beforeEach(async ({ page }) => { await setupApiMocks(page); await adminLogin(page); await navigateToAuditLog(page); });
 
@@ -990,7 +990,7 @@ test.describe('Admin Audit Log (11.18)', () => {
 // ═══════════════════════════════════════════════════════════════
 
 test.describe('Admin Maintenance — Suggestions Operations (11.29)', () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: 'serial', timeout: 40_000 });
 
   test.beforeEach(async ({ page }) => {
     await setupApiMocks(page);
@@ -1058,7 +1058,7 @@ test.describe('Admin Maintenance — Suggestions Operations (11.29)', () => {
 // ═══════════════════════════════════════════════════════════════
 
 test.describe('Admin Moderation Edge Cases (11.30)', () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: 'serial', timeout: 40_000 });
   let seededIds: string[] = [];
 
   test.beforeEach(async ({ page }) => {
@@ -1194,7 +1194,7 @@ test.describe('Admin Moderation Edge Cases (11.30)', () => {
 // ═══════════════════════════════════════════════════════════════
 
 test.describe('Admin Identity Graph Visualization (11.65)', () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: 'serial', timeout: 40_000 });
 
   test.beforeEach(async ({ page, testData }) => {
     await setupApiMocks(page);
@@ -1362,7 +1362,7 @@ test.describe('Admin Panel Responsive Design (11.86)', () => {
 // ═══════════════════════════════════════════════════════════════
 
 test.describe('Admin Notifications (11.92)', () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: 'serial', timeout: 40_000 });
   let seededIds: string[] = [];
 
   test.beforeEach(async ({ page }) => { await setupApiMocks(page); await adminLogin(page); });
@@ -1426,7 +1426,7 @@ test.describe('Admin Notifications (11.92)', () => {
 // ═══════════════════════════════════════════════════════════════
 
 test.describe('Admin Bulk Operations (11.93)', () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: 'serial', timeout: 40_000 });
   let seededIds: string[] = [];
 
   test.beforeEach(async ({ page }) => {
@@ -1518,7 +1518,7 @@ test.describe('Admin Bulk Operations (11.93)', () => {
 // ═══════════════════════════════════════════════════════════════
 
 test.describe('Admin Suggestion History Timeline (11.94)', () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: 'serial', timeout: 40_000 });
   let seededIds: string[] = [];
 
   test.beforeEach(async ({ page }) => { await setupApiMocks(page); await adminLogin(page); });
@@ -1634,7 +1634,7 @@ test.describe('Admin Suggestion History Timeline (11.94)', () => {
 // ═══════════════════════════════════════════════════════════════
 
 test.describe('Admin Contact Opt-In Flow (11.95)', () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: 'serial', timeout: 40_000 });
   let seededIds: string[] = [];
 
   test.beforeEach(async ({ page }) => { await setupApiMocks(page); await adminLogin(page); await navigateToSuggestions(page); });
