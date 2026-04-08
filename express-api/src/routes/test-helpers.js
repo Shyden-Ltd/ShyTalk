@@ -609,6 +609,7 @@ const CLEARABLE_COLLECTIONS = new Set([
   'auditLog',
   'adminAuditLog',
   'blockedTopics',
+  'funFacts',
 ]);
 
 router.post('/test/clear/:collection', async (req, res) => {

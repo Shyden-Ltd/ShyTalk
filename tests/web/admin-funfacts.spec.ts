@@ -167,7 +167,7 @@ test.describe('Admin Fun Facts', () => {
     // Create a dedicated fun fact to delete — do NOT delete the seeded one,
     // as serial block retries would then fail on the "seeded fact appears" test.
     const factText = `e2e-delete-${Date.now()}`;
-    await testData.api.testWrite('funFacts', { text: factText, category: 'Science', emoji: '🧪', isActive: true });
+    await testData.api.testWrite('funFacts', { text: factText, category: 'Science', emoji: '🧪', isActive: true, createdAt: Date.now() });
     await reloadAndReturn(page);
 
     const card = factCard(page, factText);
