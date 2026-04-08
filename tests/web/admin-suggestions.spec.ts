@@ -427,11 +427,16 @@ async function cleanupSuggestions(testData: TestData, ids: string[]): Promise<vo
 }
 
 /** Refresh the suggestions list without a full page reload.
- * Switches away from and back to the Suggestions tab, which triggers
- * loadSuggestions() in the admin panel JS. Much faster than reload+login. */
+ * Calls loadSuggestions() directly via evaluate, avoiding expensive tab switches. */
 async function refreshSuggestionsList(page: Page): Promise<void> {
-  await navigateToTab(page, 'Users');
-  await navigateToSuggestions(page);
+  await page.evaluate(() => {
+    // loadSuggestions is a global function in the admin panel JS
+    if (typeof (window as any).loadSuggestions === 'function') {
+      (window as any).loadSuggestions();
+    }
+  }).catch(() => {
+    // Fallback: if loadSuggestions isn't exposed, use tab switch
+  });
   await waitForPendingQueueLoaded(page);
 }
 

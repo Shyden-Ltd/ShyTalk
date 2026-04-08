@@ -13398,6 +13398,9 @@
     }
 
     async function loadSuggestions() {
+      // Exposed globally so Playwright tests can trigger a refresh without
+      // expensive tab switches or page reloads.
+      window.loadSuggestions = loadSuggestions;
       const pendingList = $("#suggestions-pending-queue");
       const disputeList = $("#suggestions-dispute-queue");
       const pendingEmpty = $("#sg-pending-empty");
