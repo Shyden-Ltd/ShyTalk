@@ -476,12 +476,9 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
     await refreshSuggestionsList(page);
     const card = page.locator('#suggestions-pending-queue .suggestion-card').first();
     await expect(card).toBeVisible();
-    // Use toBeAttached for inner elements — on mobile viewports the card may
-    // overflow horizontally, making child elements technically not "visible"
-    // even though they're in the DOM and rendered.
-    await expect(card.locator('.sg-title')).toBeAttached();
-    await expect(card.locator('.sg-desc')).toBeAttached();
-    await expect(card.locator('.sg-meta')).toBeAttached();
+    await expect(card.locator('.sg-title')).toBeVisible();
+    await expect(card.locator('.sg-desc')).toBeVisible();
+    await expect(card.locator('.sg-meta')).toBeVisible();
   });
 
   test('approve button moves suggestion to accepted and removes from queue', async ({ page, testData }) => {
@@ -1402,7 +1399,7 @@ test.describe('Admin Notifications (11.92)', () => {
     const dup = await seedSuggestion(testData, { status: 'merged' });
     seededIds.push(orig.id, dup.id);
     await testData.api.post(`/api/admin/suggestions/${dup.id}/dispute`, { reason: 'Not dup' });
-    await refreshSuggestionsList(page);
+    await navigateToSuggestions(page);
     await expect(page.locator('#suggestions-dispute-tab').locator('.dispute-indicator, .badge')).toBeVisible({ timeout: 10_000 });
   });
 

@@ -376,8 +376,9 @@
           transform: translateY(10px);
           transition: opacity 0.3s, transform 0.3s;
           max-width: 400px;
+          pointer-events: none;
         }
-        .toast.visible { opacity: 1; transform: translateY(0); }
+        .toast.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
         .toast.success { background: var(--success); }
         .toast.error { background: var(--danger); }
 
@@ -583,6 +584,7 @@
           display: flex;
           gap: 6px;
           margin-bottom: 16px;
+          flex-wrap: wrap;
         }
 
         .appeal-card {
@@ -2814,6 +2816,12 @@
           .gift-actions button { padding: 3px 6px; font-size: 11px; }
           /* Ensure toast fits on narrow screens */
           .toast { right: 12px; left: 12px; max-width: none; }
+          /* Stack suggestion cards vertically so action buttons don't overflow */
+          .suggestion-card { flex-direction: column; gap: 8px; }
+          .suggestion-card .sg-actions { width: 100%; justify-content: flex-start; }
+          .suggestion-card .sg-desc { max-width: 100%; }
+          /* Audit log load-more full width */
+          #audit-log-load-more { width: 100%; }
         }
 
         /* Profile Preview Panel — side-by-side */
