@@ -270,7 +270,7 @@ dependencies {
     implementation(libs.billing)
 
     // Chrome Custom Tabs (required for Firebase OAuthProvider to use in-app browser)
-    implementation("androidx.browser:browser:1.8.0")
+    implementation("androidx.browser:browser:1.10.0")
 
     // Testing
     testImplementation(libs.junit)
