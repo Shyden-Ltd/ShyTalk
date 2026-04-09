@@ -1,8 +1,7 @@
-v0.63.6
+v0.63.9
 
-environment config hardening — prevent dev/prod cross-contamination (#253)
-- ## Summary
-- - Fix 4 legal pages sending logs to prod API when on dev site
-- - Fix deploy-dev.yml writing dev Firebase config to prod build path
-- - Remove hardcoded prod URLs from LiveKit region fallbacks — use
-- `LIVEKIT_URL` env var as generic fallback so dev single-server setups
+auto-regenerate roadmap JSON in pre-push hook (#283)
+- Ensures public/roadmap-data.json stays in sync with the internal
+- roadmap whenever changes are pushed. If the JSON changes, the commit
+- is automatically amended to include it.
+- Claude Opus 4.6 (1M context) <noreply@anthropic.com>

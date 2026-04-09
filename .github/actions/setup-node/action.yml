@@ -1,0 +1,19 @@
+name: 'Setup Node.js'
+description: 'Set up Node.js with optional npm caching'
+inputs:
+  node-version:
+    description: 'Node.js version'
+    required: false
+    default: '24'
+  cache:
+    description: 'Package manager to cache (npm or empty)'
+    required: false
+    default: ''
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Node
+      uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: ${{ inputs.cache || '' }}

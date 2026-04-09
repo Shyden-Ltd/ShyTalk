@@ -76,4 +76,25 @@ class ConstantsLegalUrlsTest {
             )
         assertEquals(4, urls.size)
     }
+
+    @Test
+    fun `COMPANY_NAME is Shyden Ltd`() {
+        assertEquals("Shyden Ltd", Constants.COMPANY_NAME)
+    }
+
+    @Test
+    fun `COMPANY_NUMBER is correct`() {
+        assertEquals("17110487", Constants.COMPANY_NUMBER)
+    }
+
+    @Test
+    fun `COMPANY_ADDRESS contains registered office`() {
+        assertTrue(Constants.COMPANY_ADDRESS.contains("71-75 Shelton Street"))
+        assertTrue(Constants.COMPANY_ADDRESS.contains("WC2H 9JQ"))
+    }
+
+    @Test
+    fun `CONTACT_EMAIL is correct`() {
+        assertEquals("shytalk.help@gmail.com", Constants.CONTACT_EMAIL)
+    }
 }

@@ -1,0 +1,26 @@
+name: 'Start Firebase Emulators'
+description: 'Cache and start Firebase Emulators'
+inputs:
+  project-id:
+    description: 'Firebase project ID for emulators'
+    required: false
+    default: 'demo-shytalk'
+runs:
+  using: 'composite'
+  steps:
+    - name: Cache Firebase Emulators
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/firebase/emulators
+        key: firebase-emulators-${{ runner.os }}
+    - name: Start Firebase Emulators
+      shell: bash
+      run: |
+        npm install -g firebase-tools
+        firebase emulators:start --project=${{ inputs.project-id }} &
+        WAITED=0
+        until curl -s http://localhost:4000 > /dev/null 2>&1; do
+          sleep 1; WAITED=$((WAITED+1))
+          if [ $WAITED -ge 120 ]; then echo "::error::Emulators did not start within 120s"; exit 1; fi
+        done
+        echo "Emulators ready"

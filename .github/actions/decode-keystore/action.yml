@@ -1,0 +1,34 @@
+name: 'Decode Keystore'
+description: 'Decode Android signing keystore from base64'
+inputs:
+  keystore-base64:
+    description: 'Base64-encoded keystore'
+    required: false
+    default: ''
+  output-path:
+    description: 'Output path for keystore file'
+    required: false
+    default: 'keystore.jks'
+  fallback-debug:
+    description: 'Generate debug keystore if secret unavailable'
+    required: false
+    default: 'false'
+runs:
+  using: 'composite'
+  steps:
+    - name: Decode keystore
+      shell: bash
+      env:
+        KEYSTORE_BASE64: ${{ inputs.keystore-base64 }}
+        OUTPUT_PATH: ${{ inputs.output-path }}
+        FALLBACK_DEBUG: ${{ inputs.fallback-debug }}
+      run: |
+        if [ -n "$KEYSTORE_BASE64" ]; then
+          echo "$KEYSTORE_BASE64" | base64 -d > "$OUTPUT_PATH"
+        elif [ "$FALLBACK_DEBUG" = "true" ]; then
+          keytool -genkey -v -keystore "$OUTPUT_PATH" -alias shytalk -keyalg RSA -keysize 2048 -validity 1 -storepass android -keypass android -dname "CN=Debug"
+          echo "::warning::Using debug keystore (secrets unavailable — Dependabot PR)"
+        else
+          echo "::error::KEYSTORE_BASE64 secret is required"
+          exit 1
+        fi
