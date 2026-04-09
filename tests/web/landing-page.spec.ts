@@ -84,4 +84,10 @@ test.describe('Landing Page', () => {
     const viewport = await page.locator('meta[name="viewport"]').getAttribute('content');
     expect(viewport).toContain('width=device-width');
   });
+
+  test('has Shyden Ltd copyright footer', async ({ page }) => {
+    const copyright = page.locator('.copyright');
+    await expect(copyright).toBeVisible();
+    await expect(copyright).toContainText('© 2026 Shyden Ltd. All rights reserved.');
+  });
 });

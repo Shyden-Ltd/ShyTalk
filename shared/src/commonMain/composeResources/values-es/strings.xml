@@ -519,6 +519,7 @@
     <string name="contact_support_help">If you need help, contact shytalk.help@gmail.com</string>
     <string name="contact_support_hint">If the problem persists, contact shytalk.help@gmail.com</string>
     <string name="contact_us">Contact Us</string>
+    <string name="shyden_ltd_brand">ShyTalk es una marca de Shyden Ltd (n.º de empresa 17110487), 71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, Reino Unido.</string>
     <string name="delete_account">Delete Account</string>
     <string name="delete_account_description">Your account and all data will be permanently deleted after the grace period. You can cancel by signing in before then.</string>
     <string name="delete_account_scheduled">Your account is scheduled for deletion on %1$s. Would you like to cancel?</string>

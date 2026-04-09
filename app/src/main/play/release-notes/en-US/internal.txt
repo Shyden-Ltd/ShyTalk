@@ -1,7 +1,6 @@
-v0.63.7
+Shyden Ltd branding update
 
-release workflow — don't skip on workflow_dispatch (#279)
-- Manual workflow_dispatch triggers should always run the release job,
-- bypassing the workflow_only skip check (which examines HEAD~1 diff
-- and would skip if the latest commit is workflow-only).
-- Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+- All legal pages now show Shyden Ltd as the company behind ShyTalk
+- Privacy policy identifies Shyden Ltd as data controller with registered address
+- Terms of service identify Shyden Ltd as service provider
+- About section in the app now shows company details
