@@ -23,7 +23,7 @@
     "dotenv": "^17.4.1",
     "express": "^5.2.1",
     "express-rate-limit": "^8.3.2",
-    "firebase-admin": "^13.0.0",
+    "firebase-admin": "^13.8.0",
     "helmet": "^8.1.0",
     "livekit-server-sdk": "^2.15.1",
     "multer": "^2.1.1",
