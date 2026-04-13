@@ -97,7 +97,8 @@ Social chat app with voice rooms. Kotlin Multiplatform (Android + iOS), Firebase
 ## Local Development (Zero Cloud)
 - **Start:** `bash local/start.sh` (starts Firebase Emulators + LiveKit Docker)
 - **API:** `cd express-api && npm run local`
-- **Android:** `./gradlew installLocalDebug`
+- **Android on emulator:** `./gradlew installLocalDebug` (uses `10.0.2.2` as host alias)
+- **Android on physical device:** `./gradlew installLocalDebug -PlocalHost=localhost` AND run `adb reverse tcp:3000 tcp:3000 && adb reverse tcp:7880 tcp:7880 && adb reverse tcp:9000 tcp:9000` (tunnels device localhost to laptop)
 - **Firebase UI:** http://localhost:4000
 - **Stop:** `bash local/stop.sh` or Ctrl+C in the start.sh terminal
 - **Prerequisites:** Java 21+, Docker, Firebase CLI (`npm i -g firebase-tools`)

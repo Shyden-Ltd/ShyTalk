@@ -18,12 +18,13 @@
  * POST   /user/:uniqueId/unsuspend       → Unsuspend user (alias)
  * POST   /report-locks/:uniqueId/lock    → Lock reports for user (alias)
  * DELETE /report-locks/:uniqueId         → Unlock reports for user (alias)
+ * POST   /user/:uniqueId/change-role      → Change user role (admin)
  * POST   /user/:uniqueId/delete          → Schedule account deletion (admin)
  * POST   /user/:uniqueId/cancel-delete   → Cancel scheduled deletion (admin)
  */
 
 const router = require('express').Router();
-const { db, auth } = require('../utils/firebase');
+const { db, auth, FieldValue } = require('../utils/firebase');
 const { requireAdmin, clearSuspensionCache } = require('../middleware/auth');
 const { generateId, now } = require('../utils/helpers');
 const { computeDisplayScore } = require('../utils/gcs');
@@ -627,6 +628,58 @@ router.post('/user/:uniqueId/reset-gcs', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     log.error('admin-users', 'Reset GCS failed', {
+      uniqueId: req.params.uniqueId,
+      error: err.message,
+    });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── Change role ──
+const VALID_USER_TYPES = ['MEMBER', 'SHYTALK_OFFICIAL', 'MC_SINGER', 'MC_EVENT_HOST', 'TEACHER'];
+
+router.post('/user/:uniqueId/change-role', async (req, res) => {
+  try {
+    if (requireAdmin(req, res)) return;
+
+    const { userType } = req.body || {};
+    if (!userType || !VALID_USER_TYPES.includes(userType)) {
+      return res.status(400).json({
+        error: `Invalid userType. Must be one of: ${VALID_USER_TYPES.join(', ')}`,
+      });
+    }
+
+    const userRef = db.doc(`users/${req.params.uniqueId}`);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) return res.status(404).json({ error: 'User not found' });
+
+    const user = userSnap.data();
+    const firebaseUid = user.firebaseUid;
+
+    // Update role + write roleChanged timestamp
+    await userRef.update({
+      userType,
+      roleChanged: FieldValue.serverTimestamp(),
+    });
+
+    // Revoke all sessions
+    await auth.revokeRefreshTokens(firebaseUid);
+
+    // If demoting from admin, remove admin claim
+    if (user.isAdmin) {
+      await auth.setCustomUserClaims(firebaseUid, { admin: false });
+    }
+
+    log.info('admin-users', 'Changed user role', {
+      adminId: req.auth.uid,
+      targetUniqueId: req.params.uniqueId,
+      newRole: userType,
+      previousRole: user.userType,
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    log.error('admin-users', 'Change role failed', {
       uniqueId: req.params.uniqueId,
       error: err.message,
     });

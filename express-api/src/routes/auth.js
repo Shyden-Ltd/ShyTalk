@@ -197,6 +197,25 @@ router.post('/auth/otp/verify', sensitiveLimiter, async (req, res) => {
             'This email is linked to a Google or Apple account. Please sign in with that provider.',
         });
       }
+
+      // Check if user has TOTP enrolled — block OTP sign-in for password+TOTP users
+      if (providers.includes('password')) {
+        const userSnap = await db
+          .collection('users')
+          .where('firebaseUid', '==', userRecord.uid)
+          .limit(1)
+          .get();
+        if (!userSnap.empty) {
+          const uniqueId = userSnap.docs[0].data().uniqueId;
+          const totpDoc = await db.doc(`users/${uniqueId}/private/totp`).get();
+          if (totpDoc.exists) {
+            return res.status(403).json({
+              error: 'Use password + authenticator app to sign in.',
+            });
+          }
+        }
+      }
+
       firebaseUid = userRecord.uid;
     } catch (err) {
       if (err.code === 'auth/user-not-found') {
@@ -320,6 +339,22 @@ router.post('/auth/pin/verify', sensitiveLimiter, async (req, res) => {
 
     const firebaseUid = user.firebaseUid;
     if (!firebaseUid) return res.status(500).json({ error: 'No Firebase UID for user' });
+
+    // Check if user has TOTP enrolled — block PIN sign-in for password+TOTP users
+    try {
+      const userRecord = await auth.getUser(firebaseUid);
+      const providers = (userRecord.providerData || []).map((p) => p.providerId);
+      if (providers.includes('password')) {
+        const totpDoc = await db.doc(`users/${uniqueId}/private/totp`).get();
+        if (totpDoc.exists) {
+          return res.status(403).json({
+            error: 'Use password + authenticator app to sign in.',
+          });
+        }
+      }
+    } catch (providerErr) {
+      log.error('auth', 'Failed to check TOTP enrollment', { error: providerErr.message });
+    }
 
     const customToken = await auth.createCustomToken(firebaseUid);
     res.json({ customToken });

@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+  <meta name="theme-color" content="#0f0d15">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="description" content="ShyTalk Portal — Manage your account, security, and privacy.">
+  <title>ShyTalk — Portal</title>
+  <link rel="stylesheet" href="portal.css">
+  <noscript>This page requires JavaScript to function. Please enable JavaScript in your browser settings.</noscript>
+</head>
+<body>
+
+<main id="portal-app">
+
+  <!-- Loading spinner (shown first) -->
+  <section id="loading-section" class="portal-section portal-section--narrow" aria-label="Loading">
+    <div class="spinner" role="status">
+      <span class="sr-only" data-i18n="loading">Loading...</span>
+    </div>
+  </section>
+
+  <!-- Login form -->
+  <section id="login-section" class="portal-section portal-section--narrow" hidden>
+    <div class="portal-card">
+      <div class="portal-logo" aria-label="ShyTalk">Shy<span class="accent">Talk</span></div>
+      <p class="portal-subtitle" data-i18n="login_subtitle">Sign in to your account</p>
+
+      <button type="button" id="google-signin-btn" class="btn btn--google">
+        <img src="assets/google-logo.svg" alt="" width="20" height="20" aria-hidden="true">
+        <span data-i18n="login_google">Sign in with Google</span>
+      </button>
+
+      <button type="button" id="apple-signin-btn" class="btn btn--apple">
+        <img src="assets/apple-logo.svg" alt="" width="20" height="20" aria-hidden="true">
+        <span data-i18n="login_apple">Sign in with Apple</span>
+      </button>
+
+      <div class="divider" aria-hidden="true">
+        <span data-i18n="login_or">&mdash; or &mdash;</span>
+      </div>
+
+      <form id="login-form" autocomplete="on">
+        <label for="login-email" class="sr-only" data-i18n="login_email_label">Email address</label>
+        <input
+          type="email"
+          id="login-email"
+          class="input"
+          placeholder="Email address"
+          data-i18n-placeholder="login_email_placeholder"
+          autocomplete="email"
+          required
+        >
+
+        <label for="login-password" class="sr-only" data-i18n="login_password_label">Password</label>
+        <input
+          type="password"
+          id="login-password"
+          class="input"
+          placeholder="Password"
+          data-i18n-placeholder="login_password_placeholder"
+          autocomplete="current-password"
+          required
+        >
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="login-remember" class="checkbox">
+          <label for="login-remember" data-i18n="login_remember">Remember me</label>
+        </div>
+
+        <button type="submit" id="login-submit-btn" class="btn btn--primary">
+          <span data-i18n="login_submit">Sign In</span>
+        </button>
+      </form>
+
+      <p id="login-error" class="error-message" role="alert" hidden></p>
+
+      <p class="portal-footer-text">
+        <span data-i18n="login_no_account">Don't have an account?</span>
+        <a href="#no-account" data-i18n="login_download">Download ShyTalk</a>
+      </p>
+    </div>
+  </section>
+
+  <!-- TOTP verification prompt -->
+  <section id="totp-section" class="portal-section portal-section--narrow" hidden>
+    <div class="portal-card">
+      <div class="portal-logo" aria-label="ShyTalk">Shy<span class="accent">Talk</span></div>
+      <h1 class="portal-heading" data-i18n="totp_heading">Two-Factor Authentication</h1>
+      <p class="portal-subtitle" data-i18n="totp_subtitle">Enter the 6-digit code from your authenticator app.</p>
+
+      <form id="totp-form">
+        <label for="totp-code" class="sr-only" data-i18n="totp_code_label">Authentication code</label>
+        <input
+          type="text"
+          id="totp-code"
+          class="input input--totp"
+          dir="ltr"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          pattern="[0-9]{6}"
+          maxlength="6"
+          placeholder="000000"
+          required
+        >
+
+        <button type="submit" id="totp-verify-btn" class="btn btn--primary">
+          <span data-i18n="totp_verify">Verify</span>
+        </button>
+      </form>
+
+      <p id="totp-error" class="error-message" role="alert" hidden></p>
+
+      <a href="#recovery" class="portal-link" data-i18n="totp_lost">Lost your authenticator?</a>
+    </div>
+  </section>
+
+  <!-- TOTP enrollment -->
+  <section id="enroll-section" class="portal-section portal-section--narrow" hidden>
+    <div class="portal-card">
+      <div class="portal-logo" aria-label="ShyTalk">Shy<span class="accent">Talk</span></div>
+      <h1 class="portal-heading" data-i18n="enroll_heading">Set up two-factor authentication</h1>
+      <p class="portal-subtitle" data-i18n="enroll_subtitle">Scan the QR code with your authenticator app, or enter the key manually.</p>
+
+      <div id="enroll-qr" class="qr-container" aria-label="QR code for TOTP setup"></div>
+
+      <div class="manual-key-row">
+        <label for="enroll-manual-key" class="sr-only">TOTP secret key</label>
+        <input
+          type="text"
+          id="enroll-manual-key"
+          class="input input--mono"
+          readonly
+          aria-label="TOTP secret key"
+        >
+        <button type="button" id="enroll-copy-btn" class="btn btn--small" aria-label="Copy secret key" data-i18n="enroll_copy">Copy</button>
+      </div>
+
+      <form id="enroll-form">
+        <label for="enroll-code" class="sr-only" data-i18n="enroll_code_label">Authentication code</label>
+        <input
+          type="text"
+          id="enroll-code"
+          class="input input--totp"
+          dir="ltr"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          pattern="[0-9]{6}"
+          maxlength="6"
+          placeholder="000000"
+          required
+        >
+
+        <button type="submit" id="enroll-confirm-btn" class="btn btn--primary">
+          <span data-i18n="enroll_confirm">Confirm</span>
+        </button>
+      </form>
+
+      <p id="enroll-error" class="error-message" role="alert" hidden></p>
+    </div>
+  </section>
+
+  <!-- TOTP recovery -->
+  <section id="recovery-section" class="portal-section portal-section--narrow" hidden>
+    <div class="portal-card">
+      <div class="portal-logo" aria-label="ShyTalk">Shy<span class="accent">Talk</span></div>
+      <h1 class="portal-heading" data-i18n="recovery_heading">Lost your authenticator?</h1>
+      <p class="portal-subtitle" data-i18n="recovery_subtitle">We'll send a recovery code to your email address.</p>
+
+      <form id="recovery-send-form">
+        <label for="recovery-email" class="sr-only" data-i18n="recovery_email_label">Email address</label>
+        <input
+          type="email"
+          id="recovery-email"
+          class="input"
+          placeholder="Email address"
+          data-i18n-placeholder="recovery_email_placeholder"
+          autocomplete="email"
+          required
+        >
+
+        <button type="submit" id="recovery-send-btn" class="btn btn--primary">
+          <span data-i18n="recovery_send">Send recovery code</span>
+        </button>
+      </form>
+
+      <form id="recovery-verify-form" hidden>
+        <label for="recovery-code" class="sr-only" data-i18n="recovery_code_label">Recovery code</label>
+        <input
+          type="text"
+          id="recovery-code"
+          class="input input--totp"
+          dir="ltr"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          maxlength="6"
+          placeholder="000000"
+          required
+        >
+
+        <button type="submit" id="recovery-verify-btn" class="btn btn--primary">
+          <span data-i18n="recovery_verify">Verify</span>
+        </button>
+      </form>
+
+      <p id="recovery-message" class="success-message" role="status" hidden></p>
+      <p id="recovery-error" class="error-message" role="alert" hidden></p>
+
+      <a href="#login" class="portal-link" data-i18n="recovery_back">Back to sign in</a>
+    </div>
+  </section>
+
+  <!-- Suspension screen -->
+  <section id="suspended-section" class="portal-section portal-section--narrow" hidden>
+    <div class="portal-card portal-card--suspended">
+      <div class="suspended-icon" aria-hidden="true">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+      </div>
+      <h1 class="portal-heading" data-i18n="suspended_heading">Your account has been suspended</h1>
+      <p id="suspended-reason" class="portal-subtitle" data-i18n="suspended_reason">Your account has been suspended for violating our community guidelines.</p>
+      <p id="suspended-end-date" class="suspended-date" hidden>
+        <span data-i18n="suspended_until">Suspension ends:</span>
+        <span id="suspended-end-value"></span>
+      </p>
+
+      <button type="button" id="suspended-appeal-btn" class="btn btn--primary">
+        <span data-i18n="suspended_appeal">Submit an Appeal</span>
+      </button>
+
+      <a id="suspended-contact-link" href="#" class="portal-link" data-i18n="suspended_contact">Contact Support</a>
+
+      <button type="button" id="suspended-signout-btn" class="btn btn--outline">
+        <span data-i18n="suspended_signout">Sign Out</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- No account (download prompt) -->
+  <section id="no-account-section" class="portal-section portal-section--narrow" hidden>
+    <div class="portal-card">
+      <div class="portal-logo" aria-label="ShyTalk">Shy<span class="accent">Talk</span></div>
+      <h1 class="portal-heading" data-i18n="no_account_heading">Download ShyTalk</h1>
+      <p class="portal-subtitle" data-i18n="no_account_subtitle">Create your account in the app to get started.</p>
+
+      <div class="store-links">
+        <a
+          href="https://play.google.com/store/apps/details?id=com.shyden.shytalk"
+          class="btn btn--store"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-i18n="no_account_google_play"
+        >Google Play</a>
+        <a
+          href="#"
+          class="btn btn--store btn--store-disabled"
+          aria-disabled="true"
+          data-i18n="no_account_app_store"
+        >App Store (Coming Soon)</a>
+      </div>
+
+      <a href="#login" class="portal-link" data-i18n="no_account_back">Back to sign in</a>
+    </div>
+  </section>
+
+  <!-- Dashboard -->
+  <section id="dashboard-section" class="portal-section portal-section--wide" hidden>
+    <header class="dashboard-header">
+      <div class="dashboard-header-left">
+        <div class="portal-logo portal-logo--small" aria-label="ShyTalk">Shy<span class="accent">Talk</span></div>
+        <span id="dashboard-welcome" class="dashboard-welcome" data-i18n="dashboard_welcome">Welcome back</span>
+      </div>
+      <button type="button" id="dashboard-signout-btn" class="btn btn--outline btn--small">
+        <span data-i18n="dashboard_signout">Sign Out</span>
+      </button>
+    </header>
+
+    <div class="dashboard-content">
+      <!-- Your Panels -->
+      <div id="panels-group" class="card-group" hidden>
+        <h2 class="card-group-title" data-i18n="dashboard_panels">Your Panels</h2>
+        <div class="card-grid" id="panels-grid">
+          <!-- Dynamically populated by portal.js -->
+        </div>
+      </div>
+
+      <!-- Community -->
+      <div class="card-group">
+        <h2 class="card-group-title" data-i18n="dashboard_community">Community</h2>
+        <div class="card-grid" id="community-grid">
+          <a href="/roadmap.html" class="dashboard-card">
+            <div class="dashboard-card-icon" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+              </svg>
+            </div>
+            <span class="dashboard-card-label" data-i18n="dashboard_roadmap">Roadmap</span>
+          </a>
+          <a href="/roadmap.html#suggestions" class="dashboard-card">
+            <div class="dashboard-card-icon" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+            </div>
+            <span class="dashboard-card-label" data-i18n="dashboard_suggestions">Suggestions</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Account -->
+      <div class="card-group">
+        <h2 class="card-group-title" data-i18n="dashboard_account">Account</h2>
+        <div class="card-grid card-grid--account" id="account-grid">
+          <a href="#profile" class="dashboard-card">
+            <div class="dashboard-card-icon" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+            </div>
+            <span class="dashboard-card-label" data-i18n="dashboard_profile">Profile</span>
+          </a>
+          <a href="#security" class="dashboard-card">
+            <div class="dashboard-card-icon" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </div>
+            <span class="dashboard-card-label" data-i18n="dashboard_security">Security</span>
+          </a>
+          <a href="#data-privacy" class="dashboard-card">
+            <div class="dashboard-card-icon" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            </div>
+            <span class="dashboard-card-label" data-i18n="dashboard_data_privacy">Data &amp; Privacy</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Profile section -->
+  <section id="profile-section" class="portal-section portal-section--wide" hidden>
+    <div class="portal-subpage">
+      <a href="#dashboard" class="back-link">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        <span data-i18n="back_to_dashboard">Back to Dashboard</span>
+      </a>
+
+      <h1 class="portal-heading" data-i18n="profile_heading">Profile</h1>
+
+      <div class="profile-info">
+        <div class="profile-avatar" id="profile-avatar" aria-label="Profile avatar"></div>
+        <div class="profile-details">
+          <div class="profile-field">
+            <span class="profile-label" data-i18n="profile_display_name">Display Name</span>
+            <span class="profile-value" id="profile-display-name">--</span>
+          </div>
+          <div class="profile-field">
+            <span class="profile-label" data-i18n="profile_unique_id">Unique ID</span>
+            <span class="profile-value" id="profile-unique-id">--</span>
+          </div>
+          <div class="profile-field">
+            <span class="profile-label" data-i18n="profile_user_type">Account Type</span>
+            <span class="profile-value" id="profile-user-type">--</span>
+          </div>
+        </div>
+      </div>
+
+      <p class="portal-notice" data-i18n="profile_coming_soon">Full profile management coming soon.</p>
+    </div>
+  </section>
+
+  <!-- Security section -->
+  <section id="security-section" class="portal-section portal-section--wide" hidden>
+    <div class="portal-subpage">
+      <a href="#dashboard" class="back-link">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        <span data-i18n="back_to_dashboard">Back to Dashboard</span>
+      </a>
+
+      <h1 class="portal-heading" data-i18n="security_heading">Security</h1>
+
+      <div class="security-cards">
+        <!-- Change Password (email/password users only) -->
+        <div id="security-password-card" class="security-card" hidden>
+          <h2 class="security-card-title" data-i18n="security_password">Password</h2>
+          <p class="security-card-desc" data-i18n="security_password_desc">Change your account password.</p>
+          <button type="button" id="security-change-password-btn" class="btn btn--primary btn--small">
+            <span data-i18n="security_change_password">Change Password</span>
+          </button>
+        </div>
+
+        <!-- TOTP Management -->
+        <div class="security-card">
+          <h2 class="security-card-title" data-i18n="security_totp">Two-Factor Authentication</h2>
+          <p class="security-card-desc" id="security-totp-status" data-i18n="security_totp_status">Loading...</p>
+          <button type="button" id="security-totp-btn" class="btn btn--primary btn--small" hidden>
+            <span id="security-totp-btn-label" data-i18n="security_totp_enable">Enable 2FA</span>
+          </button>
+        </div>
+
+        <!-- Sign Out All Sessions -->
+        <div class="security-card">
+          <h2 class="security-card-title" data-i18n="security_sessions">Sessions</h2>
+          <p class="security-card-desc" data-i18n="security_sessions_desc">Sign out from all devices and sessions.</p>
+          <button type="button" id="security-revoke-btn" class="btn btn--danger btn--small">
+            <span data-i18n="security_revoke_all">Sign Out All Sessions</span>
+          </button>
+        </div>
+
+        <!-- Linked Sign-In Methods -->
+        <div class="security-card">
+          <h2 class="security-card-title" data-i18n="security_providers">Linked Sign-In Methods</h2>
+          <ul id="security-providers-list" class="providers-list">
+            <!-- Dynamically populated by portal.js -->
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Data & Privacy section -->
+  <section id="data-privacy-section" class="portal-section portal-section--wide" hidden>
+    <div class="portal-subpage">
+      <a href="#dashboard" class="back-link">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        <span data-i18n="back_to_dashboard">Back to Dashboard</span>
+      </a>
+
+      <h1 class="portal-heading" data-i18n="data_privacy_heading">Data &amp; Privacy</h1>
+
+      <div class="security-cards">
+        <div class="security-card">
+          <h2 class="security-card-title" data-i18n="data_export">Export My Data</h2>
+          <p class="security-card-desc" data-i18n="data_export_desc">Download a copy of your personal data.</p>
+          <button type="button" id="data-export-btn" class="btn btn--primary btn--small">
+            <span data-i18n="data_export_btn">Export Data</span>
+          </button>
+        </div>
+
+        <div class="security-card">
+          <h2 class="security-card-title" data-i18n="data_delete">Delete My Account</h2>
+          <p class="security-card-desc" data-i18n="data_delete_desc">Permanently delete your account and all associated data. This action cannot be undone.</p>
+          <button type="button" id="data-delete-btn" class="btn btn--danger btn--small">
+            <span data-i18n="data_delete_btn">Delete Account</span>
+          </button>
+        </div>
+
+        <div class="security-card">
+          <h2 class="security-card-title" data-i18n="data_legal">Legal</h2>
+          <div class="legal-links">
+            <a href="/privacy.html" class="portal-link" data-i18n="data_privacy_policy">Privacy Policy</a>
+            <a href="/terms.html" class="portal-link" data-i18n="data_terms">Terms of Service</a>
+            <a href="/community-guidelines.html" class="portal-link" data-i18n="data_guidelines">Community Guidelines</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Re-auth modal (overlays everything) -->
+<div id="reauth-modal" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-labelledby="reauth-title" aria-modal="true">
+    <h2 id="reauth-title" class="modal-title" data-i18n="reauth_title">Confirm your identity</h2>
+    <p class="modal-desc" data-i18n="reauth_desc">Please verify your identity to continue.</p>
+
+    <form id="reauth-form">
+      <label for="reauth-totp-code" class="sr-only" data-i18n="reauth_code_label">Authentication code</label>
+      <input
+        type="text"
+        id="reauth-totp-code"
+        class="input input--totp"
+        dir="ltr"
+        inputmode="numeric"
+        autocomplete="one-time-code"
+        pattern="[0-9]{6}"
+        maxlength="6"
+        placeholder="000000"
+      >
+
+      <div class="modal-actions">
+        <button type="button" id="reauth-cancel-btn" class="btn btn--outline btn--small" data-i18n="reauth_cancel">Cancel</button>
+        <button type="submit" id="reauth-confirm-btn" class="btn btn--primary btn--small" data-i18n="reauth_confirm">Confirm</button>
+      </div>
+    </form>
+
+    <p id="reauth-error" class="error-message" role="alert" hidden></p>
+  </div>
+</div>
+
+<!-- Error/message modal -->
+<div id="message-modal" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-labelledby="message-modal-title" aria-modal="true">
+    <h2 id="message-modal-title" class="modal-title"></h2>
+    <p id="message-modal-body" class="modal-desc"></p>
+    <div class="modal-actions">
+      <button type="button" id="message-modal-close-btn" class="btn btn--primary btn--small" data-i18n="modal_close">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Scripts: NO inline scripts — CSP forbids unsafe-inline -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="config.js"></script>
+<script src="qrcode.min.js"></script>
+<script src="portal-translations.js"></script>
+<script src="portal.js"></script>
+
+</body>
+</html>

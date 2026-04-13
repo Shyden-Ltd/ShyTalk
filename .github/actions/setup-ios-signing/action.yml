@@ -1,0 +1,68 @@
+name: 'Setup iOS Signing'
+description: 'Set up iOS code signing (certificate, profile, Xcode, App Store key)'
+inputs:
+  certificate-base64:
+    description: 'Base64-encoded .p12 certificate'
+    required: true
+  certificate-password:
+    description: 'Certificate password'
+    required: true
+  provision-profile-base64:
+    description: 'Base64-encoded provisioning profile'
+    required: true
+  app-store-connect-key:
+    description: 'App Store Connect API key (.p8 content)'
+    required: true
+  app-store-connect-key-id:
+    description: 'App Store Connect key ID'
+    required: true
+  xcode-version:
+    description: 'Major Xcode version to select'
+    required: false
+    default: '26'
+runs:
+  using: 'composite'
+  steps:
+    - name: Select Xcode ${{ inputs.xcode-version }}
+      shell: bash
+      run: |
+        XCODE=$(ls -d /Applications/Xcode_${{ inputs.xcode-version }}*.app 2>/dev/null | head -1)
+        if [ -z "$XCODE" ]; then
+          echo "Available Xcode versions:"
+          ls /Applications/Xcode*.app
+          echo "::error::Xcode ${{ inputs.xcode-version }} not found on this runner"
+          exit 1
+        fi
+        sudo xcode-select -s "$XCODE/Contents/Developer"
+        echo "Selected: $XCODE"
+
+    - name: Install Apple API key
+      shell: bash
+      env:
+        APP_STORE_CONNECT_KEY: ${{ inputs.app-store-connect-key }}
+        APP_STORE_CONNECT_KEY_ID: ${{ inputs.app-store-connect-key-id }}
+      run: |
+        mkdir -p ~/private_keys
+        echo "$APP_STORE_CONNECT_KEY" > ~/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8
+
+    - name: Decode signing certificate and provisioning profile
+      shell: bash
+      env:
+        IOS_CERTIFICATE_BASE64: ${{ inputs.certificate-base64 }}
+        IOS_CERTIFICATE_PASSWORD: ${{ inputs.certificate-password }}
+        IOS_PROVISION_PROFILE_BASE64: ${{ inputs.provision-profile-base64 }}
+      run: |
+        CERTIFICATE_PATH=$RUNNER_TEMP/certificate.p12
+        KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+        echo "$IOS_CERTIFICATE_BASE64" | base64 -d > "$CERTIFICATE_PATH"
+        security create-keychain -p "" "$KEYCHAIN_PATH"
+        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+        security unlock-keychain -p "" "$KEYCHAIN_PATH"
+        security import "$CERTIFICATE_PATH" -P "$IOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+        security set-key-partition-list -S apple-tool:,apple: -k "" "$KEYCHAIN_PATH"
+        security list-keychain -d user -s "$KEYCHAIN_PATH"
+        PROFILE_PATH=$RUNNER_TEMP/profile.mobileprovision
+        echo "$IOS_PROVISION_PROFILE_BASE64" | base64 -d > "$PROFILE_PATH"
+        PROFILE_UUID=$(/usr/bin/security cms -D -i "$PROFILE_PATH" 2>/dev/null | grep -A1 '<key>UUID</key>' | grep '<string>' | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
+        mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+        cp "$PROFILE_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/${PROFILE_UUID}.mobileprovision

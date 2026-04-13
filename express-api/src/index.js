@@ -4,6 +4,8 @@ const helmet = require('helmet');
 const corsMiddleware = require('./middleware/cors');
 const { authMiddleware } = require('./middleware/auth');
 const { generalLimiter, writeLimiter, sensitiveLimiter } = require('./middleware/rateLimit');
+const portalRoutes = require('./routes/portal');
+const { portalLimiter, recoveryLimiter } = require('./middleware/rateLimit');
 const { startCronJobs } = require('./cron');
 require('./utils/firebase'); // Initialize Firebase before routes
 const { patchConsole } = require('./utils/consoleLogger');
@@ -59,7 +61,9 @@ app.use('/api', (req, res, next) => {
       /^\/suggestions\/[^/]+$/.test(req.path) &&
       req.path !== '/suggestions/mine') ||
     // One-click email unsubscribe (token-based, no auth)
-    (req.method === 'POST' && req.path === '/subscriptions/unsubscribe')
+    (req.method === 'POST' && req.path === '/subscriptions/unsubscribe') ||
+    // Portal TOTP recovery (unauthenticated — user has lost their TOTP device)
+    req.path.startsWith('/portal/totp-recovery/')
   )
     return next();
   authMiddleware(req, res, next);
@@ -90,6 +94,18 @@ app.use('/api/reports', sensitiveLimiter);
 app.use('/api/appeals', sensitiveLimiter);
 app.use('/api/users/:uniqueId/delete', sensitiveLimiter);
 app.use('/api/users/:uniqueId/data-export', sensitiveLimiter);
+
+// Portal rate limiter (no admin exemption) — skip for recovery routes
+app.use('/api/portal', (req, res, next) => {
+  if (req.path.startsWith('/totp-recovery/')) return next();
+  portalLimiter(req, res, next);
+});
+
+// Recovery-specific rate limiter (per-email, 3 per 24h)
+app.use('/api/portal/totp-recovery', recoveryLimiter);
+
+// Mount portal routes
+app.use('/api', portalRoutes);
 
 // Mount route modules
 app.use('/api', require('./routes/config'));

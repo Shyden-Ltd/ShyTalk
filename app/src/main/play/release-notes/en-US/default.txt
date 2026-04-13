@@ -1,7 +1,8 @@
-v0.63.7
+v0.64.4
 
-release workflow — don't skip on workflow_dispatch (#279)
-- Manual workflow_dispatch triggers should always run the release job,
-- bypassing the workflow_only skip check (which examines HEAD~1 diff
-- and would skip if the latest commit is workflow-only).
-- Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+extract core ES modules from inline script (PR A) (#289)
+- ## Summary
+- PR A of 3 for the admin panel restructure (#41). Extracts shared helper
+- functions from the 9,500-line inline `<script type="module">` into
+- reusable ES modules.
+- ## New modules at `public/js/core/` (shared across future panels)

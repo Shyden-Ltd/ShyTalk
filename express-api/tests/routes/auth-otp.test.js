@@ -7,6 +7,8 @@ const mockDocSet = jest.fn().mockResolvedValue();
 const mockDocUpdate = jest.fn().mockResolvedValue();
 const mockDocDelete = jest.fn().mockResolvedValue();
 
+const mockCollectionGet = jest.fn().mockResolvedValue({ empty: true, docs: [] });
+
 jest.mock('../../src/utils/firebase', () => ({
   db: {
     doc: jest.fn((path) => ({
@@ -15,6 +17,11 @@ jest.mock('../../src/utils/firebase', () => ({
       set: (...args) => mockDocSet(path, ...args),
       update: (...args) => mockDocUpdate(path, ...args),
       delete: (...args) => mockDocDelete(path, ...args),
+    })),
+    collection: jest.fn(() => ({
+      where: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      get: (...args) => mockCollectionGet(...args),
     })),
   },
   auth: {
@@ -788,6 +795,81 @@ describe('OTP Routes', () => {
       const res = await request(app)
         .post('/api/auth/otp/verify')
         .send({ email: 'user@example.com', code: '123456' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.customToken).toBe('custom-token-abc');
+    });
+  });
+
+  // ─── OTP TOTP bypass prevention ───────────────────────────────
+
+  describe('POST /api/auth/otp/verify — TOTP bypass prevention', () => {
+    it('should return 403 for password user WITH TOTP enrolled', async () => {
+      bcrypt.compare.mockResolvedValueOnce(true);
+      auth.getUserByEmail.mockResolvedValueOnce({
+        uid: 'uid-totp-user',
+        providerData: [{ providerId: 'password' }],
+      });
+
+      // 1st call: OTP doc lookup
+      mockDocGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({
+          hashedCode: '$2b$10$hashedcode',
+          expiresAt: Date.now() + 5 * 60 * 1000,
+          attempts: 0,
+        }),
+      });
+
+      // User query by firebaseUid to find uniqueId
+      mockCollectionGet.mockResolvedValueOnce({
+        empty: false,
+        docs: [{ id: 'user-doc-1', data: () => ({ uniqueId: 12345678 }) }],
+      });
+
+      // 2nd call: TOTP doc exists
+      mockDocGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ secret: 'enc-secret' }),
+      });
+
+      const res = await request(app)
+        .post('/api/auth/otp/verify')
+        .send({ email: 'totp-user@example.com', code: '123456' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toMatch(/authenticator/i);
+    });
+
+    it('should allow OTP for password user WITHOUT TOTP enrolled', async () => {
+      bcrypt.compare.mockResolvedValueOnce(true);
+      auth.getUserByEmail.mockResolvedValueOnce({
+        uid: 'uid-no-totp-user',
+        providerData: [{ providerId: 'password' }],
+      });
+
+      // 1st call: OTP doc lookup
+      mockDocGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({
+          hashedCode: '$2b$10$hashedcode',
+          expiresAt: Date.now() + 5 * 60 * 1000,
+          attempts: 0,
+        }),
+      });
+
+      // User query by firebaseUid
+      mockCollectionGet.mockResolvedValueOnce({
+        empty: false,
+        docs: [{ id: 'user-doc-2', data: () => ({ uniqueId: 87654321 }) }],
+      });
+
+      // 2nd call: TOTP doc does NOT exist
+      mockDocGet.mockResolvedValueOnce({ exists: false });
+
+      const res = await request(app)
+        .post('/api/auth/otp/verify')
+        .send({ email: 'no-totp@example.com', code: '123456' });
 
       expect(res.status).toBe(200);
       expect(res.body.customToken).toBe('custom-token-abc');

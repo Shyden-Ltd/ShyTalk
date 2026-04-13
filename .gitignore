@@ -29,9 +29,10 @@ worker-api/.wrangler/
 local/firebase-emulator-data/
 express-api/.env.local
 
-# Admin panel config files (contain Firebase API keys)
+# Admin panel & portal config files (contain Firebase API keys)
 public/admin/config.js
 public/admin/config.dev.js
+public/portal/config.js
 /node_modules/
 e2e_results/
 test_output.txt

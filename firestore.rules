@@ -24,7 +24,15 @@ service cloud.firestore {
                      'pinHash', 'pinSetAt', 'pinAttempts', 'pinLockedUntil', 'pinLockoutCount',
                      'deletionScheduledAt', 'deletionReason', 'deletionExecuteAt',
                      'dataExportStatus', 'dataExportR2Key', 'dataExportExpiresAt',
-                     'lastDataExportRequestedAt']);
+                     'lastDataExportRequestedAt',
+                     'gcsScore', 'gcs_score', 'gcs_last_deduction_at',
+                     'warningCount', 'warning_count', 'hasActiveWarning', 'has_active_warning',
+                     'hasNewWarning', 'warningReason', 'warning_reason', 'warningIssuedAt',
+                     'suspensionStartDate', 'suspension_start_date', 'suspensionCanAppeal',
+                     'suspendedBy', 'is_suspended', 'suspensionReason', 'suspension_reason',
+                     'preSuspensionDisplayName', 'preSuspensionProfilePhotoUrl',
+                     'preSuspensionCoverPhotoUrl', 'roleChanged',
+                     'unique_id', 'firebase_uid']);
 
       // Backpack — read own, write only via API
       match /backpack/{giftId} {
@@ -59,6 +67,11 @@ service cloud.firestore {
         allow create: if request.auth != null
           && string(callerUniqueId()) == visitorId;
         allow update, delete: if false;
+      }
+
+      // Private data — server only (TOTP secrets, encrypted keys)
+      match /private/{docId} {
+        allow read, write: if false;
       }
     }
 
@@ -249,9 +262,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // ── Admin audit log — server only ────────────────────────────
+    // ── Admin audit log — admin read, server write ───────────────
     match /adminAuditLog/{logId} {
-      allow read, write: if false;
+      allow read: if request.auth != null && request.auth.token.admin == true;
+      allow write: if false;
     }
 
     // ── Report locks — server only ───────────────────────────────
@@ -303,6 +317,11 @@ service cloud.firestore {
 
     // ── OTP codes — server-only (Admin SDK bypasses rules) ──────
     match /otpCodes/{email} {
+      allow read, write: if false;
+    }
+
+    // ── TOTP recovery codes — server-only ──────────────────────
+    match /totpRecoveryCodes/{email} {
       allow read, write: if false;
     }
 
@@ -381,12 +400,6 @@ service cloud.firestore {
     // ── Identity graphs — admin-only ────────────────────────────
     match /identityGraphs/{graphId} {
       allow read, write: if request.auth != null && request.auth.token.admin == true;
-    }
-
-    // ── Admin audit log — admin read, server write ──────────────
-    match /adminAuditLog/{logId} {
-      allow read: if request.auth != null && request.auth.token.admin == true;
-      allow write: if false;
     }
 
     // ── Notification queue — server-only ────────────────────────

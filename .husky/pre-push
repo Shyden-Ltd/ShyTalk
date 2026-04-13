@@ -1,5 +1,13 @@
 #!/usr/bin/env sh
 
+# Regenerate public roadmap JSON if the internal roadmap has changed
+node scripts/generate-roadmap-json.js 2>/dev/null
+if ! git diff --quiet public/roadmap-data.json 2>/dev/null; then
+  echo "Roadmap JSON updated — staging and amending commit..."
+  git add public/roadmap-data.json
+  git commit --amend --no-edit --no-verify
+fi
+
 # Load .env if SONAR_TOKEN not already set
 if [ -z "$SONAR_TOKEN" ] && [ -f ".env" ]; then
   SONAR_TOKEN=$(grep '^SONAR_TOKEN=' .env 2>/dev/null | cut -d= -f2-)

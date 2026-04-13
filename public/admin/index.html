@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg">
     <meta name="robots" content="noindex, nofollow">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.google.com https://recaptcha.net https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob: http://localhost:*; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://*.shytalk.shyden.co.uk wss://*.shytalk.shyden.co.uk https://recaptcha.net http://localhost:* ws://localhost:*;">
     <meta name="theme-color" content="#0f1117">
@@ -5054,33 +5055,32 @@
 <div class="toast" id="toast"></div>
 
 <script src="config.js"></script>
+<script type="module" src="js/main.js"></script>
 <script type="module">
+    // ── Core module imports (PR A extraction) ────────────────────
+    // These replace the inline function definitions that were here.
+    // PR B will move the remaining tab-specific code to tabs/*.js.
+    import { showToast, showConfirm } from '/js/core/ui.js';
+
     // --- Firebase SDK (CDN) ---
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
-    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, connectAuthEmulator }
+    // Firebase App + Auth are now initialized by main.js (loaded before this block).
+    // Import auth from main.js and use getApp() to get the already-initialized app.
+    import { getApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+    import { onAuthStateChanged, connectAuthEmulator }
       from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
     import { getFirestore as getClientFirestore, connectFirestoreEmulator, collection, query, where, onSnapshot, getDocs, orderBy, limit, doc, Timestamp }
       from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+    import { auth, signInWithEmailAndPassword, signOut } from './js/main.js';
 
-    // --- Config (loaded from config.js, or fetched from API) ---
+    // --- Config ---
     const API_BASE = window.SHYTALK_CONFIG.API_BASE;
-    let FIREBASE_CONFIG = window.SHYTALK_CONFIG.FIREBASE_CONFIG;
-    if (!FIREBASE_CONFIG) {
-      try {
-        const cfgRes = await fetch(API_BASE + '/api/firebase-config');
-        FIREBASE_CONFIG = await cfgRes.json();
-      } catch (e) {
-        console.error('Failed to load Firebase config from API:', e);
-      }
-    }
 
-    const app = initializeApp(FIREBASE_CONFIG);
-    const auth = getAuth(app);
+    // Use the app already initialized by main.js (avoids duplicate initializeApp error)
+    const app = getApp();
     const clientDb = getClientFirestore(app);
 
-    // Connect to Firebase emulators when running locally or in CI
+    // Connect Firestore to emulators (Auth emulator is handled by main.js)
     if (window.SHYTALK_CONFIG.USE_EMULATORS) {
-      connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true });
       connectFirestoreEmulator(clientDb, "localhost", 8080);
     }
 
@@ -5196,14 +5196,7 @@
       screens[name].classList.add("active");
     }
 
-    // --- Toast ---
-    let toastTimer;
-    function showToast(msg, type = "success") {
-      clearTimeout(toastTimer);
-      toast.textContent = msg;
-      toast.className = `toast ${type} visible`;
-      toastTimer = setTimeout(() => toast.classList.remove("visible"), type === "error" ? 7000 : 4000);
-    }
+    // showToast: imported from /js/core/ui.js (see import at top of this block)
 
     // --- Auth ---
     onAuthStateChanged(auth, async (user) => {
@@ -5211,8 +5204,12 @@
         // Check admin claim (client-side UX only)
         const tokenResult = await user.getIdTokenResult();
         if (tokenResult.claims.admin !== true) {
-          showToast("This account does not have admin privileges", "error");
-          await signOut(auth);
+          // Show access denied on login screen WITHOUT signing out —
+          // the user may be authenticated for the portal and signing
+          // them out here would destroy that session.
+          const loginError = document.getElementById('login-error');
+          loginError.textContent = 'Access denied — admin privileges required. If you have a portal account, go to /portal/ instead.';
+          loginError.style.display = 'block';
           showScreen("login");
           return;
         }
@@ -8171,26 +8168,7 @@
     }
 
     // Confirmation dialog
-    function showConfirm(title, message) {
-      return new Promise((resolve) => {
-        const overlay = document.createElement("div");
-        overlay.className = "confirm-overlay";
-        overlay.innerHTML = `
-          <div class="confirm-dialog">
-            <h3>${escapeHtml(title)}</h3>
-            <p>${escapeHtml(message)}</p>
-            <div class="confirm-buttons">
-              <button class="confirm-cancel">Cancel</button>
-              <button class="confirm-ok">Confirm</button>
-            </div>
-          </div>
-        `;
-        document.body.appendChild(overlay);
-        overlay.querySelector(".confirm-cancel").addEventListener("click", () => { overlay.remove(); resolve(false); });
-        overlay.querySelector(".confirm-ok").addEventListener("click", () => { overlay.remove(); resolve(true); });
-        overlay.addEventListener("click", (e) => { if (e.target === overlay) { overlay.remove(); resolve(false); } });
-      });
-    }
+    // showConfirm: imported from /js/core/ui.js (see import at top of this block)
 
     async function resolveReport(reportedUserId, resolveAll) {
       const form = reportsList.querySelector(`[data-form-uid="${reportedUserId}"]`);

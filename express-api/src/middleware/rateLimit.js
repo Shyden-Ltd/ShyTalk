@@ -60,4 +60,25 @@ const sensitiveLimiter = rateLimit({
   },
 });
 
-module.exports = { generalLimiter, writeLimiter, sensitiveLimiter };
+// Portal routes: 60 per minute per user — NO admin skip (prevents
+// admin tokens from flooding checkRevoked calls via authMiddlewareStrict)
+const portalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req) => req.auth?.uid || req.ip,
+  validate: false,
+});
+
+// Recovery endpoints (password reset, TOTP recovery): 3 per 24 hours per email
+const recoveryLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  max: 3,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req) => req.body?.email?.toLowerCase() || req.ip,
+  validate: false,
+});
+
+module.exports = { generalLimiter, writeLimiter, sensitiveLimiter, portalLimiter, recoveryLimiter };

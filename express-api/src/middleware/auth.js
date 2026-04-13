@@ -119,6 +119,49 @@ async function authMiddleware(req, res, next) {
   }
 }
 
+/**
+ * Strict auth middleware: verifies Firebase ID token with checkRevoked,
+ * resolves uniqueId, checks suspension. For portal and admin routes
+ * where token revocation must be enforced.
+ *
+ * Suspension exemption paths: /portal/me, /portal/sign-out, /users/{id}/appeal
+ */
+async function authMiddlewareStrict(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing or invalid Authorization header' });
+  }
+
+  const idToken = authHeader.slice(7);
+
+  try {
+    const decoded = await auth.verifyIdToken(idToken, true);
+    const uid = decoded.uid;
+
+    // Resolve Firebase UID → stable uniqueId
+    const uniqueId = await resolveUniqueId(uid);
+
+    // Check suspension (only if user exists)
+    const isSuspended = await checkSuspension(uniqueId);
+
+    if (isSuspended) {
+      const isSuspensionExempt =
+        req.path === '/portal/me' ||
+        req.path === '/portal/sign-out' ||
+        /^\/users\/[^/]+\/appeal$/.test(req.path);
+      if (!isSuspensionExempt) {
+        return res.status(403).json({ error: 'Account suspended' });
+      }
+    }
+
+    req.auth = { uid, uniqueId, token: decoded };
+    next();
+  } catch (err) {
+    log.error('auth', 'Authentication failed', { error: err.message });
+    return res.status(401).json({ error: 'Authentication failed' });
+  }
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────
 
 /**
@@ -154,6 +197,7 @@ function updateUniqueIdCache(uid, uniqueId) {
 
 module.exports = {
   authMiddleware,
+  authMiddlewareStrict,
   requireAdmin,
   clearSuspensionCache,
   clearUniqueIdCache,

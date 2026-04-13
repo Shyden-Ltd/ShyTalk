@@ -16,29 +16,30 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1029.0",
     "archiver": "^7.0.1",
-    "@aws-sdk/client-s3": "^3.1019.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
-    "dotenv": "^17.3.1",
+    "dotenv": "^17.4.1",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.3.0",
+    "express-rate-limit": "^8.3.2",
     "firebase-admin": "^13.0.0",
     "helmet": "^8.1.0",
-    "livekit-server-sdk": "^2.15.0",
+    "livekit-server-sdk": "^2.15.1",
     "multer": "^2.1.1",
     "node-cron": "^4.2.1",
-    "nodemailer": "^8.0.4",
+    "nodemailer": "^8.0.5",
+    "otplib": "^13.4.0",
     "sharp": "0.34.5"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "eslint": "^10.1.0",
+    "eslint": "^10.2.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-sonarjs": "^4.0.2",
     "globals": "^17.4.0",
     "jest": "^30.2.0",
-    "prettier": "^3.8.1",
+    "prettier": "^3.8.2",
     "supertest": "^7.2.2"
   }
 }

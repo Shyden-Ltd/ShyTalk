@@ -17,6 +17,7 @@ jest.mock('../../src/utils/firebase', () => ({
   },
   auth: {
     createCustomToken: jest.fn().mockResolvedValue('pin-custom-token'),
+    getUser: jest.fn().mockResolvedValue({ uid: 'fb-uid', providerData: [] }),
   },
   FieldValue: {},
 }));
@@ -377,6 +378,48 @@ describe('PIN Routes', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/numeric/i);
+    });
+  });
+
+  // ─── PIN TOTP bypass prevention ──────────────────────────────
+
+  describe('POST /api/auth/pin/verify — TOTP bypass prevention', () => {
+    it('should return 403 for password user WITH TOTP enrolled', async () => {
+      bcrypt.compare.mockResolvedValueOnce(true);
+
+      mockDocGet.mockImplementation((path) => {
+        if (path === 'users/12345678') {
+          return Promise.resolve({
+            exists: true,
+            data: () => ({
+              pinHash: '$2b$10$existinghash',
+              pinAttempts: 0,
+              pinLockedUntil: null,
+              pinLockoutCount: 0,
+              firebaseUid: 'fb-uid-totp',
+            }),
+          });
+        }
+        // TOTP doc exists
+        if (path.includes('/private/totp')) {
+          return Promise.resolve({ exists: true, data: () => ({ secret: 'enc-secret' }) });
+        }
+        return Promise.resolve({ exists: false });
+      });
+
+      // auth.getUser to check providers
+      auth.getUser = jest.fn().mockResolvedValueOnce({
+        uid: 'fb-uid-totp',
+        providerData: [{ providerId: 'password' }],
+      });
+
+      const app = buildApp(null);
+      const res = await request(app)
+        .post('/api/auth/pin/verify')
+        .send({ uniqueId: 12345678, deviceId: 'dev-1', pin: '1234' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toMatch(/authenticator/i);
     });
   });
 

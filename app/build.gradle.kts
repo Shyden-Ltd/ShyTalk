@@ -23,8 +23,8 @@ android {
         applicationId = "com.shyden.shytalk"
         minSdk = 28
         targetSdk = 36
-        versionCode = 90
-        versionName = "0.63.7"
+        versionCode = 97
+        versionName = "0.64.4"
 
         testInstrumentationRunner = "com.shyden.shytalk.ShyTalkTestRunner"
 
@@ -67,10 +67,17 @@ android {
         create("local") {
             dimension = "env"
             applicationIdSuffix = ".local"
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3000\"")
-            buildConfigField("String", "WORKER_URL", "\"http://10.0.2.2:3000\"")
-            buildConfigField("String", "LIVEKIT_SERVER_URL", "\"ws://10.0.2.2:7880\"")
-            buildConfigField("String", "RTDB_URL", "\"http://10.0.2.2:9000\"")
+            // Host alias — defaults to 10.0.2.2 (Android emulator's loopback to host machine).
+            // For physical devices: build with `-PlocalHost=localhost` and run
+            //   adb reverse tcp:3000 tcp:3000   (Express API)
+            //   adb reverse tcp:7880 tcp:7880   (LiveKit)
+            //   adb reverse tcp:9000 tcp:9000   (Firebase RTDB emulator)
+            // This tunnels the device's localhost to the laptop's localhost.
+            val localHostAlias = (project.findProperty("localHost") as String?) ?: "10.0.2.2"
+            buildConfigField("String", "API_BASE_URL", "\"http://$localHostAlias:3000\"")
+            buildConfigField("String", "WORKER_URL", "\"http://$localHostAlias:3000\"")
+            buildConfigField("String", "LIVEKIT_SERVER_URL", "\"ws://$localHostAlias:7880\"")
+            buildConfigField("String", "RTDB_URL", "\"http://$localHostAlias:9000\"")
             buildConfigField("String", "EMAIL_LINK_DOMAIN", "\"localhost\"")
             buildConfigField("String", "WEB_CLIENT_ID", "\"placeholder-local\"")
             buildConfigField("Boolean", "BYPASS_DEVICE_CHECKS", "true")

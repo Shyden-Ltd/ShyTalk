@@ -6,21 +6,15 @@ _Prioritised 2026-03-29 (revised)_
 
 ## Phase 0 — Infrastructure & Code Health (do first)
 
-These enable everything else. SonarCloud blocks all future PRs. Allure gives visibility. Legal branding is quick and overdue.
+These enable everything else. SonarCloud blocks all future PRs. Allure gives visibility. Legal branding is quick and overdue. Phase 0 is internal infrastructure and not shown on the public roadmap — user-facing web features previously listed here have moved to Phase 6.
 
 | # | Feature | Effort | Status |
 |---|---------|--------|--------|
 | 36 | **Fix all SonarCloud issues on main** — 500+ issues, must be clean before quality gate blocks PRs | Medium | DONE (PR #223, 2026-03-30) — 400+ fixed, quality gate passing |
 | 37 | **Allure report directory structure** — per-suite, per-environment, landing page. See `2026-03-29-allure-directory-spec.md` | Medium | DONE (PR #241, 2026-03-31) |
-| 35 | **Legal docs: Shyden Ltd branding** — update all public docs and legal pages | Small | |
-| 32 | **OnPush CLI** — local doc generation (`onpush init/generate/clean`). CI is paid; run locally only | Small | |
-| 40 | **CI workflow deduplication** — extract duplicated steps into reusable workflows (Firebase rules deploy, google-services decode, iOS signing, Allure report). 6+ workflows have duplicated logic | Small | |
-| 41 | **Admin panel restructure** — break 12,000+ line index.html into modular components/pages. Support future growth (more tabs, more features). Consider SPA framework or web components | Large | |
-| 42 | **Admin role-based access control** — internal admin roles (super-admin, moderator, viewer) controlling which tools each admin can use. Store roles in Firestore, enforce server-side | Medium | |
-| 43 | **MC Host dedicated panel** — separate login + dashboard for MC Hosts to manage games, participants, prizes. Isolated from main admin panel | Medium | |
-| 44 | **MC Singer dedicated panel** — separate login + dashboard for MC Singers to manage singing sessions, rooms, competitions | Medium | |
-| 45 | **Teacher dedicated panel** — separate login + dashboard for Teachers to manage teaching rooms, students, schedules | Medium | |
-| 46 | **Web page i18n completion** — full translations for all web pages including admin panel, legal pages. Language selector on every page | Medium | |
+| 35 | **Legal docs: Shyden Ltd branding** — update all public docs and legal pages | Small | DONE (PR #280, 2026-04-09) |
+| 40 | **CI workflow deduplication** — extract duplicated steps into reusable workflows (Firebase rules deploy, google-services decode, iOS signing, Allure report). 6+ workflows have duplicated logic | Small | DONE (PR #282, 2026-04-09) |
+| 41 | **Admin panel restructure** — break 12,000+ line index.html into modular components/pages. Support future growth (more tabs, more features). Consider SPA framework or web components. Blocked by #47 (now in Phase 6) | Large | |
 
 ---
 
@@ -98,14 +92,23 @@ Retention and UX improvements.
 
 ## Phase 6 — Website & Public Presence
 
-Public-facing website improvements.
+Public-facing website improvements and creator/admin tools.
 
 | # | Feature | Effort | Status |
 |---|---------|--------|--------|
+| 47 | **Unified web portal** — single login page where users authenticate with their ShyTalk account. Routes to Admin panel, MC Host panel, MC Singer panel, Teacher panel, or suggestions+roadmap based on role. Must be done BEFORE admin restructure (#41) | Medium | DONE (PR #284, 2026-04-10) |
 | 38 | **Website About section** — service details, GitHub repo link, Allure test reports link, GitHub Issues for bug reporting with template + walkthrough | Small | |
 | 34 | **Website support section** — FAQ + categorised support contact, matching in-app | Medium | |
 | 33 | **Website interactive demo** — screenshots + simulated video recordings of realistic users | Large | |
 | 39 | **Website public roadmap** — show upcoming features so users can see what's planned. Keep it high-level (no internal details), update when phases complete | Small | DONE (PR #223, 2026-03-30) |
+| 48 | **Web personal profile** — full profile management on portal: avatar upload, display name, SuperShy status/purchase, coins, linked accounts, voting history, submitted suggestions. Needs its own design cycle | Medium | |
+| 46 | **Web page i18n completion** — full translations for all web pages including admin panel, legal pages. Language selector on every page | Medium | |
+| 42 | **Admin role-based access control** — internal admin roles (super-admin, moderator, viewer) controlling which tools each admin can use. Store roles in Firestore, enforce server-side | Medium | |
+| 43 | **MC Host dedicated panel** — separate login + dashboard for MC Hosts to manage games, participants, prizes. Isolated from main admin panel | Medium | |
+| 49 | **MC Host Team Leader panel** — oversight panel for Team Leaders who manage multiple MC Hosts. View team performance, assign games/events, review MC Host activity, handle escalations | Medium | |
+| 44 | **MC Singer dedicated panel** — separate login + dashboard for MC Singers to manage singing sessions, rooms, competitions | Medium | |
+| 50 | **MC Singer Team Leader panel** — oversight panel for Team Leaders who manage multiple MC Singers. View team performance, assign singing sessions, review MC Singer activity, handle escalations | Medium | |
+| 45 | **Teacher dedicated panel** — separate login + dashboard for Teachers to manage teaching rooms, students, schedules | Medium | |
 
 ---
 
@@ -154,4 +157,15 @@ In-app support and niche room types.
 | B18 | **Admin panel restructure** — break 12,000+ line index.html into modular components. Also listed as #41 in Phase 0 | |
 | B19 | **Account sharing detection & prevention** — detect when multiple people use the same account (concurrent sessions from different devices/IPs/geolocations, impossible travel). Alert admin, optionally force re-auth or lock account. Integrates with identity graph for device fingerprinting | |
 | B20 | **Clans system** — user-created groups with leaders, members, ranks, shared chat, clan-level leaderboards, inter-clan competitions (PK battles, gift wars). Clan badges on profiles. Ties into nobility system for clan perks | |
+| B22 | **App startup redesign** — redesign app launch flow to prevent login screen flash when auto-login will happen (race condition), improve perceived startup time, better loading states | |
 | B21 | **Automated content moderation** — AI-powered detection of prohibited content across all UGC channels: pornography/nudity detection on video streams and uploaded images (profile photos, cover photos, chat images), profanity/hate speech detection on voice chat (speech-to-text + filter), and text toxicity detection on chat messages, usernames, room names, suggestions. Auto-flag for admin review or auto-action (warn/mute/suspend) based on severity. Dashboard for false-positive review and threshold tuning | |
+
+---
+
+## Nice to Have (deferred — end-of-roadmap polish)
+
+Items that are useful but not blocking. Do these only after all numbered phases are complete.
+
+| ID | Item | Effort | Notes |
+|----|------|--------|-------|
+| 32 | **OnPush CLI** — local doc generation (`onpush init/generate/clean`). CI is paid; run locally only | Small | Moved from Phase 0 (2026-04-11) — productivity tool, not user-visible. Defer until core roadmap is done. |

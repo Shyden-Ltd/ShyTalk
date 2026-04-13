@@ -1,0 +1,46 @@
+name: 'Decode google-services.json'
+description: 'Decode google-services.json for dev/prod/local build flavors'
+inputs:
+  dev-base64:
+    description: 'Base64-encoded dev google-services.json'
+    required: false
+    default: ''
+  prod-base64:
+    description: 'Base64-encoded prod google-services.json'
+    required: false
+    default: ''
+  include-local:
+    description: 'Create local flavor with demo config'
+    required: false
+    default: 'false'
+runs:
+  using: 'composite'
+  steps:
+    - name: Decode google-services.json
+      shell: bash
+      env:
+        DEV_BASE64: ${{ inputs.dev-base64 }}
+        PROD_BASE64: ${{ inputs.prod-base64 }}
+        INCLUDE_LOCAL: ${{ inputs.include-local }}
+      run: |
+        PLACEHOLDER='{"project_info":{"project_number":"0","project_id":"placeholder"},"client":[{"client_info":{"mobilesdk_app_id":"1:0:android:0","android_client_info":{"package_name":"com.shyden.shytalk"}},"api_key":[{"current_key":"placeholder"}]},{"client_info":{"mobilesdk_app_id":"1:0:android:0","android_client_info":{"package_name":"com.shyden.shytalk.dev"}},"api_key":[{"current_key":"placeholder"}]}]}'
+        LOCAL_JSON='{"project_info":{"project_number":"0","firebase_url":"http://localhost:9000","project_id":"demo-shytalk","storage_bucket":"demo-shytalk.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:0:android:0","android_client_info":{"package_name":"com.shyden.shytalk.local"}},"api_key":[{"current_key":"demo-key"}]}],"configuration_version":"1"}'
+
+        mkdir -p app/src/dev app/src/prod app/src/local
+
+        if [ -n "$DEV_BASE64" ]; then
+          echo "$DEV_BASE64" | base64 -d > app/src/dev/google-services.json
+        else
+          echo "$PLACEHOLDER" > app/src/dev/google-services.json
+          echo "::warning::Using placeholder dev google-services.json (secret unavailable)"
+        fi
+
+        if [ -n "$PROD_BASE64" ]; then
+          echo "$PROD_BASE64" | base64 -d > app/src/prod/google-services.json
+        else
+          cp app/src/dev/google-services.json app/src/prod/google-services.json
+        fi
+
+        if [ "$INCLUDE_LOCAL" = "true" ]; then
+          echo "$LOCAL_JSON" > app/src/local/google-services.json
+        fi

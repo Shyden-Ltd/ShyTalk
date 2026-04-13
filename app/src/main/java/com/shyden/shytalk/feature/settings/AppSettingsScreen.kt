@@ -1549,7 +1549,15 @@ private fun AboutPage(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = stringResource(Res.string.shyden_ltd_brand),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Contact
             Row(
