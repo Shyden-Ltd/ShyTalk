@@ -20,7 +20,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
-    "allure-playwright": "^3.6.0",
+    "allure-playwright": "^3.7.1",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
     "sharp": "^0.34.5"
