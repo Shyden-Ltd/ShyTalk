@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
  * These will be replaced with real iOS implementations:
  * - SignIn → ASAuthorizationController (Apple Sign-In)
  * - AppSettings → iOS Settings.app integration
- * - Warning → AVAudioPlayer + bundled images
+ * - Warning → shared WarningScreen (EmergencyTonePlayer via AVAudioEngine + shared drawable)
  * - Profile → shared ProfileScreen (once moved to commonMain)
  * - Room → shared RoomScreen (once moved to commonMain)
  */
