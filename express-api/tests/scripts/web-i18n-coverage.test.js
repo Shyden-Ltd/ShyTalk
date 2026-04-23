@@ -64,6 +64,11 @@ describe('portal-translations.js', () => {
     }
   });
 
+  test('contains English (en) language block', () => {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    expect(content).toMatch(/^\s{2}en:/m);
+  });
+
   test('km (Khmer) language block exists with translations', () => {
     const content = fs.readFileSync(filePath, 'utf-8');
     expect(content).toMatch(/^\s{2}km:/m);
