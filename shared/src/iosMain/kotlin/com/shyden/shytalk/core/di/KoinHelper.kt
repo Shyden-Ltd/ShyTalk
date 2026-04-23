@@ -17,7 +17,7 @@ import org.koin.mp.KoinPlatformTools
  *
  * @param useEmulators If true, connects Firebase to local emulators (localhost).
  */
-fun doInitKoin(useEmulators: Boolean = true) {
+fun doInitKoin(useEmulators: Boolean = false) {
     if (KoinPlatformTools.defaultContext().getOrNull() != null) {
         logI("KoinHelper", "Koin already initialised — skipping")
         return
@@ -31,19 +31,15 @@ fun doInitKoin(useEmulators: Boolean = true) {
         }
         logI("KoinHelper", "Koin initialised successfully (emulators=$useEmulators)")
     } catch (e: Exception) {
-        logE("KoinHelper", "Koin initialisation failed: ${e.message}")
+        logE("KoinHelper", "Koin initialisation failed: ${e.message}", e)
         throw e
     }
 }
 
 private fun configureFirebaseEmulators() {
-    try {
-        val host = "localhost"
-        Firebase.firestore.useEmulator(host, 8080)
-        Firebase.auth.useEmulator(host, 9099)
-        Firebase.database.useEmulator(host, 9000)
-        logI("KoinHelper", "Firebase emulators: Firestore=$host:8080, Auth=$host:9099, RTDB=$host:9000")
-    } catch (e: Exception) {
-        logW("KoinHelper", "Firebase emulator config failed: ${e.message}")
-    }
+    val host = "localhost"
+    Firebase.firestore.useEmulator(host, 8080)
+    Firebase.auth.useEmulator(host, 9099)
+    Firebase.database.useEmulator(host, 9000)
+    logI("KoinHelper", "Firebase emulators: Firestore=$host:8080, Auth=$host:9099, RTDB=$host:9000")
 }
