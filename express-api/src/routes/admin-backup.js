@@ -84,8 +84,8 @@ router.get('/admin/backups', async (req, res) => {
           entry.manifest = manifest;
           entry.userCount = manifest.collections?.users ?? null;
         }
-      } catch {
-        // Manifest might not exist for older backups
+      } catch (err) {
+        log.warn('admin-backup', 'Failed to load manifest', { date, error: err.message });
       }
       entry.size = entry.totalSize;
       backups.push(entry);
