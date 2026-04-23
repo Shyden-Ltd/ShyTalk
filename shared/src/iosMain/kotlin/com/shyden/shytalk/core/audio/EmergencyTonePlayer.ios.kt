@@ -59,9 +59,12 @@ actual object EmergencyTonePlayer {
                 channel[i] = signal[i]
             }
 
-            audioEngine.startAndReturnError(null)
-            player.play()
+            if (!audioEngine.startAndReturnError(null)) {
+                logW("EmergencyTonePlayer", "AVAudioEngine failed to start")
+                return
+            }
             player.scheduleBuffer(buffer, completionHandler = null)
+            player.play()
 
             engine = audioEngine
             playerNode = player
@@ -74,6 +77,7 @@ actual object EmergencyTonePlayer {
         try {
             playerNode?.stop()
             engine?.stop()
+            AVAudioSession.sharedInstance().setActive(false, error = null)
         } catch (e: Exception) {
             logW("EmergencyTonePlayer", "Failed to stop audio: ${e.message}")
         }
