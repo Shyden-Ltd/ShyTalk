@@ -6,89 +6,6 @@
       "description": "real Firebase repos, same data as Android, all screens functional",
       "phase": "Platform & iOS",
       "i18n": {}
-    },
-    {
-      "name": "Web page i18n completion",
-      "description": "full translations for all web pages including admin panel, legal pages. Language selector on every page",
-      "phase": "Website & Presence",
-      "i18n": {
-        "ar": {
-          "n": "ترجمة موقع الويب",
-          "d": "جميع صفحات الموقع بـ 19 لغة"
-        },
-        "de": {
-          "n": "Mehrsprachige Website",
-          "d": "Alle Website-Seiten in 19 Sprachen"
-        },
-        "es": {
-          "n": "Sitio web multilingüe",
-          "d": "Todas las páginas del sitio en 19 idiomas"
-        },
-        "fr": {
-          "n": "Site multilingue",
-          "d": "Toutes les pages du site en 19 langues"
-        },
-        "hi": {
-          "n": "बहुभाषी वेबसाइट",
-          "d": "19 भाषाओं में सभी वेबसाइट पेज"
-        },
-        "id": {
-          "n": "Situs multibahasa",
-          "d": "Semua halaman situs dalam 19 bahasa"
-        },
-        "it": {
-          "n": "Sito multilingue",
-          "d": "Tutte le pagine del sito in 19 lingue"
-        },
-        "ja": {
-          "n": "多言語ウェブサイト",
-          "d": "すべてのウェブサイトページを19言語で"
-        },
-        "ko": {
-          "n": "다국어 웹사이트",
-          "d": "모든 웹사이트 페이지를 19개 언어로"
-        },
-        "nl": {
-          "n": "Meertalige website",
-          "d": "Alle websitepagina's in 19 talen"
-        },
-        "pl": {
-          "n": "Wielojęzyczna strona",
-          "d": "Wszystkie strony w 19 językach"
-        },
-        "pt": {
-          "n": "Site multilíngue",
-          "d": "Todas as páginas do site em 19 idiomas"
-        },
-        "ru": {
-          "n": "Многоязычный сайт",
-          "d": "Все страницы сайта на 19 языках"
-        },
-        "sv": {
-          "n": "Flerspråkig webbplats",
-          "d": "Alla webbplatssidor på 19 språk"
-        },
-        "th": {
-          "n": "เว็บหลายภาษา",
-          "d": "ทุกหน้าเว็บใน 19 ภาษา"
-        },
-        "tr": {
-          "n": "Çok dilli site",
-          "d": "Tüm web sayfaları 19 dilde"
-        },
-        "uk": {
-          "n": "Багатомовний сайт",
-          "d": "Усі сторінки сайту 19 мовами"
-        },
-        "vi": {
-          "n": "Website đa ngôn ngữ",
-          "d": "Tất cả trang web bằng 19 ngôn ngữ"
-        },
-        "zh": {
-          "n": "多语言网站",
-          "d": "所有网页支持19种语言"
-        }
-      }
     }
   ],
   "phases": [
@@ -2472,7 +2389,7 @@
       },
       "status": "in-progress",
       "progress": {
-        "done": 2,
+        "done": 3,
         "total": 14
       },
       "features": [
@@ -2977,7 +2894,7 @@
         {
           "name": "Web page i18n completion",
           "description": "full translations for all web pages including admin panel, legal pages. Language selector on every page",
-          "status": "in-progress",
+          "status": "done",
           "i18n": {
             "ar": {
               "n": "ترجمة موقع الويب",
