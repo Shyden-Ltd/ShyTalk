@@ -84,6 +84,11 @@ class IosApiClient(
         }
     }
 
+    fun clearTokenCache() {
+        cachedToken = null
+        tokenTimestamp = 0
+    }
+
     suspend fun get(path: String): JsonObject = request("GET", path)
 
     suspend fun post(
@@ -102,6 +107,11 @@ class IosApiClient(
     ): JsonObject = request("PUT", path, body)
 
     suspend fun delete(path: String): JsonObject = request("DELETE", path)
+
+    suspend fun delete(
+        path: String,
+        body: JsonObject?,
+    ): JsonObject = request("DELETE", path, body)
 
     suspend fun getPublic(path: String): JsonObject {
         val response =
