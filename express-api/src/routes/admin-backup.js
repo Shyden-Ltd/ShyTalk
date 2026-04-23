@@ -57,7 +57,7 @@ router.get('/admin/backups', async (req, res) => {
 
     // List all manifest files under backups/full/
     const objects = await listObjectsWithMeta('backups/full/');
-    const dateMap = {};
+    const dateMap = Object.create(null);
 
     for (const obj of objects) {
       // Extract date from key: backups/full/YYYY-MM-DD/filename.json
@@ -320,7 +320,7 @@ router.post('/admin/backups/restore/:date', async (req, res) => {
 /** Scan an R2 folder and restore missing photo URLs to user docs. */
 async function recoverPhotosFromFolder(folder, CDN_URL) {
   const field = folder === 'profiles/' ? 'profilePhotoUrl' : 'coverPhotoUrl';
-  const userPhotos = {};
+  const userPhotos = Object.create(null);
 
   const objects = await listObjectsWithMeta(folder);
   for (const obj of objects) {
