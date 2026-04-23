@@ -1,12 +1,7 @@
 package com.shyden.shytalk.core.di
 
-import com.shyden.shytalk.core.di.stubs.IosConversationWebSocketServiceStub
-import com.shyden.shytalk.core.di.stubs.IosEconomyRepositoryStub
-import com.shyden.shytalk.core.di.stubs.IosGiftRepositoryStub
-import com.shyden.shytalk.core.di.stubs.IosPresenceServiceStub
-import com.shyden.shytalk.core.di.stubs.IosRoomLifecycleManagerStub
-import com.shyden.shytalk.core.di.stubs.IosTypingRepositoryStub
 import com.shyden.shytalk.core.di.stubs.IosVoiceServiceStub
+import com.shyden.shytalk.core.room.IosRoomLifecycleManager
 import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.core.util.BiometricAuth
 import com.shyden.shytalk.core.util.CryptoKeyPair
@@ -16,7 +11,10 @@ import com.shyden.shytalk.data.remote.AppConfigService
 import com.shyden.shytalk.data.remote.ConversationWebSocketService
 import com.shyden.shytalk.data.remote.IosApiClient
 import com.shyden.shytalk.data.remote.IosAppConfigServiceImpl
+import com.shyden.shytalk.data.remote.IosConversationWebSocketServiceImpl
+import com.shyden.shytalk.data.remote.IosPresenceServiceImpl
 import com.shyden.shytalk.data.remote.IosTokenServiceImpl
+import com.shyden.shytalk.data.remote.IosTypingRepositoryImpl
 import com.shyden.shytalk.data.remote.PresenceService
 import com.shyden.shytalk.data.remote.TokenService
 import com.shyden.shytalk.data.remote.VoiceService
@@ -34,7 +32,9 @@ import com.shyden.shytalk.data.repository.IosAuthRepositoryImpl
 import com.shyden.shytalk.data.repository.IosBannerRepositoryImpl
 import com.shyden.shytalk.data.repository.IosBiometricRepositoryImpl
 import com.shyden.shytalk.data.repository.IosDeviceRepositoryImpl
+import com.shyden.shytalk.data.repository.IosEconomyRepositoryImpl
 import com.shyden.shytalk.data.repository.IosFunFactRepositoryImpl
+import com.shyden.shytalk.data.repository.IosGiftRepositoryImpl
 import com.shyden.shytalk.data.repository.IosIdentityRepositoryImpl
 import com.shyden.shytalk.data.repository.IosMessageRepositoryImpl
 import com.shyden.shytalk.data.repository.IosNotificationRepositoryImpl
@@ -106,10 +106,10 @@ val iosPlatformModule =
         single<IdentityRepository> { IosIdentityRepositoryImpl(get(), get()) }
         single<PrivateMessageRepository> { IosPrivateMessageRepositoryImpl(get(), get(), get()) }
         single<ReportRepository> { IosReportRepositoryImpl(get()) }
-        single<TypingRepository> { IosTypingRepositoryStub() }
+        single<TypingRepository> { IosTypingRepositoryImpl(get()) }
         single<NotificationRepository> { IosNotificationRepositoryImpl(get(), get()) }
-        single<GiftRepository> { IosGiftRepositoryStub() }
-        single<EconomyRepository> { IosEconomyRepositoryStub() }
+        single<GiftRepository> { IosGiftRepositoryImpl(get()) }
+        single<EconomyRepository> { IosEconomyRepositoryImpl(get(), get(), get()) }
         single<BannerRepository> { IosBannerRepositoryImpl(get()) }
         single<FunFactRepository> { IosFunFactRepositoryImpl(get()) }
         single<TranslationRepository> { IosTranslationRepositoryImpl(get()) }
@@ -122,12 +122,12 @@ val iosPlatformModule =
         // Services
         single<TokenService> { IosTokenServiceImpl(get()) }
         single<VoiceService> { IosVoiceServiceStub() }
-        single<PresenceService> { IosPresenceServiceStub() }
-        single<ConversationWebSocketService> { IosConversationWebSocketServiceStub() }
+        single<PresenceService> { IosPresenceServiceImpl(get()) }
+        single<ConversationWebSocketService> { IosConversationWebSocketServiceImpl(get()) }
         single<AppConfigService> { IosAppConfigServiceImpl(get()) }
 
         // Managers
-        single<RoomLifecycleManager> { IosRoomLifecycleManagerStub() }
+        single<RoomLifecycleManager> { IosRoomLifecycleManager(get()) }
 
         // Preloaders
         single<BannerImagePreloader> { BannerImagePreloader { } }
