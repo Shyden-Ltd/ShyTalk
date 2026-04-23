@@ -6,7 +6,7 @@ struct iOSApp: App {
     @StateObject private var coordinator = StartingScreenCoordinator()
 
     init() {
-        KoinHelperKt.doInitKoin()
+        KoinHelperKt.doInitKoin(useEmulators: true)
     }
 
     var body: some Scene {

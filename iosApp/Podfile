@@ -1,7 +1,7 @@
 platform :ios, '16.0'
 
 target 'iosApp' do
-  use_frameworks!
+  use_frameworks! :linkage => :static
 
   # Firebase iOS SDK — same services as Android
   pod 'FirebaseCore'
