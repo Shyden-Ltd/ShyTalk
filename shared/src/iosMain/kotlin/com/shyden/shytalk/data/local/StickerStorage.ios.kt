@@ -1,6 +1,7 @@
 package com.shyden.shytalk.data.local
 
 import com.shyden.shytalk.feature.messaging.Sticker
+import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.usePinned
@@ -17,7 +18,10 @@ import platform.Foundation.stringByAppendingPathComponent
 import platform.Foundation.writeToFile
 import platform.posix.memcpy
 
-@OptIn(ExperimentalForeignApi::class)
+@OptIn(BetaInteropApi::class)
+private fun String.appendPathComponent(component: String): String = NSString.create(string = this).stringByAppendingPathComponent(component)
+
+@OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
 actual class StickerStorage {
     private val fileManager = NSFileManager.defaultManager
     private val stickersDir: String by lazy {
@@ -27,16 +31,16 @@ actual class StickerStorage {
                 NSUserDomainMask,
                 true,
             ).first() as String
-        val dir = (docs as NSString).stringByAppendingPathComponent("stickers")
+        val dir = docs.appendPathComponent("stickers")
         if (!fileManager.fileExistsAtPath(dir)) {
             fileManager.createDirectoryAtPath(dir, true, null, null)
         }
         dir
     }
     private val indexFile: String
-        get() = (stickersDir as NSString).stringByAppendingPathComponent("index.txt")
+        get() = stickersDir.appendPathComponent("index.txt")
     private val recentsFile: String
-        get() = (stickersDir as NSString).stringByAppendingPathComponent("recents.txt")
+        get() = stickersDir.appendPathComponent("recents.txt")
 
     actual fun getStickers(): List<Sticker> =
         readIndex().map { (id, path) ->
@@ -48,7 +52,7 @@ actual class StickerStorage {
         imageData: ByteArray,
     ): Sticker {
         val ext = detectImageExtension(imageData)
-        val imagePath = (stickersDir as NSString).stringByAppendingPathComponent("$id.$ext")
+        val imagePath = stickersDir.appendPathComponent("$id.$ext")
         imageData.usePinned { pinned ->
             val nsData = NSData.create(bytes = pinned.addressOf(0), length = imageData.size.toULong())
             nsData.writeToFile(imagePath, true)
@@ -144,7 +148,7 @@ actual class StickerStorage {
         lines: List<String>,
     ) {
         val content = lines.joinToString("\n")
-        (content as NSString).writeToFile(path, true, NSUTF8StringEncoding, null)
+        NSString.create(string = content).writeToFile(path, true, NSUTF8StringEncoding, null)
     }
 
     private fun detectImageExtension(data: ByteArray): String {

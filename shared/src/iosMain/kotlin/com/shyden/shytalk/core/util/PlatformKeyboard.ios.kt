@@ -31,8 +31,8 @@ actual fun isKeyboardVisible(): Boolean {
             ) { _ -> visible = false }
 
         onDispose {
-            showObserver?.let { center.removeObserver(it) }
-            hideObserver?.let { center.removeObserver(it) }
+            center.removeObserver(showObserver)
+            center.removeObserver(hideObserver)
         }
     }
 
