@@ -6,6 +6,9 @@ struct iOSApp: App {
     @StateObject private var coordinator = StartingScreenCoordinator()
 
     init() {
+        // TODO: Replace #if DEBUG with a proper build flavor system (local/dev/prod)
+        // matching Android's 3 flavors. Currently all debug builds use emulators,
+        // which differs from Android where only the "local" flavor does.
         #if DEBUG
         KoinHelperKt.doInitKoin(useEmulators: true)
         #else
