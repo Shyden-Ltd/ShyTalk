@@ -3,7 +3,7 @@ package com.shyden.shytalk.core.audio
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
-import android.util.Log
+import com.shyden.shytalk.core.util.logW
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -15,7 +15,7 @@ import kotlin.math.sin
  *    — separated by 1-second pauses
  * 2. Followed by the 8-second attention tone (853 Hz + 960 Hz dual sine)
  */
-object EmergencyTonePlayer {
+actual object EmergencyTonePlayer {
     private const val SAMPLE_RATE = 44100
     private const val AMPLITUDE = 0.30f
 
@@ -31,7 +31,7 @@ object EmergencyTonePlayer {
 
     private var audioTrack: AudioTrack? = null
 
-    fun play() {
+    actual fun play() {
         stop()
 
         val signal = generateEASSignal()
@@ -61,13 +61,13 @@ object EmergencyTonePlayer {
         audioTrack = track
     }
 
-    fun stop() {
+    actual fun stop() {
         audioTrack?.let {
             try {
                 it.stop()
                 it.release()
             } catch (e: Exception) {
-                Log.w("EmergencyTonePlayer", "Failed to stop audio track", e)
+                logW("EmergencyTonePlayer", "Failed to stop audio track")
             }
         }
         audioTrack = null

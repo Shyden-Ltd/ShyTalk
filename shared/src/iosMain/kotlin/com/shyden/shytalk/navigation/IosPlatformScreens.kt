@@ -28,7 +28,7 @@ fun createIosPlatformScreens(): PlatformScreens =
     PlatformScreens(
         signInScreen = { params -> IosSignInPlaceholder(params) },
         appSettingsScreen = { params -> IosSettingsPlaceholder(params) },
-        warningScreen = { params -> IosWarningPlaceholder(params) },
+        warningScreen = { params -> IosWarningScreen(params) },
         profileScreen = { params -> IosProfilePlaceholder(params) },
         roomScreen = { params -> IosRoomPlaceholder(params) },
     )
@@ -74,13 +74,11 @@ private fun IosSettingsPlaceholder(params: AppSettingsScreenParams) {
 }
 
 @Composable
-private fun IosWarningPlaceholder(params: WarningScreenParams) {
-    PlaceholderScreen(
-        title = "Warning",
-        subtitle = params.reason ?: "You have a warning",
-        actionLabel = "I Understand",
-        actionTag = "ios_warning_acceptButton",
-        onAction = params.onAccept,
+private fun IosWarningScreen(params: WarningScreenParams) {
+    com.shyden.shytalk.feature.warning.WarningScreen(
+        reason = params.reason,
+        onAccept = params.onAccept,
+        onViewCommunityStandards = params.onViewCommunityStandards,
     )
 }
 
