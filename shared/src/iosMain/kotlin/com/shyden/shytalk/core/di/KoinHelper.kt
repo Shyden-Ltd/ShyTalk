@@ -2,7 +2,6 @@ package com.shyden.shytalk.core.di
 
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logI
-import com.shyden.shytalk.core.util.logW
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.database.database
