@@ -8,8 +8,12 @@
  * rather than running the full script with fs mocks.
  */
 
-const { parseRoadmap, SKIP_PHASES, PHASE_TITLES, computePhaseStatus } =
-  require('../../../scripts/generate-roadmap-json');
+const {
+  parseRoadmap,
+  SKIP_PHASES,
+  PHASE_TITLES,
+  computePhaseStatus,
+} = require('../../../scripts/generate-roadmap-json');
 
 // ─── Sample data ───────────────────────────────────────────────
 
@@ -131,11 +135,7 @@ describe('phase filtering', () => {
 
 describe('computePhaseStatus', () => {
   test('all done → complete', () => {
-    const result = computePhaseStatus([
-      { status: 'done' },
-      { status: 'done' },
-      { status: 'done' },
-    ]);
+    const result = computePhaseStatus([{ status: 'done' }, { status: 'done' }, { status: 'done' }]);
     expect(result.label).toBe('complete');
     expect(result.done).toBe(3);
     expect(result.total).toBe(3);
@@ -153,28 +153,19 @@ describe('computePhaseStatus', () => {
   });
 
   test('only in-progress, no done → in-progress', () => {
-    const result = computePhaseStatus([
-      { status: 'in-progress' },
-      { status: 'planned' },
-    ]);
+    const result = computePhaseStatus([{ status: 'in-progress' }, { status: 'planned' }]);
     expect(result.label).toBe('in-progress');
     expect(result.done).toBe(0);
     expect(result.total).toBe(2);
   });
 
   test('next status counts as in-progress', () => {
-    const result = computePhaseStatus([
-      { status: 'next' },
-      { status: 'planned' },
-    ]);
+    const result = computePhaseStatus([{ status: 'next' }, { status: 'planned' }]);
     expect(result.label).toBe('in-progress');
   });
 
   test('all planned → planned', () => {
-    const result = computePhaseStatus([
-      { status: 'planned' },
-      { status: 'planned' },
-    ]);
+    const result = computePhaseStatus([{ status: 'planned' }, { status: 'planned' }]);
     expect(result.label).toBe('planned');
     expect(result.done).toBe(0);
     expect(result.total).toBe(2);
