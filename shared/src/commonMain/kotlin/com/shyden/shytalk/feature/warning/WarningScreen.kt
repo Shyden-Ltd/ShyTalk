@@ -2,11 +2,13 @@ package com.shyden.shytalk.feature.warning
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -51,82 +53,85 @@ fun WarningScreen(
     }
 
     Surface(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(32.dp)
-                    .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Image(
-                painter = painterResource(Res.drawable.police_duck),
-                contentDescription = stringResource(Res.string.police_duck_description),
+        BoxWithConstraints {
+            Column(
                 modifier =
                     Modifier
-                        .size(160.dp)
-                        .clip(CircleShape),
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                text = stringResource(Res.string.official_warning),
-                style = MaterialTheme.typography.headlineMedium,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.testTag("warning_title"),
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text =
-                    if (!reason.isNullOrBlank() && !reason.equals("other", ignoreCase = true)) {
-                        stringResource(Res.string.warning_reviewed_for_reason, reason)
-                    } else {
-                        stringResource(Res.string.warning_reviewed)
-                    },
-                style = MaterialTheme.typography.bodyLarge,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = stringResource(Res.string.warning_consequence),
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            TextButton(
-                onClick = onViewCommunityStandards,
-                modifier = Modifier.testTag("warning_communityStandardsLink"),
+                        .fillMaxWidth()
+                        .heightIn(min = maxHeight)
+                        .padding(32.dp)
+                        .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
             ) {
-                Text(stringResource(Res.string.view_community_standards))
+                Image(
+                    painter = painterResource(Res.drawable.police_duck),
+                    contentDescription = stringResource(Res.string.police_duck_description),
+                    modifier =
+                        Modifier
+                            .size(160.dp)
+                            .clip(CircleShape),
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Text(
+                    text = stringResource(Res.string.official_warning),
+                    style = MaterialTheme.typography.headlineMedium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.testTag("warning_title"),
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text =
+                        if (!reason.isNullOrBlank() && !reason.equals("other", ignoreCase = true)) {
+                            stringResource(Res.string.warning_reviewed_for_reason, reason)
+                        } else {
+                            stringResource(Res.string.warning_reviewed)
+                        },
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = stringResource(Res.string.warning_consequence),
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                TextButton(
+                    onClick = onViewCommunityStandards,
+                    modifier = Modifier.testTag("warning_communityStandardsLink"),
+                ) {
+                    Text(stringResource(Res.string.view_community_standards))
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = onAccept,
+                    modifier = Modifier.fillMaxWidth().testTag("warning_acceptButton"),
+                ) {
+                    Text(stringResource(Res.string.i_understand_and_accept))
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = stringResource(Res.string.support_contact),
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Button(
-                onClick = onAccept,
-                modifier = Modifier.fillMaxWidth().testTag("warning_acceptButton"),
-            ) {
-                Text(stringResource(Res.string.i_understand_and_accept))
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = stringResource(Res.string.support_contact),
-                style = MaterialTheme.typography.bodySmall,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }
