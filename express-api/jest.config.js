@@ -1,5 +1,8 @@
 module.exports = {
   testEnvironment: 'node',
+  restoreMocks: true,
+  clearMocks: true,
+  resetMocks: false,
   testMatch: ['**/src/__tests__/**/*.test.js', '**/tests/**/*.test.js'],
   // Exclude tests that require modules outside the express-api project root
   // (cross-project mocking doesn't work reliably with Jest)
