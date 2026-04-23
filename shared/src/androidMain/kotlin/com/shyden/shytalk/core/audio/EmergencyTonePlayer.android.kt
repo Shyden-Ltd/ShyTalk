@@ -34,31 +34,41 @@ actual object EmergencyTonePlayer {
     actual fun play() {
         stop()
 
-        val signal = generateEASSignal()
+        try {
+            val signal = generateEASSignal()
 
-        val track =
-            AudioTrack
-                .Builder()
-                .setAudioAttributes(
-                    AudioAttributes
-                        .Builder()
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build(),
-                ).setAudioFormat(
-                    AudioFormat
-                        .Builder()
-                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                        .setSampleRate(SAMPLE_RATE)
-                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                        .build(),
-                ).setBufferSizeInBytes(signal.size * 2)
-                .setTransferMode(AudioTrack.MODE_STATIC)
-                .build()
+            val track =
+                AudioTrack
+                    .Builder()
+                    .setAudioAttributes(
+                        AudioAttributes
+                            .Builder()
+                            .setUsage(AudioAttributes.USAGE_ALARM)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build(),
+                    ).setAudioFormat(
+                        AudioFormat
+                            .Builder()
+                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                            .setSampleRate(SAMPLE_RATE)
+                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                            .build(),
+                    ).setBufferSizeInBytes(signal.size * 2)
+                    .setTransferMode(AudioTrack.MODE_STATIC)
+                    .build()
 
-        track.write(signal, 0, signal.size)
-        track.play()
-        audioTrack = track
+            if (track.state != AudioTrack.STATE_INITIALIZED) {
+                logW("EmergencyTonePlayer", "AudioTrack failed to initialize")
+                track.release()
+                return
+            }
+
+            track.write(signal, 0, signal.size)
+            track.play()
+            audioTrack = track
+        } catch (e: Exception) {
+            logW("EmergencyTonePlayer", "Failed to play EAS tone: ${e.message}")
+        }
     }
 
     actual fun stop() {
