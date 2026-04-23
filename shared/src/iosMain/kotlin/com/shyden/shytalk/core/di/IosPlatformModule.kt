@@ -1,16 +1,12 @@
 package com.shyden.shytalk.core.di
 
-import com.shyden.shytalk.core.di.stubs.IosAppConfigServiceStub
-import com.shyden.shytalk.core.di.stubs.IosBannerImagePreloaderStub
 import com.shyden.shytalk.core.di.stubs.IosConversationWebSocketServiceStub
 import com.shyden.shytalk.core.di.stubs.IosEconomyRepositoryStub
 import com.shyden.shytalk.core.di.stubs.IosGiftRepositoryStub
 import com.shyden.shytalk.core.di.stubs.IosPresenceServiceStub
 import com.shyden.shytalk.core.di.stubs.IosRoomLifecycleManagerStub
-import com.shyden.shytalk.core.di.stubs.IosTokenServiceStub
 import com.shyden.shytalk.core.di.stubs.IosTypingRepositoryStub
 import com.shyden.shytalk.core.di.stubs.IosVoiceServiceStub
-import com.shyden.shytalk.core.di.stubs.IosWebContentPreloaderStub
 import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.core.util.BiometricAuth
 import com.shyden.shytalk.core.util.CryptoKeyPair
@@ -19,6 +15,8 @@ import com.shyden.shytalk.data.local.StickerStorage
 import com.shyden.shytalk.data.remote.AppConfigService
 import com.shyden.shytalk.data.remote.ConversationWebSocketService
 import com.shyden.shytalk.data.remote.IosApiClient
+import com.shyden.shytalk.data.remote.IosAppConfigServiceImpl
+import com.shyden.shytalk.data.remote.IosTokenServiceImpl
 import com.shyden.shytalk.data.remote.PresenceService
 import com.shyden.shytalk.data.remote.TokenService
 import com.shyden.shytalk.data.remote.VoiceService
@@ -122,16 +120,16 @@ val iosPlatformModule =
         single<AppLockRepository> { AppLockRepositoryImpl(get<SecureStorage>()) }
 
         // Services
-        single<TokenService> { IosTokenServiceStub() }
+        single<TokenService> { IosTokenServiceImpl(get()) }
         single<VoiceService> { IosVoiceServiceStub() }
         single<PresenceService> { IosPresenceServiceStub() }
         single<ConversationWebSocketService> { IosConversationWebSocketServiceStub() }
-        single<AppConfigService> { IosAppConfigServiceStub() }
+        single<AppConfigService> { IosAppConfigServiceImpl(get()) }
 
         // Managers
         single<RoomLifecycleManager> { IosRoomLifecycleManagerStub() }
 
         // Preloaders
-        single<BannerImagePreloader> { IosBannerImagePreloaderStub() }
-        single<WebContentPreloader> { IosWebContentPreloaderStub() }
+        single<BannerImagePreloader> { BannerImagePreloader { } }
+        single<WebContentPreloader> { WebContentPreloader { } }
     }
