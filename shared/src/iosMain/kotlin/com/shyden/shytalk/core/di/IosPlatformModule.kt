@@ -2,23 +2,13 @@ package com.shyden.shytalk.core.di
 
 import com.shyden.shytalk.core.di.stubs.IosAppConfigServiceStub
 import com.shyden.shytalk.core.di.stubs.IosBannerImagePreloaderStub
-import com.shyden.shytalk.core.di.stubs.IosBannerRepositoryStub
-import com.shyden.shytalk.core.di.stubs.IosBiometricRepositoryStub
 import com.shyden.shytalk.core.di.stubs.IosConversationWebSocketServiceStub
-import com.shyden.shytalk.core.di.stubs.IosDeviceRepositoryStub
 import com.shyden.shytalk.core.di.stubs.IosEconomyRepositoryStub
-import com.shyden.shytalk.core.di.stubs.IosFunFactRepositoryStub
 import com.shyden.shytalk.core.di.stubs.IosGiftRepositoryStub
-import com.shyden.shytalk.core.di.stubs.IosNotificationRepositoryStub
-import com.shyden.shytalk.core.di.stubs.IosOtpRepositoryStub
-import com.shyden.shytalk.core.di.stubs.IosPinRepositoryStub
 import com.shyden.shytalk.core.di.stubs.IosPresenceServiceStub
 import com.shyden.shytalk.core.di.stubs.IosPrivateMessageRepositoryStub
-import com.shyden.shytalk.core.di.stubs.IosReportRepositoryStub
 import com.shyden.shytalk.core.di.stubs.IosRoomLifecycleManagerStub
-import com.shyden.shytalk.core.di.stubs.IosStorageRepositoryStub
 import com.shyden.shytalk.core.di.stubs.IosTokenServiceStub
-import com.shyden.shytalk.core.di.stubs.IosTranslationRepositoryStub
 import com.shyden.shytalk.core.di.stubs.IosTypingRepositoryStub
 import com.shyden.shytalk.core.di.stubs.IosVoiceServiceStub
 import com.shyden.shytalk.core.di.stubs.IosWebContentPreloaderStub
@@ -44,10 +34,20 @@ import com.shyden.shytalk.data.repository.FunFactRepository
 import com.shyden.shytalk.data.repository.GiftRepository
 import com.shyden.shytalk.data.repository.IdentityRepository
 import com.shyden.shytalk.data.repository.IosAuthRepositoryImpl
+import com.shyden.shytalk.data.repository.IosBannerRepositoryImpl
+import com.shyden.shytalk.data.repository.IosBiometricRepositoryImpl
+import com.shyden.shytalk.data.repository.IosDeviceRepositoryImpl
+import com.shyden.shytalk.data.repository.IosFunFactRepositoryImpl
 import com.shyden.shytalk.data.repository.IosIdentityRepositoryImpl
 import com.shyden.shytalk.data.repository.IosMessageRepositoryImpl
+import com.shyden.shytalk.data.repository.IosNotificationRepositoryImpl
+import com.shyden.shytalk.data.repository.IosOtpRepositoryImpl
+import com.shyden.shytalk.data.repository.IosPinRepositoryImpl
+import com.shyden.shytalk.data.repository.IosReportRepositoryImpl
 import com.shyden.shytalk.data.repository.IosRoomRepositoryImpl
 import com.shyden.shytalk.data.repository.IosSeatRequestRepositoryImpl
+import com.shyden.shytalk.data.repository.IosStorageRepositoryImpl
+import com.shyden.shytalk.data.repository.IosTranslationRepositoryImpl
 import com.shyden.shytalk.data.repository.IosUserRepositoryImpl
 import com.shyden.shytalk.data.repository.MessageRepository
 import com.shyden.shytalk.data.repository.NotificationRepository
@@ -103,21 +103,21 @@ val iosPlatformModule =
         single<RoomRepository> { IosRoomRepositoryImpl(get(), get()) }
         single<MessageRepository> { IosMessageRepositoryImpl(get()) }
         single<SeatRequestRepository> { IosSeatRequestRepositoryImpl(get(), get()) }
-        single<StorageRepository> { IosStorageRepositoryStub() }
-        single<DeviceRepository> { IosDeviceRepositoryStub() }
+        single<StorageRepository> { IosStorageRepositoryImpl(get()) }
+        single<DeviceRepository> { IosDeviceRepositoryImpl(get(), get()) }
         single<IdentityRepository> { IosIdentityRepositoryImpl(get(), get()) }
         single<PrivateMessageRepository> { IosPrivateMessageRepositoryStub() }
-        single<ReportRepository> { IosReportRepositoryStub() }
+        single<ReportRepository> { IosReportRepositoryImpl(get()) }
         single<TypingRepository> { IosTypingRepositoryStub() }
-        single<NotificationRepository> { IosNotificationRepositoryStub() }
+        single<NotificationRepository> { IosNotificationRepositoryImpl(get(), get()) }
         single<GiftRepository> { IosGiftRepositoryStub() }
         single<EconomyRepository> { IosEconomyRepositoryStub() }
-        single<BannerRepository> { IosBannerRepositoryStub() }
-        single<FunFactRepository> { IosFunFactRepositoryStub() }
-        single<TranslationRepository> { IosTranslationRepositoryStub() }
-        single<OtpRepository> { IosOtpRepositoryStub() }
-        single<PinRepository> { IosPinRepositoryStub() }
-        single<BiometricRepository> { IosBiometricRepositoryStub() }
+        single<BannerRepository> { IosBannerRepositoryImpl(get()) }
+        single<FunFactRepository> { IosFunFactRepositoryImpl(get()) }
+        single<TranslationRepository> { IosTranslationRepositoryImpl(get()) }
+        single<OtpRepository> { IosOtpRepositoryImpl(get()) }
+        single<PinRepository> { IosPinRepositoryImpl(get()) }
+        single<BiometricRepository> { IosBiometricRepositoryImpl(get()) }
         single { SecureStorage() }
         single<AppLockRepository> { AppLockRepositoryImpl(get<SecureStorage>()) }
 
