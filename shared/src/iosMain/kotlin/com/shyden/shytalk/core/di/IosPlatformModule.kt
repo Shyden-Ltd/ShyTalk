@@ -17,8 +17,6 @@ import com.shyden.shytalk.core.di.stubs.IosPresenceServiceStub
 import com.shyden.shytalk.core.di.stubs.IosPrivateMessageRepositoryStub
 import com.shyden.shytalk.core.di.stubs.IosReportRepositoryStub
 import com.shyden.shytalk.core.di.stubs.IosRoomLifecycleManagerStub
-import com.shyden.shytalk.core.di.stubs.IosRoomRepositoryStub
-import com.shyden.shytalk.core.di.stubs.IosSeatRequestRepositoryStub
 import com.shyden.shytalk.core.di.stubs.IosStorageRepositoryStub
 import com.shyden.shytalk.core.di.stubs.IosTokenServiceStub
 import com.shyden.shytalk.core.di.stubs.IosTranslationRepositoryStub
@@ -48,6 +46,8 @@ import com.shyden.shytalk.data.repository.GiftRepository
 import com.shyden.shytalk.data.repository.IdentityRepository
 import com.shyden.shytalk.data.repository.IosAuthRepositoryImpl
 import com.shyden.shytalk.data.repository.IosIdentityRepositoryImpl
+import com.shyden.shytalk.data.repository.IosRoomRepositoryImpl
+import com.shyden.shytalk.data.repository.IosSeatRequestRepositoryImpl
 import com.shyden.shytalk.data.repository.IosUserRepositoryImpl
 import com.shyden.shytalk.data.repository.MessageRepository
 import com.shyden.shytalk.data.repository.NotificationRepository
@@ -100,9 +100,9 @@ val iosPlatformModule =
         // Repositories
         single<AuthRepository> { IosAuthRepositoryImpl(get()) }
         single<UserRepository> { IosUserRepositoryImpl(get(), get()) }
-        single<RoomRepository> { IosRoomRepositoryStub() }
+        single<RoomRepository> { IosRoomRepositoryImpl(get(), get()) }
         single<MessageRepository> { IosMessageRepositoryStub() }
-        single<SeatRequestRepository> { IosSeatRequestRepositoryStub() }
+        single<SeatRequestRepository> { IosSeatRequestRepositoryImpl(get(), get()) }
         single<StorageRepository> { IosStorageRepositoryStub() }
         single<DeviceRepository> { IosDeviceRepositoryStub() }
         single<IdentityRepository> { IosIdentityRepositoryImpl(get(), get()) }
