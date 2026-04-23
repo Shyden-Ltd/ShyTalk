@@ -7,45 +7,31 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const vm = require('node:vm');
 
 const PUBLIC_DIR = path.join(__dirname, '..', '..', '..', 'public');
 
 const ALL_LANGUAGES = [
-  'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km',
-  'ko', 'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
+  'ar',
+  'de',
+  'es',
+  'fr',
+  'hi',
+  'id',
+  'it',
+  'ja',
+  'km',
+  'ko',
+  'nl',
+  'pl',
+  'pt',
+  'ru',
+  'sv',
+  'th',
+  'tr',
+  'uk',
+  'vi',
+  'zh',
 ];
-
-/**
- * Extract language keys from a JS translation file that assigns to window.
- * Parses the file in a sandbox and returns the translations object.
- */
-function loadBrowserTranslations(filePath) {
-  const code = fs.readFileSync(filePath, 'utf-8');
-  const sandbox = {
-    window: {},
-    document: {
-      querySelectorAll: () => [],
-      querySelector: () => null,
-      documentElement: { lang: 'en', dir: 'ltr' },
-      addEventListener: () => {},
-      getElementById: () => null,
-      createElement: () => ({ style: {}, classList: { add: () => {} }, addEventListener: () => {} }),
-      body: { appendChild: () => {}, classList: { add: () => {}, remove: () => {} } },
-    },
-    localStorage: { getItem: () => null, setItem: () => {} },
-    navigator: { language: 'en' },
-    setTimeout: () => {},
-    clearTimeout: () => {},
-    console,
-  };
-  try {
-    vm.runInNewContext(code, sandbox, { filename: filePath, timeout: 5000 });
-  } catch (e) {
-    // Some files may fail to execute fully — that's OK, we just need the translations object
-  }
-  return sandbox;
-}
 
 // ── Portal translations ────────────────────────────────────────
 
