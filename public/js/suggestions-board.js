@@ -1481,8 +1481,9 @@
     setupHeaderSubscribe();
     fetchSuggestions();
 
-    // Expose login modal globally so roadmap-app.js bell handlers can use it
+    // Expose modals globally so roadmap-app.js bell handlers can use them
     window.shytalkShowLoginModal = showLoginPromptModal;
+    window.shytalkOpenSubscribeModal = openSubscribeModal;
 
     // Re-render when auth state changes (show/hide suggest button)
     document.addEventListener("shytalk-auth-changed", function () {

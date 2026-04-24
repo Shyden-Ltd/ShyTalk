@@ -1200,3 +1200,89 @@ test.describe('Roadmap Auth — Mobile Responsiveness', () => {
     }
   });
 });
+
+test.describe('Roadmap Auth — Bell icon auth behaviour', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/roadmap.html');
+  });
+
+  test('bell icon when NOT authenticated opens login modal', async ({ page }) => {
+    const bell = page.locator('[data-testid="feature-bell"]').first();
+    await bell.waitFor({ timeout: 10_000 });
+    await bell.click();
+    const loginModal = page.locator('[data-testid="login-modal-overlay"]');
+    await expect(loginModal).toBeVisible({ timeout: 5_000 });
+  });
+
+  test('bell icon when authenticated does NOT open login modal', async ({ page }) => {
+    // Simulate authenticated state
+    await page.evaluate(() => {
+      (window as any).shytalkAuth = {
+        ...(window as any).shytalkAuth,
+        currentUser: {
+          uid: 'test-123',
+          displayName: 'TestUser',
+          getIdToken: () => Promise.resolve('fake'),
+        },
+        profile: { uniqueId: 1001, displayName: 'TestUser' },
+      };
+    });
+
+    const bell = page.locator('[data-testid="feature-bell"]').first();
+    await bell.waitFor({ timeout: 10_000 });
+    await bell.click();
+
+    // Login modal should NOT appear for authenticated users
+    const loginModal = page.locator('[data-testid="login-modal-overlay"]');
+    await page.waitForTimeout(1000);
+    expect(await loginModal.count()).toBe(0);
+  });
+
+  test('bell icon when authenticated opens subscribe modal', async ({ page }) => {
+    // Simulate authenticated state with profile
+    await page.evaluate(() => {
+      (window as any).shytalkAuth = {
+        ...(window as any).shytalkAuth,
+        currentUser: {
+          uid: 'test-123',
+          displayName: 'TestUser',
+          getIdToken: () => Promise.resolve('fake'),
+        },
+        profile: { uniqueId: 1001, displayName: 'TestUser' },
+      };
+    });
+
+    // Mock the subscribe API to avoid real network call
+    await page.route('**/api/roadmap/subscribe/preferences*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ preferences: {}, watchList: [] }),
+      }),
+    );
+
+    const bell = page.locator('[data-testid="feature-bell"]').first();
+    await bell.waitFor({ timeout: 10_000 });
+    await bell.click();
+
+    // Subscribe modal should appear (not login modal)
+    const subscribeModal = page.locator('[data-testid="subscribe-modal"]');
+    await expect(subscribeModal).toBeVisible({ timeout: 5_000 });
+  });
+});
+
+test.describe('Roadmap Auth — Google account picker', () => {
+  test('signInWithGoogle source contains select_account prompt', async ({ page }) => {
+    await page.goto('/roadmap.html');
+
+    // Verify the signInWithGoogle function source includes setCustomParameters with select_account
+    // This is a static analysis test — Firebase SDK may not be initialized in test mode
+    const source = await page.evaluate(async () => {
+      const res = await fetch('/js/roadmap-auth.js');
+      return res.text();
+    });
+    expect(source).toContain("prompt");
+    expect(source).toContain("select_account");
+    expect(source).toMatch(/setCustomParameters.*select_account|select_account.*setCustomParameters/s);
+  });
+});

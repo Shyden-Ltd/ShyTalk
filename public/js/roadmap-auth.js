@@ -180,6 +180,7 @@
   function signInWithGoogle() {
     if (!auth) return;
     var provider = new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
     auth.signInWithPopup(provider).catch(function (err) {
       if (err.code !== 'auth/popup-closed-by-user') {
         console.error('Google sign-in failed:', err);

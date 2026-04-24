@@ -34,6 +34,7 @@ public/admin/config.js
 public/admin/config.dev.js
 public/portal/config.js
 public/js/roadmap-config.js
+.scannerwork/
 /node_modules/
 e2e_results/
 test_output.txt

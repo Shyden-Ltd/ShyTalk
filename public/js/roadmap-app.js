@@ -739,8 +739,13 @@
     for (var i = 0; i < bells.length; i++) {
       bells[i].addEventListener("click", function (e) {
         e.stopPropagation();
-        // Show login modal (from suggestions-board.js) instead of toast
-        if (window.shytalkShowLoginModal) {
+        var auth = window.shytalkAuth;
+        if (auth && auth.currentUser && auth.profile) {
+          // Authenticated — open subscribe modal
+          if (window.shytalkOpenSubscribeModal) {
+            window.shytalkOpenSubscribeModal();
+          }
+        } else if (window.shytalkShowLoginModal) {
           window.shytalkShowLoginModal("subscribe to feature updates");
         } else {
           showLoginToast();
