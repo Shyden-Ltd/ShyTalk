@@ -54,7 +54,7 @@ Keep Play Store billing current. Ship iOS alongside Android.
 | #  | Feature                                                                     | Effort | Status |
 |----|-----------------------------------------------------------------------------|--------|--------|
 | B5 | **iOS build fix** — cinterop errors, iOS compilation                        | Medium | DONE (PRs #312-316, 2026-04-22) |
-| B6 | **iOS app — full feature parity** — real Firebase repos, same data as Android, all screens functional | XL | IN PROGRESS — Phases 1-4 wiring done (PRs #312-322), real Firebase repos in progress |
+| B6 | **iOS app — full feature parity** — real Firebase repos, same data as Android, all screens functional | XL | DONE (PRs #312-352, 2026-04-24) — All screens shared, real VoiceService, stubs deleted |
 | B7 | **Billing v7→v8** — Google Play Billing major version, deprecation deadline | Medium |        |
 
 ---

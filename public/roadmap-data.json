@@ -1,13 +1,6 @@
 {
-  "lastUpdated": "2026-04-23",
-  "currentlyWorkingOn": [
-    {
-      "name": "iOS app",
-      "description": "real Firebase repos, same data as Android, all screens functional",
-      "phase": "Platform & iOS",
-      "i18n": {}
-    }
-  ],
+  "lastUpdated": "2026-04-24",
+  "currentlyWorkingOn": [],
   "phases": [
     {
       "title": "Safety & Compliance",
@@ -587,7 +580,7 @@
       },
       "status": "in-progress",
       "progress": {
-        "done": 1,
+        "done": 2,
         "total": 3
       },
       "features": [
@@ -677,7 +670,7 @@
         {
           "name": "iOS app",
           "description": "real Firebase repos, same data as Android, all screens functional",
-          "status": "in-progress",
+          "status": "done",
           "i18n": {}
         },
         {
