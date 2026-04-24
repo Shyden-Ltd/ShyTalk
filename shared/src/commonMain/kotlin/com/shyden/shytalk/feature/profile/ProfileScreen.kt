@@ -1,9 +1,5 @@
 package com.shyden.shytalk.feature.profile
 
-import android.util.Log
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.RepeatMode
@@ -87,7 +83,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -96,10 +91,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
-import com.shyden.shytalk.core.crop.CropContract
-import com.shyden.shytalk.core.crop.CropInput
 import com.shyden.shytalk.core.model.BackpackItem
 import com.shyden.shytalk.core.model.Gift
+import com.shyden.shytalk.core.platform.PlatformImagePicker
+import com.shyden.shytalk.core.platform.PlatformProfilePhotoPicker
 import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.core.ui.SuperShyGold
@@ -108,6 +103,7 @@ import com.shyden.shytalk.core.util.calculateAge
 import com.shyden.shytalk.core.util.countryNameForCode
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.flagEmojiForCode
+import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.feature.gifting.GiftingViewModel
 import com.shyden.shytalk.feature.messaging.ReportUserDialog
 import com.shyden.shytalk.feature.shop.SuperShyBottomSheet
@@ -160,82 +156,39 @@ fun ProfileScreen(
     val fileTooLargeMsg = stringResource(Res.string.file_too_large)
     val reportThankYouMsg = stringResource(Res.string.report_thank_you)
 
-    // Photo picking + cropping
-    var pendingCropType by remember { mutableStateOf<String?>(null) }
+    // Photo picking — cross-platform via PlatformImagePicker expect/actual
+    var launchProfilePhotoPicker by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var launchCoverPhotoPicker by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var launchEvidencePicker by remember { mutableStateOf<(() -> Unit)?>(null) }
 
-    val imageContext = LocalContext.current
-    val cropLauncher =
-        rememberLauncherForActivityResult(CropContract()) { uri ->
-            if (uri != null) {
-                val imageData =
-                    try {
-                        imageContext.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                    } catch (e: Exception) {
-                        Log.w("ProfileScreen", "Failed to read cropped image", e)
-                        null
-                    }
-                if (imageData != null) {
-                    when (pendingCropType) {
-                        "profile" -> viewModel.uploadProfilePhoto(imageData)
-                        "cover" -> viewModel.uploadCoverPhoto(imageData)
-                    }
-                }
-            }
-        }
+    PlatformProfilePhotoPicker(
+        onImageSelected = { bytes -> if (bytes != null) viewModel.uploadProfilePhoto(bytes) },
+    ) { launcher -> launchProfilePhotoPicker = launcher }
 
-    val pickerLauncher =
-        rememberLauncherForActivityResult(PickVisualMedia()) { uri ->
-            if (uri != null) {
-                val input =
-                    when (pendingCropType) {
-                        "profile" -> CropInput(uri, 1, 1, "oval", 80, "Crop Profile Photo")
-                        else -> CropInput(uri, 16, 9, "rectangle", 80, "Crop Cover Photo")
-                    }
-                cropLauncher.launch(input)
-            }
-        }
+    PlatformImagePicker(
+        onImageSelected = { bytes -> if (bytes != null) viewModel.uploadCoverPhoto(bytes) },
+    ) { launcher -> launchCoverPhotoPicker = launcher }
 
-    val reportEvidencePickerLauncher =
-        rememberLauncherForActivityResult(PickVisualMedia()) { uri ->
-            if (uri != null) {
-                val mimeType = imageContext.contentResolver.getType(uri) ?: "image/jpeg"
-                if (mimeType.startsWith("video/")) {
-                    isCompressingEvidence = true
-                    evidenceScope.launch {
-                        val result =
-                            com.shyden.shytalk.core.util.VideoCompressor.compressVideo(
-                                imageContext,
-                                uri,
-                                Constants.EVIDENCE_VIDEO_TARGET_BYTES,
-                                mimeType,
-                            )
-                        isCompressingEvidence = false
-                        if (result != null && result.first.size <= Constants.EVIDENCE_MAX_SIZE_BYTES) {
-                            reportEvidenceList.add(result)
-                            reportEvidenceVersion++
-                        } else {
-                            snackbarHostState.showSnackbar(videoTooLargeMsg)
-                        }
-                    }
+    PlatformImagePicker(
+        onImageSelected = { bytes ->
+            if (bytes != null) {
+                if (bytes.size <= Constants.EVIDENCE_MAX_SIZE_BYTES) {
+                    reportEvidenceList.add(bytes to "image/jpeg")
+                    reportEvidenceVersion++
                 } else {
-                    val bytes = imageContext.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                    if (bytes != null) {
-                        if (bytes.size <= Constants.EVIDENCE_MAX_SIZE_BYTES) {
-                            reportEvidenceList.add(bytes to mimeType)
-                            reportEvidenceVersion++
-                        } else {
-                            evidenceScope.launch {
-                                snackbarHostState.showSnackbar(fileTooLargeMsg)
-                            }
-                        }
+                    evidenceScope.launch {
+                        snackbarHostState.showSnackbar(fileTooLargeMsg)
                     }
                 }
             }
-        }
+        },
+    ) { launcher -> launchEvidencePicker = launcher }
 
     fun launchPhotoPicker(type: String) {
-        pendingCropType = type
-        pickerLauncher.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))
+        when (type) {
+            "profile" -> launchProfilePhotoPicker?.invoke()
+            "cover" -> launchCoverPhotoPicker?.invoke()
+        }
     }
 
     LaunchedEffect(uiState.error) {
@@ -384,9 +337,7 @@ fun ProfileScreen(
             },
             evidenceItems = reportEvidenceList.map { it.first }.also { _ -> reportEvidenceVersion },
             onAddEvidence = {
-                reportEvidencePickerLauncher.launch(
-                    PickVisualMediaRequest(PickVisualMedia.ImageAndVideo),
-                )
+                launchEvidencePicker?.invoke()
             },
             onRemoveEvidence = { index ->
                 if (index in reportEvidenceList.indices) {
@@ -1369,7 +1320,15 @@ private fun ProfileContent(
     }
 }
 
-private fun formatBalance(value: Long): String = "%,d".format(value)
+private fun formatBalance(value: Long): String {
+    val str = value.toString()
+    val result = StringBuilder()
+    for (i in str.indices) {
+        if (i > 0 && (str.length - i) % 3 == 0) result.append(',')
+        result.append(str[i])
+    }
+    return result.toString()
+}
 
 @Composable
 private fun BackpackContent(

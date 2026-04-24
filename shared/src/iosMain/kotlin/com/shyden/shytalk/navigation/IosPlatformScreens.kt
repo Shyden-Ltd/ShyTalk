@@ -41,7 +41,20 @@ fun createIosPlatformScreens(): PlatformScreens =
             )
         },
         warningScreen = { params -> IosWarningScreen(params) },
-        profileScreen = { params -> IosProfilePlaceholder(params) },
+        profileScreen = { params ->
+            com.shyden.shytalk.feature.profile.ProfileScreen(
+                userId = params.userId,
+                showBackButton = params.showBackButton,
+                onNavigateBack = params.onNavigateBack,
+                onNavigateToUserProfile = params.onNavigateToUserProfile,
+                onNavigateToFollowList = params.onNavigateToFollowList,
+                onNavigateToSettings = params.onNavigateToSettings,
+                onNavigateToRoom = params.onNavigateToRoom,
+                onNavigateToChat = params.onNavigateToChat,
+                onNavigateToWallet = params.onNavigateToWallet,
+                modifier = params.modifier,
+            )
+        },
         roomScreen = { params -> IosRoomPlaceholder(params) },
     )
 
@@ -51,17 +64,6 @@ private fun IosWarningScreen(params: WarningScreenParams) {
         reason = params.reason,
         onAccept = params.onAccept,
         onViewCommunityStandards = params.onViewCommunityStandards,
-    )
-}
-
-@Composable
-private fun IosProfilePlaceholder(params: ProfileScreenParams) {
-    PlaceholderScreen(
-        title = "Profile",
-        subtitle = if (params.userId != null) "User ${params.userId}" else "Your Profile",
-        actionLabel = if (params.showBackButton) "Back" else null,
-        actionTag = "ios_profile_backButton",
-        onAction = params.onNavigateBack,
     )
 }
 

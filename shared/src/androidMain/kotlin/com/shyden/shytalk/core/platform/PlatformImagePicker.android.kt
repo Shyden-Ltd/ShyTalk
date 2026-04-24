@@ -5,13 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import com.shyden.shytalk.core.crop.CropContract
-import com.shyden.shytalk.core.crop.CropInput
 
 @Composable
 actual fun PlatformImagePicker(
@@ -42,11 +36,12 @@ actual fun PlatformProfilePhotoPicker(
     onImageSelected: (ByteArray?) -> Unit,
     content: @Composable (launchPicker: () -> Unit) -> Unit,
 ) {
+    // Pick image without crop — the server handles resizing.
+    // Android-specific crop (CropActivity) remains available in app/ module
+    // for screens that still use the Android-only NavGraph.
     val context = LocalContext.current
-    var pendingUri by remember { mutableStateOf<android.net.Uri?>(null) }
-
-    val cropLauncher =
-        rememberLauncherForActivityResult(CropContract()) { uri ->
+    val launcher =
+        rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
             if (uri == null) {
                 onImageSelected(null)
                 return@rememberLauncherForActivityResult
@@ -55,30 +50,12 @@ actual fun PlatformProfilePhotoPicker(
                 try {
                     context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 } catch (e: Exception) {
-                    Log.w("PlatformImagePicker", "Failed to read cropped image", e)
+                    Log.w("PlatformImagePicker", "Failed to read image", e)
                     null
                 }
             onImageSelected(bytes)
         }
-
-    val pickLauncher =
-        rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-            if (uri != null) {
-                pendingUri = uri
-                cropLauncher.launch(
-                    CropInput(
-                        uri = uri,
-                        aspectRatioX = 1,
-                        aspectRatioY = 1,
-                        cropShape = "circle",
-                        quality = 80,
-                        title = "Crop Profile Photo",
-                    ),
-                )
-            }
-        }
-
-    content { pickLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+    content { launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
 }
 
 @Composable
