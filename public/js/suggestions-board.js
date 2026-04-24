@@ -438,7 +438,8 @@
         if (window.shytalkAuth && window.shytalkAuth.signInWithGoogle) {
           window.shytalkAuth.signInWithGoogle();
         }
-        close();
+        // Do NOT close() here — signInWithPopup is async. The modal
+        // auto-closes via the shytalk-auth-changed event after auth succeeds.
       });
     }
     if (appleSignIn) {
@@ -446,9 +447,17 @@
         if (window.shytalkAuth && window.shytalkAuth.signInWithApple) {
           window.shytalkAuth.signInWithApple();
         }
-        close();
       });
     }
+
+    // Auto-close modal when authentication succeeds
+    function authChangeHandler(e) {
+      if (e.detail && e.detail.user) {
+        close();
+        document.removeEventListener("shytalk-auth-changed", authChangeHandler);
+      }
+    }
+    document.addEventListener("shytalk-auth-changed", authChangeHandler);
 
     function outsideClickHandler(e) {
       if (!modalContent || !modalContent.contains(e.target)) {

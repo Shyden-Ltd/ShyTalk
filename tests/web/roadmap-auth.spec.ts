@@ -278,6 +278,120 @@ test.describe('Roadmap Auth — Subscribe uses shared login modal', () => {
     expect(called).toBe('apple');
   });
 
+  test('login modal stays open while sign-in popup is processing (Google)', async ({ page }) => {
+    // Mock signInWithGoogle to be a no-op (simulates popup opening without completing)
+    await page.evaluate(() => {
+      let _auth = (window as any).shytalkAuth;
+      Object.defineProperty(window, 'shytalkAuth', {
+        get: () => _auth,
+        set: (v) => {
+          _auth = v;
+          if (_auth) {
+            _auth.signInWithGoogle = () => {
+              // Simulate async popup — does nothing (popup hasn't completed yet)
+            };
+          }
+        },
+        configurable: true,
+      });
+      if (_auth) {
+        _auth.signInWithGoogle = () => {};
+      }
+    });
+
+    const suggestBtn = page.locator('[data-testid="suggest-btn"]');
+    await suggestBtn.waitFor({ timeout: 10_000 });
+    await suggestBtn.click();
+    const modal = page.locator('[data-testid="login-modal-overlay"]');
+    await expect(modal).toBeVisible({ timeout: 5_000 });
+
+    // Click Google sign-in
+    await modal.locator('[data-testid="auth-google-btn"]').click();
+
+    // Modal MUST still be visible — the popup is still processing
+    await expect(modal).toBeVisible({ timeout: 2_000 });
+  });
+
+  test('login modal stays open while sign-in popup is processing (Apple)', async ({ page }) => {
+    await page.evaluate(() => {
+      let _auth = (window as any).shytalkAuth;
+      Object.defineProperty(window, 'shytalkAuth', {
+        get: () => _auth,
+        set: (v) => {
+          _auth = v;
+          if (_auth) {
+            _auth.signInWithApple = () => {};
+          }
+        },
+        configurable: true,
+      });
+      if (_auth) {
+        _auth.signInWithApple = () => {};
+      }
+    });
+
+    const suggestBtn = page.locator('[data-testid="suggest-btn"]');
+    await suggestBtn.waitFor({ timeout: 10_000 });
+    await suggestBtn.click();
+    const modal = page.locator('[data-testid="login-modal-overlay"]');
+    await expect(modal).toBeVisible({ timeout: 5_000 });
+
+    // Click Apple sign-in
+    await modal.locator('[data-testid="auth-apple-btn"]').click();
+
+    // Modal MUST still be visible
+    await expect(modal).toBeVisible({ timeout: 2_000 });
+  });
+
+  test('login modal auto-closes after successful authentication', async ({ page }) => {
+    // Set up auth mock that fires the auth-changed event after a brief delay
+    await page.evaluate(() => {
+      let _auth = (window as any).shytalkAuth;
+      Object.defineProperty(window, 'shytalkAuth', {
+        get: () => _auth,
+        set: (v) => {
+          _auth = v;
+          if (_auth) {
+            _auth.signInWithGoogle = () => {
+              // Simulate successful auth after 200ms
+              setTimeout(() => {
+                document.dispatchEvent(
+                  new CustomEvent('shytalk-auth-changed', {
+                    detail: { user: { uid: 'test-123', displayName: 'TestUser' } },
+                  }),
+                );
+              }, 200);
+            };
+          }
+        },
+        configurable: true,
+      });
+      if (_auth) {
+        _auth.signInWithGoogle = () => {
+          setTimeout(() => {
+            document.dispatchEvent(
+              new CustomEvent('shytalk-auth-changed', {
+                detail: { user: { uid: 'test-123', displayName: 'TestUser' } },
+              }),
+            );
+          }, 200);
+        };
+      }
+    });
+
+    const suggestBtn = page.locator('[data-testid="suggest-btn"]');
+    await suggestBtn.waitFor({ timeout: 10_000 });
+    await suggestBtn.click();
+    const modal = page.locator('[data-testid="login-modal-overlay"]');
+    await expect(modal).toBeVisible({ timeout: 5_000 });
+
+    // Click Google sign-in — triggers delayed auth event
+    await modal.locator('[data-testid="auth-google-btn"]').click();
+
+    // Modal should auto-close after auth succeeds
+    await expect(modal).not.toBeVisible({ timeout: 5_000 });
+  });
+
   test('bell button (unauthenticated) opens the shared login modal', async ({ page }) => {
     const bell = page.locator('[data-testid="feature-bell"], .feature-bell').first();
     await bell.waitFor({ timeout: 10_000 });

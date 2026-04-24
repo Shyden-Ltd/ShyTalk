@@ -13,13 +13,13 @@
 (function () {
   'use strict';
 
-  // Environment-aware API base
-  var isDev = location.hostname.includes('dev') || location.hostname === 'localhost';
+  // Environment-aware API base (check isLocal BEFORE isDev — localhost matches both)
   var isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-  var API_BASE = isDev
-    ? 'https://dev-api.shytalk.shyden.co.uk'
-    : isLocal
-      ? 'http://localhost:3000'
+  var isDev = location.hostname.includes('dev') || isLocal;
+  var API_BASE = isLocal
+    ? 'http://localhost:3000'
+    : isDev
+      ? 'https://dev-api.shytalk.shyden.co.uk'
       : 'https://api.shytalk.shyden.co.uk';
 
   // Firebase config — loaded from API via firebase-config-ready event
@@ -129,6 +129,11 @@
         firebase.initializeApp(firebaseConfig);
       }
       auth = firebase.auth();
+      // Connect to Auth emulator in local dev mode
+      if (isLocal && !auth._emulatorConnected) {
+        auth.useEmulator('http://localhost:9099');
+        auth._emulatorConnected = true;
+      }
     } catch (err) {
       console.info('Firebase auth unavailable:', err && err.code);
       authStateKnown = true;
@@ -202,6 +207,11 @@
     });
   }
 
+  function signInWithEmail(email, password) {
+    if (!auth) return Promise.reject(new Error('Auth not initialized'));
+    return auth.signInWithEmailAndPassword(email, password);
+  }
+
   function updateGlobalAuth() {
     window.shytalkAuth = {
       currentUser: currentUser,
@@ -209,6 +219,7 @@
       getToken: getToken,
       signInWithGoogle: signInWithGoogle,
       signInWithApple: signInWithApple,
+      signInWithEmail: signInWithEmail,
       API_BASE: API_BASE,
     };
     document.dispatchEvent(new CustomEvent('shytalk-auth-changed', {
