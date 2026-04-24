@@ -1,11 +1,6 @@
 package com.shyden.shytalk.feature.settings
 
-import android.Manifest
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
-import android.provider.Settings
-import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,6 +41,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -66,30 +62,37 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
-import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
-import com.shyden.shytalk.BuildConfig
-import com.shyden.shytalk.R
+import com.shyden.shytalk.core.effects.PlatformBackHandler
 import com.shyden.shytalk.core.model.LinkedProvider
 import com.shyden.shytalk.core.model.PmPrivacy
 import com.shyden.shytalk.core.model.ProviderType
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.platform.PlatformSettingsService
+import com.shyden.shytalk.core.platform.SettingsType
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
-private enum class SettingsPage { Main, BlockedUsers, Account, LinkedAccounts, Privacy, Notifications, Permissions, About }
+private enum class SettingsPage {
+    Main,
+    BlockedUsers,
+    Account,
+    LinkedAccounts,
+    Privacy,
+    Notifications,
+    Permissions,
+    About,
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,13 +104,13 @@ fun AppSettingsScreen(
     onNavigateToCyberBullyingPolicy: () -> Unit = {},
     onSignOut: () -> Unit,
     viewModel: AppSettingsViewModel = koinViewModel(),
+    platformSettings: PlatformSettingsService = koinInject(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var currentPageName by rememberSaveable { mutableStateOf(SettingsPage.Main.name) }
     val currentPage = SettingsPage.valueOf(currentPageName)
     var showSignOutDialog by remember { mutableStateOf(false) }
-    val activity = LocalContext.current as? android.app.Activity
 
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
@@ -116,7 +119,7 @@ fun AppSettingsScreen(
         }
     }
 
-    BackHandler(enabled = currentPage != SettingsPage.Main) {
+    PlatformBackHandler(enabled = currentPage != SettingsPage.Main) {
         currentPageName = SettingsPage.Main.name
     }
 
@@ -139,7 +142,7 @@ fun AppSettingsScreen(
                     onNavigateToPage = { currentPageName = it.name },
                     onSetLanguage = {
                         viewModel.setLanguage(it)
-                        activity?.recreate()
+                        platformSettings.restartForLanguageChange()
                     },
                     onSignOut = { showSignOutDialog = true },
                     snackbarHostState = snackbarHostState,
@@ -162,6 +165,7 @@ fun AppSettingsScreen(
                     onCancelDeletion = { viewModel.cancelAccountDeletion() },
                     onRequestExport = { viewModel.requestDataExport() },
                     snackbarHostState = snackbarHostState,
+                    platformSettings = platformSettings,
                 )
 
             SettingsPage.LinkedAccounts ->
@@ -206,6 +210,7 @@ fun AppSettingsScreen(
                 PermissionsPage(
                     onBack = { currentPageName = SettingsPage.Main.name },
                     snackbarHostState = snackbarHostState,
+                    platformSettings = platformSettings,
                 )
 
             SettingsPage.About ->
@@ -219,6 +224,7 @@ fun AppSettingsScreen(
                     onCheckForUpdates = { viewModel.checkForUpdates() },
                     onClearCache = { viewModel.requestClearCache() },
                     snackbarHostState = snackbarHostState,
+                    platformSettings = platformSettings,
                 )
         }
     }
@@ -230,15 +236,21 @@ fun AppSettingsScreen(
             title = { Text(stringResource(Res.string.sign_out)) },
             text = { Text(stringResource(Res.string.sign_out_confirm)) },
             confirmButton = {
-                TextButton(onClick = {
-                    showSignOutDialog = false
-                    onSignOut()
-                }) {
+                TextButton(
+                    onClick = {
+                        showSignOutDialog = false
+                        onSignOut()
+                    },
+                    modifier = Modifier.testTag("settings_signOutConfirmButton"),
+                ) {
                     Text(stringResource(Res.string.sign_out), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showSignOutDialog = false }) {
+                TextButton(
+                    onClick = { showSignOutDialog = false },
+                    modifier = Modifier.testTag("settings_signOutCancelButton"),
+                ) {
                     Text(stringResource(Res.string.cancel))
                 }
             },
@@ -252,12 +264,18 @@ fun AppSettingsScreen(
             title = { Text(stringResource(Res.string.clear_cache)) },
             text = { Text(stringResource(Res.string.clear_cache_confirm, formatCacheSize(uiState.cacheSizeBytes))) },
             confirmButton = {
-                TextButton(onClick = { viewModel.clearCache() }) {
+                TextButton(
+                    onClick = { viewModel.clearCache() },
+                    modifier = Modifier.testTag("settings_clearCacheConfirmButton"),
+                ) {
                     Text(stringResource(Res.string.clear))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { viewModel.dismissClearCacheDialog() }) {
+                TextButton(
+                    onClick = { viewModel.dismissClearCacheDialog() },
+                    modifier = Modifier.testTag("settings_clearCacheCancelButton"),
+                ) {
                     Text(stringResource(Res.string.cancel))
                 }
             },
@@ -271,7 +289,10 @@ fun AppSettingsScreen(
             title = { Text(stringResource(Res.string.cache_cleared)) },
             text = { Text(stringResource(Res.string.cache_cleared_description)) },
             confirmButton = {
-                TextButton(onClick = { viewModel.resetCacheCleared() }) {
+                TextButton(
+                    onClick = { viewModel.resetCacheCleared() },
+                    modifier = Modifier.testTag("settings_cacheClearedOkButton"),
+                ) {
                     Text(stringResource(Res.string.ok))
                 }
             },
@@ -280,7 +301,6 @@ fun AppSettingsScreen(
 
     // Update check result dialog
     uiState.updateCheckResult?.let { result ->
-        val context = LocalContext.current
         AlertDialog(
             onDismissRequest = { viewModel.dismissUpdateResult() },
             title = {
@@ -303,26 +323,30 @@ fun AppSettingsScreen(
             },
             confirmButton = {
                 if (result is UpdateCheckResult.UpdateAvailable) {
-                    Button(onClick = {
-                        viewModel.dismissUpdateResult()
-                        val intent =
-                            Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse("https://play.google.com/store/apps/details?id=com.shyden.shytalk"),
-                            )
-                        context.startActivity(intent)
-                    }) {
+                    Button(
+                        onClick = {
+                            viewModel.dismissUpdateResult()
+                            platformSettings.openPlayStore("com.shyden.shytalk")
+                        },
+                        modifier = Modifier.testTag("settings_downloadUpdateButton"),
+                    ) {
                         Text(stringResource(Res.string.download_now))
                     }
                 } else {
-                    TextButton(onClick = { viewModel.dismissUpdateResult() }) {
+                    TextButton(
+                        onClick = { viewModel.dismissUpdateResult() },
+                        modifier = Modifier.testTag("settings_updateResultOkButton"),
+                    ) {
                         Text(stringResource(Res.string.ok))
                     }
                 }
             },
             dismissButton = {
                 if (result is UpdateCheckResult.UpdateAvailable) {
-                    TextButton(onClick = { viewModel.dismissUpdateResult() }) {
+                    TextButton(
+                        onClick = { viewModel.dismissUpdateResult() },
+                        modifier = Modifier.testTag("settings_updateResultLaterButton"),
+                    ) {
                         Text(stringResource(Res.string.later))
                     }
                 }
@@ -394,44 +418,52 @@ private fun SettingsMainPage(
                 icon = Icons.Default.Block,
                 title = stringResource(Res.string.blocked_users),
                 onClick = { onNavigateToPage(SettingsPage.BlockedUsers) },
+                testTag = "settings_blockedUsersItem",
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             SettingsMenuItem(
                 icon = Icons.Default.Person,
                 title = stringResource(Res.string.account),
                 onClick = { onNavigateToPage(SettingsPage.Account) },
+                testTag = "settings_accountItem",
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             SettingsMenuItem(
                 icon = Icons.Default.Lock,
                 title = stringResource(Res.string.privacy),
                 onClick = { onNavigateToPage(SettingsPage.Privacy) },
+                testTag = "settings_privacyItem",
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             SettingsMenuItem(
                 icon = Icons.Default.Notifications,
                 title = stringResource(Res.string.notifications),
                 onClick = { onNavigateToPage(SettingsPage.Notifications) },
+                testTag = "settings_notificationsItem",
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             SettingsMenuItem(
                 icon = Icons.Default.Language,
                 title = stringResource(Res.string.language),
                 subtitle =
-                    SUPPORTED_LANGUAGES.firstOrNull { it.first == uiState.language }?.second ?: stringResource(Res.string.english_language),
+                    SUPPORTED_LANGUAGES.firstOrNull { it.first == uiState.language }?.second
+                        ?: stringResource(Res.string.english_language),
                 onClick = { showLanguageDialog = true },
+                testTag = "settings_languageItem",
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             SettingsMenuItem(
                 icon = Icons.Default.Security,
                 title = stringResource(Res.string.permissions),
                 onClick = { onNavigateToPage(SettingsPage.Permissions) },
+                testTag = "settings_permissionsItem",
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             SettingsMenuItem(
                 icon = Icons.Default.Info,
                 title = stringResource(Res.string.about),
                 onClick = { onNavigateToPage(SettingsPage.About) },
+                testTag = "settings_aboutItem",
             )
 
             Spacer(modifier = Modifier.weight(1f))
@@ -477,10 +509,11 @@ private fun SettingsMainPage(
                                     .clickable {
                                         onSetLanguage(code)
                                         showLanguageDialog = false
-                                    }.padding(vertical = 10.dp),
+                                    }.padding(vertical = 10.dp)
+                                    .testTag("settings_language_$code"),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            androidx.compose.material3.RadioButton(
+                            RadioButton(
                                 selected = uiState.language == code,
                                 onClick = {
                                     onSetLanguage(code)
@@ -497,7 +530,10 @@ private fun SettingsMainPage(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showLanguageDialog = false }) {
+                TextButton(
+                    onClick = { showLanguageDialog = false },
+                    modifier = Modifier.testTag("settings_languageDialogCancelButton"),
+                ) {
                     Text(stringResource(Res.string.cancel))
                 }
             },
@@ -511,13 +547,15 @@ private fun SettingsMenuItem(
     title: String,
     subtitle: String? = null,
     onClick: () -> Unit,
+    testTag: String = "",
 ) {
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 16.dp),
+                .padding(horizontal = 16.dp, vertical = 16.dp)
+                .then(if (testTag.isNotEmpty()) Modifier.testTag(testTag) else Modifier),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -563,7 +601,10 @@ private fun SettingsSubPage(
             TopAppBar(
                 title = { Text(title) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.testTag("settings_subPageBackButton"),
+                    ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.back))
                     }
                 },
@@ -630,19 +671,80 @@ private fun BlockedUsersPage(
             title = { Text(stringResource(Res.string.unblock_confirm, user.displayName)) },
             text = { Text(stringResource(Res.string.unblock_description)) },
             confirmButton = {
-                TextButton(onClick = {
-                    onUnblockUser(user.uid)
-                    showUnblockDialog = null
-                }) {
+                TextButton(
+                    onClick = {
+                        onUnblockUser(user.uid)
+                        showUnblockDialog = null
+                    },
+                    modifier = Modifier.testTag("settings_unblockConfirmButton"),
+                ) {
                     Text(stringResource(Res.string.unblock))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showUnblockDialog = null }) {
+                TextButton(
+                    onClick = { showUnblockDialog = null },
+                    modifier = Modifier.testTag("settings_unblockCancelButton"),
+                ) {
                     Text(stringResource(Res.string.cancel))
                 }
             },
         )
+    }
+}
+
+@Composable
+private fun BlockedUserRow(
+    user: User,
+    onUnblock: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp)
+                .testTag("settings_blockedUserRow_${user.uid}"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        val photoUrl = user.photoUrl
+        if (photoUrl != null) {
+            AsyncImage(
+                model = photoUrl,
+                contentDescription = user.displayName,
+                modifier =
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape),
+                contentScale = ContentScale.Crop,
+            )
+        } else {
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+            ) {
+                Icon(
+                    Icons.Default.Person,
+                    contentDescription = null,
+                    modifier = Modifier.padding(10.dp),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+        }
+
+        Text(
+            text = user.displayName.ifEmpty { stringResource(Res.string.unknown) },
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
+
+        TextButton(
+            onClick = onUnblock,
+            modifier = Modifier.testTag("settings_unblockButton_${user.uid}"),
+        ) {
+            Text(stringResource(Res.string.unblock))
+        }
     }
 }
 
@@ -657,6 +759,7 @@ private fun AccountPage(
     onCancelDeletion: () -> Unit,
     onRequestExport: () -> Unit,
     snackbarHostState: SnackbarHostState,
+    platformSettings: PlatformSettingsService,
 ) {
     var showDeleteAccountDialog by remember { mutableStateOf(false) }
     var showPinVerification by remember { mutableStateOf(false) }
@@ -697,6 +800,7 @@ private fun AccountPage(
                         "${it.activeProviders.size} ${stringResource(Res.string.linked).lowercase()}"
                     },
                 onClick = onNavigateToLinkedAccounts,
+                testTag = "settings_linkedAccountsItem",
             )
             HorizontalDivider()
 
@@ -705,7 +809,10 @@ private fun AccountPage(
             // Data export
             OutlinedButton(
                 onClick = { onRequestExport() },
-                modifier = Modifier.fillMaxWidth(),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .testTag("settings_exportDataButton"),
                 enabled = !uiState.isExportRequesting && uiState.exportStatus != "pending",
             ) {
                 Text(stringResource(Res.string.export_data))
@@ -730,10 +837,7 @@ private fun AccountPage(
             Spacer(modifier = Modifier.height(16.dp))
 
             if (uiState.deletionScheduled && uiState.deletionDeleteAt != null) {
-                val deleteDate =
-                    java.text
-                        .SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-                        .format(java.util.Date(uiState.deletionDeleteAt!!))
+                val deleteDate = platformSettings.formatDate(uiState.deletionDeleteAt)
                 Text(
                     text = stringResource(Res.string.delete_account_scheduled, deleteDate),
                     color = MaterialTheme.colorScheme.error,
@@ -742,7 +846,10 @@ private fun AccountPage(
                 )
                 OutlinedButton(
                     onClick = { onCancelDeletion() },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .testTag("settings_cancelDeletionButton"),
                     colors =
                         ButtonDefaults.outlinedButtonColors(
                             contentColor = MaterialTheme.colorScheme.primary,
@@ -753,7 +860,10 @@ private fun AccountPage(
             } else {
                 OutlinedButton(
                     onClick = { showDeleteAccountDialog = true },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .testTag("settings_deleteAccountButton"),
                     colors =
                         ButtonDefaults.outlinedButtonColors(
                             contentColor = MaterialTheme.colorScheme.error,
@@ -781,12 +891,16 @@ private fun AccountPage(
                         showPinVerification = true
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.testTag("settings_deleteAccountConfirmButton"),
                 ) {
                     Text(stringResource(Res.string.delete_account))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteAccountDialog = false }) {
+                TextButton(
+                    onClick = { showDeleteAccountDialog = false },
+                    modifier = Modifier.testTag("settings_deleteAccountCancelButton"),
+                ) {
                     Text(stringResource(Res.string.cancel))
                 }
             },
@@ -805,7 +919,10 @@ private fun AccountPage(
                         onValueChange = { if (it.length <= 8) pinInput = it },
                         label = { Text(stringResource(Res.string.pin_verify_subtitle)) },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .testTag("settings_deletePinInput"),
                     )
                     uiState.deletionError?.let { error ->
                         Spacer(modifier = Modifier.height(8.dp))
@@ -825,12 +942,16 @@ private fun AccountPage(
                     },
                     enabled = pinInput.isNotEmpty() && !uiState.isDeletionRequesting,
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.testTag("settings_deletePinConfirmButton"),
                 ) {
                     Text(stringResource(Res.string.delete_account))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showPinVerification = false }) {
+                TextButton(
+                    onClick = { showPinVerification = false },
+                    modifier = Modifier.testTag("settings_deletePinCancelButton"),
+                ) {
                     Text(stringResource(Res.string.cancel))
                 }
             },
@@ -908,7 +1029,11 @@ private fun LinkedAccountsPage(
                     unlinkedTypes.forEach { type ->
                         OutlinedButton(
                             onClick = { onLinkProvider(type) },
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .testTag("settings_connectProvider_${type.key}"),
                         ) {
                             Icon(
                                 imageVector =
@@ -936,15 +1061,21 @@ private fun LinkedAccountsPage(
             title = { Text(stringResource(Res.string.unlink_provider_confirm, providerDisplayName(provider.type))) },
             text = { Text(stringResource(Res.string.unlink_provider_description)) },
             confirmButton = {
-                TextButton(onClick = {
-                    onUnlinkProvider(provider.type, provider.identifier)
-                    showUnlinkDialog = null
-                }) {
+                TextButton(
+                    onClick = {
+                        onUnlinkProvider(provider.type, provider.identifier)
+                        showUnlinkDialog = null
+                    },
+                    modifier = Modifier.testTag("settings_unlinkProviderConfirmButton"),
+                ) {
                     Text(stringResource(Res.string.unlink), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showUnlinkDialog = null }) {
+                TextButton(
+                    onClick = { showUnlinkDialog = null },
+                    modifier = Modifier.testTag("settings_unlinkProviderCancelButton"),
+                ) {
                     Text(stringResource(Res.string.cancel))
                 }
             },
@@ -963,7 +1094,8 @@ private fun ProviderRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(vertical = 12.dp),
+                .padding(vertical = 12.dp)
+                .testTag("settings_providerRow_${provider.type.key}"),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -1005,7 +1137,10 @@ private fun ProviderRow(
             if (isUnlinking) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             } else {
-                TextButton(onClick = onUnlink) {
+                TextButton(
+                    onClick = onUnlink,
+                    modifier = Modifier.testTag("settings_unlinkButton_${provider.type.key}"),
+                ) {
                     Text(
                         text = stringResource(Res.string.unlink),
                         color = MaterialTheme.colorScheme.error,
@@ -1053,6 +1188,7 @@ private fun PrivacyPage(
                 description = stringResource(Res.string.hide_following_description),
                 checked = uiState.hideFollowing,
                 onCheckedChange = { onToggleHideFollowing() },
+                testTag = "settings_hideFollowingSwitch",
             )
             Spacer(modifier = Modifier.height(8.dp))
             SettingsSwitch(
@@ -1060,6 +1196,7 @@ private fun PrivacyPage(
                 description = stringResource(Res.string.hide_online_status_description),
                 checked = uiState.hideOnlineStatus,
                 onCheckedChange = { onToggleHideOnlineStatus() },
+                testTag = "settings_hideOnlineStatusSwitch",
             )
             Spacer(modifier = Modifier.height(8.dp))
             SettingsSwitch(
@@ -1067,6 +1204,7 @@ private fun PrivacyPage(
                 description = stringResource(Res.string.hide_age_description),
                 checked = uiState.hideAge,
                 onCheckedChange = { onToggleHideAge() },
+                testTag = "settings_hideAgeSwitch",
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -1097,10 +1235,11 @@ private fun PrivacyPage(
                         Modifier
                             .fillMaxWidth()
                             .clickable { onSetPmPrivacy(privacy) }
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = 8.dp)
+                            .testTag("settings_pmPrivacy_${privacy.name}"),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    androidx.compose.material3.RadioButton(
+                    RadioButton(
                         selected = uiState.pmPrivacy == privacy,
                         onClick = { onSetPmPrivacy(privacy) },
                     )
@@ -1158,6 +1297,7 @@ private fun NotificationsPage(
                 description = stringResource(Res.string.pm_notifications_description),
                 checked = uiState.pmNotificationsEnabled,
                 onCheckedChange = { onTogglePmNotifications() },
+                testTag = "settings_pmNotificationsSwitch",
             )
             Spacer(modifier = Modifier.height(4.dp))
             SettingsSwitch(
@@ -1165,6 +1305,7 @@ private fun NotificationsPage(
                 description = stringResource(Res.string.notification_sound_description),
                 checked = uiState.pmSoundEnabled,
                 onCheckedChange = { onTogglePmSound() },
+                testTag = "settings_pmSoundSwitch",
             )
             Spacer(modifier = Modifier.height(4.dp))
             SettingsSwitch(
@@ -1172,6 +1313,7 @@ private fun NotificationsPage(
                 description = stringResource(Res.string.message_preview_description),
                 checked = uiState.pmNotificationPreview,
                 onCheckedChange = { onTogglePmPreview() },
+                testTag = "settings_pmPreviewSwitch",
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -1189,6 +1331,7 @@ private fun NotificationsPage(
                 description = stringResource(Res.string.show_timestamps_description),
                 checked = uiState.pmShowTimestamps,
                 onCheckedChange = { onTogglePmTimestamps() },
+                testTag = "settings_pmTimestampsSwitch",
             )
             Spacer(modifier = Modifier.height(4.dp))
             SettingsSwitch(
@@ -1196,6 +1339,7 @@ private fun NotificationsPage(
                 description = stringResource(Res.string.show_date_separators_description),
                 checked = uiState.pmShowDateSeparators,
                 onCheckedChange = { onTogglePmDateSeparators() },
+                testTag = "settings_pmDateSeparatorsSwitch",
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -1213,6 +1357,7 @@ private fun NotificationsPage(
                 description = stringResource(Res.string.enable_dnd_description),
                 checked = uiState.dndEnabled,
                 onCheckedChange = { onToggleDnd() },
+                testTag = "settings_dndSwitch",
             )
             if (uiState.dndEnabled) {
                 var showStartTimePicker by remember { mutableStateOf(false) }
@@ -1223,7 +1368,8 @@ private fun NotificationsPage(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .clickable { showStartTimePicker = true },
+                            .clickable { showStartTimePicker = true }
+                            .testTag("settings_dndStartTime"),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -1232,7 +1378,7 @@ private fun NotificationsPage(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
-                        text = String.format("%02d:%02d", uiState.dndStartHour, uiState.dndStartMinute),
+                        text = formatTime(uiState.dndStartHour, uiState.dndStartMinute),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.primary,
                     )
@@ -1242,7 +1388,8 @@ private fun NotificationsPage(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .clickable { showEndTimePicker = true },
+                            .clickable { showEndTimePicker = true }
+                            .testTag("settings_dndEndTime"),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -1251,7 +1398,7 @@ private fun NotificationsPage(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
-                        text = String.format("%02d:%02d", uiState.dndEndHour, uiState.dndEndMinute),
+                        text = formatTime(uiState.dndEndHour, uiState.dndEndMinute),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.primary,
                     )
@@ -1268,14 +1415,20 @@ private fun NotificationsPage(
                         title = { Text(stringResource(Res.string.dnd_start_time)) },
                         text = { TimePicker(state = startState) },
                         confirmButton = {
-                            TextButton(onClick = {
-                                onSetDndStartHour(startState.hour)
-                                onSetDndStartMinute(startState.minute)
-                                showStartTimePicker = false
-                            }) { Text(stringResource(Res.string.ok)) }
+                            TextButton(
+                                onClick = {
+                                    onSetDndStartHour(startState.hour)
+                                    onSetDndStartMinute(startState.minute)
+                                    showStartTimePicker = false
+                                },
+                                modifier = Modifier.testTag("settings_dndStartConfirmButton"),
+                            ) { Text(stringResource(Res.string.ok)) }
                         },
                         dismissButton = {
-                            TextButton(onClick = { showStartTimePicker = false }) { Text(stringResource(Res.string.cancel)) }
+                            TextButton(
+                                onClick = { showStartTimePicker = false },
+                                modifier = Modifier.testTag("settings_dndStartCancelButton"),
+                            ) { Text(stringResource(Res.string.cancel)) }
                         },
                     )
                 }
@@ -1291,14 +1444,20 @@ private fun NotificationsPage(
                         title = { Text(stringResource(Res.string.dnd_end_time)) },
                         text = { TimePicker(state = endState) },
                         confirmButton = {
-                            TextButton(onClick = {
-                                onSetDndEndHour(endState.hour)
-                                onSetDndEndMinute(endState.minute)
-                                showEndTimePicker = false
-                            }) { Text(stringResource(Res.string.ok)) }
+                            TextButton(
+                                onClick = {
+                                    onSetDndEndHour(endState.hour)
+                                    onSetDndEndMinute(endState.minute)
+                                    showEndTimePicker = false
+                                },
+                                modifier = Modifier.testTag("settings_dndEndConfirmButton"),
+                            ) { Text(stringResource(Res.string.ok)) }
                         },
                         dismissButton = {
-                            TextButton(onClick = { showEndTimePicker = false }) { Text(stringResource(Res.string.cancel)) }
+                            TextButton(
+                                onClick = { showEndTimePicker = false },
+                                modifier = Modifier.testTag("settings_dndEndCancelButton"),
+                            ) { Text(stringResource(Res.string.cancel)) }
                         },
                     )
                 }
@@ -1319,6 +1478,7 @@ private fun NotificationsPage(
                 description = stringResource(Res.string.self_destruct_description),
                 checked = uiState.selfDestructAlertEnabled,
                 onCheckedChange = { onToggleSelfDestructAlert() },
+                testTag = "settings_selfDestructAlertSwitch",
             )
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -1332,49 +1492,12 @@ private fun NotificationsPage(
 private fun PermissionsPage(
     onBack: () -> Unit,
     snackbarHostState: SnackbarHostState,
+    platformSettings: PlatformSettingsService,
 ) {
-    val context = LocalContext.current
-    val notificationManager =
-        remember {
-            context.getSystemService(android.app.NotificationManager::class.java)
-        }
-
-    // Re-check permission state when returning from system settings
-    var refreshKey by remember { mutableStateOf(0) }
-    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
-        val observer =
-            androidx.lifecycle.LifecycleEventObserver { _, event ->
-                if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                    refreshKey++
-                }
-            }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
-    val notificationsEnabled =
-        remember(refreshKey) {
-            notificationManager?.areNotificationsEnabled() == true
-        }
-    val overlayEnabled =
-        remember(refreshKey) {
-            Settings.canDrawOverlays(context)
-        }
-    val microphoneEnabled =
-        remember(refreshKey) {
-            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-                android.content.pm.PackageManager.PERMISSION_GRANTED
-        }
-    val bluetoothEnabled =
-        remember(refreshKey) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) ==
-                    android.content.pm.PackageManager.PERMISSION_GRANTED
-            } else {
-                true
-            }
-        }
+    val notificationsEnabled = remember { platformSettings.areNotificationsEnabled() }
+    val overlayEnabled = remember { platformSettings.canDrawOverlays() }
+    val microphoneEnabled = remember { platformSettings.hasPermission("microphone") }
+    val bluetoothEnabled = remember { platformSettings.hasPermission("bluetooth") }
 
     SettingsSubPage(
         title = stringResource(Res.string.permissions),
@@ -1391,14 +1514,9 @@ private fun PermissionsPage(
                 description = stringResource(Res.string.notifications_permission_description),
                 enabled = notificationsEnabled,
                 onClick = {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        context.startActivity(
-                            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                            },
-                        )
-                    }
+                    platformSettings.openSystemSettings(SettingsType.NOTIFICATIONS)
                 },
+                testTag = "settings_notificationsPermission",
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -1408,13 +1526,9 @@ private fun PermissionsPage(
                 description = stringResource(Res.string.overlay_permission_description),
                 enabled = overlayEnabled,
                 onClick = {
-                    context.startActivity(
-                        Intent(
-                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                            Uri.parse("package:${context.packageName}"),
-                        ),
-                    )
+                    platformSettings.openSystemSettings(SettingsType.OVERLAY)
                 },
+                testTag = "settings_overlayPermission",
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -1424,32 +1538,22 @@ private fun PermissionsPage(
                 description = stringResource(Res.string.microphone_description),
                 enabled = microphoneEnabled,
                 onClick = {
-                    context.startActivity(
-                        Intent(
-                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                            Uri.parse("package:${context.packageName}"),
-                        ),
-                    )
+                    platformSettings.openSystemSettings(SettingsType.MICROPHONE)
                 },
+                testTag = "settings_microphonePermission",
             )
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-                PermissionRow(
-                    title = stringResource(Res.string.bluetooth),
-                    description = stringResource(Res.string.bluetooth_description),
-                    enabled = bluetoothEnabled,
-                    onClick = {
-                        context.startActivity(
-                            Intent(
-                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                Uri.parse("package:${context.packageName}"),
-                            ),
-                        )
-                    },
-                )
-            }
+            PermissionRow(
+                title = stringResource(Res.string.bluetooth),
+                description = stringResource(Res.string.bluetooth_description),
+                enabled = bluetoothEnabled,
+                onClick = {
+                    platformSettings.openSystemSettings(SettingsType.BLUETOOTH)
+                },
+                testTag = "settings_bluetoothPermission",
+            )
         }
     }
 }
@@ -1460,13 +1564,15 @@ private fun PermissionRow(
     description: String,
     enabled: Boolean,
     onClick: () -> Unit,
+    testTag: String = "",
 ) {
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onClick)
-                .padding(vertical = 8.dp),
+                .padding(vertical = 8.dp)
+                .then(if (testTag.isNotEmpty()) Modifier.testTag(testTag) else Modifier),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1503,9 +1609,8 @@ private fun AboutPage(
     onCheckForUpdates: () -> Unit,
     onClearCache: () -> Unit,
     snackbarHostState: SnackbarHostState,
+    platformSettings: PlatformSettingsService,
 ) {
-    val context = LocalContext.current
-
     SettingsSubPage(
         title = stringResource(Res.string.about),
         onBack = onBack,
@@ -1526,15 +1631,9 @@ private fun AboutPage(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                val appIcon =
-                    remember {
-                        ContextCompat
-                            .getDrawable(context, R.mipmap.ic_launcher)
-                            ?.toBitmap(128, 128)
-                            ?.asImageBitmap()
-                    }
+                val appIcon = remember { platformSettings.getAppIcon() }
                 if (appIcon != null) {
-                    androidx.compose.foundation.Image(
+                    Image(
                         painter = BitmapPainter(appIcon),
                         contentDescription = stringResource(Res.string.app_name_label),
                         modifier =
@@ -1549,7 +1648,7 @@ private fun AboutPage(
                         style = MaterialTheme.typography.titleMedium,
                     )
                     Text(
-                        text = "v${BuildConfig.VERSION_NAME}",
+                        text = "v${platformSettings.getAppVersionName()}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1572,12 +1671,9 @@ private fun AboutPage(
                     Modifier
                         .fillMaxWidth()
                         .clickable {
-                            val intent =
-                                Intent(Intent.ACTION_SENDTO).apply {
-                                    data = Uri.parse("mailto:shytalk.help@gmail.com")
-                                }
-                            context.startActivity(intent)
-                        }.padding(vertical = 12.dp),
+                            platformSettings.openEmail("shytalk.help@gmail.com")
+                        }.padding(vertical = 12.dp)
+                        .testTag("settings_contactUsLink"),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -1598,7 +1694,8 @@ private fun AboutPage(
                     Modifier
                         .fillMaxWidth()
                         .clickable { onNavigateToPrivacyPolicy() }
-                        .padding(vertical = 12.dp),
+                        .padding(vertical = 12.dp)
+                        .testTag("settings_privacyPolicyLink"),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -1613,7 +1710,8 @@ private fun AboutPage(
                     Modifier
                         .fillMaxWidth()
                         .clickable { onNavigateToCommunityStandards() }
-                        .padding(vertical = 12.dp),
+                        .padding(vertical = 12.dp)
+                        .testTag("settings_communityStandardsLink"),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -1628,7 +1726,8 @@ private fun AboutPage(
                     Modifier
                         .fillMaxWidth()
                         .clickable { onNavigateToTermsAndConditions() }
-                        .padding(vertical = 12.dp),
+                        .padding(vertical = 12.dp)
+                        .testTag("settings_termsAndConditionsLink"),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -1643,7 +1742,8 @@ private fun AboutPage(
                     Modifier
                         .fillMaxWidth()
                         .clickable { onNavigateToCyberBullyingPolicy() }
-                        .padding(vertical = 12.dp),
+                        .padding(vertical = 12.dp)
+                        .testTag("settings_cyberBullyingPolicyLink"),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -1657,7 +1757,10 @@ private fun AboutPage(
             OutlinedButton(
                 onClick = onCheckForUpdates,
                 enabled = !uiState.isCheckingUpdate,
-                modifier = Modifier.fillMaxWidth(),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .testTag("settings_checkForUpdatesButton"),
             ) {
                 if (uiState.isCheckingUpdate) {
                     CircularProgressIndicator(modifier = Modifier.size(18.dp))
@@ -1673,7 +1776,10 @@ private fun AboutPage(
             // Clear Cache
             OutlinedButton(
                 onClick = onClearCache,
-                modifier = Modifier.fillMaxWidth(),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .testTag("settings_clearCacheButton"),
             ) {
                 Text(stringResource(Res.string.clear_cache_with_size, formatCacheSize(uiState.cacheSizeBytes)))
             }
@@ -1715,6 +1821,7 @@ private fun SettingsSwitch(
     description: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    testTag: String = "",
 ) {
     Row(
         modifier =
@@ -1739,77 +1846,7 @@ private fun SettingsSwitch(
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
+            modifier = if (testTag.isNotEmpty()) Modifier.testTag(testTag) else Modifier,
         )
     }
 }
-
-internal fun censorEmail(email: String): String {
-    val parts = email.split("@", limit = 2)
-    if (parts.size != 2) return email
-    val local = parts[0]
-    val domain = parts[1]
-    val censored =
-        when {
-            local.length <= 2 -> "${local.first()}*"
-            else -> "${local.take(2)}${"*".repeat((local.length - 3).coerceAtLeast(1))}${local.last()}"
-        }
-    return "$censored@$domain"
-}
-
-@Composable
-private fun BlockedUserRow(
-    user: User,
-    onUnblock: () -> Unit,
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        val photoUrl = user.photoUrl
-        if (photoUrl != null) {
-            AsyncImage(
-                model = photoUrl,
-                contentDescription = user.displayName,
-                modifier =
-                    Modifier
-                        .size(40.dp)
-                        .clip(CircleShape),
-                contentScale = ContentScale.Crop,
-            )
-        } else {
-            Surface(
-                modifier = Modifier.size(40.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-            ) {
-                Icon(
-                    Icons.Default.Person,
-                    contentDescription = null,
-                    modifier = Modifier.padding(10.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-        }
-
-        Text(
-            text = user.displayName.ifEmpty { stringResource(Res.string.unknown) },
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.weight(1f),
-        )
-
-        TextButton(onClick = onUnblock) {
-            Text(stringResource(Res.string.unblock))
-        }
-    }
-}
-
-private fun formatCacheSize(bytes: Long): String =
-    when {
-        bytes < 1024 -> "$bytes B"
-        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-        else -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
-    }

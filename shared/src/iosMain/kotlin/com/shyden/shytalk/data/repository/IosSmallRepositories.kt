@@ -243,8 +243,8 @@ class IosOtpRepositoryImpl(
 ) : OtpRepository {
     override suspend fun sendOtp(email: String): Result<Unit> =
         runCatching {
-            api.postPublic("/api/auth/otp/send", JsonObject(mapOf("email" to JsonPrimitive(email))))
-            Unit
+            @Suppress("UNUSED_VARIABLE")
+            val ignored = api.postPublic("/api/auth/otp/send", JsonObject(mapOf("email" to JsonPrimitive(email))))
         }
 
     override suspend fun verifyOtp(
@@ -307,8 +307,8 @@ class IosPinRepositoryImpl(
 
     override suspend fun resetPin(newPin: String): Result<Unit> =
         runCatching {
-            api.post("/api/auth/pin/reset", JsonObject(mapOf("pin" to JsonPrimitive(newPin))))
-            Unit
+            @Suppress("UNUSED_VARIABLE")
+            val ignored = api.post("/api/auth/pin/reset", JsonObject(mapOf("pin" to JsonPrimitive(newPin))))
         }
 }
 
@@ -322,11 +322,12 @@ class IosBiometricRepositoryImpl(
         deviceId: String,
     ): Result<Unit> =
         runCatching {
-            api.post(
-                "/api/auth/biometric/register",
-                JsonObject(mapOf("publicKey" to JsonPrimitive(publicKeyBase64), "deviceId" to JsonPrimitive(deviceId))),
-            )
-            Unit
+            @Suppress("UNUSED_VARIABLE")
+            val ignored =
+                api.post(
+                    "/api/auth/biometric/register",
+                    JsonObject(mapOf("publicKey" to JsonPrimitive(publicKeyBase64), "deviceId" to JsonPrimitive(deviceId))),
+                )
         }
 
     override suspend fun getChallenge(
@@ -360,8 +361,8 @@ class IosBiometricRepositoryImpl(
 
     override suspend fun revoke(deviceId: String): Result<Unit> =
         runCatching {
-            api.delete("/api/auth/biometric/$deviceId")
-            Unit
+            @Suppress("UNUSED_VARIABLE")
+            val ignored = api.delete("/api/auth/biometric/$deviceId")
         }
 }
 

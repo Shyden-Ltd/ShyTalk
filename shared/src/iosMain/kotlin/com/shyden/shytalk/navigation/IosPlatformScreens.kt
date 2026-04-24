@@ -30,40 +30,20 @@ fun createIosPlatformScreens(): PlatformScreens =
             com.shyden.shytalk.feature.auth
                 .IosSignInScreen(params)
         },
-        appSettingsScreen = { params -> IosSettingsPlaceholder(params) },
+        appSettingsScreen = { params ->
+            com.shyden.shytalk.feature.settings.AppSettingsScreen(
+                onNavigateBack = params.onNavigateBack,
+                onNavigateToPrivacyPolicy = params.onNavigateToPrivacyPolicy,
+                onNavigateToCommunityStandards = params.onNavigateToCommunityStandards,
+                onNavigateToTermsAndConditions = params.onNavigateToTermsAndConditions,
+                onNavigateToCyberBullyingPolicy = params.onNavigateToCyberBullyingPolicy,
+                onSignOut = params.onSignOut,
+            )
+        },
         warningScreen = { params -> IosWarningScreen(params) },
         profileScreen = { params -> IosProfilePlaceholder(params) },
         roomScreen = { params -> IosRoomPlaceholder(params) },
     )
-
-@Composable
-private fun IosSettingsPlaceholder(params: AppSettingsScreenParams) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(
-            text = "Settings",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-        Button(
-            onClick = params.onNavigateBack,
-            modifier = Modifier.testTag("ios_settings_backButton"),
-        ) {
-            Text("Back")
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(
-            onClick = params.onSignOut,
-            modifier = Modifier.testTag("ios_settings_signOutButton"),
-        ) {
-            Text("Sign Out")
-        }
-    }
-}
 
 @Composable
 private fun IosWarningScreen(params: WarningScreenParams) {

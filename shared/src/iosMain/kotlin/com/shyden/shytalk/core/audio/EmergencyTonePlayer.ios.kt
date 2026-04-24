@@ -41,7 +41,7 @@ actual object EmergencyTonePlayer {
                 AVAudioFormat(
                     standardFormatWithSampleRate = SAMPLE_RATE,
                     channels = 1u,
-                ) ?: return
+                )
 
             audioEngine.connect(player, to = audioEngine.mainMixerNode, format = format)
 
@@ -50,7 +50,7 @@ actual object EmergencyTonePlayer {
                 AVAudioPCMBuffer(
                     pCMFormat = format,
                     frameCapacity = signal.size.toUInt(),
-                ) ?: return
+                )
             buffer.frameLength = signal.size.toUInt()
 
             val channelData = buffer.floatChannelData ?: return
