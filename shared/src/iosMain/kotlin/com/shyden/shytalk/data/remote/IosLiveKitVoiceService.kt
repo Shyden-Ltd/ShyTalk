@@ -123,6 +123,7 @@ class IosLiveKitVoiceService(
     override fun leaveChannel() {
         scope.launch {
             joinMutex.withLock {
+                bridge?.setDelegate(null)
                 bridge?.disconnect()
                 _isJoined.value = false
                 _connectionState.value = VoiceConnectionState.DISCONNECTED

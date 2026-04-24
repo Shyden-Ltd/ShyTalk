@@ -9,6 +9,7 @@ internal fun censorEmail(email: String): String {
     val censored =
         when {
             local.length <= 2 -> "${local.first()}*"
+            local.length == 3 -> "${local.first()}*${local.last()}"
             else -> "${local.take(2)}${"*".repeat((local.length - 3).coerceAtLeast(1))}${local.last()}"
         }
     return "$censored@$domain"

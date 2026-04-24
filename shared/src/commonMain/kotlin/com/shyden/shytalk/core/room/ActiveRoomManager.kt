@@ -58,11 +58,11 @@ class ActiveRoomManager(
     val messages: StateFlow<List<Message>> = _messages.asStateFlow()
     override val activeMessages: StateFlow<List<Message>> = _messages.asStateFlow()
 
-    private val _sharedUserCache = mutableMapOf<String, User>()
-    override val sharedUserCache: Map<String, User> get() = _sharedUserCache
+    private val _sharedUserCache = MutableStateFlow<Map<String, User>>(emptyMap())
+    override val sharedUserCache: Map<String, User> get() = _sharedUserCache.value
 
     override fun updateSharedUserCache(users: Map<String, User>) {
-        _sharedUserCache.putAll(users)
+        _sharedUserCache.value = _sharedUserCache.value + users
     }
 
     private val _ownerAwayRemainingMs = MutableStateFlow(0L)
@@ -107,18 +107,21 @@ class ActiveRoomManager(
     private var presenceMonitorJob: Job? = null
     private var isSeated = false
 
-    private val leaveSignals = mutableMapOf<String, CompletableDeferred<Unit>>()
+    private val leaveSignalMap = MutableStateFlow<Map<String, CompletableDeferred<Unit>>>(emptyMap())
 
     override fun markLeaveStarted(roomId: String) {
-        leaveSignals[roomId] = CompletableDeferred()
+        val deferred = CompletableDeferred<Unit>()
+        leaveSignalMap.value = leaveSignalMap.value + (roomId to deferred)
     }
 
     override fun markLeaveCompleted(roomId: String) {
-        leaveSignals.remove(roomId)?.complete(Unit)
+        val current = leaveSignalMap.value
+        current[roomId]?.complete(Unit)
+        leaveSignalMap.value = current - roomId
     }
 
     override suspend fun awaitLeaveCompletion(roomId: String) {
-        leaveSignals[roomId]?.await()
+        leaveSignalMap.value[roomId]?.await()
     }
 
     override var isAppInForeground: Boolean = false
@@ -163,7 +166,7 @@ class ActiveRoomManager(
         _ownerAwayRemainingMs.value = 0L
         _roomClosed.value = false
         _disconnectedUserIds.value = emptySet()
-        _sharedUserCache.clear()
+        _sharedUserCache.value = emptyMap()
         roomServiceController.stop()
     }
 
@@ -284,7 +287,7 @@ class ActiveRoomManager(
         _activeRoomId.value = null
         _activeRoom.value = null
         _messages.value = emptyList()
-        _sharedUserCache.clear()
+        _sharedUserCache.value = emptyMap()
         _ownerAwayRemainingMs.value = 0L
         _disconnectedUserIds.value = emptySet()
         // Note: _roomClosed is NOT reset here — it's reset when entering a new room.

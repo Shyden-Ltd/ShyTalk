@@ -46,7 +46,7 @@ interface LiveKitBridgeDelegate {
  * Combines the bridge handler with a way to set the delegate.
  */
 interface LiveKitBridge : LiveKitBridgeHandler {
-    fun setDelegate(delegate: LiveKitBridgeDelegate)
+    fun setDelegate(delegate: LiveKitBridgeDelegate?)
 }
 
 @kotlin.concurrent.Volatile

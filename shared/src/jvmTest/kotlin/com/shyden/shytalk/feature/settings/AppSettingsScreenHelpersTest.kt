@@ -12,6 +12,11 @@ class AppSettingsScreenHelpersTest {
     }
 
     @Test
+    fun `censorEmail handles 3-char local part without leaking all chars`() {
+        assertEquals("a*c@example.com", censorEmail("abc@example.com"))
+    }
+
+    @Test
     fun `censorEmail handles short local part (2 chars)`() {
         assertEquals("a*@example.com", censorEmail("ab@example.com"))
     }

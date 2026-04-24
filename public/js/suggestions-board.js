@@ -18,11 +18,10 @@
 
   // ── Constants ──
 
-  var API_BASE = location.hostname.includes("dev")
-    ? "https://dev-api.shytalk.shyden.co.uk"
-    : location.hostname === "localhost" || location.hostname === "127.0.0.1"
-      ? "http://localhost:3000"
-      : "https://api.shytalk.shyden.co.uk";
+  // Check isLocal BEFORE isDev — localhost matches both
+  var isLocal = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+  var isDev = location.hostname.includes("dev") || isLocal;
+  var API_BASE = isLocal ? "http://localhost:3000" : isDev ? "https://dev-api.shytalk.shyden.co.uk" : "https://api.shytalk.shyden.co.uk"; // localhost checked first
 
   var PAGE_SIZE = 10;
   var SEARCH_DEBOUNCE_MS = 300;
