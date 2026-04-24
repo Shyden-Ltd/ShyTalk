@@ -141,6 +141,16 @@
       return;
     }
 
+    // Handle redirect result (user returning from Google/Apple OAuth page)
+    auth.getRedirectResult().then(function (result) {
+      // result.user is set if returning from a redirect sign-in
+      // onAuthStateChanged below will handle the state update
+    }).catch(function (err) {
+      if (err.code !== 'auth/popup-closed-by-user') {
+        console.error('Redirect sign-in error:', err);
+      }
+    });
+
     auth.onAuthStateChanged(function (user) {
       authStateKnown = true;
       currentUser = user;
@@ -181,21 +191,13 @@
     if (!auth) return;
     var provider = new firebase.auth.GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
-    auth.signInWithPopup(provider).catch(function (err) {
-      if (err.code !== 'auth/popup-closed-by-user') {
-        console.error('Google sign-in failed:', err);
-      }
-    });
+    auth.signInWithRedirect(provider);
   }
 
   function signInWithApple() {
     if (!auth) return;
     var provider = new firebase.auth.OAuthProvider('apple.com');
-    auth.signInWithPopup(provider).catch(function (err) {
-      if (err.code !== 'auth/popup-closed-by-user') {
-        console.error('Apple sign-in failed:', err);
-      }
-    });
+    auth.signInWithRedirect(provider);
   }
 
   function signOut() {

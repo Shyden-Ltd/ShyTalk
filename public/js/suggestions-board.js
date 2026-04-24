@@ -431,6 +431,8 @@
     }
 
     // Wire up Google/Apple sign-in buttons
+    // signInWithRedirect navigates away from the page entirely,
+    // so no need to close the modal — the page reloads after auth.
     var googleSignIn = overlay.querySelector(".auth-google-btn");
     var appleSignIn = overlay.querySelector(".auth-apple-btn");
     if (googleSignIn) {
@@ -438,8 +440,6 @@
         if (window.shytalkAuth && window.shytalkAuth.signInWithGoogle) {
           window.shytalkAuth.signInWithGoogle();
         }
-        // Do NOT close() here — signInWithPopup is async. The modal
-        // auto-closes via the shytalk-auth-changed event after auth succeeds.
       });
     }
     if (appleSignIn) {
@@ -449,15 +449,6 @@
         }
       });
     }
-
-    // Auto-close modal when authentication succeeds
-    function authChangeHandler(e) {
-      if (e.detail && e.detail.user) {
-        close();
-        document.removeEventListener("shytalk-auth-changed", authChangeHandler);
-      }
-    }
-    document.addEventListener("shytalk-auth-changed", authChangeHandler);
 
     function outsideClickHandler(e) {
       if (!modalContent || !modalContent.contains(e.target)) {

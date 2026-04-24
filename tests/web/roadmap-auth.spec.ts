@@ -278,9 +278,10 @@ test.describe('Roadmap Auth — Subscribe uses shared login modal', () => {
     expect(called).toBe('apple');
   });
 
-  test('login modal stays open while sign-in popup is processing (Google)', async ({ page }) => {
-    // Mock signInWithGoogle to be a no-op (simulates popup opening without completing)
+  test('Google sign-in button calls signInWithGoogle (triggers redirect)', async ({ page }) => {
+    // Mock signInWithGoogle to prevent actual redirect
     await page.evaluate(() => {
+      (window as any).__signInCalled = null;
       let _auth = (window as any).shytalkAuth;
       Object.defineProperty(window, 'shytalkAuth', {
         get: () => _auth,
@@ -288,79 +289,7 @@ test.describe('Roadmap Auth — Subscribe uses shared login modal', () => {
           _auth = v;
           if (_auth) {
             _auth.signInWithGoogle = () => {
-              // Simulate async popup — does nothing (popup hasn't completed yet)
-            };
-          }
-        },
-        configurable: true,
-      });
-      if (_auth) {
-        _auth.signInWithGoogle = () => {};
-      }
-    });
-
-    const suggestBtn = page.locator('[data-testid="suggest-btn"]');
-    await suggestBtn.waitFor({ timeout: 10_000 });
-    await suggestBtn.click();
-    const modal = page.locator('[data-testid="login-modal-overlay"]');
-    await expect(modal).toBeVisible({ timeout: 5_000 });
-
-    // Click Google sign-in
-    await modal.locator('[data-testid="auth-google-btn"]').click();
-
-    // Modal MUST still be visible — the popup is still processing
-    await expect(modal).toBeVisible({ timeout: 2_000 });
-  });
-
-  test('login modal stays open while sign-in popup is processing (Apple)', async ({ page }) => {
-    await page.evaluate(() => {
-      let _auth = (window as any).shytalkAuth;
-      Object.defineProperty(window, 'shytalkAuth', {
-        get: () => _auth,
-        set: (v) => {
-          _auth = v;
-          if (_auth) {
-            _auth.signInWithApple = () => {};
-          }
-        },
-        configurable: true,
-      });
-      if (_auth) {
-        _auth.signInWithApple = () => {};
-      }
-    });
-
-    const suggestBtn = page.locator('[data-testid="suggest-btn"]');
-    await suggestBtn.waitFor({ timeout: 10_000 });
-    await suggestBtn.click();
-    const modal = page.locator('[data-testid="login-modal-overlay"]');
-    await expect(modal).toBeVisible({ timeout: 5_000 });
-
-    // Click Apple sign-in
-    await modal.locator('[data-testid="auth-apple-btn"]').click();
-
-    // Modal MUST still be visible
-    await expect(modal).toBeVisible({ timeout: 2_000 });
-  });
-
-  test('login modal auto-closes after successful authentication', async ({ page }) => {
-    // Set up auth mock that fires the auth-changed event after a brief delay
-    await page.evaluate(() => {
-      let _auth = (window as any).shytalkAuth;
-      Object.defineProperty(window, 'shytalkAuth', {
-        get: () => _auth,
-        set: (v) => {
-          _auth = v;
-          if (_auth) {
-            _auth.signInWithGoogle = () => {
-              // Simulate successful auth after 200ms
-              setTimeout(() => {
-                document.dispatchEvent(
-                  new CustomEvent('shytalk-auth-changed', {
-                    detail: { user: { uid: 'test-123', displayName: 'TestUser' } },
-                  }),
-                );
-              }, 200);
+              (window as any).__signInCalled = 'google';
             };
           }
         },
@@ -368,13 +297,7 @@ test.describe('Roadmap Auth — Subscribe uses shared login modal', () => {
       });
       if (_auth) {
         _auth.signInWithGoogle = () => {
-          setTimeout(() => {
-            document.dispatchEvent(
-              new CustomEvent('shytalk-auth-changed', {
-                detail: { user: { uid: 'test-123', displayName: 'TestUser' } },
-              }),
-            );
-          }, 200);
+          (window as any).__signInCalled = 'google';
         };
       }
     });
@@ -385,11 +308,45 @@ test.describe('Roadmap Auth — Subscribe uses shared login modal', () => {
     const modal = page.locator('[data-testid="login-modal-overlay"]');
     await expect(modal).toBeVisible({ timeout: 5_000 });
 
-    // Click Google sign-in — triggers delayed auth event
     await modal.locator('[data-testid="auth-google-btn"]').click();
 
-    // Modal should auto-close after auth succeeds
-    await expect(modal).not.toBeVisible({ timeout: 5_000 });
+    const called = await page.evaluate(() => (window as any).__signInCalled);
+    expect(called).toBe('google');
+  });
+
+  test('Apple sign-in button calls signInWithApple (triggers redirect)', async ({ page }) => {
+    await page.evaluate(() => {
+      (window as any).__signInCalled = null;
+      let _auth = (window as any).shytalkAuth;
+      Object.defineProperty(window, 'shytalkAuth', {
+        get: () => _auth,
+        set: (v) => {
+          _auth = v;
+          if (_auth) {
+            _auth.signInWithApple = () => {
+              (window as any).__signInCalled = 'apple';
+            };
+          }
+        },
+        configurable: true,
+      });
+      if (_auth) {
+        _auth.signInWithApple = () => {
+          (window as any).__signInCalled = 'apple';
+        };
+      }
+    });
+
+    const suggestBtn = page.locator('[data-testid="suggest-btn"]');
+    await suggestBtn.waitFor({ timeout: 10_000 });
+    await suggestBtn.click();
+    const modal = page.locator('[data-testid="login-modal-overlay"]');
+    await expect(modal).toBeVisible({ timeout: 5_000 });
+
+    await modal.locator('[data-testid="auth-apple-btn"]').click();
+
+    const called = await page.evaluate(() => (window as any).__signInCalled);
+    expect(called).toBe('apple');
   });
 
   test('bell button (unauthenticated) opens the shared login modal', async ({ page }) => {
@@ -1271,18 +1228,42 @@ test.describe('Roadmap Auth — Bell icon auth behaviour', () => {
   });
 });
 
-test.describe('Roadmap Auth — Google account picker', () => {
-  test('signInWithGoogle source contains select_account prompt', async ({ page }) => {
+test.describe('Roadmap Auth — Redirect-based OAuth', () => {
+  test('signInWithGoogle uses signInWithRedirect (not popup)', async ({ page }) => {
     await page.goto('/roadmap.html');
-
-    // Verify the signInWithGoogle function source includes setCustomParameters with select_account
-    // This is a static analysis test — Firebase SDK may not be initialized in test mode
     const source = await page.evaluate(async () => {
       const res = await fetch('/js/roadmap-auth.js');
       return res.text();
     });
-    expect(source).toContain("prompt");
-    expect(source).toContain("select_account");
-    expect(source).toMatch(/setCustomParameters.*select_account|select_account.*setCustomParameters/s);
+    expect(source).toContain('signInWithRedirect');
+    expect(source).not.toContain('signInWithPopup');
+  });
+
+  test('signInWithGoogle uses select_account prompt', async ({ page }) => {
+    await page.goto('/roadmap.html');
+    const source = await page.evaluate(async () => {
+      const res = await fetch('/js/roadmap-auth.js');
+      return res.text();
+    });
+    expect(source).toContain('select_account');
+  });
+
+  test('signInWithApple uses signInWithRedirect (not popup)', async ({ page }) => {
+    await page.goto('/roadmap.html');
+    const source = await page.evaluate(async () => {
+      const res = await fetch('/js/roadmap-auth.js');
+      return res.text();
+    });
+    // Apple sign-in should also use redirect
+    expect(source).not.toMatch(/signInWithPopup.*apple|apple.*signInWithPopup/si);
+  });
+
+  test('getRedirectResult called on page load', async ({ page }) => {
+    await page.goto('/roadmap.html');
+    const source = await page.evaluate(async () => {
+      const res = await fetch('/js/roadmap-auth.js');
+      return res.text();
+    });
+    expect(source).toContain('getRedirectResult');
   });
 });
