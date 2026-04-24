@@ -124,7 +124,7 @@ android {
     }
     sourceSets {
         getByName("androidTest") {
-            assets.srcDirs("src/androidTest/assets")
+            assets.directories.add(file("src/androidTest/assets"))
         }
     }
 
