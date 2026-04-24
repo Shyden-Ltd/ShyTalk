@@ -106,7 +106,11 @@ object IosImagePicker {
                             if (jpegData != null) {
                                 val bytes = nsDataToByteArray(jpegData)
                                 images.add(bytes)
+                            } else {
+                                logW("IosImagePicker", "JPEG compression returned null for image")
                             }
+                        } else {
+                            logW("IosImagePicker", "Image load returned neither data nor error")
                         }
 
                         remaining--

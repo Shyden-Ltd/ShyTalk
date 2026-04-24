@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class ActiveRoomManager(
@@ -111,13 +112,12 @@ class ActiveRoomManager(
 
     override fun markLeaveStarted(roomId: String) {
         val deferred = CompletableDeferred<Unit>()
-        leaveSignalMap.value = leaveSignalMap.value + (roomId to deferred)
+        leaveSignalMap.update { it + (roomId to deferred) }
     }
 
     override fun markLeaveCompleted(roomId: String) {
-        val current = leaveSignalMap.value
-        current[roomId]?.complete(Unit)
-        leaveSignalMap.value = current - roomId
+        leaveSignalMap.value[roomId]?.complete(Unit)
+        leaveSignalMap.update { it - roomId }
     }
 
     override suspend fun awaitLeaveCompletion(roomId: String) {
@@ -301,7 +301,8 @@ class ActiveRoomManager(
     private suspend fun loadUserName() {
         when (val result = userRepository.getUser(currentUserId)) {
             is Resource.Success -> currentUserName = result.data.displayName
-            else -> {}
+            is Resource.Error -> logW(TAG, "Failed to load user name: ${result.message}")
+            is Resource.Loading -> {}
         }
     }
 

@@ -125,36 +125,36 @@ service cloud.firestore {
     match /conversations/{conversationId} {
       allow get: if request.auth != null;
       allow list: if request.auth != null
-                  && callerUniqueId() in resource.data.participantIds;
+                  && string(callerUniqueId()) in resource.data.participantIds;
       allow create: if request.auth != null;
       allow update: if request.auth != null
-                    && callerUniqueId() in resource.data.participantIds;
+                    && string(callerUniqueId()) in resource.data.participantIds;
 
       match /messages/{messageId} {
         allow read: if request.auth != null
-          && callerUniqueId() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+          && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
         allow create: if request.auth != null
-          && callerUniqueId() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+          && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
         allow update, delete: if request.auth != null
-          && (callerUniqueId() == resource.data.senderId
-              || callerUniqueId() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupAdminIds
-              || callerUniqueId() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupModIds);
+          && (string(callerUniqueId()) == resource.data.senderId
+              || string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupAdminIds
+              || string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupModIds);
 
         match /edits/{editId} {
           allow read: if request.auth != null
-            && callerUniqueId() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+            && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
           allow create: if request.auth != null
-            && callerUniqueId() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+            && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
         }
       }
 
       // User-specific conversation settings — own settings, or participant can init others during group creation
       match /userSettings/{settingsId} {
         allow read: if request.auth != null
-          && callerUniqueId() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+          && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
         allow write: if request.auth != null
           && (string(callerUniqueId()) == settingsId
-              || callerUniqueId() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupAdminIds);
+              || string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupAdminIds);
       }
 
       // Legacy settings path
@@ -166,20 +166,20 @@ service cloud.firestore {
       // Mutes — participants read, admins/mods can mute/unmute members
       match /mutes/{muteId} {
         allow read: if request.auth != null
-          && callerUniqueId() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+          && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
         allow write: if request.auth != null
           && (string(callerUniqueId()) == muteId
-              || callerUniqueId() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupAdminIds
-              || callerUniqueId() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupModIds);
+              || string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupAdminIds
+              || string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupModIds);
       }
 
       // Mod log — participants read, admins/mods create
       match /mod_log/{logId} {
         allow read: if request.auth != null
-          && callerUniqueId() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+          && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
         allow create: if request.auth != null
-          && (callerUniqueId() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupAdminIds
-              || callerUniqueId() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupModIds);
+          && (string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupAdminIds
+              || string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupModIds);
       }
     }
 
@@ -194,11 +194,11 @@ service cloud.firestore {
     match /deviceBindings/{deviceId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
-        && (request.resource.data.userId == callerUniqueId()
-            || request.resource.data.uniqueId == callerUniqueId());
+        && (request.resource.data.userId == string(callerUniqueId())
+            || request.resource.data.uniqueId == string(callerUniqueId()));
       allow update: if request.auth != null
-        && (resource.data.userId == callerUniqueId()
-            || resource.data.uniqueId == callerUniqueId());
+        && (resource.data.userId == string(callerUniqueId())
+            || resource.data.uniqueId == string(callerUniqueId()));
       allow delete: if false;
     }
 
@@ -241,7 +241,7 @@ service cloud.firestore {
     // ── Suspension appeals ───────────────────────────────────────
     match /suspensionAppeals/{appealId} {
       allow read: if request.auth != null
-        && resource.data.uniqueId == callerUniqueId();
+        && resource.data.uniqueId == string(callerUniqueId());
       allow create: if request.auth != null;
     }
 
@@ -343,24 +343,24 @@ service cloud.firestore {
     // ── Suggestions — public read (non-pending), auth create ────
     match /suggestions/{suggestionId} {
       allow read: if resource.data.status != 'pending'
-                  || (request.auth != null && callerUniqueId() == resource.data.submitterUid)
+                  || (request.auth != null && string(callerUniqueId()) == resource.data.submitterUid)
                   || (request.auth != null && request.auth.token.admin == true);
       allow create: if request.auth != null;
       allow update: if request.auth != null
-                    && (callerUniqueId() == resource.data.submitterUid && resource.data.status == 'pending')
+                    && (string(callerUniqueId()) == resource.data.submitterUid && resource.data.status == 'pending')
                     || (request.auth != null && request.auth.token.admin == true);
       allow delete: if request.auth != null
-                    && callerUniqueId() == resource.data.submitterUid
+                    && string(callerUniqueId()) == resource.data.submitterUid
                     && resource.data.status == 'pending';
 
       match /votes/{voteId} {
         allow read: if request.auth != null;
         allow create: if request.auth != null
-                      && request.resource.data.voterId == callerUniqueId();
+                      && request.resource.data.voterId == string(callerUniqueId());
         allow update: if request.auth != null
-                      && resource.data.voterId == callerUniqueId();
+                      && resource.data.voterId == string(callerUniqueId());
         allow delete: if request.auth != null
-                      && resource.data.voterId == callerUniqueId();
+                      && resource.data.voterId == string(callerUniqueId());
       }
 
       match /comments/{commentId} {
@@ -391,9 +391,9 @@ service cloud.firestore {
     // ── Notifications — owner read/update, server create ────────
     match /notifications/{notifId} {
       allow read: if request.auth != null
-                  && resource.data.uid == callerUniqueId();
+                  && resource.data.uid == string(callerUniqueId());
       allow update: if request.auth != null
-                    && resource.data.uid == callerUniqueId();
+                    && resource.data.uid == string(callerUniqueId());
       allow create, delete: if false;
     }
 

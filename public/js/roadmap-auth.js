@@ -65,7 +65,9 @@
       container.querySelector('.auth-signout-btn').addEventListener('click', signOut);
     } else if (currentUser && shytalkProfile === false) {
       // Signed in but no ShyTalk account — sign out silently, show download prompt
-      if (auth) auth.signOut().catch(function () {});
+      if (auth) auth.signOut().catch(function (err) {
+        console.warn('Auto sign-out failed:', err && err.code);
+      });
       currentUser = null;
       updateGlobalAuth();
       container.innerHTML =
@@ -135,7 +137,7 @@
         auth._emulatorConnected = true;
       }
     } catch (err) {
-      console.info('Firebase auth unavailable:', err && err.code);
+      console.warn('Firebase auth unavailable:', err && err.code, err && err.message);
       authStateKnown = true;
       renderAuthUI();
       return;
@@ -147,7 +149,7 @@
       // onAuthStateChanged below will handle the state update
     }).catch(function (err) {
       if (err.code !== 'auth/popup-closed-by-user') {
-        console.error('Redirect sign-in error:', err && err.code);
+        console.error('Redirect sign-in error:', err && err.code, err && err.message);
       }
     });
 
@@ -207,6 +209,8 @@
       shytalkProfile = null;
       renderAuthUI();
       updateGlobalAuth();
+    }).catch(function (err) {
+      console.error('Sign out failed:', err && err.code, err && err.message);
     });
   }
 
@@ -236,6 +240,7 @@
     try {
       return await currentUser.getIdToken();
     } catch (e) {
+      console.warn('Token refresh failed:', e && e.code);
       return null;
     }
   }

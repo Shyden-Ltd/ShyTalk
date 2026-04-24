@@ -51,7 +51,13 @@ class LiveKitBridgeImpl: shared.LiveKitBridge {
     func setMicrophoneEnabled(enabled: Bool) {
         guard let room = room else { return }
         Task {
-            try? await room.localParticipant.setMicrophone(enabled: enabled)
+            do {
+                try await room.localParticipant.setMicrophone(enabled: enabled)
+            } catch {
+                await MainActor.run {
+                    self.kotlinDelegate?.onConnectionFailed(error: "Microphone error: \(error.localizedDescription)")
+                }
+            }
         }
     }
 
