@@ -487,7 +487,7 @@
       '<div class="sg-modal-body" id="sg-subscribe-body">' +
       bodyHtml +
       "</div>" +
-      '<div class="sg-gdpr-consent" data-testid="subscribe-gdpr-notice">' +
+      '<div class="sg-gdpr-consent" data-testid="subscribe-gdpr-notice" data-i18n="gdprEmailConsent">' +
       "By enabling email notifications you consent to receive updates. You can unsubscribe at any time using the link in each email or by returning to this page." +
       "</div>" +
       '<div class="sg-modal-actions">' +
