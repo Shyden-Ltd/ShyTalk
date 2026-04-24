@@ -497,15 +497,12 @@
       '<div class="sg-modal-body" id="sg-subscribe-body">' +
       bodyHtml +
       "</div>" +
-      '<div class="sg-gdpr-consent">' +
-      '<label class="sg-checkbox-label" data-testid="subscribe-gdpr-checkbox">' +
-      '<input type="checkbox" id="sg-gdpr-checkbox" />' +
-      " I consent to receiving email notifications about roadmap updates (GDPR)" +
-      "</label>" +
+      '<div class="sg-gdpr-consent" data-testid="subscribe-gdpr-notice">' +
+      "By enabling email notifications you consent to receive updates. You can unsubscribe at any time using the link in each email or by returning to this page." +
       "</div>" +
       '<div class="sg-modal-actions">' +
       '<button class="sg-btn sg-btn--secondary" data-testid="subscribe-modal-cancel">' + sgT("cancel") + '</button>' +
-      '<button class="sg-btn sg-btn--primary" data-testid="subscribe-modal-save" disabled>Save</button>' +
+      '<button class="sg-btn sg-btn--primary" data-testid="subscribe-modal-save">Save</button>' +
       "</div>" +
       "</div>" +
       "</div>" +
@@ -519,7 +516,6 @@
       '[data-testid="subscribe-modal-cancel"]',
     );
     var saveBtn = overlay.querySelector('[data-testid="subscribe-modal-save"]');
-    var gdprCheckbox = document.getElementById("sg-gdpr-checkbox");
     var body = document.getElementById("sg-subscribe-body");
 
     function close() {
@@ -531,15 +527,6 @@
     overlay.addEventListener("click", function (e) {
       if (e.target === overlay) close();
     });
-
-    // openSubscribeModal is only called when user is already authenticated
-    // (unauthenticated users are directed to showLoginPromptModal instead)
-
-    if (gdprCheckbox) {
-      gdprCheckbox.addEventListener("change", function () {
-        saveBtn.disabled = !gdprCheckbox.checked;
-      });
-    }
 
     // Load preferences
     fetchSubscriptionPrefs()

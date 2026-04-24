@@ -67,9 +67,8 @@ test.describe('Subscribe Modal', () => {
     // Closing modal without saving should preserve original state
   });
 
-  test('email checkbox disabled until GDPR consent ticked', async ({ page }) => {
-    // Email toggle should be disabled by default
-    // Only enabled after GDPR consent checkbox is checked
+  test('save button is enabled by default (no checkbox gating)', async ({ page }) => {
+    // Save button should always be enabled — GDPR consent is implied by enabling email
   });
 });
 
@@ -148,32 +147,16 @@ test.describe('Subscribe Modal GDPR Flow', () => {
     await page.goto('/roadmap.html');
   });
 
-  test('email toggle disabled by default', async ({ page }) => {
-    // Email channel toggle should start disabled
+  test('GDPR notice visible (no checkbox, just informational text)', async ({ page }) => {
+    // Subscribe modal shows consent notice text instead of a checkbox
   });
 
-  test('GDPR consent checkbox unchecked by default', async ({ page }) => {
-    // Consent checkbox should not be pre-checked
+  test('GDPR notice mentions unsubscribe via email link', async ({ page }) => {
+    // Notice should mention unsubscribing via email link or returning to page
   });
 
-  test('ticking consent enables email toggle', async ({ page }) => {
-    // After checking consent, email toggle should become enabled
-  });
-
-  test('un-ticking consent disables email AND unchecks it', async ({ page }) => {
-    // Removing consent should disable and uncheck email
-  });
-
-  test('GDPR consent text translated to current language', async ({ page }) => {
-    // Consent text should match page language
-  });
-
-  test('GDPR consent text links to privacy policy', async ({ page }) => {
-    // Should link to privacy.html
-  });
-
-  test('revoking consent: email channel immediately disabled, confirmation toast', async ({ page }) => {
-    // Revoking should show confirmation
+  test('disabling all email toggles effectively unsubscribes from email', async ({ page }) => {
+    // Turning off all email channels and saving removes email consent
   });
 });
 
