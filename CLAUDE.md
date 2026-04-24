@@ -31,8 +31,11 @@ Social chat app with voice rooms. Kotlin Multiplatform (Android + iOS), Firebase
 - KMP: `shared/` module (commonMain/androidMain/iosMain) + `app/` (Android) + `iosApp/` (iOS)
 - MVVM + Koin DI + Compose Multiplatform + Navigation
 - Repository pattern: interface + impl, bound via Koin
-- Most models, repos, ViewModels, UI in `shared/src/commonMain/`
-- Android-only screens in `app/`
+- All models, repos, ViewModels, screens, and UI in `shared/src/commonMain/`
+- Platform abstractions via expect/actual: PlatformSettingsService, PlatformImagePicker, PlatformBackHandler, PlatformTts, KeepScreenOn, RequestMicPermission
+- iOS voice via LiveKit Swift bridge: `iosApp/iosApp/LiveKitBridge.swift` → `IosLiveKitVoiceService.kt`
+- Android foreground service: `app/` has `RoomService.kt` + `AndroidRoomServiceController`
+- Shared header on all web pages: `public/js/shared-header.js`
 - Seasonal events: `public/events/events.json` (registry), `public/js/seasonal-theme.js` (web), `SeasonalTheme.kt` (app)
 - 20 locales: ar, de, es, fr, hi, id, it, ja, km, ko, nl, pl, pt, ru, sv, th, tr, uk, vi, zh
 
