@@ -11,6 +11,9 @@ target 'iosApp' do
 
   # Google Sign-In
   pod 'GoogleSignIn'
+
+  # LiveKit — voice rooms
+  pod 'LiveKitClient'
 end
 
 post_install do |installer|

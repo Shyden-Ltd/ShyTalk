@@ -1,6 +1,5 @@
 package com.shyden.shytalk.core.di
 
-import com.shyden.shytalk.core.di.stubs.IosVoiceServiceStub
 import com.shyden.shytalk.core.room.IosRoomLifecycleManager
 import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.core.util.BiometricAuth
@@ -12,6 +11,7 @@ import com.shyden.shytalk.data.remote.ConversationWebSocketService
 import com.shyden.shytalk.data.remote.IosApiClient
 import com.shyden.shytalk.data.remote.IosAppConfigServiceImpl
 import com.shyden.shytalk.data.remote.IosConversationWebSocketServiceImpl
+import com.shyden.shytalk.data.remote.IosLiveKitVoiceService
 import com.shyden.shytalk.data.remote.IosPresenceServiceImpl
 import com.shyden.shytalk.data.remote.IosTokenServiceImpl
 import com.shyden.shytalk.data.remote.IosTypingRepositoryImpl
@@ -121,7 +121,7 @@ val iosPlatformModule =
 
         // Services
         single<TokenService> { IosTokenServiceImpl(get()) }
-        single<VoiceService> { IosVoiceServiceStub() }
+        single<VoiceService> { IosLiveKitVoiceService(get()) }
         single<PresenceService> { IosPresenceServiceImpl(get()) }
         single<ConversationWebSocketService> { IosConversationWebSocketServiceImpl(get()) }
         single<AppConfigService> { IosAppConfigServiceImpl(get()) }

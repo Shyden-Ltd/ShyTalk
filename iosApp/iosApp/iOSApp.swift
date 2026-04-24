@@ -18,6 +18,12 @@ struct iOSApp: App {
         KoinHelperKt.doInitKoin(useEmulators: false)
         #endif
         setupGoogleSignIn()
+        setupLiveKit()
+    }
+
+    private func setupLiveKit() {
+        let bridge = LiveKitBridgeImpl()
+        IosLiveKitBridgeKt.registerLiveKitBridge(bridge: bridge)
     }
 
     var body: some Scene {
