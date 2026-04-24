@@ -1,12 +1,5 @@
 package com.shyden.shytalk.feature.room
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.speech.tts.TextToSpeech
-import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
@@ -52,11 +45,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.shyden.shytalk.core.effects.PlatformBackHandler
 import com.shyden.shytalk.core.model.Broadcast
 import com.shyden.shytalk.core.model.BroadcastType
 import com.shyden.shytalk.core.model.Gift
@@ -64,6 +56,9 @@ import com.shyden.shytalk.core.model.GiftEvent
 import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.RoomState
 import com.shyden.shytalk.core.model.SeatState
+import com.shyden.shytalk.core.platform.PlatformImagePicker
+import com.shyden.shytalk.core.platform.PlatformMultiImagePicker
+import com.shyden.shytalk.core.platform.PlatformSettingsService
 import com.shyden.shytalk.core.ui.BroadcastBanner
 import com.shyden.shytalk.core.ui.DegradedModeBanner
 import com.shyden.shytalk.core.ui.GiftEffectOverlay
@@ -71,6 +66,7 @@ import com.shyden.shytalk.core.ui.GiftPreviewPopup
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.currentTimeMillis
+import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.repository.GiftRepository
 import com.shyden.shytalk.feature.daily.DailyRewardCelebrationDialog
 import com.shyden.shytalk.feature.daily.DailyRewardDialog
@@ -107,7 +103,6 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -207,75 +202,43 @@ fun RoomScreen(
     var reportEvidenceVersion by remember { mutableStateOf(0) }
     var isCompressingEvidence by remember { mutableStateOf(false) }
 
-    val context = LocalContext.current
     val evidenceScope = rememberCoroutineScope()
-    val videoTooLargeMsg = stringResource(Res.string.video_too_large)
     val fileTooLargeMsg = stringResource(Res.string.file_too_large)
+    val platformSettings: PlatformSettingsService = org.koin.compose.koinInject()
 
-    val reportEvidencePickerLauncher =
-        rememberLauncherForActivityResult(
-            ActivityResultContracts.PickVisualMedia(),
-        ) { uri ->
-            if (uri != null) {
-                val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
-                if (mimeType.startsWith("video/")) {
-                    isCompressingEvidence = true
-                    evidenceScope.launch {
-                        val result =
-                            com.shyden.shytalk.core.util.VideoCompressor.compressVideo(
-                                context,
-                                uri,
-                                Constants.EVIDENCE_VIDEO_TARGET_BYTES,
-                                mimeType,
-                            )
-                        isCompressingEvidence = false
-                        if (result != null && result.first.size <= Constants.EVIDENCE_MAX_SIZE_BYTES) {
-                            reportEvidenceList.add(result)
-                            reportEvidenceVersion++
-                        } else {
-                            snackbarHostState.showSnackbar(videoTooLargeMsg)
-                        }
-                    }
+    var launchEvidencePicker by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var launchPmImagePicker by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var launchStickerPicker by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    PlatformImagePicker(
+        onImageSelected = { bytes ->
+            if (bytes != null) {
+                if (bytes.size <= Constants.EVIDENCE_MAX_SIZE_BYTES) {
+                    reportEvidenceList.add(bytes to "image/jpeg")
+                    reportEvidenceVersion++
                 } else {
-                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                    if (bytes != null) {
-                        if (bytes.size <= Constants.EVIDENCE_MAX_SIZE_BYTES) {
-                            reportEvidenceList.add(bytes to mimeType)
-                            reportEvidenceVersion++
-                        } else {
-                            evidenceScope.launch {
-                                snackbarHostState.showSnackbar(fileTooLargeMsg)
-                            }
-                        }
-                    }
+                    evidenceScope.launch { snackbarHostState.showSnackbar(fileTooLargeMsg) }
                 }
             }
-        }
+        },
+    ) { launcher -> launchEvidencePicker = launcher }
 
-    val pmImagePickerLauncher =
-        rememberLauncherForActivityResult(
-            ActivityResultContracts.PickMultipleVisualMedia(10),
-        ) { uris ->
-            if (uris.isNotEmpty()) {
-                val bytesList =
-                    uris.mapNotNull { uri ->
-                        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                    }
+    PlatformMultiImagePicker(
+        maxCount = 10,
+        onImagesSelected = { bytesList ->
+            if (bytesList.isNotEmpty()) {
                 pmImageResultHandler?.invoke(bytesList)
             }
-        }
+        },
+    ) { launcher -> launchPmImagePicker = launcher }
 
-    val pmStickerPickerLauncher =
-        rememberLauncherForActivityResult(
-            ActivityResultContracts.PickVisualMedia(),
-        ) { uri ->
-            if (uri != null) {
-                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                if (bytes != null) {
-                    pmStickerResultHandler?.invoke(bytes)
-                }
+    PlatformImagePicker(
+        onImageSelected = { bytes ->
+            if (bytes != null) {
+                pmStickerResultHandler?.invoke(bytes)
             }
-        }
+        },
+    ) { launcher -> launchStickerPicker = launcher }
 
     val currentUser = uiState.allKnownUsers[uiState.currentUserId]
 
@@ -325,97 +288,56 @@ fun RoomScreen(
         onDispose { viewModel.setRoomScreenVisible(false) }
     }
 
-    // Keep screen on while in room
-    val activity = LocalContext.current as? android.app.Activity
-    DisposableEffect(Unit) {
-        activity?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        onDispose {
-            activity?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        }
-    }
+    // Keep screen on while in room (expect/actual per platform)
+    com.shyden.shytalk.core.effects
+        .KeepScreenOn()
 
-    // Self-destruct announcement TTS
-    val tts = remember { mutableStateOf<TextToSpeech?>(null) }
+    // Self-destruct announcement TTS (expect/actual per platform)
     var selfDestructAnnounced by remember(roomId) { mutableStateOf(false) }
     DisposableEffect(Unit) {
-        val engine =
-            TextToSpeech(context) { status ->
-                if (status == TextToSpeech.SUCCESS) {
-                    tts.value?.language = Locale.US
-                    tts.value?.setPitch(0.75f)
-                    tts.value?.setSpeechRate(0.85f)
-                }
-            }
-        tts.value = engine
         onDispose {
-            engine.stop()
-            engine.shutdown()
-            tts.value = null
+            com.shyden.shytalk.core.audio.PlatformTts
+                .release()
         }
     }
 
-    // Play self-destruct announcement when a 5-minute countdown first appears
-    // (room expiry OR owner-away cooldown), and deactivation when owner returns
-    // Only plays if the user has enabled self-destruct alerts in settings (default: off)
     val selfDestructEnabled = currentUser?.selfDestructAlertEnabled == true
     LaunchedEffect(uiState.roomExpiryRemainingMs, uiState.ownerAwayRemainingMs, selfDestructEnabled) {
         val expiryActive = uiState.roomExpiryRemainingMs in 1..300_000L
         val ownerAwayActive = uiState.ownerAwayRemainingMs in 1..300_000L
         if (selfDestructEnabled && !selfDestructAnnounced && (expiryActive || ownerAwayActive)) {
             selfDestructAnnounced = true
-            tts.value?.speak(
+            com.shyden.shytalk.core.audio.PlatformTts.speak(
                 "Room self destruct sequence activated. Self destruct in T minus 5 minutes.",
-                TextToSpeech.QUEUE_FLUSH,
-                null,
                 "self_destruct",
             )
         } else if (selfDestructAnnounced && !expiryActive && !ownerAwayActive) {
             selfDestructAnnounced = false
             if (selfDestructEnabled) {
-                tts.value?.speak(
+                com.shyden.shytalk.core.audio.PlatformTts.speak(
                     "Self destruct sequence deactivated.",
-                    TextToSpeech.QUEUE_FLUSH,
-                    null,
                     "self_destruct_off",
                 )
             }
         }
     }
 
-    // Audio permission handling
+    // Audio permission handling (cross-platform via expect/actual)
     val scope = rememberCoroutineScope()
     val micDeniedMsg = stringResource(Res.string.mic_permission_denied)
-    val permissionLauncher =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.RequestPermission(),
-        ) { granted ->
-            viewModel.onAudioPermissionResult(granted)
-            if (!granted) {
-                scope.launch {
-                    snackbarHostState.showSnackbar(micDeniedMsg)
-                }
-            }
-        }
-
-    LaunchedEffect(Unit) {
-        val already =
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.RECORD_AUDIO,
-            ) == PackageManager.PERMISSION_GRANTED
-        if (already) {
-            viewModel.onAudioPermissionResult(true)
-        } else {
-            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+    com.shyden.shytalk.core.effects.RequestMicPermission { granted ->
+        viewModel.onAudioPermissionResult(granted)
+        if (!granted) {
+            scope.launch { snackbarHostState.showSnackbar(micDeniedMsg) }
         }
     }
 
     // System back navigates back without leaving the room (voice persists)
-    BackHandler(enabled = !showParticipantPanel && uiState.hasJoined) {
+    PlatformBackHandler(enabled = !showParticipantPanel && uiState.hasJoined) {
         onNavigateBack()
     }
 
-    BackHandler(enabled = showParticipantPanel) {
+    PlatformBackHandler(enabled = showParticipantPanel) {
         showParticipantPanel = false
     }
 
@@ -798,15 +720,8 @@ fun RoomScreen(
                                 _isOwnerOrHost = isOwnerOrHost,
                                 isVoiceUnavailable = uiState.isVoiceUnavailable,
                                 onToggleMic = { seatIndex ->
-                                    val hasMic =
-                                        ContextCompat.checkSelfPermission(
-                                            context,
-                                            Manifest.permission.RECORD_AUDIO,
-                                        ) == PackageManager.PERMISSION_GRANTED
-                                    if (hasMic) {
+                                    if (platformSettings.hasPermission("microphone")) {
                                         viewModel.toggleSelfMute(seatIndex)
-                                    } else {
-                                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                                     }
                                 },
                                 onSendMessage = { viewModel.sendMessage(it) },
@@ -1156,9 +1071,7 @@ fun RoomScreen(
                                 },
                             evidenceItems = reportEvidenceList.map { it.first }.also { _ -> reportEvidenceVersion },
                             onAddEvidence = {
-                                reportEvidencePickerLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
-                                )
+                                launchEvidencePicker?.invoke()
                             },
                             onRemoveEvidence = { index ->
                                 if (index in reportEvidenceList.indices) {
@@ -1193,15 +1106,11 @@ fun RoomScreen(
                         preOpenGroupConversationId = pmSheetPreOpenGroupConversationId,
                         onPickImages = { vm ->
                             pmImageResultHandler = { bytesList -> vm.uploadAndSendImages(bytesList) }
-                            pmImagePickerLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                            )
+                            launchPmImagePicker?.invoke()
                         },
                         onPickStickerImage = { vm ->
                             pmStickerResultHandler = { bytes -> vm.addStickerFromImage(bytes) }
-                            pmStickerPickerLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                            )
+                            launchStickerPicker?.invoke()
                         },
                         activeRoomId = roomId,
                         activeRoomName = uiState.room?.name,
@@ -1305,14 +1214,8 @@ fun RoomScreen(
                             coinBalance = walletState.coinBalance,
                             coinPackages = walletState.coinPackages,
                             isPurchasing = walletState.isPurchasing,
-                            onPurchasePackage = { pkg ->
-                                if (com.shyden.shytalk.BuildConfig.FLAVOR != "prod") {
-                                    walletViewModel.onPurchaseCompleted(
-                                        pkg.productId,
-                                        "dev-${java.util.UUID.randomUUID()}",
-                                        false,
-                                    )
-                                }
+                            onPurchasePackage = { _ ->
+                                // Billing is handled by the platform-specific flow (Google Play / StoreKit).
                                 // In prod, the room sheet does not launch billing directly —
                                 // users are directed to the full Wallet screen for purchases.
                             },

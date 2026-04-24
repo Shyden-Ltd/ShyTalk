@@ -55,7 +55,16 @@ fun createIosPlatformScreens(): PlatformScreens =
                 modifier = params.modifier,
             )
         },
-        roomScreen = { params -> IosRoomPlaceholder(params) },
+        roomScreen = { params ->
+            com.shyden.shytalk.feature.room.RoomScreen(
+                roomId = params.roomId,
+                isBackendDegraded = params.isBackendDegraded,
+                onNavigateBack = params.onNavigateBack,
+                onNavigateToUserProfile = params.onNavigateToUserProfile,
+                onNavigateToChat = params.onNavigateToChat,
+                onNavigateToWallet = params.onNavigateToWallet,
+            )
+        },
     )
 
 @Composable
@@ -65,51 +74,4 @@ private fun IosWarningScreen(params: WarningScreenParams) {
         onAccept = params.onAccept,
         onViewCommunityStandards = params.onViewCommunityStandards,
     )
-}
-
-@Composable
-private fun IosRoomPlaceholder(params: RoomScreenParams) {
-    PlaceholderScreen(
-        title = "Voice Room",
-        subtitle = "Room: ${params.roomId}",
-        actionLabel = "Leave",
-        actionTag = "ios_room_leaveButton",
-        onAction = params.onNavigateBack,
-    )
-}
-
-@Composable
-private fun PlaceholderScreen(
-    title: String,
-    subtitle: String,
-    actionLabel: String? = null,
-    actionTag: String = "",
-    onAction: () -> Unit = {},
-) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (actionLabel != null) {
-            Spacer(modifier = Modifier.height(24.dp))
-            Button(
-                onClick = onAction,
-                modifier = Modifier.testTag(actionTag),
-            ) {
-                Text(actionLabel)
-            }
-        }
-    }
 }
