@@ -63,6 +63,7 @@
     { value: "id", label: "Indonesian" },
     { value: "it", label: "Italian" },
     { value: "ja", label: "Japanese" },
+    { value: "km", label: "Khmer" },
     { value: "ko", label: "Korean" },
     { value: "nl", label: "Dutch" },
     { value: "pl", label: "Polish" },

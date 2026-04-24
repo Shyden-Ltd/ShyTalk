@@ -108,7 +108,7 @@ service cloud.firestore {
         allow read: if request.auth != null;
         allow create: if request.auth != null;
         allow update, delete: if request.auth != null
-          && callerUniqueId() == resource.data.senderId;
+          && string(callerUniqueId()) == resource.data.senderId;
       }
 
       // Seat requests — owner can approve/deny, requester can cancel own
@@ -116,8 +116,8 @@ service cloud.firestore {
         allow read: if request.auth != null;
         allow create: if request.auth != null;
         allow update: if request.auth != null
-          && (callerUniqueId() == get(/databases/$(database)/documents/rooms/$(roomId)).data.ownerId
-              || callerUniqueId() == resource.data.userId);
+          && (string(callerUniqueId()) == get(/databases/$(database)/documents/rooms/$(roomId)).data.ownerId
+              || string(callerUniqueId()) == resource.data.userId);
       }
     }
 

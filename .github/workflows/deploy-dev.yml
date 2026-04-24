@@ -226,6 +226,9 @@ jobs:
           key: xcode-derived-${{ hashFiles('iosApp/**', 'shared/build/bin/iosArm64/releaseFramework/**') }}
           restore-keys: xcode-derived-
 
+      - name: Install CocoaPods
+        run: cd iosApp && pod install
+
       - name: Build, archive, and export iOS app
         env:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
@@ -234,7 +237,7 @@ jobs:
           cd iosApp
           # Archive
           xcodebuild \
-            -project iosApp.xcodeproj \
+            -workspace iosApp.xcworkspace \
             -scheme iosApp \
             -sdk iphoneos \
             -configuration Release \

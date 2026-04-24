@@ -9,7 +9,7 @@ class LiveKitBridgeImpl: shared.LiveKitBridge {
     private var kotlinDelegate: shared.LiveKitBridgeDelegate?
     private var eventTask: Task<Void, Never>?
 
-    func setDelegate(delegate: shared.LiveKitBridgeDelegate) {
+    func setDelegate(delegate: shared.LiveKitBridgeDelegate?) {
         self.kotlinDelegate = delegate
     }
 

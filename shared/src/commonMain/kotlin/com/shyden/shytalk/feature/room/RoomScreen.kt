@@ -658,7 +658,8 @@ fun RoomScreen(
                                 ) {
                                     Icon(
                                         Icons.Default.MicOff,
-                                        contentDescription = null,
+                                        contentDescription =
+                                            stringResource(Res.string.microphone) + " " + stringResource(Res.string.denied).lowercase(),
                                         tint = Color(0xFFE65100),
                                         modifier = Modifier.padding(end = 8.dp),
                                     )

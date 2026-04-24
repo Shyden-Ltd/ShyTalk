@@ -245,11 +245,14 @@ jobs:
       - name: Build KMP shared framework for iOS
         run: ./gradlew :shared:linkReleaseFrameworkIosArm64
 
+      - name: Install CocoaPods
+        run: cd iosApp && pod install
+
       - name: Build and archive iOS app
         run: |
           cd iosApp
           xcodebuild \
-            -project iosApp.xcodeproj \
+            -workspace iosApp.xcworkspace \
             -scheme iosApp \
             -sdk iphoneos \
             -configuration Release \
@@ -418,11 +421,14 @@ jobs:
       - name: Build KMP shared framework for iOS Simulator
         run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64
 
+      - name: Install CocoaPods
+        run: cd iosApp && pod install
+
       - name: Build iOS app for simulator
         run: |
           cd iosApp
           xcodebuild build \
-            -project iosApp.xcodeproj \
+            -workspace iosApp.xcworkspace \
             -scheme iosApp \
             -sdk iphonesimulator \
             -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \

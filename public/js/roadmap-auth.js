@@ -147,7 +147,7 @@
       // onAuthStateChanged below will handle the state update
     }).catch(function (err) {
       if (err.code !== 'auth/popup-closed-by-user') {
-        console.error('Redirect sign-in error:', err);
+        console.error('Redirect sign-in error:', err && err.code);
       }
     });
 
@@ -220,6 +220,7 @@
       currentUser: currentUser,
       profile: shytalkProfile,
       getToken: getToken,
+      signOut: signOut,
       signInWithGoogle: signInWithGoogle,
       signInWithApple: signInWithApple,
       signInWithEmail: signInWithEmail,
@@ -248,7 +249,7 @@
 
   // ─── Initialize ───────────────────────────────────────────────
 
-  window.shytalkAuth = { currentUser: null, profile: null, getToken: getToken, API_BASE: API_BASE };
+  window.shytalkAuth = { currentUser: null, profile: null, getToken: getToken, signOut: signOut, API_BASE: API_BASE };
 
   // Wait for Firebase config from API before initializing
   if (window.SHYTALK_FIREBASE_CONFIG) {

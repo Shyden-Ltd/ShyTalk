@@ -1571,7 +1571,7 @@ private fun PermissionRow(
             Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onClick)
-                .padding(vertical = 8.dp)
+                .padding(vertical = 14.dp)
                 .then(if (testTag.isNotEmpty()) Modifier.testTag(testTag) else Modifier),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,

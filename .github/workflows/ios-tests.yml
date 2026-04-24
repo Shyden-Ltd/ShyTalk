@@ -121,11 +121,15 @@ jobs:
         if: steps.check-tests.outputs.has_tests == 'true'
         run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64
 
+      - name: Install CocoaPods
+        if: steps.check-tests.outputs.has_tests == 'true'
+        run: cd iosApp && pod install
+
       - name: Build iOS app for testing
         if: steps.check-tests.outputs.has_tests == 'true'
         run: |
           xcodebuild build-for-testing \
-            -project iosApp/iosApp.xcodeproj \
+            -workspace iosApp/iosApp.xcworkspace \
             -scheme iosApp \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build/ios-derived-data \
@@ -189,7 +193,7 @@ jobs:
       - name: Run iOS E2E tests
         run: |
           xcodebuild test-without-building \
-            -project iosApp/iosApp.xcodeproj \
+            -workspace iosApp/iosApp.xcworkspace \
             -scheme iosApp \
             -destination "id=${{ steps.sim.outputs.device_id }}" \
             -derivedDataPath build/ios-derived-data \
