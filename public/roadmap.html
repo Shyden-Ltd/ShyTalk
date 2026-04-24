@@ -1672,25 +1672,8 @@
       >Skip to content</a
     >
 
-    <!-- ── Header ── -->
-    <header class="header" role="banner">
-      <a href="/" class="header-logo" aria-label="ShyTalk home">ShyTalk</a>
-      <button
-        class="subscribe-btn"
-        id="subscribe-btn"
-        aria-label="Subscribe to updates"
-        data-testid="subscribe-btn"
-        data-log="subscribe-btn"
-        data-i18n="subscribe"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path
-            d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"
-          />
-        </svg>
-        Subscribe
-      </button>
-    </header>
+    <!-- Shared header injected by /js/shared-header.js -->
+    <script src="/js/shared-header.js"></script>
 
     <!-- ── Stats section ── -->
     <section class="stats-section" aria-label="Progress overview">
@@ -1747,6 +1730,22 @@
           data-i18n="navSuggestions"
           >Suggestions</a
         >
+        <button
+          class="subscribe-btn"
+          id="subscribe-btn"
+          aria-label="Subscribe to updates"
+          data-testid="subscribe-btn"
+          data-log="subscribe-btn"
+          data-i18n="subscribe"
+          style="margin-left: auto;"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"
+            />
+          </svg>
+          Subscribe
+        </button>
       </div>
     </nav>
 
