@@ -186,6 +186,7 @@ jobs:
         run: |
           sed "s|<PROD_FIREBASE_API_KEY>|$PROD_FIREBASE_API_KEY|" public/admin/config.example.js > public/admin/config.js
           sed "s|<PROD_FIREBASE_API_KEY>|$PROD_FIREBASE_API_KEY|" public/portal/config.example.js > public/portal/config.js
+          sed "s|<PROD_FIREBASE_API_KEY>|$PROD_FIREBASE_API_KEY|" public/js/roadmap-config.example.js > public/js/roadmap-config.js
           wrangler pages deploy public --project-name shytalk-site --branch main
 
   deploy-android-prod:

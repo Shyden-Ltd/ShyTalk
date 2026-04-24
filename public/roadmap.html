@@ -1803,9 +1803,10 @@
     <!-- Firebase SDK (compat) for auth -->
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+    <script src="/js/roadmap-config.js" onerror=""></script>
     <script>
-      // Fetch Firebase config from API, with client-side fallback.
-      // The API key is public (same as google-services.json checked into the repo).
+      // Fetch Firebase config from API.
+      // If the API is unavailable, check for a deploy-injected config file.
       (function () {
         var isLocal =
           location.hostname === "localhost" ||
@@ -1817,12 +1818,6 @@
           : isDev
             ? "https://dev-api.shytalk.shyden.co.uk"
             : "https://api.shytalk.shyden.co.uk";
-
-        // Fallback configs — Firebase web API keys are public (not secrets)
-        var fallbackConfigs = {
-          prod: { apiKey: "AIzaSyDM0uE3PotYJ4SXfomM0_mn3SRzodNl55w", authDomain: "shytalk-7ba69.firebaseapp.com", projectId: "shytalk-7ba69" },
-          dev:  { apiKey: "AIzaSyC0U5DnHI-WwhMNTRzcK3H_atBoZu3xwIY", authDomain: "shytalk-dev.firebaseapp.com", projectId: "shytalk-dev" },
-        };
 
         function applyConfig(config) {
           window.SHYTALK_FIREBASE_CONFIG = config;
@@ -1836,10 +1831,13 @@
           })
           .then(applyConfig)
           .catch(function () {
-            // API unavailable — use client-side fallback
-            var fallback = isDev ? fallbackConfigs.dev : fallbackConfigs.prod;
-            console.info("Using fallback Firebase config (" + fallback.projectId + ")");
-            applyConfig(fallback);
+            // API unavailable — try deploy-injected config (roadmap-config.js sets window.ROADMAP_FIREBASE_CONFIG)
+            if (window.ROADMAP_FIREBASE_CONFIG) {
+              console.info("Using deploy-injected Firebase config");
+              applyConfig(window.ROADMAP_FIREBASE_CONFIG);
+            } else {
+              console.warn("Failed to load Firebase config — auth features disabled");
+            }
           });
       })();
     </script>
