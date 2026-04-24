@@ -9,7 +9,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.firestore
 import com.shyden.shytalk.BuildConfig
 import com.shyden.shytalk.core.room.ActiveRoomManager
+import com.shyden.shytalk.core.room.AndroidRoomServiceController
 import com.shyden.shytalk.core.room.RoomLifecycleManager
+import com.shyden.shytalk.core.room.RoomServiceController
 import com.shyden.shytalk.core.util.BiometricAuth
 import com.shyden.shytalk.core.util.CryptoKeyPair
 import com.shyden.shytalk.core.util.SecureStorage
@@ -150,7 +152,8 @@ val appModule =
         single { CryptoKeyPair() }
 
         // ActiveRoomManager
-        single { ActiveRoomManager(get(), get(), get(), get(), get(), get(), get(), androidContext()) }
+        single<RoomServiceController> { AndroidRoomServiceController(androidContext()) }
+        single { ActiveRoomManager(get(), get(), get(), get(), get(), get(), get(), get()) }
         single<RoomLifecycleManager> { get<ActiveRoomManager>() }
 
         // Preloaders (Android-specific implementations)

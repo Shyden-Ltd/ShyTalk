@@ -1,7 +1,5 @@
 package com.shyden.shytalk.core.room
 
-import android.content.Context
-import android.util.Log
 import com.shyden.shytalk.core.model.ChatRoom
 import com.shyden.shytalk.core.model.Message
 import com.shyden.shytalk.core.model.RoomRole
@@ -10,6 +8,10 @@ import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
+import com.shyden.shytalk.core.util.logD
+import com.shyden.shytalk.core.util.logE
+import com.shyden.shytalk.core.util.logI
+import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.remote.PresenceService
 import com.shyden.shytalk.data.remote.VoiceConnectionState
 import com.shyden.shytalk.data.remote.VoiceService
@@ -38,7 +40,7 @@ class ActiveRoomManager(
     private val seatRequestRepository: SeatRequestRepository,
     val voiceService: VoiceService,
     private val presenceService: PresenceService,
-    private val context: Context,
+    private val roomServiceController: RoomServiceController,
 ) : RoomLifecycleManager {
     companion object {
         private const val TAG = "ActiveRoomManager"
@@ -56,7 +58,7 @@ class ActiveRoomManager(
     val messages: StateFlow<List<Message>> = _messages.asStateFlow()
     override val activeMessages: StateFlow<List<Message>> = _messages.asStateFlow()
 
-    private val _sharedUserCache = java.util.concurrent.ConcurrentHashMap<String, User>()
+    private val _sharedUserCache = mutableMapOf<String, User>()
     override val sharedUserCache: Map<String, User> get() = _sharedUserCache
 
     override fun updateSharedUserCache(users: Map<String, User>) {
@@ -105,7 +107,7 @@ class ActiveRoomManager(
     private var presenceMonitorJob: Job? = null
     private var isSeated = false
 
-    private val leaveSignals = java.util.concurrent.ConcurrentHashMap<String, CompletableDeferred<Unit>>()
+    private val leaveSignals = mutableMapOf<String, CompletableDeferred<Unit>>()
 
     override fun markLeaveStarted(roomId: String) {
         leaveSignals[roomId] = CompletableDeferred()
@@ -139,7 +141,7 @@ class ActiveRoomManager(
     override fun trackRoom(roomId: String) {
         _activeRoomId.value = roomId
         _roomClosed.value = false
-        RoomService.start(context, roomId)
+        roomServiceController.start(roomId)
         startConnectionMonitor()
         startPresenceMonitor()
     }
@@ -162,7 +164,7 @@ class ActiveRoomManager(
         _roomClosed.value = false
         _disconnectedUserIds.value = emptySet()
         _sharedUserCache.clear()
-        RoomService.stop(context)
+        roomServiceController.stop()
     }
 
     suspend fun enterRoom(roomId: String) {
@@ -184,19 +186,19 @@ class ActiveRoomManager(
             "${currentUserName.ifEmpty { "Someone" }} joined the room",
         )
 
-        RoomService.start(context, roomId)
+        roomServiceController.start(roomId)
     }
 
     suspend fun leaveRoom() {
         val roomId =
             _activeRoomId.value ?: run {
-                Log.d(TAG, "leaveRoom: no activeRoomId, returning")
+                logD(TAG, "leaveRoom: no activeRoomId, returning")
                 return
             }
         val room =
             _activeRoom.value ?: run {
                 // Room data lost but we still have the ID — close as safest option
-                Log.w(TAG, "leaveRoom: no activeRoom (data lost), forcing close for roomId=$roomId")
+                logW(TAG, "leaveRoom: no activeRoom (data lost), forcing close for roomId=$roomId")
                 presenceService.removePresence()
                 voiceService.leaveChannel()
                 roomRepository.closeRoom(roomId)
@@ -205,7 +207,7 @@ class ActiveRoomManager(
             }
         val userId = currentUserId
         val isOwner = room.ownerId == userId
-        Log.d(TAG, "leaveRoom: roomId=$roomId userId=$userId isOwner=$isOwner")
+        logD(TAG, "leaveRoom: roomId=$roomId userId=$userId isOwner=$isOwner")
 
         presenceService.removePresence()
 
@@ -217,14 +219,14 @@ class ActiveRoomManager(
                     seat.userId != null && seat.userId != userId && seat.state == SeatState.OCCUPIED
                 }
             if (anyoneOnMic) {
-                Log.d(TAG, "leaveRoom: owner → setOwnerAway (others present, seat preserved)")
+                logD(TAG, "leaveRoom: owner → setOwnerAway (others present, seat preserved)")
                 roomRepository.setOwnerAway(roomId)
             } else {
-                Log.d(TAG, "leaveRoom: owner alone → closeRoom")
+                logD(TAG, "leaveRoom: owner alone → closeRoom")
                 roomRepository.closeRoom(roomId)
             }
         } else if (mySeatEntry != null) {
-            Log.d(TAG, "leaveRoom: non-owner → leaveSeat(${mySeatEntry.key})")
+            logD(TAG, "leaveRoom: non-owner → leaveSeat(${mySeatEntry.key})")
             roomRepository.leaveSeat(roomId, mySeatEntry.key.toInt())
         }
 
@@ -245,7 +247,7 @@ class ActiveRoomManager(
                             seat.state == SeatState.OCCUPIED
                     }
                 if (!othersStillSeated) {
-                    Log.d(TAG, "leaveRoom: no seated non-owners left in OWNER_AWAY room → closeRoom")
+                    logD(TAG, "leaveRoom: no seated non-owners left in OWNER_AWAY room → closeRoom")
                     roomRepository.closeRoom(roomId)
                 }
             }
@@ -289,7 +291,7 @@ class ActiveRoomManager(
         // This allows RoomService.observeRoomClosed() to show the "Room Closed" animation.
 
         if (stopService) {
-            RoomService.stop(context)
+            roomServiceController.stop()
         }
     }
 
@@ -311,7 +313,7 @@ class ActiveRoomManager(
                     .catch { e -> _error.value = e.message }
                     .collect { room ->
                         if (room == null || room.state == RoomState.CLOSED) {
-                            Log.d(TAG, "Room observation: room=${room?.roomId} state=${room?.state} — closing")
+                            logD(TAG, "Room observation: room=${room?.roomId} state=${room?.state} — closing")
                             voiceService.leaveChannel()
                             presenceService.removePresence()
                             _roomClosed.value = true
@@ -324,7 +326,7 @@ class ActiveRoomManager(
 
                         // Detect if user was kicked
                         if (userId !in room.participantIds || userId in room.bannedUserIds) {
-                            Log.d(TAG, "Room observation: user kicked from room=${room.roomId}")
+                            logD(TAG, "Room observation: user kicked from room=${room.roomId}")
                             voiceService.leaveChannel()
                             presenceService.removePresence()
                             _roomClosed.value = true
@@ -360,7 +362,7 @@ class ActiveRoomManager(
 
                         // Close OWNER_AWAY room immediately if no non-owner seats remain
                         if (room.state == RoomState.OWNER_AWAY && !room.hasSeatedNonOwners()) {
-                            Log.d(TAG, "Room observation: OWNER_AWAY with no seated non-owners → closeRoom")
+                            logD(TAG, "Room observation: OWNER_AWAY with no seated non-owners → closeRoom")
                             ownerAwayCountdownJob?.cancel()
                             roomRepository.closeRoom(room.roomId)
                             return@collect
@@ -377,7 +379,7 @@ class ActiveRoomManager(
             scope.launch {
                 messageRepository
                     .getMessages(roomId)
-                    .catch { e -> Log.w(TAG, "Message observation error", e) }
+                    .catch { e -> logW(TAG, "Message observation error", e) }
                     .collect { messages -> _messages.value = messages }
             }
     }
@@ -393,7 +395,7 @@ class ActiveRoomManager(
                     val room = _activeRoom.value ?: return@collect
                     val userId = currentUserId
                     val currentlySeated = room.findUserSeat(userId) != null
-                    Log.d(
+                    logD(
                         TAG,
                         "connectionMonitor: state=$state userId=$userId ownerId=${room.ownerId} seated=$currentlySeated wasEver=$wasEverConnected",
                     )
@@ -417,7 +419,7 @@ class ActiveRoomManager(
                             // Owner must NOT leave from their own device on network loss.
                             val isOwner = room.ownerId == userId
                             if (isOwner) {
-                                Log.d(TAG, "connectionMonitor: owner disconnected — skipping leaveRoom, presence system will handle")
+                                logD(TAG, "connectionMonitor: owner disconnected — skipping leaveRoom, presence system will handle")
                                 return@collect
                             }
 
@@ -429,7 +431,7 @@ class ActiveRoomManager(
                                     val seatEntry = currentRoom.findUserSeat(currentUserId)
                                     val roomId = _activeRoomId.value
                                     if (seatEntry != null && roomId != null) {
-                                        Log.d(
+                                        logD(
                                             TAG,
                                             "connectionMonitor: non-owner voice disconnect timeout — removing from seat ${seatEntry.key}",
                                         )
@@ -462,7 +464,7 @@ class ActiveRoomManager(
 
                 presenceService
                     .observeRoomPresence(roomId)
-                    .catch { e -> Log.w(TAG, "Presence monitor error", e) }
+                    .catch { e -> logW(TAG, "Presence monitor error", e) }
                     .collect { presentUserIds ->
                         val room = _activeRoom.value ?: return@collect
                         val participantIds = room.participantIds
@@ -494,7 +496,7 @@ class ActiveRoomManager(
                                     // Owner disconnect → transition to OWNER_AWAY instead of removing
                                     val latestRoom = _activeRoom.value
                                     if (userId == latestRoom?.ownerId && latestRoom.state == RoomState.ACTIVE) {
-                                        Log.d(TAG, "presenceMonitor: owner absent → setOwnerAway")
+                                        logD(TAG, "presenceMonitor: owner absent → setOwnerAway")
                                         roomRepository.setOwnerAway(roomId)
                                     } else {
                                         roomRepository.removeDisconnectedUser(roomId, userId)
@@ -516,7 +518,9 @@ class ActiveRoomManager(
             ownerAwayCountdownJob =
                 scope.launch {
                     while (true) {
-                        val elapsed = System.currentTimeMillis() - leftAt
+                        val elapsed =
+                            com.shyden.shytalk.core.util
+                                .currentTimeMillis() - leftAt
                         val remaining = Constants.OWNER_LEAVE_TIMEOUT_MS - elapsed
                         if (remaining <= 0) {
                             // Any remaining participant can close an expired OWNER_AWAY room
@@ -700,13 +704,13 @@ class ActiveRoomManager(
 
     suspend fun closeRoom() {
         val roomId = _activeRoomId.value ?: return
-        Log.d(TAG, "closeRoom: roomId=$roomId")
+        logD(TAG, "closeRoom: roomId=$roomId")
         presenceService.removePresence()
         voiceService.leaveChannel()
         val result = roomRepository.closeRoom(roomId)
-        Log.d(TAG, "closeRoom: API result=$result")
+        logD(TAG, "closeRoom: API result=$result")
         if (result is Resource.Error) {
-            Log.e(TAG, "closeRoom: API FAILED: ${result.message}")
+            logE(TAG, "closeRoom: API FAILED: ${result.message}")
         }
         _roomClosed.value = true
         // Don't stop service — let RoomService.observeRoomClosed() show animation first

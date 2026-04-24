@@ -80,7 +80,7 @@ class ActiveRoomManagerTest {
                 seatRequestRepository = seatRequestRepository,
                 voiceService = voiceService,
                 presenceService = presenceService,
-                context = context,
+                roomServiceController = mockk(relaxed = true),
             )
     }
 
@@ -252,7 +252,7 @@ class ActiveRoomManagerTest {
                     seatRequestRepository,
                     voiceService,
                     presenceService,
-                    context,
+                    mockk(relaxed = true),
                 )
             hostManager.trackRoom("room-1")
             val hostRoom =
