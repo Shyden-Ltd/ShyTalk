@@ -855,7 +855,7 @@ fun RoomScreen(
                 if (showRoomNameDialog && uiState.room != null) {
                     val isOwner = uiState.currentRole == RoomRole.OWNER
                     if (isOwner) {
-                        var editedName by remember(showRoomNameDialog) { mutableStateOf(uiState.room?.name ?: "") }
+                        var editedName by remember(showRoomNameDialog, isOwner) { mutableStateOf(uiState.room?.name ?: "") }
                         AlertDialog(
                             onDismissRequest = { showRoomNameDialog = false },
                             title = { Text(stringResource(Res.string.edit_room_name)) },
