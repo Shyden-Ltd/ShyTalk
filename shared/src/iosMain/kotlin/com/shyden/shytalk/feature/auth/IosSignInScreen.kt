@@ -135,16 +135,15 @@ fun IosSignInScreen(params: SignInScreenParams) {
                 modifier = Modifier.testTag("ios_apple_sign_in"),
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Email/OTP Sign-In button
-            EmailSignInButton(
-                onClick = {
-                    if (isBusy) return@EmailSignInButton
-                    params.onNavigateToEmail()
-                },
-                modifier = Modifier.testTag("ios_email_sign_in"),
-            )
+            // Email Sign-In hidden — pending self-hosted mail server implementation
+            // Spacer(modifier = Modifier.height(12.dp))
+            // EmailSignInButton(
+            //     onClick = {
+            //         if (isBusy) return@EmailSignInButton
+            //         params.onNavigateToEmail()
+            //     },
+            //     modifier = Modifier.testTag("ios_email_sign_in"),
+            // )
         }
     }
 }
