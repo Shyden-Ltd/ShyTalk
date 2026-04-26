@@ -281,10 +281,42 @@ class AuthViewModel(
 
             is Resource.Error -> {
                 logE(TAG, "Identity resolution failed: ${result.message}")
-                _uiState.update { it.copy(isLoading = false, isBackendUnreachable = true) }
+                handleBackendError(result.message)
             }
 
             is Resource.Loading -> Unit
+        }
+    }
+
+    /**
+     * Routes auth-related errors to a fresh sign-in screen, network-related errors to
+     * "Unable to Connect". A stale refresh token previously fell through to the
+     * "Unable to Connect" path, leaving the user stuck retrying instead of re-authenticating.
+     */
+    private suspend fun handleBackendError(errorMessage: String?) {
+        val message = errorMessage.orEmpty()
+        val isAuthError =
+            message.contains("Not authenticated", ignoreCase = true) ||
+                message.contains("Token refresh", ignoreCase = true) ||
+                message.contains("INVALID_REFRESH_TOKEN", ignoreCase = true) ||
+                message.contains("UNAUTHENTICATED", ignoreCase = true) ||
+                message.contains("401")
+        if (isAuthError) {
+            logW(TAG, "Auth error — clearing session and routing to sign-in: $message")
+            try {
+                appLockRepository?.clearCredential()
+            } catch (e: Exception) {
+                logW(TAG, "Failed to clear credential: ${e.message}")
+            }
+            try {
+                authRepository.signOut()
+            } catch (e: Exception) {
+                logW(TAG, "Sign-out during auth-error recovery failed: ${e.message}")
+            }
+            resolvedUniqueId = null
+            _uiState.value = AuthUiState()
+        } else {
+            _uiState.update { it.copy(isLoading = false, isBackendUnreachable = true) }
         }
     }
 
@@ -379,11 +411,11 @@ class AuthViewModel(
                             }
                         }
 
-                        else -> {
-                            _uiState.update {
-                                it.copy(isLoading = false, isBackendUnreachable = true)
-                            }
+                        is Resource.Error -> {
+                            handleBackendError(userResult.message)
                         }
+
+                        is Resource.Loading -> Unit
                     }
                 } else {
                     _uiState.update {
@@ -399,9 +431,7 @@ class AuthViewModel(
             }
 
             is Resource.Error -> {
-                _uiState.update {
-                    it.copy(isLoading = false, isBackendUnreachable = true)
-                }
+                handleBackendError(result.message)
             }
 
             is Resource.Loading -> Unit

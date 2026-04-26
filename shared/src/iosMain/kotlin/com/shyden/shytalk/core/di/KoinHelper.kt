@@ -1,5 +1,6 @@
 package com.shyden.shytalk.core.di
 
+import com.shyden.shytalk.core.BuildVariant
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logI
 import dev.gitlive.firebase.Firebase
@@ -17,6 +18,7 @@ import org.koin.mp.KoinPlatformTools
  * @param useEmulators If true, connects Firebase to local emulators (localhost).
  */
 fun doInitKoin(useEmulators: Boolean = false) {
+    BuildVariant.isLocalEmulator = useEmulators
     if (KoinPlatformTools.defaultContext().getOrNull() != null) {
         logI("KoinHelper", "Koin already initialised — skipping")
         return

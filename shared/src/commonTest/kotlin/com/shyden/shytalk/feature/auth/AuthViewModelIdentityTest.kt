@@ -439,4 +439,90 @@ class AuthViewModelIdentityTest {
             // And currentUserId should return the uniqueId, not the Firebase UID
             assertEquals("10000005", authRepo.currentUserId, "currentUserId should return uniqueId, not Firebase UID")
         }
+
+    // ─── F-CYCLE5-01: Auth-error misclassifier tests ─────────────────
+
+    @Test
+    fun resolveIdentityFails_withAuthError_clearsSessionInsteadOfShowingUnableToConnect() =
+        runTest {
+            val identityRepo =
+                FakeIdentityRepository().apply {
+                    resolveResult = Resource.Error("INVALID_REFRESH_TOKEN: token has been invalidated")
+                }
+            val authRepo =
+                FakeAuthRepository(
+                    firebaseUid = "stale-firebase-uid",
+                    isAuthenticated = true,
+                    currentUserEmail = "user@test.com",
+                    providerInfo = "email" to "user@test.com",
+                )
+
+            val vm =
+                AuthViewModel(authRepo, FakeUserRepository(), FakeDeviceRepository(), identityRepo, "device-1", bypassDeviceChecks = true)
+            advanceUntilIdle()
+
+            vm.resolveAfterExternalSignIn("email", "user@test.com")
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertFalse(state.isBackendUnreachable, "Auth error should NOT show 'Unable to Connect'")
+            assertFalse(state.isAuthenticated, "Stale session should be cleared")
+            assertTrue(authRepo.signedOut, "signOut should be called to recover from stale session")
+        }
+
+    @Test
+    fun resolveIdentityFails_withGenericError_setsBackendUnreachable() =
+        runTest {
+            val identityRepo =
+                FakeIdentityRepository().apply {
+                    resolveResult = Resource.Error("Network timeout reaching api.shytalk.example")
+                }
+            val authRepo =
+                FakeAuthRepository(
+                    firebaseUid = "firebase-uid",
+                    isAuthenticated = true,
+                    currentUserEmail = "user@test.com",
+                    providerInfo = "email" to "user@test.com",
+                )
+
+            val vm =
+                AuthViewModel(authRepo, FakeUserRepository(), FakeDeviceRepository(), identityRepo, "device-1", bypassDeviceChecks = true)
+            advanceUntilIdle()
+
+            vm.resolveAfterExternalSignIn("email", "user@test.com")
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertTrue(state.isBackendUnreachable, "Network error should show 'Unable to Connect'")
+            assertFalse(authRepo.signedOut, "Network errors should NOT trigger sign-out")
+        }
+
+    @Test
+    fun userExistsFails_withUnauthenticated_clearsSession() =
+        runTest {
+            val identityRepo =
+                FakeIdentityRepository().apply {
+                    resolveResult = Resource.Success(SignInResult.Found(10000005))
+                }
+            val userRepo =
+                FakeUserRepository().apply {
+                    existsResult = Resource.Error("UNAUTHENTICATED: token expired")
+                }
+            val authRepo =
+                FakeAuthRepository(
+                    firebaseUid = "uid",
+                    isAuthenticated = true,
+                    currentUserEmail = "u@test.com",
+                    providerInfo = "email" to "u@test.com",
+                )
+
+            val vm = AuthViewModel(authRepo, userRepo, FakeDeviceRepository(), identityRepo, "device-1", bypassDeviceChecks = true)
+            advanceUntilIdle()
+            vm.resolveAfterExternalSignIn("email", "u@test.com")
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertFalse(state.isBackendUnreachable, "Stale token mid-flow should not show 'Unable to Connect'")
+            assertTrue(authRepo.signedOut, "signOut should be called")
+        }
 }
