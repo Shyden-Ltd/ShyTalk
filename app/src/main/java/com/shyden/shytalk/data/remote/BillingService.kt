@@ -70,13 +70,23 @@ class BillingService(
                     }
                 }
             } else if (billingResult.responseCode != BillingClient.BillingResponseCode.USER_CANCELED) {
+                // v8: surface USER_INELIGIBLE / PAYMENT_DECLINED_DUE_TO_INSUFFICIENT_FUNDS so
+                // the audit trail can distinguish a Play-blocked purchase (regulatory /
+                // parental-controls) from a generic billing error.
+                val subCode = billingResult.onPurchasesUpdatedSubResponseCode
+                val errorMessage =
+                    if (subCode != BillingClient.OnPurchasesUpdatedSubResponseCode.NO_APPLICABLE_SUB_RESPONSE_CODE) {
+                        "${billingResult.debugMessage} (subCode=$subCode)"
+                    } else {
+                        billingResult.debugMessage
+                    }
                 _purchaseEvents.tryEmit(
                     PurchaseResult(
                         productId = "",
                         purchaseToken = "",
                         isSubscription = false,
                         success = false,
-                        errorMessage = billingResult.debugMessage,
+                        errorMessage = errorMessage,
                     ),
                 )
             }
@@ -143,8 +153,23 @@ class BillingService(
         return suspendCancellableCoroutine { cont ->
             billingClient.queryProductDetailsAsync(queryParams) { result, queryResult ->
                 if (result.responseCode == BillingClient.BillingResponseCode.OK) {
+                    // v8 can return OK with a partial productDetailsList; the unfetched
+                    // siblings are the only client-side signal of a Play-side fetch failure
+                    // (mistyped/region-restricted/policy-blocked SKU). Don't drop them silently.
+                    val unfetched = queryResult.unfetchedProductList
+                    if (unfetched.isNotEmpty()) {
+                        Log.w(
+                            TAG,
+                            "queryProducts: ${unfetched.size} unfetched: " +
+                                unfetched.joinToString { "${it.productId}(status=${it.statusCode})" },
+                        )
+                    }
                     cont.resume(queryResult.productDetailsList ?: emptyList())
                 } else {
+                    Log.w(
+                        TAG,
+                        "queryProducts failed: code=${result.responseCode} msg=${result.debugMessage}",
+                    )
                     cont.resume(emptyList())
                 }
             }
