@@ -36,11 +36,16 @@ class AuthViewModelIdentityTest {
     @BeforeTest
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        // Reset the process-level migration guard so each test starts from a known
+        // state. Without this, the first test that exercises the migration path
+        // sets the static flag and every subsequent test silently skips migration.
+        AuthViewModel.resetMigrationGuardForTests()
     }
 
     @AfterTest
     fun tearDown() {
         Dispatchers.resetMain()
+        AuthViewModel.resetMigrationGuardForTests()
     }
 
     // ─── Fakes ───────────────────────────────────────────────────────

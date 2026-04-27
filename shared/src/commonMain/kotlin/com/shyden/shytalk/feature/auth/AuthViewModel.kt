@@ -72,6 +72,15 @@ class AuthViewModel(
          */
         @kotlin.concurrent.Volatile
         private var migrationCompleted: Boolean = false
+
+        /**
+         * Test-only hook to reset the process-level migration guard between test runs.
+         * Production callers must not invoke this — call sites are gated by `signOut()`
+         * resetting the flag at the natural lifecycle boundary.
+         */
+        internal fun resetMigrationGuardForTests() {
+            migrationCompleted = false
+        }
     }
 
     private val _uiState = MutableStateFlow(AuthUiState())

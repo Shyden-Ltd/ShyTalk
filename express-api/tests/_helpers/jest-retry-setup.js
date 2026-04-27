@@ -23,4 +23,4 @@
  * The retry is bounded: 3 retries max. A test that fails 4 times in a
  * row almost certainly has a real bug, not socket churn.
  */
-jest.retryTimes(5, { logErrorsBeforeRetry: true });
+jest.retryTimes(3, { logErrorsBeforeRetry: true });
