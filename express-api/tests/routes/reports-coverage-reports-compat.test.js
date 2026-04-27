@@ -52,7 +52,7 @@ jest.mock('../../src/utils/log', () => ({
 jest.mock('../../src/middleware/auth', () => ({
   requireAdmin: jest.fn(() => false),
   clearSuspensionCache: jest.fn(),
-  resolveUniqueId: jest.fn(async (uid) => (uid ? `${uid}-uniq` : null)),
+  resolveUniqueId: jest.fn(async (uid) => uid || null),
 }));
 jest.mock('../../src/utils/system-pm', () => ({
   sendSystemPm: jest.fn().mockResolvedValue(),
@@ -315,7 +315,9 @@ describe('POST /api/reports/:id/resolve - severity fallback and snake_case', () 
       .post('/api/reports/r1/resolve')
       .send({ action: 'warned_severe' });
     expect(res.status).toBe(200);
-    expect(createWarning).toHaveBeenCalledWith('u1', expect.objectContaining({ severity: 4 }));
+    // Server re-resolves from reportedUserId='t' (identity mock), ignoring the
+    // stored reportedUserUniqueId='u1' to defeat client-injected IDOR.
+    expect(createWarning).toHaveBeenCalledWith('t', expect.objectContaining({ severity: 4 }));
   });
 
   it('suspension uses snake_case pre-suspension fields', async () => {

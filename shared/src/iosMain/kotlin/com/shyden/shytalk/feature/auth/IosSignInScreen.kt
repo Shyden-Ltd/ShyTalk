@@ -12,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -105,6 +106,30 @@ fun IosSignInScreen(params: SignInScreenParams) {
             )
 
             Spacer(modifier = Modifier.height(32.dp))
+
+            // Persistent recovery banner. The transient `error` snackbar gets dismissed
+            // (`clearError()` runs after the snackbar animates), but `requiresAppDataClear`
+            // is sticky — without rendering it explicitly the user sees disabled sign-in
+            // buttons with no explanation after the snackbar disappears.
+            if (uiState.requiresAppDataClear) {
+                val bannerMessage = uiState.error?.toString().orEmpty()
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = MaterialTheme.shapes.medium,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .testTag("storage_corrupted_banner"),
+                ) {
+                    Text(
+                        text = bannerMessage,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
 
             var signingInProvider by remember { mutableStateOf<String?>(null) }
 

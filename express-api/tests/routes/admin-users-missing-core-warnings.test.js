@@ -154,6 +154,27 @@ describe('POST /api/user/:uniqueId/warn', () => {
     expect(res.body.error).toMatch(/severity/i);
   });
 
+  // ─── Length-cap validators (G1: must protect against admin-side
+  // storage exhaustion of warning subcollection + audit log) ─────
+
+  it('returns 400 when reason exceeds 500 chars', async () => {
+    const app = createAdminApp();
+    const res = await request(app)
+      .post('/api/user/10000001/warn')
+      .send({ reason: 'x'.repeat(501), severity: 2 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/reason exceeds 500 chars/);
+  });
+
+  it('returns 400 when adminNote exceeds 2000 chars', async () => {
+    const app = createAdminApp();
+    const res = await request(app)
+      .post('/api/user/10000001/warn')
+      .send({ reason: 'spam', severity: 2, adminNote: 'n'.repeat(2001) });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/adminNote exceeds 2000 chars/);
+  });
+
   it('returns 404 when target user does not exist', async () => {
     // createWarning: first reads db.doc().get() for the user — not found → throws before getDoc
     mockDocGet.mockResolvedValueOnce({ exists: false });

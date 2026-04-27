@@ -175,6 +175,8 @@ describe('reports: POST /api/reports returns 500 on Firestore error', () => {
     jest.mock('../../src/middleware/auth', () => ({
       requireAdmin: jest.fn(() => false),
       clearSuspensionCache: jest.fn(),
+      // Identity mock for the IDOR-fix server-resolve in POST /reports.
+      resolveUniqueId: jest.fn(async (uid) => uid || null),
     }));
 
     jest.mock('../../src/utils/system-pm', () => ({

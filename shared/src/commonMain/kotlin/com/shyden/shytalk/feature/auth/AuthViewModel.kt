@@ -642,7 +642,10 @@ class AuthViewModel(
     }
 
     fun clearError() {
-        _uiState.update { it.copy(error = null) }
+        // Preserve the error message when the sticky storage-corrupted flag is set so
+        // the persistent recovery banner can render it after the snackbar dismisses.
+        // Otherwise the user would see disabled auth buttons with no on-screen reason.
+        _uiState.update { if (it.requiresAppDataClear) it else it.copy(error = null) }
     }
 
     fun clearDeviceLocked() {

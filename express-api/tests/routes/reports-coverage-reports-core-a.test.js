@@ -55,7 +55,10 @@ jest.mock('../../src/middleware/auth', () => ({
   // Server-resolves the report target's uniqueId from the Firebase Auth UID so a
   // malicious reporter can't supply an arbitrary victim. Default fixture returns
   // `${uid}-uniq` which is the convention used by the test data builders here.
-  resolveUniqueId: jest.fn(async (uid) => (uid ? `${uid}-uniq` : null)),
+  // Default to identity so test fixtures can use any string as reportedUserId
+  // and have it resolve to the same value (matches the IDOR-fix re-resolve
+  // behaviour that defeats client-injected reportedUserUniqueId).
+  resolveUniqueId: jest.fn(async (uid) => uid || null),
 }));
 jest.mock('../../src/utils/system-pm', () => ({
   sendSystemPm: jest.fn().mockResolvedValue(),
@@ -387,7 +390,9 @@ describe('POST /api/reports/:id/resolve - edge cases', () => {
       .post('/api/reports/r1/resolve')
       .send({ action: 'warned_severe', severity: 4 });
     expect(res.status).toBe(200);
-    expect(createWarning).toHaveBeenCalledWith('u1', expect.objectContaining({ severity: 4 }));
+    // Server re-resolves from reportedUserId='t' (identity mock), ignoring the
+    // stored reportedUserUniqueId='u1' to defeat client-injected IDOR.
+    expect(createWarning).toHaveBeenCalledWith('t', expect.objectContaining({ severity: 4 }));
     expect(sendSystemPm).toHaveBeenCalledWith('rep1', expect.stringContaining('severe warning'));
   });
 
@@ -497,6 +502,9 @@ describe('POST /api/reports/:id/resolve - edge cases', () => {
     getDoc.mockResolvedValueOnce({
       id: 'r1',
       reportedUserId: 't',
+      // Deliberately set the stored uniqueId to a DIFFERENT value than the auth-uid
+      // resolution returns. The F1-RES fix re-resolves from reportedUserId at resolve
+      // time, so the stored 'u1' must be ignored and the server-resolved value used.
       reportedUserUniqueId: 'u1',
       reporterId: 'rep1',
       reason: 'original',
@@ -505,8 +513,9 @@ describe('POST /api/reports/:id/resolve - edge cases', () => {
       .post('/api/reports/r1/resolve')
       .send({ action: 'warned', reason: 'custom', adminNote: 'note' });
     expect(res.status).toBe(200);
+    // Server re-resolves 't' to 't' via the identity mock, NOT the client-injected 'u1'.
     expect(createWarning).toHaveBeenCalledWith(
-      'u1',
+      't',
       expect.objectContaining({ reason: 'custom', adminNote: 'note' }),
     );
   });

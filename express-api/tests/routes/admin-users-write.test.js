@@ -521,6 +521,14 @@ describe('POST /api/user/:uniqueId/suspend --- validation', () => {
     expect(res.body.error).toMatch(/canAppeal/i);
   });
 
+  it('should return 400 when reason exceeds 500 chars', async () => {
+    const res = await request(app)
+      .post('/api/user/user-1/suspend')
+      .send({ reason: 'x'.repeat(501), canAppeal: true });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/reason exceeds 500 chars/);
+  });
+
   it('should return 400 when endDate is not a valid date', async () => {
     const res = await request(app)
       .post('/api/user/user-1/suspend')

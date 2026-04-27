@@ -937,7 +937,13 @@ router.post('/user/:uniqueId/suspend', async (req, res) => {
     // Evict from any active rooms. Awaited (was fire-and-forget) so a partial
     // cascade is reflected in the admin response — without this, a chunk failure
     // mid-cascade left rooms in mixed state with the admin shown success.
-    let cascade = { roomsClosed: 0, roomsUpdated: 0, partial: false, failedRoomIds: [] };
+    let cascade = {
+      roomsClosed: 0,
+      roomsUpdated: 0,
+      partial: false,
+      failedRoomIds: [],
+      userDocFailed: false,
+    };
     try {
       cascade = await evictSuspendedUser(req.params.uniqueId);
     } catch (err) {
@@ -945,7 +951,9 @@ router.post('/user/:uniqueId/suspend', async (req, res) => {
         uniqueId: req.params.uniqueId,
         error: err.message,
       });
-      cascade = { ...cascade, partial: true, error: err.message };
+      // Stable error token instead of err.message — Firestore SDK errors can
+      // include project paths / stack frames. Full message logged above.
+      cascade = { ...cascade, partial: true, userDocFailed: true, error: 'cascade_failed' };
     }
 
     res.json({ success: true, cascade });

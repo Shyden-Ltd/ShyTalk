@@ -38,6 +38,17 @@ const REASON_MAX_LENGTH = 500;
 const ADMIN_NOTE_MAX_LENGTH = 2000;
 const DESCRIPTION_MAX_LENGTH = 2000;
 const MESSAGE_TEXT_MAX_LENGTH = 1000;
+// reportedUserName is forwarded into the FCM admin-alert payload at the bottom of
+// POST /reports. FCM rejects oversized payloads with `messaging/invalid-argument`,
+// which `cleanupInvalidAdminTokens` then matches and DELETES from every admin doc —
+// so a single oversized report could blackhole all admin push notifications. Cap
+// matches the displayName max in the user model.
+const REPORTED_USER_NAME_MAX_LENGTH = 50;
+// evidenceUrls is iterated by the orphan-storage cron, which loads up to 1000 reports'
+// urls into a Set in memory. Cap entry-count + per-entry length so a malicious report
+// can't OOM the cron on the Oracle Cloud free tier (1 GB RAM).
+const EVIDENCE_URLS_MAX_COUNT = 10;
+const EVIDENCE_URL_MAX_LENGTH = 500;
 
 /**
  * Remove invalid FCM tokens from admin user docs in Firestore.
@@ -108,6 +119,29 @@ router.post('/reports', async (req, res) => {
       return res
         .status(400)
         .json({ error: `messageText exceeds ${MESSAGE_TEXT_MAX_LENGTH} chars` });
+    if (
+      reportedUserName !== undefined &&
+      reportedUserName !== null &&
+      (typeof reportedUserName !== 'string' ||
+        reportedUserName.length > REPORTED_USER_NAME_MAX_LENGTH)
+    )
+      return res
+        .status(400)
+        .json({ error: `reportedUserName exceeds ${REPORTED_USER_NAME_MAX_LENGTH} chars` });
+    if (evidenceUrls !== undefined && evidenceUrls !== null) {
+      if (!Array.isArray(evidenceUrls))
+        return res.status(400).json({ error: 'evidenceUrls must be an array' });
+      if (evidenceUrls.length > EVIDENCE_URLS_MAX_COUNT)
+        return res
+          .status(400)
+          .json({ error: `evidenceUrls exceeds ${EVIDENCE_URLS_MAX_COUNT} entries` });
+      for (const url of evidenceUrls) {
+        if (typeof url !== 'string' || url.length > EVIDENCE_URL_MAX_LENGTH)
+          return res
+            .status(400)
+            .json({ error: `evidenceUrls entry exceeds ${EVIDENCE_URL_MAX_LENGTH} chars` });
+      }
+    }
 
     // Server-authoritative uniqueId resolution. Trusting client-supplied
     // reportedUserUniqueId would let any reporter cause an admin to suspend
@@ -395,8 +429,10 @@ router.post('/reports/:id/resolve', async (req, res) => {
     if (action === 'warned' || action === 'warned_severe') {
       const severity = body?.severity || (action === 'warned_severe' ? 4 : 2);
       const warningReason = body?.reason || report.reason;
-      // createWarning expects uniqueId (user doc key), not Firebase Auth UID
-      const warnUniqueId = report.reportedUserUniqueId ?? report.reportedUserId;
+      // createWarning expects uniqueId (user doc key), not Firebase Auth UID. Always
+      // re-resolve from the server-trusted reportedUserId — pre-existing reports may
+      // carry a client-injected reportedUserUniqueId from before the IDOR fix landed.
+      const warnUniqueId = (await resolveUniqueId(report.reportedUserId)) ?? report.reportedUserId;
 
       try {
         await createWarning(warnUniqueId, {
@@ -434,8 +470,11 @@ router.post('/reports/:id/resolve', async (req, res) => {
       const canAppeal = body?.canAppeal ?? false;
       const endTimestamp = suspensionDays > 0 ? Date.now() + suspensionDays * 86400000 : null;
 
-      // User documents are keyed by uniqueId, not Firebase Auth UID
-      const reportedUniqueId = report.reportedUserUniqueId ?? report.reportedUserId;
+      // User documents are keyed by uniqueId. Re-resolve from server-trusted
+      // reportedUserId to defeat any client-injected reportedUserUniqueId stored
+      // before the IDOR fix landed.
+      const reportedUniqueId =
+        (await resolveUniqueId(report.reportedUserId)) ?? report.reportedUserId;
       const reportedUser = await getDoc(`users/${reportedUniqueId}`);
 
       try {
@@ -468,7 +507,18 @@ router.post('/reports/:id/resolve', async (req, res) => {
             userId: reportedUniqueId,
             error: cascadeErr.message,
           });
-          cascade = { roomsClosed: 0, roomsUpdated: 0, partial: true, error: cascadeErr.message };
+          // Stable error token instead of cascadeErr.message — Firestore SDK
+          // error strings can include project/document paths and stack frames,
+          // which we don't want to ship over the wire even to admin clients.
+          // The full message is already logged server-side above.
+          cascade = {
+            roomsClosed: 0,
+            roomsUpdated: 0,
+            partial: true,
+            failedRoomIds: [],
+            userDocFailed: true,
+            error: 'cascade_failed',
+          };
         }
 
         // Send suspension PM (fire-and-forget)
@@ -632,7 +682,18 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
             userId: reportedUniqueId,
             error: cascadeErr.message,
           });
-          cascade = { roomsClosed: 0, roomsUpdated: 0, partial: true, error: cascadeErr.message };
+          // Stable error token instead of cascadeErr.message — Firestore SDK
+          // error strings can include project/document paths and stack frames,
+          // which we don't want to ship over the wire even to admin clients.
+          // The full message is already logged server-side above.
+          cascade = {
+            roomsClosed: 0,
+            roomsUpdated: 0,
+            partial: true,
+            failedRoomIds: [],
+            userDocFailed: true,
+            error: 'cascade_failed',
+          };
         }
 
         // Send suspension PM (fire-and-forget)
@@ -962,7 +1023,13 @@ router.post('/admin/users/:uniqueId/suspend', async (req, res) => {
     ]);
 
     // Awaited (was fire-and-forget) so cascade partial-failure is visible to admin.
-    let cascade = { roomsClosed: 0, roomsUpdated: 0, partial: false, failedRoomIds: [] };
+    let cascade = {
+      roomsClosed: 0,
+      roomsUpdated: 0,
+      partial: false,
+      failedRoomIds: [],
+      userDocFailed: false,
+    };
     try {
       cascade = await evictSuspendedUser(req.params.uniqueId);
     } catch (err) {
@@ -970,7 +1037,8 @@ router.post('/admin/users/:uniqueId/suspend', async (req, res) => {
         userId: req.params.uniqueId,
         error: err.message,
       });
-      cascade = { ...cascade, partial: true, error: err.message };
+      // Stable error token instead of err.message; full message is logged above.
+      cascade = { ...cascade, partial: true, userDocFailed: true, error: 'cascade_failed' };
     }
 
     res.json({ success: true, cascade });
