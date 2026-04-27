@@ -1,17 +1,23 @@
 import { test, expect } from './fixtures/admin';
-import { adminLogin, navigateToTab, searchUser, switchUserSubtab } from './helpers/admin-auth';
 
 /**
- * Verifies the full suspension-cascade and warning-no-cascade behaviour matrix
- * by seeding ephemeral rooms via /api/test/write/rooms, then driving suspension
- * + warning through the admin UI and checking room state via /api/test/verify.
+ * E2E coverage for the suspension-cascade and warning-no-cascade behaviour
+ * matrix from the admin surface.
  *
- * Mirrors:
+ * Strategy:
+ *   - Seed an ephemeral room via /api/test/write/rooms with the test user
+ *     plugged into a specific role (owner / host / attendee / visitor).
+ *   - Trigger suspend or warn via the admin Bearer-token API (the same
+ *     endpoint the admin UI button hits — UI-button coverage already lives
+ *     in admin-users-moderation.spec.ts).
+ *   - Read the room back via /api/test/verify and check the resulting state.
+ *
+ * Mirrors the unit + integration coverage:
  *   - tests/utils/evict-suspended-user.test.js (Express util-level matrix)
  *   - tests/routes/admin-users-warn-room-cascade.test.js (warning-preserves)
  *   - shared/src/jvmTest/.../ChatRoomPermissionsTest.kt (host action policy)
  *
- * Behaviour spec being tested:
+ * Behaviour spec being verified end-to-end:
  *   - Suspending the room owner    → state=CLOSED, participantIds + hostIds wiped
  *   - Suspending a host            → removed from hostIds AND participantIds; seat cleared
  *   - Suspending a seated attendee → seat cleared; removed from participantIds
@@ -19,24 +25,15 @@ import { adminLogin, navigateToTab, searchUser, switchUserSubtab } from './helpe
  *   - Issuing a warning            → NO room change for any role
  */
 
+const SUSPEND_END_DATE = () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
 test.describe('Admin Users — Suspension Cascade & Warning Preservation', () => {
   test.describe.configure({ mode: 'serial' });
-
-  test.beforeEach(async ({ page }) => {
-    page.on('dialog', async (dialog) => {
-      if (dialog.type() === 'prompt') {
-        await dialog.accept('E2E cascade test');
-      } else {
-        await dialog.accept();
-      }
-    });
-    await adminLogin(page);
-  });
 
   /**
    * Seed a fully-occupied 8-seat room. Returns the room id.
    *   seat 0 = owner, seats 1+2 = hosts, seats 3..7 = attendees.
-   * The user fixture (testData.user) is plugged into whichever role the test
+   * The user fixture (testData.user) plugs into whichever role the test
    * exercises by passing its uniqueId in the corresponding slot.
    */
   async function seedFullRoom(
@@ -72,7 +69,7 @@ test.describe('Admin Users — Suspension Cascade & Warning Preservation', () =>
 
   // ── Suspension cascade ────────────────────────────────────────
 
-  test('suspending the room owner closes the room', async ({ page, testData }) => {
+  test('suspending the room owner closes the room', async ({ testData }) => {
     const ownerId = String(testData.user.uniqueId);
     const roomId = await seedFullRoom(testData.api, testData.testRunId, {
       ownerId,
@@ -86,34 +83,35 @@ test.describe('Admin Users — Suspension Cascade & Warning Preservation', () =>
       ],
     });
 
-    // Suspend via admin UI
-    await navigateToTab(page, 'Users');
-    await searchUser(page, ownerId);
-    await switchUserSubtab(page, 'moderation');
-    await page.locator('#suspend-reason').fill('Cascade test — owner');
-    await page.locator('.duration-presets button[data-days="7"]').click();
-    await page.locator('#suspend-can-appeal').check();
-    await page.locator('#suspend-btn').click();
-    await expect(page.locator('#suspended-banner')).toBeVisible({ timeout: 15_000 });
+    await testData.api.post(`/api/user/${ownerId}/suspend`, {
+      reason: 'Cascade test — owner',
+      endDate: SUSPEND_END_DATE(),
+      canAppeal: true,
+    });
 
-    // Verify cascade
+    // Cascade is fire-and-forget — poll until it settles
+    await expect
+      .poll(async () => (await testData.api.testVerify('rooms', roomId)).state, {
+        timeout: 15_000,
+      })
+      .toBe('CLOSED');
     const room = await testData.api.testVerify('rooms', roomId);
-    expect(room.state).toBe('CLOSED');
     expect(room.closedAt).toBeGreaterThan(0);
     expect(room.participantIds).toEqual([]);
     expect(room.hostIds).toEqual([]);
 
-    // Cleanup: unsuspend + reset GCS so this test isn't sticky
-    await page.locator('#unsuspend-btn').click();
-    await expect(page.locator('#suspended-banner')).toBeHidden({ timeout: 15_000 });
+    // Cleanup so subsequent tests start with an unsuspended user
+    await testData.api.post(`/api/user/${ownerId}/unsuspend`);
     await testData.api.post(`/api/user/${ownerId}/reset-gcs`);
   });
 
-  test('suspending a seated host clears seat + removes from hostIds', async ({ page, testData }) => {
+  test('suspending a seated host clears seat + removes from hostIds', async ({ testData }) => {
     const targetId = String(testData.user.uniqueId);
+    const ownerStub = `${testData.prefix}_owner`;
+    const otherHost = `${testData.prefix}_host2`;
     const roomId = await seedFullRoom(testData.api, testData.testRunId, {
-      ownerId: `${testData.prefix}_owner`,
-      hostIds: [targetId, `${testData.prefix}_host2`], // user is host in seat 1
+      ownerId: ownerStub,
+      hostIds: [targetId, otherHost], // user is host in seat 1
       attendeeIds: [
         `${testData.prefix}_att1`,
         `${testData.prefix}_att2`,
@@ -123,19 +121,21 @@ test.describe('Admin Users — Suspension Cascade & Warning Preservation', () =>
       ],
     });
 
-    await navigateToTab(page, 'Users');
-    await searchUser(page, targetId);
-    await switchUserSubtab(page, 'moderation');
-    await page.locator('#suspend-reason').fill('Cascade test — host');
-    await page.locator('.duration-presets button[data-days="7"]').click();
-    await page.locator('#suspend-can-appeal').check();
-    await page.locator('#suspend-btn').click();
-    await expect(page.locator('#suspended-banner')).toBeVisible({ timeout: 15_000 });
+    await testData.api.post(`/api/user/${targetId}/suspend`, {
+      reason: 'Cascade test — host',
+      endDate: SUSPEND_END_DATE(),
+      canAppeal: true,
+    });
 
+    // Cascade is fire-and-forget — poll until hostIds + seat are cleared
+    await expect
+      .poll(async () => (await testData.api.testVerify('rooms', roomId)).hostIds, {
+        timeout: 15_000,
+      })
+      .not.toContain(targetId);
     const room = await testData.api.testVerify('rooms', roomId);
     expect(room.state).toBe('ACTIVE'); // room stays open
-    expect(room.hostIds).not.toContain(targetId);
-    expect(room.hostIds).toContain(`${testData.prefix}_host2`);
+    expect(room.hostIds).toContain(otherHost);
     expect(room.participantIds).not.toContain(targetId);
     expect(room.seats[1]).toEqual({
       userId: null,
@@ -143,22 +143,22 @@ test.describe('Admin Users — Suspension Cascade & Warning Preservation', () =>
       isMuted: false,
     });
     // Other seats untouched
-    expect(room.seats[0].userId).toBe(`${testData.prefix}_owner`);
-    expect(room.seats[2].userId).toBe(`${testData.prefix}_host2`);
+    expect(room.seats[0].userId).toBe(ownerStub);
+    expect(room.seats[2].userId).toBe(otherHost);
 
-    await page.locator('#unsuspend-btn').click();
-    await expect(page.locator('#suspended-banner')).toBeHidden({ timeout: 15_000 });
+    await testData.api.post(`/api/user/${targetId}/unsuspend`);
     await testData.api.post(`/api/user/${targetId}/reset-gcs`);
   });
 
   test('suspending a seated non-host clears seat + leaves hostIds untouched', async ({
-    page,
     testData,
   }) => {
     const targetId = String(testData.user.uniqueId);
+    const host1 = `${testData.prefix}_host1`;
+    const host2 = `${testData.prefix}_host2`;
     const roomId = await seedFullRoom(testData.api, testData.testRunId, {
       ownerId: `${testData.prefix}_owner`,
-      hostIds: [`${testData.prefix}_host1`, `${testData.prefix}_host2`],
+      hostIds: [host1, host2],
       attendeeIds: [
         targetId, // seat 3
         `${testData.prefix}_att2`,
@@ -168,34 +168,33 @@ test.describe('Admin Users — Suspension Cascade & Warning Preservation', () =>
       ],
     });
 
-    await navigateToTab(page, 'Users');
-    await searchUser(page, targetId);
-    await switchUserSubtab(page, 'moderation');
-    await page.locator('#suspend-reason').fill('Cascade test — attendee');
-    await page.locator('.duration-presets button[data-days="7"]').click();
-    await page.locator('#suspend-can-appeal').check();
-    await page.locator('#suspend-btn').click();
-    await expect(page.locator('#suspended-banner')).toBeVisible({ timeout: 15_000 });
+    await testData.api.post(`/api/user/${targetId}/suspend`, {
+      reason: 'Cascade test — attendee',
+      endDate: SUSPEND_END_DATE(),
+      canAppeal: true,
+    });
 
+    // Cascade is fire-and-forget — poll until participant is removed
+    await expect
+      .poll(
+        async () => (await testData.api.testVerify('rooms', roomId)).participantIds,
+        { timeout: 15_000 },
+      )
+      .not.toContain(targetId);
     const room = await testData.api.testVerify('rooms', roomId);
     expect(room.state).toBe('ACTIVE');
-    expect(room.hostIds).toEqual([
-      `${testData.prefix}_host1`,
-      `${testData.prefix}_host2`,
-    ]);
-    expect(room.participantIds).not.toContain(targetId);
+    expect(room.hostIds).toEqual([host1, host2]);
     expect(room.seats[3]).toEqual({
       userId: null,
       state: 'EMPTY',
       isMuted: false,
     });
 
-    await page.locator('#unsuspend-btn').click();
-    await expect(page.locator('#suspended-banner')).toBeHidden({ timeout: 15_000 });
+    await testData.api.post(`/api/user/${targetId}/unsuspend`);
     await testData.api.post(`/api/user/${targetId}/reset-gcs`);
   });
 
-  test('suspending a visitor only removes them from participantIds', async ({ page, testData }) => {
+  test('suspending a visitor only removes them from participantIds', async ({ testData }) => {
     const visitorId = String(testData.user.uniqueId);
     const ownerId = `${testData.prefix}_owner`;
     // Build room with visitor in participantIds but NOT in any seat or hostIds
@@ -216,32 +215,31 @@ test.describe('Admin Users — Suspension Cascade & Warning Preservation', () =>
     });
     const roomId = result.id;
 
-    await navigateToTab(page, 'Users');
-    await searchUser(page, visitorId);
-    await switchUserSubtab(page, 'moderation');
-    await page.locator('#suspend-reason').fill('Cascade test — visitor');
-    await page.locator('.duration-presets button[data-days="7"]').click();
-    await page.locator('#suspend-can-appeal').check();
-    await page.locator('#suspend-btn').click();
-    await expect(page.locator('#suspended-banner')).toBeVisible({ timeout: 15_000 });
+    await testData.api.post(`/api/user/${visitorId}/suspend`, {
+      reason: 'Cascade test — visitor',
+      endDate: SUSPEND_END_DATE(),
+      canAppeal: true,
+    });
 
+    // Cascade is fire-and-forget — poll until visitor is removed from participants
+    await expect
+      .poll(
+        async () => (await testData.api.testVerify('rooms', roomId)).participantIds,
+        { timeout: 15_000 },
+      )
+      .not.toContain(visitorId);
     const room = await testData.api.testVerify('rooms', roomId);
     expect(room.state).toBe('ACTIVE');
-    expect(room.participantIds).not.toContain(visitorId);
     expect(room.participantIds).toContain(ownerId);
     expect(room.hostIds).toEqual([]);
     expect(room.seats[0].userId).toBe(ownerId); // owner seat preserved
     expect(room.seats[1].userId).toBeNull();
 
-    await page.locator('#unsuspend-btn').click();
-    await expect(page.locator('#suspended-banner')).toBeHidden({ timeout: 15_000 });
+    await testData.api.post(`/api/user/${visitorId}/unsuspend`);
     await testData.api.post(`/api/user/${visitorId}/reset-gcs`);
   });
 
-  test('suspending the owner of an abandoned room still closes it', async ({
-    page,
-    testData,
-  }) => {
+  test('suspending the owner of an abandoned room still closes it', async ({ testData }) => {
     const ownerId = String(testData.user.uniqueId);
     // Owner is NOT in participantIds — they have abandoned the room
     const result = await testData.api.testWrite('rooms', {
@@ -258,28 +256,27 @@ test.describe('Admin Users — Suspension Cascade & Warning Preservation', () =>
     });
     const roomId = result.id;
 
-    await navigateToTab(page, 'Users');
-    await searchUser(page, ownerId);
-    await switchUserSubtab(page, 'moderation');
-    await page.locator('#suspend-reason').fill('Cascade test — abandoned owner');
-    await page.locator('.duration-presets button[data-days="7"]').click();
-    await page.locator('#suspend-can-appeal').check();
-    await page.locator('#suspend-btn').click();
-    await expect(page.locator('#suspended-banner')).toBeVisible({ timeout: 15_000 });
+    await testData.api.post(`/api/user/${ownerId}/suspend`, {
+      reason: 'Cascade test — abandoned owner',
+      endDate: SUSPEND_END_DATE(),
+      canAppeal: true,
+    });
 
     // The owner-query path catches this case even when the participants-only
-    // query would miss it
-    const room = await testData.api.testVerify('rooms', roomId);
-    expect(room.state).toBe('CLOSED');
+    // query would miss it. Poll until the cascade settles.
+    await expect
+      .poll(async () => (await testData.api.testVerify('rooms', roomId)).state, {
+        timeout: 15_000,
+      })
+      .toBe('CLOSED');
 
-    await page.locator('#unsuspend-btn').click();
-    await expect(page.locator('#suspended-banner')).toBeHidden({ timeout: 15_000 });
+    await testData.api.post(`/api/user/${ownerId}/unsuspend`);
     await testData.api.post(`/api/user/${ownerId}/reset-gcs`);
   });
 
   // ── Warning preservation ──────────────────────────────────────
 
-  test('warning a seated user does NOT touch the room', async ({ page, testData }) => {
+  test('warning a seated user does NOT touch the room', async ({ testData }) => {
     const targetId = String(testData.user.uniqueId);
     const ownerId = `${testData.prefix}_owner`;
     // User is in seat 3 as an attendee
@@ -303,15 +300,10 @@ test.describe('Admin Users — Suspension Cascade & Warning Preservation', () =>
     // Snapshot the room BEFORE the warning
     const before = await testData.api.testVerify('rooms', roomId);
 
-    // Issue warning via admin UI
-    await navigateToTab(page, 'Users');
-    await searchUser(page, targetId);
-    await switchUserSubtab(page, 'moderation');
-    await page.locator('#direct-warn-reason').selectOption('Spam');
-    await page.locator('input[name="direct-warn-severity"][value="3"]').click();
-    await page.locator('#direct-warn-btn').click();
-    await expect(page.locator('#warning-history-list .warning-item').first()).toBeVisible({
-      timeout: 15_000,
+    await testData.api.post(`/api/user/${targetId}/warn`, {
+      reason: 'Spam',
+      severity: 3,
+      adminNote: null,
     });
 
     // Room must be byte-for-byte unchanged
@@ -332,7 +324,7 @@ test.describe('Admin Users — Suspension Cascade & Warning Preservation', () =>
     await testData.api.post(`/api/user/${targetId}/reset-gcs`);
   });
 
-  test('warning the room owner does NOT close the room', async ({ page, testData }) => {
+  test('warning the room owner does NOT close the room', async ({ testData }) => {
     const ownerId = String(testData.user.uniqueId);
     const result = await testData.api.testWrite('rooms', {
       _testRun: testData.testRunId,
@@ -350,14 +342,10 @@ test.describe('Admin Users — Suspension Cascade & Warning Preservation', () =>
     });
     const roomId = result.id;
 
-    await navigateToTab(page, 'Users');
-    await searchUser(page, ownerId);
-    await switchUserSubtab(page, 'moderation');
-    await page.locator('#direct-warn-reason').selectOption('Other');
-    await page.locator('input[name="direct-warn-severity"][value="3"]').click();
-    await page.locator('#direct-warn-btn').click();
-    await expect(page.locator('#warning-history-list .warning-item').first()).toBeVisible({
-      timeout: 15_000,
+    await testData.api.post(`/api/user/${ownerId}/warn`, {
+      reason: 'Other',
+      severity: 3,
+      adminNote: null,
     });
 
     const room = await testData.api.testVerify('rooms', roomId);
