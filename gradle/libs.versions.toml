@@ -80,7 +80,7 @@ firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging
 gitlive-firebase-app = { group = "dev.gitlive", name = "firebase-app", version.ref = "gitliveFirebase" }
 gitlive-firebase-auth = { group = "dev.gitlive", name = "firebase-auth", version.ref = "gitliveFirebase" }
 gitlive-firebase-firestore = { group = "dev.gitlive", name = "firebase-firestore", version.ref = "gitliveFirebase" }
-gitlive-firebase-database = { group = "dev.gitlive", name = "firebase-database", version = "1.8.0" }
+gitlive-firebase-database = { group = "dev.gitlive", name = "firebase-database", version = "2.4.0" }
 
 # Coroutines
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
