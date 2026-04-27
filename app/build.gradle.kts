@@ -16,7 +16,10 @@ play {
 android {
     namespace = "com.shyden.shytalk"
     compileSdk {
-        version = release(36)
+        version =
+            release(36) {
+                minorApiLevel = 1
+            }
     }
 
     defaultConfig {

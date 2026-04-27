@@ -141,9 +141,9 @@ class BillingService(
                 .build()
 
         return suspendCancellableCoroutine { cont ->
-            billingClient.queryProductDetailsAsync(queryParams) { result, detailsList ->
+            billingClient.queryProductDetailsAsync(queryParams) { result, queryResult ->
                 if (result.responseCode == BillingClient.BillingResponseCode.OK) {
-                    cont.resume(detailsList)
+                    cont.resume(queryResult.productDetailsList ?: emptyList())
                 } else {
                     cont.resume(emptyList())
                 }

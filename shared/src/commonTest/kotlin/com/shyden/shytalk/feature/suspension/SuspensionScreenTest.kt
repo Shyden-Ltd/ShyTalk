@@ -1,12 +1,10 @@
 package com.shyden.shytalk.feature.suspension
 
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class SuspensionScreenTest {
-    // ===== shouldShowReason =====
-
     @Test
     fun `shouldShowReason - true when not expired and reason present`() {
         assertTrue(shouldShowReason(countdownExpired = false, reason = "Spam"))
