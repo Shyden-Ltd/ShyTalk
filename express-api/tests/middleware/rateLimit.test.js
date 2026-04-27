@@ -167,42 +167,78 @@ describe('sensitiveLimiter', () => {
 });
 
 describe('admin exemption', () => {
-  test('admin users are exempt from generalLimiter (6+ requests all succeed)', async () => {
-    const { generalLimiter } = freshLimiters();
-    const app = express();
-    // Inject admin auth before rate limiter
-    app.use((req, _res, next) => {
-      req.auth = { uid: 'admin-user', token: { admin: true } };
-      next();
-    });
-    app.use(generalLimiter);
-    app.get('/test', (req, res) => res.json({ success: true }));
+  // These tests previously sent 210 / 10 parallel HTTP requests through supertest
+  // to verify admin requests bypass rate limiting. Under load (full 4225-test
+  // suite) those parallel batches caused ECONNRESET / socket hang up flake from
+  // ephemeral port exhaustion. Now we invoke the limiter middleware directly
+  // with a mock req/res/next — the skip function is the entire surface area we
+  // care about, and calling it directly is deterministic.
 
-    // Send 210 requests in batches — exceeds the 200 limit, all should pass for admin
-    for (let batch = 0; batch < 7; batch++) {
-      const results = await Promise.all(
-        Array.from({ length: 30 }, () => request(app).get('/test')),
-      );
-      results.forEach((res) => expect(res.status).toBe(200));
+  function invokeLimiter(limiter, req) {
+    return new Promise((resolve, reject) => {
+      const res = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn().mockReturnThis(),
+        setHeader: jest.fn().mockReturnThis(),
+        getHeader: jest.fn(),
+        removeHeader: jest.fn(),
+        end: jest.fn(),
+      };
+      const next = (err) => (err ? reject(err) : resolve({ skipped: true, res }));
+      try {
+        const ret = limiter(req, res, next);
+        if (ret && typeof ret.then === 'function') ret.catch(reject);
+        // If the limiter blocked the request it calls res.json without next()
+        setImmediate(() => {
+          if (res.json.mock.calls.length > 0 || res.status.mock.calls.length > 0) {
+            resolve({ skipped: false, res });
+          }
+        });
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  test('admin users are exempt from generalLimiter', async () => {
+    const { generalLimiter } = freshLimiters();
+    const adminReq = {
+      auth: { uid: 'admin-user', token: { admin: true } },
+      ip: '127.0.0.1',
+      method: 'GET',
+      path: '/test',
+      url: '/test',
+      headers: {},
+      get: () => undefined,
+      // express-rate-limit reads these:
+      app: { get: () => undefined },
+      socket: { remoteAddress: '127.0.0.1' },
+    };
+    // 250+ invocations would normally trigger the 200/min limit — admin should bypass
+    for (let i = 0; i < 250; i++) {
+      const result = await invokeLimiter(generalLimiter, adminReq);
+      expect(result.skipped).toBe(true);
     }
   });
 
-  test('admin users are exempt from sensitiveLimiter (6+ requests all succeed)', async () => {
+  test('admin users are exempt from sensitiveLimiter', async () => {
     const { sensitiveLimiter } = freshLimiters();
-    const app = express();
-    // Inject admin auth before rate limiter
-    app.use((req, _res, next) => {
-      req.auth = { uid: 'admin-user', token: { admin: true } };
-      next();
-    });
-    app.use(sensitiveLimiter);
-    app.post('/report', (req, res) => res.json({ success: true }));
-
-    // Send 10 requests in parallel — double the 5-request limit, all should pass for admin
-    const results = await Promise.all(
-      Array.from({ length: 10 }, () => request(app).post('/report')),
-    );
-    results.forEach((res) => expect(res.status).toBe(200));
+    const adminReq = {
+      auth: { uid: 'admin-user', token: { admin: true } },
+      ip: '127.0.0.1',
+      method: 'POST',
+      path: '/report',
+      url: '/report',
+      headers: {},
+      get: () => undefined,
+      app: { get: () => undefined },
+      socket: { remoteAddress: '127.0.0.1' },
+    };
+    // 10+ invocations would normally trigger the 5/min sensitive limit
+    for (let i = 0; i < 10; i++) {
+      const result = await invokeLimiter(sensitiveLimiter, adminReq);
+      expect(result.skipped).toBe(true);
+    }
   });
 
   test('non-admin users are still rate-limited on sensitiveLimiter', async () => {

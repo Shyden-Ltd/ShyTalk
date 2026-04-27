@@ -107,6 +107,21 @@ const economyRouter = require('../../src/routes/economy');
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // mockReset drains mockResolvedValueOnce/mockImplementation queues — clearAllMocks
+  // does not. Without this, queued values from prior tests bleed into the next
+  // test and cause flaky failures.
+  mockDocGet.mockReset();
+  mockDocSet.mockReset();
+  mockDocUpdate.mockReset();
+  mockDocDelete.mockReset();
+  mockBatchSet.mockReset();
+  mockBatchUpdate.mockReset();
+  mockBatchDelete.mockReset();
+  mockBatchCommit.mockReset();
+  mockRunTransaction.mockReset();
+  mockGetAll.mockReset();
+
+  // Re-set defaults AFTER reset
   mockBatchCommit.mockResolvedValue();
   mockDocSet.mockResolvedValue();
   mockDocUpdate.mockResolvedValue();

@@ -80,7 +80,17 @@ beforeEach(() => {
   transactionUniqueIdCounter = 100000000;
   process.env.TEST_API_KEY = VALID_API_KEY;
 
-  // Restore default mock implementations after clearAllMocks
+  // mockReset drains mockResolvedValueOnce queues + clears implementations
+  // (clearAllMocks does not). Without this, queued values bleed across tests.
+  mockDocGet.mockReset();
+  mockDocSet.mockReset();
+  mockDocUpdate.mockReset();
+  mockDocDelete.mockReset();
+  mockBatchCommit.mockReset();
+  mockQueryGet.mockReset();
+  mockTransactionGet.mockReset();
+
+  // Restore default mock implementations after reset
   mockDocGet.mockResolvedValue({ exists: false });
   mockDocSet.mockResolvedValue();
   mockDocUpdate.mockResolvedValue();

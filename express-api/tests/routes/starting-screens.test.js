@@ -55,6 +55,11 @@ jest.mock('../../src/middleware/auth', () => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Drain mockResolvedValueOnce queues + clear implementations (clearAllMocks
+  // does not). Without this, queued values bleed across tests.
+  mockDocGet.mockReset();
+  mockDocSet.mockReset();
+  mockDocSet.mockResolvedValue();
 });
 
 // ─── App setup (mirrors index.js auth exemption pattern) ─────────

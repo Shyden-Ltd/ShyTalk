@@ -156,6 +156,26 @@ function createApp({ uniqueId = 1001, isAdmin = false, isSuspended = false } = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // AUTO-MOCKRESET-BLOCK: drain mockResolvedValueOnce queues that clearAllMocks does NOT clear.
+  // Without this, queued values bleed across tests, causing cross-file flake at scale.
+  mockDocGet.mockReset();
+  mockDocSet.mockReset();
+  mockDocUpdate.mockReset();
+  mockDocDelete.mockReset();
+  mockCollectionAdd.mockReset();
+  mockCollectionGet.mockReset();
+  mockWhere.mockReset();
+  mockOrderBy.mockReset();
+  mockLimit.mockReset();
+  mockOffset.mockReset();
+  mockStartAfter.mockReset();
+  mockRunTransaction.mockReset();
+  // Re-apply simple defaults (mockReset wipes them)
+  mockDocSet.mockResolvedValue();
+  mockDocUpdate.mockResolvedValue();
+  mockDocDelete.mockResolvedValue();
+  mockCollectionAdd.mockResolvedValue({ id: 'new-id' });
+  mockCollectionGet.mockResolvedValue({ empty: true, docs: [], size: 0 });
   jest.resetModules();
   mockDocGet.mockResolvedValue({ exists: false });
   mockCollectionGet.mockResolvedValue({ empty: true, docs: [], size: 0 });

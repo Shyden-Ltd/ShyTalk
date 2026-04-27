@@ -211,14 +211,25 @@ function _createRawApp({ uniqueId = 1001, isAdmin = false } = {}) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockDocGet.mockReset();
+  mockDocSet.mockReset();
+  mockDocUpdate.mockReset();
+  mockDocDelete.mockReset();
+  mockCollectionAdd.mockReset();
   mockCollectionGet.mockReset();
+  mockBatchCommit.mockReset();
+  mockBatchUpdate.mockReset();
   mockRunTransaction.mockReset();
   mockRunTransaction.mockImplementation(async (fn) => {
     const t = { get: mockDocGet, set: mockDocSet, update: mockDocUpdate, delete: mockDocDelete };
     return fn(t);
   });
   mockDocGet.mockResolvedValue({ exists: false });
+  mockDocSet.mockResolvedValue();
+  mockDocUpdate.mockResolvedValue();
+  mockDocDelete.mockResolvedValue();
+  mockCollectionAdd.mockResolvedValue({ id: 'new-suggestion-id' });
   mockCollectionGet.mockResolvedValue({ empty: true, docs: [], size: 0 });
+  mockBatchCommit.mockResolvedValue();
 });
 
 // ─── Helpers ────────────────────────────────────────────────────

@@ -105,6 +105,15 @@ function blockAdmin() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // mockReset drains queues + clears implementations (clearAllMocks does not)
+  mockDocGet.mockReset();
+  mockDocSet.mockReset();
+  mockDocUpdate.mockReset();
+  mockDocDelete.mockReset();
+  mockBatchCommit.mockReset();
+  getDoc.mockReset();
+  requireAdmin.mockReset();
+
   mockCollectionGet = jest.fn().mockResolvedValue({ empty: true, docs: [] });
   mockBatchCommit.mockResolvedValue();
   mockDocSet.mockResolvedValue();

@@ -117,6 +117,10 @@ function createApp(uniqueId = 10000001) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Drain mockResolvedValueOnce queues + clear implementations.
+  mockDocGet.mockReset();
+  mockDocUpdate.mockReset();
+  mockDocSet.mockReset();
   mockDocUpdate.mockResolvedValue();
   mockDocSet.mockResolvedValue();
   // Reset the economy config cache between tests

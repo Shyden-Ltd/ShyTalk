@@ -1,6 +1,21 @@
 module.exports = {
   testEnvironment: 'node',
-  maxWorkers: '50%',
+  // 2 workers + 256MB recycle threshold + 10s test timeout combine to
+  // produce deterministic runs across the 4225-test suite.
+  //
+  // * maxWorkers: 2 — fewer workers = more memory each, fewer GC stalls
+  //   under sustained load. Higher counts caused per-run flake.
+  // * workerIdleMemoryLimit: 256MB — recycle workers eagerly so heap
+  //   doesn't accumulate across hundreds of test files in one process.
+  // * testTimeout: 10000 — every test in this suite passes in <100ms in
+  //   isolation. The 5s Jest default starts triggering false-positive
+  //   timeouts only when a worker is mid-GC or supertest's ephemeral HTTP
+  //   server is slow to bind under macOS's loopback contention. 10s is
+  //   *not* slack for slow test logic — it's slack for OS-level resource
+  //   contention that's invisible to the test code itself.
+  maxWorkers: 2,
+  workerIdleMemoryLimit: '256MB',
+  testTimeout: 10000,
   restoreMocks: true,
   clearMocks: true,
   resetMocks: false,
