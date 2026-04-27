@@ -1196,60 +1196,9 @@ async function liftAutoAppliedBans(uniqueId, adminUid) {
 // HELPER: Evict suspended user from rooms
 // ══════════════════════════════════════════════════════════════
 
-/**
- * Evict a suspended user from any active rooms they are participating in.
- * Queries rooms where the user is a participant, removes them from
- * participantIds, clears their seat, and clears their currentRoomId.
- */
-async function evictSuspendedUser(uid) {
-  const snapshot = await db
-    .collection('rooms')
-    .where('participantIds', 'array-contains', uid)
-    .get();
-
-  if (snapshot.empty) {
-    // Still clear currentRoomId even if no matching rooms found
-    await db.doc(`users/${uid}`).update({ currentRoomId: null });
-    return;
-  }
-
-  const rooms = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-
-  // Collect all writes then batch in chunks of 500
-  const writes = [];
-
-  for (const room of rooms) {
-    const participantIds = (room.participantIds || []).filter((id) => id !== uid);
-
-    // Clear any seat occupied by this user
-    const seats = room.seats ? { ...room.seats } : {};
-    for (const [index, seat] of Object.entries(seats)) {
-      if (seat && (seat.userId === uid || seat.user_id === uid)) {
-        seats[index] = {
-          index: Number.parseInt(index, 10),
-          status: 'EMPTY',
-          userId: null,
-          isMuted: false,
-        };
-      }
-    }
-
-    writes.push({ ref: db.doc(`rooms/${room.id}`), data: { participantIds, seats } });
-  }
-
-  // Add the user's currentRoomId clear
-  writes.push({ ref: db.doc(`users/${uid}`), data: { currentRoomId: null } });
-
-  // Batch write in chunks of 500
-  for (let i = 0; i < writes.length; i += 500) {
-    const batch = db.batch();
-    const chunk = writes.slice(i, i + 500);
-    for (const w of chunk) {
-      batch.update(w.ref, w.data);
-    }
-    await batch.commit();
-  }
-}
+// evictSuspendedUser is exported from utils so reports.js + admin-users.js share
+// one canonical implementation. See utils/evict-suspended-user.js for behaviour.
+const { evictSuspendedUser } = require('../utils/evict-suspended-user');
 
 // ═══════════════════════════════════════════════════════════════════
 // Admin Auth Management (PIN lockout, biometric keys, OTP metrics)

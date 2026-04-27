@@ -36,6 +36,95 @@ data class ChatRoom(
     /** Finds the seat entry occupied by the given user, or null if not seated. */
     fun findUserSeat(userId: String): Map.Entry<String, Seat>? = seats.entries.find { it.value.isOccupiedBy(userId) }
 
+    // ─── Moderation permission helpers ──────────────────────────────
+    //
+    // Pure-function mirror of the host-action gates baked into
+    // ActiveRoomManager.kt. Centralising them here means UI code can ask the
+    // same questions ("can this user kick that user?") without importing the
+    // active-room state machine, AND lets us test the policy in isolation.
+
+    /** True iff `actorId` is allowed to take action on `targetId`. */
+    fun canKickUser(
+        actorId: String,
+        targetId: String,
+    ): Boolean {
+        // Owners can never be kicked.
+        if (targetId == ownerId) return false
+        return when (resolveRole(actorId)) {
+            RoomRole.OWNER -> true
+
+            // Hosts can kick attendees but not other hosts.
+            RoomRole.HOST -> targetId !in hostIds
+
+            RoomRole.ATTENDEE -> false
+        }
+    }
+
+    /** True iff `actorId` can force-remove the user occupying `seatIndex`. */
+    fun canRemoveFromSeat(
+        actorId: String,
+        seatIndex: Int,
+    ): Boolean {
+        // The owner seat is always 0 and cannot be vacated by force.
+        if (seatIndex == 0) return false
+        val occupantId = seats[seatIndex.toString()]?.userId ?: return false
+        return canKickUser(actorId, occupantId)
+    }
+
+    /** True iff `actorId` can force-mute (but not unmute) the user at `seatIndex`. */
+    fun canForceMute(
+        actorId: String,
+        seatIndex: Int,
+    ): Boolean {
+        val seat = seats[seatIndex.toString()] ?: return false
+        val occupantId = seat.userId ?: return false
+        if (occupantId == ownerId) return false
+        if (seat.isMuted) return false // already muted — only the user themselves can unmute
+        return when (resolveRole(actorId)) {
+            RoomRole.OWNER -> true
+            RoomRole.HOST -> occupantId !in hostIds
+            RoomRole.ATTENDEE -> false
+        }
+    }
+
+    /**
+     * True iff `actorId` can take `seatIndex` directly (no approval round-trip).
+     * Attendees ALWAYS need a seat-request — the route via the request workflow
+     * is exposed elsewhere.
+     */
+    fun canTakeSeatDirectly(
+        actorId: String,
+        seatIndex: Int,
+    ): Boolean {
+        val role = resolveRole(actorId)
+        // Owner can only sit in seat 0; conversely seat 0 is owner-only.
+        if (role == RoomRole.OWNER && seatIndex != 0) return false
+        if (seatIndex == 0 && role != RoomRole.OWNER) return false
+        // Seat must actually exist + be empty.
+        val seat = seats[seatIndex.toString()] ?: return false
+        if (seat.state == SeatState.OCCUPIED) return false
+        return when (role) {
+            RoomRole.OWNER -> true
+
+            // Hosts can take any non-owner seat unless approval is required AND
+            // they are NOT bypassing the queue. Approval-required rooms force the
+            // request flow even for hosts (matches ActiveRoomManager.takeSeat
+            // semantics).
+            RoomRole.HOST -> !requireApproval
+
+            // Attendees can never bypass — they must create a seat request.
+            RoomRole.ATTENDEE -> false
+        }
+    }
+
+    /** True iff `actorId` can send a peer-invite (host invitation) without approval. */
+    fun canInvite(actorId: String): Boolean =
+        when (resolveRole(actorId)) {
+            RoomRole.OWNER -> true
+            RoomRole.HOST -> !requireApproval
+            RoomRole.ATTENDEE -> false
+        }
+
     /** True if any non-owner user is currently seated (OCCUPIED). */
     fun hasSeatedNonOwners(): Boolean =
         seats.any { (_, seat) ->

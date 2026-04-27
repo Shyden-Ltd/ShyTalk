@@ -441,7 +441,7 @@ describe('evictSuspendedUser - via suspend', () => {
     expect(res.status).toBe(200);
     await new Promise((r) => setTimeout(r, 100));
     expect(log.warn).toHaveBeenCalledWith(
-      'reports',
+      'evict-suspended-user',
       expect.stringContaining('Failed to write'),
       expect.any(Object),
     );
@@ -460,7 +460,7 @@ describe('evictSuspendedUser - via suspend', () => {
     expect(res.status).toBe(200);
     await new Promise((r) => setTimeout(r, 100));
     expect(log.warn).toHaveBeenCalledWith(
-      'reports',
+      'evict-suspended-user',
       expect.stringContaining('Failed to remove'),
       expect.any(Object),
     );

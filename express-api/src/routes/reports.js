@@ -18,7 +18,7 @@
  */
 
 const router = require('express').Router();
-const { db, rtdb } = require('../utils/firebase');
+const { db } = require('../utils/firebase');
 const { generateId, now } = require('../utils/helpers');
 const { requireAdmin, clearSuspensionCache } = require('../middleware/auth');
 const { sendSystemPm } = require('../utils/system-pm');
@@ -1166,90 +1166,9 @@ router.patch('/appeals/:id', async (req, res) => {
 // HELPERS
 // ══════════════════════════════════════════════════════════════
 
-/**
- * Evict a suspended user from all rooms they're in.
- *
- * Queries rooms where the user appears in participantIds, removes them from
- * the participant list, clears their seat, and clears their currentRoomId.
- * If the user is the owner, the room is closed and an RTDB close event is fired.
- */
-async function evictSuspendedUser(userId) {
-  const rooms = await queryDocs(
-    db.collection('rooms').where('participantIds', 'array-contains', userId),
-  );
-
-  if (rooms.length === 0) return;
-
-  const batchOps = [];
-  const rtdbEvents = []; // Collect RTDB writes to fire AFTER Firestore batch
-
-  for (const room of rooms) {
-    if (room.ownerId === userId) {
-      // Owner suspended — close the room
-      batchOps.push({
-        path: `rooms/${room.id}`,
-        data: { state: 'CLOSED', closedAt: now() },
-      });
-      rtdbEvents.push({ roomId: room.id, type: 'room_closed', remove: true });
-    } else {
-      // Regular participant — remove from participants and clear their seat
-      const participantIds = (room.participantIds || []).filter((id) => id !== userId);
-
-      const seats = room.seats ? { ...room.seats } : {};
-      for (const [index, seat] of Object.entries(seats)) {
-        if (seat && (seat.userId === userId || seat.user_id === userId)) {
-          seats[index] = { userId: null, state: 'EMPTY', isMuted: false };
-        }
-      }
-
-      batchOps.push({
-        path: `rooms/${room.id}`,
-        data: { participantIds, seats },
-      });
-      rtdbEvents.push({ roomId: room.id, type: 'room_updated', remove: false });
-    }
-  }
-
-  // Clear user's currentRoomId
-  batchOps.push({
-    path: `users/${userId}`,
-    data: { currentRoomId: null },
-  });
-
-  // Commit Firestore batch first
-  for (let i = 0; i < batchOps.length; i += 500) {
-    const chunk = batchOps.slice(i, i + 500);
-    const batch = db.batch();
-    for (const op of chunk) {
-      batch.set(db.doc(op.path), op.data, { merge: true });
-    }
-    await batch.commit();
-  }
-
-  // Then fire RTDB events (after Firestore is committed)
-  for (const evt of rtdbEvents) {
-    try {
-      await rtdb.ref(`rooms/${evt.roomId}/events/lastEvent`).set({
-        type: evt.type,
-        ts: Date.now(),
-      });
-    } catch (err) {
-      log.warn('reports', `Failed to write ${evt.type} RTDB event`, {
-        roomId: evt.roomId,
-        error: err.message,
-      });
-    }
-    if (evt.remove) {
-      try {
-        await rtdb.ref(`rooms/${evt.roomId}`).remove();
-      } catch (err) {
-        log.warn('reports', 'Failed to remove RTDB room node', {
-          roomId: evt.roomId,
-          error: err.message,
-        });
-      }
-    }
-  }
-}
+// evictSuspendedUser was moved to utils/evict-suspended-user.js so admin-users.js
+// and reports.js share one canonical implementation that correctly handles all
+// role cascades (owner → close, host → demote+reseat, etc.).
+const { evictSuspendedUser } = require('../utils/evict-suspended-user');
 
 module.exports = router;

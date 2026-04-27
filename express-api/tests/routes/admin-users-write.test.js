@@ -1002,16 +1002,23 @@ describe('POST /api/user/:uniqueId/suspend --- room eviction', () => {
     expect(res.status).toBe(200);
     await flushPromises();
 
-    expect(mockBatchUpdate).toHaveBeenCalled();
+    // The shared evictSuspendedUser util in src/utils/evict-suspended-user.js
+    // uses `batch.set(ref, data, { merge: true })` (not `batch.update(...)`),
+    // and writes the canonical Seat shape `{ userId, state, isMuted }` (not the
+    // old `{ index, status, userId, isMuted }` form which never matched the
+    // commonMain Seat data class). Test mirrors the new behaviour.
+    expect(mockBatchSet).toHaveBeenCalled();
 
-    const roomUpdateCall = mockBatchUpdate.mock.calls.find(
+    const roomUpdateCall = mockBatchSet.mock.calls.find(
       (call) => call[1]?.participantIds && call[1]?.seats,
     );
     expect(roomUpdateCall).toBeDefined();
     expect(roomUpdateCall[1].participantIds).not.toContain('user-evict');
-    expect(roomUpdateCall[1].seats[0].status).toBe('EMPTY');
+    expect(roomUpdateCall[1].seats[0].state).toBe('EMPTY');
     expect(roomUpdateCall[1].seats[0].userId).toBeNull();
-    expect(roomUpdateCall[1].seats[1].status).toBe('OCCUPIED');
+    // The other seat is read-through unchanged from the source room (still
+    // shows OCCUPIED with its original userId).
+    expect(roomUpdateCall[1].seats[1].userId).toBe('other-user');
   });
 });
 
