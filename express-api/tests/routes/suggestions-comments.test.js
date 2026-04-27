@@ -131,6 +131,16 @@ function createUnauthApp() {
 beforeEach(() => {
   jest.clearAllMocks();
   jest.resetModules();
+  mockDocGet.mockReset();
+  mockDocSet.mockReset();
+  mockDocUpdate.mockReset();
+  mockDocDelete.mockReset();
+  mockCollectionAdd.mockReset();
+  mockCollectionGet.mockReset();
+  mockDocSet.mockResolvedValue();
+  mockDocUpdate.mockResolvedValue();
+  mockDocDelete.mockResolvedValue();
+  mockCollectionAdd.mockResolvedValue({ id: 'new-comment-id' });
   mockDocGet.mockResolvedValue({ exists: false });
   mockCollectionGet.mockResolvedValue({ empty: true, docs: [], size: 0 });
   suggestionsRouter = require('../../src/routes/suggestions');
