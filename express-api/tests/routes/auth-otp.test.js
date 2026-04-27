@@ -88,6 +88,28 @@ describe('OTP Routes', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // mockResolvedValueOnce queues are NOT drained by clearAllMocks — if a prior
+    // test threw before consuming all queued returns, those values bleed into
+    // the next test. mockReset() drains the queue and clears implementations.
+    // Defaults set at module level (e.g., .mockResolvedValue() declarations) get
+    // wiped too, so we re-apply them below.
+    mockDocGet.mockReset();
+    mockDocSet.mockReset();
+    mockDocUpdate.mockReset();
+    mockDocDelete.mockReset();
+    mockCollectionGet.mockReset();
+    mockDocSet.mockResolvedValue();
+    mockDocUpdate.mockResolvedValue();
+    mockDocDelete.mockResolvedValue();
+    mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
+    auth.createCustomToken.mockReset();
+    auth.createCustomToken.mockResolvedValue('custom-token-abc');
+    auth.getUserByEmail.mockReset();
+    sendEmail.mockReset();
+    sendEmail.mockResolvedValue({ messageId: 'msg-1' });
+    bcrypt.hash.mockReset();
+    bcrypt.hash.mockResolvedValue('$2b$10$hashedcode');
+    bcrypt.compare.mockReset();
     app = buildApp();
   });
 

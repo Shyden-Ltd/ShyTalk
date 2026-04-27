@@ -42,6 +42,12 @@ const {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // mockReset() is required for mocks that ever use mockImplementation/mockResolvedValueOnce
+  // — clearAllMocks() only resets call history, not implementations. Without these resets,
+  // mockImplementation set in one test bleeds into the next, causing flaky failures.
+  mockVerifyIdToken.mockReset();
+  mockDocGet.mockReset();
+  mockCollectionQuery.mockReset();
   clearUniqueIdCache(); // Reset uniqueId cache
   clearSuspensionCache('__all__'); // Not a real key, but we also need per-key clearing
   // Clear suspension cache for any keys used in tests by calling with known keys

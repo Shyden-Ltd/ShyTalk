@@ -77,6 +77,13 @@ function createApp(uid = 'firebase-uid', uniqueId = 10000001) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // mockReset() drains queues from prior tests' mockResolvedValueOnce/mockImplementation
+  // — clearAllMocks() does not. Required for cross-suite stability.
+  mockDocGet.mockReset();
+  mockDocSet.mockReset();
+  mockDocUpdate.mockReset();
+  mockBatchUpdate.mockReset();
+  mockBatchCommit.mockReset();
   mockBatchCommit.mockResolvedValue();
   mockDocSet.mockResolvedValue();
   mockDocUpdate.mockResolvedValue();
