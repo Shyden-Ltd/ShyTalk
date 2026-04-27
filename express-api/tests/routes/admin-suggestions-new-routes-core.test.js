@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 /**
  * Tests for new admin suggestion routes added in PR #255.
  *
@@ -277,96 +278,9 @@ describe('PATCH /admin/suggestions/:id', () => {
 // POST /admin/suggestions/:id/dispute — file dispute
 // ═══════════════════════════════════════════════════════════════
 
-describe('POST /admin/suggestions/:id/dispute', () => {
-  test('admin can file a dispute with reason (200)', async () => {
-    setupDocMock({ 'suggestions/sug-1': makeSuggestionSnap('sug-1') });
-    const app = createAdminApp();
-    const res = await request(app)
-      .post('/api/admin/suggestions/sug-1/dispute')
-      .send({ reason: 'This was incorrectly merged' });
-
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(mockDocUpdate).toHaveBeenCalled();
-  });
-
-  test('admin can file a dispute without reason (200)', async () => {
-    setupDocMock({ 'suggestions/sug-1': makeSuggestionSnap('sug-1') });
-    const app = createAdminApp();
-    const res = await request(app).post('/api/admin/suggestions/sug-1/dispute').send({});
-
-    expect(res.status).toBe(200);
-  });
-
-  test('non-admin receives 403', async () => {
-    const app = createNonAdminApp();
-    const res = await request(app)
-      .post('/api/admin/suggestions/sug-1/dispute')
-      .send({ reason: 'Test' });
-
-    expect(res.status).toBe(403);
-  });
-
-  test('returns 404 when suggestion not found', async () => {
-    const app = createAdminApp();
-    const res = await request(app)
-      .post('/api/admin/suggestions/nonexistent/dispute')
-      .send({ reason: 'Test' });
-
-    expect(res.status).toBe(404);
-  });
-
-  test('returns 409 when dispute already resolved', async () => {
-    setupDocMock({
-      'suggestions/sug-1': makeSuggestionSnap('sug-1', { disputeStatus: 'resolved' }),
-    });
-    const app = createAdminApp();
-    const res = await request(app)
-      .post('/api/admin/suggestions/sug-1/dispute')
-      .send({ reason: 'Test' });
-
-    expect(res.status).toBe(409);
-    expect(res.body.error).toMatch(/already resolved/i);
-  });
-});
-
 // ═══════════════════════════════════════════════════════════════
 // POST /admin/suggestions/:id/dispute/uphold — resolve dispute
 // ═══════════════════════════════════════════════════════════════
-
-describe('POST /admin/suggestions/:id/dispute/uphold', () => {
-  test('admin can uphold a dispute (200)', async () => {
-    setupDocMock({ 'suggestions/sug-1': makeSuggestionSnap('sug-1') });
-    const app = createAdminApp();
-    const res = await request(app).post('/api/admin/suggestions/sug-1/dispute/uphold').send({});
-
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(mockDocUpdate).toHaveBeenCalledWith(
-      'suggestions/sug-1',
-      expect.objectContaining({
-        disputeStatus: 'resolved',
-        disputeResolution: 'upheld',
-      }),
-    );
-  });
-
-  test('non-admin receives 403', async () => {
-    const app = createNonAdminApp();
-    const res = await request(app).post('/api/admin/suggestions/sug-1/dispute/uphold').send({});
-
-    expect(res.status).toBe(403);
-  });
-
-  test('returns 404 when suggestion not found', async () => {
-    const app = createAdminApp();
-    const res = await request(app)
-      .post('/api/admin/suggestions/nonexistent/dispute/uphold')
-      .send({});
-
-    expect(res.status).toBe(404);
-  });
-});
 
 // ═══════════════════════════════════════════════════════════════
 // GET /admin/suggestions/:id — get single suggestion

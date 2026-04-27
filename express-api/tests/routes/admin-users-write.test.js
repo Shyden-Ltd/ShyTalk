@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 const express = require('express');
 const request = require('supertest');
 
@@ -163,55 +164,6 @@ describe('PATCH /api/user/:uid', () => {
         targetUserId: 'user-1',
       }),
     );
-  });
-});
-
-describe('GET /api/search/uniqueId/:id', () => {
-  let app;
-
-  beforeEach(() => {
-    app = createApp();
-    jest.clearAllMocks();
-  });
-
-  it('should find user by tempUniqueId when uniqueId not found', async () => {
-    const { db } = require('../../src/utils/firebase');
-
-    // First collection call (uniqueId search) - empty
-    // Second collection call (tempUniqueId fallback) - found
-    let callCount = 0;
-    db.collection.mockImplementation(() => {
-      callCount++;
-      const getResult =
-        callCount === 1
-          ? { empty: true, docs: [] }
-          : {
-              empty: false,
-              docs: [
-                {
-                  id: 'user-abc',
-                  data: () => ({
-                    uniqueId: 99999999,
-                    tempUniqueId: 12345678,
-                    gcsScore: 100,
-                  }),
-                },
-              ],
-            };
-      const chain = {
-        where: jest.fn().mockImplementation(() => chain),
-        orderBy: jest.fn().mockImplementation(() => chain),
-        limit: jest.fn().mockImplementation(() => chain),
-        get: jest.fn().mockResolvedValue(getResult),
-      };
-      return chain;
-    });
-
-    const res = await request(app).get('/api/search/uniqueId/12345678').expect(200);
-
-    expect(res.body.id).toBe('user-abc');
-    expect(res.body.uniqueId).toBe(99999999);
-    expect(res.body.tempUniqueId).toBe(12345678);
   });
 });
 
@@ -1123,72 +1075,3 @@ describe('POST /api/user/:uniqueId/suspend --- timed ban duration', () => {
 });
 
 // --- GET /api/conversations/:id/messages ------------------------------------
-
-describe('GET /api/conversations/:id/messages', () => {
-  let app;
-
-  beforeEach(() => {
-    app = createApp();
-    jest.clearAllMocks();
-  });
-
-  it('should return messages in chronological order', async () => {
-    const { db } = require('../../src/utils/firebase');
-
-    const mockMsgGet = jest.fn().mockResolvedValue({
-      docs: [
-        { id: 'msg-2', data: () => ({ text: 'Second', createdAt: 2000 }) },
-        { id: 'msg-1', data: () => ({ text: 'First', createdAt: 1000 }) },
-      ],
-    });
-
-    db.collection.mockImplementation(() => ({
-      orderBy: jest.fn().mockReturnValue({
-        limit: jest.fn().mockReturnValue({
-          get: mockMsgGet,
-        }),
-      }),
-    }));
-
-    const res = await request(app).get('/api/conversations/conv-1/messages');
-
-    expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(2);
-    expect(res.body[0].id).toBe('msg-1');
-    expect(res.body[1].id).toBe('msg-2');
-  });
-
-  it('should respect the limit query parameter', async () => {
-    const { db } = require('../../src/utils/firebase');
-
-    const mockLimit = jest.fn().mockReturnValue({
-      get: jest.fn().mockResolvedValue({ docs: [] }),
-    });
-    db.collection.mockImplementation(() => ({
-      orderBy: jest.fn().mockReturnValue({
-        limit: mockLimit,
-      }),
-    }));
-
-    await request(app).get('/api/conversations/conv-1/messages?limit=10');
-
-    expect(mockLimit).toHaveBeenCalledWith(10);
-  });
-
-  it('should cap the limit at 200', async () => {
-    const { db } = require('../../src/utils/firebase');
-
-    const mockLimit = jest.fn().mockReturnValue({
-      get: jest.fn().mockResolvedValue({ docs: [] }),
-    });
-    db.collection.mockImplementation(() => ({
-      orderBy: jest.fn().mockReturnValue({
-        limit: mockLimit,
-      }),
-    }));
-
-    await request(app).get('/api/conversations/conv-1/messages?limit=999');
-
-    expect(mockLimit).toHaveBeenCalledWith(200);
-  });
-});

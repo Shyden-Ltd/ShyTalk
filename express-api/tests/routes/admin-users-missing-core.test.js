@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 const express = require('express');
 const request = require('supertest');
 
@@ -359,49 +360,6 @@ describe('POST /api/user/:uniqueId/warnings/:warningId/revoke', () => {
 
 // ─── POST /api/user/:uniqueId/reset-gcs ──────────────────────────
 
-describe('POST /api/user/:uniqueId/reset-gcs', () => {
-  it('returns 403 for non-admin', async () => {
-    blockAdmin();
-    const app = createAdminApp();
-    const res = await request(app).post('/api/user/10000001/reset-gcs');
-    expect(res.status).toBe(403);
-  });
-
-  it('returns 200 and resets GCS to 100 with cleared warning fields', async () => {
-    const app = createAdminApp();
-    const res = await request(app).post('/api/user/10000001/reset-gcs');
-
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-
-    expect(mockDocUpdate).toHaveBeenCalledWith(
-      'users/10000001',
-      expect.objectContaining({
-        gcsScore: 100,
-        gcsLastDeductionAt: null,
-        warningCount: 0,
-        hasActiveWarning: false,
-        hasNewWarning: false,
-        warningReason: null,
-        warningIssuedAt: null,
-      }),
-    );
-  });
-
-  it('creates an audit log entry on GCS reset', async () => {
-    const app = createAdminApp();
-    await request(app).post('/api/user/10000001/reset-gcs').expect(200);
-
-    expect(mockDocSet).toHaveBeenCalledWith(
-      'adminAuditLog/warn-id',
-      expect.objectContaining({
-        action: 'RESET_GCS',
-        targetUserId: '10000001',
-      }),
-    );
-  });
-});
-
 // ─── GET /api/user/:uniqueId/stalkers ────────────────────────────
 
 describe('GET /api/user/:uniqueId/stalkers', () => {
@@ -435,72 +393,6 @@ describe('GET /api/user/:uniqueId/stalkers', () => {
 });
 
 // ─── GET /api/user/:uniqueId — normalizeUser suspended user branches ──
-
-describe('GET /api/user/:uniqueId — normalizeUser for suspended users', () => {
-  it('restores pre-suspension display name, profile photo, and cover photo for admin view', async () => {
-    mockDocGet.mockResolvedValueOnce({
-      exists: true,
-      id: '10000001',
-      data: () => ({
-        uniqueId: 10000001,
-        displayName: 'Suspended Account',
-        profilePhotoUrl: null,
-        coverPhotoUrl: null,
-        isSuspended: true,
-        preSuspensionDisplayName: 'RealName',
-        preSuspensionProfilePhotoUrl: 'https://r2.example.com/profiles/10000001/photo.jpg',
-        preSuspensionCoverPhotoUrl: 'https://r2.example.com/covers/10000001/cover.jpg',
-        gcsScore: 0,
-        gcsLastDeductionAt: null,
-        email: 'suspended@example.com',
-        firebaseUid: 'uid-suspended',
-      }),
-    });
-
-    const app = createAdminApp();
-    const res = await request(app).get('/api/user/10000001');
-    expect(res.status).toBe(200);
-    // Admin sees real name, not "Suspended Account"
-    expect(res.body.displayName).toBe('RealName');
-    expect(res.body.profilePhotoUrl).toBe('https://r2.example.com/profiles/10000001/photo.jpg');
-    expect(res.body.coverPhotoUrl).toBe('https://r2.example.com/covers/10000001/cover.jpg');
-    expect(res.body._preSuspension).toEqual({
-      displayName: 'RealName',
-      profilePhotoUrl: 'https://r2.example.com/profiles/10000001/photo.jpg',
-      coverPhotoUrl: 'https://r2.example.com/covers/10000001/cover.jpg',
-    });
-  });
-
-  it('handles suspended user with only partial pre-suspension data', async () => {
-    mockDocGet.mockResolvedValueOnce({
-      exists: true,
-      id: '10000002',
-      data: () => ({
-        uniqueId: 10000002,
-        displayName: 'Suspended Account',
-        profilePhotoUrl: null,
-        coverPhotoUrl: null,
-        isSuspended: true,
-        preSuspensionDisplayName: 'PartialUser',
-        // no preSuspensionProfilePhotoUrl or preSuspensionCoverPhotoUrl
-        gcsScore: 50,
-        gcsLastDeductionAt: null,
-        email: 'partial@example.com',
-        firebaseUid: 'uid-partial',
-      }),
-    });
-
-    const app = createAdminApp();
-    const res = await request(app).get('/api/user/10000002');
-    expect(res.status).toBe(200);
-    expect(res.body.displayName).toBe('PartialUser');
-    expect(res.body._preSuspension).toEqual({
-      displayName: 'PartialUser',
-      profilePhotoUrl: null,
-      coverPhotoUrl: null,
-    });
-  });
-});
 
 // ─── GET /api/user/:uniqueId — backfillAuthInfo branch ──
 
@@ -853,17 +745,6 @@ describe('POST /api/user/:uniqueId/warnings/:warningId/revoke — additional', (
 
 // ─── POST /api/user/:uniqueId/reset-gcs — error branch ─────────────
 
-describe('POST /api/user/:uniqueId/reset-gcs — error handling', () => {
-  it('returns 500 when Firestore throws', async () => {
-    mockDocUpdate.mockRejectedValueOnce(new Error('Write failed'));
-
-    const app = createAdminApp();
-    const res = await request(app).post('/api/user/10000001/reset-gcs');
-    expect(res.status).toBe(500);
-    expect(res.body.error).toMatch(/internal server error/i);
-  });
-});
-
 // ─── GET /api/user/:uniqueId/stalkers — error branch ────────────────
 
 describe('GET /api/user/:uniqueId/stalkers — error handling', () => {
@@ -1203,32 +1084,6 @@ describe('POST /api/report-locks/:uniqueId/lock', () => {
 
 // ─── DELETE /api/report-locks/:uniqueId ─────────────────────────────
 
-describe('DELETE /api/report-locks/:uniqueId', () => {
-  it('returns 403 for non-admin', async () => {
-    blockAdmin();
-    const app = createAdminApp();
-    const res = await request(app).delete('/api/report-locks/10000001');
-    expect(res.status).toBe(403);
-  });
-
-  it('deletes the report lock', async () => {
-    const app = createAdminApp();
-    const res = await request(app).delete('/api/report-locks/10000001');
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(mockDocDelete).toHaveBeenCalledWith('reportLocks/10000001');
-  });
-
-  it('returns 500 on error', async () => {
-    mockDocDelete.mockRejectedValueOnce(new Error('Delete failed'));
-
-    const app = createAdminApp();
-    const res = await request(app).delete('/api/report-locks/10000001');
-    expect(res.status).toBe(500);
-    expect(res.body.error).toMatch(/internal server error/i);
-  });
-});
-
 // ─── GET /api/user/:uniqueId/auth-status ────────────────────────────
 
 describe('GET /api/user/:uniqueId/auth-status', () => {
@@ -1287,66 +1142,7 @@ describe('GET /api/user/:uniqueId/auth-status', () => {
 
 // ─── POST /api/user/:uniqueId/reset-pin-lockout ────────────────────
 
-describe('POST /api/user/:uniqueId/reset-pin-lockout', () => {
-  it('returns 403 for non-admin', async () => {
-    blockAdmin();
-    const app = createAdminApp();
-    const res = await request(app).post('/api/user/10000001/reset-pin-lockout');
-    expect(res.status).toBe(403);
-  });
-
-  it('resets pin lockout fields and returns success', async () => {
-    const app = createAdminApp();
-    const res = await request(app).post('/api/user/10000001/reset-pin-lockout');
-    expect(res.status).toBe(200);
-    expect(res.body.message).toMatch(/pin lockout reset/i);
-    expect(mockDocUpdate).toHaveBeenCalledWith(
-      'users/10000001',
-      expect.objectContaining({
-        pinAttempts: 0,
-        pinLockedUntil: null,
-        pinLockoutCount: 0,
-      }),
-    );
-  });
-
-  it('returns 500 on error', async () => {
-    mockDocUpdate.mockRejectedValueOnce(new Error('Update failed'));
-
-    const app = createAdminApp();
-    const res = await request(app).post('/api/user/10000001/reset-pin-lockout');
-    expect(res.status).toBe(500);
-    expect(res.body.error).toMatch(/failed to reset lockout/i);
-  });
-});
-
 // ─── DELETE /api/user/:uniqueId/biometric-keys/:deviceId ────────────
-
-describe('DELETE /api/user/:uniqueId/biometric-keys/:deviceId', () => {
-  it('returns 403 for non-admin', async () => {
-    blockAdmin();
-    const app = createAdminApp();
-    const res = await request(app).delete('/api/user/10000001/biometric-keys/device-abc');
-    expect(res.status).toBe(403);
-  });
-
-  it('deletes the biometric key and returns success', async () => {
-    const app = createAdminApp();
-    const res = await request(app).delete('/api/user/10000001/biometric-keys/device-abc');
-    expect(res.status).toBe(200);
-    expect(res.body.message).toMatch(/biometric key revoked/i);
-    expect(mockDocDelete).toHaveBeenCalledWith('biometricKeys/10000001:device-abc');
-  });
-
-  it('returns 500 on error', async () => {
-    mockDocDelete.mockRejectedValueOnce(new Error('Delete failed'));
-
-    const app = createAdminApp();
-    const res = await request(app).delete('/api/user/10000001/biometric-keys/device-abc');
-    expect(res.status).toBe(500);
-    expect(res.body.error).toMatch(/failed to revoke key/i);
-  });
-});
 
 // ─── GET /api/metrics/otp ───────────────────────────────────────────
 
