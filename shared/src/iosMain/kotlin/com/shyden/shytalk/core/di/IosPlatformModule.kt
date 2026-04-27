@@ -1,7 +1,9 @@
 package com.shyden.shytalk.core.di
 
-import com.shyden.shytalk.core.room.IosRoomLifecycleManager
+import com.shyden.shytalk.core.room.ActiveRoomManager
+import com.shyden.shytalk.core.room.IosRoomServiceController
 import com.shyden.shytalk.core.room.RoomLifecycleManager
+import com.shyden.shytalk.core.room.RoomServiceController
 import com.shyden.shytalk.core.util.BiometricAuth
 import com.shyden.shytalk.core.util.CryptoKeyPair
 import com.shyden.shytalk.core.util.SecureStorage
@@ -69,6 +71,7 @@ import dev.gitlive.firebase.database.database
 import dev.gitlive.firebase.firestore.FirebaseFirestore
 import dev.gitlive.firebase.firestore.firestore
 import org.koin.core.qualifier.named
+import org.koin.dsl.bind
 import org.koin.dsl.module
 
 val iosPlatformModule =
@@ -127,7 +130,26 @@ val iosPlatformModule =
         single<AppConfigService> { IosAppConfigServiceImpl(get()) }
 
         // Managers
-        single<RoomLifecycleManager> { IosRoomLifecycleManager(get()) }
+        single { IosRoomServiceController() } bind RoomServiceController::class
+        single {
+            ActiveRoomManager(
+                get(), // RoomRepository
+                get(), // MessageRepository
+                get(), // AuthRepository
+                get(), // UserRepository
+                get(), // SeatRequestRepository
+                get(), // VoiceService
+                get(), // PresenceService
+                get(), // RoomServiceController
+            )
+        }
+        single<RoomLifecycleManager> { get<ActiveRoomManager>() }
+
+        // Platform services
+        single<com.shyden.shytalk.core.platform.PlatformSettingsService> {
+            com.shyden.shytalk.core.platform
+                .IosPlatformSettingsService()
+        }
 
         // Preloaders
         single<BannerImagePreloader> { BannerImagePreloader { } }
