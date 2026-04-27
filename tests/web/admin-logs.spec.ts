@@ -18,7 +18,14 @@ async function waitForLogsLoaded(page: Page): Promise<void> {
 
 /** Click the Search button in the logs filter bar. */
 async function searchLogs(page: Page): Promise<void> {
+  // Wait for the API response so the table rows reflect the new filter,
+  // not a stale render from before the click.
+  const respPromise = page.waitForResponse(
+    (resp) => resp.url().includes('/api/admin/logs') && resp.request().method() === 'GET',
+    { timeout: 15_000 },
+  );
   await page.locator('#log-search-btn').click();
+  await respPromise;
   await waitForLogsLoaded(page);
 }
 

@@ -666,7 +666,14 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
     await overturnDialog.locator('#overturn-target-status').selectOption('accepted');
     await overturnDialog.locator('#overturn-reason-input').fill('Reconsidered after team discussion');
     await overturnDialog.locator('.btn-confirm-overturn').click();
-    expect((await testData.api.get(`/api/admin/suggestions/${result.id}`)).status).toBe('accepted');
+    // Wait for dialog to close — confirms the API call returned and the UI
+    // re-rendered before we read the suggestion back.
+    await expect(overturnDialog).toBeHidden({ timeout: 10_000 });
+    await expect
+      .poll(async () => (await testData.api.get(`/api/admin/suggestions/${result.id}`)).status, {
+        timeout: 10_000,
+      })
+      .toBe('accepted');
   });
 
   test('suggestion history timeline of status changes visible', async ({ page, testData }) => {
@@ -1558,7 +1565,10 @@ test.describe('Admin Suggestion History Timeline (11.94)', () => {
     await card.locator('.btn-view-history').click();
     const tl = page.locator(`#suggestion-timeline-${r.id}`);
     await expect(tl).toBeVisible();
-    expect(await tl.locator('.timeline-entry').count()).toBeGreaterThanOrEqual(4);
+    // Entries render after an async fetch — poll, don't one-shot.
+    await expect
+      .poll(() => tl.locator('.timeline-entry').count(), { timeout: 10_000 })
+      .toBeGreaterThanOrEqual(4);
   });
 
   test('timeline: created -> rejected (with reason)', async ({ page, testData }) => {
@@ -1597,7 +1607,10 @@ test.describe('Admin Suggestion History Timeline (11.94)', () => {
     const tl = page.locator(`#suggestion-timeline-${r.id}`);
     await expect(tl).toBeVisible();
     await expect(tl).toContainText(/edit/i);
-    expect(await tl.locator('.edit-diff, .timeline-diff').count()).toBeGreaterThanOrEqual(1);
+    // Entries render after an async fetch — poll for the diff count.
+    await expect
+      .poll(() => tl.locator('.edit-diff, .timeline-diff').count(), { timeout: 10_000 })
+      .toBeGreaterThanOrEqual(1);
   });
 
   test('timeline: overturns with admin name and reason', async ({ page, testData }) => {
@@ -1625,8 +1638,14 @@ test.describe('Admin Suggestion History Timeline (11.94)', () => {
     const tl = page.locator(`#suggestion-timeline-${r.id}`);
     await expect(tl).toBeVisible();
     const entries = tl.locator('.timeline-entry');
-    expect(await entries.count()).toBeGreaterThanOrEqual(1);
-    for (let i = 0; i < await entries.count(); i++) expect(await entries.nth(i).locator('.timeline-timestamp').count()).toBeGreaterThan(0);
+    // Entries render after an async fetch — poll for the count.
+    await expect
+      .poll(() => entries.count(), { timeout: 10_000 })
+      .toBeGreaterThanOrEqual(1);
+    const total = await entries.count();
+    for (let i = 0; i < total; i++) {
+      expect(await entries.nth(i).locator('.timeline-timestamp').count()).toBeGreaterThan(0);
+    }
   });
 
   test('timeline entries are in chronological order', async ({ page, testData }) => {
