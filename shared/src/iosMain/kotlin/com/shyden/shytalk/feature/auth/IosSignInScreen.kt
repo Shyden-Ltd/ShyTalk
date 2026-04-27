@@ -30,6 +30,7 @@ import com.shyden.shytalk.core.BuildVariant
 import com.shyden.shytalk.feature.auth.components.AppleSignInButton
 import com.shyden.shytalk.feature.auth.components.EmailSignInButton
 import com.shyden.shytalk.feature.auth.components.GoogleSignInButton
+import com.shyden.shytalk.feature.suspension.SuspensionScreen
 import com.shyden.shytalk.navigation.SignInScreenParams
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.voice_chat_reimagined
@@ -58,6 +59,24 @@ fun IosSignInScreen(params: SignInScreenParams) {
         if (uiState.isAuthenticated && !uiState.isSuspended && !uiState.isBackendUnreachable && !isBanned) {
             params.onAuthSuccess(uiState.hasProfile, uiState.hasDOB, uiState.needsLegalAcceptance)
         }
+    }
+
+    // Suspension takes priority — show SuspensionScreen overlay before sign-in UI.
+    if (uiState.isSuspended) {
+        SuspensionScreen(
+            reason = uiState.suspensionReason,
+            endDate = uiState.suspensionEndDate,
+            canAppeal = uiState.suspensionCanAppeal,
+            appealStatus = uiState.suspensionAppealStatus,
+            onSubmitAppeal = { viewModel.submitAppeal(it) },
+            onSignOut = { viewModel.signOut() },
+            isLoading = uiState.isLoading,
+            isDeviceBanned = uiState.isDeviceBanned,
+            isNetworkBanned = uiState.isNetworkBanned,
+            banReason = uiState.banReason,
+            banExpiresAt = uiState.banExpiresAt,
+        )
+        return
     }
 
     Scaffold(

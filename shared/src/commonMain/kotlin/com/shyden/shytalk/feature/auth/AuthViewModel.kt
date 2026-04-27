@@ -63,6 +63,15 @@ class AuthViewModel(
 ) : ViewModel() {
     companion object {
         private const val TAG = "AuthViewModel"
+
+        /**
+         * Process-level guard preventing the init() migration path from running more than once
+         * per app process. Without this, on iOS new AuthViewModel instances (created when
+         * Compose recomposes the screen tree) re-trigger the migration path, hammering the
+         * Firebase Auth emulator until rate-limited.
+         */
+        @kotlin.concurrent.Volatile
+        private var migrationCompleted: Boolean = false
     }
 
     private val _uiState = MutableStateFlow(AuthUiState())
@@ -94,9 +103,17 @@ class AuthViewModel(
                     _uiState.update { it.copy(hasStoredCredential = true, needsLockScreen = true) }
                 }
             }
-        } else if (lockRepo != null && !lockRepo.hasCredential && authRepository.isAuthenticated) {
+        } else if (
+            lockRepo != null &&
+            !lockRepo.hasCredential &&
+            authRepository.isAuthenticated &&
+            !migrationCompleted
+        ) {
             // First launch after update: user has Firebase session but no PIN
             // Route through identity resolution → PIN setup (migration path)
+            // Guarded by `migrationCompleted` so we don't loop when a new AuthViewModel
+            // instance is created (e.g. iOS Compose recomposition).
+            migrationCompleted = true
             logI(TAG, "Migration: authenticated user without PIN — will route to PIN setup")
             viewModelScope.launch {
                 val providerInfo = authRepository.getProviderInfo()
@@ -595,6 +612,8 @@ class AuthViewModel(
             appLockRepository?.clearCredential()
             resolvedUniqueId = null
             authRepository.signOut()
+            // Allow migration path to run again on next sign-in
+            migrationCompleted = false
             _uiState.value = AuthUiState()
         }
     }

@@ -47,19 +47,47 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.shyden.shytalk.R
 import com.shyden.shytalk.core.audio.EmergencyTonePlayer
+import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.formatSuspensionEndDateTime
-import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
+import com.shyden.shytalk.resources.account_suspended
+import com.shyden.shytalk.resources.account_unlocked
+import com.shyden.shytalk.resources.appeal
+import com.shyden.shytalk.resources.appeal_not_eligible
+import com.shyden.shytalk.resources.appeal_placeholder
+import com.shyden.shytalk.resources.appeal_submitted
+import com.shyden.shytalk.resources.appeal_unsuccessful
+import com.shyden.shytalk.resources.ban_expires
+import com.shyden.shytalk.resources.ban_reason
+import com.shyden.shytalk.resources.police_duck
+import com.shyden.shytalk.resources.police_duck_description
+import com.shyden.shytalk.resources.sign_in
+import com.shyden.shytalk.resources.sign_out
+import com.shyden.shytalk.resources.submit_appeal
+import com.shyden.shytalk.resources.support_contact
+import com.shyden.shytalk.resources.suspension_also_device_and_network_banned
+import com.shyden.shytalk.resources.suspension_also_device_banned
+import com.shyden.shytalk.resources.suspension_also_network_banned
+import com.shyden.shytalk.resources.suspension_ends_at
+import com.shyden.shytalk.resources.suspension_ends_in
+import com.shyden.shytalk.resources.suspension_login_again
+import com.shyden.shytalk.resources.suspension_permanent
+import com.shyden.shytalk.resources.suspension_reason
+import com.shyden.shytalk.resources.time_unit_day
+import com.shyden.shytalk.resources.time_unit_hour
+import com.shyden.shytalk.resources.time_unit_millisecond
+import com.shyden.shytalk.resources.time_unit_minute
+import com.shyden.shytalk.resources.time_unit_second
 import kotlinx.coroutines.delay
+import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
+import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
@@ -80,7 +108,7 @@ fun SuspensionScreen(
 ) {
     var appealText by remember { mutableStateOf("") }
     var appealSubmitted by remember { mutableStateOf(false) }
-    var countdownExpired by remember { mutableStateOf(endDate != null && endDate <= System.currentTimeMillis()) }
+    var countdownExpired by remember { mutableStateOf(endDate != null && endDate <= currentTimeMillis()) }
 
     DisposableEffect(Unit) {
         EmergencyTonePlayer.play()
@@ -102,7 +130,7 @@ fun SuspensionScreen(
                 verticalArrangement = Arrangement.Center,
             ) {
                 Image(
-                    painter = painterResource(R.drawable.police_duck),
+                    painter = painterResource(Res.drawable.police_duck),
                     contentDescription = stringResource(Res.string.police_duck_description),
                     modifier =
                         Modifier
@@ -137,11 +165,11 @@ fun SuspensionScreen(
                 }
 
                 if (endDate != null) {
-                    var remainingMs by remember { mutableLongStateOf(endDate - System.currentTimeMillis()) }
+                    var remainingMs by remember { mutableLongStateOf(endDate - currentTimeMillis()) }
 
                     LaunchedEffect(endDate) {
                         while (true) {
-                            remainingMs = (endDate - System.currentTimeMillis()).coerceAtLeast(0)
+                            remainingMs = (endDate - currentTimeMillis()).coerceAtLeast(0)
                             if (remainingMs <= 0) break
                             delay(10L)
                         }
@@ -198,7 +226,6 @@ fun SuspensionScreen(
                 Spacer(modifier = Modifier.height(32.dp))
 
                 when {
-                    // Appeal form: eligible and hasn't appealed yet
                     canAppeal && appealStatus == null && !appealSubmitted -> {
                         OutlinedTextField(
                             value = appealText,
@@ -234,7 +261,6 @@ fun SuspensionScreen(
                         }
                     }
 
-                    // Just submitted or pending review
                     appealSubmitted || appealStatus == "pending" -> {
                         Text(
                             text = stringResource(Res.string.appeal_submitted),
@@ -244,7 +270,6 @@ fun SuspensionScreen(
                         )
                     }
 
-                    // Denied
                     appealStatus == "denied" -> {
                         Text(
                             text = stringResource(Res.string.appeal_unsuccessful),
@@ -254,7 +279,6 @@ fun SuspensionScreen(
                         )
                     }
 
-                    // Not eligible (no canAppeal, no appeal status) — hide after countdown expires
                     !countdownExpired -> {
                         Text(
                             text = stringResource(Res.string.appeal_not_eligible),
@@ -265,7 +289,6 @@ fun SuspensionScreen(
                     }
                 }
 
-                // Show device/network ban info if also banned
                 if ((isDeviceBanned || isNetworkBanned) && !countdownExpired) {
                     Spacer(modifier = Modifier.height(24.dp))
 
@@ -386,9 +409,9 @@ private fun CountdownClock(
 private fun ClockSegment(
     value: String,
     label: String,
-    background: androidx.compose.ui.graphics.Color,
-    digitColor: androidx.compose.ui.graphics.Color,
-    labelColor: androidx.compose.ui.graphics.Color,
+    background: Color,
+    digitColor: Color,
+    labelColor: Color,
     animate: Boolean = true,
 ) {
     val digitStyle =
@@ -405,7 +428,6 @@ private fun ClockSegment(
                     .padding(horizontal = 8.dp, vertical = 6.dp),
             contentAlignment = Alignment.Center,
         ) {
-            // Invisible placeholder for stable width
             Text(
                 text = if (value.length == 3) "000" else "00",
                 style = digitStyle,
@@ -435,7 +457,7 @@ private fun ClockSegment(
 }
 
 @Composable
-private fun ClockSeparator(color: androidx.compose.ui.graphics.Color) {
+private fun ClockSeparator(color: Color) {
     Text(
         text = ":",
         style =
@@ -466,7 +488,7 @@ private data class FireworkParticle(
 @Composable
 private fun Fireworks() {
     val particles = remember { mutableStateOf(listOf<FireworkParticle>()) }
-    val startTime = remember { System.currentTimeMillis() }
+    val startTime = remember { currentTimeMillis() }
     var tick by remember { mutableLongStateOf(0L) }
 
     val colors =
@@ -486,9 +508,8 @@ private fun Fireworks() {
     LaunchedEffect(Unit) {
         val rng = Random(startTime)
         while (true) {
-            val now = System.currentTimeMillis()
+            val now = currentTimeMillis()
 
-            // Launch new bursts periodically (~every 300ms)
             if (now / 300 > (now - 16) / 300) {
                 val burstX = 0.05f + rng.nextFloat() * 0.9f
                 val burstY = 0.05f + rng.nextFloat() * 0.7f
@@ -510,7 +531,6 @@ private fun Fireworks() {
                 particles.value = particles.value + newParticles
             }
 
-            // Remove dead particles
             particles.value = particles.value.filter { now - it.birthTime < it.lifetime }
 
             tick = now
@@ -525,7 +545,7 @@ private fun Fireworks() {
             val progress = (age / p.lifetime).coerceIn(0f, 1f)
             val dist = p.speed * progress * size.width
             val gravity = 0.3f * progress * progress * size.height
-            val rad = Math.toRadians(p.angle.toDouble())
+            val rad = (PI / 180.0) * p.angle.toDouble()
             val x = p.originX * size.width + cos(rad).toFloat() * dist
             val y = p.originY * size.height + sin(rad).toFloat() * dist + gravity
             val alpha = (1f - progress).coerceIn(0f, 1f)
