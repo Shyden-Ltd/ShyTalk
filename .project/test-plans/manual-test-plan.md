@@ -1,7 +1,7 @@
 # ShyTalk Manual QA Test Plan
 
-**Last updated:** 2026-04-24
-**Total test cases:** 263
+**Last updated:** 2026-04-27
+**Total test cases:** 293
 **Test approach:** Action-based functional tests covering every screen, sub-page, interactive element, user role, platform, viewport, locale, state, accessibility dimension, and cross-platform integration flow.
 
 ## Coverage Checklist
@@ -48,6 +48,9 @@
 - [x] State coverage (empty, first-time, loaded, error, loading, offline, degraded)
 - [x] Accessibility (keyboard nav, screen reader, contrast, touch targets)
 - [x] User roles (owner, host, regular, suspended, banned, no-account)
+- [x] Suspension cascade matrix (owner→close, host→demote, seated→clear, visitor→remove, multi-room)
+- [x] Warning behaviour matrix (room state preserved for every role)
+- [x] Host action permissions on full 8-seat room (kick, remove-from-seat, force-mute, take-seat, invite)
 
 ## Environment Prerequisites
 - Docker Desktop running
@@ -2067,3 +2070,274 @@
 - **Steps**: 1. Open admin panel. 2. Check browser console for CSP violations.
 - **Expected**: No Content-Security-Policy violations in console. All scripts, styles, and connections allowed by the CSP header.
 - **Priority**: P1
+
+
+## 31. Suspension Cascade -- Room State Matrix
+
+These cases prove that suspending a user has the right effect on every active room they participate in or own. The contract is implemented in `express-api/src/utils/evict-suspended-user.js`; the manual cases here verify the user-visible behaviour end-to-end through the admin panel + app.
+
+### TC-264: Suspend room owner -- room closes immediately
+- **Area**: Moderation cascade
+- **Platform**: Web Admin + App (Android, iOS)
+- **Setup**: User A owns "TestRoom" with seats 0..7 occupied (A is owner; B + C are hosts; D..H are attendees). All 8 are connected on app + iOS Simulator.
+- **Steps**: 1. Admin opens user A in Users -> Moderation. 2. Click "Suspend" with reason "QA owner cascade". 3. Confirm.
+- **Expected**:
+  - Room A's `state` flips to `CLOSED` in Firestore within 5 s.
+  - All clients (owner A, hosts B+C, attendees D..H) receive `room_closed` RTDB event and navigate back to home.
+  - `participantIds` and `hostIds` are emptied (clients can't re-join the closed room).
+  - RTDB node `rooms/{roomId}` is removed.
+  - User A's profile shows the suspension state on next sign-in.
+- **Priority**: P0
+
+### TC-265: Suspend room owner who has already left their room
+- **Area**: Moderation cascade (edge)
+- **Platform**: Web Admin
+- **Setup**: User A owns "TestRoom" but has navigated away (A no longer in `participantIds`). Some attendees still present.
+- **Steps**: 1. Suspend user A.
+- **Expected**: Room A still closes (state=CLOSED). The owner-only Firestore query catches this case even when A is absent from `participantIds`.
+- **Priority**: P0
+
+### TC-266: Suspend a seated host -- demote + remove from seat
+- **Area**: Moderation cascade
+- **Platform**: Web Admin + App
+- **Setup**: User B is a host (in `hostIds`) and seated in seat 1 of "TestRoom" owned by user A.
+- **Steps**: 1. Admin suspends user B.
+- **Expected**:
+  - Room A `state` stays `ACTIVE`.
+  - B is removed from `hostIds` AND `participantIds`.
+  - Seat 1 becomes `{ userId: null, state: 'EMPTY', isMuted: false }`.
+  - Other seats (owner A in 0, host C in 2, attendees in 3..7) are untouched.
+  - Other clients receive `room_updated` RTDB event.
+  - RTDB room node is NOT removed (room is still alive).
+- **Priority**: P0
+
+### TC-267: Suspend a host who is NOT seated
+- **Area**: Moderation cascade
+- **Platform**: Web Admin + App
+- **Setup**: User B is a host (in `hostIds`) but no seat (still in `participantIds`).
+- **Steps**: 1. Admin suspends user B.
+- **Expected**: Removed from `hostIds` and `participantIds`. All seats unchanged. Room stays open.
+- **Priority**: P0
+
+### TC-268: Suspend a seated non-host attendee
+- **Area**: Moderation cascade
+- **Platform**: Web Admin + App
+- **Setup**: User D is seated in seat 3 of "TestRoom" but is NOT in `hostIds`.
+- **Steps**: 1. Admin suspends user D.
+- **Expected**: Removed from `participantIds`. Seat 3 becomes empty. `hostIds` unchanged. Owner + hosts + other attendees unaffected.
+- **Priority**: P0
+
+### TC-269: Suspend a visitor (in room, not seated)
+- **Area**: Moderation cascade
+- **Platform**: Web Admin + App
+- **Setup**: User V is in `participantIds` but no seat assigned.
+- **Steps**: 1. Admin suspends user V.
+- **Expected**: V removed from `participantIds`. Seats untouched. `hostIds` untouched. Room stays open.
+- **Priority**: P0
+
+### TC-270: Suspend a user who owns one room AND hosts another
+- **Area**: Moderation cascade (multi-room)
+- **Platform**: Web Admin
+- **Setup**: User M owns "RoomA" (alone in it) and is also a host in "RoomB" (owned by another user, M is seated in seat 2).
+- **Steps**: 1. Admin suspends user M.
+- **Expected**:
+  - RoomA: closed (state=CLOSED, RTDB node removed).
+  - RoomB: M removed from `hostIds` + `participantIds`, seat 2 cleared, RoomB stays open.
+  - Both rooms processed in the same suspension call.
+- **Priority**: P1
+
+### TC-271: Suspend a user with no active rooms
+- **Area**: Moderation cascade (edge)
+- **Platform**: Web Admin
+- **Setup**: User L is offline and not in any rooms.
+- **Steps**: 1. Admin suspends user L.
+- **Expected**: No room state changes anywhere. User L's `currentRoomId` is cleared (was already null). Suspension still applied normally.
+- **Priority**: P2
+
+### TC-272: Concurrent suspension of all 8 users in a fully-occupied room
+- **Area**: Moderation cascade (stress)
+- **Platform**: Web Admin
+- **Setup**: All 8 seats of "TestRoom" occupied: owner A, hosts B+C, attendees D..H.
+- **Steps**: 1. Admin suspends user A. 2. Within 1 s, admin (or another admin tab) suspends each of B..H one after the other.
+- **Expected**: Owner suspension closes the room first; subsequent suspensions on already-evicted users still cleanly clear `currentRoomId` and apply suspension to user docs. No 500 errors. No data corruption (`hostIds` / `participantIds` arrays don't desync).
+- **Priority**: P1
+
+
+## 32. Warning -- Room State Preserved
+
+A warning is a SOFT moderation action: the user's GCS score drops, they get a notification, but their seat / role / room presence is preserved. These cases verify that contract for every user role.
+
+### TC-273: Warn the room owner -- room state unchanged
+- **Area**: Moderation soft-action
+- **Platform**: Web Admin + App
+- **Setup**: User A owns "TestRoom" with full 8-seat occupancy. A is online with the room screen open on Android + iOS.
+- **Steps**: 1. Admin opens A's Users -> Moderation tab. 2. Issue warning "QA owner warning" severity 3. 3. Click "Issue Warning".
+- **Expected**:
+  - A's app shows WarningScreen overlay (real-time listener reacts to `hasActiveWarning=true`).
+  - Room A is STILL `ACTIVE` -- no `state` change in Firestore.
+  - A's `participantIds`/`hostIds`/seat occupancy unchanged.
+  - A's GCS score decremented per severity table; `warningCount`++.
+  - Other users (hosts + attendees) see no UI change.
+- **Priority**: P0
+
+### TC-274: Warn a seated host -- they keep their seat + host privileges
+- **Area**: Moderation soft-action
+- **Platform**: Web Admin + App
+- **Setup**: User B is a host in seat 1 of A's "TestRoom".
+- **Steps**: 1. Admin issues warning to B severity 4.
+- **Expected**: B sees WarningScreen overlay. After acknowledging, B is still in seat 1, still in `hostIds`, can still kick attendees / mute / take seats. Room state unchanged.
+- **Priority**: P0
+
+### TC-275: Warn a seated non-host -- they keep their seat
+- **Area**: Moderation soft-action
+- **Platform**: Web Admin + App
+- **Setup**: User D is in seat 3 (attendee).
+- **Steps**: 1. Admin issues warning to D.
+- **Expected**: D sees WarningScreen. After acknowledging, D is still in seat 3, still in `participantIds`. Room state unchanged.
+- **Priority**: P0
+
+### TC-276: Warn a visitor (not seated)
+- **Area**: Moderation soft-action
+- **Platform**: Web Admin + App
+- **Setup**: User V is in `participantIds` but not seated.
+- **Steps**: 1. Admin issues warning to V.
+- **Expected**: V sees WarningScreen. After acknowledging, V is still in the room as visitor. No room state change.
+- **Priority**: P0
+
+### TC-277: Warning fields update on the user doc but NOT on the room doc
+- **Area**: Moderation soft-action -- data integrity
+- **Platform**: Web Admin (Firestore inspection)
+- **Steps**: 1. Issue warning to a seated user. 2. Inspect Firestore `users/{uniqueId}` doc. 3. Inspect `rooms/{roomId}` doc.
+- **Expected**: User doc has `gcsScore` decremented, `hasActiveWarning=true`, `hasNewWarning=true`, `warningCount` incremented, `warningReason` set, new doc at `users/{uid}/warnings/{warningId}`. Room doc has NO changes (no `state` flip, no `participantIds` edit, no `hostIds` edit, no seat change).
+- **Priority**: P1
+
+
+## 33. Host Action Permissions -- 8-Seat Full Room Matrix
+
+These cases prove the policy gates inside `ChatRoom.canKickUser/canRemoveFromSeat/canForceMute/canTakeSeatDirectly/canInvite` (mirror of `ActiveRoomManager` enforcement) hold end-to-end. Run on a fully-occupied room with mixed roles.
+
+### Setup for TC-278..TC-291
+"TestRoom" with 8 seats occupied:
+- Seat 0: User A -- owner
+- Seat 1: User B -- host
+- Seat 2: User C -- host
+- Seat 3..7: Users D, E, F, G, H -- attendees
+
+### TC-278: Owner can kick any host or attendee
+- **Area**: Permission matrix
+- **Platform**: App (Android, iOS)
+- **Steps**: 1. As owner A, long-press host B's seat. 2. Tap "Kick". 3. Confirm. 4. Repeat for host C, attendee D, attendee H.
+- **Expected**: Each kick succeeds; the target leaves the room (real-time listener disconnects them); their seat empties; system message "A user was kicked from the room. Reason: ..." is added to chat.
+- **Priority**: P0
+
+### TC-279: Owner cannot kick themselves
+- **Area**: Permission matrix
+- **Platform**: App
+- **Steps**: 1. As owner A, attempt to long-press their own seat 0. 2. Look for kick option.
+- **Expected**: Kick option is hidden / disabled for the owner's own seat. Attempting via API directly returns no-op (the policy rejects).
+- **Priority**: P1
+
+### TC-280: Host can kick attendees but NOT another host
+- **Area**: Permission matrix
+- **Platform**: App
+- **Steps**: 1. As host B, kick attendee D -- expect success. 2. Long-press host C's seat -- "Kick" option must be hidden / disabled.
+- **Expected**: Step 1 succeeds. Step 2: kick UI is not exposed for host C; if forced via dev tools / direct repository call, the policy rejects (no-op).
+- **Priority**: P0
+
+### TC-281: Host cannot kick the owner
+- **Area**: Permission matrix
+- **Platform**: App
+- **Steps**: 1. As host B, long-press owner A's seat. 2. Look for kick option.
+- **Expected**: Kick option not exposed. Direct API call rejected.
+- **Priority**: P0
+
+### TC-282: Attendee cannot kick anyone
+- **Area**: Permission matrix
+- **Platform**: App
+- **Steps**: 1. As attendee D, long-press each other seat (owner, hosts, other attendees).
+- **Expected**: No kick option visible on any seat. Attempted API call rejected.
+- **Priority**: P0
+
+### TC-283: Owner can remove any host/attendee from their seat (but not seat 0)
+- **Area**: Permission matrix
+- **Platform**: App
+- **Steps**: 1. As owner A, long-press host B's seat -> "Remove from seat" -> confirm. 2. Repeat on attendee D's seat. 3. Try to "Remove from seat" on seat 0 (own seat).
+- **Expected**: Steps 1+2 succeed -- the seat empties, user moves to "audience" / participant. Step 3: option not exposed.
+- **Priority**: P0
+
+### TC-284: Host can remove attendees but NOT other hosts from seats
+- **Area**: Permission matrix
+- **Platform**: App
+- **Steps**: 1. As host B, "Remove from seat" attendee D -- expect success. 2. Long-press host C's seat -> look for option.
+- **Expected**: Step 1 succeeds. Step 2: option not exposed. Direct API call rejected.
+- **Priority**: P0
+
+### TC-285: Attendee cannot remove anyone from a seat
+- **Area**: Permission matrix
+- **Platform**: App
+- **Steps**: 1. As attendee D, long-press other seats.
+- **Expected**: "Remove from seat" never exposed. API call rejected.
+- **Priority**: P0
+
+### TC-286: Owner can force-mute any host or attendee
+- **Area**: Permission matrix
+- **Platform**: App + admin RTDB inspection
+- **Setup**: All 8 seated; mics unmuted.
+- **Steps**: 1. As owner A, force-mute host B. 2. Force-mute attendee D.
+- **Expected**: Each target's seat shows muted indicator; their voice transmission stops on other clients; only the user themselves can unmute (owner cannot un-force-mute -- second tap should be a no-op).
+- **Priority**: P0
+
+### TC-287: Host can force-mute attendees but NOT other hosts or the owner
+- **Area**: Permission matrix
+- **Platform**: App
+- **Steps**: 1. As host B, force-mute attendee D -- expect success. 2. Try host C -- option not exposed. 3. Try owner A -- option not exposed.
+- **Expected**: Step 1 succeeds. Steps 2+3: option not exposed. Direct API rejected.
+- **Priority**: P0
+
+### TC-288: Already-muted seat cannot be force-muted again
+- **Area**: Permission matrix (idempotency)
+- **Platform**: App
+- **Setup**: Attendee D's seat is already muted (they self-muted).
+- **Steps**: 1. As owner A, attempt to force-mute D's seat.
+- **Expected**: No-op. Force-mute is a one-way action; only the user themselves can unmute.
+- **Priority**: P1
+
+### TC-289: Only owner can take seat 0; non-owners cannot
+- **Area**: Permission matrix (seat policy)
+- **Platform**: App
+- **Setup**: Owner has temporarily left seat 0 (seat 0 EMPTY).
+- **Steps**: 1. As host B, attempt to tap seat 0 to sit. 2. As attendee D, attempt to tap seat 0. 3. As owner A, tap seat 0.
+- **Expected**: Steps 1+2: rejected (no-op or "owner only" message). Step 3: A takes seat 0.
+- **Priority**: P0
+
+### TC-290: Host can self-invite to a non-owner seat when room does NOT require approval
+- **Area**: Permission matrix (seat policy)
+- **Platform**: App
+- **Setup**: Room A `requireApproval=false`. Seat 5 is empty. User B is a host but NOT seated.
+- **Steps**: 1. As host B, tap seat 5.
+- **Expected**: B is seated immediately in seat 5. No approval round-trip. Seat 5 OCCUPIED with B.
+- **Priority**: P0
+
+### TC-291: Host CANNOT self-invite when room DOES require approval
+- **Area**: Permission matrix (seat policy)
+- **Platform**: App
+- **Setup**: Room A `requireApproval=true`. Seat 5 empty. User B is a host but not seated.
+- **Steps**: 1. As host B, tap seat 5.
+- **Expected**: A seat-request is created (same flow as attendees). B does NOT bypass approval just because they're a host. Owner A sees the request and approves/denies.
+- **Priority**: P0
+
+### TC-292: Attendee can NEVER take a seat directly -- always goes through seat-request
+- **Area**: Permission matrix (seat policy)
+- **Platform**: App
+- **Setup**: Seat 5 empty in BOTH a no-approval room AND an approval-required room.
+- **Steps**: 1. As attendee D in the no-approval room, tap seat 5. 2. As attendee D in the approval-required room, tap seat 5.
+- **Expected**: Both cases create a seat-request rather than seating directly. The presence/absence of `requireApproval` does not change attendee behaviour.
+- **Priority**: P0
+
+### TC-293: Host can invite peers when no approval required; not when required
+- **Area**: Permission matrix (invite policy)
+- **Platform**: App
+- **Steps**: 1. Open Invite User flow as host B in a `requireApproval=false` room -- send. 2. Switch to a `requireApproval=true` room -- attempt invite.
+- **Expected**: Step 1: invite sent (FCM push fires). Step 2: invite UI not exposed / rejected.
+- **Priority**: P1
+
