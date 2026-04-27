@@ -6,6 +6,7 @@ import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.core.util.logW
+import com.shyden.shytalk.data.firestore.dataMap
 import com.shyden.shytalk.data.remote.ApiException
 import com.shyden.shytalk.data.remote.IosApiClient
 import dev.gitlive.firebase.firestore.FirebaseFirestore
@@ -26,7 +27,7 @@ class IosDeviceRepositoryImpl(
         firebaseCall("Failed to check device binding") {
             val doc = firestore.collection("deviceBindings").document(deviceId).get()
             if (!doc.exists) return@firebaseCall null
-            val data = doc.data<Map<String, Any?>>()
+            val data = doc.dataMap()
             (data["uniqueId"] ?: data["userId"])?.toString()
         }
 
@@ -106,7 +107,7 @@ class IosNotificationRepositoryImpl(
         firebaseCall("Failed to get notification setting") {
             val doc = firestore.collection("users").document(userId).get()
             if (!doc.exists) return@firebaseCall true
-            val data = doc.data<Map<String, Any?>>()
+            val data = doc.dataMap()
             (data["pmNotificationsEnabled"] as? Boolean) ?: true
         }
 }
@@ -381,7 +382,7 @@ class IosBannerRepositoryImpl(
         return snapshot.documents
             .mapNotNull { doc ->
                 try {
-                    val data = doc.data<Map<String, Any?>>()
+                    val data = doc.dataMap()
                     val startDate = (data["startDate"] as? Number)?.toLong() ?: 0L
                     val endDate = (data["endDate"] as? Number)?.toLong() ?: Long.MAX_VALUE
                     if (startDate > now || endDate < now) return@mapNotNull null
@@ -406,7 +407,7 @@ class IosFunFactRepositoryImpl(
         val facts =
             snapshot.documents.mapNotNull { doc ->
                 try {
-                    val data = doc.data<Map<String, Any?>>()
+                    val data = doc.dataMap()
                     FunFact.fromMap(data, doc.id)
                 } catch (e: Exception) {
                     null

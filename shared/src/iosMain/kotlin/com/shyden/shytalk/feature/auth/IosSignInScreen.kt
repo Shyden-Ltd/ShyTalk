@@ -53,6 +53,13 @@ fun IosSignInScreen(params: SignInScreenParams) {
         }
     }
 
+    val isBanned = uiState.isDeviceBanned || uiState.isNetworkBanned
+    LaunchedEffect(uiState.isAuthenticated, uiState.isSuspended, uiState.isBackendUnreachable, isBanned) {
+        if (uiState.isAuthenticated && !uiState.isSuspended && !uiState.isBackendUnreachable && !isBanned) {
+            params.onAuthSuccess(uiState.hasProfile, uiState.hasDOB, uiState.needsLegalAcceptance)
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->

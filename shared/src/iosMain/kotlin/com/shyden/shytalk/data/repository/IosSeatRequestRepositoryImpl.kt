@@ -4,6 +4,7 @@ import com.shyden.shytalk.core.model.SeatRequest
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.firebaseCall
+import com.shyden.shytalk.data.firestore.dataMap
 import com.shyden.shytalk.data.remote.IosApiClient
 import dev.gitlive.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.Flow
@@ -23,7 +24,7 @@ class IosSeatRequestRepositoryImpl(
             .map { snapshot ->
                 snapshot.documents.mapNotNull { doc ->
                     try {
-                        val data = doc.data<Map<String, Any?>>()
+                        val data = doc.dataMap()
                         SeatRequest.fromMap(data, doc.id)
                     } catch (e: Exception) {
                         null
@@ -42,7 +43,7 @@ class IosSeatRequestRepositoryImpl(
             .map { snapshot ->
                 snapshot.documents.mapNotNull { doc ->
                     try {
-                        val data = doc.data<Map<String, Any?>>()
+                        val data = doc.dataMap()
                         SeatRequest.fromMap(data, doc.id)
                     } catch (e: Exception) {
                         null
@@ -88,7 +89,7 @@ class IosSeatRequestRepositoryImpl(
                     .collection("rooms/$roomId/seatRequests")
                     .document(requestId)
                     .get()
-            val data = doc.data<Map<String, Any?>>()
+            val data = doc.dataMap()
             SeatRequest.fromMap(data, requestId)
         }
 

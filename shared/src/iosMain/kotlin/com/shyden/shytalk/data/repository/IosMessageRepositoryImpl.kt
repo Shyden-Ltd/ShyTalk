@@ -5,6 +5,7 @@ import com.shyden.shytalk.core.model.MessageType
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.firebaseCall
+import com.shyden.shytalk.data.firestore.dataMap
 import dev.gitlive.firebase.firestore.Direction
 import dev.gitlive.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.Flow
@@ -23,7 +24,7 @@ class IosMessageRepositoryImpl(
                 snapshot.documents
                     .mapNotNull { doc ->
                         try {
-                            val data = doc.data<Map<String, Any?>>()
+                            val data = doc.dataMap()
                             Message.fromMap(data, doc.id)
                         } catch (e: Exception) {
                             null

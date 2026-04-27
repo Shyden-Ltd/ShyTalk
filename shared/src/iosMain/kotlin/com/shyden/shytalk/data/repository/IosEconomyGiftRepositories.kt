@@ -14,6 +14,7 @@ import com.shyden.shytalk.core.model.MilestoneReward
 import com.shyden.shytalk.core.model.Transaction
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
+import com.shyden.shytalk.data.firestore.dataMap
 import com.shyden.shytalk.data.remote.IosApiClient
 import dev.gitlive.firebase.firestore.Direction
 import dev.gitlive.firebase.firestore.FirebaseFirestore
@@ -41,7 +42,7 @@ class IosEconomyRepositoryImpl(
                 if (!snapshot.exists) {
                     0L
                 } else {
-                    (snapshot.data<Map<String, Any?>>()["shyCoins"] as? Number)?.toLong() ?: 0L
+                    (snapshot.dataMap()["shyCoins"] as? Number)?.toLong() ?: 0L
                 }
             }
     }
@@ -69,7 +70,7 @@ class IosEconomyRepositoryImpl(
             .snapshots
             .map { snapshot ->
                 if (!snapshot.exists) return@map defaultConfig
-                val data = snapshot.data<Map<String, Any?>>()
+                val data = snapshot.dataMap()
                 val config = EconomyConfig.fromMap(data)
                 if (config.pullCosts.isEmpty()) defaultConfig else config
             }
@@ -199,7 +200,7 @@ class IosEconomyRepositoryImpl(
             snapshot.documents
                 .mapNotNull { doc ->
                     try {
-                        val data = doc.data<Map<String, Any?>>()
+                        val data = doc.dataMap()
                         CoinPackage.fromMap(data, doc.id)
                     } catch (e: Exception) {
                         null
@@ -218,7 +219,7 @@ class IosEconomyRepositoryImpl(
                     .get()
             snapshot.documents.mapNotNull { doc ->
                 try {
-                    val data = doc.data<Map<String, Any?>>()
+                    val data = doc.dataMap()
                     Transaction.fromMap(data, doc.id)
                 } catch (e: Exception) {
                     null
@@ -240,7 +241,7 @@ class IosEconomyRepositoryImpl(
             val snapshot = query.get()
             snapshot.documents.mapNotNull { doc ->
                 try {
-                    val data = doc.data<Map<String, Any?>>()
+                    val data = doc.dataMap()
                     Transaction.fromMap(data, doc.id)
                 } catch (e: Exception) {
                     null
@@ -299,7 +300,7 @@ class IosGiftRepositoryImpl(
                 snapshot.documents
                     .mapNotNull { doc ->
                         try {
-                            val data = doc.data<Map<String, Any?>>()
+                            val data = doc.dataMap()
                             Gift.fromMap(data, doc.id)
                         } catch (e: Exception) {
                             null
@@ -315,7 +316,7 @@ class IosGiftRepositoryImpl(
                 snapshot.documents
                     .mapNotNull { doc ->
                         try {
-                            val data = doc.data<Map<String, Any?>>()
+                            val data = doc.dataMap()
                             Gift.fromMap(data, doc.id)
                         } catch (e: Exception) {
                             null
@@ -330,7 +331,7 @@ class IosGiftRepositoryImpl(
             .map { snapshot ->
                 snapshot.documents.mapNotNull { doc ->
                     try {
-                        val data = doc.data<Map<String, Any?>>()
+                        val data = doc.dataMap()
                         BackpackItem.fromMap(data, doc.id)
                     } catch (e: Exception) {
                         null
@@ -345,7 +346,7 @@ class IosGiftRepositoryImpl(
             .map { snapshot ->
                 snapshot.documents.mapNotNull { doc ->
                     try {
-                        val data = doc.data<Map<String, Any?>>()
+                        val data = doc.dataMap()
                         GiftWallEntry.fromMap(data, doc.id)
                     } catch (e: Exception) {
                         null
@@ -362,7 +363,7 @@ class IosGiftRepositoryImpl(
             .map { snapshot ->
                 snapshot.documents.mapNotNull { doc ->
                     try {
-                        val data = doc.data<Map<String, Any?>>()
+                        val data = doc.dataMap()
                         Broadcast.fromMap(data, doc.id)
                     } catch (e: Exception) {
                         null
@@ -376,7 +377,7 @@ class IosGiftRepositoryImpl(
     ): List<GiftSender> {
         val doc = firestore.collection("users/$userId/giftWall").document(giftId).get()
         if (!doc.exists) return emptyList()
-        val data = doc.data<Map<String, Any?>>()
+        val data = doc.dataMap()
         val senders = data["senders"] as? List<*> ?: return emptyList()
         return senders.mapNotNull { sender ->
             val map = sender as? Map<*, *> ?: return@mapNotNull null
@@ -390,7 +391,7 @@ class IosGiftRepositoryImpl(
     override suspend fun getGiftRanking(giftId: String): List<GiftRankEntry> {
         val doc = firestore.collection("giftRankings").document(giftId).get()
         if (!doc.exists) return emptyList()
-        val data = doc.data<Map<String, Any?>>()
+        val data = doc.dataMap()
         val rankings = data["rankings"] as? List<*> ?: return emptyList()
         return rankings.mapNotNull { entry ->
             val map = entry as? Map<*, *> ?: return@mapNotNull null

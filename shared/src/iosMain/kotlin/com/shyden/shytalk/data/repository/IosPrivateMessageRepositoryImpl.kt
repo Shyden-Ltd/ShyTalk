@@ -12,6 +12,7 @@ import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.core.util.logW
+import com.shyden.shytalk.data.firestore.dataMap
 import com.shyden.shytalk.data.remote.IosApiClient
 import dev.gitlive.firebase.firestore.Direction
 import dev.gitlive.firebase.firestore.FieldValue
@@ -45,7 +46,7 @@ class IosPrivateMessageRepositoryImpl(
             prefetchedConversations =
                 snapshot.documents.mapNotNull { doc ->
                     try {
-                        val data = doc.data<Map<String, Any?>>()
+                        val data = doc.dataMap()
                         Conversation.fromMap(data, doc.id)
                     } catch (e: Exception) {
                         null
@@ -66,7 +67,7 @@ class IosPrivateMessageRepositoryImpl(
             .map { snapshot ->
                 snapshot.documents.mapNotNull { doc ->
                     try {
-                        val data = doc.data<Map<String, Any?>>()
+                        val data = doc.dataMap()
                         Conversation.fromMap(data, doc.id)
                     } catch (e: Exception) {
                         null
@@ -84,7 +85,7 @@ class IosPrivateMessageRepositoryImpl(
             val docRef = firestore.collection("conversations").document(conversationId)
             val doc = docRef.get()
             if (doc.exists) {
-                val data = doc.data<Map<String, Any?>>()
+                val data = doc.dataMap()
                 Conversation.fromMap(data, conversationId)
             } else {
                 val now = currentTimeMillis()
@@ -116,7 +117,7 @@ class IosPrivateMessageRepositoryImpl(
                     .document(userId)
                     .get()
             if (!doc.exists) return@firebaseCall ConversationSettings.default(userId)
-            val data = doc.data<Map<String, Any?>>()
+            val data = doc.dataMap()
             ConversationSettings.fromMap(data, userId)
         }
 
@@ -132,7 +133,7 @@ class IosPrivateMessageRepositoryImpl(
                 if (!snapshot.exists) {
                     ConversationSettings.default(userId)
                 } else {
-                    val data = snapshot.data<Map<String, Any?>>()
+                    val data = snapshot.dataMap()
                     ConversationSettings.fromMap(data, userId)
                 }
             }
@@ -150,7 +151,7 @@ class IosPrivateMessageRepositoryImpl(
                 snapshot.documents
                     .mapNotNull { doc ->
                         try {
-                            val data = doc.data<Map<String, Any?>>()
+                            val data = doc.dataMap()
                             PrivateMessage.fromMap(data, doc.id)
                         } catch (e: Exception) {
                             null
@@ -174,7 +175,7 @@ class IosPrivateMessageRepositoryImpl(
             snapshot.documents
                 .mapNotNull { doc ->
                     try {
-                        val data = doc.data<Map<String, Any?>>()
+                        val data = doc.dataMap()
                         PrivateMessage.fromMap(data, doc.id)
                     } catch (e: Exception) {
                         null
@@ -315,7 +316,7 @@ class IosPrivateMessageRepositoryImpl(
                     .get()
             snapshot.documents.mapNotNull { doc ->
                 try {
-                    val data = doc.data<Map<String, Any?>>()
+                    val data = doc.dataMap()
                     MessageEdit.fromMap(data, doc.id)
                 } catch (e: Exception) {
                     null
@@ -404,7 +405,7 @@ class IosPrivateMessageRepositoryImpl(
                     .document(messageId)
             firestore.runTransaction {
                 val doc = get(messageRef)
-                val data = doc.data<Map<String, Any?>>()
+                val data = doc.dataMap()
 
                 @Suppress("UNCHECKED_CAST")
                 val reactions =
@@ -440,7 +441,7 @@ class IosPrivateMessageRepositoryImpl(
             val lowerQuery = query.lowercase()
             snapshot.documents.mapNotNull { doc ->
                 try {
-                    val data = doc.data<Map<String, Any?>>()
+                    val data = doc.dataMap()
                     val message = PrivateMessage.fromMap(data, doc.id)
                     if (message.text.lowercase().contains(lowerQuery)) message else null
                 } catch (e: Exception) {
@@ -524,7 +525,7 @@ class IosPrivateMessageRepositoryImpl(
         firebaseCall("Failed to load moderation config") {
             val doc = firestore.collection("config").document("moderation").get()
             if (!doc.exists) return@firebaseCall emptyList()
-            val data = doc.data<Map<String, Any?>>()
+            val data = doc.dataMap()
             (data["prohibitedWords"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
         }
 
@@ -532,7 +533,7 @@ class IosPrivateMessageRepositoryImpl(
         firebaseCall("Failed to get conversation") {
             val doc = firestore.collection("conversations").document(conversationId).get()
             if (!doc.exists) throw Exception("Conversation not found")
-            val data = doc.data<Map<String, Any?>>()
+            val data = doc.dataMap()
             Conversation.fromMap(data, conversationId)
         }
 
@@ -596,7 +597,7 @@ class IosPrivateMessageRepositoryImpl(
                     .get()
             snapshot.documents.mapNotNull { doc ->
                 try {
-                    val data = doc.data<Map<String, Any?>>()
+                    val data = doc.dataMap()
                     MuteInfo.fromMap(data, doc.id)
                 } catch (e: Exception) {
                     null
@@ -713,7 +714,7 @@ class IosPrivateMessageRepositoryImpl(
             snapshot.documents.mapNotNull { doc ->
                 if (doc.id == currentUserId) return@mapNotNull null
                 try {
-                    val data = doc.data<Map<String, Any?>>()
+                    val data = doc.dataMap()
                     User.fromMap(data, doc.id)
                 } catch (e: Exception) {
                     null
@@ -736,7 +737,7 @@ class IosPrivateMessageRepositoryImpl(
                     }.get()
             snapshot.documents.count { doc ->
                 try {
-                    val data = doc.data<Map<String, Any?>>()
+                    val data = doc.dataMap()
                     (data["isClosed"] as? Boolean) != true
                 } catch (e: Exception) {
                     false

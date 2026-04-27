@@ -6,6 +6,7 @@ import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.core.util.logW
+import com.shyden.shytalk.data.firestore.dataMap
 import com.shyden.shytalk.data.remote.IosApiClient
 import dev.gitlive.firebase.firestore.FieldValue
 import dev.gitlive.firebase.firestore.FirebaseFirestore
@@ -32,7 +33,7 @@ class IosRoomRepositoryImpl(
                     .get()
             prefetchedRooms =
                 snapshot.documents.map { doc ->
-                    val data = doc.data<Map<String, Any?>>()
+                    val data = doc.dataMap()
                     ChatRoom.fromMap(data, doc.id)
                 }
         } catch (e: Exception) {
@@ -47,7 +48,7 @@ class IosRoomRepositoryImpl(
             .snapshots
             .map { snapshot ->
                 snapshot.documents.map { doc ->
-                    val data = doc.data<Map<String, Any?>>()
+                    val data = doc.dataMap()
                     ChatRoom.fromMap(data, doc.id)
                 }
             }
@@ -59,7 +60,7 @@ class IosRoomRepositoryImpl(
             .snapshots
             .map { snapshot ->
                 if (!snapshot.exists) return@map null
-                val data = snapshot.data<Map<String, Any?>>()
+                val data = snapshot.dataMap()
                 ChatRoom.fromMap(data, roomId)
             }
 
@@ -67,7 +68,7 @@ class IosRoomRepositoryImpl(
         firebaseCall("Failed to get room") {
             val doc = firestore.collection("rooms").document(roomId).get()
             if (!doc.exists) throw Exception("Room not found")
-            val data = doc.data<Map<String, Any?>>()
+            val data = doc.dataMap()
             ChatRoom.fromMap(data, roomId)
         }
 
@@ -125,7 +126,7 @@ class IosRoomRepositoryImpl(
     ): Resource<Unit> =
         firebaseCall("Failed to leave room") {
             val doc = firestore.collection("rooms").document(roomId).get()
-            val data = if (doc.exists) doc.data<Map<String, Any?>>() else null
+            val data = if (doc.exists) doc.dataMap() else null
             clearUserFromRoom(roomId, userId, data)
             firestore.collection("users").document(userId).updateFields { "currentRoomId" to null }
         }
@@ -171,7 +172,7 @@ class IosRoomRepositoryImpl(
             val roomRef = firestore.collection("rooms").document(roomId)
             firestore.runTransaction {
                 val doc = get(roomRef)
-                val data = doc.data<Map<String, Any?>>()
+                val data = doc.dataMap()
                 val seatsRaw = data["seats"] as? Map<*, *> ?: throw Exception("No seats data")
                 val fromSeat =
                     (seatsRaw[fromIndex.toString()] as? Map<*, *>)
@@ -203,7 +204,7 @@ class IosRoomRepositoryImpl(
         firebaseCall("Failed to kick user") {
             val effectiveReason = reason.ifBlank { "No reason given" }
             val doc = firestore.collection("rooms").document(roomId).get()
-            val data = if (doc.exists) doc.data<Map<String, Any?>>() else null
+            val data = if (doc.exists) doc.dataMap() else null
 
             val kickInfoValue: Map<String, String> = mapOf("kickerName" to kickerName, "reason" to effectiveReason)
             firestore.collection("rooms").document(roomId).updateFields {
@@ -342,7 +343,7 @@ class IosRoomRepositoryImpl(
         firebaseCall("Failed to close room") {
             val doc = firestore.collection("rooms").document(roomId).get()
             if (!doc.exists) throw Exception("Room not found")
-            val data = doc.data<Map<String, Any?>>()
+            val data = doc.dataMap()
             val participantIds = (data["participantIds"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
 
             val emptySeat = mapOf("userId" to null, "state" to "EMPTY", "isMuted" to false)
@@ -406,7 +407,7 @@ class IosRoomRepositoryImpl(
                     }.get()
             for (doc in snapshot.documents) {
                 if (doc.id == exceptRoomId) continue
-                val data = doc.data<Map<String, Any?>>()
+                val data = doc.dataMap()
                 try {
                     clearUserFromRoom(doc.id, userId, data)
                 } catch (e: Exception) {
@@ -432,7 +433,7 @@ class IosRoomRepositoryImpl(
             val emptySeats = (0..7).associate { it.toString() to emptySeat }
 
             for (doc in snapshot.documents) {
-                val data = doc.data<Map<String, Any?>>()
+                val data = doc.dataMap()
                 val participantIds = (data["participantIds"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
                 try {
                     firestore.collection("rooms").document(doc.id).updateFields {
@@ -460,7 +461,7 @@ class IosRoomRepositoryImpl(
     ): Resource<Unit> =
         firebaseCall("Failed to remove disconnected user") {
             val doc = firestore.collection("rooms").document(roomId).get()
-            val data = if (doc.exists) doc.data<Map<String, Any?>>() else null
+            val data = if (doc.exists) doc.dataMap() else null
             clearUserFromRoom(roomId, userId, data)
             firestore.collection("users").document(userId).updateFields { "currentRoomId" to null }
         }

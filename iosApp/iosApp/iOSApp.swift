@@ -8,13 +8,21 @@ struct iOSApp: App {
     @StateObject private var coordinator = StartingScreenCoordinator()
 
     init() {
-        FirebaseApp.configure()
-        // Debug builds use emulators, release builds use production Firebase.
-        // iOS has 2 build configurations (Debug/Release) vs Android's 3 flavors
-        // (local/dev/prod). Debug ≈ local, Release ≈ prod.
+        // Debug builds use emulators with the demo-shytalk project (matches
+        // Android local flavor and local/seed.js). Release builds use the
+        // bundled GoogleService-Info.plist (shytalk-dev or shytalk-7ba69).
         #if DEBUG
+        let options = FirebaseOptions(googleAppID: "1:0:ios:0",
+                                      gcmSenderID: "0")
+        options.apiKey = "demo-api-key"
+        options.projectID = "demo-shytalk"
+        options.bundleID = Bundle.main.bundleIdentifier ?? "com.shyden.shytalk"
+        options.databaseURL = "http://localhost:9000?ns=demo-shytalk"
+        options.storageBucket = "demo-shytalk.appspot.com"
+        FirebaseApp.configure(options: options)
         KoinHelperKt.doInitKoin(useEmulators: true)
         #else
+        FirebaseApp.configure()
         KoinHelperKt.doInitKoin(useEmulators: false)
         #endif
         setupGoogleSignIn()

@@ -7,6 +7,7 @@ import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logW
+import com.shyden.shytalk.data.firestore.dataMap
 import com.shyden.shytalk.data.remote.IosApiClient
 import dev.gitlive.firebase.firestore.Direction
 import dev.gitlive.firebase.firestore.DocumentSnapshot
@@ -53,7 +54,7 @@ class IosUserRepositoryImpl(
         doc: DocumentSnapshot,
         userId: String,
     ): User {
-        val data = doc.data<Map<String, Any?>>()
+        val data = doc.dataMap()
         return User.fromMap(data, userId)
     }
 
@@ -76,7 +77,7 @@ class IosUserRepositoryImpl(
         firebaseCall("Failed to get blocked users") {
             val doc = firestore.collection("users").document(userId).get()
             if (!doc.exists) return@firebaseCall emptySet()
-            val data = doc.data<Map<String, Any?>>()
+            val data = doc.dataMap()
             (data["blockedUserIds"] as? List<*>)
                 ?.filterIsInstance<String>()
                 ?.toSet() ?: emptySet()
@@ -111,7 +112,7 @@ class IosUserRepositoryImpl(
                     .get()
             snapshot.documents.mapNotNull { doc ->
                 try {
-                    val data = doc.data<Map<String, Any?>>()
+                    val data = doc.dataMap()
                     ProfileVisitor.fromMap(data)
                 } catch (e: Exception) {
                     null
@@ -123,7 +124,7 @@ class IosUserRepositoryImpl(
         firebaseCall("Failed to get aliases") {
             val doc = firestore.collection("users").document(userId).get()
             if (!doc.exists) return@firebaseCall emptyMap()
-            val data = doc.data<Map<String, Any?>>()
+            val data = doc.dataMap()
             val aliases = data["aliases"] as? Map<*, *> ?: return@firebaseCall emptyMap()
             aliases.entries.associate { (k, v) -> k.toString() to v.toString() }
         }
@@ -132,7 +133,7 @@ class IosUserRepositoryImpl(
         firebaseCall("Failed to get warning reason") {
             val doc = firestore.collection("users").document(userId).get()
             if (!doc.exists) return@firebaseCall null
-            val data = doc.data<Map<String, Any?>>()
+            val data = doc.dataMap()
             data["warningReason"] as? String
         }
 
@@ -152,7 +153,7 @@ class IosUserRepositoryImpl(
                                 .where { FieldPath.documentId inArray chunk }
                                 .get()
                         snapshot.documents.mapNotNull { doc ->
-                            val data = doc.data<Map<String, Any?>>()
+                            val data = doc.dataMap()
                             val blockedIds =
                                 (data["blockedUserIds"] as? List<*>)
                                     ?.filterIsInstance<String>() ?: emptyList()
@@ -175,7 +176,7 @@ class IosUserRepositoryImpl(
             .snapshots
             .map { snapshot ->
                 if (!snapshot.exists) return@map UserFlags()
-                val data = snapshot.data<Map<String, Any?>>()
+                val data = snapshot.dataMap()
                 UserFlags(
                     isSuspended = data["isSuspended"] as? Boolean ?: false,
                     suspensionEndDate = (data["suspensionEndDate"] as? Number)?.toLong(),
