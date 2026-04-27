@@ -98,6 +98,17 @@ jest.mock('../../src/utils/email', () => ({
 // ─── App setup ──────────────────────────────────────────────────
 
 const notificationsRouter = require('../../src/routes/suggestions-notifications');
+const subscriptionsRouter = require('../../src/routes/subscriptions');
+const crypto = require('crypto');
+
+// Generate a valid HMAC unsubscribe token (matches src/routes/subscriptions.js validation).
+// The unsubscribe endpoint lives in subscriptionsRouter, not notificationsRouter — these
+// tests need to mount both for endpoint coverage.
+function makeValidUnsubscribeToken(uid, secret = 'dev-unsubscribe-secret') {
+  const timestamp = Date.now();
+  const hmac = crypto.createHmac('sha256', secret).update(`${uid}:${timestamp}`).digest('hex');
+  return Buffer.from(`${uid}:${timestamp}:${hmac}`).toString('base64');
+}
 
 function createApp({ uniqueId = 1001, isAdmin = false } = {}) {
   const app = express();
@@ -236,15 +247,17 @@ describe('Channel preference respect', () => {
   test('POST to unsubscribe endpoint with valid token removes email channel', async () => {
     const app = express();
     app.use(express.json());
-    app.use('/api', notificationsRouter);
-    await request(app).post('/api/subscriptions/unsubscribe').send({ token: 'valid-token' });
-    // Token validation happens server-side
+    app.use('/api', subscriptionsRouter);
+    await request(app)
+      .post('/api/subscriptions/unsubscribe')
+      .send({ token: makeValidUnsubscribeToken('1001') })
+      .expect(200);
   });
 
   test('POST to unsubscribe endpoint with invalid token returns 400', async () => {
     const app = express();
     app.use(express.json());
-    app.use('/api', notificationsRouter);
+    app.use('/api', subscriptionsRouter);
     await request(app).post('/api/subscriptions/unsubscribe').send({ token: '' }).expect(400);
   });
 
@@ -484,10 +497,12 @@ describe('PUT /api/notifications/:id/read — additional coverage', () => {
 });
 
 describe('POST /api/subscriptions/unsubscribe — additional coverage', () => {
+  // The unsubscribe endpoint lives in subscriptionsRouter, not notificationsRouter,
+  // so these tests mount the subscriptions router. Token validation is HMAC-based.
   test('returns 400 when token is missing entirely', async () => {
     const app = express();
     app.use(express.json());
-    app.use('/api', notificationsRouter);
+    app.use('/api', subscriptionsRouter);
     const res = await request(app).post('/api/subscriptions/unsubscribe').send({}).expect(400);
     expect(res.body.error).toBe('Unsubscribe token required');
   });
@@ -495,7 +510,7 @@ describe('POST /api/subscriptions/unsubscribe — additional coverage', () => {
   test('returns 400 when token is whitespace only', async () => {
     const app = express();
     app.use(express.json());
-    app.use('/api', notificationsRouter);
+    app.use('/api', subscriptionsRouter);
     const res = await request(app)
       .post('/api/subscriptions/unsubscribe')
       .send({ token: '   ' })
@@ -506,7 +521,7 @@ describe('POST /api/subscriptions/unsubscribe — additional coverage', () => {
   test('returns 400 when token is non-string type', async () => {
     const app = express();
     app.use(express.json());
-    app.use('/api', notificationsRouter);
+    app.use('/api', subscriptionsRouter);
     const res = await request(app)
       .post('/api/subscriptions/unsubscribe')
       .send({ token: 12345 })
@@ -514,24 +529,24 @@ describe('POST /api/subscriptions/unsubscribe — additional coverage', () => {
     expect(res.body.error).toBe('Unsubscribe token required');
   });
 
-  test('returns 400 when token is shorter than 10 characters', async () => {
+  test('returns 400 for token that does not parse as HMAC tuple', async () => {
     const app = express();
     app.use(express.json());
-    app.use('/api', notificationsRouter);
+    app.use('/api', subscriptionsRouter);
     const res = await request(app)
       .post('/api/subscriptions/unsubscribe')
       .send({ token: 'short' })
       .expect(400);
-    expect(res.body.error).toBe('Invalid unsubscribe token');
+    expect(res.body.error).toMatch(/Invalid unsubscribe token/);
   });
 
-  test('returns success for valid token (>= 10 chars)', async () => {
+  test('returns success for valid HMAC token', async () => {
     const app = express();
     app.use(express.json());
-    app.use('/api', notificationsRouter);
+    app.use('/api', subscriptionsRouter);
     const res = await request(app)
       .post('/api/subscriptions/unsubscribe')
-      .send({ token: 'valid-token-1234567890' })
+      .send({ token: makeValidUnsubscribeToken('1001') })
       .expect(200);
     expect(res.body.success).toBe(true);
     expect(res.body.message).toBe('Email notifications disabled');

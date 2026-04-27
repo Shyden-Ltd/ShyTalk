@@ -17,6 +17,15 @@
 
 const express = require('express');
 const request = require('supertest');
+const crypto = require('crypto');
+
+// Generate a valid HMAC unsubscribe token (matches src/routes/subscriptions.js validation).
+// Default secret matches the production fallback used when UNSUBSCRIBE_SECRET is unset.
+function makeValidUnsubscribeToken(uid, secret = 'dev-unsubscribe-secret') {
+  const timestamp = Date.now();
+  const hmac = crypto.createHmac('sha256', secret).update(`${uid}:${timestamp}`).digest('hex');
+  return Buffer.from(`${uid}:${timestamp}:${hmac}`).toString('base64');
+}
 
 // ─── Firebase mock ──────────────────────────────────────────────
 
@@ -444,7 +453,7 @@ describe('POST /api/subscriptions/unsubscribe — One-click email unsubscribe', 
     app.use('/api', subscriptionsRouter);
     await request(app)
       .post('/api/subscriptions/unsubscribe')
-      .send({ token: 'valid-unsubscribe-token' })
+      .send({ token: makeValidUnsubscribeToken('1001') })
       .expect(200);
   });
 
@@ -795,7 +804,7 @@ describe('POST /api/subscriptions/unsubscribe — additional coverage', () => {
     expect(res.body.error).toBe('Unsubscribe token required');
   });
 
-  test('returns 400 when token is < 10 chars', async () => {
+  test('returns 400 for token that does not parse as HMAC tuple (too short)', async () => {
     const app = express();
     app.use(express.json());
     app.use('/api', subscriptionsRouter);
@@ -803,10 +812,12 @@ describe('POST /api/subscriptions/unsubscribe — additional coverage', () => {
       .post('/api/subscriptions/unsubscribe')
       .send({ token: 'short' })
       .expect(400);
-    expect(res.body.error).toBe('Invalid unsubscribe token');
+    // Implementation returns "Invalid unsubscribe token format" when base64 decode
+    // produces fewer than the expected 3 colon-separated parts (uid:timestamp:hmac).
+    expect(res.body.error).toMatch(/Invalid unsubscribe token/);
   });
 
-  test('returns 400 when token >= 10 chars but missing unsubscribe marker', async () => {
+  test('returns 400 for malformed (non-HMAC) token', async () => {
     const app = express();
     app.use(express.json());
     app.use('/api', subscriptionsRouter);
@@ -814,16 +825,29 @@ describe('POST /api/subscriptions/unsubscribe — additional coverage', () => {
       .post('/api/subscriptions/unsubscribe')
       .send({ token: 'longtokenwithoutmarker' })
       .expect(400);
-    expect(res.body.error).toBe('Invalid unsubscribe token');
+    expect(res.body.error).toMatch(/Invalid unsubscribe token/);
   });
 
-  test('returns success when token >= 10 chars and includes unsubscribe marker', async () => {
+  test('returns 403 for syntactically valid token with wrong HMAC signature', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use('/api', subscriptionsRouter);
+    // uid:timestamp:wrong-hmac — passes the 3-part split but HMAC verification fails.
+    const forged = Buffer.from('1001:1700000000000:notarealhmac').toString('base64');
+    const res = await request(app)
+      .post('/api/subscriptions/unsubscribe')
+      .send({ token: forged })
+      .expect(403);
+    expect(res.body.error).toMatch(/Invalid unsubscribe token/);
+  });
+
+  test('returns success for valid HMAC token', async () => {
     const app = express();
     app.use(express.json());
     app.use('/api', subscriptionsRouter);
     const res = await request(app)
       .post('/api/subscriptions/unsubscribe')
-      .send({ token: 'unsubscribe-abc-123' })
+      .send({ token: makeValidUnsubscribeToken('1001') })
       .expect(200);
     expect(res.body.success).toBe(true);
     expect(res.body.message).toBe('Email notifications disabled');
