@@ -16,6 +16,9 @@ module.exports = {
   maxWorkers: 2,
   workerIdleMemoryLimit: '1GB',
   testTimeout: 10000,
+  // Enable per-test retry for transient socket failures (ECONNRESET / hang up
+  // from ephemeral port exhaustion). See jest-retry-setup.js for the why.
+  setupFiles: ['./tests/_helpers/jest-retry-setup.js'],
   restoreMocks: true,
   clearMocks: true,
   resetMocks: false,
