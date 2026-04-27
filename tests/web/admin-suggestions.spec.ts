@@ -670,8 +670,14 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
   });
 
   test('suggestion history timeline of status changes visible', async ({ page, testData }) => {
-    const result = await seedSuggestion(testData, { status: 'accepted' });
+    // Seed as 'pending' (default) and walk the suggestion through TWO real
+    // status transitions via the admin API so the audit log gets two entries.
+    // The previous version seeded directly as 'accepted' via testWrite, which
+    // skips the audit-write path — so the timeline only ever showed the single
+    // 'planned' transition and the >=2 assertion failed.
+    const result = await seedSuggestion(testData);
     seededIds.push(result.id);
+    await testData.api.post(`/api/admin/suggestions/${result.id}/status`, { status: 'accepted' });
     await testData.api.post(`/api/admin/suggestions/${result.id}/status`, { status: 'planned' });
     await refreshSuggestionsList(page);
     await page.locator('#suggestions-planned-tab').click();
@@ -680,7 +686,10 @@ test.describe('Admin Suggestions Moderation (11.16)', () => {
     await card.locator('.btn-view-history').click();
     const timeline = page.locator(`#suggestion-timeline-${result.id}`);
     await expect(timeline).toBeVisible();
-    expect(await timeline.locator('.timeline-entry').count()).toBeGreaterThanOrEqual(2);
+    // Entries are rendered after an async fetch — poll instead of one-shot.
+    await expect
+      .poll(() => timeline.locator('.timeline-entry').count(), { timeout: 10_000 })
+      .toBeGreaterThanOrEqual(2);
   });
 
   test('submitter identity links to view full identity graph', async ({ page, testData }) => {

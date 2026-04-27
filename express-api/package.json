@@ -43,7 +43,7 @@
     "supertest": "^7.2.2"
   },
   "overrides": {
-    "fast-xml-parser": ">=5.7.0",
+    "fast-xml-parser": ">=5.7.2",
     "@tootallnate/once": ">=3.0.1",
     "uuid": ">=14.0.0"
   }
