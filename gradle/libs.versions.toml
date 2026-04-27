@@ -1,5 +1,5 @@
 [versions]
-agp = "9.1.1"
+agp = "9.2.0"
 kotlin = "2.4.0-Beta2" # Beta required: K/N 2.3.x has AutoboxingTransformer crash blocking iOS linking. Upgrade to stable when 2.4.0 releases.
 composeMultiplatform = "1.10.3"
 composeBom = "2026.03.01"
