@@ -20,7 +20,7 @@
 const router = require('express').Router();
 const { db } = require('../utils/firebase');
 const { generateId, now } = require('../utils/helpers');
-const { requireAdmin, clearSuspensionCache } = require('../middleware/auth');
+const { requireAdmin, clearSuspensionCache, resolveUniqueId } = require('../middleware/auth');
 const { sendSystemPm } = require('../utils/system-pm');
 const { computeDisplayScore } = require('../utils/gcs');
 const { getDoc, queryDocs } = require('../utils/firestore-helpers');
@@ -30,9 +30,14 @@ const { createWarning } = require('./admin-users');
 
 // See admin-users.js for rationale; same caps apply here so a long reason
 // can't sneak in through the report-resolve path and bypass the warn/suspend
-// boundary checks.
+// boundary checks. The reporter-side caps below cover POST /reports input
+// — without them, a regular user could write up to the 1MB body limit per
+// report, and admin resolution would propagate that string into multiple
+// Firestore documents (warnings + user doc + audit log).
 const REASON_MAX_LENGTH = 500;
 const ADMIN_NOTE_MAX_LENGTH = 2000;
+const DESCRIPTION_MAX_LENGTH = 2000;
+const MESSAGE_TEXT_MAX_LENGTH = 1000;
 
 /**
  * Remove invalid FCM tokens from admin user docs in Firestore.
@@ -72,7 +77,6 @@ router.post('/reports', async (req, res) => {
     const {
       reportedUserId,
       reportedUserName,
-      reportedUserUniqueId,
       conversationId,
       messageId,
       messageText,
@@ -83,6 +87,36 @@ router.post('/reports', async (req, res) => {
 
     if (!reportedUserId || !reason) {
       return res.status(400).json({ error: 'reportedUserId and reason required' });
+    }
+
+    // Reporter-side text caps. Without these, a regular authenticated user
+    // can submit up to ~1MB strings, and admin resolution propagates them
+    // into 3 Firestore docs (warning, user doc, audit log).
+    if (typeof reason !== 'string' || reason.length > REASON_MAX_LENGTH)
+      return res.status(400).json({ error: `reason exceeds ${REASON_MAX_LENGTH} chars` });
+    if (
+      description !== undefined &&
+      description !== null &&
+      (typeof description !== 'string' || description.length > DESCRIPTION_MAX_LENGTH)
+    )
+      return res.status(400).json({ error: `description exceeds ${DESCRIPTION_MAX_LENGTH} chars` });
+    if (
+      messageText !== undefined &&
+      messageText !== null &&
+      (typeof messageText !== 'string' || messageText.length > MESSAGE_TEXT_MAX_LENGTH)
+    )
+      return res
+        .status(400)
+        .json({ error: `messageText exceeds ${MESSAGE_TEXT_MAX_LENGTH} chars` });
+
+    // Server-authoritative uniqueId resolution. Trusting client-supplied
+    // reportedUserUniqueId would let any reporter cause an admin to suspend
+    // an arbitrary chosen victim — when admin resolves with action='suspended',
+    // the cascade keys off reportedUserUniqueId and immediately closes that
+    // user's rooms regardless of who actually owns the reported behaviour.
+    const reportedUserUniqueId = await resolveUniqueId(reportedUserId);
+    if (!reportedUserUniqueId) {
+      return res.status(400).json({ error: 'reportedUserId does not match any known user' });
     }
 
     // Fetch reporter info
@@ -98,7 +132,7 @@ router.post('/reports', async (req, res) => {
         reporterUniqueId: reporter?.uniqueId ?? reporter?.unique_id ?? null,
         reportedUserId: reportedUserId,
         reportedUserName: reportedUserName || null,
-        reportedUserUniqueId: reportedUserUniqueId || null,
+        reportedUserUniqueId,
         conversationId: conversationId || null,
         messageId: messageId || null,
         messageText: messageText || null,

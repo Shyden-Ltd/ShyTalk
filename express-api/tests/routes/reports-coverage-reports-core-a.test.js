@@ -52,6 +52,10 @@ jest.mock('../../src/utils/log', () => ({
 jest.mock('../../src/middleware/auth', () => ({
   requireAdmin: jest.fn(() => false),
   clearSuspensionCache: jest.fn(),
+  // Server-resolves the report target's uniqueId from the Firebase Auth UID so a
+  // malicious reporter can't supply an arbitrary victim. Default fixture returns
+  // `${uid}-uniq` which is the convention used by the test data builders here.
+  resolveUniqueId: jest.fn(async (uid) => (uid ? `${uid}-uniq` : null)),
 }));
 jest.mock('../../src/utils/system-pm', () => ({
   sendSystemPm: jest.fn().mockResolvedValue(),
@@ -223,6 +227,71 @@ describe('POST /api/reports - FCM + cleanupInvalidAdminTokens', () => {
       .post('/api/reports')
       .send({ reportedUserId: 'target', reason: 'spam' });
     expect(res.status).toBe(500);
+  });
+
+  // ─── F1: IDOR fix — server-resolves reportedUserUniqueId ──────
+  // Previously `reportedUserUniqueId` was accepted from the request body. A
+  // malicious reporter could submit a different victim's uniqueId and admin
+  // resolution would suspend them. Cascade is now synchronous so the eviction
+  // happens immediately on suspend — guarding the value at submission time
+  // is the only safe place.
+
+  it('rejects POST /reports when reportedUserId does not resolve to a known user', async () => {
+    const { resolveUniqueId } = require('../../src/middleware/auth');
+    resolveUniqueId.mockResolvedValueOnce(null);
+    const res = await request(app)
+      .post('/api/reports')
+      .send({ reportedUserId: 'unknown-uid', reason: 'spam' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/does not match any known user/i);
+  });
+
+  it('ignores client-supplied reportedUserUniqueId and uses server-resolved value', async () => {
+    const { resolveUniqueId } = require('../../src/middleware/auth');
+    resolveUniqueId.mockResolvedValueOnce('SERVER_VALUE');
+    const res = await request(app).post('/api/reports').send({
+      reportedUserId: 'target',
+      reportedUserUniqueId: 'CLIENT_INJECTED_VICTIM',
+      reason: 'spam',
+    });
+    expect(res.status).toBe(200);
+    expect(mockDocSet).toHaveBeenCalledWith(
+      expect.objectContaining({ reportedUserUniqueId: 'SERVER_VALUE' }),
+      { merge: true },
+    );
+  });
+
+  // ─── F2: length caps on reporter-supplied text ─────────────────
+
+  it('rejects reason longer than 500 chars at the report-submission boundary', async () => {
+    const res = await request(app)
+      .post('/api/reports')
+      .send({ reportedUserId: 'target', reason: 'x'.repeat(501) });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/reason exceeds 500 chars/);
+  });
+
+  it('rejects description longer than 2000 chars', async () => {
+    const res = await request(app)
+      .post('/api/reports')
+      .send({ reportedUserId: 'target', reason: 'spam', description: 'd'.repeat(2001) });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/description exceeds 2000 chars/);
+  });
+
+  it('rejects messageText longer than 1000 chars', async () => {
+    const res = await request(app)
+      .post('/api/reports')
+      .send({ reportedUserId: 'target', reason: 'spam', messageText: 'm'.repeat(1001) });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/messageText exceeds 1000 chars/);
+  });
+
+  it('accepts reason at the 500-char boundary (off-by-one direction guard)', async () => {
+    const res = await request(app)
+      .post('/api/reports')
+      .send({ reportedUserId: 'target', reason: 'x'.repeat(500) });
+    expect(res.status).toBe(200);
   });
 });
 

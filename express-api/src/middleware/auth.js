@@ -202,4 +202,5 @@ module.exports = {
   clearSuspensionCache,
   clearUniqueIdCache,
   updateUniqueIdCache,
+  resolveUniqueId,
 };

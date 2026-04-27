@@ -550,10 +550,36 @@ describe('evictSuspendedUser — RTDB failure tolerance', () => {
         roomsUpdated: 0,
         partial: false,
         failedRoomIds: [],
+        userDocFailed: false,
       });
       // Reverted from update() → set+merge so a deleted user doc doesn't throw.
       expect(mockDocSet).toHaveBeenCalledWith({ currentRoomId: null }, { merge: true });
       expect(mockDocUpdate).not.toHaveBeenCalled();
+    });
+
+    it('reports userDocFailed=true when only the user-doc op chunk rejects', async () => {
+      // Single room, single chunk includes both ops — but to exercise the user-doc-only
+      // failure mode we mock rooms.length to be exactly 500 so user-doc lands alone in
+      // chunk 2. Easier: a single room + a forced two-chunk split via mockBatchCommit.
+      const room = {
+        id: 'room-only',
+        ownerId: 'banned',
+        state: 'ACTIVE',
+        participantIds: ['banned', 'a'],
+        hostIds: [],
+        seats: {},
+      };
+      mockRoomsQueries({ participantRooms: [room], ownerRooms: [room] });
+      // First chunk (rooms+user-doc combined since 2 ops < 500) rejects: BOTH the room
+      // op AND the user-doc op are in failedSet, so cascade reports userDocFailed=true
+      // and the room id appears in failedRoomIds.
+      mockBatchCommit.mockRejectedValueOnce(new Error('Firestore down'));
+
+      const result = await evictSuspendedUser('banned');
+
+      expect(result.userDocFailed).toBe(true);
+      expect(result.failedRoomIds).toEqual(['room-only']);
+      expect(result.partial).toBe(true);
     });
 
     it('propagates set+merge rejection from the zero-rooms branch to the caller', async () => {

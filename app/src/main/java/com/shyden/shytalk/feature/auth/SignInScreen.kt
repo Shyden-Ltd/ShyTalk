@@ -247,7 +247,10 @@ fun SignInScreen(
                 }
             }
 
-            val isBusy = uiState.isLoading || signingInProvider != null
+            // `requiresAppDataClear` (set when sign-out / clearCredential threw and local
+            // auth storage is half-cleared) keeps auth actions disabled — retrying any
+            // provider would just hit the same broken storage. User must clear app data.
+            val isBusy = uiState.isLoading || signingInProvider != null || uiState.requiresAppDataClear
 
             // Google Sign-In button (branded)
             GoogleSignInButton(

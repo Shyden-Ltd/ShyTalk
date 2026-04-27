@@ -44,7 +44,13 @@ async function evictSuspendedUser(uid) {
     // set+merge (not update) so a missing user doc — possible if the user was deleted
     // between suspension lookup and cascade — doesn't throw "no document to update".
     await db.doc(`users/${uid}`).set({ currentRoomId: null }, { merge: true });
-    return { roomsClosed: 0, roomsUpdated: 0, partial: false, failedRoomIds: [] };
+    return {
+      roomsClosed: 0,
+      roomsUpdated: 0,
+      partial: false,
+      failedRoomIds: [],
+      userDocFailed: false,
+    };
   }
 
   const closeTimestamp = now();
@@ -94,10 +100,14 @@ async function evictSuspendedUser(uid) {
 
   batchOps.push({ path: `users/${uid}`, data: { currentRoomId: null } });
 
-  // Firestore batch (chunked at 500 to respect Firestore limits). Track which room
-  // chunks failed so the caller can distinguish a fully-committed cascade from a
-  // partial one — earlier code returned success even when the second chunk threw.
+  // Firestore batch (chunked at 500 to respect Firestore limits). Track which
+  // room chunks AND the user-doc op failed so the caller can distinguish a
+  // fully-committed cascade from a partial one. Earlier code returned success
+  // even when the second chunk threw, and silently dropped user-doc failures
+  // (the path regex below matches only `rooms/...`, so user-doc errors were
+  // invisible in `failedRoomIds`).
   const failedRoomIds = [];
+  let userDocFailed = false;
   for (let i = 0; i < batchOps.length; i += 500) {
     const chunk = batchOps.slice(i, i + 500);
     const batch = db.batch();
@@ -113,10 +123,13 @@ async function evictSuspendedUser(uid) {
         chunkSize: chunk.length,
         error: err.message,
       });
-      // Record the room ids in this chunk (the user-doc op has no roomId so skip it).
       for (const op of chunk) {
-        const m = op.path.match(/^rooms\/(.+)$/);
-        if (m) failedRoomIds.push(m[1]);
+        const roomMatch = op.path.match(/^rooms\/(.+)$/);
+        if (roomMatch) {
+          failedRoomIds.push(roomMatch[1]);
+        } else if (op.path === `users/${uid}`) {
+          userDocFailed = true;
+        }
       }
     }
   }
@@ -155,8 +168,9 @@ async function evictSuspendedUser(uid) {
   return {
     roomsClosed,
     roomsUpdated,
-    partial: failedRoomIds.length > 0,
+    partial: failedRoomIds.length > 0 || userDocFailed,
     failedRoomIds,
+    userDocFailed,
   };
 }
 

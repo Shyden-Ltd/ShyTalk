@@ -49,6 +49,17 @@ data class AuthUiState(
     val needsPinSetup: Boolean = false,
     val hasStoredCredential: Boolean = false,
     val needsLockScreen: Boolean = false,
+    /**
+     * Set when local auth storage (Keychain / EncryptedSharedPreferences / Firebase
+     * SDK persistence) is in a half-cleared state because `signOut()` or
+     * `clearCredential()` threw. The bare sign-in UI cannot recover from this —
+     * retrying sign-in just hits the same broken storage. UI must show a
+     * non-dismissable error explaining that the user needs to force-quit AND
+     * clear app data, and must disable all auth-action buttons while this is set.
+     * NOT cleared by `clearError()`; survives `_uiState.value = AuthUiState()`
+     * resets only by virtue of every reset point preserving it explicitly.
+     */
+    val requiresAppDataClear: Boolean = false,
 )
 
 class AuthViewModel(
@@ -140,15 +151,33 @@ class AuthViewModel(
                     // No recognised provider on the Firebase session (legacy account, anonymous,
                     // custom-token, or provider profile lacking email/uid). Without a provider
                     // we can't run identity resolution, so the safe path is to clear the orphaned
-                    // session and let the user re-authenticate. Reset the migration guard so a
-                    // fresh sign-in can re-enter this path.
+                    // session and let the user re-authenticate.
                     logW(TAG, "Migration aborted: no recognised provider info — clearing session")
+                    var signedOut = true
                     try {
                         authRepository.signOut()
                     } catch (e: Exception) {
-                        logW(TAG, "signOut during migration abort failed: ${e.message}")
+                        signedOut = false
+                        logE(TAG, "signOut during migration abort failed: ${e.message}")
                     }
-                    migrationCompleted = false
+                    if (signedOut) {
+                        // Reset the migration guard so a fresh sign-in re-enters this path
+                        // cleanly. Only do this when signOut actually succeeded — otherwise
+                        // the next ViewModel construction would re-enter migration with the
+                        // same orphaned session and loop on signOut failures.
+                        migrationCompleted = false
+                    } else {
+                        // Mirror the SF3 hard-error pattern from handleBackendError: surface
+                        // the broken state via the sticky `requiresAppDataClear` flag so the
+                        // UI keeps auth actions disabled. The migration guard intentionally
+                        // stays `true` here — re-entering migration without successful
+                        // signOut just retries the same orphaned session and loops.
+                        _uiState.value =
+                            AuthUiState(
+                                error = UiText.plain("Could not clear stored session — please clear app data and restart"),
+                                requiresAppDataClear = true,
+                            )
+                    }
                 }
             }
         }
@@ -383,12 +412,15 @@ class AuthViewModel(
             // threw, do it manually so a subsequent successful sign-in can re-enter migration.
             if (!signedOut) migrationCompleted = false
             if (!credentialCleared || !signedOut) {
-                // Fresh sign-in UI on top of half-cleared local state would mislead the user.
-                // Surface a hard error and let them force-quit / retry rather than entering a
-                // partially-authenticated state with mismatched PIN + session storage.
+                // Fresh sign-in UI on top of half-cleared local state would mislead the user
+                // — retrying any provider just hits the same broken storage and loops. The
+                // `requiresAppDataClear` flag is sticky (not cleared by `clearError()`) so
+                // the UI can keep auth actions disabled until the user actually clears app
+                // data and restarts.
                 _uiState.value =
                     AuthUiState(
-                        error = UiText.plain("Could not clear stored session — please force-quit and reopen the app"),
+                        error = UiText.plain("Could not clear stored session — please clear app data and restart"),
+                        requiresAppDataClear = true,
                     )
             } else {
                 _uiState.value = AuthUiState()

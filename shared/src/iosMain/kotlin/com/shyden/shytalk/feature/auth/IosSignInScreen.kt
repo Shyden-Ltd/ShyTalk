@@ -114,7 +114,11 @@ fun IosSignInScreen(params: SignInScreenParams) {
                 }
             }
 
-            val isBusy = uiState.isLoading || signingInProvider != null
+            // `requiresAppDataClear` is set when local auth storage couldn't be cleaned up
+            // after a sign-out failure — retrying any provider hits the same broken storage
+            // and loops. Treat the same as "busy" so all auth buttons stay disabled until
+            // the user actually clears app data and restarts.
+            val isBusy = uiState.isLoading || signingInProvider != null || uiState.requiresAppDataClear
 
             // Google Sign-In button
             GoogleSignInButton(
@@ -239,12 +243,13 @@ fun IosSignInScreen(params: SignInScreenParams) {
 // not seeded here would surface ERROR_USER_NOT_FOUND from Firebase, so list
 // only the verified seed set. Mirrors Android's local-flavor picker.
 //
-// The strings in this list (and the inline shared dev password) compile into the
-// iOS Kotlin/Native binary regardless of build configuration — Kotlin/Native does
-// not dead-code-eliminate constants based on `if (BuildVariant.isLocalEmulator)`
-// branches the way Android's `BuildConfig.FLAVOR` does. Eliminating the leak
-// from RELEASE iOS binaries requires moving DEV_ACCOUNTS into a Swift `#if DEBUG`
-// section and bridging via Koin — tracked as a follow-up.
+// TODO(ios-debug-strip): the strings in this list (and the inline shared dev
+// password) compile into the iOS Kotlin/Native binary regardless of build
+// configuration — Kotlin/Native does not dead-code-eliminate constants based
+// on `if (BuildVariant.isLocalEmulator)` branches the way Android's
+// `BuildConfig.FLAVOR` does. Eliminating the leak from RELEASE iOS binaries
+// requires moving DEV_ACCOUNTS into a Swift `#if DEBUG` section and bridging
+// via Koin.
 private val DEV_ACCOUNTS =
     listOf(
         "claude-test@shytalk.dev" to "Admin",

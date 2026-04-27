@@ -3,6 +3,7 @@ package com.shyden.shytalk.feature.auth
 import com.shyden.shytalk.core.model.ProfileVisitor
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Resource
+import com.shyden.shytalk.data.repository.AppLockRepository
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.BanStatus
 import com.shyden.shytalk.data.repository.CreateUserResult
@@ -82,11 +83,60 @@ class AuthViewModelIdentityTest {
 
         override suspend fun signInWithCustomToken(token: String): Resource<String> = signInResult
 
+        var signOutShouldThrow = false
+
         override fun signOut() {
+            if (signOutShouldThrow) throw RuntimeException("signOut deliberately failing in test")
             signedOut = true
             resolvedUniqueId = null
             firebaseUid = null
         }
+    }
+
+    /**
+     * In-memory fake of `AppLockRepository`. Only the credential-storage hooks
+     * relevant to `handleBackendError` and the migration recovery path are
+     * implemented; everything else throws so a test that touches an unintended
+     * surface fails loudly.
+     */
+    private class FakeAppLockRepository(
+        override val hasCredential: Boolean = false,
+    ) : AppLockRepository {
+        var clearCredentialCalled = false
+        var clearCredentialShouldThrow = false
+
+        override val isAppLockEnabled: Boolean = false
+        override val isBiometricEnabled: Boolean = false
+        override val lockTimeoutMinutes: Int = 0
+        override val storedUniqueId: String? = null
+        override val storedDeviceId: String? = null
+        override val localPinHash: String? = null
+        override val credentialVersion: Int = 0
+
+        override fun clearCredential() {
+            clearCredentialCalled = true
+            if (clearCredentialShouldThrow) {
+                throw RuntimeException("clearCredential deliberately failing in test")
+            }
+        }
+
+        override fun setCredential(
+            uniqueId: String,
+            deviceId: String,
+            localPinHash: String,
+        ) {
+            error("setCredential should not be called in this test")
+        }
+
+        override fun setAppLockEnabled(enabled: Boolean) = error("not used")
+
+        override fun setBiometricEnabled(enabled: Boolean) = error("not used")
+
+        override fun setLockTimeoutMinutes(minutes: Int) = error("not used")
+
+        override fun updateLastActiveTimestamp() = error("not used")
+
+        override fun isLockRequired(): Boolean = error("not used")
     }
 
     private class FakeIdentityRepository : IdentityRepository {
@@ -546,8 +596,17 @@ class AuthViewModelIdentityTest {
                     providerInfo = "email" to "u@test.com",
                 )
 
+            val appLock = FakeAppLockRepository(hasCredential = true)
             val vm =
-                AuthViewModel(authRepo, FakeUserRepository(), FakeDeviceRepository(), identityRepo, "device-1", bypassDeviceChecks = true)
+                AuthViewModel(
+                    authRepo,
+                    FakeUserRepository(),
+                    FakeDeviceRepository(),
+                    identityRepo,
+                    "device-1",
+                    bypassDeviceChecks = true,
+                    appLockRepository = appLock,
+                )
             advanceUntilIdle()
             vm.resolveAfterExternalSignIn("email", "u@test.com")
             advanceUntilIdle()
@@ -555,6 +614,10 @@ class AuthViewModelIdentityTest {
             val state = vm.uiState.value
             assertTrue(state.isBackendUnreachable, "IPv6 prefix containing '2401:' must take the network-error path")
             assertFalse(authRepo.signedOut, "False-positive 401 match must NOT clear session")
+            assertFalse(
+                appLock.clearCredentialCalled,
+                "False-positive 401 match must NOT call clearCredential — would silently nuke the user's PIN",
+            )
         }
 
     @Test
@@ -572,13 +635,26 @@ class AuthViewModelIdentityTest {
                     providerInfo = "email" to "u@test.com",
                 )
 
+            val appLock = FakeAppLockRepository(hasCredential = true)
             val vm =
-                AuthViewModel(authRepo, FakeUserRepository(), FakeDeviceRepository(), identityRepo, "device-1", bypassDeviceChecks = true)
+                AuthViewModel(
+                    authRepo,
+                    FakeUserRepository(),
+                    FakeDeviceRepository(),
+                    identityRepo,
+                    "device-1",
+                    bypassDeviceChecks = true,
+                    appLockRepository = appLock,
+                )
             advanceUntilIdle()
             vm.resolveAfterExternalSignIn("email", "u@test.com")
             advanceUntilIdle()
 
+            val state = vm.uiState.value
             assertTrue(authRepo.signedOut, "Standalone '401' as a word must trigger session clear")
+            assertTrue(appLock.clearCredentialCalled, "Genuine auth error MUST clear stored credential")
+            assertFalse(state.isBackendUnreachable, "Auth error must NOT show 'Unable to Connect'")
+            assertFalse(state.isAuthenticated, "Auth error must clear isAuthenticated")
         }
 
     @Test
@@ -596,13 +672,26 @@ class AuthViewModelIdentityTest {
                     providerInfo = "email" to "u@test.com",
                 )
 
+            val appLock = FakeAppLockRepository(hasCredential = true)
             val vm =
-                AuthViewModel(authRepo, FakeUserRepository(), FakeDeviceRepository(), identityRepo, "device-1", bypassDeviceChecks = true)
+                AuthViewModel(
+                    authRepo,
+                    FakeUserRepository(),
+                    FakeDeviceRepository(),
+                    identityRepo,
+                    "device-1",
+                    bypassDeviceChecks = true,
+                    appLockRepository = appLock,
+                )
             advanceUntilIdle()
             vm.resolveAfterExternalSignIn("email", "u@test.com")
             advanceUntilIdle()
 
+            val state = vm.uiState.value
             assertTrue(authRepo.signedOut, "'Token refresh' substring (iOS API client error) must clear session")
+            assertTrue(appLock.clearCredentialCalled, "Genuine auth error MUST clear stored credential")
+            assertFalse(state.isBackendUnreachable)
+            assertFalse(state.isAuthenticated)
         }
 
     @Test
@@ -620,12 +709,201 @@ class AuthViewModelIdentityTest {
                     providerInfo = "email" to "u@test.com",
                 )
 
+            val appLock = FakeAppLockRepository(hasCredential = true)
             val vm =
-                AuthViewModel(authRepo, FakeUserRepository(), FakeDeviceRepository(), identityRepo, "device-1", bypassDeviceChecks = true)
+                AuthViewModel(
+                    authRepo,
+                    FakeUserRepository(),
+                    FakeDeviceRepository(),
+                    identityRepo,
+                    "device-1",
+                    bypassDeviceChecks = true,
+                    appLockRepository = appLock,
+                )
             advanceUntilIdle()
             vm.resolveAfterExternalSignIn("email", "u@test.com")
             advanceUntilIdle()
 
+            val state = vm.uiState.value
             assertTrue(authRepo.signedOut, "'Not authenticated' (IosApiClient when no current user) must clear session")
+            assertTrue(appLock.clearCredentialCalled, "Genuine auth error MUST clear stored credential")
+            assertFalse(state.isBackendUnreachable)
+            assertFalse(state.isAuthenticated)
+        }
+
+    // ─── SF3 hard-error UI: half-cleared local state ────────────────
+
+    @Test
+    fun handleBackendError_whenClearCredentialThrows_setsRequiresAppDataClear() =
+        runTest {
+            val identityRepo =
+                FakeIdentityRepository().apply {
+                    resolveResult = Resource.Error("INVALID_REFRESH_TOKEN: revoked")
+                }
+            val authRepo =
+                FakeAuthRepository(
+                    firebaseUid = "uid",
+                    isAuthenticated = true,
+                    currentUserEmail = "u@test.com",
+                    providerInfo = "email" to "u@test.com",
+                )
+
+            val appLock = FakeAppLockRepository(hasCredential = true).apply { clearCredentialShouldThrow = true }
+            val vm =
+                AuthViewModel(
+                    authRepo,
+                    FakeUserRepository(),
+                    FakeDeviceRepository(),
+                    identityRepo,
+                    "device-1",
+                    bypassDeviceChecks = true,
+                    appLockRepository = appLock,
+                )
+            advanceUntilIdle()
+            vm.resolveAfterExternalSignIn("email", "u@test.com")
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertTrue(state.requiresAppDataClear, "clearCredential failure must set the sticky storage-corrupted flag")
+            assertTrue(authRepo.signedOut, "signOut must still be attempted even after clearCredential throws")
+            assertTrue(state.error != null, "User must see an error message instructing the recovery action")
+        }
+
+    @Test
+    fun handleBackendError_whenSignOutThrows_resetsMigrationGuardManually() =
+        runTest {
+            val identityRepo =
+                FakeIdentityRepository().apply {
+                    resolveResult = Resource.Error("INVALID_REFRESH_TOKEN: revoked")
+                }
+            val authRepo =
+                FakeAuthRepository(
+                    firebaseUid = "uid",
+                    isAuthenticated = true,
+                    currentUserEmail = "u@test.com",
+                    providerInfo = "email" to "u@test.com",
+                ).apply { signOutShouldThrow = true }
+
+            val appLock = FakeAppLockRepository(hasCredential = true)
+            val vm =
+                AuthViewModel(
+                    authRepo,
+                    FakeUserRepository(),
+                    FakeDeviceRepository(),
+                    identityRepo,
+                    "device-1",
+                    bypassDeviceChecks = true,
+                    appLockRepository = appLock,
+                )
+            advanceUntilIdle()
+            vm.resolveAfterExternalSignIn("email", "u@test.com")
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertTrue(state.requiresAppDataClear, "signOut failure must set the sticky storage-corrupted flag")
+            assertTrue(appLock.clearCredentialCalled, "clearCredential must have been called before signOut threw")
+        }
+
+    @Test
+    fun handleBackendError_whenBothSucceed_clearsToBareSignInWithoutStickyFlag() =
+        runTest {
+            val identityRepo =
+                FakeIdentityRepository().apply {
+                    resolveResult = Resource.Error("INVALID_REFRESH_TOKEN: revoked")
+                }
+            val authRepo =
+                FakeAuthRepository(
+                    firebaseUid = "uid",
+                    isAuthenticated = true,
+                    currentUserEmail = "u@test.com",
+                    providerInfo = "email" to "u@test.com",
+                )
+
+            val appLock = FakeAppLockRepository(hasCredential = true)
+            val vm =
+                AuthViewModel(
+                    authRepo,
+                    FakeUserRepository(),
+                    FakeDeviceRepository(),
+                    identityRepo,
+                    "device-1",
+                    bypassDeviceChecks = true,
+                    appLockRepository = appLock,
+                )
+            advanceUntilIdle()
+            vm.resolveAfterExternalSignIn("email", "u@test.com")
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertFalse(
+                state.requiresAppDataClear,
+                "Happy-path recovery must NOT set requiresAppDataClear — would lock out users from retrying sign-in",
+            )
+            assertTrue(authRepo.signedOut)
+            assertTrue(appLock.clearCredentialCalled)
+        }
+
+    // ─── SF1 migration null-providerInfo path ───────────────────────
+
+    @Test
+    fun migrationPath_whenProviderInfoNull_signsOutAndResetsMigrationGuard() =
+        runTest {
+            // Setup mirrors the migration prerequisites: hasCredential=false on AppLock,
+            // isAuthenticated=true on AuthRepo, and getProviderInfo()=null.
+            val authRepo =
+                FakeAuthRepository(
+                    firebaseUid = "orphan-uid",
+                    isAuthenticated = true,
+                    currentUserEmail = "anon@firebase",
+                    providerInfo = null, // legacy / anonymous / custom-token session
+                )
+            val appLock = FakeAppLockRepository(hasCredential = false)
+
+            val vm =
+                AuthViewModel(
+                    authRepo,
+                    FakeUserRepository(),
+                    FakeDeviceRepository(),
+                    FakeIdentityRepository(),
+                    "device-1",
+                    bypassDeviceChecks = true,
+                    appLockRepository = appLock,
+                )
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertTrue(authRepo.signedOut, "Migration with null providerInfo must clear the orphaned Firebase session")
+            assertFalse(state.requiresAppDataClear, "Happy-path migration abort must not set the storage-corrupted flag")
+        }
+
+    @Test
+    fun migrationPath_whenProviderInfoNullAndSignOutThrows_setsRequiresAppDataClear() =
+        runTest {
+            val authRepo =
+                FakeAuthRepository(
+                    firebaseUid = "orphan-uid",
+                    isAuthenticated = true,
+                    currentUserEmail = "anon@firebase",
+                    providerInfo = null,
+                ).apply { signOutShouldThrow = true }
+            val appLock = FakeAppLockRepository(hasCredential = false)
+
+            val vm =
+                AuthViewModel(
+                    authRepo,
+                    FakeUserRepository(),
+                    FakeDeviceRepository(),
+                    FakeIdentityRepository(),
+                    "device-1",
+                    bypassDeviceChecks = true,
+                    appLockRepository = appLock,
+                )
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertTrue(state.requiresAppDataClear, "signOut failure during migration must set the sticky flag")
+            assertTrue(state.error != null, "User must see the recovery instruction")
+            // Migration guard must NOT be reset to false here — re-entering migration
+            // with the same orphaned session would just re-fail signOut and loop.
         }
 }

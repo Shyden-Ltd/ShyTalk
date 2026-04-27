@@ -52,6 +52,7 @@ jest.mock('../../src/utils/log', () => ({
 jest.mock('../../src/middleware/auth', () => ({
   requireAdmin: jest.fn(() => false),
   clearSuspensionCache: jest.fn(),
+  resolveUniqueId: jest.fn(async (uid) => (uid ? `${uid}-uniq` : null)),
 }));
 jest.mock('../../src/utils/system-pm', () => ({
   sendSystemPm: jest.fn().mockResolvedValue(),
