@@ -36,11 +36,14 @@ class IosPrivateMessageRepositoryImpl(
     override suspend fun prefetchConversations() {
         try {
             val uid = authRepository.currentUserId ?: return
-            val uidQuery: Any = uid.toLongOrNull() ?: uid
+            // participantIds is stored as STRINGS in Firestore (set by Express API
+            // and the create-conversation path below). Querying with a Long would
+            // miss every document AND trigger a Firestore rule evaluation error
+            // for `string(callerUniqueId()) in resource.data.participantIds`.
             val snapshot =
                 firestore
                     .collection("conversations")
-                    .where { "participantIds" contains uidQuery }
+                    .where { "participantIds" contains uid }
                     .orderBy("lastMessageAt", Direction.DESCENDING)
                     .get()
             prefetchedConversations =
@@ -58,10 +61,10 @@ class IosPrivateMessageRepositoryImpl(
     }
 
     override fun getConversations(userId: String): Flow<List<Conversation>> {
-        val userIdQuery: Any = userId.toLongOrNull() ?: userId
+        // See prefetchConversations: participantIds is stored as strings.
         return firestore
             .collection("conversations")
-            .where { "participantIds" contains userIdQuery }
+            .where { "participantIds" contains userId }
             .orderBy("lastMessageAt", Direction.DESCENDING)
             .snapshots
             .map { snapshot ->
@@ -91,11 +94,8 @@ class IosPrivateMessageRepositoryImpl(
                 val now = currentTimeMillis()
                 val data =
                     mapOf(
-                        "participantIds" to
-                            listOf<Any>(
-                                uid1.toLongOrNull() ?: uid1,
-                                uid2.toLongOrNull() ?: uid2,
-                            ).sortedBy { it.toString() },
+                        // Strings (matches Express API + Firestore rules format)
+                        "participantIds" to listOf(uid1, uid2).sorted(),
                         "isGroup" to false,
                         "createdAt" to now,
                         "lastMessageAt" to now,
