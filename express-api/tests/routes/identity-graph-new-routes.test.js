@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 /**
- * Tests for new identity graph routes added in PR #255.
+ * Tests for new identity graph routes.
  *
  * Covers:
  *   GET  /admin/identity-graph/:id                    — get graph nodes/edges

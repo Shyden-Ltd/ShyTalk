@@ -35,6 +35,13 @@ const { sendEmail } = require('../utils/email');
 const { buildDeletionScheduledEmail } = require('../utils/email-templates');
 const { sendFcmToTokens } = require('../utils/fcm');
 
+// Length caps for admin-supplied free-form text. Bounded inputs prevent
+// a compromised or careless admin from blowing out per-user warning
+// subcollections, the global audit log, and system PM bodies — Firestore
+// document storage is metered and the dev project is on Spark free tier.
+const REASON_MAX_LENGTH = 500;
+const ADMIN_NOTE_MAX_LENGTH = 2000;
+
 // ─── Helpers ─────────────────────────────────────────────────────
 
 /**
@@ -458,6 +465,10 @@ router.post('/user/:uniqueId/warn', async (req, res) => {
 
     const body = req.body;
     if (!body?.reason) return res.status(400).json({ error: 'reason is required' });
+    if (body.reason.length > REASON_MAX_LENGTH)
+      return res.status(400).json({ error: `reason exceeds ${REASON_MAX_LENGTH} chars` });
+    if (body.adminNote && body.adminNote.length > ADMIN_NOTE_MAX_LENGTH)
+      return res.status(400).json({ error: `adminNote exceeds ${ADMIN_NOTE_MAX_LENGTH} chars` });
 
     const severity = Number.parseInt(body.severity, 10) || 3;
     if (severity < 1 || severity > 5)
@@ -822,6 +833,8 @@ router.post('/user/:uniqueId/suspend', async (req, res) => {
 
     const body = req.body;
     if (!body?.reason) return res.status(400).json({ error: 'reason is required' });
+    if (body.reason.length > REASON_MAX_LENGTH)
+      return res.status(400).json({ error: `reason exceeds ${REASON_MAX_LENGTH} chars` });
     if (typeof body.canAppeal !== 'boolean')
       return res.status(400).json({ error: 'canAppeal must be a boolean' });
 
@@ -921,15 +934,21 @@ router.post('/user/:uniqueId/suspend', async (req, res) => {
       }),
     );
 
-    // Evict from any active rooms (fire-and-forget)
-    evictSuspendedUser(req.params.uniqueId).catch((err) =>
+    // Evict from any active rooms. Awaited (was fire-and-forget) so a partial
+    // cascade is reflected in the admin response — without this, a chunk failure
+    // mid-cascade left rooms in mixed state with the admin shown success.
+    let cascade = { roomsClosed: 0, roomsUpdated: 0, partial: false, failedRoomIds: [] };
+    try {
+      cascade = await evictSuspendedUser(req.params.uniqueId);
+    } catch (err) {
       log.error('admin-users', 'Failed to evict suspended user', {
         uniqueId: req.params.uniqueId,
         error: err.message,
-      }),
-    );
+      });
+      cascade = { ...cascade, partial: true, error: err.message };
+    }
 
-    res.json({ success: true });
+    res.json({ success: true, cascade });
   } catch (err) {
     log.error('admin-users', 'Suspend user failed', {
       uniqueId: req.params.uniqueId,

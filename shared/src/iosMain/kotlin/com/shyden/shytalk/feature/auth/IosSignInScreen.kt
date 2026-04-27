@@ -28,7 +28,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.BuildVariant
 import com.shyden.shytalk.feature.auth.components.AppleSignInButton
-import com.shyden.shytalk.feature.auth.components.EmailSignInButton
 import com.shyden.shytalk.feature.auth.components.GoogleSignInButton
 import com.shyden.shytalk.feature.suspension.SuspensionScreen
 import com.shyden.shytalk.navigation.SignInScreenParams
@@ -167,16 +166,6 @@ fun IosSignInScreen(params: SignInScreenParams) {
                 modifier = Modifier.testTag("ios_apple_sign_in"),
             )
 
-            // Email Sign-In hidden — pending self-hosted mail server implementation
-            // Spacer(modifier = Modifier.height(12.dp))
-            // EmailSignInButton(
-            //     onClick = {
-            //         if (isBusy) return@EmailSignInButton
-            //         params.onNavigateToEmail()
-            //     },
-            //     modifier = Modifier.testTag("ios_email_sign_in"),
-            // )
-
             // Dev-only sign-in for local emulator testing — mirrors the Android picker.
             if (BuildVariant.isLocalEmulator) {
                 var showDevPicker by remember { mutableStateOf(false) }
@@ -200,6 +189,12 @@ fun IosSignInScreen(params: SignInScreenParams) {
                                     TextButton(
                                         onClick = {
                                             showDevPicker = false
+                                            // Defence-in-depth: the surrounding picker is
+                                            // already gated by isLocalEmulator, but a Frida
+                                            // / debugger flip of the flag at runtime is the
+                                            // documented S2 risk. Re-check the flag at the
+                                            // call site so the auth call refuses.
+                                            if (!BuildVariant.isLocalEmulator) return@TextButton
                                             signingInProvider = "dev"
                                             scope.launch {
                                                 try {
@@ -240,16 +235,18 @@ fun IosSignInScreen(params: SignInScreenParams) {
     }
 }
 
+// Accounts that match what local/seed.js actually creates. Tapping any account
+// not seeded here would surface ERROR_USER_NOT_FOUND from Firebase, so list
+// only the verified seed set. Mirrors Android's local-flavor picker.
+//
+// The strings in this list (and the inline shared dev password) compile into the
+// iOS Kotlin/Native binary regardless of build configuration — Kotlin/Native does
+// not dead-code-eliminate constants based on `if (BuildVariant.isLocalEmulator)`
+// branches the way Android's `BuildConfig.FLAVOR` does. Eliminating the leak
+// from RELEASE iOS binaries requires moving DEV_ACCOUNTS into a Swift `#if DEBUG`
+// section and bridging via Koin — tracked as a follow-up.
 private val DEV_ACCOUNTS =
     listOf(
         "claude-test@shytalk.dev" to "Admin",
         "user@test.com" to "Test User",
-        "member@test.com" to "Member",
-        "official@test.com" to "Official",
-        "singer@test.com" to "Singer",
-        "eventhost@test.com" to "Event Host",
-        "teacher@test.com" to "Teacher",
-        "alice@test.com" to "Alice",
-        "bob@test.com" to "Bob",
-        "suspended@test.com" to "Suspended",
     )

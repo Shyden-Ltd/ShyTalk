@@ -41,8 +41,10 @@ async function evictSuspendedUser(uid) {
   const rooms = [...roomsById.values()];
 
   if (rooms.length === 0) {
-    await db.doc(`users/${uid}`).update({ currentRoomId: null });
-    return { roomsClosed: 0, roomsUpdated: 0 };
+    // set+merge (not update) so a missing user doc — possible if the user was deleted
+    // between suspension lookup and cascade — doesn't throw "no document to update".
+    await db.doc(`users/${uid}`).set({ currentRoomId: null }, { merge: true });
+    return { roomsClosed: 0, roomsUpdated: 0, partial: false, failedRoomIds: [] };
   }
 
   const closeTimestamp = now();
@@ -92,18 +94,39 @@ async function evictSuspendedUser(uid) {
 
   batchOps.push({ path: `users/${uid}`, data: { currentRoomId: null } });
 
-  // Firestore batch (chunked at 500 to respect Firestore limits).
+  // Firestore batch (chunked at 500 to respect Firestore limits). Track which room
+  // chunks failed so the caller can distinguish a fully-committed cascade from a
+  // partial one — earlier code returned success even when the second chunk threw.
+  const failedRoomIds = [];
   for (let i = 0; i < batchOps.length; i += 500) {
     const chunk = batchOps.slice(i, i + 500);
     const batch = db.batch();
     for (const op of chunk) {
       batch.set(db.doc(op.path), op.data, { merge: true });
     }
-    await batch.commit();
+    try {
+      await batch.commit();
+    } catch (err) {
+      log.error('evict-suspended-user', 'Batch commit failed', {
+        userId: uid,
+        chunkStart: i,
+        chunkSize: chunk.length,
+        error: err.message,
+      });
+      // Record the room ids in this chunk (the user-doc op has no roomId so skip it).
+      for (const op of chunk) {
+        const m = op.path.match(/^rooms\/(.+)$/);
+        if (m) failedRoomIds.push(m[1]);
+      }
+    }
   }
 
-  // RTDB events fire after Firestore commit so listeners see consistent state.
+  // RTDB events fire only for rooms whose Firestore write actually committed —
+  // emitting `room_closed` for a room that's still OPEN in Firestore would lie
+  // to live clients listening on the RTDB channel.
+  const failedSet = new Set(failedRoomIds);
   for (const evt of rtdbEvents) {
+    if (failedSet.has(evt.roomId)) continue;
     try {
       await rtdb.ref(`rooms/${evt.roomId}/events/lastEvent`).set({
         type: evt.type,
@@ -129,7 +152,12 @@ async function evictSuspendedUser(uid) {
     }
   }
 
-  return { roomsClosed, roomsUpdated };
+  return {
+    roomsClosed,
+    roomsUpdated,
+    partial: failedRoomIds.length > 0,
+    failedRoomIds,
+  };
 }
 
 module.exports = { evictSuspendedUser };

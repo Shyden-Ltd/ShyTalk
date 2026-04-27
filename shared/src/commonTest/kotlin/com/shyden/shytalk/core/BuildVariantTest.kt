@@ -8,25 +8,25 @@ import kotlin.test.assertTrue
 class BuildVariantTest {
     @AfterTest
     fun resetState() {
-        BuildVariant.isLocalEmulator = false
+        BuildVariant.initLocalEmulator(false)
     }
 
     @Test
     fun `defaults to false for production safety`() {
-        BuildVariant.isLocalEmulator = false
+        BuildVariant.initLocalEmulator(false)
         assertFalse(BuildVariant.isLocalEmulator)
     }
 
     @Test
     fun `can be set to true for local emulator builds`() {
-        BuildVariant.isLocalEmulator = true
+        BuildVariant.initLocalEmulator(true)
         assertTrue(BuildVariant.isLocalEmulator)
     }
 
     @Test
     fun `can be toggled back to false`() {
-        BuildVariant.isLocalEmulator = true
-        BuildVariant.isLocalEmulator = false
+        BuildVariant.initLocalEmulator(true)
+        BuildVariant.initLocalEmulator(false)
         assertFalse(BuildVariant.isLocalEmulator)
     }
 }

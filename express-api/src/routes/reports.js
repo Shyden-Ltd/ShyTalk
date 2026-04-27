@@ -28,6 +28,12 @@ const { sendFcmToTokens } = require('../utils/fcm');
 const log = require('../utils/log');
 const { createWarning } = require('./admin-users');
 
+// See admin-users.js for rationale; same caps apply here so a long reason
+// can't sneak in through the report-resolve path and bypass the warn/suspend
+// boundary checks.
+const REASON_MAX_LENGTH = 500;
+const ADMIN_NOTE_MAX_LENGTH = 2000;
+
 /**
  * Remove invalid FCM tokens from admin user docs in Firestore.
  * For each invalid token, finds which admin user doc contains it and removes it.
@@ -319,6 +325,11 @@ router.post('/reports/:id/resolve', async (req, res) => {
     if (requireAdmin(req, res)) return;
 
     const body = req.body;
+    if (body?.reason && body.reason.length > REASON_MAX_LENGTH)
+      return res.status(400).json({ error: `reason exceeds ${REASON_MAX_LENGTH} chars` });
+    if (body?.adminNote && body.adminNote.length > ADMIN_NOTE_MAX_LENGTH)
+      return res.status(400).json({ error: `adminNote exceeds ${ADMIN_NOTE_MAX_LENGTH} chars` });
+
     const action = normaliseAction(body?.action);
     const timestamp = now();
 
@@ -383,6 +394,7 @@ router.post('/reports/:id/resolve', async (req, res) => {
     }
 
     // Suspension action: suspend the reported user
+    let cascade = null;
     if (action === 'suspended') {
       const suspensionDays = body?.suspensionDays ? Number(body.suspensionDays) : 0;
       const canAppeal = body?.canAppeal ?? false;
@@ -413,13 +425,17 @@ router.post('/reports/:id/resolve', async (req, res) => {
           currentRoomId: null,
         });
 
-        // Evict from rooms (fire-and-forget)
-        evictSuspendedUser(reportedUniqueId).catch((err) =>
+        // Awaited (was fire-and-forget) so cascade partial-failure surfaces in
+        // the response and the admin UI can warn about manual cleanup.
+        try {
+          cascade = await evictSuspendedUser(reportedUniqueId);
+        } catch (cascadeErr) {
           log.error('reports', 'Failed to evict suspended user from resolve', {
             userId: reportedUniqueId,
-            error: err.message,
-          }),
-        );
+            error: cascadeErr.message,
+          });
+          cascade = { roomsClosed: 0, roomsUpdated: 0, partial: true, error: cascadeErr.message };
+        }
 
         // Send suspension PM (fire-and-forget)
         sendSystemPm(
@@ -462,7 +478,7 @@ router.post('/reports/:id/resolve', async (req, res) => {
     // Release lock and write audit log in parallel
     await Promise.all([auditWrite, db.doc(`reportLocks/${req.params.id}`).delete()]);
 
-    res.json({ success: true });
+    res.json(cascade ? { success: true, cascade } : { success: true });
   } catch (err) {
     log.error('reports', 'POST /api/reports/:id/resolve failed', {
       reportId: req.params.id,
@@ -478,6 +494,11 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
     if (requireAdmin(req, res)) return;
 
     const body = req.body;
+    if (body?.reason && body.reason.length > REASON_MAX_LENGTH)
+      return res.status(400).json({ error: `reason exceeds ${REASON_MAX_LENGTH} chars` });
+    if (body?.adminNote && body.adminNote.length > ADMIN_NOTE_MAX_LENGTH)
+      return res.status(400).json({ error: `adminNote exceeds ${ADMIN_NOTE_MAX_LENGTH} chars` });
+
     const action = normaliseAction(body?.action);
     const timestamp = now();
 
@@ -539,6 +560,7 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
     }
 
     // Suspension action: suspend the reported user
+    let cascade = null;
     if (action === 'suspended') {
       const suspensionDays = body?.suspensionDays ? Number(body.suspensionDays) : 0;
       const canAppeal = body?.canAppeal ?? false;
@@ -569,12 +591,15 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
           currentRoomId: null,
         });
 
-        evictSuspendedUser(reportedUniqueId).catch((err) =>
+        try {
+          cascade = await evictSuspendedUser(reportedUniqueId);
+        } catch (cascadeErr) {
           log.error('reports', 'Failed to evict suspended user from bulk resolve', {
             userId: reportedUniqueId,
-            error: err.message,
-          }),
-        );
+            error: cascadeErr.message,
+          });
+          cascade = { roomsClosed: 0, roomsUpdated: 0, partial: true, error: cascadeErr.message };
+        }
 
         // Send suspension PM (fire-and-forget)
         sendSystemPm(
@@ -653,7 +678,11 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
       );
     }
 
-    res.json({ success: true, resolved: reports.length });
+    res.json(
+      cascade
+        ? { success: true, resolved: reports.length, cascade }
+        : { success: true, resolved: reports.length },
+    );
   } catch (err) {
     log.error('reports', 'POST /api/reports/resolve-all/:userId failed', {
       userId: req.params.userId,
@@ -848,6 +877,8 @@ router.post('/admin/users/:uniqueId/suspend', async (req, res) => {
 
     const body = req.body;
     if (!body?.reason) return res.status(400).json({ error: 'reason is required' });
+    if (body.reason.length > REASON_MAX_LENGTH)
+      return res.status(400).json({ error: `reason exceeds ${REASON_MAX_LENGTH} chars` });
     if (typeof body.canAppeal !== 'boolean')
       return res.status(400).json({ error: 'canAppeal must be a boolean' });
 
@@ -896,15 +927,19 @@ router.post('/admin/users/:uniqueId/suspend', async (req, res) => {
       ),
     ]);
 
-    // Evict from rooms (fire-and-forget)
-    evictSuspendedUser(req.params.uniqueId).catch((err) =>
+    // Awaited (was fire-and-forget) so cascade partial-failure is visible to admin.
+    let cascade = { roomsClosed: 0, roomsUpdated: 0, partial: false, failedRoomIds: [] };
+    try {
+      cascade = await evictSuspendedUser(req.params.uniqueId);
+    } catch (err) {
       log.error('reports', 'Failed to evict suspended user', {
         userId: req.params.uniqueId,
         error: err.message,
-      }),
-    );
+      });
+      cascade = { ...cascade, partial: true, error: err.message };
+    }
 
-    res.json({ success: true });
+    res.json({ success: true, cascade });
   } catch (err) {
     log.error('reports', 'POST /api/admin/users/:uniqueId/suspend failed', {
       userId: req.params.uniqueId,
@@ -1166,9 +1201,6 @@ router.patch('/appeals/:id', async (req, res) => {
 // HELPERS
 // ══════════════════════════════════════════════════════════════
 
-// evictSuspendedUser was moved to utils/evict-suspended-user.js so admin-users.js
-// and reports.js share one canonical implementation that correctly handles all
-// role cascades (owner → close, host → demote+reseat, etc.).
 const { evictSuspendedUser } = require('../utils/evict-suspended-user');
 
 module.exports = router;

@@ -530,4 +530,102 @@ class AuthViewModelIdentityTest {
             assertFalse(state.isBackendUnreachable, "Stale token mid-flow should not show 'Unable to Connect'")
             assertTrue(authRepo.signedOut, "signOut should be called")
         }
+
+    @Test
+    fun networkError_withIpv6PrefixContaining401_doesNotClearSession() =
+        runTest {
+            val identityRepo =
+                FakeIdentityRepository().apply {
+                    resolveResult = Resource.Error("Connection refused: [2401:db00::34]:8443")
+                }
+            val authRepo =
+                FakeAuthRepository(
+                    firebaseUid = "uid",
+                    isAuthenticated = true,
+                    currentUserEmail = "u@test.com",
+                    providerInfo = "email" to "u@test.com",
+                )
+
+            val vm =
+                AuthViewModel(authRepo, FakeUserRepository(), FakeDeviceRepository(), identityRepo, "device-1", bypassDeviceChecks = true)
+            advanceUntilIdle()
+            vm.resolveAfterExternalSignIn("email", "u@test.com")
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertTrue(state.isBackendUnreachable, "IPv6 prefix containing '2401:' must take the network-error path")
+            assertFalse(authRepo.signedOut, "False-positive 401 match must NOT clear session")
+        }
+
+    @Test
+    fun authError_withRealHttp401InMessage_clearsSession() =
+        runTest {
+            val identityRepo =
+                FakeIdentityRepository().apply {
+                    resolveResult = Resource.Error("HTTP 401 Unauthorized")
+                }
+            val authRepo =
+                FakeAuthRepository(
+                    firebaseUid = "uid",
+                    isAuthenticated = true,
+                    currentUserEmail = "u@test.com",
+                    providerInfo = "email" to "u@test.com",
+                )
+
+            val vm =
+                AuthViewModel(authRepo, FakeUserRepository(), FakeDeviceRepository(), identityRepo, "device-1", bypassDeviceChecks = true)
+            advanceUntilIdle()
+            vm.resolveAfterExternalSignIn("email", "u@test.com")
+            advanceUntilIdle()
+
+            assertTrue(authRepo.signedOut, "Standalone '401' as a word must trigger session clear")
+        }
+
+    @Test
+    fun authError_withTokenRefreshFailedSubstring_clearsSession() =
+        runTest {
+            val identityRepo =
+                FakeIdentityRepository().apply {
+                    resolveResult = Resource.Error("Token refresh failed: revoked")
+                }
+            val authRepo =
+                FakeAuthRepository(
+                    firebaseUid = "uid",
+                    isAuthenticated = true,
+                    currentUserEmail = "u@test.com",
+                    providerInfo = "email" to "u@test.com",
+                )
+
+            val vm =
+                AuthViewModel(authRepo, FakeUserRepository(), FakeDeviceRepository(), identityRepo, "device-1", bypassDeviceChecks = true)
+            advanceUntilIdle()
+            vm.resolveAfterExternalSignIn("email", "u@test.com")
+            advanceUntilIdle()
+
+            assertTrue(authRepo.signedOut, "'Token refresh' substring (iOS API client error) must clear session")
+        }
+
+    @Test
+    fun authError_withNotAuthenticatedSubstring_clearsSession() =
+        runTest {
+            val identityRepo =
+                FakeIdentityRepository().apply {
+                    resolveResult = Resource.Error("Not authenticated")
+                }
+            val authRepo =
+                FakeAuthRepository(
+                    firebaseUid = "uid",
+                    isAuthenticated = true,
+                    currentUserEmail = "u@test.com",
+                    providerInfo = "email" to "u@test.com",
+                )
+
+            val vm =
+                AuthViewModel(authRepo, FakeUserRepository(), FakeDeviceRepository(), identityRepo, "device-1", bypassDeviceChecks = true)
+            advanceUntilIdle()
+            vm.resolveAfterExternalSignIn("email", "u@test.com")
+            advanceUntilIdle()
+
+            assertTrue(authRepo.signedOut, "'Not authenticated' (IosApiClient when no current user) must clear session")
+        }
 }

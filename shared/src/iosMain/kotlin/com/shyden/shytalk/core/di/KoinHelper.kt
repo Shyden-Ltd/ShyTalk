@@ -18,7 +18,7 @@ import org.koin.mp.KoinPlatformTools
  * @param useEmulators If true, connects Firebase to local emulators (localhost).
  */
 fun doInitKoin(useEmulators: Boolean = false) {
-    BuildVariant.isLocalEmulator = useEmulators
+    BuildVariant.initLocalEmulator(useEmulators)
     if (KoinPlatformTools.defaultContext().getOrNull() != null) {
         logI("KoinHelper", "Koin already initialised — skipping")
         return

@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 /**
- * Tests for new admin suggestion routes added in PR #255.
+ * Tests for new admin suggestion routes.
  *
  * Covers:
  *   PATCH  /admin/suggestions/:id              — edit title/description/tags

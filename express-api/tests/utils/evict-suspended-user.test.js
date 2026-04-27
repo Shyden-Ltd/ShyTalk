@@ -30,10 +30,11 @@
  */
 
 const mockDocUpdate = jest.fn().mockResolvedValue();
+const mockDocSet = jest.fn().mockResolvedValue();
 const mockBatchSet = jest.fn();
 const mockBatchCommit = jest.fn().mockResolvedValue();
 const mockBatch = jest.fn(() => ({ set: mockBatchSet, commit: mockBatchCommit }));
-const mockDoc = jest.fn(() => ({ update: mockDocUpdate }));
+const mockDoc = jest.fn(() => ({ update: mockDocUpdate, set: mockDocSet }));
 // Collection chain returns a self-referential proxy so .where().where().get() etc.
 // all resolve. queryDocs is mocked separately so the actual return is irrelevant.
 const mockCollection = jest.fn(() => {
@@ -81,6 +82,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockDocUpdate.mockReset();
   mockDocUpdate.mockResolvedValue();
+  mockDocSet.mockReset();
+  mockDocSet.mockResolvedValue();
   mockBatchSet.mockReset();
   mockBatchCommit.mockReset();
   mockBatchCommit.mockResolvedValue();
@@ -403,7 +406,9 @@ describe('evictSuspendedUser — multi-room cascade', () => {
     mockRoomsQueries({ participantRooms: [], ownerRooms: [] });
     await evictSuspendedUser('lonely-user');
     expect(mockDoc).toHaveBeenCalledWith('users/lonely-user');
-    expect(mockDocUpdate).toHaveBeenCalledWith({ currentRoomId: null });
+    // set+merge instead of update — the user doc may have been deleted between
+    // the suspension lookup and cascade run, and update() throws on missing docs.
+    expect(mockDocSet).toHaveBeenCalledWith({ currentRoomId: null }, { merge: true });
   });
 
   it('skips RTDB room_node removal for non-owner cascade (only events fire)', async () => {
@@ -494,5 +499,68 @@ describe('evictSuspendedUser — RTDB failure tolerance', () => {
       expect.stringContaining('Failed to remove'),
       expect.any(Object),
     );
+  });
+
+  // ─── Partial-failure tests (T1, T5) ────────────────────────────
+  // The route layer surfaces `partial`/`failedRoomIds` from the cascade so an
+  // admin sees that some rooms still need manual cleanup. These tests pin the
+  // cascade's contract so a refactor that drops the failed-room tracking
+  // shows up immediately.
+
+  describe('partial failure surfacing', () => {
+    it('reports partial=true with failedRoomIds when a batch.commit() rejects', async () => {
+      const ownerRoom = {
+        id: 'room-1',
+        ownerId: 'banned',
+        state: 'ACTIVE',
+        participantIds: ['banned', 'a'],
+        hostIds: [],
+        seats: {},
+      };
+      const hostRoom = {
+        id: 'room-2',
+        ownerId: 'someone-else',
+        state: 'ACTIVE',
+        participantIds: ['someone-else', 'banned'],
+        hostIds: ['banned'],
+        seats: {},
+      };
+      mockRoomsQueries({ participantRooms: [ownerRoom, hostRoom], ownerRooms: [ownerRoom] });
+      // Single chunk (rooms+user-doc < 500 ops) — first commit rejects so both
+      // rooms end up in failedRoomIds; RTDB events for those rooms must NOT fire.
+      mockBatchCommit.mockRejectedValueOnce(new Error('Firestore RESOURCE_EXHAUSTED'));
+
+      const result = await evictSuspendedUser('banned');
+
+      expect(result.partial).toBe(true);
+      expect(result.failedRoomIds).toEqual(expect.arrayContaining(['room-1', 'room-2']));
+      // RTDB writes must be skipped for failed rooms — emitting room_closed/updated
+      // for a room whose Firestore write rolled back would lie to live clients.
+      expect(mockRtdbSet).not.toHaveBeenCalled();
+      expect(mockRtdbRemove).not.toHaveBeenCalled();
+    });
+
+    it('returns partial=false when zero-rooms branch succeeds via set+merge (not update)', async () => {
+      mockRoomsQueries({ participantRooms: [], ownerRooms: [] });
+
+      const result = await evictSuspendedUser('lonely');
+
+      expect(result).toEqual({
+        roomsClosed: 0,
+        roomsUpdated: 0,
+        partial: false,
+        failedRoomIds: [],
+      });
+      // Reverted from update() → set+merge so a deleted user doc doesn't throw.
+      expect(mockDocSet).toHaveBeenCalledWith({ currentRoomId: null }, { merge: true });
+      expect(mockDocUpdate).not.toHaveBeenCalled();
+    });
+
+    it('propagates set+merge rejection from the zero-rooms branch to the caller', async () => {
+      mockRoomsQueries({ participantRooms: [], ownerRooms: [] });
+      mockDocSet.mockRejectedValueOnce(new Error('Firestore unavailable'));
+
+      await expect(evictSuspendedUser('lonely')).rejects.toThrow('Firestore unavailable');
+    });
   });
 });
