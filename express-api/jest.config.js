@@ -14,7 +14,7 @@ module.exports = {
   //   *not* slack for slow test logic — it's slack for OS-level resource
   //   contention that's invisible to the test code itself.
   maxWorkers: 2,
-  workerIdleMemoryLimit: '256MB',
+  workerIdleMemoryLimit: '1GB',
   testTimeout: 10000,
   restoreMocks: true,
   clearMocks: true,
