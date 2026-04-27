@@ -15,7 +15,12 @@ kotlin {
 
     android {
         namespace = "com.shyden.shytalk.shared"
-        compileSdk = 36
+        compileSdk {
+            version =
+                release(36) {
+                    minorApiLevel = 1
+                }
+        }
         minSdk = 28
 
         compilerOptions {
