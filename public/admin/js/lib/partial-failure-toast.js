@@ -5,10 +5,12 @@
  *
  * The shape locked here is the contract emitted by
  * /api/reports/:id/resolve and /api/reports/resolve-all/:userId in
- * express-api/src/routes/reports.js (Pass-9..Pass-13).
+ * express-api/src/routes/reports.js. The MOD_ERROR token registry exported
+ * from that file is the source of truth for the `error` strings.
  *
- * Order matters: action-blocking failures first, audit (compliance) next,
- * PMs (delivery) last — so the admin reads the most actionable item first.
+ * Order: action-blocking failures (warning/suspension/cascade) first,
+ * compliance/lock middle, delivery (PMs) last — so the admin reads the
+ * most actionable item first.
  *
  * UMD-ish module: works as a CommonJS require() in tests AND as a browser
  * <script> tag (attaches to window).

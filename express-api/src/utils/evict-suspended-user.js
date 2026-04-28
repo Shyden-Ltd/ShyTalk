@@ -195,4 +195,29 @@ async function evictSuspendedUser(uid) {
   };
 }
 
-module.exports = { evictSuspendedUser };
+/**
+ * Build the on-wire cascade contract from a thrown evictSuspendedUser error.
+ * Centralises four previously-duplicated literals across reports.js + admin-users.js
+ * so the response shape can't drift (rtdbEventsFailed was missing on two sites,
+ * causing inconsistent contracts between the resolve and suspend routes).
+ *
+ * Always returns the full superset shape — fields that are unknown given a
+ * pre-room-loop throw default to safe zero/false values. The caller decides
+ * the `error` token by passing it in (kept as an arg so different routes can
+ * reference their own MOD_ERROR.CASCADE_FAILED literal without circular deps).
+ */
+function buildCascadeFailure(err, errorToken) {
+  // Boolean() coerces the && short-circuit so userDocFailed is always strictly
+  // boolean (a null err would otherwise leak `null` into the response).
+  return {
+    roomsClosed: 0,
+    roomsUpdated: 0,
+    partial: true,
+    failedRoomIds: [],
+    userDocFailed: Boolean(err && err.phase === 'user_doc'),
+    rtdbEventsFailed: 0,
+    error: errorToken,
+  };
+}
+
+module.exports = { evictSuspendedUser, buildCascadeFailure };

@@ -945,6 +945,7 @@ router.post('/user/:uniqueId/suspend', async (req, res) => {
       partial: false,
       failedRoomIds: [],
       userDocFailed: false,
+      rtdbEventsFailed: 0,
     };
     try {
       cascade = await evictSuspendedUser(req.params.uniqueId);
@@ -953,17 +954,10 @@ router.post('/user/:uniqueId/suspend', async (req, res) => {
         uniqueId: req.params.uniqueId,
         error: err.message,
       });
-      // Stable error token instead of err.message — Firestore SDK errors can
-      // include project paths / stack frames. Full message logged above.
-      // userDocFailed reflects the phase tag from evict-suspended-user.js:
-      // initial-query throws have no phase (false); zero-rooms user-doc
-      // set+merge failures are tagged 'user_doc' (true).
-      cascade = {
-        ...cascade,
-        partial: true,
-        userDocFailed: err.phase === 'user_doc',
-        error: 'cascade_failed',
-      };
+      // 'cascade_failed' is the same token MOD_ERROR.CASCADE_FAILED in reports.js
+      // exports; admin-users.js doesn't import that registry to avoid a circular
+      // dep, but the wire format is identical.
+      cascade = buildCascadeFailure(err, 'cascade_failed');
     }
 
     res.json({ success: true, cascade });
@@ -1235,7 +1229,10 @@ async function liftAutoAppliedBans(uniqueId, adminUid) {
 
 // evictSuspendedUser is exported from utils so reports.js + admin-users.js share
 // one canonical implementation. See utils/evict-suspended-user.js for behaviour.
-const { evictSuspendedUser } = require('../utils/evict-suspended-user');
+// buildCascadeFailure unifies the on-wire cascade contract across all 4 sites
+// (Pass-17: previously two literals omitted rtdbEventsFailed and used a stale
+// 'cascade_failed' string token, drifting from the resolve routes).
+const { evictSuspendedUser, buildCascadeFailure } = require('../utils/evict-suspended-user');
 
 // ═══════════════════════════════════════════════════════════════════
 // Admin Auth Management (PIN lockout, biometric keys, OTP metrics)

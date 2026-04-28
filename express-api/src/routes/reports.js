@@ -51,10 +51,10 @@ const EVIDENCE_URLS_MAX_COUNT = 10;
 const EVIDENCE_URL_MAX_LENGTH = 500;
 
 // Stable error tokens for the moderation partial-failure contract. Centralised
-// so the admin client (public/admin/js/tabs/reports.js) and i18n strings can
-// reference one source of truth — a typo or rename in either handler would
-// otherwise silently break the consumer's branch on the response body. Keys
-// suffix `_FAILED` to mirror the value tokens; locked by a snapshot test.
+// so the admin client (public/admin/js/tabs/reports.js) references one source of
+// truth — a typo or rename in either handler would otherwise silently break the
+// consumer's branch on the response body. Keys suffix `_FAILED` to mirror the
+// value tokens; locked by a snapshot test.
 const MOD_ERROR = Object.freeze({
   WARNING_CREATE_FAILED: 'warning_create_failed',
   SUSPENSION_UPDATE_FAILED: 'suspension_update_failed',
@@ -607,18 +607,7 @@ router.post('/reports/:id/resolve', async (req, res) => {
             userId: reportedUniqueId,
             error: cascadeErr.message,
           });
-          // userDocFailed reads `cascadeErr.phase` set by evict-suspended-user.js
-          // when its user-doc set+merge throws; initial-query throws have no
-          // phase tag and surface as userDocFailed:false + partial:true.
-          cascade = {
-            roomsClosed: 0,
-            roomsUpdated: 0,
-            partial: true,
-            failedRoomIds: [],
-            userDocFailed: cascadeErr.phase === 'user_doc',
-            rtdbEventsFailed: 0,
-            error: MOD_ERROR.CASCADE_FAILED,
-          };
+          cascade = buildCascadeFailure(cascadeErr, MOD_ERROR.CASCADE_FAILED);
         }
 
         suspendPmPromise = sendSystemPm(
@@ -872,15 +861,7 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
             userId: reportedUniqueId,
             error: cascadeErr.message,
           });
-          cascade = {
-            roomsClosed: 0,
-            roomsUpdated: 0,
-            partial: true,
-            failedRoomIds: [],
-            userDocFailed: cascadeErr.phase === 'user_doc',
-            rtdbEventsFailed: 0,
-            error: MOD_ERROR.CASCADE_FAILED,
-          };
+          cascade = buildCascadeFailure(cascadeErr, MOD_ERROR.CASCADE_FAILED);
         }
 
         suspendPmPromise = sendSystemPm(
@@ -1299,6 +1280,7 @@ router.post('/admin/users/:uniqueId/suspend', async (req, res) => {
       partial: false,
       failedRoomIds: [],
       userDocFailed: false,
+      rtdbEventsFailed: 0,
     };
     try {
       cascade = await evictSuspendedUser(req.params.uniqueId);
@@ -1307,15 +1289,7 @@ router.post('/admin/users/:uniqueId/suspend', async (req, res) => {
         userId: req.params.uniqueId,
         error: err.message,
       });
-      // Stable error token instead of err.message; full message is logged above.
-      // userDocFailed reflects the phase tag from evict-suspended-user.js (initial
-      // queries: false; zero-rooms user-doc set+merge failure: true).
-      cascade = {
-        ...cascade,
-        partial: true,
-        userDocFailed: err.phase === 'user_doc',
-        error: 'cascade_failed',
-      };
+      cascade = buildCascadeFailure(err, MOD_ERROR.CASCADE_FAILED);
     }
 
     res.json({ success: true, cascade });
@@ -1580,7 +1554,7 @@ router.patch('/appeals/:id', async (req, res) => {
 // HELPERS
 // ══════════════════════════════════════════════════════════════
 
-const { evictSuspendedUser } = require('../utils/evict-suspended-user');
+const { evictSuspendedUser, buildCascadeFailure } = require('../utils/evict-suspended-user');
 
 module.exports = router;
 // Attach the MOD_ERROR token table to the exported router so the

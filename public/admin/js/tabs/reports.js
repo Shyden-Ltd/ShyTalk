@@ -729,10 +729,9 @@ async function resolveReport(reportedUserId, resolveAll) {
       });
     }
 
-    // Pass-9..Pass-13 partial-failure contract — see public/admin/js/lib/
-    // partial-failure-toast.js for the full key list and ordering rationale.
-    // Extracted to a shared lib so it's testable AND reusable by future
-    // admin-side consumers (bulk-warn, bulk-unsuspend, etc.).
+    // Partial-failure contract — see public/admin/js/lib/partial-failure-toast.js
+    // for the full key list and ordering rationale. Extracted to a shared lib so
+    // it's testable AND reusable by future admin consumers (bulk-warn, etc.).
     const partialMessage = window.PartialFailureToast.buildPartialFailureMessage(result);
     if (partialMessage) {
       showToast(partialMessage, 'error');
