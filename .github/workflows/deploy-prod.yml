@@ -220,7 +220,7 @@ jobs:
     name: Deploy iOS to App Store
     needs: [validate-release]
     if: inputs.ios
-    runs-on: macos-latest
+    runs-on: [self-hosted, macOS, ARM64, shytalk-mac]
     # Bumped from 45 -> 90 on 2026-04-28: K/Native linkReleaseFrameworkIosArm64
     # plus xcodebuild archive plus App Store upload total ~50 min worst case
     # on slow days; 90 gives runner-pool-slowdown headroom.
@@ -407,7 +407,7 @@ jobs:
     if: |
       always() &&
       needs.deploy-ios-prod.result == 'success'
-    runs-on: macos-latest
+    runs-on: [self-hosted, macOS, ARM64, shytalk-mac]
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6

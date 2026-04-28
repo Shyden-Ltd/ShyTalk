@@ -189,7 +189,7 @@ jobs:
   distribute-ios:
     name: Distribute iOS to TestFlight
     if: inputs.ios-testers
-    runs-on: macos-15
+    runs-on: [self-hosted, macOS, ARM64, shytalk-mac]
     # Bumped from 45 -> 90 on 2026-04-28: K/Native linkReleaseFrameworkIosArm64
     # has been taking 24-29 min on the macos-15 runner pool (was ~10 min in
     # mid-April). Plus xcodebuild archive ~15-20 min + pod install ~3 min +

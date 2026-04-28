@@ -26,14 +26,28 @@ runs:
     - name: Select Xcode ${{ inputs.xcode-version }}
       shell: bash
       run: |
+        # GitHub-hosted runners ship Xcode at /Applications/Xcode_<version>.app,
+        # self-hosted runners typically have /Applications/Xcode.app (no suffix).
+        # Try the versioned path first, fall back to the unversioned one if its
+        # CFBundleShortVersionString matches the requested major version.
         XCODE=$(ls -d /Applications/Xcode_${{ inputs.xcode-version }}*.app 2>/dev/null | head -1)
+        if [ -z "$XCODE" ] && [ -d /Applications/Xcode.app ]; then
+          ACTUAL=$(defaults read /Applications/Xcode.app/Contents/Info CFBundleShortVersionString 2>/dev/null || echo "")
+          if [[ "$ACTUAL" == "${{ inputs.xcode-version }}" || "$ACTUAL" == "${{ inputs.xcode-version }}".* ]]; then
+            XCODE=/Applications/Xcode.app
+          fi
+        fi
         if [ -z "$XCODE" ]; then
           echo "Available Xcode versions:"
-          ls /Applications/Xcode*.app
+          ls /Applications/Xcode*.app 2>/dev/null || echo "(none)"
           echo "::error::Xcode ${{ inputs.xcode-version }} not found on this runner"
           exit 1
         fi
-        sudo xcode-select -s "$XCODE/Contents/Developer"
+        # Use DEVELOPER_DIR env var instead of `sudo xcode-select -s`. The env
+        # var is honoured by xcodebuild / xcrun / clang; setting it via
+        # GITHUB_ENV means subsequent steps inherit it. Avoids needing
+        # passwordless sudo on self-hosted runners.
+        echo "DEVELOPER_DIR=$XCODE/Contents/Developer" >> "$GITHUB_ENV"
         echo "Selected: $XCODE"
 
     - name: Install Apple API key
