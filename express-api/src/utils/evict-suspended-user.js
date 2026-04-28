@@ -43,7 +43,14 @@ async function evictSuspendedUser(uid) {
   if (rooms.length === 0) {
     // set+merge (not update) so a missing user doc — possible if the user was deleted
     // between suspension lookup and cascade — doesn't throw "no document to update".
-    await db.doc(`users/${uid}`).set({ currentRoomId: null }, { merge: true });
+    // Tag any thrown error with phase: 'user_doc' so the route's catch can set
+    // userDocFailed: true accurately rather than reporting a generic cascade abort.
+    try {
+      await db.doc(`users/${uid}`).set({ currentRoomId: null }, { merge: true });
+    } catch (err) {
+      err.phase = 'user_doc';
+      throw err;
+    }
     return {
       roomsClosed: 0,
       roomsUpdated: 0,

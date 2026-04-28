@@ -59,6 +59,10 @@ jest.mock('../../src/utils/log', () => ({
 jest.mock('../../src/middleware/auth', () => ({
   requireAdmin: jest.fn(() => false),
   clearSuspensionCache: jest.fn(),
+  // Identity resolver — IDOR fix re-resolves uniqueId from reportedUserId
+  // before the audit log + cascade. Default to identity so existing test
+  // fixtures using `reportedUserId: 'X'` continue to map to `'X'`.
+  resolveUniqueId: jest.fn(async (uid) => uid || null),
 }));
 
 jest.mock('../../src/utils/system-pm', () => ({

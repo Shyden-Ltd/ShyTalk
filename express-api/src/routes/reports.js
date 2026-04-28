@@ -258,12 +258,23 @@ router.get('/reports', async (req, res) => {
     // user's profile in the admin moderation queue.
     const reportedUserIds = [...new Set(filtered.map((r) => r.reportedUserId).filter(Boolean))];
     const reportedUniqueIdMap = {}; // reportedUserId → server-resolved reportedUserUniqueId
-    await Promise.all(
-      reportedUserIds.map(async (uid) => {
-        const resolved = await resolveUniqueId(uid);
-        if (resolved) reportedUniqueIdMap[uid] = resolved;
-      }),
+    // Promise.allSettled (not Promise.all) so a single transient lookup failure
+    // doesn't 500 the entire moderation queue. Reports whose target user can't
+    // be resolved render with reportedUser: null instead.
+    const resolutionResults = await Promise.allSettled(
+      reportedUserIds.map((uid) => resolveUniqueId(uid)),
     );
+    resolutionResults.forEach((result, idx) => {
+      const uid = reportedUserIds[idx];
+      if (result.status === 'fulfilled' && result.value) {
+        reportedUniqueIdMap[uid] = result.value;
+      } else if (result.status === 'rejected') {
+        log.warn('reports', 'resolveUniqueId failed during list enrichment', {
+          reportedUserId: uid,
+          error: result.reason?.message,
+        });
+      }
+    });
     const reportedUniqueIds = [...new Set(Object.values(reportedUniqueIdMap))];
     const reporterIds = [...new Set(filtered.map((r) => r.reporterId).filter(Boolean))];
 
@@ -304,14 +315,22 @@ router.get('/reports', async (req, res) => {
       lockMap[lock.id] = lock;
     }
 
-    // Enrich reports
-    const enriched = filtered.map((r) => ({
-      ...r,
-      evidenceUrls: r.evidenceUrls || [],
-      reportedUser: userMap[r.reportedUserId] || null,
-      reporter: reporterMap[r.reporterId] || null,
-      lock: lockMap[r.reportedUserId] || null,
-    }));
+    // Enrich reports. Strip the stored `reportedUserUniqueId` (could be
+    // client-injected on pre-IDOR-fix reports) and replace with the
+    // server-resolved value from `reportedUniqueIdMap`. The admin UI keys
+    // its "navigate to user" action off this field, so leaking the stored
+    // value would let a malicious reporter steer admins to a wrong profile.
+    const enriched = filtered.map((r) => {
+      const { reportedUserUniqueId: _stored, ...rest } = r;
+      return {
+        ...rest,
+        reportedUserUniqueId: reportedUniqueIdMap[r.reportedUserId] ?? null,
+        evidenceUrls: r.evidenceUrls || [],
+        reportedUser: userMap[r.reportedUserId] || null,
+        reporter: reporterMap[r.reporterId] || null,
+        lock: lockMap[r.reportedUserId] || null,
+      };
+    });
 
     // Group by reported user for pending reports
     if (statusFilter === 'pending') {
@@ -324,10 +343,12 @@ router.get('/reports', async (req, res) => {
             displayName: r.reportedUser?.displayName ?? r.reportedUser?.display_name ?? null,
             profilePhotoUrl:
               r.reportedUser?.profilePhotoUrl ?? r.reportedUser?.profile_photo_url ?? null,
+            // Drop the `r.reportedUserUniqueId` fallback — it could be
+            // client-injected on pre-IDOR-fix reports.
             uniqueId:
               r.reportedUser?.uniqueId ??
               r.reportedUser?.unique_id ??
-              r.reportedUserUniqueId ??
+              reportedUniqueIdMap[r.reportedUserId] ??
               null,
             warningCount: r.reportedUser?.warningCount ?? r.reportedUser?.warning_count ?? 0,
             isSuspended: r.reportedUser?.isSuspended ?? r.reportedUser?.is_suspended ?? false,
@@ -353,8 +374,12 @@ router.get('/reports', async (req, res) => {
           displayName: r.reportedUser?.displayName ?? r.reportedUser?.display_name ?? null,
           profilePhotoUrl:
             r.reportedUser?.profilePhotoUrl ?? r.reportedUser?.profile_photo_url ?? null,
+          // Drop the `r.reportedUserUniqueId` fallback (IDOR sliver, see comment above).
           uniqueId:
-            r.reportedUser?.uniqueId ?? r.reportedUser?.unique_id ?? r.reportedUserUniqueId ?? null,
+            r.reportedUser?.uniqueId ??
+            r.reportedUser?.unique_id ??
+            reportedUniqueIdMap[r.reportedUserId] ??
+            null,
           warningCount: r.reportedUser?.warningCount ?? r.reportedUser?.warning_count ?? 0,
           isSuspended: r.reportedUser?.isSuspended ?? r.reportedUser?.is_suspended ?? false,
           gcsDisplayScore: r.reportedUser?.gcsDisplayScore ?? 100,
@@ -418,12 +443,20 @@ router.post('/reports/:id/resolve', async (req, res) => {
       resolvedBy: req.auth.uid,
     });
 
-    // Audit log (fire-and-forget)
+    // Audit log (fire-and-forget). targetUserId is logged as the canonical
+    // uniqueId so forensic queries by uniqueId surface this entry, matching
+    // the convention in admin-economy.js / admin-temp-id.js / admin-users.js.
+    // Falls back to reportedUserId only on the dismissed action where we
+    // intentionally skipped the cascade-target resolution.
+    const auditTargetUniqueId =
+      resolvedTargetUniqueId ??
+      (await resolveUniqueId(report.reportedUserId)) ??
+      report.reportedUserId;
     const auditWrite = db.doc(`adminAuditLog/${generateId()}`).set(
       {
         adminId: req.auth.uid,
         action: 'RESOLVE_REPORT',
-        targetUserId: report.reportedUserId,
+        targetUserId: auditTargetUniqueId,
         details: `Report ${req.params.id}: ${action}`,
         createdAt: timestamp,
       },
@@ -515,19 +548,18 @@ router.post('/reports/:id/resolve', async (req, res) => {
           // error strings can include project/document paths and stack frames,
           // which we don't want to ship over the wire even to admin clients.
           // The full message is already logged server-side above.
-          // userDocFailed: false — the route's preceding `users/${...}.update(...)`
-          // committed before this catch (lines around the suspension block);
-          // evictSuspendedUser only throws from its initial queries, before any
-          // user-doc write. Reporting userDocFailed:true would mislead the admin
-          // into retrying an already-suspended user. partial:true reflects the
-          // rooms cascade — failedRoomIds is empty because the cascade aborted
-          // before producing a per-room failure list.
+          //
+          // userDocFailed comes from the phase tag on the thrown error. The
+          // zero-rooms branch in evict-suspended-user.js tags its user-doc
+          // set+merge failure with `phase: 'user_doc'`; the initial-query
+          // throws have no phase tag, so we report userDocFailed: false and
+          // partial: true (rooms cascade aborted before producing detail).
           cascade = {
             roomsClosed: 0,
             roomsUpdated: 0,
             partial: true,
             failedRoomIds: [],
-            userDocFailed: false,
+            userDocFailed: cascadeErr.phase === 'user_doc',
             error: 'cascade_failed',
           };
         }
@@ -596,6 +628,12 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
 
     const action = normaliseAction(body?.action);
     const timestamp = now();
+
+    // Server-trusted uniqueId for the audit log. Hoisted here so the
+    // RESOLVE_ALL_REPORTS audit entry below logs the canonical uniqueId
+    // (matching the convention in admin-economy.js / admin-users.js etc.)
+    // rather than the Firebase Auth UID.
+    const auditTargetUniqueId = (await resolveUniqueId(req.params.userId)) ?? req.params.userId;
 
     // Fetch all pending reports for this user
     const reports = await queryDocs(
@@ -706,19 +744,18 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
           // error strings can include project/document paths and stack frames,
           // which we don't want to ship over the wire even to admin clients.
           // The full message is already logged server-side above.
-          // userDocFailed: false — the route's preceding `users/${...}.update(...)`
-          // committed before this catch (lines around the suspension block);
-          // evictSuspendedUser only throws from its initial queries, before any
-          // user-doc write. Reporting userDocFailed:true would mislead the admin
-          // into retrying an already-suspended user. partial:true reflects the
-          // rooms cascade — failedRoomIds is empty because the cascade aborted
-          // before producing a per-room failure list.
+          //
+          // userDocFailed comes from the phase tag on the thrown error. The
+          // zero-rooms branch in evict-suspended-user.js tags its user-doc
+          // set+merge failure with `phase: 'user_doc'`; the initial-query
+          // throws have no phase tag, so we report userDocFailed: false and
+          // partial: true (rooms cascade aborted before producing detail).
           cascade = {
             roomsClosed: 0,
             roomsUpdated: 0,
             partial: true,
             failedRoomIds: [],
-            userDocFailed: false,
+            userDocFailed: cascadeErr.phase === 'user_doc',
             error: 'cascade_failed',
           };
         }
@@ -777,7 +814,7 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
         {
           adminId: req.auth.uid,
           action: 'RESOLVE_ALL_REPORTS',
-          targetUserId: req.params.userId,
+          targetUserId: auditTargetUniqueId,
           details: `Resolved ${reports.length} reports: ${action}`,
           createdAt: timestamp,
         },
@@ -1065,10 +1102,14 @@ router.post('/admin/users/:uniqueId/suspend', async (req, res) => {
         error: err.message,
       });
       // Stable error token instead of err.message; full message is logged above.
-      // userDocFailed: false — the route already committed the suspension user-doc
-      // update before evictSuspendedUser was called; this catch only fires when
-      // evictSuspendedUser's initial queries throw (rooms cascade only).
-      cascade = { ...cascade, partial: true, userDocFailed: false, error: 'cascade_failed' };
+      // userDocFailed reflects the phase tag from evict-suspended-user.js (initial
+      // queries: false; zero-rooms user-doc set+merge failure: true).
+      cascade = {
+        ...cascade,
+        partial: true,
+        userDocFailed: err.phase === 'user_doc',
+        error: 'cascade_failed',
+      };
     }
 
     res.json({ success: true, cascade });
