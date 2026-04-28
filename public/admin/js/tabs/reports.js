@@ -729,9 +729,10 @@ async function resolveReport(reportedUserId, resolveAll) {
       });
     }
 
-    // Pass-9/10 partial-failure contract: surface every failed sub-action so
+    // Pass-9/10/11 partial-failure contract: surface every failed sub-action so
     // the admin can retry individually instead of seeing a green toast that
-    // lies. Order matters — show failures first so they aren't buried.
+    // lies. Order: action-blocking failures first, audit (compliance) next,
+    // PMs (delivery) last.
     const partialFailures = [];
     if (result.warning?.failed) partialFailures.push('warning was NOT applied');
     if (result.suspension?.failed) partialFailures.push('suspension was NOT applied');
@@ -742,11 +743,12 @@ async function resolveReport(reportedUserId, resolveAll) {
       partialFailures.push(`room cascade partial — ${detail}`);
     }
     if (result.reports?.failed > 0) {
-      partialFailures.push(`${result.reports.failed}/${result.reports.failed + result.reports.committed} reports did not commit`);
+      const total = result.reports.total ?? (result.reports.failed + (result.reports.committed ?? 0));
+      partialFailures.push(`${result.reports.failed}/${total} reports did not commit`);
     }
     if (result.auditLog?.failed) partialFailures.push('audit log failed — escalate to ops');
     if (result.pms?.failed > 0) {
-      partialFailures.push(`${result.pms.failed}/${result.pms.total} reporter PMs failed`);
+      partialFailures.push(`${result.pms.failed}/${result.pms.total ?? '?'} PMs failed`);
     }
 
     if (partialFailures.length > 0) {

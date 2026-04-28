@@ -53,14 +53,23 @@ const EVIDENCE_URL_MAX_LENGTH = 500;
 // Stable error tokens for the moderation partial-failure contract. Centralised
 // so the admin client (public/admin/js/tabs/reports.js) and i18n strings can
 // reference one source of truth — a typo or rename in either handler would
-// otherwise silently break the consumer's branch on the response body.
+// otherwise silently break the consumer's branch on the response body. Keys
+// suffix `_FAILED` to mirror the value tokens; locked by a snapshot test.
 const MOD_ERROR = Object.freeze({
-  WARNING_CREATE: 'warning_create_failed',
-  SUSPENSION_UPDATE: 'suspension_update_failed',
-  CASCADE: 'cascade_failed',
-  AUDIT_WRITE: 'audit_write_failed',
-  REPORTS_COMMIT: 'reports_commit_failed',
+  WARNING_CREATE_FAILED: 'warning_create_failed',
+  SUSPENSION_UPDATE_FAILED: 'suspension_update_failed',
+  CASCADE_FAILED: 'cascade_failed',
+  AUDIT_WRITE_FAILED: 'audit_write_failed',
+  REPORTS_COMMIT_FAILED: 'reports_commit_failed',
 });
+
+// Wrap a Firestore .set() invocation so a synchronous throw (bad path, mock
+// quirks) becomes a rejected promise instead of bubbling to the outer route
+// catch — which would 500 the response after state has already committed.
+// `setOp` is a thunk that returns the .set() promise. Always returns a promise.
+function safeAuditSet(setOp, onFailure) {
+  return Promise.resolve().then(setOp).catch(onFailure);
+}
 
 /**
  * Remove invalid FCM tokens from admin user docs in Firestore.
@@ -477,26 +486,38 @@ router.post('/reports/:id/resolve', async (req, res) => {
     // Fire-and-forget so a Firestore throw doesn't 500 a fully-applied
     // moderation action. The promise is awaited later — but only via .catch —
     // so the failure becomes a flag in the response, never an upstream throw.
+    // safeAuditSet also absorbs synchronous throws (bad path, mocking quirks)
+    // that would otherwise bypass the promise chain and bubble up.
     let auditLogFailed = false;
-    const auditPromise = db
-      .doc(`adminAuditLog/${generateId()}`)
-      .set(
-        {
-          adminId: req.auth.uid,
-          action: 'RESOLVE_REPORT',
-          targetUserId: auditTargetUniqueId,
-          details: `Report ${req.params.id}: ${action}`,
-          createdAt: timestamp,
-        },
-        { merge: true },
-      )
-      .catch((err) => {
+    const auditPromise = safeAuditSet(
+      () =>
+        db.doc(`adminAuditLog/${generateId()}`).set(
+          {
+            adminId: req.auth.uid,
+            action: 'RESOLVE_REPORT',
+            targetUserId: auditTargetUniqueId,
+            details: `Report ${req.params.id}: ${action}`,
+            createdAt: timestamp,
+          },
+          { merge: true },
+        ),
+      (err) => {
         log.error('reports', 'Failed to write RESOLVE_REPORT audit log', {
           reportId: req.params.id,
           error: err?.message ?? String(err),
         });
         auditLogFailed = true;
-      });
+      },
+    );
+
+    // PM-failure tracking parallel to the bulk handler. `targetPmFailed`
+    // covers warn/suspend PMs to the moderation target; `reporterPmFailed`
+    // covers the reporter ack PM. Both surface as `pms: { failed, total }`.
+    let targetPmFailed = false;
+    let reporterPmFailed = false;
+    let warnPmPromise = null;
+    let suspendPmPromise = null;
+    let reporterPmPromise = null;
 
     // Warning actions: create warning doc (which deducts GCS)
     let warningFailed = false;
@@ -520,16 +541,16 @@ router.post('/reports/:id/resolve', async (req, res) => {
           adminUniqueId: req.auth.uniqueId,
         });
 
-        // Send warning PM (fire-and-forget)
-        sendSystemPm(
+        warnPmPromise = sendSystemPm(
           report.reportedUserId,
           `\u26a0\ufe0f You have received a warning.\n\nReason: ${warningReason}\n\nRepeated violations may result in suspension.`,
-        ).catch((err) =>
+        ).catch((err) => {
           log.error('reports', 'Failed to send warning PM', {
             userId: report.reportedUserId,
             error: err.message,
-          }),
-        );
+          });
+          targetPmFailed = true;
+        });
       } catch (warnErr) {
         // Report is already marked resolved above; failure here means the
         // warning did NOT land. The admin must see this in the response body
@@ -594,19 +615,20 @@ router.post('/reports/:id/resolve', async (req, res) => {
             partial: true,
             failedRoomIds: [],
             userDocFailed: cascadeErr.phase === 'user_doc',
-            error: MOD_ERROR.CASCADE,
+            error: MOD_ERROR.CASCADE_FAILED,
           };
         }
 
-        sendSystemPm(
+        suspendPmPromise = sendSystemPm(
           report.reportedUserId,
           `Your account has been suspended.\n\nReason: ${report.reason || 'Moderation action'}${canAppeal ? '\n\nYou may submit an appeal.' : ''}`,
-        ).catch((err) =>
+        ).catch((err) => {
           log.error('reports', 'Failed to send suspension PM from resolve', {
             userId: report.reportedUserId,
             error: err.message,
-          }),
-        );
+          });
+          targetPmFailed = true;
+        });
       } catch (susErr) {
         log.error('reports', 'Failed to suspend user from resolve', {
           reportId: req.params.id,
@@ -630,35 +652,49 @@ router.post('/reports/:id/resolve', async (req, res) => {
       } else {
         actionText = 'reviewed';
       }
-      sendSystemPm(
+      reporterPmPromise = sendSystemPm(
         report.reporterId,
         `Your report has been ${actionText}. Thank you for helping keep ShyTalk safe.`,
-      ).catch((err) =>
+      ).catch((err) => {
         log.error('reports', 'Failed to send reporter PM', {
           reporterId: report.reporterId,
           error: err.message,
-        }),
-      );
+        });
+        reporterPmFailed = true;
+      });
     }
 
     // Lock release IS critical-path — admin needs it cleared to take the
     // next moderation action against this user.
     await db.doc(`reportLocks/${req.params.id}`).delete();
 
-    // Resolve the audit-log promise so its outcome (success/.catch flag) is
-    // settled before we build the response. Never throws — .catch absorbs.
-    await auditPromise;
+    // INVARIANT: every promise added here MUST have an absorbing .catch.
+    // Promise.all rejects on first unhandled — would 500 a fully-applied
+    // moderation. Do NOT split this await into multiple — flag mutations
+    // happen inside the .catch handlers and must all settle before
+    // responseBody is built.
+    await Promise.all(
+      [auditPromise, warnPmPromise, suspendPmPromise, reporterPmPromise].filter(Boolean),
+    );
 
     const responseBody = { success: true };
     if (cascade) responseBody.cascade = cascade;
     if (warningFailed) {
-      responseBody.warning = { failed: true, error: MOD_ERROR.WARNING_CREATE };
+      responseBody.warning = { failed: true, error: MOD_ERROR.WARNING_CREATE_FAILED };
     }
     if (suspensionFailed) {
-      responseBody.suspension = { failed: true, error: MOD_ERROR.SUSPENSION_UPDATE };
+      responseBody.suspension = { failed: true, error: MOD_ERROR.SUSPENSION_UPDATE_FAILED };
     }
     if (auditLogFailed) {
-      responseBody.auditLog = { failed: true, error: MOD_ERROR.AUDIT_WRITE };
+      responseBody.auditLog = { failed: true, error: MOD_ERROR.AUDIT_WRITE_FAILED };
+    }
+    const totalSinglePms =
+      (warnPmPromise !== null ? 1 : 0) +
+      (suspendPmPromise !== null ? 1 : 0) +
+      (reporterPmPromise !== null ? 1 : 0);
+    const failedSinglePms = (targetPmFailed ? 1 : 0) + (reporterPmFailed ? 1 : 0);
+    if (failedSinglePms > 0) {
+      responseBody.pms = { failed: failedSinglePms, total: totalSinglePms };
     }
     res.json(responseBody);
   } catch (err) {
@@ -721,6 +757,14 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
       },
     }));
 
+    // Track every PM that targets the suspended/warned user. Reporter PMs are
+    // tracked separately in `pmsFailed`; this flag covers warning + suspension
+    // PMs delivered to the moderation target. Without this the admin saw only
+    // reporter-PM failures and silently lost target-PM delivery info.
+    let targetPmFailed = false;
+    let warnPmPromise = null;
+    let suspendPmPromise = null;
+
     // Apply warning if applicable (uses createWarning to write warning doc + update user)
     let warningFailed = false;
     if (action === 'warned' || action === 'warned_severe') {
@@ -746,16 +790,16 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
           adminUniqueId: req.auth.uniqueId,
         });
 
-        // Send warning PM (fire-and-forget)
-        sendSystemPm(
+        warnPmPromise = sendSystemPm(
           req.params.userId,
           `\u26a0\ufe0f You have received a warning based on multiple reports.\n\nReason: ${warningReason}\n\nRepeated violations may result in suspension.`,
-        ).catch((err) =>
+        ).catch((err) => {
           log.error('reports', 'Failed to send warning PM', {
             userId: req.params.userId,
             error: err.message,
-          }),
-        );
+          });
+          targetPmFailed = true;
+        });
       } catch (warnErr) {
         log.error('reports', 'Failed to create warning from bulk resolve', {
           userId: req.params.userId,
@@ -816,40 +860,41 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
             partial: true,
             failedRoomIds: [],
             userDocFailed: cascadeErr.phase === 'user_doc',
-            error: MOD_ERROR.CASCADE,
+            error: MOD_ERROR.CASCADE_FAILED,
           };
         }
 
-        // Send suspension PM (fire-and-forget)
-        sendSystemPm(
+        suspendPmPromise = sendSystemPm(
           reports[0]?.reportedUserId ?? req.params.userId,
           `Your account has been suspended.\n\nReason: Multiple reports${canAppeal ? '\n\nYou may submit an appeal.' : ''}`,
-        ).catch((err) =>
+        ).catch((err) => {
           log.error('reports', 'Failed to send suspension PM from bulk resolve', {
             userId: req.params.userId,
             error: err.message,
-          }),
-        );
+          });
+          targetPmFailed = true;
+        });
 
-        suspendAuditPromise = db
-          .doc(`adminAuditLog/${generateId()}`)
-          .set(
-            {
-              adminId: req.auth.uid,
-              action: 'SUSPEND',
-              targetUserId: reportedUniqueId,
-              details: `Suspended via bulk resolve (${reports.length} reports)`,
-              createdAt: timestamp,
-            },
-            { merge: true },
-          )
-          .catch((err) => {
+        suspendAuditPromise = safeAuditSet(
+          () =>
+            db.doc(`adminAuditLog/${generateId()}`).set(
+              {
+                adminId: req.auth.uid,
+                action: 'SUSPEND',
+                targetUserId: reportedUniqueId,
+                details: `Suspended via bulk resolve (${reports.length} reports)`,
+                createdAt: timestamp,
+              },
+              { merge: true },
+            ),
+          (err) => {
             log.error('reports', 'Failed to write suspension audit log from bulk resolve', {
               userId: reportedUniqueId,
               error: err.message,
             });
             suspendAuditFailed = true;
-          });
+          },
+        );
       } catch (susErr) {
         log.error('reports', 'Failed to suspend user from bulk resolve', {
           userId: req.params.userId,
@@ -887,25 +932,26 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
     }
 
     let bulkAuditFailed = false;
-    const bulkAuditPromise = db
-      .doc(`adminAuditLog/${generateId()}`)
-      .set(
-        {
-          adminId: req.auth.uid,
-          action: 'RESOLVE_ALL_REPORTS',
-          targetUserId: auditTargetUniqueId,
-          details: `Resolved ${reports.length} reports: ${action}`,
-          createdAt: timestamp,
-        },
-        { merge: true },
-      )
-      .catch((err) => {
+    const bulkAuditPromise = safeAuditSet(
+      () =>
+        db.doc(`adminAuditLog/${generateId()}`).set(
+          {
+            adminId: req.auth.uid,
+            action: 'RESOLVE_ALL_REPORTS',
+            targetUserId: auditTargetUniqueId,
+            details: `Resolved ${reports.length} reports: ${action}`,
+            createdAt: timestamp,
+          },
+          { merge: true },
+        ),
+      (err) => {
         log.error('reports', 'Failed to write RESOLVE_ALL_REPORTS audit log', {
           userId: req.params.userId,
           error: err?.message ?? String(err),
         });
         bulkAuditFailed = true;
-      });
+      },
+    );
 
     // Lock release IS critical-path — admin needs it cleared to take the
     // next moderation action against this user.
@@ -913,7 +959,7 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
 
     const uniqueReporters = [...new Set(reports.map((r) => r.reporterId).filter(Boolean))];
     let pmsFailed = 0;
-    const pmPromises = uniqueReporters.map((reporterId) =>
+    const reporterPmPromises = uniqueReporters.map((reporterId) =>
       sendSystemPm(
         reporterId,
         'Your report has been reviewed. Thank you for helping keep ShyTalk safe.',
@@ -926,30 +972,47 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
       }),
     );
 
-    // Resolve audit + reporter PM promises so their .catch flags are settled
-    // before we build the response. Always settle (no throw bubbles up).
-    await Promise.all([bulkAuditPromise, suspendAuditPromise, ...pmPromises].filter(Boolean));
+    // INVARIANT: every promise added here MUST have an absorbing .catch.
+    // Promise.all rejects on the first unhandled reject, which would 500 a
+    // fully-applied moderation. The .catch handlers also mutate outer-scope
+    // flags (auditLog/pmsFailed/etc) — do NOT split this await into multiple
+    // awaits or the flags may be unset when the response is built.
+    await Promise.all(
+      [
+        bulkAuditPromise,
+        suspendAuditPromise,
+        warnPmPromise,
+        suspendPmPromise,
+        ...reporterPmPromises,
+      ].filter(Boolean),
+    );
 
     const responseBody = { success: true, resolved: reportsCommitted };
     if (reportsCommitFailed || reportsCommitted < reports.length) {
       responseBody.reports = {
         committed: reportsCommitted,
         failed: reports.length - reportsCommitted,
-        error: MOD_ERROR.REPORTS_COMMIT,
+        total: reports.length,
+        error: MOD_ERROR.REPORTS_COMMIT_FAILED,
       };
     }
     if (cascade) responseBody.cascade = cascade;
     if (warningFailed) {
-      responseBody.warning = { failed: true, error: MOD_ERROR.WARNING_CREATE };
+      responseBody.warning = { failed: true, error: MOD_ERROR.WARNING_CREATE_FAILED };
     }
     if (suspensionFailed) {
-      responseBody.suspension = { failed: true, error: MOD_ERROR.SUSPENSION_UPDATE };
+      responseBody.suspension = { failed: true, error: MOD_ERROR.SUSPENSION_UPDATE_FAILED };
     }
     if (bulkAuditFailed || suspendAuditFailed) {
-      responseBody.auditLog = { failed: true, error: MOD_ERROR.AUDIT_WRITE };
+      responseBody.auditLog = { failed: true, error: MOD_ERROR.AUDIT_WRITE_FAILED };
     }
-    if (pmsFailed > 0) {
-      responseBody.pms = { failed: pmsFailed, total: uniqueReporters.length };
+    const totalPms =
+      uniqueReporters.length +
+      (warnPmPromise !== null ? 1 : 0) +
+      (suspendPmPromise !== null ? 1 : 0);
+    const totalPmsFailed = pmsFailed + (targetPmFailed ? 1 : 0);
+    if (totalPmsFailed > 0) {
+      responseBody.pms = { failed: totalPmsFailed, total: totalPms };
     }
     res.json(responseBody);
   } catch (err) {
@@ -1487,3 +1550,6 @@ router.patch('/appeals/:id', async (req, res) => {
 const { evictSuspendedUser } = require('../utils/evict-suspended-user');
 
 module.exports = router;
+// Attach the MOD_ERROR token table to the exported router so the
+// snapshot test can lock its values without parsing the source.
+module.exports.MOD_ERROR = MOD_ERROR;

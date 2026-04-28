@@ -1593,6 +1593,7 @@ describe('Pass-10: cascade + audit + commit failure response shape', () => {
     expect(res.body.reports).toEqual({
       committed: 0,
       failed: 1,
+      total: 1,
       error: 'reports_commit_failed',
     });
     expect(res.body.suspension).toBeUndefined();
@@ -1685,5 +1686,132 @@ describe('Pass-10: cascade + audit + commit failure response shape', () => {
     const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'suspended' });
     expect(res.body.suspension).toBeDefined();
     expect(Object.keys(res.body.suspension).sort()).toEqual(['error', 'failed']);
+  });
+
+  it('bulk-resolve: auditLog.failed surfaces when RESOLVE_ALL_REPORTS audit .set rejects', async () => {
+    // Pass-11 test-analyzer Gap 1: bulk-resolve auditLog.failed had no positive
+    // assertion. Pass-7/8 only asserted res.status===200 and that log.error
+    // fired — a regression that swallowed bulkAuditFailed=true would pass.
+    const { queryDocs } = require('../../src/utils/firestore-helpers');
+    queryDocs.mockResolvedValueOnce([
+      { id: 'r1', reportedUserId: 'target', reporterId: 'rep1', status: 'pending' },
+    ]);
+    // Order of .set() calls in dismissed bulk: [RESOLVE_ALL_REPORTS audit].
+    mockDocSet.mockRejectedValueOnce(new Error('Firestore quota'));
+
+    const res = await request(app)
+      .post('/api/reports/resolve-all/target')
+      .send({ action: 'dismissed' });
+    expect(res.status).toBe(200);
+    expect(res.body.auditLog).toEqual({ failed: true, error: 'audit_write_failed' });
+  });
+
+  it('bulk-resolve: auditLog.failed surfaces when SUSPEND audit .set rejects (suspendAuditFailed)', async () => {
+    // Pass-11 test-analyzer Gap 1b: suspendAuditFailed had zero coverage.
+    // Order of .set() calls in suspended bulk:
+    //   1. user-doc set+merge inside evict (rooms.length===0 branch)
+    //   2. SUSPEND audit log
+    //   3. RESOLVE_ALL_REPORTS audit log
+    // Reject call #2 to flip suspendAuditFailed.
+    const { queryDocs, getDoc } = require('../../src/utils/firestore-helpers');
+    queryDocs.mockResolvedValueOnce([
+      { id: 'r1', reportedUserId: 'target', reporterId: 'rep1', status: 'pending' },
+    ]);
+    queryDocs.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    getDoc.mockResolvedValueOnce({ id: 'target', displayName: 'User' });
+    mockDocSet.mockResolvedValueOnce(); // evict user-doc set succeeds
+    mockDocSet.mockRejectedValueOnce(new Error('SUSPEND audit quota')); // SUSPEND audit fails
+
+    const res = await request(app)
+      .post('/api/reports/resolve-all/target')
+      .send({ action: 'suspended' });
+    expect(res.status).toBe(200);
+    expect(res.body.auditLog).toEqual({ failed: true, error: 'audit_write_failed' });
+  });
+
+  it('bulk-resolve: cascade response shape matches single-resolve when evict throws (parity)', async () => {
+    // Pass-11 test-analyzer Gap 2: bulk cascade catch is duplicated from
+    // single-resolve at reports.js:826. A divergent typo would not be caught
+    // by the single-resolve cascade test alone — assert the bulk shape too.
+    const { queryDocs, getDoc } = require('../../src/utils/firestore-helpers');
+    queryDocs.mockResolvedValueOnce([
+      { id: 'r1', reportedUserId: 'target', reporterId: 'rep1', status: 'pending' },
+    ]);
+    getDoc.mockResolvedValueOnce({ id: 'target', displayName: 'User' });
+    queryDocs.mockRejectedValueOnce(new Error('Firestore timeout: project=secret'));
+
+    const res = await request(app)
+      .post('/api/reports/resolve-all/target')
+      .send({ action: 'suspended' });
+    expect(res.status).toBe(200);
+    expect(res.body.cascade).toEqual({
+      roomsClosed: 0,
+      roomsUpdated: 0,
+      partial: true,
+      failedRoomIds: [],
+      userDocFailed: false,
+      error: 'cascade_failed',
+    });
+    expect(JSON.stringify(res.body)).not.toContain('Firestore timeout');
+    expect(JSON.stringify(res.body)).not.toContain('secret');
+  });
+
+  it('bulk-resolve: pms.failed counts target-user PMs alongside reporter PMs (Pass-11 HIGH-1)', async () => {
+    // Pass-11 silent-failure HIGH-1: bulk-resolve previously only counted
+    // reporter PM failures; warning/suspension PMs to the moderation target
+    // were silently dropped. Now both feed into the same `pms.failed` counter.
+    const { queryDocs } = require('../../src/utils/firestore-helpers');
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+    queryDocs.mockResolvedValueOnce([
+      { id: 'r1', reportedUserId: 'target', reporterId: 'rep1', status: 'pending' },
+    ]);
+    // Order of sendSystemPm calls in bulk warned: [warning PM to target, reporter PM to rep1]
+    sendSystemPm.mockRejectedValueOnce(new Error('warn-pm fcm fail')); // warning PM fails
+    sendSystemPm.mockResolvedValueOnce(); // reporter PM succeeds
+
+    const res = await request(app)
+      .post('/api/reports/resolve-all/target')
+      .send({ action: 'warned' });
+    expect(res.status).toBe(200);
+    expect(res.body.pms).toEqual({ failed: 1, total: 2 });
+  });
+
+  it('MOD_ERROR token values are stable (snapshot)', async () => {
+    // Pass-11 test-analyzer Gap 4: lock the wire-format tokens so a rename
+    // can't silently drift the contract between server and admin client.
+    const { MOD_ERROR } = require('../../src/routes/reports');
+    expect(MOD_ERROR).toEqual({
+      WARNING_CREATE_FAILED: 'warning_create_failed',
+      SUSPENSION_UPDATE_FAILED: 'suspension_update_failed',
+      CASCADE_FAILED: 'cascade_failed',
+      AUDIT_WRITE_FAILED: 'audit_write_failed',
+      REPORTS_COMMIT_FAILED: 'reports_commit_failed',
+    });
+    // Object.freeze: a runtime rename should throw in strict mode.
+    expect(Object.isFrozen(MOD_ERROR)).toBe(true);
+  });
+
+  it('safeAuditSet absorbs synchronous throws from a bad .set thunk (Pass-11 HIGH-2)', async () => {
+    // Pass-11 silent-failure HIGH-2: db.doc(...).set(...) could throw
+    // synchronously (bad path, mocking quirks) before returning a promise,
+    // bypassing .catch and bubbling to the route's outer try → 500. Force
+    // mockDocSet to throw synchronously and assert the route still returns 200.
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    getDoc.mockResolvedValueOnce({
+      id: 'r1',
+      reportedUserId: 't',
+      reportedUserUniqueId: 'u1',
+      reporterId: 'rep1',
+      reason: 'x',
+    });
+    // Make the audit-log .set() throw SYNCHRONOUSLY (not return a rejected promise).
+    mockDocSet.mockImplementationOnce(() => {
+      throw new Error('synchronous throw from set');
+    });
+
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'dismissed' });
+    expect(res.status).toBe(200);
+    expect(res.body.auditLog).toEqual({ failed: true, error: 'audit_write_failed' });
+    expect(res.body.success).toBe(true);
   });
 });
