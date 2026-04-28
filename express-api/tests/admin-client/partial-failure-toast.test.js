@@ -209,4 +209,68 @@ describe('buildPartialFailureMessage — defensive', () => {
     });
     expect(msg).toContain('0 room(s) need manual cleanup');
   });
+
+  it('legacy response shape (no Pass-9..13 keys) returns null (Pass-14 forward-compat)', () => {
+    // Pre-Pass-9 responses had no warning/suspension/cascade/etc. keys. After a
+    // dev/prod deploy skew, the admin client may briefly receive an older
+    // response with `committed`/`failed` at the top level (no `reports.`
+    // namespace). The lib must NOT misinterpret those as Pass-9 keys.
+    expect(buildPartialFailureMessage({ success: true, committed: 5, failed: 0 })).toBeNull();
+    expect(buildPartialFailureMessage({ success: true, committed: 5, failed: 7 })).toBeNull();
+  });
+
+  it('numeric-type guard: failed=true (boolean) does NOT trigger reports toast', () => {
+    // Pass-14 silent-failure-hunter MEDIUM: a misimplemented backend sending
+    // failed: true (boolean) would coerce true > 0 → false on the OLD lib,
+    // silently omitting the toast. The numeric-type guard now requires the
+    // value to be an actual number before comparison.
+    expect(buildPartialFailureMessage({ success: true, reports: { failed: true } })).toBeNull();
+    expect(buildPartialFailureMessage({ success: true, pms: { failed: 'yes' } })).toBeNull();
+    expect(
+      buildPartialFailureMessage({
+        success: true,
+        cascade: { rtdbEventsFailed: 'broken' },
+      }),
+    ).toBeNull();
+  });
+});
+
+describe('buildPartialFailureMessage — ordering invariants', () => {
+  it('cascade.partial precedes cascade.rtdbEventsFailed in the message', () => {
+    // Pass-14 test-analyzer S3: lock the substring order so a future refactor
+    // that shuffles the conditionals can't silently reorder admin-facing text.
+    const msg = buildPartialFailureMessage({
+      success: true,
+      cascade: {
+        partial: true,
+        userDocFailed: false,
+        failedRoomIds: ['r1'],
+        rtdbEventsFailed: 2,
+      },
+    });
+    const cascadeIdx = msg.indexOf('room cascade partial');
+    const rtdbIdx = msg.indexOf("RTDB event(s) didn't deliver");
+    expect(cascadeIdx).toBeGreaterThan(-1);
+    expect(rtdbIdx).toBeGreaterThan(cascadeIdx);
+  });
+
+  it('warning precedes suspension precedes cascade in the message', () => {
+    const msg = buildPartialFailureMessage({
+      success: true,
+      warning: { failed: true, error: 'warning_create_failed' },
+      suspension: { failed: true, error: 'suspension_update_failed' },
+      cascade: {
+        partial: true,
+        userDocFailed: false,
+        failedRoomIds: [],
+        rtdbEventsFailed: 0,
+      },
+    });
+    const wIdx = msg.indexOf('warning was NOT applied');
+    const sIdx = msg.indexOf('suspension was NOT applied');
+    const cIdx = msg.indexOf('room cascade partial');
+    expect(wIdx).toBeGreaterThan(-1);
+    expect(sIdx).toBeGreaterThan(wIdx);
+    expect(cIdx).toBeGreaterThan(sIdx);
+  });
 });

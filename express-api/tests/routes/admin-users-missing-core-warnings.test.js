@@ -9,6 +9,10 @@ const mockDocUpdate = jest.fn().mockResolvedValue();
 const mockDocSet = jest.fn().mockResolvedValue();
 const mockDocDelete = jest.fn().mockResolvedValue();
 const mockBatchCommit = jest.fn().mockResolvedValue();
+// Promoted to module-level so the Pass-13 atomicity regression test can
+// assert the EXACT batch op counts (warning + user-doc + audit = 3 ops).
+const mockBatchSet = jest.fn();
+const mockBatchUpdate = jest.fn();
 // mockCollectionGet is a mutable reference — the factory closure captures the
 // outer variable by reference, and tests reassign it to control collection responses.
 // Named with the "mock" prefix so Jest's scope guard allows it inside jest.mock().
@@ -35,8 +39,8 @@ jest.mock('../../src/utils/firebase', () => ({
       return chain;
     }),
     batch: jest.fn(() => ({
-      update: jest.fn(),
-      set: jest.fn(),
+      update: mockBatchUpdate,
+      set: mockBatchSet,
       commit: mockBatchCommit,
     })),
   },
@@ -112,6 +116,8 @@ beforeEach(() => {
   mockDocUpdate.mockReset();
   mockDocDelete.mockReset();
   mockBatchCommit.mockReset();
+  mockBatchSet.mockReset();
+  mockBatchUpdate.mockReset();
   getDoc.mockReset();
   requireAdmin.mockReset();
 
@@ -417,14 +423,34 @@ describe('POST /api/user/:uniqueId/warn — additional branches', () => {
     expect(res.status).toBe(200);
     // Exactly one batch.commit() — all three writes go through it.
     expect(mockBatchCommit).toHaveBeenCalledTimes(1);
-    // The legacy Promise.all path called db.doc().set/update directly. Those
-    // call counts MUST be zero for the warn flow now (other tests still
-    // exercise the legacy path for unrelated routes; this test isolates the
-    // warn flow by clearing call history right after fixture setup).
+    // EXACT batch op counts: warning subcollection doc + audit log = 2 sets,
+    // user-doc = 1 update. Stronger than just "no direct .set to warnings/"
+    // because it would catch a regression like:
+    //   const batch = db.batch();
+    //   await Promise.all([batch.set(...), db.doc(...).update(...), batch.set(...)]);
+    //   await batch.commit();
+    // — which leaks the user-doc update outside the batch.
+    expect(mockBatchSet).toHaveBeenCalledTimes(2);
+    expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
+    // User-doc update must go through the batch (mockBatchUpdate), NOT direct
+    // mockDocUpdate. mockDocUpdate.mock.calls captures direct .update() — the
+    // warn flow should add nothing to it.
+    expect(mockDocUpdate).not.toHaveBeenCalled();
+    // Warning subcollection write goes through the batch — no direct .set().
     const setPathsForWarning = mockDocSet.mock.calls.filter((c) =>
       String(c[0] ?? '').includes('warnings/'),
     );
     expect(setPathsForWarning.length).toBe(0);
+    // The batch.update payload IS the user doc with the warning side-effects.
+    const userDocBatchUpdate = mockBatchUpdate.mock.calls[0][1];
+    expect(userDocBatchUpdate).toEqual(
+      expect.objectContaining({
+        warningCount: expect.any(Number),
+        gcsScore: expect.any(Number),
+        hasActiveWarning: true,
+        hasNewWarning: true,
+      }),
+    );
   });
 });
 

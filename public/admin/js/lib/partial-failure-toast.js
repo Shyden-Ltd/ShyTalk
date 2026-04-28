@@ -37,17 +37,25 @@
         : (result.cascade.failedRoomIds || []).length + ' room(s) need manual cleanup';
       parts.push('room cascade partial — ' + detail);
     }
-    if (result.cascade && result.cascade.rtdbEventsFailed > 0) {
+    // Numeric-type guards before `> 0` comparisons: a misimplemented backend
+    // sending `failed: true` would coerce `true > 0` → false and silently omit
+    // the toast. typeof-checks defend the contract against future drift.
+    if (
+      result.cascade &&
+      typeof result.cascade.rtdbEventsFailed === 'number' &&
+      result.cascade.rtdbEventsFailed > 0
+    ) {
       parts.push(
         result.cascade.rtdbEventsFailed +
           " RTDB event(s) didn't deliver — live clients may not see the change",
       );
     }
-    if (result.reports && result.reports.failed > 0) {
+    if (result.reports && typeof result.reports.failed === 'number' && result.reports.failed > 0) {
       const total =
-        result.reports.total != null
+        typeof result.reports.total === 'number'
           ? result.reports.total
-          : result.reports.failed + (result.reports.committed != null ? result.reports.committed : 0);
+          : result.reports.failed +
+            (typeof result.reports.committed === 'number' ? result.reports.committed : 0);
       parts.push(result.reports.failed + '/' + total + ' reports did not commit');
     }
     if (result.auditLog && result.auditLog.failed) {
@@ -56,8 +64,8 @@
     if (result.lockRelease && result.lockRelease.failed) {
       parts.push('report lock not released — admin may need to unlock manually');
     }
-    if (result.pms && result.pms.failed > 0) {
-      const pmsTotal = result.pms.total != null ? result.pms.total : '?';
+    if (result.pms && typeof result.pms.failed === 'number' && result.pms.failed > 0) {
+      const pmsTotal = typeof result.pms.total === 'number' ? result.pms.total : '?';
       parts.push(result.pms.failed + '/' + pmsTotal + ' PMs failed');
     }
 

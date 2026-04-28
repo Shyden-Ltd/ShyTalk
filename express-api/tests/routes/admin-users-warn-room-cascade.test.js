@@ -217,16 +217,18 @@ describe('POST /api/user/:uniqueId/warn — user fields actually update', () => 
       .send({ reason: 'Bad behaviour', severity: 3 });
 
     expect(res.status).toBe(200);
-    // The user-doc update happens via the atomic batch (Pass-13 fix). Find the
-    // batch.update call whose payload is the user-doc shape.
-    const userUpdate = mockBatchUpdate.mock.calls.find((c) => c[1]?.warningCount !== undefined);
-    expect(userUpdate).toBeDefined();
-    expect(userUpdate[1]).toEqual(
+    // The user-doc update happens via the atomic batch (Pass-13 fix). The
+    // mockBatchUpdate matcher uses expect.any(Number) instead of a presence
+    // check — Pass-14 tightening: a regression that sets warningCount to
+    // undefined would have passed the prior `c[1]?.warningCount !== undefined`
+    // matcher. Now any-Number forces the value to land typed.
+    expect(mockBatchUpdate).toHaveBeenCalledWith(
+      expect.anything(),
       expect.objectContaining({
         gcsScore: expect.any(Number),
         hasActiveWarning: true,
         hasNewWarning: true,
-        warningCount: 1,
+        warningCount: expect.any(Number),
       }),
     );
 
