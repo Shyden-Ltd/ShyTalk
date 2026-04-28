@@ -1139,14 +1139,14 @@ describe('Pass-7 backfill: bulk-resolve 404 when target user no longer exists', 
   });
 });
 
-describe('Pass-7 backfill: bulk-resolve audit-log fire-and-forget on throw', () => {
+describe('Pass-7/8 backfill: bulk-resolve audit-log resilience', () => {
   let app;
   beforeEach(() => {
     app = createApp();
     jest.clearAllMocks();
   });
 
-  it('returns 200 even when audit-log resolveUniqueId throws (state already committed)', async () => {
+  it('survives a resolveUniqueId throw and falls back to raw req.params.userId in the audit row', async () => {
     const { resolveUniqueId } = require('../../src/middleware/auth');
     const { queryDocs } = require('../../src/utils/firestore-helpers');
     resolveUniqueId.mockReset();
@@ -1165,5 +1165,101 @@ describe('Pass-7 backfill: bulk-resolve audit-log fire-and-forget on throw', () 
     expect(auditEntry).not.toBeNull();
     expect(auditEntry.action).toBe('RESOLVE_ALL_REPORTS');
     expect(auditEntry.targetUserId).toBe('firebase-uid-77');
+    // Lock release IS critical-path even on resolveUniqueId throw.
+    expect(mockDocDelete).toHaveBeenCalled();
+  });
+
+  it('returns 200 when the audit-log .set() itself rejects (Pass-7 fire-and-forget contract)', async () => {
+    const { resolveUniqueId } = require('../../src/middleware/auth');
+    const { queryDocs } = require('../../src/utils/firestore-helpers');
+    const log = require('../../src/utils/log');
+    resolveUniqueId.mockReset();
+    resolveUniqueId.mockResolvedValue('CANONICAL-77');
+    queryDocs.mockResolvedValueOnce([
+      { id: 'r1', reportedUserId: 'firebase-uid-77', reporterId: 'rep1', status: 'pending' },
+    ]);
+    // Reject the audit .set() write itself. Other .set() calls in the test
+    // (none on this dismissed path beyond audit) will use the default resolved value.
+    mockDocSet.mockReset();
+    mockDocSet.mockRejectedValueOnce(new Error('Firestore quota exceeded'));
+    mockDocSet.mockResolvedValue();
+
+    const res = await request(app)
+      .post('/api/reports/resolve-all/firebase-uid-77')
+      .send({ action: 'dismissed' });
+
+    // Critical: audit-log throw must not 500 the request after state has committed.
+    expect(res.status).toBe(200);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(log.error).toHaveBeenCalledWith(
+      'reports',
+      'Failed to write RESOLVE_ALL_REPORTS audit log',
+      expect.any(Object),
+    );
+    // Lock release IS critical-path even when audit fails.
+    expect(mockDocDelete).toHaveBeenCalled();
+  });
+});
+
+describe('Pass-8 backfill: single-resolve audit-log .set() fire-and-forget', () => {
+  let app;
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+  });
+
+  it('returns 200 when the RESOLVE_REPORT audit .set() itself rejects', async () => {
+    const { resolveUniqueId } = require('../../src/middleware/auth');
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    const log = require('../../src/utils/log');
+    resolveUniqueId.mockReset();
+    resolveUniqueId.mockResolvedValue('CANONICAL-12345');
+    getDoc.mockResolvedValueOnce({
+      id: 'r1',
+      reportedUserId: 'firebase-auth-uid',
+      reporterId: 'rep1',
+      reason: 'spam',
+    });
+    // Reject only the audit .set() write — must not 500 the request.
+    mockDocSet.mockReset();
+    mockDocSet.mockRejectedValueOnce(new Error('Firestore quota exceeded'));
+    mockDocSet.mockResolvedValue();
+
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'dismissed' });
+
+    expect(res.status).toBe(200);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(log.error).toHaveBeenCalledWith(
+      'reports',
+      'Failed to write RESOLVE_REPORT audit log',
+      expect.any(Object),
+    );
+    // Lock release IS critical-path even when audit fails.
+    expect(mockDocDelete).toHaveBeenCalled();
+  });
+
+  it('still updates the report status before the audit .set() throw', async () => {
+    const { resolveUniqueId } = require('../../src/middleware/auth');
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    resolveUniqueId.mockReset();
+    resolveUniqueId.mockResolvedValue('CANONICAL-12345');
+    getDoc.mockResolvedValueOnce({
+      id: 'r1',
+      reportedUserId: 'firebase-auth-uid',
+      reporterId: 'rep1',
+      reason: 'spam',
+    });
+    mockDocSet.mockReset();
+    mockDocSet.mockRejectedValueOnce(new Error('Firestore quota'));
+    mockDocSet.mockResolvedValue();
+
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'dismissed' });
+
+    expect(res.status).toBe(200);
+    // Report status update is the awaited write at the top of the handler;
+    // it must have committed BEFORE the fire-and-forget audit .set() rejected.
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'resolved', actionTaken: 'dismissed' }),
+    );
   });
 });
