@@ -25,7 +25,7 @@ jest.mock('../../src/utils/firestore-helpers', () => ({
 const { buildCascadeFailure } = require('../../src/utils/evict-suspended-user');
 
 describe('buildCascadeFailure (Pass-17 cascade contract unifier)', () => {
-  it('returns the canonical superset shape with all 7 keys', () => {
+  it('returns the canonical superset shape with all 7 keys (parity with success path per Pass-19)', () => {
     const result = buildCascadeFailure(new Error('boom'), 'cascade_failed');
     expect(Object.keys(result).sort()).toEqual(
       [

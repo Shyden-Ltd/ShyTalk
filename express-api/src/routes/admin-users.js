@@ -939,14 +939,9 @@ router.post('/user/:uniqueId/suspend', async (req, res) => {
     // Evict from any active rooms. Awaited (was fire-and-forget) so a partial
     // cascade is reflected in the admin response — without this, a chunk failure
     // mid-cascade left rooms in mixed state with the admin shown success.
-    let cascade = {
-      roomsClosed: 0,
-      roomsUpdated: 0,
-      partial: false,
-      failedRoomIds: [],
-      userDocFailed: false,
-      rtdbEventsFailed: 0,
-    };
+    // cascade is unconditionally assigned below; earlier iterations had a
+    // fire-and-forget default that's now dead (Pass-19 cleanup).
+    let cascade;
     try {
       cascade = await evictSuspendedUser(req.params.uniqueId);
     } catch (err) {

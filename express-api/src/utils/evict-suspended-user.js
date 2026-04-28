@@ -63,6 +63,10 @@ async function evictSuspendedUser(uid) {
       failedRoomIds: [],
       userDocFailed: false,
       rtdbEventsFailed: 0,
+      // error:null on success makes the contract symmetric with the failure
+      // path (buildCascadeFailure) so consumers can branch on `cascade.error`
+      // uniformly without conditional-presence checks.
+      error: null,
     };
   }
 
@@ -192,6 +196,9 @@ async function evictSuspendedUser(uid) {
     failedRoomIds,
     userDocFailed,
     rtdbEventsFailed,
+    // error: null when the cascade ran to completion (even partially), to
+    // match the failure-path shape from buildCascadeFailure.
+    error: null,
   };
 }
 

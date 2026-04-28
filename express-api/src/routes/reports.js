@@ -1274,14 +1274,10 @@ router.post('/admin/users/:uniqueId/suspend', async (req, res) => {
     ]);
 
     // Awaited (was fire-and-forget) so cascade partial-failure is visible to admin.
-    let cascade = {
-      roomsClosed: 0,
-      roomsUpdated: 0,
-      partial: false,
-      failedRoomIds: [],
-      userDocFailed: false,
-      rtdbEventsFailed: 0,
-    };
+    // cascade is unconditionally assigned below (success: evictSuspendedUser
+    // return value; failure: buildCascadeFailure). Earlier iterations had a
+    // fire-and-forget cascade where this default was the response — now dead.
+    let cascade;
     try {
       cascade = await evictSuspendedUser(req.params.uniqueId);
     } catch (err) {

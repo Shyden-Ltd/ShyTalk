@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 /**
  * Suspension cascade matrix for evictSuspendedUser.
  *
@@ -132,23 +131,6 @@ function mockRoomsQueries({ participantRooms = [], ownerRooms = [] } = {}) {
   mockQueryDocs.mockReset();
   mockQueryDocs.mockResolvedValueOnce(participantRooms);
   mockQueryDocs.mockResolvedValueOnce(ownerRooms);
-}
-
-/** Find the batch.set() call whose data matches the given room id. */
-function findRoomWrite(roomId) {
-  return (
-    mockBatchSet.mock.calls.find((call) =>
-      call[0] && typeof call[0] === 'object' && call[0]._path !== undefined
-        ? call[0]._path === `rooms/${roomId}` // unlikely shape
-        : false,
-    ) ||
-    mockBatchSet.mock.calls.find((call) => {
-      // db.doc is mocked to return whatever mockDoc returns, but the path arg is
-      // the original string passed to db.doc(). We reach for it via the mockDoc
-      // call history.
-      return call[0]?.__roomId === roomId;
-    })
-  );
 }
 
 /** Locate the data payload for a given doc path in batch.set() calls. */
@@ -552,6 +534,7 @@ describe('evictSuspendedUser — RTDB failure tolerance', () => {
         failedRoomIds: [],
         userDocFailed: false,
         rtdbEventsFailed: 0,
+        error: null,
       });
       // Reverted from update() → set+merge so a deleted user doc doesn't throw.
       expect(mockDocSet).toHaveBeenCalledWith({ currentRoomId: null }, { merge: true });

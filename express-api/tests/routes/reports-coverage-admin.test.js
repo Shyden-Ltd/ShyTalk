@@ -530,17 +530,18 @@ describe('POST /api/admin/users/:uniqueId/suspend — cascade wire-shape (Pass-1
     queryDocs.mockReset();
   });
 
-  it('happy path: cascade response includes all 7 canonical keys', async () => {
+  it('happy path: cascade response includes all 7 canonical keys (with error: null per Pass-19)', async () => {
     getDoc.mockResolvedValueOnce({ id: 'u1', displayName: 'User' });
     const res = await request(app)
       .post('/api/admin/users/u1/suspend')
       .send({ reason: 'Test', canAppeal: false });
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    // The success-path cascade comes from evictSuspendedUser's return value;
-    // assert all 7 keys are present (rtdbEventsFailed was missing pre-Pass-17).
+    // Pass-19 unified the cascade success/failure shape — both now have 7
+    // keys with `error` set to null on success or 'cascade_failed' on failure.
     expect(Object.keys(res.body.cascade).sort()).toEqual(
       [
+        'error',
         'failedRoomIds',
         'partial',
         'roomsClosed',
@@ -549,6 +550,7 @@ describe('POST /api/admin/users/:uniqueId/suspend — cascade wire-shape (Pass-1
         'userDocFailed',
       ].sort(),
     );
+    expect(res.body.cascade.error).toBeNull();
     expect(res.body.cascade.rtdbEventsFailed).toBe(0);
     expect(res.body.cascade.partial).toBe(false);
   });
