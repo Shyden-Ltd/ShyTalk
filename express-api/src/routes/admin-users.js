@@ -953,7 +953,9 @@ router.post('/user/:uniqueId/suspend', async (req, res) => {
       });
       // Stable error token instead of err.message — Firestore SDK errors can
       // include project paths / stack frames. Full message logged above.
-      cascade = { ...cascade, partial: true, userDocFailed: true, error: 'cascade_failed' };
+      // userDocFailed: false because the route's user-doc update committed before
+      // evictSuspendedUser was called.
+      cascade = { ...cascade, partial: true, userDocFailed: false, error: 'cascade_failed' };
     }
 
     res.json({ success: true, cascade });

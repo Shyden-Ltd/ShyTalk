@@ -242,7 +242,11 @@ fun SignInScreen(
             // `clearError()`, but `requiresAppDataClear` is sticky — without rendering it
             // explicitly the user sees disabled sign-in buttons with no explanation.
             if (uiState.requiresAppDataClear) {
-                val bannerMessage = uiState.error?.toString().orEmpty()
+                // UiText.resolve() — toString() returns Kotlin's auto-generated
+                // data-class form (`Plain(text=...)`) which leaks the type wrapper
+                // to users; resolve() returns the localised string for both
+                // `Plain` and `Res` arms.
+                val bannerMessage = uiState.error?.resolve().orEmpty()
                 Surface(
                     color = MaterialTheme.colorScheme.errorContainer,
                     shape = MaterialTheme.shapes.medium,

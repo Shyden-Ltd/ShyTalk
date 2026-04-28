@@ -503,7 +503,7 @@ describe('POST /api/reports/:id/resolve - edge cases', () => {
       id: 'r1',
       reportedUserId: 't',
       // Deliberately set the stored uniqueId to a DIFFERENT value than the auth-uid
-      // resolution returns. The F1-RES fix re-resolves from reportedUserId at resolve
+      // resolution returns. The route re-resolves from reportedUserId at resolve
       // time, so the stored 'u1' must be ignored and the server-resolved value used.
       reportedUserUniqueId: 'u1',
       reporterId: 'rep1',
@@ -552,8 +552,10 @@ describe('POST /api/reports/resolve-all/:userId - warn + suspend', () => {
       .post('/api/reports/resolve-all/target')
       .send({ action: 'warned', reason: 'Spam' });
     expect(res.status).toBe(200);
+    // Server re-resolves from req.params.userId='target' (identity mock).
+    // Stored reports[0].reportedUserUniqueId='ut' is ignored to defeat IDOR.
     expect(createWarning).toHaveBeenCalledWith(
-      'ut',
+      'target',
       expect.objectContaining({ reason: 'Spam', severity: 2 }),
     );
   });
@@ -573,7 +575,8 @@ describe('POST /api/reports/resolve-all/:userId - warn + suspend', () => {
       .post('/api/reports/resolve-all/target')
       .send({ action: 'warned_severe' });
     expect(res.status).toBe(200);
-    expect(createWarning).toHaveBeenCalledWith('ut', expect.objectContaining({ severity: 4 }));
+    // Server re-resolves from req.params.userId='target'; stored 'ut' is ignored.
+    expect(createWarning).toHaveBeenCalledWith('target', expect.objectContaining({ severity: 4 }));
   });
 
   it('logs error when createWarning fails in bulk', async () => {

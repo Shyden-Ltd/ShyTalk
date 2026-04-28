@@ -250,28 +250,21 @@ router.get('/reports', async (req, res) => {
         )
       : userFiltered;
 
-    // Collect all unique user IDs for enrichment
+    // Collect all unique user IDs for enrichment.
     // User documents are keyed by uniqueId (numeric), NOT Firebase Auth UID.
-    // Build a mapping from reportedUserId → reportedUserUniqueId from report data,
-    // then use uniqueId to fetch user documents.
-    const reportedUniqueIdMap = {}; // reportedUserId → reportedUserUniqueId
-    for (const r of filtered) {
-      if (
-        r.reportedUserId &&
-        r.reportedUserUniqueId !== null &&
-        r.reportedUserUniqueId !== undefined
-      ) {
-        reportedUniqueIdMap[r.reportedUserId] = r.reportedUserUniqueId;
-      }
-    }
+    // Re-resolve reportedUserUniqueId server-side from each unique reportedUserId
+    // rather than trusting `r.reportedUserUniqueId` from the stored report — pre-IDOR-fix
+    // reports may carry a client-injected value, which would surface the wrong
+    // user's profile in the admin moderation queue.
     const reportedUserIds = [...new Set(filtered.map((r) => r.reportedUserId).filter(Boolean))];
-    const reportedUniqueIds = [
-      ...new Set(
-        reportedUserIds
-          .map((uid) => reportedUniqueIdMap[uid])
-          .filter((id) => id !== null && id !== undefined),
-      ),
-    ];
+    const reportedUniqueIdMap = {}; // reportedUserId → server-resolved reportedUserUniqueId
+    await Promise.all(
+      reportedUserIds.map(async (uid) => {
+        const resolved = await resolveUniqueId(uid);
+        if (resolved) reportedUniqueIdMap[uid] = resolved;
+      }),
+    );
+    const reportedUniqueIds = [...new Set(Object.values(reportedUniqueIdMap))];
     const reporterIds = [...new Set(filtered.map((r) => r.reporterId).filter(Boolean))];
 
     // Parallel-fetch user enrichment data and report locks
@@ -405,6 +398,18 @@ router.post('/reports/:id/resolve', async (req, res) => {
     const report = await getDoc(`reports/${req.params.id}`);
     if (!report) return res.status(404).json({ error: 'Report not found' });
 
+    // Resolve the cascade target BEFORE marking the report resolved. If the target
+    // user no longer exists, refuse with 404 so the report stays pending — otherwise
+    // we'd have a status='resolved' report whose downstream warn/suspend actions
+    // silently no-op'd against a wrong-format doc key.
+    let resolvedTargetUniqueId = null;
+    if (action === 'warned' || action === 'warned_severe' || action === 'suspended') {
+      resolvedTargetUniqueId = await resolveUniqueId(report.reportedUserId);
+      if (!resolvedTargetUniqueId) {
+        return res.status(404).json({ error: 'reported user no longer exists' });
+      }
+    }
+
     // Resolve the report
     await db.doc(`reports/${req.params.id}`).update({
       status: 'resolved',
@@ -429,10 +434,11 @@ router.post('/reports/:id/resolve', async (req, res) => {
     if (action === 'warned' || action === 'warned_severe') {
       const severity = body?.severity || (action === 'warned_severe' ? 4 : 2);
       const warningReason = body?.reason || report.reason;
-      // createWarning expects uniqueId (user doc key), not Firebase Auth UID. Always
-      // re-resolve from the server-trusted reportedUserId — pre-existing reports may
-      // carry a client-injected reportedUserUniqueId from before the IDOR fix landed.
-      const warnUniqueId = (await resolveUniqueId(report.reportedUserId)) ?? report.reportedUserId;
+      // resolvedTargetUniqueId was checked non-null at the top of the handler before
+      // the report-status update, so it is safe to use here. Trusting the stored
+      // `report.reportedUserUniqueId` would re-introduce the IDOR for pre-existing
+      // reports whose stored value was supplied by an earlier client.
+      const warnUniqueId = resolvedTargetUniqueId;
 
       try {
         await createWarning(warnUniqueId, {
@@ -470,11 +476,9 @@ router.post('/reports/:id/resolve', async (req, res) => {
       const canAppeal = body?.canAppeal ?? false;
       const endTimestamp = suspensionDays > 0 ? Date.now() + suspensionDays * 86400000 : null;
 
-      // User documents are keyed by uniqueId. Re-resolve from server-trusted
-      // reportedUserId to defeat any client-injected reportedUserUniqueId stored
-      // before the IDOR fix landed.
-      const reportedUniqueId =
-        (await resolveUniqueId(report.reportedUserId)) ?? report.reportedUserId;
+      // resolvedTargetUniqueId was server-resolved at the top of the handler; using
+      // it here defeats any client-injected `report.reportedUserUniqueId`.
+      const reportedUniqueId = resolvedTargetUniqueId;
       const reportedUser = await getDoc(`users/${reportedUniqueId}`);
 
       try {
@@ -511,12 +515,19 @@ router.post('/reports/:id/resolve', async (req, res) => {
           // error strings can include project/document paths and stack frames,
           // which we don't want to ship over the wire even to admin clients.
           // The full message is already logged server-side above.
+          // userDocFailed: false — the route's preceding `users/${...}.update(...)`
+          // committed before this catch (lines around the suspension block);
+          // evictSuspendedUser only throws from its initial queries, before any
+          // user-doc write. Reporting userDocFailed:true would mislead the admin
+          // into retrying an already-suspended user. partial:true reflects the
+          // rooms cascade — failedRoomIds is empty because the cascade aborted
+          // before producing a per-room failure list.
           cascade = {
             roomsClosed: 0,
             roomsUpdated: 0,
             partial: true,
             failedRoomIds: [],
-            userDocFailed: true,
+            userDocFailed: false,
             error: 'cascade_failed',
           };
         }
@@ -611,8 +622,14 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
     if (action === 'warned' || action === 'warned_severe') {
       const severity = body?.severity || (action === 'warned_severe' ? 4 : 2);
       const warningReason = body?.reason || 'Multiple reports';
-      // createWarning expects uniqueId (user doc key), not Firebase Auth UID
-      const warnUniqueId = reports[0]?.reportedUserUniqueId ?? req.params.userId;
+      // Re-resolve from req.params.userId (server-trusted Firebase Auth UID per
+      // public/admin/js/tabs/reports.js). Stored reports[].reportedUserUniqueId may
+      // have been client-injected before the F1 IDOR fix; trusting it on the bulk
+      // path would re-open the IDOR through the "Resolve all" admin button.
+      const warnUniqueId = await resolveUniqueId(req.params.userId);
+      if (!warnUniqueId) {
+        return res.status(404).json({ error: 'reported user no longer exists' });
+      }
 
       try {
         await createWarning(warnUniqueId, {
@@ -650,8 +667,11 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
       const canAppeal = body?.canAppeal ?? false;
       const endTimestamp = suspensionDays > 0 ? Date.now() + suspensionDays * 86400000 : null;
 
-      // User docs are keyed by uniqueId; get it from the report data
-      const reportedUniqueId = reports[0]?.reportedUserUniqueId ?? req.params.userId;
+      // Same IDOR-defeating re-resolve as the warn branch above.
+      const reportedUniqueId = await resolveUniqueId(req.params.userId);
+      if (!reportedUniqueId) {
+        return res.status(404).json({ error: 'reported user no longer exists' });
+      }
       const reportedUser = await getDoc(`users/${reportedUniqueId}`);
 
       try {
@@ -686,12 +706,19 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
           // error strings can include project/document paths and stack frames,
           // which we don't want to ship over the wire even to admin clients.
           // The full message is already logged server-side above.
+          // userDocFailed: false — the route's preceding `users/${...}.update(...)`
+          // committed before this catch (lines around the suspension block);
+          // evictSuspendedUser only throws from its initial queries, before any
+          // user-doc write. Reporting userDocFailed:true would mislead the admin
+          // into retrying an already-suspended user. partial:true reflects the
+          // rooms cascade — failedRoomIds is empty because the cascade aborted
+          // before producing a per-room failure list.
           cascade = {
             roomsClosed: 0,
             roomsUpdated: 0,
             partial: true,
             failedRoomIds: [],
-            userDocFailed: true,
+            userDocFailed: false,
             error: 'cascade_failed',
           };
         }
@@ -1038,7 +1065,10 @@ router.post('/admin/users/:uniqueId/suspend', async (req, res) => {
         error: err.message,
       });
       // Stable error token instead of err.message; full message is logged above.
-      cascade = { ...cascade, partial: true, userDocFailed: true, error: 'cascade_failed' };
+      // userDocFailed: false — the route already committed the suspension user-doc
+      // update before evictSuspendedUser was called; this catch only fires when
+      // evictSuspendedUser's initial queries throw (rooms cascade only).
+      cascade = { ...cascade, partial: true, userDocFailed: false, error: 'cascade_failed' };
     }
 
     res.json({ success: true, cascade });

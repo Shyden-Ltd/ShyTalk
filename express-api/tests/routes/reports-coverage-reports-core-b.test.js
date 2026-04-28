@@ -52,6 +52,7 @@ jest.mock('../../src/utils/log', () => ({
 jest.mock('../../src/middleware/auth', () => ({
   requireAdmin: jest.fn(() => false),
   clearSuspensionCache: jest.fn(),
+  resolveUniqueId: jest.fn(async (uid) => uid || null),
 }));
 jest.mock('../../src/utils/system-pm', () => ({
   sendSystemPm: jest.fn().mockResolvedValue(),
@@ -233,12 +234,14 @@ describe('GET /api/reports - search and enrichment', () => {
     expect(computeDisplayScore).toHaveBeenCalledWith(75, 1699e9);
   });
 
-  it('handles null reportedUserUniqueId', async () => {
+  it('handles null reportedUserUniqueId — server re-resolves so the field is irrelevant', async () => {
     queryDocs
       .mockResolvedValueOnce([
         {
           id: 'r1',
           reportedUserId: 'u1',
+          // Stored value is null; new enrichment re-resolves from reportedUserId
+          // via the identity mock, so this field is ignored entirely.
           reportedUserUniqueId: null,
           reporterId: 'rep1',
           status: 'pending',
@@ -247,7 +250,10 @@ describe('GET /api/reports - search and enrichment', () => {
         },
       ])
       .mockResolvedValueOnce([]);
-    getDoc.mockResolvedValueOnce({ id: 'rep1', displayName: 'Reporter' });
+    // Two getDoc calls now: one for the resolved reported user ('u1'), one for rep1.
+    getDoc
+      .mockResolvedValueOnce({ id: 'u1', displayName: 'Reported' })
+      .mockResolvedValueOnce({ id: 'rep1', displayName: 'Reporter' });
     const res = await request(app).get('/api/reports?status=pending');
     expect(res.status).toBe(200);
     expect(res.body.users).toHaveLength(1);

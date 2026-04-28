@@ -60,6 +60,9 @@ jest.mock('../../src/utils/log', () => ({
 jest.mock('../../src/middleware/auth', () => ({
   requireAdmin: jest.fn(() => false),
   clearSuspensionCache: jest.fn(),
+  // Identity mock so the IDOR re-resolve in POST /reports + GET /reports
+  // enrichment + resolve handlers returns the supplied uid as-is.
+  resolveUniqueId: jest.fn(async (uid) => uid || null),
 }));
 
 jest.mock('../../src/utils/system-pm', () => ({

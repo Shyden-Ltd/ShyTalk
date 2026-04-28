@@ -154,8 +154,8 @@ describe('POST /api/user/:uniqueId/warn', () => {
     expect(res.body.error).toMatch(/severity/i);
   });
 
-  // ─── Length-cap validators (G1: must protect against admin-side
-  // storage exhaustion of warning subcollection + audit log) ─────
+  // ─── Length-cap validators: must protect against admin-side
+  // storage exhaustion of warning subcollection + audit log ─────
 
   it('returns 400 when reason exceeds 500 chars', async () => {
     const app = createAdminApp();
