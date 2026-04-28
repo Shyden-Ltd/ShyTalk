@@ -20,6 +20,13 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0'
+      # Pod targets are static libraries embedded in the parent app — they
+      # don't ship as separate signed bundles. Disabling code-signing for
+      # pods prevents xcodebuild's global manual-signing CLI flags
+      # (CODE_SIGN_STYLE=Manual, PROVISIONING_PROFILE_SPECIFIER, etc.) from
+      # leaking onto every pod target and triggering the "X does not support
+      # provisioning profiles" error during release archives.
+      config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
     end
   end
 end
