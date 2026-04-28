@@ -273,4 +273,93 @@ describe('buildPartialFailureMessage — ordering invariants', () => {
     expect(sIdx).toBeGreaterThan(wIdx);
     expect(cIdx).toBeGreaterThan(sIdx);
   });
+
+  it('full chain order locked: every branch fires in canonical order (Pass-15 fix)', () => {
+    // Pass-15 test-analyzer criticality 7: a refactor moving `pms` ahead of
+    // `auditLog` (e.g. for "delivery first" UX) would silently change the
+    // admin-facing message order. Lock all 7 positions with one fixture.
+    const msg = buildPartialFailureMessage({
+      success: true,
+      warning: { failed: true, error: 'warning_create_failed' },
+      suspension: { failed: true, error: 'suspension_update_failed' },
+      cascade: {
+        partial: true,
+        userDocFailed: false,
+        failedRoomIds: ['r1', 'r2'],
+        rtdbEventsFailed: 3,
+      },
+      reports: { committed: 2, failed: 1, total: 3, error: 'reports_commit_failed' },
+      auditLog: { failed: true, error: 'audit_write_failed' },
+      lockRelease: { failed: true },
+      pms: { failed: 1, total: 4 },
+    });
+    const expected = [
+      'warning was NOT applied',
+      'suspension was NOT applied',
+      'room cascade partial',
+      "RTDB event(s) didn't deliver",
+      'reports did not commit',
+      'audit log failed — escalate to ops',
+      'report lock not released',
+      'PMs failed',
+    ];
+    let lastIdx = -1;
+    for (const fragment of expected) {
+      const idx = msg.indexOf(fragment);
+      expect(idx).toBeGreaterThan(lastIdx);
+      lastIdx = idx;
+    }
+    // Verify exactly 8 semicolon-separated parts (the 8 positions above).
+    expect(msg.split('; ').length).toBe(8);
+  });
+});
+
+describe('buildPartialFailureMessage — Number.isFinite edge cases (Pass-15 fix)', () => {
+  // Pass-15 test-analyzer criticality 6: typeof === 'number' admits NaN,
+  // ±Infinity, and negatives. NaN > 0 is false, so a misimplemented backend
+  // sending `failed: NaN` would silently omit the toast — the exact
+  // silent-failure class the lib was created to defend against.
+
+  it('NaN failed counts do not trigger toasts', () => {
+    expect(buildPartialFailureMessage({ success: true, reports: { failed: NaN } })).toBeNull();
+    expect(buildPartialFailureMessage({ success: true, pms: { failed: NaN } })).toBeNull();
+    expect(
+      buildPartialFailureMessage({ success: true, cascade: { rtdbEventsFailed: NaN } }),
+    ).toBeNull();
+  });
+
+  it('Infinity failed counts do not trigger toasts', () => {
+    expect(buildPartialFailureMessage({ success: true, reports: { failed: Infinity } })).toBeNull();
+    expect(buildPartialFailureMessage({ success: true, pms: { failed: Infinity } })).toBeNull();
+    expect(
+      buildPartialFailureMessage({ success: true, cascade: { rtdbEventsFailed: -Infinity } }),
+    ).toBeNull();
+  });
+
+  it('negative failed counts do not trigger toasts (corrupted counter)', () => {
+    expect(buildPartialFailureMessage({ success: true, reports: { failed: -3 } })).toBeNull();
+    expect(buildPartialFailureMessage({ success: true, pms: { failed: -1 } })).toBeNull();
+    expect(
+      buildPartialFailureMessage({ success: true, cascade: { rtdbEventsFailed: -1 } }),
+    ).toBeNull();
+  });
+
+  it('NaN total falls back to computed/fallback (no NaN leaks into rendered text)', () => {
+    const msg = buildPartialFailureMessage({
+      success: true,
+      reports: { failed: 3, committed: 2, total: NaN },
+    });
+    // total NaN falls back to failed (3) + committed (2) = 5
+    expect(msg).toContain('3/5 reports did not commit');
+    expect(msg).not.toContain('NaN');
+  });
+
+  it('NaN pms.total renders ? (no NaN leak)', () => {
+    const msg = buildPartialFailureMessage({
+      success: true,
+      pms: { failed: 2, total: NaN },
+    });
+    expect(msg).toContain('2/? PMs failed');
+    expect(msg).not.toContain('NaN');
+  });
 });
