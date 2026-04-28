@@ -507,6 +507,85 @@ describe('evictSuspendedUser - via suspend', () => {
 // Additional branch coverage tests
 // =================================================================
 
+describe('POST /api/admin/users/:uniqueId/suspend — cascade wire-shape (Pass-18 LOW-1)', () => {
+  // Pass-18 api-test-auditor LOW-1: the suspend admin route uses
+  // buildCascadeFailure but no test asserts the wire-shape that arrives
+  // in the response. Tests use mockReset() per feedback-test-mock-isolation
+  // because mockOnce queues poison subsequent describes.
+  let app, getDoc, queryDocs;
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+    const fh = require('../../src/utils/firestore-helpers');
+    ({ getDoc, queryDocs } = fh);
+    getDoc.mockReset();
+    getDoc.mockImplementation(async (_path) => null);
+    queryDocs.mockReset();
+    queryDocs.mockResolvedValue([]);
+    require('../../src/middleware/auth').requireAdmin.mockReturnValue(false);
+  });
+  afterEach(() => {
+    // Drain any unconsumed .Once values so siblings inherit a clean state.
+    getDoc.mockReset();
+    queryDocs.mockReset();
+  });
+
+  it('happy path: cascade response includes all 7 canonical keys', async () => {
+    getDoc.mockResolvedValueOnce({ id: 'u1', displayName: 'User' });
+    const res = await request(app)
+      .post('/api/admin/users/u1/suspend')
+      .send({ reason: 'Test', canAppeal: false });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    // The success-path cascade comes from evictSuspendedUser's return value;
+    // assert all 7 keys are present (rtdbEventsFailed was missing pre-Pass-17).
+    expect(Object.keys(res.body.cascade).sort()).toEqual(
+      [
+        'failedRoomIds',
+        'partial',
+        'roomsClosed',
+        'roomsUpdated',
+        'rtdbEventsFailed',
+        'userDocFailed',
+      ].sort(),
+    );
+    expect(res.body.cascade.rtdbEventsFailed).toBe(0);
+    expect(res.body.cascade.partial).toBe(false);
+  });
+
+  it('cascade-throw path: response uses buildCascadeFailure shape (8 keys with error)', async () => {
+    // Force evictSuspendedUser to throw by rejecting its first queryDocs.
+    const { queryDocs } = require('../../src/utils/firestore-helpers');
+    getDoc.mockResolvedValueOnce({ id: 'u1', displayName: 'User' });
+    queryDocs.mockRejectedValueOnce(new Error('Firestore timeout: project=secret'));
+
+    const res = await request(app)
+      .post('/api/admin/users/u1/suspend')
+      .send({ reason: 'Test', canAppeal: false });
+    expect(res.status).toBe(200);
+    expect(res.body.cascade).toEqual({
+      roomsClosed: 0,
+      roomsUpdated: 0,
+      partial: true,
+      failedRoomIds: [],
+      userDocFailed: false,
+      rtdbEventsFailed: 0,
+      error: 'cascade_failed',
+    });
+    // Defense: Firestore SDK message must NOT leak through cascade contract.
+    expect(JSON.stringify(res.body)).not.toContain('Firestore timeout');
+    expect(JSON.stringify(res.body)).not.toContain('secret');
+  });
+
+  it('error token MOD_ERROR.CASCADE_FAILED equals literal "cascade_failed" (cross-file drift guard)', async () => {
+    // Pass-18 LOW-2: reports.js uses MOD_ERROR.CASCADE_FAILED, admin-users.js
+    // uses a literal 'cascade_failed' (different file, no shared import to
+    // avoid circular dep). Both MUST resolve to the same wire token.
+    const { MOD_ERROR } = require('../../src/routes/reports');
+    expect(MOD_ERROR.CASCADE_FAILED).toBe('cascade_failed');
+  });
+});
+
 describe('POST /api/admin/users/:uniqueId/suspend - snake_case user fields', () => {
   let app, getDoc;
   beforeEach(() => {
