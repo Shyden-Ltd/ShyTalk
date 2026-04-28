@@ -490,6 +490,7 @@ router.post('/reports/:id/resolve', async (req, res) => {
       );
 
     // Warning actions: create warning doc (which deducts GCS)
+    let warningFailed = false;
     if (action === 'warned' || action === 'warned_severe') {
       const severity = body?.severity || (action === 'warned_severe' ? 4 : 2);
       const warningReason = body?.reason || report.reason;
@@ -521,15 +522,22 @@ router.post('/reports/:id/resolve', async (req, res) => {
           }),
         );
       } catch (warnErr) {
+        // CRITICAL: createWarning failed — the user has NOT received the warning,
+        // their GCS has NOT been deducted, but the report is already marked
+        // resolved at the top of this handler. Surface partial-failure to the
+        // admin response so the UI can show "warning not applied — retry"
+        // instead of a green "Action complete" toast that lies.
         log.error('reports', 'Failed to create warning from report', {
           reportId: req.params.id,
           error: warnErr.message,
         });
+        warningFailed = true;
       }
     }
 
     // Suspension action: suspend the reported user
     let cascade = null;
+    let suspensionFailed = false;
     if (action === 'suspended') {
       const suspensionDays = body?.suspensionDays ? Number(body.suspensionDays) : 0;
       const canAppeal = body?.canAppeal ?? false;
@@ -596,10 +604,16 @@ router.post('/reports/:id/resolve', async (req, res) => {
           `Your account has been suspended.\n\nReason: ${report.reason || 'Moderation action'}${canAppeal ? '\n\nYou may submit an appeal.' : ''}`,
         ).catch(() => {});
       } catch (susErr) {
+        // CRITICAL: the suspension user-doc update threw — the user has NOT
+        // been suspended even though the report is marked resolved. Surface
+        // to the admin response (mirroring the cascade contract) so the UI
+        // can show "suspension not applied — retry" instead of a misleading
+        // success toast.
         log.error('reports', 'Failed to suspend user from resolve', {
           reportId: req.params.id,
           error: susErr.message,
         });
+        suspensionFailed = true;
       }
     }
 
@@ -634,7 +648,18 @@ router.post('/reports/:id/resolve', async (req, res) => {
     // cleared to take the next moderation action against this user).
     await db.doc(`reportLocks/${req.params.id}`).delete();
 
-    res.json(cascade ? { success: true, cascade } : { success: true });
+    // Build response surfacing any partial moderation-action failures so the
+    // admin UI can branch on `warning.failed` / `suspension.failed` / `cascade.partial`
+    // rather than treating every 200 as full success.
+    const responseBody = { success: true };
+    if (cascade) responseBody.cascade = cascade;
+    if (warningFailed) {
+      responseBody.warning = { failed: true, error: 'warning_create_failed' };
+    }
+    if (suspensionFailed) {
+      responseBody.suspension = { failed: true, error: 'suspension_update_failed' };
+    }
+    res.json(responseBody);
   } catch (err) {
     log.error('reports', 'POST /api/reports/:id/resolve failed', {
       reportId: req.params.id,
@@ -696,6 +721,7 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
     }));
 
     // Apply warning if applicable (uses createWarning to write warning doc + update user)
+    let warningFailed = false;
     if (action === 'warned' || action === 'warned_severe') {
       const severity = body?.severity || (action === 'warned_severe' ? 4 : 2);
       const warningReason = body?.reason || 'Multiple reports';
@@ -730,15 +756,19 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
           }),
         );
       } catch (warnErr) {
+        // CRITICAL: same as the single-resolve path — surface partial failure
+        // so admin UI can show "warning not applied" instead of green toast.
         log.error('reports', 'Failed to create warning from bulk resolve', {
           userId: req.params.userId,
           error: warnErr.message,
         });
+        warningFailed = true;
       }
     }
 
     // Suspension action: suspend the reported user
     let cascade = null;
+    let suspensionFailed = false;
     if (action === 'suspended') {
       const suspensionDays = body?.suspensionDays ? Number(body.suspensionDays) : 0;
       const canAppeal = body?.canAppeal ?? false;
@@ -829,10 +859,12 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
             }),
           );
       } catch (susErr) {
+        // CRITICAL: same as single-resolve — surface partial failure.
         log.error('reports', 'Failed to suspend user from bulk resolve', {
           userId: req.params.userId,
           error: susErr.message,
         });
+        suspensionFailed = true;
       }
     }
 
@@ -886,11 +918,18 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
       );
     }
 
-    res.json(
-      cascade
-        ? { success: true, resolved: reports.length, cascade }
-        : { success: true, resolved: reports.length },
-    );
+    // Same partial-failure response shape as the single-resolve handler so
+    // admin UI can surface warning.failed / suspension.failed / cascade.partial
+    // instead of treating every 200 as full moderation success.
+    const responseBody = { success: true, resolved: reports.length };
+    if (cascade) responseBody.cascade = cascade;
+    if (warningFailed) {
+      responseBody.warning = { failed: true, error: 'warning_create_failed' };
+    }
+    if (suspensionFailed) {
+      responseBody.suspension = { failed: true, error: 'suspension_update_failed' };
+    }
+    res.json(responseBody);
   } catch (err) {
     log.error('reports', 'POST /api/reports/resolve-all/:userId failed', {
       userId: req.params.userId,

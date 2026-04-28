@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 /**
  * Comprehensive coverage tests for src/routes/reports.js
  */
@@ -314,7 +313,11 @@ describe('POST /api/reports/:id/resolve - edge cases', () => {
     require('../../src/middleware/auth').requireAdmin.mockReturnValue(false);
   });
 
-  it('logs error when createWarning fails', async () => {
+  it('surfaces warning.failed in response when createWarning throws (single-resolve)', async () => {
+    // Pass-9 partial-failure contract: a warn that failed silently used to return
+    // {success:true} and only log.error — the admin UI showed "Resolved" while no
+    // warning ever landed. The route now surfaces a `warning: { failed: true,
+    // error: 'warning_create_failed' }` block so the admin can retry.
     const { createWarning } = require('../../src/routes/admin-users');
     const log = require('../../src/utils/log');
     createWarning.mockRejectedValueOnce(new Error('fail'));
@@ -327,6 +330,13 @@ describe('POST /api/reports/:id/resolve - edge cases', () => {
     });
     const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'warned' });
     expect(res.status).toBe(200);
+    expect(res.body).toEqual(
+      expect.objectContaining({
+        success: true,
+        warning: { failed: true, error: 'warning_create_failed' },
+      }),
+    );
+    expect(res.body.suspension).toBeUndefined();
     expect(log.error).toHaveBeenCalledWith(
       'reports',
       'Failed to create warning from report',
@@ -355,7 +365,11 @@ describe('POST /api/reports/:id/resolve - edge cases', () => {
     );
   });
 
-  it('logs error when suspension fails from resolve', async () => {
+  it('surfaces suspension.failed in response when user-doc update throws (single-resolve)', async () => {
+    // Pass-9 partial-failure contract: a suspension that failed silently used to
+    // return {success:true} and only log.error — admin UI claimed the user was
+    // banned while their account stayed unrestricted. Route now surfaces
+    // `suspension: { failed: true, error: 'suspension_update_failed' }`.
     const log = require('../../src/utils/log');
     getDoc
       .mockResolvedValueOnce({
@@ -369,6 +383,13 @@ describe('POST /api/reports/:id/resolve - edge cases', () => {
     mockDocUpdate.mockResolvedValueOnce().mockRejectedValueOnce(new Error('fail'));
     const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'suspended' });
     expect(res.status).toBe(200);
+    expect(res.body).toEqual(
+      expect.objectContaining({
+        success: true,
+        suspension: { failed: true, error: 'suspension_update_failed' },
+      }),
+    );
+    expect(res.body.warning).toBeUndefined();
     expect(log.error).toHaveBeenCalledWith(
       'reports',
       'Failed to suspend user from resolve',
@@ -579,7 +600,10 @@ describe('POST /api/reports/resolve-all/:userId - warn + suspend', () => {
     expect(createWarning).toHaveBeenCalledWith('target', expect.objectContaining({ severity: 4 }));
   });
 
-  it('logs error when createWarning fails in bulk', async () => {
+  it('surfaces warning.failed in response when createWarning throws (bulk-resolve)', async () => {
+    // Pass-9 partial-failure contract: bulk-resolve must propagate the same
+    // failure flag as single-resolve so the admin sees the warning didn't land
+    // even when reports.length>0.
     const { createWarning } = require('../../src/routes/admin-users');
     const log = require('../../src/utils/log');
     createWarning.mockRejectedValueOnce(new Error('fail'));
@@ -596,6 +620,14 @@ describe('POST /api/reports/resolve-all/:userId - warn + suspend', () => {
       .post('/api/reports/resolve-all/target')
       .send({ action: 'warned' });
     expect(res.status).toBe(200);
+    expect(res.body).toEqual(
+      expect.objectContaining({
+        success: true,
+        resolved: 1,
+        warning: { failed: true, error: 'warning_create_failed' },
+      }),
+    );
+    expect(res.body.suspension).toBeUndefined();
     expect(log.error).toHaveBeenCalledWith(
       'reports',
       'Failed to create warning from bulk resolve',
@@ -647,7 +679,10 @@ describe('POST /api/reports/resolve-all/:userId - warn + suspend', () => {
     expect(call[0].suspensionEndDate).toBeNull();
   });
 
-  it('logs error when suspension fails in bulk', async () => {
+  it('surfaces suspension.failed in response when user-doc update throws (bulk-resolve)', async () => {
+    // Pass-9 partial-failure contract: bulk-resolve suspension must surface the
+    // same flag as single-resolve. Without this, an admin clicking "Resolve all
+    // and suspend" sees success while the target's account is still active.
     const log = require('../../src/utils/log');
     queryDocs.mockResolvedValueOnce([
       {
@@ -664,6 +699,14 @@ describe('POST /api/reports/resolve-all/:userId - warn + suspend', () => {
       .post('/api/reports/resolve-all/target')
       .send({ action: 'suspended' });
     expect(res.status).toBe(200);
+    expect(res.body).toEqual(
+      expect.objectContaining({
+        success: true,
+        resolved: 1,
+        suspension: { failed: true, error: 'suspension_update_failed' },
+      }),
+    );
+    expect(res.body.warning).toBeUndefined();
     expect(log.error).toHaveBeenCalledWith(
       'reports',
       'Failed to suspend user from bulk resolve',
@@ -1166,6 +1209,12 @@ describe('Pass-7/8 backfill: bulk-resolve audit-log resilience', () => {
     expect(auditEntry.action).toBe('RESOLVE_ALL_REPORTS');
     expect(auditEntry.targetUserId).toBe('firebase-uid-77');
     // Lock release IS critical-path even on resolveUniqueId throw.
+    // Path-tight: assert the *correct* document was deleted (the per-target
+    // throttle lock), not just that *some* delete fired. A path-blind
+    // assertion would pass even if the route accidentally deleted the report
+    // row or the audit log instead.
+    const { db } = require('../../src/utils/firebase');
+    expect(db.doc).toHaveBeenCalledWith('reportLocks/firebase-uid-77');
     expect(mockDocDelete).toHaveBeenCalled();
   });
 
@@ -1197,6 +1246,8 @@ describe('Pass-7/8 backfill: bulk-resolve audit-log resilience', () => {
       expect.any(Object),
     );
     // Lock release IS critical-path even when audit fails.
+    const { db } = require('../../src/utils/firebase');
+    expect(db.doc).toHaveBeenCalledWith('reportLocks/firebase-uid-77');
     expect(mockDocDelete).toHaveBeenCalled();
   });
 });
@@ -1234,7 +1285,10 @@ describe('Pass-8 backfill: single-resolve audit-log .set() fire-and-forget', () 
       'Failed to write RESOLVE_REPORT audit log',
       expect.any(Object),
     );
-    // Lock release IS critical-path even when audit fails.
+    // Lock release IS critical-path even when audit fails. Path-tight to
+    // catch a regression where the route deletes a different document.
+    const { db } = require('../../src/utils/firebase');
+    expect(db.doc).toHaveBeenCalledWith('reportLocks/r1');
     expect(mockDocDelete).toHaveBeenCalled();
   });
 
@@ -1261,5 +1315,131 @@ describe('Pass-8 backfill: single-resolve audit-log .set() fire-and-forget', () 
     expect(mockDocUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'resolved', actionTaken: 'dismissed' }),
     );
+  });
+});
+
+// =================================================================
+// Pass-9 backfill: positive assertions on the partial-failure response shape.
+//
+// The four "logs error when ... fails" tests above prove that *when* a
+// downstream action throws, the route surfaces a `warning.failed` /
+// `suspension.failed` block. They do NOT prove the converse: that the success
+// path is *clean* of these flags. Without the negative case, a regression that
+// always emits `warning: { failed: true }` would still pass — log.error wasn't
+// asserted on the success path either.
+//
+// These tests lock both directions:
+//   1. happy path: response is `{success:true}` (plus cascade), no warning/suspension keys
+//   2. dual-failure: warn-throw AND suspend-throw on the same handler must produce
+//      both flags. (Single-action paths can only fail one at a time, so dual is only
+//      meaningful where one handler invokes both — bulk-resolve with action that
+//      cascades. We test the simpler scope here: action='warned' fails warning;
+//      action='suspended' fails suspension; the response shape never co-mingles.)
+// =================================================================
+describe('Pass-9: positive partial-failure response shape', () => {
+  let app;
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+    require('../../src/middleware/auth').requireAdmin.mockReturnValue(false);
+  });
+
+  it('single-resolve happy path: warned action returns no warning/suspension flags when createWarning succeeds', async () => {
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    getDoc.mockResolvedValueOnce({
+      id: 'r1',
+      reportedUserId: 't',
+      reportedUserUniqueId: 'u1',
+      reporterId: 'rep1',
+      reason: 'x',
+    });
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'warned' });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    // Critical: success path MUST NOT pollute the response with stale flags.
+    expect(res.body.warning).toBeUndefined();
+    expect(res.body.suspension).toBeUndefined();
+  });
+
+  it('single-resolve happy path: suspended action returns no warning/suspension flags when user-doc updates succeed', async () => {
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    getDoc
+      .mockResolvedValueOnce({
+        id: 'r1',
+        reportedUserId: 't',
+        reportedUserUniqueId: 'u1',
+        reporterId: 'rep1',
+        reason: 'severe',
+      })
+      .mockResolvedValueOnce({ id: 'u1', displayName: 'User' });
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'suspended' });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.warning).toBeUndefined();
+    expect(res.body.suspension).toBeUndefined();
+  });
+
+  it('bulk-resolve happy path: dismissed action returns success+resolved with no failure flags', async () => {
+    const { queryDocs } = require('../../src/utils/firestore-helpers');
+    queryDocs.mockResolvedValueOnce([
+      {
+        id: 'r1',
+        reportedUserId: 'target',
+        reportedUserUniqueId: 'ut',
+        reporterId: 'rep1',
+        status: 'pending',
+      },
+    ]);
+    const res = await request(app)
+      .post('/api/reports/resolve-all/target')
+      .send({ action: 'dismissed' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(expect.objectContaining({ success: true, resolved: 1 }));
+    expect(res.body.warning).toBeUndefined();
+    expect(res.body.suspension).toBeUndefined();
+  });
+
+  it('single-resolve: warning.failed flag is structurally exact (no extra keys leak in)', async () => {
+    // Lock the contract: the failure block must be EXACTLY { failed, error }.
+    // A regression that adds `error.stack` or the raw Error object would leak
+    // server internals to the admin client — which has happened before in
+    // similar Express handlers across the repo.
+    const { createWarning } = require('../../src/routes/admin-users');
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    createWarning.mockRejectedValueOnce(new Error('boom: secret stack trace'));
+    getDoc.mockResolvedValueOnce({
+      id: 'r1',
+      reportedUserId: 't',
+      reportedUserUniqueId: 'u1',
+      reporterId: 'rep1',
+      reason: 'x',
+    });
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'warned' });
+    expect(res.status).toBe(200);
+    expect(res.body.warning).toEqual({ failed: true, error: 'warning_create_failed' });
+    // Defense-in-depth: nothing from the thrown Error should leak.
+    expect(JSON.stringify(res.body)).not.toContain('secret stack trace');
+    expect(JSON.stringify(res.body)).not.toContain('boom');
+  });
+
+  it('single-resolve: suspension.failed flag is structurally exact (no extra keys leak in)', async () => {
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    getDoc
+      .mockResolvedValueOnce({
+        id: 'r1',
+        reportedUserId: 't',
+        reportedUserUniqueId: 'u1',
+        reporterId: 'rep1',
+        reason: 'severe',
+      })
+      .mockResolvedValueOnce({ id: 'u1', displayName: 'User' });
+    mockDocUpdate
+      .mockResolvedValueOnce()
+      .mockRejectedValueOnce(new Error('boom: secret stack trace'));
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'suspended' });
+    expect(res.status).toBe(200);
+    expect(res.body.suspension).toEqual({ failed: true, error: 'suspension_update_failed' });
+    expect(JSON.stringify(res.body)).not.toContain('secret stack trace');
+    expect(JSON.stringify(res.body)).not.toContain('boom');
   });
 });
