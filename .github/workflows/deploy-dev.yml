@@ -190,7 +190,12 @@ jobs:
     name: Distribute iOS to TestFlight
     if: inputs.ios-testers
     runs-on: macos-15
-    timeout-minutes: 45
+    # Bumped from 45 -> 90 on 2026-04-28: K/Native linkReleaseFrameworkIosArm64
+    # has been taking 24-29 min on the macos-15 runner pool (was ~10 min in
+    # mid-April). Plus xcodebuild archive ~15-20 min + pod install ~3 min +
+    # TestFlight upload ~2 min = comfortable 50-min worst case. 90 min gives
+    # headroom for runner-pool slowdowns without impacting normal-case time.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 

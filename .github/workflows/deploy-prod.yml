@@ -221,7 +221,10 @@ jobs:
     needs: [validate-release]
     if: inputs.ios
     runs-on: macos-latest
-    timeout-minutes: 45
+    # Bumped from 45 -> 90 on 2026-04-28: K/Native linkReleaseFrameworkIosArm64
+    # plus xcodebuild archive plus App Store upload total ~50 min worst case
+    # on slow days; 90 gives runner-pool-slowdown headroom.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
