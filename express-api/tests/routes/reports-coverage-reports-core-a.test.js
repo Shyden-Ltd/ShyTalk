@@ -1443,3 +1443,247 @@ describe('Pass-9: positive partial-failure response shape', () => {
     expect(JSON.stringify(res.body)).not.toContain('boom');
   });
 });
+
+// =================================================================
+// Pass-10 backfill: cascade-failure response shape, audit-log flag,
+// reports-commit failure, and exact-keys structural assertions.
+//
+// Scope: the *glue code* in reports.js that converts an `evictSuspendedUser`
+// throw into the on-wire `cascade: { partial: true, ... }` shape was
+// previously uncovered. The util itself is tested in evict-suspended-user.test.js,
+// but reports.js's catch block is its own contract — a regression that omits
+// `userDocFailed` or swallows the throw would not be caught by util tests.
+// =================================================================
+describe('Pass-10: cascade + audit + commit failure response shape', () => {
+  let app;
+  // Pass-10 tests use mockOnce queues whose leftover values would poison
+  // subsequent tests if not reset. Per feedback-test-mock-isolation.md the
+  // canonical pattern is `mockReset()` + restore defaults — `clearAllMocks()`
+  // only wipes call history, not queued .Once values.
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+    mockDocSet.mockReset();
+    mockDocSet.mockResolvedValue();
+    mockDocUpdate.mockReset();
+    mockDocUpdate.mockResolvedValue();
+    mockBatchCommit.mockReset();
+    mockBatchCommit.mockResolvedValue();
+    const fh = require('../../src/utils/firestore-helpers');
+    fh.queryDocs.mockReset();
+    fh.queryDocs.mockResolvedValue([]);
+    fh.getDoc.mockReset();
+    fh.getDoc.mockImplementation(async (path) => {
+      const { db } = require('../../src/utils/firebase');
+      const snap = await db.doc(path).get();
+      return snap.exists ? { id: snap.id, ...snap.data() } : null;
+    });
+    require('../../src/utils/system-pm').sendSystemPm.mockReset();
+    require('../../src/utils/system-pm').sendSystemPm.mockResolvedValue();
+    require('../../src/routes/admin-users').createWarning.mockReset();
+    require('../../src/routes/admin-users').createWarning.mockResolvedValue();
+    require('../../src/middleware/auth').requireAdmin.mockReturnValue(false);
+    require('../../src/middleware/auth').resolveUniqueId.mockReset();
+    require('../../src/middleware/auth').resolveUniqueId.mockImplementation(
+      async (uid) => uid || null,
+    );
+  });
+
+  it('single-resolve: cascade response shape is exact when evictSuspendedUser throws (non-phase error)', async () => {
+    // queryDocs is the first sync call inside evictSuspendedUser (Promise.all).
+    // Reject it so evict throws; the route's catch builds the cascade contract.
+    const { getDoc, queryDocs } = require('../../src/utils/firestore-helpers');
+    getDoc
+      .mockResolvedValueOnce({
+        id: 'r1',
+        reportedUserId: 't',
+        reportedUserUniqueId: 'u1',
+        reporterId: 'rep1',
+        reason: 'severe',
+      })
+      .mockResolvedValueOnce({ id: 'u1', displayName: 'User' });
+    queryDocs.mockRejectedValueOnce(new Error('Firestore timeout: project=secret'));
+
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'suspended' });
+    expect(res.status).toBe(200);
+    expect(res.body.cascade).toEqual({
+      roomsClosed: 0,
+      roomsUpdated: 0,
+      partial: true,
+      failedRoomIds: [],
+      userDocFailed: false,
+      error: 'cascade_failed',
+    });
+    // Defense: the Firestore error message must NOT leak.
+    expect(JSON.stringify(res.body)).not.toContain('Firestore timeout');
+    expect(JSON.stringify(res.body)).not.toContain('secret');
+  });
+
+  it('single-resolve: cascade.userDocFailed=true when evict throws with phase=user_doc tag', async () => {
+    const { getDoc, queryDocs } = require('../../src/utils/firestore-helpers');
+    getDoc
+      .mockResolvedValueOnce({
+        id: 'r1',
+        reportedUserId: 't',
+        reportedUserUniqueId: 'u1',
+        reporterId: 'rep1',
+        reason: 'severe',
+      })
+      .mockResolvedValueOnce({ id: 'u1', displayName: 'User' });
+    queryDocs.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    // Audit-log .set() (1st call) succeeds; evict's user-doc set+merge (2nd call)
+    // rejects with phase tag. evict-suspended-user.js's catch tags then re-throws.
+    const phaseErr = Object.assign(new Error('user doc gone'), { phase: 'user_doc' });
+    mockDocSet.mockResolvedValueOnce();
+    mockDocSet.mockRejectedValueOnce(phaseErr);
+
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'suspended' });
+    expect(res.status).toBe(200);
+    expect(res.body.cascade).toEqual({
+      roomsClosed: 0,
+      roomsUpdated: 0,
+      partial: true,
+      failedRoomIds: [],
+      userDocFailed: true,
+      error: 'cascade_failed',
+    });
+  });
+
+  it('single-resolve: auditLog.failed surfaces when audit .set() rejects', async () => {
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    getDoc.mockResolvedValueOnce({
+      id: 'r1',
+      reportedUserId: 't',
+      reportedUserUniqueId: 'u1',
+      reporterId: 'rep1',
+      reason: 'x',
+    });
+    // First .set() in the dismissed-action flow IS the audit log — reject it.
+    mockDocSet.mockRejectedValueOnce(new Error('Firestore quota'));
+
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'dismissed' });
+    expect(res.status).toBe(200);
+    expect(res.body.auditLog).toEqual({ failed: true, error: 'audit_write_failed' });
+    expect(res.body.success).toBe(true);
+  });
+
+  it('bulk-resolve: reports.failed surfaces when chunk-commit throws after suspend committed', async () => {
+    // Pass-10 C1: previously a chunk-commit throw bubbled to the outer catch
+    // and 500'd the response — admin retried, double-suspending the user.
+    // Now the throw is swallowed and surfaced via response.reports.
+    const { queryDocs, getDoc } = require('../../src/utils/firestore-helpers');
+    queryDocs.mockResolvedValueOnce([
+      {
+        id: 'r1',
+        reportedUserId: 'target',
+        reportedUserUniqueId: 'ut',
+        reporterId: 'rep1',
+        status: 'pending',
+      },
+    ]);
+    getDoc.mockResolvedValueOnce({ id: 'ut', displayName: 'User' });
+    mockBatchCommit.mockRejectedValueOnce(new Error('Firestore unavailable'));
+
+    const res = await request(app)
+      .post('/api/reports/resolve-all/target')
+      .send({ action: 'suspended' });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.resolved).toBe(0);
+    expect(res.body.reports).toEqual({
+      committed: 0,
+      failed: 1,
+      error: 'reports_commit_failed',
+    });
+    expect(res.body.suspension).toBeUndefined();
+  });
+
+  it('bulk-resolve: pms.failed counter records reporter PM throws', async () => {
+    const { queryDocs } = require('../../src/utils/firestore-helpers');
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+    queryDocs.mockResolvedValueOnce([
+      { id: 'r1', reportedUserId: 'target', reporterId: 'rep1', status: 'pending' },
+      { id: 'r2', reportedUserId: 'target', reporterId: 'rep2', status: 'pending' },
+    ]);
+    sendSystemPm.mockResolvedValueOnce();
+    sendSystemPm.mockRejectedValueOnce(new Error('FCM throttled'));
+
+    const res = await request(app)
+      .post('/api/reports/resolve-all/target')
+      .send({ action: 'dismissed' });
+    expect(res.status).toBe(200);
+    expect(res.body.pms).toEqual({ failed: 1, total: 2 });
+  });
+
+  it('bulk-resolve: resolved=0 happy-path emits no failure flags', async () => {
+    const { queryDocs } = require('../../src/utils/firestore-helpers');
+    queryDocs.mockResolvedValueOnce([]);
+
+    const res = await request(app)
+      .post('/api/reports/resolve-all/no-such-user')
+      .send({ action: 'dismissed' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, resolved: 0 });
+    expect(res.body.warning).toBeUndefined();
+    expect(res.body.suspension).toBeUndefined();
+    expect(res.body.cascade).toBeUndefined();
+    expect(res.body.auditLog).toBeUndefined();
+    expect(res.body.reports).toBeUndefined();
+    expect(res.body.pms).toBeUndefined();
+  });
+
+  it('single-resolve: warned_severe happy-path emits no failure flags (parity with warned)', async () => {
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    getDoc.mockResolvedValueOnce({
+      id: 'r1',
+      reportedUserId: 't',
+      reportedUserUniqueId: 'u1',
+      reporterId: 'rep1',
+      reason: 'severe',
+    });
+    const res = await request(app)
+      .post('/api/reports/r1/resolve')
+      .send({ action: 'warned_severe' });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.warning).toBeUndefined();
+    expect(res.body.suspension).toBeUndefined();
+    expect(res.body.cascade).toBeUndefined();
+    expect(res.body.auditLog).toBeUndefined();
+  });
+
+  it('warning.failed object has EXACTLY two keys (no leak via key-count regression)', async () => {
+    // Tighter than JSON.stringify: a future addition of `error.detail` or
+    // `originalError` carrying a safe-looking string would still fail this.
+    const { createWarning } = require('../../src/routes/admin-users');
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    createWarning.mockRejectedValueOnce(new Error('boom'));
+    getDoc.mockResolvedValueOnce({
+      id: 'r1',
+      reportedUserId: 't',
+      reportedUserUniqueId: 'u1',
+      reporterId: 'rep1',
+      reason: 'x',
+    });
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'warned' });
+    expect(res.body.warning).toBeDefined();
+    expect(Object.keys(res.body.warning).sort()).toEqual(['error', 'failed']);
+  });
+
+  it('suspension.failed object has EXACTLY two keys', async () => {
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    getDoc
+      .mockResolvedValueOnce({
+        id: 'r1',
+        reportedUserId: 't',
+        reportedUserUniqueId: 'u1',
+        reporterId: 'rep1',
+        reason: 'severe',
+      })
+      .mockResolvedValueOnce({ id: 'u1', displayName: 'User' });
+    mockDocUpdate.mockResolvedValueOnce().mockRejectedValueOnce(new Error('boom'));
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'suspended' });
+    expect(res.body.suspension).toBeDefined();
+    expect(Object.keys(res.body.suspension).sort()).toEqual(['error', 'failed']);
+  });
+});

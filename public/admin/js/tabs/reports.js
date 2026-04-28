@@ -729,7 +729,31 @@ async function resolveReport(reportedUserId, resolveAll) {
       });
     }
 
-    showToast(`Report${resolveAll ? 's' : ''} resolved: ${actionLabel}`);
+    // Pass-9/10 partial-failure contract: surface every failed sub-action so
+    // the admin can retry individually instead of seeing a green toast that
+    // lies. Order matters — show failures first so they aren't buried.
+    const partialFailures = [];
+    if (result.warning?.failed) partialFailures.push('warning was NOT applied');
+    if (result.suspension?.failed) partialFailures.push('suspension was NOT applied');
+    if (result.cascade?.partial) {
+      const detail = result.cascade.userDocFailed
+        ? 'user-doc clear failed'
+        : `${(result.cascade.failedRoomIds || []).length} room(s) need manual cleanup`;
+      partialFailures.push(`room cascade partial — ${detail}`);
+    }
+    if (result.reports?.failed > 0) {
+      partialFailures.push(`${result.reports.failed}/${result.reports.failed + result.reports.committed} reports did not commit`);
+    }
+    if (result.auditLog?.failed) partialFailures.push('audit log failed — escalate to ops');
+    if (result.pms?.failed > 0) {
+      partialFailures.push(`${result.pms.failed}/${result.pms.total} reporter PMs failed`);
+    }
+
+    if (partialFailures.length > 0) {
+      showToast(`Partial: ${partialFailures.join('; ')}. Please retry the failed step.`, 'error');
+    } else {
+      showToast(`Report${resolveAll ? 's' : ''} resolved: ${actionLabel}`);
+    }
 
     if (result.autoEscalateSuggested) {
       showToast('This user has 5+ warnings. Consider suspending.', 'error');

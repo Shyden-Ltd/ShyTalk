@@ -50,6 +50,18 @@ const REPORTED_USER_NAME_MAX_LENGTH = 50;
 const EVIDENCE_URLS_MAX_COUNT = 10;
 const EVIDENCE_URL_MAX_LENGTH = 500;
 
+// Stable error tokens for the moderation partial-failure contract. Centralised
+// so the admin client (public/admin/js/tabs/reports.js) and i18n strings can
+// reference one source of truth — a typo or rename in either handler would
+// otherwise silently break the consumer's branch on the response body.
+const MOD_ERROR = Object.freeze({
+  WARNING_CREATE: 'warning_create_failed',
+  SUSPENSION_UPDATE: 'suspension_update_failed',
+  CASCADE: 'cascade_failed',
+  AUDIT_WRITE: 'audit_write_failed',
+  REPORTS_COMMIT: 'reports_commit_failed',
+});
+
 /**
  * Remove invalid FCM tokens from admin user docs in Firestore.
  * For each invalid token, finds which admin user doc contains it and removes it.
@@ -443,13 +455,10 @@ router.post('/reports/:id/resolve', async (req, res) => {
       resolvedBy: req.auth.uid,
     });
 
-    // Audit log: targetUserId logged as the canonical uniqueId so forensic
-    // queries by uniqueId surface this entry, matching the convention in
-    // admin-economy.js / admin-temp-id.js / admin-users.js. The resolution
-    // is wrapped in try/catch — the report-status update at line 439 has
-    // ALREADY committed, so a transient Firestore throw here must not 500
-    // the whole request. Fall back to the raw reportedUserId in that case;
-    // the audit log gets a less-queryable row but the response succeeds.
+    // targetUserId is the canonical uniqueId so forensic queries match
+    // admin-economy.js / admin-temp-id.js / admin-users.js convention. Falls
+    // back to the raw uid if the resolve throws — report is already committed
+    // above and a 500 here would lie about the moderation state.
     let auditTargetUniqueId;
     if (resolvedTargetUniqueId) {
       auditTargetUniqueId = resolvedTargetUniqueId;
@@ -465,13 +474,12 @@ router.post('/reports/:id/resolve', async (req, res) => {
         auditTargetUniqueId = report.reportedUserId;
       }
     }
-    // Audit-log .set() is fire-and-forget. The report-status update at the
-    // top of this handler has already committed by this point; if the
-    // audit-log write throws (Firestore quota, transient outage), the
-    // user-visible action has already taken effect. Failing the response
-    // would lie to the admin UI ("error happened, retry") when the action
-    // actually succeeded. Log the failure server-side and keep going.
-    db.doc(`adminAuditLog/${generateId()}`)
+    // Fire-and-forget so a Firestore throw doesn't 500 a fully-applied
+    // moderation action. The promise is awaited later — but only via .catch —
+    // so the failure becomes a flag in the response, never an upstream throw.
+    let auditLogFailed = false;
+    const auditPromise = db
+      .doc(`adminAuditLog/${generateId()}`)
       .set(
         {
           adminId: req.auth.uid,
@@ -482,12 +490,13 @@ router.post('/reports/:id/resolve', async (req, res) => {
         },
         { merge: true },
       )
-      .catch((err) =>
+      .catch((err) => {
         log.error('reports', 'Failed to write RESOLVE_REPORT audit log', {
           reportId: req.params.id,
           error: err?.message ?? String(err),
-        }),
-      );
+        });
+        auditLogFailed = true;
+      });
 
     // Warning actions: create warning doc (which deducts GCS)
     let warningFailed = false;
@@ -522,11 +531,9 @@ router.post('/reports/:id/resolve', async (req, res) => {
           }),
         );
       } catch (warnErr) {
-        // CRITICAL: createWarning failed — the user has NOT received the warning,
-        // their GCS has NOT been deducted, but the report is already marked
-        // resolved at the top of this handler. Surface partial-failure to the
-        // admin response so the UI can show "warning not applied — retry"
-        // instead of a green "Action complete" toast that lies.
+        // Report is already marked resolved above; failure here means the
+        // warning did NOT land. The admin must see this in the response body
+        // (not just log.error) to be able to retry.
         log.error('reports', 'Failed to create warning from report', {
           reportId: req.params.id,
           error: warnErr.message,
@@ -578,37 +585,29 @@ router.post('/reports/:id/resolve', async (req, res) => {
             userId: reportedUniqueId,
             error: cascadeErr.message,
           });
-          // Stable error token instead of cascadeErr.message — Firestore SDK
-          // error strings can include project/document paths and stack frames,
-          // which we don't want to ship over the wire even to admin clients.
-          // The full message is already logged server-side above.
-          //
-          // userDocFailed comes from the phase tag on the thrown error. The
-          // zero-rooms branch in evict-suspended-user.js tags its user-doc
-          // set+merge failure with `phase: 'user_doc'`; the initial-query
-          // throws have no phase tag, so we report userDocFailed: false and
-          // partial: true (rooms cascade aborted before producing detail).
+          // userDocFailed reads `cascadeErr.phase` set by evict-suspended-user.js
+          // when its user-doc set+merge throws; initial-query throws have no
+          // phase tag and surface as userDocFailed:false + partial:true.
           cascade = {
             roomsClosed: 0,
             roomsUpdated: 0,
             partial: true,
             failedRoomIds: [],
             userDocFailed: cascadeErr.phase === 'user_doc',
-            error: 'cascade_failed',
+            error: MOD_ERROR.CASCADE,
           };
         }
 
-        // Send suspension PM (fire-and-forget)
         sendSystemPm(
           report.reportedUserId,
           `Your account has been suspended.\n\nReason: ${report.reason || 'Moderation action'}${canAppeal ? '\n\nYou may submit an appeal.' : ''}`,
-        ).catch(() => {});
+        ).catch((err) =>
+          log.error('reports', 'Failed to send suspension PM from resolve', {
+            userId: report.reportedUserId,
+            error: err.message,
+          }),
+        );
       } catch (susErr) {
-        // CRITICAL: the suspension user-doc update threw — the user has NOT
-        // been suspended even though the report is marked resolved. Surface
-        // to the admin response (mirroring the cascade contract) so the UI
-        // can show "suspension not applied — retry" instead of a misleading
-        // success toast.
         log.error('reports', 'Failed to suspend user from resolve', {
           reportId: req.params.id,
           error: susErr.message,
@@ -642,22 +641,24 @@ router.post('/reports/:id/resolve', async (req, res) => {
       );
     }
 
-    // Release lock and write audit log in parallel
-    // The audit-log write above is already fire-and-forget; only block on
-    // the report-lock deletion which IS critical-path (admin needs the lock
-    // cleared to take the next moderation action against this user).
+    // Lock release IS critical-path — admin needs it cleared to take the
+    // next moderation action against this user.
     await db.doc(`reportLocks/${req.params.id}`).delete();
 
-    // Build response surfacing any partial moderation-action failures so the
-    // admin UI can branch on `warning.failed` / `suspension.failed` / `cascade.partial`
-    // rather than treating every 200 as full success.
+    // Resolve the audit-log promise so its outcome (success/.catch flag) is
+    // settled before we build the response. Never throws — .catch absorbs.
+    await auditPromise;
+
     const responseBody = { success: true };
     if (cascade) responseBody.cascade = cascade;
     if (warningFailed) {
-      responseBody.warning = { failed: true, error: 'warning_create_failed' };
+      responseBody.warning = { failed: true, error: MOD_ERROR.WARNING_CREATE };
     }
     if (suspensionFailed) {
-      responseBody.suspension = { failed: true, error: 'suspension_update_failed' };
+      responseBody.suspension = { failed: true, error: MOD_ERROR.SUSPENSION_UPDATE };
+    }
+    if (auditLogFailed) {
+      responseBody.auditLog = { failed: true, error: MOD_ERROR.AUDIT_WRITE };
     }
     res.json(responseBody);
   } catch (err) {
@@ -756,8 +757,6 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
           }),
         );
       } catch (warnErr) {
-        // CRITICAL: same as the single-resolve path — surface partial failure
-        // so admin UI can show "warning not applied" instead of green toast.
         log.error('reports', 'Failed to create warning from bulk resolve', {
           userId: req.params.userId,
           error: warnErr.message,
@@ -769,6 +768,8 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
     // Suspension action: suspend the reported user
     let cascade = null;
     let suspensionFailed = false;
+    let suspendAuditFailed = false;
+    let suspendAuditPromise = null;
     if (action === 'suspended') {
       const suspensionDays = body?.suspensionDays ? Number(body.suspensionDays) : 0;
       const canAppeal = body?.canAppeal ?? false;
@@ -809,23 +810,13 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
             userId: reportedUniqueId,
             error: cascadeErr.message,
           });
-          // Stable error token instead of cascadeErr.message — Firestore SDK
-          // error strings can include project/document paths and stack frames,
-          // which we don't want to ship over the wire even to admin clients.
-          // The full message is already logged server-side above.
-          //
-          // userDocFailed comes from the phase tag on the thrown error. The
-          // zero-rooms branch in evict-suspended-user.js tags its user-doc
-          // set+merge failure with `phase: 'user_doc'`; the initial-query
-          // throws have no phase tag, so we report userDocFailed: false and
-          // partial: true (rooms cascade aborted before producing detail).
           cascade = {
             roomsClosed: 0,
             roomsUpdated: 0,
             partial: true,
             failedRoomIds: [],
             userDocFailed: cascadeErr.phase === 'user_doc',
-            error: 'cascade_failed',
+            error: MOD_ERROR.CASCADE,
           };
         }
 
@@ -840,8 +831,8 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
           }),
         );
 
-        // Audit log for suspension action
-        db.doc(`adminAuditLog/${generateId()}`)
+        suspendAuditPromise = db
+          .doc(`adminAuditLog/${generateId()}`)
           .set(
             {
               adminId: req.auth.uid,
@@ -852,14 +843,14 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
             },
             { merge: true },
           )
-          .catch((err) =>
+          .catch((err) => {
             log.error('reports', 'Failed to write suspension audit log from bulk resolve', {
               userId: reportedUniqueId,
               error: err.message,
-            }),
-          );
+            });
+            suspendAuditFailed = true;
+          });
       } catch (susErr) {
-        // CRITICAL: same as single-resolve — surface partial failure.
         log.error('reports', 'Failed to suspend user from bulk resolve', {
           userId: req.params.userId,
           error: susErr.message,
@@ -868,21 +859,36 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
       }
     }
 
-    // Execute batch writes in chunks of 500
-    const combinedWrites = allWrites;
-    for (let i = 0; i < combinedWrites.length; i += 500) {
-      const chunk = combinedWrites.slice(i, i + 500);
+    // Wrap chunk-commit so a Firestore throw on chunk N (after warn/suspend
+    // already committed against the user) does NOT 500 the response. A 500
+    // here would leave the admin UI thinking the entire moderation action
+    // failed, when in fact warn/suspend applied — they'd retry, double-warning
+    // the user. Track which reports landed so the admin sees the truth.
+    let reportsCommitted = 0;
+    let reportsCommitFailed = false;
+    for (let i = 0; i < allWrites.length; i += 500) {
+      const chunk = allWrites.slice(i, i + 500);
       const batch = db.batch();
       for (const w of chunk) {
         batch.set(db.doc(w.path), w.data, { merge: true });
       }
-      await batch.commit();
+      try {
+        await batch.commit();
+        reportsCommitted += chunk.length;
+      } catch (chunkErr) {
+        log.error('reports', 'Failed to commit reports batch in bulk resolve', {
+          userId: req.params.userId,
+          chunkStart: i,
+          chunkSize: chunk.length,
+          error: chunkErr.message,
+        });
+        reportsCommitFailed = true;
+      }
     }
 
-    // Audit log: fire-and-forget. The bulk batch commits + suspension cascade
-    // have already committed at this point; a Firestore throw here must not
-    // 500 a fully-applied moderation action.
-    db.doc(`adminAuditLog/${generateId()}`)
+    let bulkAuditFailed = false;
+    const bulkAuditPromise = db
+      .doc(`adminAuditLog/${generateId()}`)
       .set(
         {
           adminId: req.auth.uid,
@@ -893,41 +899,57 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
         },
         { merge: true },
       )
-      .catch((err) =>
+      .catch((err) => {
         log.error('reports', 'Failed to write RESOLVE_ALL_REPORTS audit log', {
           userId: req.params.userId,
           error: err?.message ?? String(err),
-        }),
-      );
+        });
+        bulkAuditFailed = true;
+      });
 
-    // Lock release IS critical-path (admin needs the lock cleared to take
-    // the next moderation action against this user).
+    // Lock release IS critical-path — admin needs it cleared to take the
+    // next moderation action against this user.
     await db.doc(`reportLocks/${req.params.userId}`).delete();
 
-    // Resolution PMs to all unique reporters (fire-and-forget)
     const uniqueReporters = [...new Set(reports.map((r) => r.reporterId).filter(Boolean))];
-    for (const reporterId of uniqueReporters) {
+    let pmsFailed = 0;
+    const pmPromises = uniqueReporters.map((reporterId) =>
       sendSystemPm(
         reporterId,
         'Your report has been reviewed. Thank you for helping keep ShyTalk safe.',
-      ).catch((err) =>
+      ).catch((err) => {
         log.error('reports', 'Failed to send reporter PM (resolve-all)', {
           reporterId,
           error: err.message,
-        }),
-      );
-    }
+        });
+        pmsFailed += 1;
+      }),
+    );
 
-    // Same partial-failure response shape as the single-resolve handler so
-    // admin UI can surface warning.failed / suspension.failed / cascade.partial
-    // instead of treating every 200 as full moderation success.
-    const responseBody = { success: true, resolved: reports.length };
+    // Resolve audit + reporter PM promises so their .catch flags are settled
+    // before we build the response. Always settle (no throw bubbles up).
+    await Promise.all([bulkAuditPromise, suspendAuditPromise, ...pmPromises].filter(Boolean));
+
+    const responseBody = { success: true, resolved: reportsCommitted };
+    if (reportsCommitFailed || reportsCommitted < reports.length) {
+      responseBody.reports = {
+        committed: reportsCommitted,
+        failed: reports.length - reportsCommitted,
+        error: MOD_ERROR.REPORTS_COMMIT,
+      };
+    }
     if (cascade) responseBody.cascade = cascade;
     if (warningFailed) {
-      responseBody.warning = { failed: true, error: 'warning_create_failed' };
+      responseBody.warning = { failed: true, error: MOD_ERROR.WARNING_CREATE };
     }
     if (suspensionFailed) {
-      responseBody.suspension = { failed: true, error: 'suspension_update_failed' };
+      responseBody.suspension = { failed: true, error: MOD_ERROR.SUSPENSION_UPDATE };
+    }
+    if (bulkAuditFailed || suspendAuditFailed) {
+      responseBody.auditLog = { failed: true, error: MOD_ERROR.AUDIT_WRITE };
+    }
+    if (pmsFailed > 0) {
+      responseBody.pms = { failed: pmsFailed, total: uniqueReporters.length };
     }
     res.json(responseBody);
   } catch (err) {
