@@ -729,31 +729,13 @@ async function resolveReport(reportedUserId, resolveAll) {
       });
     }
 
-    // Pass-9/10/11 partial-failure contract: surface every failed sub-action so
-    // the admin can retry individually instead of seeing a green toast that
-    // lies. Order: action-blocking failures first, audit (compliance) next,
-    // PMs (delivery) last.
-    const partialFailures = [];
-    if (result.warning?.failed) partialFailures.push('warning was NOT applied');
-    if (result.suspension?.failed) partialFailures.push('suspension was NOT applied');
-    if (result.cascade?.partial) {
-      const detail = result.cascade.userDocFailed
-        ? 'user-doc clear failed'
-        : `${(result.cascade.failedRoomIds || []).length} room(s) need manual cleanup`;
-      partialFailures.push(`room cascade partial — ${detail}`);
-    }
-    if (result.reports?.failed > 0) {
-      const total = result.reports.total ?? (result.reports.failed + (result.reports.committed ?? 0));
-      partialFailures.push(`${result.reports.failed}/${total} reports did not commit`);
-    }
-    if (result.auditLog?.failed) partialFailures.push('audit log failed — escalate to ops');
-    if (result.lockRelease?.failed) partialFailures.push('report lock not released — admin may need to unlock manually');
-    if (result.pms?.failed > 0) {
-      partialFailures.push(`${result.pms.failed}/${result.pms.total ?? '?'} PMs failed`);
-    }
-
-    if (partialFailures.length > 0) {
-      showToast(`Partial: ${partialFailures.join('; ')}. Please retry the failed step.`, 'error');
+    // Pass-9..Pass-13 partial-failure contract — see public/admin/js/lib/
+    // partial-failure-toast.js for the full key list and ordering rationale.
+    // Extracted to a shared lib so it's testable AND reusable by future
+    // admin-side consumers (bulk-warn, bulk-unsuspend, etc.).
+    const partialMessage = window.PartialFailureToast.buildPartialFailureMessage(result);
+    if (partialMessage) {
+      showToast(partialMessage, 'error');
     } else {
       showToast(`Report${resolveAll ? 's' : ''} resolved: ${actionLabel}`);
     }

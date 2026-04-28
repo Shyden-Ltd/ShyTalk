@@ -62,6 +62,7 @@ async function evictSuspendedUser(uid) {
       partial: false,
       failedRoomIds: [],
       userDocFailed: false,
+      rtdbEventsFailed: 0,
     };
   }
 
@@ -150,6 +151,7 @@ async function evictSuspendedUser(uid) {
   // emitting `room_closed` for a room that's still OPEN in Firestore would lie
   // to live clients listening on the RTDB channel.
   const failedSet = new Set(failedRoomIds);
+  let rtdbEventsFailed = 0;
   for (const evt of rtdbEvents) {
     if (failedSet.has(evt.roomId)) continue;
     try {
@@ -162,6 +164,7 @@ async function evictSuspendedUser(uid) {
         roomId: evt.roomId,
         error: err.message,
       });
+      rtdbEventsFailed += 1;
     }
     // For owner closures, also tear down the RTDB room node entirely so any
     // lingering presence/typing/event children are cleaned up.
@@ -173,6 +176,7 @@ async function evictSuspendedUser(uid) {
           roomId: evt.roomId,
           error: err.message,
         });
+        rtdbEventsFailed += 1;
       }
     }
   }
@@ -180,9 +184,14 @@ async function evictSuspendedUser(uid) {
   return {
     roomsClosed,
     roomsUpdated,
+    // partial covers Firestore failures (the source of truth); RTDB failures
+    // surface as a separate counter so the admin can distinguish "user is
+    // still in rooms" from "live clients didn't get the close event but state
+    // is correct" — only the former needs manual cleanup.
     partial: failedRoomIds.length > 0 || userDocFailed,
     failedRoomIds,
     userDocFailed,
+    rtdbEventsFailed,
   };
 }
 

@@ -551,6 +551,7 @@ describe('evictSuspendedUser — RTDB failure tolerance', () => {
         partial: false,
         failedRoomIds: [],
         userDocFailed: false,
+        rtdbEventsFailed: 0,
       });
       // Reverted from update() → set+merge so a deleted user doc doesn't throw.
       expect(mockDocSet).toHaveBeenCalledWith({ currentRoomId: null }, { merge: true });
@@ -638,6 +639,72 @@ describe('evictSuspendedUser — RTDB failure tolerance', () => {
       expect(caught).toBe(frozenErr);
       // Freezing prevents the phase tag, but the function must still re-throw.
       expect(caught.phase).toBeUndefined();
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Pass-13 fix L2: rtdbEventsFailed counter
+  // ───────────────────────────────────────────────────────────────────────
+  describe('rtdbEventsFailed counter (Pass-13 L2)', () => {
+    it('increments rtdbEventsFailed when room_updated RTDB write rejects', async () => {
+      // Set up a single visitor room so rooms.length=1, owner !== uid, → updates path.
+      mockQueryDocs
+        .mockResolvedValueOnce([
+          {
+            id: 'roomA',
+            ownerId: 'someone-else',
+            participantIds: ['suspended-uid', 'someone-else'],
+            hostIds: [],
+            seats: {},
+          },
+        ])
+        .mockResolvedValueOnce([]);
+      mockBatchCommit.mockResolvedValueOnce();
+      mockRtdbSet.mockRejectedValueOnce(new Error('RTDB write failed'));
+
+      const result = await evictSuspendedUser('suspended-uid');
+      expect(result.rtdbEventsFailed).toBe(1);
+      // partial covers Firestore truth; RTDB-only failures don't flip partial.
+      expect(result.partial).toBe(false);
+      expect(result.roomsUpdated).toBe(1);
+    });
+
+    it('rtdbEventsFailed=0 on full success', async () => {
+      mockQueryDocs
+        .mockResolvedValueOnce([
+          {
+            id: 'roomA',
+            ownerId: 'someone-else',
+            participantIds: ['suspended-uid'],
+            hostIds: [],
+            seats: {},
+          },
+        ])
+        .mockResolvedValueOnce([]);
+
+      const result = await evictSuspendedUser('suspended-uid');
+      expect(result.rtdbEventsFailed).toBe(0);
+    });
+
+    it('counts both RTDB set + remove failures for owner closure', async () => {
+      // Owner branch fires: ref(.../events/lastEvent).set + ref(...).remove.
+      // Reject both → rtdbEventsFailed=2.
+      mockQueryDocs.mockResolvedValueOnce([]).mockResolvedValueOnce([
+        {
+          id: 'ownedRoom',
+          ownerId: 'suspended-uid',
+          participantIds: ['suspended-uid'],
+          hostIds: ['suspended-uid'],
+          seats: {},
+        },
+      ]);
+      mockBatchCommit.mockResolvedValueOnce();
+      mockRtdbSet.mockRejectedValueOnce(new Error('rtdb set fail'));
+      mockRtdbRemove.mockRejectedValueOnce(new Error('rtdb remove fail'));
+
+      const result = await evictSuspendedUser('suspended-uid');
+      expect(result.rtdbEventsFailed).toBe(2);
+      expect(result.roomsClosed).toBe(1);
     });
   });
 });

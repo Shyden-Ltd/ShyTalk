@@ -417,43 +417,45 @@ async function createWarning(
 
   const warningId = generateId();
 
-  await Promise.all([
-    // Write warning doc to subcollection
-    db.doc(`users/${uniqueId}/warnings/${warningId}`).set({
-      reason,
-      severity,
-      gcsDeduction: deduction,
-      gcsBefore: gcsScore,
-      gcsAfter: newGcs,
-      adminNote: adminNote || null,
-      issuedBy: adminUid,
-      issuedByName: adminName,
-      source: source || 'direct',
-      linkedReportId: linkedReportId || null,
-      revoked: false,
-      revokedAt: null,
-      revokedBy: null,
-      createdAt: timestamp,
-    }),
-    // Update user doc
-    db.doc(`users/${uniqueId}`).update({
-      gcsScore: newGcs,
-      gcsLastDeductionAt: timestamp,
-      warningCount: newWarningCount,
-      warningReason: reason,
-      hasActiveWarning: true,
-      hasNewWarning: true,
-      warningIssuedAt: timestamp,
-    }),
-    // Audit log
-    db.doc(`adminAuditLog/${generateId()}`).set({
-      adminId: adminUid,
-      action: 'WARN',
-      targetUserId: uniqueId,
-      details: `Severity: ${severity}, GCS: ${gcsScore} → ${newGcs}, Reason: ${reason}, Source: ${source || 'direct'}`,
-      createdAt: timestamp,
-    }),
-  ]);
+  // Atomic batch instead of Promise.all so a partial commit (warning subcollection
+  // doc lands but user-doc update fails — or vice-versa) does NOT leave an
+  // orphan warning record. Without atomicity, the admin retry path produces
+  // duplicate warnings and the GCS deduction can land twice. Firestore batches
+  // are all-or-nothing per chunk and stay under the 500-op limit (we have 3).
+  const batch = db.batch();
+  batch.set(db.doc(`users/${uniqueId}/warnings/${warningId}`), {
+    reason,
+    severity,
+    gcsDeduction: deduction,
+    gcsBefore: gcsScore,
+    gcsAfter: newGcs,
+    adminNote: adminNote || null,
+    issuedBy: adminUid,
+    issuedByName: adminName,
+    source: source || 'direct',
+    linkedReportId: linkedReportId || null,
+    revoked: false,
+    revokedAt: null,
+    revokedBy: null,
+    createdAt: timestamp,
+  });
+  batch.update(db.doc(`users/${uniqueId}`), {
+    gcsScore: newGcs,
+    gcsLastDeductionAt: timestamp,
+    warningCount: newWarningCount,
+    warningReason: reason,
+    hasActiveWarning: true,
+    hasNewWarning: true,
+    warningIssuedAt: timestamp,
+  });
+  batch.set(db.doc(`adminAuditLog/${generateId()}`), {
+    adminId: adminUid,
+    action: 'WARN',
+    targetUserId: uniqueId,
+    details: `Severity: ${severity}, GCS: ${gcsScore} → ${newGcs}, Reason: ${reason}, Source: ${source || 'direct'}`,
+    createdAt: timestamp,
+  });
+  await batch.commit();
 
   return { warningId, newGcs, deduction, warningCount: newWarningCount };
 }

@@ -1512,6 +1512,7 @@ describe('Pass-10: cascade + audit + commit failure response shape', () => {
       partial: true,
       failedRoomIds: [],
       userDocFailed: false,
+      rtdbEventsFailed: 0,
       error: 'cascade_failed',
     });
     // Defense: the Firestore error message must NOT leak.
@@ -1545,6 +1546,7 @@ describe('Pass-10: cascade + audit + commit failure response shape', () => {
       partial: true,
       failedRoomIds: [],
       userDocFailed: true,
+      rtdbEventsFailed: 0,
       error: 'cascade_failed',
     });
   });
@@ -1750,6 +1752,7 @@ describe('Pass-10: cascade + audit + commit failure response shape', () => {
       partial: true,
       failedRoomIds: [],
       userDocFailed: false,
+      rtdbEventsFailed: 0,
       error: 'cascade_failed',
     });
     expect(JSON.stringify(res.body)).not.toContain('Firestore timeout');
@@ -1971,5 +1974,27 @@ describe('Pass-12: single-resolve pms.failed + lockRelease', () => {
     const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'dismissed' });
     expect(res.status).toBe(200);
     expect(res.body.lockRelease).toBeUndefined();
+  });
+
+  it('safeFireAndForget absorbs sync throws from the lock-delete thunk (Pass-13 nice-to-have)', async () => {
+    // Pass-13 test-analyzer 4/10: the sync-throw absorption was tested for
+    // the .set() thunk only. Cover the .delete() thunk path as well.
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    getDoc.mockResolvedValueOnce({
+      id: 'r1',
+      reportedUserId: 't',
+      reportedUserUniqueId: 'u1',
+      reporterId: 'rep1',
+      reason: 'x',
+    });
+    // Make the lock-release .delete() throw SYNCHRONOUSLY.
+    mockDocDelete.mockImplementationOnce(() => {
+      throw new Error('synchronous throw from delete');
+    });
+
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'dismissed' });
+    expect(res.status).toBe(200);
+    expect(res.body.lockRelease).toEqual({ failed: true });
+    expect(res.body.success).toBe(true);
   });
 });

@@ -616,6 +616,7 @@ router.post('/reports/:id/resolve', async (req, res) => {
             partial: true,
             failedRoomIds: [],
             userDocFailed: cascadeErr.phase === 'user_doc',
+            rtdbEventsFailed: 0,
             error: MOD_ERROR.CASCADE_FAILED,
           };
         }
@@ -877,6 +878,7 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
             partial: true,
             failedRoomIds: [],
             userDocFailed: cascadeErr.phase === 'user_doc',
+            rtdbEventsFailed: 0,
             error: MOD_ERROR.CASCADE_FAILED,
           };
         }

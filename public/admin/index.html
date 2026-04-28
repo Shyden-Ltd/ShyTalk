@@ -5055,6 +5055,10 @@
 <div class="toast" id="toast"></div>
 
 <script src="config.js"></script>
+<!-- Partial-failure toast lib (UMD) — must load BEFORE main.js so the
+     window.PartialFailureToast global is available when tabs/reports.js
+     processes a /api/reports/:id/resolve response. -->
+<script src="js/lib/partial-failure-toast.js"></script>
 <script type="module" src="js/main.js"></script>
 <script src="/js/language-selector.js"></script>
 <script src="/admin/translations.js"></script>

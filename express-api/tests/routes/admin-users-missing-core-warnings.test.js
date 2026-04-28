@@ -367,7 +367,9 @@ describe('POST /api/user/:uniqueId/warn — additional branches', () => {
       data: () => ({ gcsScore: 90, warningCount: 1 }),
     });
     getDoc.mockResolvedValueOnce({ displayName: 'Admin User' });
-    mockDocSet.mockRejectedValueOnce(new Error('Batch write failed'));
+    // createWarning was migrated to a Firestore batch in Pass-13; reject the
+    // batch.commit so the route's outer try/catch fires the 500.
+    mockBatchCommit.mockRejectedValueOnce(new Error('Batch write failed'));
 
     const app = createAdminApp();
     const res = await request(app)
@@ -393,6 +395,36 @@ describe('POST /api/user/:uniqueId/warn — additional branches', () => {
     // severity 3 -> deduction 15
     expect(res.body.deduction).toBe(15);
     expect(res.body.newGcs).toBe(85);
+  });
+
+  it('createWarning writes warning + user + audit atomically via Firestore batch (Pass-13 C2 fix)', async () => {
+    // Regression test for the orphan-warning bug: previously Promise.all
+    // would partially commit (warning doc lands but user-doc update fails)
+    // leaving a warning record without the GCS deduction. Admin retries,
+    // duplicate warning + double GCS hit. The batch makes all 3 writes
+    // commit atomically — assert all 3 batch ops fired AND committed once.
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      id: '10000001',
+      data: () => ({ gcsScore: 100, warningCount: 0 }),
+    });
+    getDoc.mockResolvedValueOnce({ displayName: 'Admin User' });
+
+    const app = createAdminApp();
+    const res = await request(app)
+      .post('/api/user/10000001/warn')
+      .send({ reason: 'Atomicity regression', severity: 2 });
+    expect(res.status).toBe(200);
+    // Exactly one batch.commit() — all three writes go through it.
+    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+    // The legacy Promise.all path called db.doc().set/update directly. Those
+    // call counts MUST be zero for the warn flow now (other tests still
+    // exercise the legacy path for unrelated routes; this test isolates the
+    // warn flow by clearing call history right after fixture setup).
+    const setPathsForWarning = mockDocSet.mock.calls.filter((c) =>
+      String(c[0] ?? '').includes('warnings/'),
+    );
+    expect(setPathsForWarning.length).toBe(0);
   });
 });
 

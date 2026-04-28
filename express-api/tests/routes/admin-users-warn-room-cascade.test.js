@@ -20,6 +20,12 @@
 const mockDocGet = jest.fn();
 const mockDocUpdate = jest.fn().mockResolvedValue();
 const mockDocSet = jest.fn().mockResolvedValue();
+// createWarning was migrated to a Firestore batch in Pass-13 so the warning
+// doc + user doc + audit doc commit atomically. Tests assert against batch
+// op-recorders below, not mockDocSet/mockDocUpdate, for those three writes.
+const mockBatchUpdate = jest.fn();
+const mockBatchSet = jest.fn();
+const mockBatchCommit = jest.fn().mockResolvedValue();
 
 jest.mock('../../src/utils/firebase', () => ({
   db: {
@@ -38,9 +44,9 @@ jest.mock('../../src/utils/firebase', () => ({
       return chain;
     }),
     batch: jest.fn(() => ({
-      update: jest.fn(),
-      set: jest.fn(),
-      commit: jest.fn().mockResolvedValue(),
+      update: mockBatchUpdate,
+      set: mockBatchSet,
+      commit: mockBatchCommit,
     })),
   },
   rtdb: {
@@ -211,7 +217,11 @@ describe('POST /api/user/:uniqueId/warn — user fields actually update', () => 
       .send({ reason: 'Bad behaviour', severity: 3 });
 
     expect(res.status).toBe(200);
-    expect(mockDocUpdate).toHaveBeenCalledWith(
+    // The user-doc update happens via the atomic batch (Pass-13 fix). Find the
+    // batch.update call whose payload is the user-doc shape.
+    const userUpdate = mockBatchUpdate.mock.calls.find((c) => c[1]?.warningCount !== undefined);
+    expect(userUpdate).toBeDefined();
+    expect(userUpdate[1]).toEqual(
       expect.objectContaining({
         gcsScore: expect.any(Number),
         hasActiveWarning: true,
@@ -222,8 +232,8 @@ describe('POST /api/user/:uniqueId/warn — user fields actually update', () => 
 
     // The mutation specifically does NOT clear currentRoomId / participantIds
     // (those are suspension-only fields).
-    const userUpdates = mockDocUpdate.mock.calls.map((c) => c[0]);
-    for (const u of userUpdates) {
+    const allBatchUpdates = mockBatchUpdate.mock.calls.map((c) => c[1]);
+    for (const u of allBatchUpdates) {
       expect(u).not.toHaveProperty('currentRoomId');
       expect(u).not.toHaveProperty('participantIds');
       expect(u).not.toHaveProperty('hostIds');
@@ -249,7 +259,9 @@ describe('POST /api/user/:uniqueId/warn — user fields actually update', () => 
       c[0].startsWith('users/target-1/warnings/'),
     );
     expect(warningPathCall).toBeDefined();
-    expect(mockDocSet).toHaveBeenCalledWith(
+    // Warning doc is written via the atomic batch (Pass-13 fix).
+    expect(mockBatchSet).toHaveBeenCalledWith(
+      expect.anything(),
       expect.objectContaining({
         reason: 'Bad behaviour',
         severity: 3,
