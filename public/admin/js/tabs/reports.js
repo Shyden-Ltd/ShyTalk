@@ -747,6 +747,7 @@ async function resolveReport(reportedUserId, resolveAll) {
       partialFailures.push(`${result.reports.failed}/${total} reports did not commit`);
     }
     if (result.auditLog?.failed) partialFailures.push('audit log failed — escalate to ops');
+    if (result.lockRelease?.failed) partialFailures.push('report lock not released — admin may need to unlock manually');
     if (result.pms?.failed > 0) {
       partialFailures.push(`${result.pms.failed}/${result.pms.total ?? '?'} PMs failed`);
     }

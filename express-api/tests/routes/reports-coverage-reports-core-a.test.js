@@ -1791,7 +1791,7 @@ describe('Pass-10: cascade + audit + commit failure response shape', () => {
     expect(Object.isFrozen(MOD_ERROR)).toBe(true);
   });
 
-  it('safeAuditSet absorbs synchronous throws from a bad .set thunk (Pass-11 HIGH-2)', async () => {
+  it('safeFireAndForget absorbs synchronous throws from a bad .set thunk (Pass-11 HIGH-2)', async () => {
     // Pass-11 silent-failure HIGH-2: db.doc(...).set(...) could throw
     // synchronously (bad path, mocking quirks) before returning a promise,
     // bypassing .catch and bubbling to the route's outer try → 500. Force
@@ -1804,7 +1804,6 @@ describe('Pass-10: cascade + audit + commit failure response shape', () => {
       reporterId: 'rep1',
       reason: 'x',
     });
-    // Make the audit-log .set() throw SYNCHRONOUSLY (not return a rejected promise).
     mockDocSet.mockImplementationOnce(() => {
       throw new Error('synchronous throw from set');
     });
@@ -1813,5 +1812,164 @@ describe('Pass-10: cascade + audit + commit failure response shape', () => {
     expect(res.status).toBe(200);
     expect(res.body.auditLog).toEqual({ failed: true, error: 'audit_write_failed' });
     expect(res.body.success).toBe(true);
+  });
+});
+
+// =================================================================
+// Pass-12 backfill: single-resolve pms tests + lockRelease guard.
+// Pass-12 test analyzer Gap [8/10]: single-resolve pms.failed has zero
+// coverage despite Pass-11 adding the bulk equivalent. Mirror the bulk
+// tests for parity and lock the per-action arithmetic.
+// =================================================================
+describe('Pass-12: single-resolve pms.failed + lockRelease', () => {
+  let app;
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+    mockDocSet.mockReset();
+    mockDocSet.mockResolvedValue();
+    mockDocUpdate.mockReset();
+    mockDocUpdate.mockResolvedValue();
+    mockDocDelete.mockReset();
+    mockDocDelete.mockResolvedValue();
+    const fh = require('../../src/utils/firestore-helpers');
+    fh.queryDocs.mockReset();
+    fh.queryDocs.mockResolvedValue([]);
+    fh.getDoc.mockReset();
+    fh.getDoc.mockImplementation(async (path) => {
+      const { db } = require('../../src/utils/firebase');
+      const snap = await db.doc(path).get();
+      return snap.exists ? { id: snap.id, ...snap.data() } : null;
+    });
+    require('../../src/utils/system-pm').sendSystemPm.mockReset();
+    require('../../src/utils/system-pm').sendSystemPm.mockResolvedValue();
+    require('../../src/routes/admin-users').createWarning.mockReset();
+    require('../../src/routes/admin-users').createWarning.mockResolvedValue();
+    require('../../src/middleware/auth').requireAdmin.mockReturnValue(false);
+    require('../../src/middleware/auth').resolveUniqueId.mockReset();
+    require('../../src/middleware/auth').resolveUniqueId.mockImplementation(
+      async (uid) => uid || null,
+    );
+  });
+
+  it('warned: warn-PM rejects → pms { failed: 1, total: 2 } (warn + reporter)', async () => {
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+    getDoc.mockResolvedValueOnce({
+      id: 'r1',
+      reportedUserId: 't',
+      reportedUserUniqueId: 'u1',
+      reporterId: 'rep1',
+      reason: 'x',
+    });
+    // Order of sendSystemPm in warned: [warn PM to target, reporter PM]
+    sendSystemPm.mockRejectedValueOnce(new Error('warn-pm fcm fail'));
+    sendSystemPm.mockResolvedValueOnce();
+
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'warned' });
+    expect(res.status).toBe(200);
+    expect(res.body.pms).toEqual({ failed: 1, total: 2 });
+  });
+
+  it('suspended: suspend-PM rejects → pms { failed: 1, total: 2 } (suspend + reporter)', async () => {
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+    getDoc
+      .mockResolvedValueOnce({
+        id: 'r1',
+        reportedUserId: 't',
+        reportedUserUniqueId: 'u1',
+        reporterId: 'rep1',
+        reason: 'severe',
+      })
+      .mockResolvedValueOnce({ id: 'u1', displayName: 'User' });
+    sendSystemPm.mockRejectedValueOnce(new Error('suspend-pm fcm fail'));
+    sendSystemPm.mockResolvedValueOnce();
+
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'suspended' });
+    expect(res.status).toBe(200);
+    expect(res.body.pms).toEqual({ failed: 1, total: 2 });
+  });
+
+  it('dismissed: only reporter-PM fires → pms { failed: 1, total: 1 } when it rejects', async () => {
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+    getDoc.mockResolvedValueOnce({
+      id: 'r1',
+      reportedUserId: 't',
+      reportedUserUniqueId: 'u1',
+      reporterId: 'rep1',
+      reason: 'x',
+    });
+    sendSystemPm.mockRejectedValueOnce(new Error('reporter-pm fcm fail'));
+
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'dismissed' });
+    expect(res.status).toBe(200);
+    expect(res.body.pms).toEqual({ failed: 1, total: 1 });
+  });
+
+  it('happy path: pms key is OMITTED when all PMs succeed', async () => {
+    // Pass-12 test analyzer Gap [7/10]: mirror the bulk
+    // expect(res.body.pms).toBeUndefined() at line ~1633.
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    getDoc.mockResolvedValueOnce({
+      id: 'r1',
+      reportedUserId: 't',
+      reportedUserUniqueId: 'u1',
+      reporterId: 'rep1',
+      reason: 'x',
+    });
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'dismissed' });
+    expect(res.status).toBe(200);
+    expect(res.body.pms).toBeUndefined();
+  });
+
+  it('lockRelease.failed surfaces when lock-delete rejects (single-resolve)', async () => {
+    // Pass-12 silent-failure MED-2: previously the bare await on
+    // db.doc(reportLocks/...).delete() would 500 a fully-applied moderation.
+    // Now wrapped in safeFireAndForget + flag.
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    getDoc.mockResolvedValueOnce({
+      id: 'r1',
+      reportedUserId: 't',
+      reportedUserUniqueId: 'u1',
+      reporterId: 'rep1',
+      reason: 'x',
+    });
+    mockDocDelete.mockRejectedValueOnce(new Error('Firestore lock-delete throttled'));
+
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'dismissed' });
+    expect(res.status).toBe(200);
+    expect(res.body.lockRelease).toEqual({ failed: true });
+    expect(res.body.success).toBe(true);
+  });
+
+  it('lockRelease.failed surfaces when lock-delete rejects (bulk-resolve)', async () => {
+    const { queryDocs } = require('../../src/utils/firestore-helpers');
+    queryDocs.mockResolvedValueOnce([
+      { id: 'r1', reportedUserId: 'target', reporterId: 'rep1', status: 'pending' },
+    ]);
+    mockDocDelete.mockRejectedValueOnce(new Error('Firestore lock-delete throttled'));
+
+    const res = await request(app)
+      .post('/api/reports/resolve-all/target')
+      .send({ action: 'dismissed' });
+    expect(res.status).toBe(200);
+    expect(res.body.lockRelease).toEqual({ failed: true });
+    expect(res.body.success).toBe(true);
+  });
+
+  it('happy path: lockRelease key is OMITTED when delete succeeds', async () => {
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    getDoc.mockResolvedValueOnce({
+      id: 'r1',
+      reportedUserId: 't',
+      reportedUserUniqueId: 'u1',
+      reporterId: 'rep1',
+      reason: 'x',
+    });
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'dismissed' });
+    expect(res.status).toBe(200);
+    expect(res.body.lockRelease).toBeUndefined();
   });
 });

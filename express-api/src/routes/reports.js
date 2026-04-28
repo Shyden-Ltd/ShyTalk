@@ -63,12 +63,13 @@ const MOD_ERROR = Object.freeze({
   REPORTS_COMMIT_FAILED: 'reports_commit_failed',
 });
 
-// Wrap a Firestore .set() invocation so a synchronous throw (bad path, mock
-// quirks) becomes a rejected promise instead of bubbling to the outer route
-// catch — which would 500 the response after state has already committed.
-// `setOp` is a thunk that returns the .set() promise. Always returns a promise.
-function safeAuditSet(setOp, onFailure) {
-  return Promise.resolve().then(setOp).catch(onFailure);
+// Wrap a thunk so a synchronous throw becomes a rejected promise instead of
+// bubbling to the caller. The Promise.resolve().then(opThunk) trampoline
+// catches sync throws inside opThunk; .catch(onError) absorbs both that and
+// async rejection. Used wherever a fire-and-forget side-effect (audit log,
+// lock release) must NOT 500 a fully-applied moderation action.
+function safeFireAndForget(opThunk, onError) {
+  return Promise.resolve().then(opThunk).catch(onError);
 }
 
 /**
@@ -486,10 +487,10 @@ router.post('/reports/:id/resolve', async (req, res) => {
     // Fire-and-forget so a Firestore throw doesn't 500 a fully-applied
     // moderation action. The promise is awaited later — but only via .catch —
     // so the failure becomes a flag in the response, never an upstream throw.
-    // safeAuditSet also absorbs synchronous throws (bad path, mocking quirks)
-    // that would otherwise bypass the promise chain and bubble up.
+    // safeFireAndForget also absorbs synchronous throws (bad path, mocking
+    // quirks) that would otherwise bypass the promise chain and bubble up.
     let auditLogFailed = false;
-    const auditPromise = safeAuditSet(
+    const auditPromise = safeFireAndForget(
       () =>
         db.doc(`adminAuditLog/${generateId()}`).set(
           {
@@ -657,6 +658,7 @@ router.post('/reports/:id/resolve', async (req, res) => {
         `Your report has been ${actionText}. Thank you for helping keep ShyTalk safe.`,
       ).catch((err) => {
         log.error('reports', 'Failed to send reporter PM', {
+          reportId: req.params.id,
           reporterId: report.reporterId,
           error: err.message,
         });
@@ -664,9 +666,21 @@ router.post('/reports/:id/resolve', async (req, res) => {
       });
     }
 
-    // Lock release IS critical-path — admin needs it cleared to take the
-    // next moderation action against this user.
-    await db.doc(`reportLocks/${req.params.id}`).delete();
+    // Lock release IS important (admin needs it cleared to take the next
+    // moderation action against this user) but a Firestore reject here would
+    // 500 a fully-applied moderation. Surface as `lockRelease.failed` flag
+    // so the admin sees the moderation succeeded AND knows to retry the lock.
+    let lockReleaseFailed = false;
+    await safeFireAndForget(
+      () => db.doc(`reportLocks/${req.params.id}`).delete(),
+      (err) => {
+        log.error('reports', 'Failed to release report lock', {
+          reportId: req.params.id,
+          error: err?.message ?? String(err),
+        });
+        lockReleaseFailed = true;
+      },
+    );
 
     // INVARIANT: every promise added here MUST have an absorbing .catch.
     // Promise.all rejects on first unhandled — would 500 a fully-applied
@@ -687,6 +701,9 @@ router.post('/reports/:id/resolve', async (req, res) => {
     }
     if (auditLogFailed) {
       responseBody.auditLog = { failed: true, error: MOD_ERROR.AUDIT_WRITE_FAILED };
+    }
+    if (lockReleaseFailed) {
+      responseBody.lockRelease = { failed: true };
     }
     const totalSinglePms =
       (warnPmPromise !== null ? 1 : 0) +
@@ -875,7 +892,7 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
           targetPmFailed = true;
         });
 
-        suspendAuditPromise = safeAuditSet(
+        suspendAuditPromise = safeFireAndForget(
           () =>
             db.doc(`adminAuditLog/${generateId()}`).set(
               {
@@ -932,7 +949,7 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
     }
 
     let bulkAuditFailed = false;
-    const bulkAuditPromise = safeAuditSet(
+    const bulkAuditPromise = safeFireAndForget(
       () =>
         db.doc(`adminAuditLog/${generateId()}`).set(
           {
@@ -953,9 +970,19 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
       },
     );
 
-    // Lock release IS critical-path — admin needs it cleared to take the
-    // next moderation action against this user.
-    await db.doc(`reportLocks/${req.params.userId}`).delete();
+    // Lock release IS important but a Firestore reject must NOT 500 a
+    // fully-applied moderation. Surface as `lockRelease.failed` flag.
+    let lockReleaseFailed = false;
+    await safeFireAndForget(
+      () => db.doc(`reportLocks/${req.params.userId}`).delete(),
+      (err) => {
+        log.error('reports', 'Failed to release report lock (bulk)', {
+          userId: req.params.userId,
+          error: err?.message ?? String(err),
+        });
+        lockReleaseFailed = true;
+      },
+    );
 
     const uniqueReporters = [...new Set(reports.map((r) => r.reporterId).filter(Boolean))];
     let pmsFailed = 0;
@@ -965,6 +992,7 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
         'Your report has been reviewed. Thank you for helping keep ShyTalk safe.',
       ).catch((err) => {
         log.error('reports', 'Failed to send reporter PM (resolve-all)', {
+          userId: req.params.userId,
           reporterId,
           error: err.message,
         });
@@ -1005,6 +1033,9 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
     }
     if (bulkAuditFailed || suspendAuditFailed) {
       responseBody.auditLog = { failed: true, error: MOD_ERROR.AUDIT_WRITE_FAILED };
+    }
+    if (lockReleaseFailed) {
+      responseBody.lockRelease = { failed: true };
     }
     const totalPms =
       uniqueReporters.length +
