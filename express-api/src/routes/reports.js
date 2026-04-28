@@ -465,16 +465,29 @@ router.post('/reports/:id/resolve', async (req, res) => {
         auditTargetUniqueId = report.reportedUserId;
       }
     }
-    const auditWrite = db.doc(`adminAuditLog/${generateId()}`).set(
-      {
-        adminId: req.auth.uid,
-        action: 'RESOLVE_REPORT',
-        targetUserId: auditTargetUniqueId,
-        details: `Report ${req.params.id}: ${action}`,
-        createdAt: timestamp,
-      },
-      { merge: true },
-    );
+    // Audit-log .set() is fire-and-forget. The report-status update at the
+    // top of this handler has already committed by this point; if the
+    // audit-log write throws (Firestore quota, transient outage), the
+    // user-visible action has already taken effect. Failing the response
+    // would lie to the admin UI ("error happened, retry") when the action
+    // actually succeeded. Log the failure server-side and keep going.
+    db.doc(`adminAuditLog/${generateId()}`)
+      .set(
+        {
+          adminId: req.auth.uid,
+          action: 'RESOLVE_REPORT',
+          targetUserId: auditTargetUniqueId,
+          details: `Report ${req.params.id}: ${action}`,
+          createdAt: timestamp,
+        },
+        { merge: true },
+      )
+      .catch((err) =>
+        log.error('reports', 'Failed to write RESOLVE_REPORT audit log', {
+          reportId: req.params.id,
+          error: err?.message ?? String(err),
+        }),
+      );
 
     // Warning actions: create warning doc (which deducts GCS)
     if (action === 'warned' || action === 'warned_severe') {
@@ -616,7 +629,10 @@ router.post('/reports/:id/resolve', async (req, res) => {
     }
 
     // Release lock and write audit log in parallel
-    await Promise.all([auditWrite, db.doc(`reportLocks/${req.params.id}`).delete()]);
+    // The audit-log write above is already fire-and-forget; only block on
+    // the report-lock deletion which IS critical-path (admin needs the lock
+    // cleared to take the next moderation action against this user).
+    await db.doc(`reportLocks/${req.params.id}`).delete();
 
     res.json(cascade ? { success: true, cascade } : { success: true });
   } catch (err) {
@@ -831,9 +847,11 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
       await batch.commit();
     }
 
-    // Audit log and lock release in parallel
-    await Promise.all([
-      db.doc(`adminAuditLog/${generateId()}`).set(
+    // Audit log: fire-and-forget. The bulk batch commits + suspension cascade
+    // have already committed at this point; a Firestore throw here must not
+    // 500 a fully-applied moderation action.
+    db.doc(`adminAuditLog/${generateId()}`)
+      .set(
         {
           adminId: req.auth.uid,
           action: 'RESOLVE_ALL_REPORTS',
@@ -842,9 +860,17 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
           createdAt: timestamp,
         },
         { merge: true },
-      ),
-      db.doc(`reportLocks/${req.params.userId}`).delete(),
-    ]);
+      )
+      .catch((err) =>
+        log.error('reports', 'Failed to write RESOLVE_ALL_REPORTS audit log', {
+          userId: req.params.userId,
+          error: err?.message ?? String(err),
+        }),
+      );
+
+    // Lock release IS critical-path (admin needs the lock cleared to take
+    // the next moderation action against this user).
+    await db.doc(`reportLocks/${req.params.userId}`).delete();
 
     // Resolution PMs to all unique reporters (fire-and-forget)
     const uniqueReporters = [...new Set(reports.map((r) => r.reporterId).filter(Boolean))];

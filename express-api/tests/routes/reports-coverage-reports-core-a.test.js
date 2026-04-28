@@ -1092,3 +1092,78 @@ describe('Pass-6 backfill: audit log targetUserId canonical uniqueId', () => {
     expect(resolveUniqueId).not.toHaveBeenCalled();
   });
 });
+
+// =================================================================
+// Pass-7 backfill: bulk-resolve 404 + audit throw fallback
+// =================================================================
+
+describe('Pass-7 backfill: bulk-resolve 404 when target user no longer exists', () => {
+  let app;
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+  });
+
+  it('returns 404 on /reports/resolve-all/:userId warned action when resolveUniqueId returns null', async () => {
+    const { resolveUniqueId } = require('../../src/middleware/auth');
+    const { queryDocs } = require('../../src/utils/firestore-helpers');
+    resolveUniqueId.mockReset();
+    resolveUniqueId.mockResolvedValue(null);
+    queryDocs.mockResolvedValueOnce([
+      { id: 'r1', reportedUserId: 'deleted-uid', reporterId: 'rep1', status: 'pending' },
+    ]);
+
+    const res = await request(app)
+      .post('/api/reports/resolve-all/deleted-uid')
+      .send({ action: 'warned' });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/no longer exists/i);
+  });
+
+  it('returns 404 on /reports/resolve-all/:userId suspended action when resolveUniqueId returns null', async () => {
+    const { resolveUniqueId } = require('../../src/middleware/auth');
+    const { queryDocs } = require('../../src/utils/firestore-helpers');
+    resolveUniqueId.mockReset();
+    resolveUniqueId.mockResolvedValue(null);
+    queryDocs.mockResolvedValueOnce([
+      { id: 'r1', reportedUserId: 'deleted-uid', reporterId: 'rep1', status: 'pending' },
+    ]);
+
+    const res = await request(app)
+      .post('/api/reports/resolve-all/deleted-uid')
+      .send({ action: 'suspended' });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/no longer exists/i);
+  });
+});
+
+describe('Pass-7 backfill: bulk-resolve audit-log fire-and-forget on throw', () => {
+  let app;
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+  });
+
+  it('returns 200 even when audit-log resolveUniqueId throws (state already committed)', async () => {
+    const { resolveUniqueId } = require('../../src/middleware/auth');
+    const { queryDocs } = require('../../src/utils/firestore-helpers');
+    resolveUniqueId.mockReset();
+    resolveUniqueId.mockRejectedValueOnce(new Error('Firestore unavailable'));
+    queryDocs.mockResolvedValueOnce([
+      { id: 'r1', reportedUserId: 'firebase-uid-77', reporterId: 'rep1', status: 'pending' },
+    ]);
+
+    const res = await request(app)
+      .post('/api/reports/resolve-all/firebase-uid-77')
+      .send({ action: 'dismissed' });
+
+    expect(res.status).toBe(200);
+    await new Promise((r) => setTimeout(r, 20));
+    const auditEntry = findLastAuditWrite(mockDocSet);
+    expect(auditEntry).not.toBeNull();
+    expect(auditEntry.action).toBe('RESOLVE_ALL_REPORTS');
+    expect(auditEntry.targetUserId).toBe('firebase-uid-77');
+  });
+});
