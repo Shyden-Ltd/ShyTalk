@@ -552,3 +552,122 @@ describe('GET /api/reports/stats - no resolved reports + edge cases', () => {
     expect(res.body.resolvedToday).toBe(1);
   });
 });
+
+// =================================================================
+// Pass-6 backfill: GET /api/reports IDOR strip + allSettled resilience
+// =================================================================
+
+describe('Pass-6 backfill: GET /api/reports strips client-injectable reportedUserUniqueId', () => {
+  let app, getDoc, queryDocs;
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+    ({ getDoc, queryDocs } = require('../../src/utils/firestore-helpers'));
+    require('../../src/middleware/auth').requireAdmin.mockReturnValue(false);
+  });
+
+  it('replaces stored reportedUserUniqueId with the server-resolved value (pending grouped response)', async () => {
+    const { resolveUniqueId } = require('../../src/middleware/auth');
+    resolveUniqueId.mockReset();
+    resolveUniqueId.mockResolvedValueOnce('SERVER-12345');
+    queryDocs
+      .mockResolvedValueOnce([
+        {
+          id: 'r-attack',
+          reportedUserId: 'real-target-uid',
+          reportedUserUniqueId: 'INJECTED-VICTIM',
+          reporterId: 'rep1',
+          status: 'pending',
+          reason: 'spam',
+          createdAt: 1699e9,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    getDoc
+      .mockResolvedValueOnce({ id: 'SERVER-12345', displayName: 'Real Target', uniqueId: 12345 })
+      .mockResolvedValueOnce({ id: 'rep1', displayName: 'Reporter' });
+
+    const res = await request(app).get('/api/reports?status=pending');
+
+    expect(res.status).toBe(200);
+    expect(res.body.users).toHaveLength(1);
+    expect(res.body.users[0].uniqueId).not.toBe('INJECTED-VICTIM');
+    expect(res.body.users[0].reports[0].reportedUserUniqueId).not.toBe('INJECTED-VICTIM');
+  });
+
+  it('returns null uniqueId when the user was deleted (no fallback to client-injected stored value)', async () => {
+    const { resolveUniqueId } = require('../../src/middleware/auth');
+    resolveUniqueId.mockReset();
+    resolveUniqueId.mockResolvedValueOnce(null);
+    queryDocs
+      .mockResolvedValueOnce([
+        {
+          id: 'r-stale',
+          reportedUserId: 'deleted-user-uid',
+          reportedUserUniqueId: 'INJECTED-VICTIM',
+          reporterId: 'rep1',
+          status: 'pending',
+          reason: 'spam',
+          createdAt: 1699e9,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    getDoc.mockResolvedValueOnce({ id: 'rep1', displayName: 'Reporter' });
+
+    const res = await request(app).get('/api/reports?status=pending');
+
+    expect(res.status).toBe(200);
+    expect(res.body.users[0].uniqueId).toBeNull();
+    expect(res.body.users[0].reports[0].reportedUserUniqueId).toBeNull();
+  });
+});
+
+describe('Pass-6 backfill: GET /api/reports Promise.allSettled resilience', () => {
+  let app, getDoc, queryDocs;
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+    ({ getDoc, queryDocs } = require('../../src/utils/firestore-helpers'));
+    require('../../src/middleware/auth').requireAdmin.mockReturnValue(false);
+  });
+
+  it('returns 200 (not 500) when one of N resolveUniqueId lookups rejects transiently', async () => {
+    const { resolveUniqueId } = require('../../src/middleware/auth');
+    resolveUniqueId.mockReset();
+    resolveUniqueId
+      .mockResolvedValueOnce('uniq-good')
+      .mockRejectedValueOnce(new Error('Firestore unavailable'));
+    queryDocs
+      .mockResolvedValueOnce([
+        {
+          id: 'r1',
+          reportedUserId: 'uid-good',
+          reporterId: 'rep1',
+          status: 'pending',
+          reason: 'spam',
+          createdAt: 1699e9,
+        },
+        {
+          id: 'r2',
+          reportedUserId: 'uid-fail',
+          reporterId: 'rep2',
+          status: 'pending',
+          reason: 'harass',
+          createdAt: 1699.1e9,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    getDoc
+      .mockResolvedValueOnce({ id: 'uniq-good', displayName: 'Good', uniqueId: 100 })
+      .mockResolvedValueOnce({ id: 'rep1', displayName: 'R1' })
+      .mockResolvedValueOnce({ id: 'rep2', displayName: 'R2' });
+
+    const res = await request(app).get('/api/reports?status=pending');
+
+    expect(res.status).toBe(200);
+    expect(res.body.users).toHaveLength(2);
+    const failedUser = res.body.users.find((u) => u.reportedUserId === 'uid-fail');
+    expect(failedUser).toBeDefined();
+    expect(failedUser.uniqueId).toBeNull();
+  });
+});

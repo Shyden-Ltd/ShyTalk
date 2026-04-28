@@ -588,5 +588,56 @@ describe('evictSuspendedUser — RTDB failure tolerance', () => {
 
       await expect(evictSuspendedUser('lonely')).rejects.toThrow('Firestore unavailable');
     });
+
+    // ─── Phase-tag contract (HIGH-1 from pass 4-6) ─────────────────
+    // The route catch blocks branch on `err.phase === 'user_doc'` to set
+    // `userDocFailed` accurately. Reverting the phase tag would silently
+    // regress every cascade response from "userDoc actually failed" to
+    // "userDoc fine, only rooms failed" — admin retries get wrong signal.
+
+    it('tags zero-rooms set+merge failures with err.phase === user_doc', async () => {
+      mockRoomsQueries({ participantRooms: [], ownerRooms: [] });
+      mockDocSet.mockRejectedValueOnce(new Error('Firestore unavailable'));
+
+      let caught;
+      try {
+        await evictSuspendedUser('lonely');
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeDefined();
+      expect(caught.message).toBe('Firestore unavailable');
+      expect(caught.phase).toBe('user_doc');
+    });
+
+    it('leaves err.phase undefined when the initial queryDocs throws (rooms cascade only)', async () => {
+      mockQueryDocs.mockReset();
+      mockQueryDocs.mockRejectedValueOnce(new Error('RESOURCE_EXHAUSTED on participantIds'));
+
+      let caught;
+      try {
+        await evictSuspendedUser('any-uid');
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeDefined();
+      expect(caught.phase).toBeUndefined();
+    });
+
+    it('does not crash when the thrown value is a non-extensible object (defensive guard)', async () => {
+      mockRoomsQueries({ participantRooms: [], ownerRooms: [] });
+      const frozenErr = Object.freeze(new Error('frozen'));
+      mockDocSet.mockRejectedValueOnce(frozenErr);
+
+      let caught;
+      try {
+        await evictSuspendedUser('lonely');
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBe(frozenErr);
+      // Freezing prevents the phase tag, but the function must still re-throw.
+      expect(caught.phase).toBeUndefined();
+    });
   });
 });

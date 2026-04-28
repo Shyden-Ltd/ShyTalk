@@ -906,4 +906,93 @@ class AuthViewModelIdentityTest {
             // Migration guard must NOT be reset to false here — re-entering migration
             // with the same orphaned session would just re-fail signOut and loop.
         }
+
+    // ─── Pass-6 backfill: Q1-CRIT clearError sticky-aware contract ──
+    // The persistent recovery banner reads `uiState.error` after the
+    // sticky flag is set. `clearError()` is invoked after the snackbar
+    // dismisses. If clearError clears the error while the flag is set,
+    // the banner blanks out and the user sees disabled buttons with
+    // no on-screen reason — the exact UX dead-end pass-3 fixed.
+
+    @Test
+    fun clearError_whenRequiresAppDataClearIsTrue_preservesErrorMessageForBanner() =
+        runTest {
+            val authRepo =
+                FakeAuthRepository(
+                    firebaseUid = "orphan-uid",
+                    isAuthenticated = true,
+                    currentUserEmail = "anon@firebase",
+                    providerInfo = null,
+                ).apply { signOutShouldThrow = true }
+            val appLock = FakeAppLockRepository(hasCredential = false)
+
+            val vm =
+                AuthViewModel(
+                    authRepo,
+                    FakeUserRepository(),
+                    FakeDeviceRepository(),
+                    FakeIdentityRepository(),
+                    "device-1",
+                    bypassDeviceChecks = true,
+                    appLockRepository = appLock,
+                )
+            advanceUntilIdle()
+
+            // Pre-condition: sticky flag set + error populated
+            val before = vm.uiState.value
+            assertTrue(before.requiresAppDataClear)
+            assertTrue(before.error != null)
+
+            // Simulate the snackbar consume-and-clear cycle
+            vm.clearError()
+
+            val after = vm.uiState.value
+            assertTrue(
+                after.requiresAppDataClear,
+                "Sticky flag must remain set after clearError",
+            )
+            assertTrue(
+                after.error != null,
+                "clearError() must NOT clear error when requiresAppDataClear=true — the banner needs the message",
+            )
+        }
+
+    @Test
+    fun clearError_whenRequiresAppDataClearIsFalse_clearsErrorAsBefore() =
+        runTest {
+            val identityRepo =
+                FakeIdentityRepository().apply {
+                    resolveResult = Resource.Error("Network timeout")
+                }
+            val authRepo =
+                FakeAuthRepository(
+                    firebaseUid = "uid",
+                    isAuthenticated = true,
+                    currentUserEmail = "u@test.com",
+                    providerInfo = "email" to "u@test.com",
+                )
+
+            val vm =
+                AuthViewModel(
+                    authRepo,
+                    FakeUserRepository(),
+                    FakeDeviceRepository(),
+                    identityRepo,
+                    "device-1",
+                    bypassDeviceChecks = true,
+                )
+            advanceUntilIdle()
+
+            // Drive a regular network error (not the storage-corrupted path)
+            vm.resolveAfterExternalSignIn("email", "u@test.com")
+            advanceUntilIdle()
+
+            val before = vm.uiState.value
+            assertFalse(before.requiresAppDataClear, "Network error must NOT set sticky flag")
+
+            vm.clearError()
+            val after = vm.uiState.value
+            assertEquals(null, after.error, "clearError must clear error in normal (non-sticky) state")
+            assertFalse(after.requiresAppDataClear)
+        }
 }

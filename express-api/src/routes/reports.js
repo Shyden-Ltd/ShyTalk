@@ -443,15 +443,28 @@ router.post('/reports/:id/resolve', async (req, res) => {
       resolvedBy: req.auth.uid,
     });
 
-    // Audit log (fire-and-forget). targetUserId is logged as the canonical
-    // uniqueId so forensic queries by uniqueId surface this entry, matching
-    // the convention in admin-economy.js / admin-temp-id.js / admin-users.js.
-    // Falls back to reportedUserId only on the dismissed action where we
-    // intentionally skipped the cascade-target resolution.
-    const auditTargetUniqueId =
-      resolvedTargetUniqueId ??
-      (await resolveUniqueId(report.reportedUserId)) ??
-      report.reportedUserId;
+    // Audit log: targetUserId logged as the canonical uniqueId so forensic
+    // queries by uniqueId surface this entry, matching the convention in
+    // admin-economy.js / admin-temp-id.js / admin-users.js. The resolution
+    // is wrapped in try/catch — the report-status update at line 439 has
+    // ALREADY committed, so a transient Firestore throw here must not 500
+    // the whole request. Fall back to the raw reportedUserId in that case;
+    // the audit log gets a less-queryable row but the response succeeds.
+    let auditTargetUniqueId;
+    if (resolvedTargetUniqueId) {
+      auditTargetUniqueId = resolvedTargetUniqueId;
+    } else {
+      try {
+        auditTargetUniqueId =
+          (await resolveUniqueId(report.reportedUserId)) ?? report.reportedUserId;
+      } catch (resolveErr) {
+        log.warn('reports', 'audit-log uniqueId resolution failed; logging raw reportedUserId', {
+          reportedUserId: report.reportedUserId,
+          error: resolveErr.message,
+        });
+        auditTargetUniqueId = report.reportedUserId;
+      }
+    }
     const auditWrite = db.doc(`adminAuditLog/${generateId()}`).set(
       {
         adminId: req.auth.uid,
@@ -629,12 +642,6 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
     const action = normaliseAction(body?.action);
     const timestamp = now();
 
-    // Server-trusted uniqueId for the audit log. Hoisted here so the
-    // RESOLVE_ALL_REPORTS audit entry below logs the canonical uniqueId
-    // (matching the convention in admin-economy.js / admin-users.js etc.)
-    // rather than the Firebase Auth UID.
-    const auditTargetUniqueId = (await resolveUniqueId(req.params.userId)) ?? req.params.userId;
-
     // Fetch all pending reports for this user
     const reports = await queryDocs(
       db
@@ -642,6 +649,22 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
         .where('reportedUserId', '==', req.params.userId)
         .where('status', '==', 'pending'),
     );
+
+    // Resolve audit target AFTER the empty-reports early-return below so we
+    // do not burn a Firestore op on a no-op call. Wrapped in try/catch so a
+    // transient Firestore throw does not 500 the request (audit log gets the
+    // raw UID instead, response still succeeds).
+    let auditTargetUniqueId = req.params.userId;
+    if (reports.length > 0) {
+      try {
+        auditTargetUniqueId = (await resolveUniqueId(req.params.userId)) ?? req.params.userId;
+      } catch (resolveErr) {
+        log.warn('reports', 'audit-log uniqueId resolution failed in bulk resolve', {
+          userId: req.params.userId,
+          error: resolveErr.message,
+        });
+      }
+    }
 
     if (reports.length === 0) return res.json({ success: true, resolved: 0 });
 

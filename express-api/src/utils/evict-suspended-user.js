@@ -48,7 +48,12 @@ async function evictSuspendedUser(uid) {
     try {
       await db.doc(`users/${uid}`).set({ currentRoomId: null }, { merge: true });
     } catch (err) {
-      err.phase = 'user_doc';
+      // Guard against frozen / non-Error throws — a primitive or a frozen
+      // Object would silently swallow the property assignment under sloppy
+      // mode and the route catch would mis-classify the failure.
+      if (err && typeof err === 'object' && Object.isExtensible(err)) {
+        err.phase = 'user_doc';
+      }
       throw err;
     }
     return {

@@ -804,3 +804,291 @@ describe('POST /api/reports/:id/lock - error', () => {
 
 // GET /api/admin/audit-log - admin name enrichment — removed from reports.js;
 // now served by admin-audit-log.js. See admin-audit-log-suggestions.test.js.
+
+// =================================================================
+// Pass-6 backfill: regression tests for round 1-5 fixes
+// =================================================================
+
+// Helper: locate the most recent set call against `adminAuditLog/`
+function findLastAuditWrite(mockSetFn) {
+  for (let i = mockSetFn.mock.calls.length - 1; i >= 0; i--) {
+    const call = mockSetFn.mock.calls[i];
+    if (call[0] && typeof call[0] === 'object' && call[0].action) return call[0];
+  }
+  return null;
+}
+
+describe('Pass-6 backfill: F2-RES caps on POST /reports', () => {
+  let app;
+  beforeEach(() => {
+    app = createUserApp();
+    jest.clearAllMocks();
+  });
+
+  it('rejects reportedUserName exceeding 50 chars (FCM payload protection)', async () => {
+    const res = await request(app)
+      .post('/api/reports')
+      .send({
+        reportedUserId: 'target',
+        reason: 'spam',
+        reportedUserName: 'x'.repeat(51),
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/reportedUserName exceeds 50 chars/);
+  });
+
+  it('accepts reportedUserName at the 50-char boundary', async () => {
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    getDoc.mockResolvedValueOnce({ id: 'user-123', displayName: 'Reporter', uniqueId: 'user-123' });
+    const res = await request(app)
+      .post('/api/reports')
+      .send({
+        reportedUserId: 'target',
+        reason: 'spam',
+        reportedUserName: 'x'.repeat(50),
+      });
+    expect(res.status).toBe(200);
+  });
+
+  it('rejects non-string reportedUserName', async () => {
+    const res = await request(app).post('/api/reports').send({
+      reportedUserId: 'target',
+      reason: 'spam',
+      reportedUserName: 123,
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/reportedUserName exceeds 50 chars/);
+  });
+
+  it('rejects evidenceUrls when not an array (orphan-cleanup cron protection)', async () => {
+    const res = await request(app).post('/api/reports').send({
+      reportedUserId: 'target',
+      reason: 'spam',
+      evidenceUrls: 'https://e.com/proof.jpg',
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/evidenceUrls must be an array/);
+  });
+
+  it('rejects evidenceUrls with more than 10 entries', async () => {
+    const res = await request(app)
+      .post('/api/reports')
+      .send({
+        reportedUserId: 'target',
+        reason: 'spam',
+        evidenceUrls: Array.from({ length: 11 }, (_, i) => `https://e.com/${i}.jpg`),
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/evidenceUrls exceeds 10 entries/);
+  });
+
+  it('rejects evidenceUrls entries longer than 500 chars', async () => {
+    const res = await request(app)
+      .post('/api/reports')
+      .send({
+        reportedUserId: 'target',
+        reason: 'spam',
+        evidenceUrls: ['https://e.com/' + 'x'.repeat(490)],
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/evidenceUrls entry exceeds 500 chars/);
+  });
+
+  it('rejects non-string evidenceUrls entries', async () => {
+    const res = await request(app)
+      .post('/api/reports')
+      .send({
+        reportedUserId: 'target',
+        reason: 'spam',
+        evidenceUrls: [42],
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/evidenceUrls entry exceeds 500 chars/);
+  });
+});
+
+describe('Pass-6 backfill: CRIT-3 404 when target user no longer exists', () => {
+  let app;
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+  });
+
+  it('returns 404 on /reports/:id/resolve warned action when resolveUniqueId returns null', async () => {
+    const { resolveUniqueId } = require('../../src/middleware/auth');
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    resolveUniqueId.mockReset();
+    resolveUniqueId.mockResolvedValueOnce(null);
+    getDoc.mockResolvedValueOnce({
+      id: 'r1',
+      reportedUserId: 'deleted-uid',
+      reporterId: 'rep1',
+      reason: 'spam',
+    });
+
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'warned' });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/no longer exists/i);
+    // Critical: must NOT have updated the report status before the 404
+    expect(mockDocUpdate).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 on /reports/:id/resolve suspended action when resolveUniqueId returns null', async () => {
+    const { resolveUniqueId } = require('../../src/middleware/auth');
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    resolveUniqueId.mockReset();
+    resolveUniqueId.mockResolvedValueOnce(null);
+    getDoc.mockResolvedValueOnce({
+      id: 'r1',
+      reportedUserId: 'deleted-uid',
+      reporterId: 'rep1',
+      reason: 'spam',
+    });
+
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'suspended' });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/no longer exists/i);
+  });
+});
+
+describe('Pass-6 backfill: S3 admin caps on resolve handlers', () => {
+  let app;
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+  });
+
+  it('POST /reports/:id/resolve rejects body.reason longer than 500 chars', async () => {
+    const res = await request(app)
+      .post('/api/reports/r1/resolve')
+      .send({
+        action: 'warned',
+        reason: 'x'.repeat(501),
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/reason exceeds 500 chars/);
+  });
+
+  it('POST /reports/:id/resolve rejects body.adminNote longer than 2000 chars', async () => {
+    const res = await request(app)
+      .post('/api/reports/r1/resolve')
+      .send({
+        action: 'warned',
+        adminNote: 'x'.repeat(2001),
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/adminNote exceeds 2000 chars/);
+  });
+
+  it('POST /reports/resolve-all/:userId rejects body.reason longer than 500 chars', async () => {
+    const res = await request(app)
+      .post('/api/reports/resolve-all/target')
+      .send({
+        action: 'warned',
+        reason: 'x'.repeat(501),
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/reason exceeds 500 chars/);
+  });
+
+  it('POST /reports/resolve-all/:userId rejects body.adminNote longer than 2000 chars', async () => {
+    const res = await request(app)
+      .post('/api/reports/resolve-all/target')
+      .send({
+        action: 'warned',
+        adminNote: 'x'.repeat(2001),
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/adminNote exceeds 2000 chars/);
+  });
+});
+
+describe('Pass-6 backfill: audit log targetUserId canonical uniqueId', () => {
+  let app;
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+  });
+
+  it('RESOLVE_REPORT logs the server-resolved canonical uniqueId, not the Firebase Auth UID', async () => {
+    const { resolveUniqueId } = require('../../src/middleware/auth');
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    resolveUniqueId.mockReset();
+    // Firebase UID -> canonical uniqueId resolution
+    resolveUniqueId.mockResolvedValue('CANONICAL-12345');
+    getDoc.mockResolvedValueOnce({
+      id: 'r1',
+      reportedUserId: 'firebase-auth-uid-xxx',
+      reportedUserUniqueId: 'STORED-IGNORE-ME',
+      reporterId: 'rep1',
+      reason: 'spam',
+    });
+
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'dismissed' });
+
+    expect(res.status).toBe(200);
+    const auditEntry = findLastAuditWrite(mockDocSet);
+    expect(auditEntry).not.toBeNull();
+    expect(auditEntry.action).toBe('RESOLVE_REPORT');
+    expect(auditEntry.targetUserId).toBe('CANONICAL-12345');
+  });
+
+  it('RESOLVE_REPORT falls back to raw reportedUserId when resolveUniqueId throws (does not 500 the request)', async () => {
+    const { resolveUniqueId } = require('../../src/middleware/auth');
+    const { getDoc } = require('../../src/utils/firestore-helpers');
+    resolveUniqueId.mockReset();
+    resolveUniqueId.mockRejectedValue(new Error('Firestore unavailable'));
+    getDoc.mockResolvedValueOnce({
+      id: 'r1',
+      reportedUserId: 'firebase-auth-uid-xxx',
+      reporterId: 'rep1',
+      reason: 'spam',
+    });
+
+    const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'dismissed' });
+
+    // Critical: report-status update has already committed at this point.
+    // A throw from audit-log resolution must NOT 500 the request.
+    expect(res.status).toBe(200);
+    const auditEntry = findLastAuditWrite(mockDocSet);
+    expect(auditEntry.targetUserId).toBe('firebase-auth-uid-xxx');
+  });
+
+  it('RESOLVE_ALL_REPORTS logs canonical uniqueId for forensic queryability', async () => {
+    const { resolveUniqueId } = require('../../src/middleware/auth');
+    const { queryDocs } = require('../../src/utils/firestore-helpers');
+    resolveUniqueId.mockReset();
+    resolveUniqueId.mockResolvedValue('CANONICAL-99');
+    queryDocs.mockResolvedValueOnce([
+      { id: 'r1', reportedUserId: 'firebase-uid-77', reporterId: 'rep1', status: 'pending' },
+    ]);
+
+    const res = await request(app)
+      .post('/api/reports/resolve-all/firebase-uid-77')
+      .send({ action: 'dismissed' });
+
+    expect(res.status).toBe(200);
+    const auditEntry = findLastAuditWrite(mockDocSet);
+    expect(auditEntry).not.toBeNull();
+    expect(auditEntry.action).toBe('RESOLVE_ALL_REPORTS');
+    expect(auditEntry.targetUserId).toBe('CANONICAL-99');
+  });
+
+  it('RESOLVE_ALL_REPORTS skips the resolveUniqueId call entirely on empty-reports early-return (Firestore quota)', async () => {
+    const { resolveUniqueId } = require('../../src/middleware/auth');
+    const { queryDocs } = require('../../src/utils/firestore-helpers');
+    resolveUniqueId.mockReset();
+    queryDocs.mockResolvedValueOnce([]); // No pending reports
+
+    const res = await request(app)
+      .post('/api/reports/resolve-all/firebase-uid-77')
+      .send({ action: 'dismissed' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.resolved).toBe(0);
+    // Per CLAUDE.md "Firestore quota awareness" — don't burn an op on a no-op call.
+    expect(resolveUniqueId).not.toHaveBeenCalled();
+  });
+});
