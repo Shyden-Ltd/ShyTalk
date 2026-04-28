@@ -54,7 +54,7 @@ jobs:
   # ── Resolve inputs into device matrix ────────────────────────
   resolve-inputs:
     name: Resolve Inputs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 2
     outputs:
       run_android: ${{ steps.resolve.outputs.run_android }}
@@ -103,7 +103,7 @@ jobs:
     name: "Android E2E (API ${{ matrix.api-level }}, ${{ matrix.form-factor }})"
     needs: [resolve-inputs]
     if: always() && needs.resolve-inputs.result == 'success' && needs.resolve-inputs.outputs.run_android == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -220,7 +220,7 @@ jobs:
     name: Android E2E Summary
     needs: [resolve-inputs, test-android]
     if: always() && needs.resolve-inputs.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 5
     steps:
       - name: Check results

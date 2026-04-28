@@ -14,7 +14,7 @@ env:
 
 jobs:
   auto-merge:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     if: github.event.pull_request.user.login == 'dependabot[bot]'
     timeout-minutes: 5
     steps:

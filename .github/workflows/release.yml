@@ -19,7 +19,7 @@ env:
 jobs:
   check-skip:
     name: Check Skip
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 2
     outputs:
       should_skip: ${{ steps.check.outputs.skip }}
@@ -40,7 +40,7 @@ jobs:
     name: Detect Changes
     needs: [check-skip]
     if: needs.check-skip.outputs.should_skip != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 5
     outputs:
       app_changed: ${{ steps.changes.outputs.app_changed }}
@@ -79,7 +79,7 @@ jobs:
     if: |
       needs.check-skip.outputs.should_skip != 'true' &&
       (github.event_name == 'workflow_dispatch' || needs.detect-changes.outputs.workflow_only != 'true')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 10
     steps:
       - name: Generate app token

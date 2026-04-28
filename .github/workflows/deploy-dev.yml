@@ -40,7 +40,7 @@ jobs:
   deploy-backend-dev:
     name: Deploy Backend to Dev
     if: inputs.backend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -82,7 +82,7 @@ jobs:
   deploy-web-dev:
     name: Deploy Web to Dev
     if: inputs.web
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -106,7 +106,7 @@ jobs:
   distribute-android:
     name: Distribute Android to Testers
     if: inputs.android-testers
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -189,7 +189,7 @@ jobs:
   distribute-ios:
     name: Distribute iOS to TestFlight
     if: inputs.ios-testers
-    runs-on: macos-15
+    runs-on: macos-15-xlarge
     # Bumped from 45 -> 90 on 2026-04-28: K/Native linkReleaseFrameworkIosArm64
     # has been taking 24-29 min on the macos-15 runner pool (was ~10 min in
     # mid-April). Plus xcodebuild archive ~15-20 min + pod install ~3 min +
@@ -287,7 +287,7 @@ jobs:
       inputs.playwright &&
       (needs.deploy-backend-dev.result == 'success' || needs.deploy-backend-dev.result == 'skipped') &&
       (needs.deploy-web-dev.result == 'success' || needs.deploy-web-dev.result == 'skipped')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6

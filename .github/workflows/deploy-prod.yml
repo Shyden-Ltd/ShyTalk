@@ -39,7 +39,7 @@ env:
 jobs:
   validate-release:
     name: Validate Release Tag
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 5
     outputs:
       version: ${{ steps.validate.outputs.version }}
@@ -70,7 +70,7 @@ jobs:
     name: Build Android
     needs: [validate-release]
     if: inputs.android
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -116,7 +116,7 @@ jobs:
     name: Deploy Backend to Prod
     needs: [validate-release]
     if: inputs.backend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -166,7 +166,7 @@ jobs:
     name: Deploy Web to Prod
     needs: [validate-release]
     if: inputs.web
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -193,7 +193,7 @@ jobs:
     name: Deploy Android to Play Store
     needs: [validate-release, build-android]
     if: inputs.android
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 10
     steps:
       - name: Download release artifacts
@@ -220,7 +220,7 @@ jobs:
     name: Deploy iOS to App Store
     needs: [validate-release]
     if: inputs.ios
-    runs-on: macos-latest
+    runs-on: macos-latest-xlarge
     # Bumped from 45 -> 90 on 2026-04-28: K/Native linkReleaseFrameworkIosArm64
     # plus xcodebuild archive plus App Store upload total ~50 min worst case
     # on slow days; 90 gives runner-pool-slowdown headroom.
@@ -305,7 +305,7 @@ jobs:
       needs.validate-release.result == 'success' &&
       (needs.deploy-backend-prod.result == 'success' ||
        needs.deploy-web-prod.result == 'success')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 5
     steps:
       - name: Verify API health
@@ -364,7 +364,7 @@ jobs:
     if: |
       always() &&
       needs.deploy-android-prod.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 15
     steps:
       - name: Download debug APK
@@ -407,7 +407,7 @@ jobs:
     if: |
       always() &&
       needs.deploy-ios-prod.result == 'success'
-    runs-on: macos-latest
+    runs-on: macos-latest-xlarge
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -484,7 +484,7 @@ jobs:
        needs.smoke-test-backend-web.result == 'failure' ||
        needs.smoke-test-android.result == 'failure' ||
        needs.smoke-test-ios.result == 'failure')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6

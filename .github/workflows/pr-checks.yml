@@ -20,7 +20,7 @@ env:
 jobs:
   detect-changes:
     name: Detect Changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 5
     outputs:
       app_changed: ${{ steps.changes.outputs.app_changed }}
@@ -79,7 +79,7 @@ jobs:
       needs.detect-changes.outputs.app_changed == 'true' &&
       (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
       (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -223,7 +223,7 @@ jobs:
     name: PR Gate
     needs: [detect-changes, lint, build-and-test, sonarcloud, test-backend, android-e2e, playwright-web, ios-e2e]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 2
     steps:
       - name: Evaluate results

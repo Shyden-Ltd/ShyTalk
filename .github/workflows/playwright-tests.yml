@@ -53,7 +53,7 @@ jobs:
   # ── Resolve inputs into browser matrix ──────────────────────
   resolve-inputs:
     name: Resolve Inputs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 2
     outputs:
       run_web: ${{ steps.resolve.outputs.run_web }}
@@ -99,7 +99,7 @@ jobs:
     name: Prepare Playwright
     needs: [resolve-inputs]
     if: always() && needs.resolve-inputs.result == 'success' && needs.resolve-inputs.outputs.run_web == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -133,7 +133,7 @@ jobs:
     name: "Playwright (${{ matrix.project }})"
     needs: [resolve-inputs, prepare-playwright]
     if: always() && needs.prepare-playwright.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 120
     strategy:
       fail-fast: false
@@ -263,7 +263,7 @@ jobs:
     name: Playwright Summary
     needs: [resolve-inputs, test-playwright]
     if: always() && needs.resolve-inputs.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 5
     steps:
       - name: Check results
