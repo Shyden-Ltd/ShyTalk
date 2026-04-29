@@ -76,5 +76,25 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<!--
+	    Encryption export compliance.
+	    https://developer.apple.com/documentation/security/complying-with-encryption-export-regulations
+
+	    Set to false because ShyTalk only uses encryption that is exempt
+	    from US export regulations:
+	      - HTTPS for the app's primary purpose (Firebase Auth, Express
+	        API, R2 storage)
+	      - Standard iOS encryption (Keychain, Face ID, code-signed
+	        binaries) used as-shipped
+	      - LiveKit WebRTC's standard DTLS-SRTP for voice rooms
+	      - APNs (Apple-managed encryption end-to-end)
+
+	    Without this key, every TestFlight upload sits in "Missing
+	    Compliance" status and isn't auto-distributed to internal
+	    testers — which is what blocked TestFlight distribution after
+	    PR #372 restored uploads.
+	-->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>

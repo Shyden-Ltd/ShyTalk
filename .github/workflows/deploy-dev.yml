@@ -339,6 +339,18 @@ jobs:
           fi
           echo "altool upload accepted by App Store Connect"
 
+      - name: Ensure TestFlight internal-group auto-distribution
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        # Without this, builds upload but stay in App Store Connect → TestFlight
+        # → Builds without being pushed to internal testers — the symptom that
+        # left testers on build 17 from March 12 even after the upload bug
+        # (PR #372) was fixed. See scripts/ensure-testflight-auto-distribution.js
+        # for the implementation. Idempotent: silently no-ops when groups
+        # already have hasAccessToAllBuilds=true.
+        run: node scripts/ensure-testflight-auto-distribution.js
+
       - name: Clean up signing material
         if: always()
         env:
