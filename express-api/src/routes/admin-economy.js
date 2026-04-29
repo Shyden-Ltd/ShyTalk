@@ -168,22 +168,29 @@ router.post('/users/:uniqueId/backpack', async (req, res) => {
       createdAt: timestamp,
     });
 
-    // Notify user about backpack change (unless silent)
+    // Notify user about backpack change (unless silent). Track failure
+    // so admin UI sees `pms: { failed, total }` for partial-failure toast.
+    let pmFailed = 0;
+    let pmTotal = 0;
     if (!body.silent) {
+      pmTotal = 1;
       const name = body.giftName || body.giftId;
       const msg =
         body.quantity === 0
           ? `🎒 "${name}" has been removed from your backpack by the moderation team.`
           : `🎒 Your backpack has been updated: "${name}" quantity set to ${body.quantity}.`;
-      sendSystemPm(req.params.uniqueId, msg).catch((err) =>
+      try {
+        await sendSystemPm(req.params.uniqueId, msg);
+      } catch (err) {
         log.error('admin-economy', 'Failed to send backpack PM', {
           uid: req.params.uniqueId,
           error: err.message,
-        }),
-      );
+        });
+        pmFailed = 1;
+      }
     }
 
-    res.json({ success: true });
+    res.json({ success: true, pms: { failed: pmFailed, total: pmTotal } });
   } catch (err) {
     log.error('admin-economy', 'Error setting backpack item', {
       uid: req.params.uniqueId,

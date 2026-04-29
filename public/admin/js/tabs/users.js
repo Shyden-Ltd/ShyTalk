@@ -1276,7 +1276,16 @@ export function wireModerationListeners() {
     const adminNote = $("#direct-warn-note")?.value?.trim() || undefined;
     if (!confirm("Issue a warning for \"" + reason + "\" (severity " + severity + ", -" + severity * 5 + " GCS)?")) return;
     directWarnBtn.disabled = true; directWarnBtn.textContent = "Issuing...";
-    try { const result = await apiCall("POST", `/api/user/${currentUid}/warn`, { reason, severity, adminNote }); showToast("Warning issued successfully"); if (result.autoEscalateSuggested) showToast("This user has 5+ warnings. Consider suspending.", "error"); const data = await apiCall("GET", `/api/user/${currentUid}`); populateGcsSection(data); loadWarningHistory(currentUid, false); loadReportHistory(currentUid); if ($("#direct-warn-reason")) $("#direct-warn-reason").value = ""; if ($("#direct-warn-note")) $("#direct-warn-note").value = ""; }
+    try {
+      const result = await apiCall("POST", `/api/user/${currentUid}/warn`, { reason, severity, adminNote });
+      // Surface partial-failure: the warning PM may have failed silently.
+      window.PartialFailureToast?.showResultToast(showToast, result, "Warning issued successfully");
+      if (result.autoEscalateSuggested) showToast("This user has 5+ warnings. Consider suspending.", "error");
+      const data = await apiCall("GET", `/api/user/${currentUid}`);
+      populateGcsSection(data); loadWarningHistory(currentUid, false); loadReportHistory(currentUid);
+      if ($("#direct-warn-reason")) $("#direct-warn-reason").value = "";
+      if ($("#direct-warn-note")) $("#direct-warn-note").value = "";
+    }
     catch (err) { showToast(err.message, "error"); }
     finally { directWarnBtn.disabled = false; directWarnBtn.textContent = "Issue Warning"; }
   });
@@ -1408,7 +1417,8 @@ export function renderBackpack() {
 export async function autoSaveBackpackItem(giftId, newQty, originalQty) {
   try {
     const gift = _giftCatalog.find(function(g) { return g.id === giftId; });
-    await apiCall("POST", "/api/users/" + currentUid + "/backpack", { giftId: giftId, quantity: newQty, giftName: gift ? gift.name : giftId });
+    const result = await apiCall("POST", "/api/users/" + currentUid + "/backpack", { giftId: giftId, quantity: newQty, giftName: gift ? gift.name : giftId });
+    window.PartialFailureToast?.showResultToast(showToast, result, null);
     const item = _backpackItems.find(function(i) { return i.giftId === giftId; });
     if (item) { if (newQty <= 0) { _backpackItems = _backpackItems.filter(function(i) { return i.giftId !== giftId; }); } else { item.quantity = newQty; } }
     delete _backpackEdits[giftId]; renderBackpack();
@@ -1466,7 +1476,21 @@ export function wireEconomyListeners() {
   const bpSearch = document.getElementById("backpack-search"); if (bpSearch) bpSearch.addEventListener("input", renderBackpack);
   const bpCatFilter = document.getElementById("backpack-category-filter"); if (bpCatFilter) bpCatFilter.addEventListener("change", renderBackpack);
   const addBtn = $("#backpack-add-btn");
-  if (addBtn) addBtn.addEventListener("click", async () => { const giftId = $("#backpack-gift-select")?.value; const qty = parseInt($("#backpack-qty")?.value) || 0; if (!giftId || !currentUid || qty <= 0) { showToast("Select a gift and enter a quantity", "error"); return; } try { const existing = _backpackItems.find(i => i.giftId === giftId); const newQty = (existing ? existing.quantity : 0) + qty; const giftInfo = _giftCatalog.find(g => g.id === giftId); await apiCall("POST", `/api/users/${currentUid}/backpack`, { giftId, quantity: newQty, giftName: giftInfo ? giftInfo.name : giftId }); showToast("Added " + qty + " (total now " + newQty + ")"); loadBackpack(currentUid); const bpQty = $("#backpack-qty"); if (bpQty) bpQty.value = "1"; const bpSel = $("#backpack-gift-select"); if (bpSel) bpSel.value = ""; } catch (err) { showToast(err.message, "error"); } });
+  if (addBtn) addBtn.addEventListener("click", async () => {
+    const giftId = $("#backpack-gift-select")?.value;
+    const qty = parseInt($("#backpack-qty")?.value) || 0;
+    if (!giftId || !currentUid || qty <= 0) { showToast("Select a gift and enter a quantity", "error"); return; }
+    try {
+      const existing = _backpackItems.find(i => i.giftId === giftId);
+      const newQty = (existing ? existing.quantity : 0) + qty;
+      const giftInfo = _giftCatalog.find(g => g.id === giftId);
+      const result = await apiCall("POST", `/api/users/${currentUid}/backpack`, { giftId, quantity: newQty, giftName: giftInfo ? giftInfo.name : giftId });
+      window.PartialFailureToast?.showResultToast(showToast, result, "Added " + qty + " (total now " + newQty + ")");
+      loadBackpack(currentUid);
+      const bpQty = $("#backpack-qty"); if (bpQty) bpQty.value = "1";
+      const bpSel = $("#backpack-gift-select"); if (bpSel) bpSel.value = "";
+    } catch (err) { showToast(err.message, "error"); }
+  });
   const clearBtn = $("#backpack-clear-btn");
   if (clearBtn) clearBtn.addEventListener("click", () => { if (_backpackItems.length === 0) { showToast("Backpack is already empty", "error"); return; } showClearAllConfirmation(); });
   const txLoadBtn = $("#tx-load-btn");

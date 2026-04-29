@@ -506,18 +506,24 @@ router.post('/user/:uniqueId/warn', async (req, res) => {
       adminUniqueId: req.auth.uniqueId,
     });
 
-    // Send system PM to warned user (fire-and-forget)
-    sendSystemPm(
-      req.params.uniqueId,
-      `\u26a0\ufe0f You have received a warning from the moderation team.\n\nReason: ${body.reason}\n\nRepeated violations may result in suspension.`,
-    ).catch((err) =>
+    // Send system PM to warned user. Track failure so the admin UI knows
+    // whether the user was actually informed (`pms: { failed, total }`
+    // shape matches partial-failure-toast.js).
+    let pmFailed = 0;
+    try {
+      await sendSystemPm(
+        req.params.uniqueId,
+        `\u26a0\ufe0f You have received a warning from the moderation team.\n\nReason: ${body.reason}\n\nRepeated violations may result in suspension.`,
+      );
+    } catch (err) {
       log.error('admin-users', 'Failed to send warning PM', {
         targetUniqueId: req.params.uniqueId,
         error: err.message,
-      }),
-    );
+      });
+      pmFailed = 1;
+    }
 
-    res.json({ success: true, ...result });
+    res.json({ success: true, ...result, pms: { failed: pmFailed, total: 1 } });
   } catch (err) {
     if (err.message === 'User not found') return res.status(404).json({ error: err.message });
     log.error('admin-users', 'Warn user failed', {
