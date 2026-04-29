@@ -1,6 +1,6 @@
 # ShyTalk Feature Roadmap
 
-_Prioritised 2026-04-19 (revised)_
+_Prioritised 2026-04-29 (revised)_
 
 > **Tri-platform policy (2026-04-19):** All work must keep desktop (web), iOS, and Android in
 > sync. No platform can fall behind. iOS build fix and parity are the immediate next priority.
@@ -24,6 +24,9 @@ roadmap — user-facing web features previously listed here have moved to Phase 
 | 51  | **Seasonal events system** — reusable date-gated theming for holidays (Khmer New Year, Diwali, etc.). Events.json registry, seasonal-theme.js, SeasonalTheme.kt, educational pages               | Medium | DONE (PR #302, 2026-04-16)                                    |
 | 52  | **Khmer (km) as 20th locale** — full app translation to Khmer script (771/781 strings)                                                                                                           | Medium | DONE (PR #302, 2026-04-16)                                    |
 | 53  | **Admin core module tests** — 34 Jest unit tests + 9 Playwright integration tests for PR A core modules                                                                                          | Small  | DONE (PR #290, 2026-04-13)                                    |
+| 56  | **CI paid-runner lint guard** — pre-push + workflow lint that rejects `*-xlarge`, `*-cores`, `large-*` runner specs. Prevents repeat of PR #370 (queued indefinitely on nonexistent paid runners). See `feedback-larger-runners-paid.md` | Small  | NEXT                                                          |
+| 57  | **CI stuck-run reaper** — scheduled workflow auto-cancels any run stuck in `queued` for >30 min. Self-heals stale concurrency locks regardless of cause (deleted self-hosted runner, account quota, ghosted dispatch, paid-runner mistake) | Small  | NEXT                                                          |
+| 58  | **GitHub org migration — Shyden Ltd namespace** — create free GitHub org (`shyden-ltd` or similar), transfer repo from personal account. Aligns with future Shyden Ltd company site. Update Cloudflare Pages source, README badges, in-app source links, Express API references, GitHub App installations. NOTE: does NOT unlock larger runners (paid on every plan), purely organisational/professional move | Medium |                                                               |
 | B16 | **Cross-device E2E testing** — admin actions (suspension, moderation, ban cascade) performed in admin panel and verified in app on real device. Proves full pipeline end-to-end                  | Large  |                                                               |
 
 ---
