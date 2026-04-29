@@ -103,9 +103,12 @@ runs:
         echo "$IOS_PROVISION_PROFILE_BASE64" | base64 -d > "$PROFILE_PATH"
         # PlistBuddy is exact and robust against grep/sed brittleness if
         # Apple changes whitespace or nests <string> tags in a future macOS.
-        PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" /dev/stdin <<<"$(/usr/bin/security cms -D -i "$PROFILE_PATH")")
+        # `|| true` keeps set -e from aborting the assignment on PlistBuddy
+        # failure — the explicit empty-check below fires with a diagnostic
+        # ::error:: message instead of a raw bash-1 exit on the assignment line.
+        PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" /dev/stdin <<<"$(/usr/bin/security cms -D -i "$PROFILE_PATH")" || true)
         if [ -z "$PROFILE_UUID" ]; then
-          echo "::error::Could not extract UUID from provisioning profile at $PROFILE_PATH"
+          echo "::error::Could not extract UUID from provisioning profile at $PROFILE_PATH (PlistBuddy failed or :UUID missing)"
           exit 1
         fi
         mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
