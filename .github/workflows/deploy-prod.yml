@@ -230,6 +230,19 @@ jobs:
         with:
           ref: ${{ inputs.release-tag }}
 
+      # Fast pre-flight: assert the export plist hasn't been flipped back to
+      # `destination: upload` (which would upload silently and break TestFlight,
+      # as happened 2026-03-12 → 2026-04-29). Fails in <1s before we burn 20 min
+      # on archive + export.
+      - name: Assert ExportOptions.plist requires local export
+        run: |
+          set -euo pipefail
+          dest=$(/usr/libexec/PlistBuddy -c "Print :destination" iosApp/ExportOptions.plist)
+          if [ "$dest" != "export" ]; then
+            echo "::error::iosApp/ExportOptions.plist destination must be 'export' (got '$dest'). 'upload' would upload silently and the altool step would fail."
+            exit 1
+          fi
+
       - uses: ./.github/actions/setup-jdk-gradle
 
       - uses: ./.github/actions/setup-ios-signing
@@ -246,13 +259,19 @@ jobs:
           prod-base64: ${{ secrets.GOOGLE_SERVICES_PROD_BASE64 }}
 
       - name: Build KMP shared framework for iOS
-        run: ./gradlew :shared:linkReleaseFrameworkIosArm64
+        run: |
+          set -euo pipefail
+          ./gradlew :shared:linkReleaseFrameworkIosArm64
 
       - name: Install CocoaPods
-        run: cd iosApp && pod install
+        run: |
+          set -euo pipefail
+          cd iosApp
+          pod install
 
       - name: Build and archive iOS app
         run: |
+          set -euo pipefail
           cd iosApp
           xcodebuild \
             -workspace iosApp.xcworkspace \
@@ -310,15 +329,61 @@ jobs:
             echo "::error::Expected exactly one .ipa for upload, found ${#ipas[@]}"
             exit 1
           fi
+          # altool is famous for printing product-errors to stdout while exiting 0
+          # (auth-key revoked, asset validation rejection, etc). Capture output and
+          # grep it so we fail loudly when ASC reports an upload-time error.
+          upload_log="$RUNNER_TEMP/altool-upload.log"
+          set +e
           xcrun altool --upload-app \
             -f "${ipas[0]}" \
             -t ios \
             --apiKey "$APP_STORE_CONNECT_KEY_ID" \
-            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
+            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID" \
+            --output-format xml 2>&1 | tee "$upload_log"
+          rc=${PIPESTATUS[0]}
+          set -e
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::altool exited $rc"
+            exit "$rc"
+          fi
+          if grep -qE '<key>product-errors</key>|<key>tool-errors</key>' "$upload_log"; then
+            echo "::error::altool reported errors despite exit 0 — see log above"
+            exit 1
+          fi
+          echo "altool upload accepted by App Store Connect"
 
-      - name: Clean up keychain
+      - name: Clean up signing material
         if: always()
-        run: security delete-keychain $RUNNER_TEMP/app-signing.keychain-db 2>/dev/null || true
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+        # Self-hosted runner: scrub all signing material to prevent .p8/.p12
+        # leaking between jobs. Don't fail the job on cleanup — log warnings
+        # instead so the deploy outcome reflects deploy success/failure only.
+        run: |
+          set -uo pipefail
+          fail=0
+          if [ -f "$RUNNER_TEMP/app-signing.keychain-db" ]; then
+            if ! security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db"; then
+              echo "::warning::Failed to delete keychain at $RUNNER_TEMP/app-signing.keychain-db"
+              fail=1
+            fi
+          fi
+          # Restore the user keychain search list so we don't accumulate
+          # references to deleted keychains across runs on the persistent runner.
+          if ! security list-keychain -d user -s "$HOME/Library/Keychains/login.keychain-db"; then
+            echo "::warning::Failed to restore login keychain search list"
+            fail=1
+          fi
+          rm -rf "$RUNNER_TEMP/export" \
+                 "$RUNNER_TEMP/iosApp.xcarchive" \
+                 "$RUNNER_TEMP/altool-upload.log" || true
+          if [ -n "${APP_STORE_CONNECT_KEY_ID:-}" ]; then
+            rm -f "$HOME/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8" || true
+          fi
+          if [ "$fail" -eq 0 ]; then
+            echo "Signing material scrubbed."
+          fi
+          exit 0
 
   # ── Smoke tests (after deploys) ────────────────────────────
   smoke-test-backend-web:
