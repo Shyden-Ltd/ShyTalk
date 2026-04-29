@@ -390,15 +390,40 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
           script: |
+            set -euo pipefail
             echo "=== Installing APK ==="
-            adb install debug-apk/*.apk
+            shopt -s nullglob
+            apks=(debug-apk/*.apk)
+            shopt -u nullglob
+            if [ "${#apks[@]}" -ne 1 ]; then
+              echo "::error::Expected exactly one debug APK, found ${#apks[@]}"
+              exit 1
+            fi
+            adb install -r "${apks[0]}"
             echo "=== Launching app ==="
-            adb shell am start -W -n com.shyden.shytalk/com.shyden.shytalk.MainActivity 2>&1 || true
+            am_output=$(adb shell am start -W -n com.shyden.shytalk/com.shyden.shytalk.MainActivity 2>&1)
+            echo "$am_output"
+            if echo "$am_output" | grep -qE 'Error|Exception|Activity not started'; then
+              echo "::error::am start reported an error — app failed to launch"
+              exit 1
+            fi
+            sleep 3
+            echo "=== Verifying app is foreground activity ==="
+            focused=$(adb shell dumpsys window windows 2>&1 | grep -E 'mCurrentFocus' || true)
+            echo "$focused"
+            if ! echo "$focused" | grep -q 'com.shyden.shytalk'; then
+              echo "::error::ShyTalk is not the foreground activity. Got: $focused"
+              exit 1
+            fi
             sleep 5
             echo "=== Checking for fatal crashes in logcat ==="
             adb logcat -d -s AndroidRuntime > /tmp/runtime.log 2>&1
-            CRASHES=$(grep -c "FATAL EXCEPTION" /tmp/runtime.log || true)
-            if [ "$CRASHES" -gt 0 ] 2>/dev/null; then echo "::error::Found $CRASHES fatal crash(es)"; cat /tmp/runtime.log | tail -30; exit 1; fi
+            CRASHES=$(grep -c "FATAL EXCEPTION" /tmp/runtime.log || echo 0)
+            if [ "${CRASHES:-0}" -gt 0 ]; then
+              echo "::error::Found $CRASHES fatal crash(es)"
+              tail -30 /tmp/runtime.log
+              exit 1
+            fi
             echo "No fatal crashes — Android APK installs and launches successfully"
 
   smoke-test-ios:
@@ -440,27 +465,45 @@ jobs:
 
       - name: Boot simulator and verify app launches
         run: |
+          set -euo pipefail
           echo "=== Booting simulator ==="
           DEVICE_ID=$(xcrun simctl create "smoke-test" "iPhone 16")
           xcrun simctl boot "$DEVICE_ID"
           xcrun simctl bootstatus "$DEVICE_ID"
 
-          echo "=== Installing app ==="
-          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "iosApp.app" -path "*/Debug-iphonesimulator/*" | head -1)
+          echo "=== Locating built app ==="
+          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "iosApp.app" -path "*/Debug-iphonesimulator/*" -print -quit)
           if [ -z "$APP_PATH" ]; then
-            APP_PATH=$(find iosApp/build -name "iosApp.app" -path "*Debug-iphonesimulator*" | head -1)
+            APP_PATH=$(find iosApp/build -name "iosApp.app" -path "*Debug-iphonesimulator*" -print -quit)
+          fi
+          if [ -z "$APP_PATH" ] || [ ! -d "$APP_PATH" ]; then
+            echo "::error::Could not locate iosApp.app build product. Check derivedDataPath of the build step."
+            echo "Searched ~/Library/Developer/Xcode/DerivedData and iosApp/build"
+            xcrun simctl shutdown "$DEVICE_ID" || true
+            exit 1
           fi
           echo "App path: $APP_PATH"
+
+          echo "=== Installing app ==="
           xcrun simctl install "$DEVICE_ID" "$APP_PATH"
+          if ! xcrun simctl get_app_container "$DEVICE_ID" com.shyden.shytalk app >/dev/null 2>&1; then
+            echo "::error::App did not install — get_app_container returned non-zero"
+            xcrun simctl shutdown "$DEVICE_ID" || true
+            exit 1
+          fi
 
           echo "=== Launching app ==="
           touch /tmp/smoke-start
+          # simctl launch returns the launched PID on success and non-zero on
+          # failure (e.g., "no eligible application", "code-signing rejected").
+          # Without set -e this used to silently progress to the crash-check
+          # which then "passed" because nothing was running to crash.
           xcrun simctl launch "$DEVICE_ID" com.shyden.shytalk
           sleep 10
 
           echo "=== Checking for crashes ==="
-          CRASH_COUNT=$(find ~/Library/Logs/DiagnosticReports -name "iosApp*" -newer /tmp/smoke-start 2>/dev/null | wc -l || echo 0)
-          if [ "$CRASH_COUNT" -gt 0 ]; then
+          CRASH_COUNT=$(find ~/Library/Logs/DiagnosticReports -name "iosApp*" -newer /tmp/smoke-start 2>/dev/null | wc -l | tr -d ' ')
+          if [ "${CRASH_COUNT:-0}" -gt 0 ]; then
             echo "::error::Found crash report(s)"
             cat ~/Library/Logs/DiagnosticReports/iosApp* 2>/dev/null | head -30
             xcrun simctl shutdown "$DEVICE_ID" || true
