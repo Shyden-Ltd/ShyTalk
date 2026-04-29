@@ -121,9 +121,11 @@ jobs:
         id: version
         run: |
           set -euo pipefail
-          # Extract current version
-          CURRENT=$(grep 'versionName =' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
-          CURRENT_CODE=$(grep 'versionCode' app/build.gradle.kts | head -1 | sed 's/[^0-9]//g')
+          # Extract current version. `|| true` keeps a no-match grep from
+          # exiting the script under `set -euo pipefail` — we want the
+          # is-empty guard below to fire with a clear error instead.
+          CURRENT=$(grep 'versionName =' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/' || true)
+          CURRENT_CODE=$(grep 'versionCode' app/build.gradle.kts | head -1 | sed 's/[^0-9]//g' || true)
 
           if [ -z "$CURRENT" ] || [ -z "$CURRENT_CODE" ]; then
             echo "::error::Could not parse current version from app/build.gradle.kts (got CURRENT='$CURRENT' CURRENT_CODE='$CURRENT_CODE')"
@@ -217,8 +219,10 @@ jobs:
           # Verify the bump landed at HEAD. `git pull --rebase` can race with
           # other commits on main and silently produce a HEAD whose
           # versionName doesn't match what we just bumped — leading to a tag
-          # that points at code with the wrong version.
-          PUSHED_VERSION=$(grep 'versionName =' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          # that points at code with the wrong version. `|| true` lets the
+          # is-empty guard fire with a clear error if rebase ate the
+          # versionName line entirely (vs. set -e aborting on the grep).
+          PUSHED_VERSION=$(grep 'versionName =' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/' || true)
           if [ "$PUSHED_VERSION" != "${{ steps.version.outputs.version }}" ]; then
             echo "::error::HEAD versionName is '$PUSHED_VERSION' but expected '${{ steps.version.outputs.version }}' — rebase likely lost the bump commit"
             exit 1
