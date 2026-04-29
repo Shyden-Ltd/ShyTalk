@@ -1768,20 +1768,35 @@ export function wireBansListeners() {
       const devicesData = await apiCall("GET", `/api/admin/devices/user/${currentUid}`);
       const devices = devicesData.devices || [];
       if (devices.length === 0) { showToast("No devices to ban", "error"); return; }
-      // Aggregate per-call partial failures: each /admin/bans/device returns
-      // pms: { failed, total } for the user-visible ban-notice PM. Sum
-      // across the bulk call so the admin sees "N/M PMs failed" once
-      // instead of N separate toasts.
-      const results = await Promise.all(devices.map(d =>
+      // Promise.allSettled so a single failed device-ban (HTTP 4xx/5xx)
+      // doesn't reject the whole batch. Promise.all would mask both how
+      // many devices got banned AND any per-call PM failures.
+      const settled = await Promise.allSettled(devices.map(d =>
         apiCall("POST", "/api/admin/bans/device", { deviceId: d.id, reason, linkedUniqueId: currentUid }),
       ));
-      const aggregate = {
-        pms: results.reduce((acc, r) => ({
-          failed: (acc.failed || 0) + (r?.pms?.failed || 0),
-          total: (acc.total || 0) + (r?.pms?.total || 0),
-        }), { failed: 0, total: 0 }),
-      };
-      window.PartialFailureToast?.showResultToast(showToast, aggregate, "Banned " + devices.length + " device(s)");
+      const fulfilled = settled.filter(s => s.status === "fulfilled").map(s => s.value);
+      const rejected = settled.filter(s => s.status === "rejected");
+      // Aggregate PM failures across only the fulfilled responses (rejected
+      // ones never ran their PM step).
+      const aggregatePmFailed = fulfilled.reduce((sum, r) => sum + (r?.pms?.failed || 0), 0);
+      const aggregatePmTotal = fulfilled.reduce((sum, r) => sum + (r?.pms?.total || 0), 0);
+      // Log every HTTP-level rejection for triage (admin can copy from
+      // browser console when re-running with specific deviceIds).
+      for (const r of rejected) console.error("Ban device failed:", r.reason);
+      // Build a single toast message. Order: HTTP failures first (most
+      // actionable), then PM failures, then success count.
+      const segments = [];
+      if (rejected.length > 0) {
+        segments.push(`${rejected.length}/${devices.length} ban call(s) failed (first: ${rejected[0].reason?.message || "unknown"})`);
+      }
+      if (aggregatePmFailed > 0) {
+        segments.push(`${aggregatePmFailed}/${aggregatePmTotal} PMs failed`);
+      }
+      if (segments.length > 0) {
+        showToast(`Partial: ${segments.join("; ")}. Please retry the failed step.`, "error");
+      } else {
+        showToast(`Banned ${fulfilled.length} device(s)`, "success");
+      }
       populateBansSection(currentUid);
     } catch (err) { showToast("Failed: " + err.message, "error"); }
   });
