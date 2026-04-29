@@ -399,4 +399,51 @@ describe('showResultToast — shared helper for tab handlers', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].kind).toBe('error');
   });
+
+  // Defensive cases — these cover what happens when the API response
+  // is malformed or callers pass unexpected shapes. The lib markets
+  // itself as "the silent-failure class this lib defends against",
+  // so the defensive surface needs to be locked.
+
+  it('null result body falls through to success (no toast on null successMessage)', () => {
+    // If the API call returned null body (rare but possible — e.g. 204),
+    // buildPartialFailureMessage(null) returns null → success path runs.
+    showResultToast(fakeToast, null, null);
+    expect(calls).toEqual([]);
+  });
+
+  it('null result body shows success toast when successMessage given', () => {
+    showResultToast(fakeToast, null, 'Worked');
+    expect(calls).toEqual([{ msg: 'Worked', kind: 'success' }]);
+  });
+
+  it('undefined result body behaves the same as null', () => {
+    showResultToast(fakeToast, undefined, 'Worked');
+    expect(calls).toEqual([{ msg: 'Worked', kind: 'success' }]);
+  });
+
+  it('string-shaped result (not an object) falls through to success', () => {
+    // A misimplemented backend returning a string instead of {pms:…}
+    // shouldn't trigger a partial-failure toast — there's nothing to
+    // grep against. Show the success message, not a confusing error.
+    showResultToast(fakeToast, 'whatever', 'OK');
+    expect(calls).toEqual([{ msg: 'OK', kind: 'success' }]);
+  });
+
+  it('result with pms but failed=0 shows success', () => {
+    // The "no failures" case still passes through pms but isPositiveCount
+    // rejects 0 → success path. Locks against accidental "show partial
+    // even when failed=0" regression.
+    showResultToast(fakeToast, { pms: { failed: 0, total: 5 } }, 'OK');
+    expect(calls).toEqual([{ msg: 'OK', kind: 'success' }]);
+  });
+
+  it('throws if showToast is not a function', () => {
+    // If a caller forgets to pass showToast, fail loudly rather than
+    // silently dropping the toast. (Catching this in tests beats
+    // catching it in production.)
+    expect(() => {
+      showResultToast(undefined, { pms: { failed: 1, total: 1 } }, 'OK');
+    }).toThrow(TypeError);
+  });
 });
