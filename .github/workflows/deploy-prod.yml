@@ -403,7 +403,12 @@ jobs:
             echo "=== Launching app ==="
             am_output=$(adb shell am start -W -n com.shyden.shytalk/com.shyden.shytalk.MainActivity 2>&1)
             echo "$am_output"
-            if echo "$am_output" | grep -qE 'Error|Exception|Activity not started'; then
+            # Match only real failures. The benign messages
+            # "Activity not started, its current task has been brought to the front"
+            # and "Activity not started, intent has been delivered to currently running top-most instance"
+            # are normal `am start` output when re-launching. Match the
+            # "unable to" variant or explicit Error type/Java exception lines.
+            if echo "$am_output" | grep -qE '^Error|FATAL|Activity not started, unable to|java\.lang\.|Exception type'; then
               echo "::error::am start reported an error — app failed to launch"
               exit 1
             fi
@@ -468,6 +473,10 @@ jobs:
           set -euo pipefail
           echo "=== Booting simulator ==="
           DEVICE_ID=$(xcrun simctl create "smoke-test" "iPhone 16")
+          # On the self-hosted Mac, leaked simulators accumulate across jobs.
+          # Trap shutdown+delete on EVERY exit (success, failure, signal) so
+          # we don't depend on the explicit cleanup at the end of the script.
+          trap 'xcrun simctl shutdown "$DEVICE_ID" 2>/dev/null || true; xcrun simctl delete "$DEVICE_ID" 2>/dev/null || true' EXIT
           xcrun simctl boot "$DEVICE_ID"
           xcrun simctl bootstatus "$DEVICE_ID"
 
