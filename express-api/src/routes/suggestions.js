@@ -867,6 +867,8 @@ async function notifySubscribers(suggestionData, eventType, extraData = {}) {
     const uidsToNotify = new Set(subscribers);
     if (submitterUid) uidsToNotify.add(submitterUid);
 
+    let notified = 0;
+    const failedUids = [];
     for (const uid of uidsToNotify) {
       try {
         const userDoc = await db.doc(`users/${uid}`).get();
@@ -886,12 +888,26 @@ async function notifySubscribers(suggestionData, eventType, extraData = {}) {
           title: suggestionData.title,
           ...extraData,
         });
-      } catch {
-        // Notification failure should not block the main operation
+        notified++;
+      } catch (notifyErr) {
+        // Don't block main operation, but log per-uid so admins can see
+        // which subscribers got their notification dropped (previously a
+        // bare `catch {}` swallowed everything: Firestore read failure,
+        // FCM auth/network errors, sendSystemPm Firestore write failure,
+        // even programmer errors — admin saw "success" while half of
+        // subscribers got nothing).
+        log.warn('admin-suggestions', 'Failed to notify subscriber', {
+          uid,
+          eventType,
+          error: notifyErr.message,
+        });
+        failedUids.push(uid);
       }
     }
+    return { notified, failedUids };
   } catch (err) {
     log.error('admin-suggestions', 'Notification dispatch failed', { error: err.message });
+    return { notified: 0, failedUids: [] };
   }
 }
 
