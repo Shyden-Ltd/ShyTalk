@@ -1233,8 +1233,11 @@ router.put('/admin/suggestions/:id/status', async (req, res) => {
       { previousStatus: currentStatus, newStatus, reason: reason || null },
     );
 
-    // Notify per-suggestion subscribers (FCM + system PM)
-    await notifySubscribers(data, newStatus, {
+    // Notify per-suggestion subscribers (FCM + system PM). Capture
+    // partial-failure counts so the admin UI can show "X/Y subscribers
+    // didn't receive their notification" via the existing
+    // PartialFailureToast.buildPartialFailureMessage() helper.
+    const notifyResult = await notifySubscribers(data, newStatus, {
       suggestionId: id,
       previousStatus: currentStatus,
       reason: reason || null,
@@ -1253,9 +1256,17 @@ router.put('/admin/suggestions/:id/status', async (req, res) => {
       from: currentStatus,
       to: newStatus,
       adminUid: req.auth.uniqueId,
+      pmFailed: notifyResult.failedUids.length,
     });
 
-    res.json({ success: true });
+    // pms shape matches partial-failure-toast.js: { failed, total }.
+    res.json({
+      success: true,
+      pms: {
+        failed: notifyResult.failedUids.length,
+        total: notifyResult.notified + notifyResult.failedUids.length,
+      },
+    });
   } catch (err) {
     log.error('admin-suggestions', 'Failed to change suggestion status', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });

@@ -301,13 +301,15 @@ router.patch('/user/:uniqueId', async (req, res) => {
           pmFailed++;
         }
       }
-      // Surface partial-failure to the admin UI so they can offer "Retry notify".
-      // Without this, silently dropped PMs leave the user uninformed about
-      // changes to their account.
+      // Surface partial-failure to the admin UI so it can offer "Retry notify".
+      // Shape matches partial-failure-toast.js's `pms: { failed, total }`
+      // contract — same as reports.js — so the existing
+      // PartialFailureToast.buildPartialFailureMessage() can render it
+      // without additional handler code.
       res.json({
         success: true,
         updatedFields: Object.keys(updates),
-        notifications: { sent: pmSent, failed: pmFailed },
+        pms: { failed: pmFailed, total: pmSent + pmFailed },
       });
       return;
     }
@@ -973,7 +975,13 @@ router.post('/user/:uniqueId/suspend', async (req, res) => {
       cascade = buildCascadeFailure(err, 'cascade_failed');
     }
 
-    res.json({ success: true, cascade, pmFailed });
+    // pms shape matches partial-failure-toast.js (failed, total). Single PM
+    // for the suspension reason; either delivered or not.
+    res.json({
+      success: true,
+      cascade,
+      pms: { failed: pmFailed ? 1 : 0, total: 1 },
+    });
   } catch (err) {
     log.error('admin-users', 'Suspend user failed', {
       uniqueId: req.params.uniqueId,
@@ -1047,7 +1055,10 @@ router.post('/user/:uniqueId/unsuspend', async (req, res) => {
     }
 
     clearSuspensionCache(Number(req.params.uniqueId));
-    res.json({ success: true, pmFailed });
+    res.json({
+      success: true,
+      pms: { failed: pmFailed ? 1 : 0, total: 1 },
+    });
   } catch (err) {
     log.error('admin-users', 'Unsuspend user failed', {
       uniqueId: req.params.uniqueId,
