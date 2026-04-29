@@ -11,25 +11,39 @@ const MAX_DIMENSION = 4096;
 const MIN_DIMENSION = 100;
 const COMPRESSION_TIMEOUT_MS = 10000;
 
+/**
+ * Distinguishes policy rejections (oversized image, SVG XSS risk, empty
+ * buffer) from compression-engine failures (sharp threw, timeout). Callers
+ * MUST re-throw ImagePolicyError as a 4xx client error rather than
+ * silently storing the original buffer — that would defeat the dimension
+ * check and let an oversized image become a permanent R2 object.
+ */
+class ImagePolicyError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'ImagePolicyError';
+  }
+}
+
 async function compressImage(buffer, mimeType) {
   if (!buffer || buffer.length === 0) {
-    throw new Error('Empty image buffer');
+    throw new ImagePolicyError('Empty image buffer');
   }
 
   if (mimeType === 'image/svg+xml') {
-    throw new Error('SVG format not supported — XSS risk');
+    throw new ImagePolicyError('SVG format not supported — XSS risk');
   }
 
   const originalSize = buffer.length;
 
   const metadata = await sharp(buffer).metadata();
   if (metadata.width > MAX_DIMENSION || metadata.height > MAX_DIMENSION) {
-    throw new Error(
+    throw new ImagePolicyError(
       `Image dimensions ${metadata.width}x${metadata.height} exceed maximum ${MAX_DIMENSION}x${MAX_DIMENSION}`,
     );
   }
   if (metadata.width < MIN_DIMENSION || metadata.height < MIN_DIMENSION) {
-    throw new Error(
+    throw new ImagePolicyError(
       `Image dimensions ${metadata.width}x${metadata.height} below minimum ${MIN_DIMENSION}x${MIN_DIMENSION}`,
     );
   }
@@ -69,19 +83,36 @@ async function compressImage(buffer, mimeType) {
   pipeline = pipeline.toColorspace('srgb');
 
   let timer;
+  let timedOut = false;
   const timeoutPromise = new Promise((_, reject) => {
-    timer = setTimeout(
-      () => reject(new Error('Image compression timed out')),
-      COMPRESSION_TIMEOUT_MS,
-    );
+    timer = setTimeout(() => {
+      timedOut = true;
+      reject(new Error('Image compression timed out'));
+    }, COMPRESSION_TIMEOUT_MS);
+  });
+
+  // Hold a reference to the in-flight sharp promise so we can attach a
+  // tail .catch() for the post-timeout case. Without this, when the
+  // timeout fires first, the sharp promise's eventual rejection becomes
+  // an unhandled rejection with no context back to this request.
+  const sharpPromise = pipeline.toBuffer();
+  sharpPromise.catch((tailErr) => {
+    if (timedOut) {
+      log.warn('imageCompressor', 'Sharp pipeline rejected after timeout (post-mortem)', {
+        error: tailErr.message,
+        format: outputMime,
+        originalSize,
+      });
+    }
   });
 
   let compressed;
   try {
-    compressed = await Promise.race([pipeline.toBuffer(), timeoutPromise]);
+    compressed = await Promise.race([sharpPromise, timeoutPromise]);
   } catch (err) {
     log.warn('imageCompressor', 'Compression failed, returning original', {
       error: err.message,
+      timedOut,
       format: outputMime,
       originalSize,
     });
@@ -105,4 +136,4 @@ async function compressImage(buffer, mimeType) {
   };
 }
 
-module.exports = { compressImage };
+module.exports = { compressImage, ImagePolicyError };

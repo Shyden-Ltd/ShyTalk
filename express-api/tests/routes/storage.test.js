@@ -8,14 +8,24 @@ jest.mock('../../src/utils/r2', () => ({
   deleteObject: jest.fn().mockResolvedValue(),
 }));
 
-jest.mock('../../src/utils/imageCompressor', () => ({
-  compressImage: jest.fn().mockResolvedValue({
-    buffer: Buffer.from('compressed'),
-    mimeType: 'image/jpeg',
-    originalSize: 100,
-    compressedSize: 50,
-  }),
-}));
+jest.mock('../../src/utils/imageCompressor', () => {
+  // Provide a real subclass so route's `instanceof ImagePolicyError` works
+  class ImagePolicyError extends Error {
+    constructor(message) {
+      super(message);
+      this.name = 'ImagePolicyError';
+    }
+  }
+  return {
+    compressImage: jest.fn().mockResolvedValue({
+      buffer: Buffer.from('compressed'),
+      mimeType: 'image/jpeg',
+      originalSize: 100,
+      compressedSize: 50,
+    }),
+    ImagePolicyError,
+  };
+});
 
 jest.mock('../../src/utils/helpers', () => ({
   getExtension: jest.fn((mime) => {
@@ -223,7 +233,7 @@ describe('POST /api/storage/upload', () => {
     expect(r2.putObject).toHaveBeenCalledWith(expect.any(String), compressedBuf, 'image/jpeg');
   });
 
-  test('compression failure falls back to storing original', async () => {
+  test('compression engine failure falls back to storing original', async () => {
     const { compressImage } = require('../../src/utils/imageCompressor');
     compressImage.mockRejectedValueOnce(new Error('sharp failed'));
     const app = createApp();
@@ -237,6 +247,47 @@ describe('POST /api/storage/upload', () => {
 
     expect(res.status).toBe(200);
     expect(r2.putObject).toHaveBeenCalled();
+  });
+
+  test('policy violation (oversized image) returns 400 — does NOT silently store original', async () => {
+    const { compressImage, ImagePolicyError } = require('../../src/utils/imageCompressor');
+    compressImage.mockRejectedValueOnce(
+      new ImagePolicyError('Image dimensions 9999x9999 exceed maximum 4096x4096'),
+    );
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'profiles')
+      .attach('file', Buffer.from('oversized-data'), {
+        filename: 'huge.jpg',
+        contentType: 'image/jpeg',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/exceed maximum/);
+    expect(r2.putObject).not.toHaveBeenCalled();
+  });
+
+  test('policy violation (SVG) returns 400 — does NOT silently store original', async () => {
+    // MIME-type allowlist already rejects SVG before compressImage is called,
+    // but verify the layered defence: even if a future change loosens the
+    // allowlist, ImagePolicyError thrown by compressImage still produces 400.
+    const { compressImage, ImagePolicyError } = require('../../src/utils/imageCompressor');
+    compressImage.mockRejectedValueOnce(
+      new ImagePolicyError('SVG format not supported — XSS risk'),
+    );
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'profiles')
+      .attach('file', Buffer.from('<svg></svg>'), {
+        filename: 'a.jpg',
+        contentType: 'image/jpeg',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/SVG format/);
+    expect(r2.putObject).not.toHaveBeenCalled();
   });
 
   test('HEIC upload key uses post-compression extension (.jpg not .heic)', async () => {

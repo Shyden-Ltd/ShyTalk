@@ -14,7 +14,7 @@ const multer = require('multer');
 const r2 = require('../utils/r2');
 const { getExtension } = require('../utils/helpers');
 const log = require('../utils/log');
-const { compressImage } = require('../utils/imageCompressor');
+const { compressImage, ImagePolicyError } = require('../utils/imageCompressor');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -74,7 +74,23 @@ router.post('/storage/upload', upload.single('file'), async (req, res) => {
       originalSize = compressed.originalSize;
       compressedSize = compressed.compressedSize;
     } catch (compressionErr) {
-      log.warn('storage', 'Compression failed, storing original', {
+      // Policy violations (oversized image, SVG, empty buffer) MUST be
+      // surfaced as a 4xx — silently uploading the original would defeat
+      // the dimension/MIME checks that exist for safety reasons.
+      if (compressionErr instanceof ImagePolicyError) {
+        log.warn('storage', 'Upload rejected: image policy violation', {
+          uniqueId,
+          contentType,
+          error: compressionErr.message,
+        });
+        return res.status(400).json({ error: compressionErr.message });
+      }
+      // Compression-engine failures (sharp internal error, codec issue,
+      // timeout) — store original, log warning, succeed. The caller asked
+      // to upload an image; compression is a best-effort optimisation.
+      log.warn('storage', 'Compression engine failed, storing original', {
+        uniqueId,
+        contentType,
         error: compressionErr.message,
       });
     }
