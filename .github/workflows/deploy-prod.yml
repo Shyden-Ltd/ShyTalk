@@ -319,25 +319,32 @@ jobs:
       - name: Verify API endpoints respond
         if: needs.deploy-backend-prod.result == 'success'
         run: |
+          set -euo pipefail
           echo "=== API Endpoint Checks ==="
           ERRORS=0
-          for endpoint in "/api/health"; do
-            STATUS=$(curl -s -o /dev/null -w '%{http_code}' "https://api.shytalk.shyden.co.uk${endpoint}")
-            if [ "$STATUS" = "200" ]; then echo "OK: ${endpoint} → ${STATUS}"
-            else echo "FAIL: ${endpoint} → ${STATUS}"; ERRORS=$((ERRORS + 1)); fi
-          done
-          for endpoint in "/api/users/me" "/api/rooms" "/api/conversations"; do
-            STATUS=$(curl -s -o /dev/null -w '%{http_code}' "https://api.shytalk.shyden.co.uk${endpoint}")
-            if [ "$STATUS" = "401" ]; then echo "OK: ${endpoint} → ${STATUS} (auth required)"
-            elif [ "$STATUS" -ge 500 ]; then echo "FAIL: ${endpoint} → ${STATUS} (server error)"; ERRORS=$((ERRORS + 1))
-            else echo "OK: ${endpoint} → ${STATUS}"; fi
-          done
-          for endpoint in "/api/admin/alerts" "/api/admin/banners"; do
-            STATUS=$(curl -s -o /dev/null -w '%{http_code}' "https://api.shytalk.shyden.co.uk${endpoint}")
-            if [ "$STATUS" -ge 500 ]; then echo "FAIL: ${endpoint} → ${STATUS}"; ERRORS=$((ERRORS + 1))
-            else echo "OK: ${endpoint} → ${STATUS}"; fi
-          done
-          [ "$ERRORS" -eq 0 ] || { echo "::error::${ERRORS} endpoint(s) returned server errors"; exit 1; }
+          # Whitelist expected status per endpoint. Anything else fails the
+          # smoke test — including 404 (route removed), 400 (validation
+          # broke), 403 (auth misconfigured), 429 (rate-limit gone wild).
+          # The previous "anything not 5xx is OK" pattern silently passed
+          # all of those.
+          check() {
+            local endpoint=$1 expected=$2
+            local status
+            status=$(curl -s -o /dev/null -w '%{http_code}' "https://api.shytalk.shyden.co.uk${endpoint}")
+            if echo "$status" | grep -qE "^(${expected})$"; then
+              echo "OK: ${endpoint} → ${status} (expected ${expected})"
+            else
+              echo "FAIL: ${endpoint} → ${status} (expected ${expected})"
+              ERRORS=$((ERRORS + 1))
+            fi
+          }
+          check "/api/health"            "200"
+          check "/api/users/me"          "401"
+          check "/api/rooms"             "401"
+          check "/api/conversations"     "401"
+          check "/api/admin/alerts"      "401"
+          check "/api/admin/banners"     "401"
+          [ "$ERRORS" -eq 0 ] || { echo "::error::${ERRORS} endpoint(s) returned unexpected status"; exit 1; }
           echo "All API endpoints responding correctly"
 
       - name: Verify web landing page

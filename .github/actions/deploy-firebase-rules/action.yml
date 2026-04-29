@@ -26,7 +26,13 @@ runs:
         DEPLOY_FIRESTORE: ${{ inputs.deploy-firestore }}
         DEPLOY_DATABASE: ${{ inputs.deploy-database }}
       run: |
+        set -euo pipefail
+        # Use trap so the service-account JSON is removed even if a deploy
+        # fails. Without this, set -e aborts before the trailing `rm` runs
+        # and the credential leaks across reusable-runner jobs.
+        umask 077
         echo "$SA_JSON" > /tmp/firebase-sa.json
+        trap 'rm -f /tmp/firebase-sa.json' EXIT
         export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
         if [ "$DEPLOY_FIRESTORE" = "true" ]; then
           firebase deploy --only firestore:rules --project "$PROJECT" --non-interactive
@@ -34,4 +40,3 @@ runs:
         if [ "$DEPLOY_DATABASE" = "true" ]; then
           firebase deploy --only database --project "$PROJECT" --non-interactive
         fi
-        rm /tmp/firebase-sa.json
