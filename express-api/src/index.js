@@ -35,9 +35,34 @@ const logger = require('./utils/loggerInstance');
 const { createRequestLogger } = require('./middleware/requestLogger');
 app.use(createRequestLogger(logger));
 
-// Health check (no auth, rate-limited by IP via generalLimiter below)
+// Health check (no auth, rate-limited by IP via generalLimiter below).
+// Returns the deployed git SHA so deploy workflows can assert the new
+// code is actually serving — closes the "deploy succeeded but old pm2
+// process still running" silent-failure class. The SHA is sourced from:
+//   1. DEPLOYED_SHA env var (preferred — the deploy script sets this
+//      via pm2 restart --update-env)
+//   2. ~/.deployed-sha file (durable fallback that survives pm2 daemon
+//      restarts; the deploy script writes it alongside the env var)
+//   3. "unknown" for local dev runs
+const path = require('node:path');
+const fs = require('node:fs');
+function resolveDeployedSha() {
+  if (process.env.DEPLOYED_SHA) return process.env.DEPLOYED_SHA;
+  // The .deployed-sha file lives one level above src/ so it survives
+  // tarball-based redeploys that overwrite src/ contents.
+  try {
+    const shaPath = path.resolve(__dirname, '..', '.deployed-sha');
+    if (fs.existsSync(shaPath)) {
+      return fs.readFileSync(shaPath, 'utf8').trim() || 'unknown';
+    }
+  } catch {
+    // Ignore — fall through to "unknown".
+  }
+  return 'unknown';
+}
+const DEPLOYED_SHA = resolveDeployedSha();
 app.get('/api/health', generalLimiter, (req, res) => {
-  res.json({ status: 'ok', timestamp: Date.now() });
+  res.json({ status: 'ok', timestamp: Date.now(), sha: DEPLOYED_SHA });
 });
 
 // Auth routes (mounted BEFORE auth middleware — these handle their own auth)

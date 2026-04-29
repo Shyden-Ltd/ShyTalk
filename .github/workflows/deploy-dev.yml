@@ -62,16 +62,38 @@ jobs:
           cd express-api
           tar czf /tmp/api.tar.gz --exclude='node_modules' --exclude='.env' .
           scp /tmp/api.tar.gz ubuntu@145.241.224.13:/tmp/
-          ssh ubuntu@145.241.224.13 "cd ~/express-api && tar xzf /tmp/api.tar.gz && npm install --omit=dev && pm2 restart shytalk-api"
+          # DEPLOYED_SHA written to .deployed-sha file (durable across pm2
+          # daemon restarts) AND set inline before pm2 restart --update-env
+          # (so the new process picks it up immediately). The /api/health
+          # endpoint reads it back so the deploy verification can assert
+          # the new code is actually serving (vs. stale pm2 process from
+          # a prior tarball that didn't trigger restart correctly).
+          ssh ubuntu@145.241.224.13 "cd ~/express-api && tar xzf /tmp/api.tar.gz && echo '${{ github.sha }}' > .deployed-sha && npm install --omit=dev && DEPLOYED_SHA='${{ github.sha }}' pm2 restart shytalk-api --update-env"
 
       - name: Verify dev API health
         run: |
+          set -euo pipefail
+          EXPECTED_SHA='${{ github.sha }}'
           for i in 1 2 3 4 5; do
             sleep 5
-            if curl -sf https://dev-api.shytalk.shyden.co.uk/api/health; then exit 0; fi
-            echo "Health check attempt $i failed, retrying..."
+            body=$(curl -sf -m 10 https://dev-api.shytalk.shyden.co.uk/api/health || echo "")
+            if [ -z "$body" ]; then
+              echo "Health check attempt $i: curl failed, retrying..."
+              continue
+            fi
+            echo "$body"
+            # Assert the deployed SHA is now serving — closes the
+            # "deploy succeeded but old pm2 process still running" silent-
+            # failure class. The tarball was extracted but if pm2 didn't
+            # actually restart (or restarted but the env didn't take), the
+            # old code is still serving and the SHA stays stale.
+            if echo "$body" | grep -q "\"sha\":\"$EXPECTED_SHA\""; then
+              echo "Health check passed — deployed SHA $EXPECTED_SHA is serving"
+              exit 0
+            fi
+            echo "Health check attempt $i: SHA mismatch (expected $EXPECTED_SHA), retrying..."
           done
-          echo "Dev API health check failed after 5 attempts"
+          echo "::error::Dev API health check failed after 5 attempts — deployed code may not be running"
           exit 1
 
       - uses: ./.github/actions/deploy-firebase-rules

@@ -150,16 +150,32 @@ jobs:
           cd express-api
           tar czf /tmp/api.tar.gz --exclude='node_modules' --exclude='.env' .
           scp /tmp/api.tar.gz ubuntu@213.35.98.160:/tmp/
-          ssh ubuntu@213.35.98.160 "cd ~/shytalk-api && tar xzf /tmp/api.tar.gz && npm install --omit=dev && pm2 restart shytalk-api"
+          # See deploy-dev.yml for rationale on .deployed-sha + pm2 --update-env.
+          # The release tag's commit SHA (resolved via git rev-parse) is what we
+          # actually deployed — github.sha here resolves to the workflow's HEAD,
+          # which is the release-tag's commit because checkout used `ref: ${{ inputs.release-tag }}`.
+          ssh ubuntu@213.35.98.160 "cd ~/shytalk-api && tar xzf /tmp/api.tar.gz && echo '${{ github.sha }}' > .deployed-sha && npm install --omit=dev && DEPLOYED_SHA='${{ github.sha }}' pm2 restart shytalk-api --update-env"
 
       - name: Verify prod API health
         run: |
+          set -euo pipefail
+          EXPECTED_SHA='${{ github.sha }}'
           for i in 1 2 3 4 5; do
             sleep 5
-            if curl -sf https://api.shytalk.shyden.co.uk/api/health; then exit 0; fi
-            echo "Health check attempt $i failed, retrying..."
+            body=$(curl -sf -m 10 https://api.shytalk.shyden.co.uk/api/health || echo "")
+            if [ -z "$body" ]; then
+              echo "Health check attempt $i: curl failed, retrying..."
+              continue
+            fi
+            echo "$body"
+            # See deploy-dev.yml for rationale on the SHA assertion.
+            if echo "$body" | grep -q "\"sha\":\"$EXPECTED_SHA\""; then
+              echo "Health check passed — deployed SHA $EXPECTED_SHA is serving"
+              exit 0
+            fi
+            echo "Health check attempt $i: SHA mismatch (expected $EXPECTED_SHA), retrying..."
           done
-          echo "Prod API health check failed after 5 attempts"
+          echo "::error::Prod API health check failed after 5 attempts — deployed code may not be running"
           exit 1
 
       - uses: ./.github/actions/deploy-firebase-rules

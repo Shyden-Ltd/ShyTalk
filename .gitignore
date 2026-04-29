@@ -90,3 +90,6 @@ firebase-debug.log
 firestore-debug.log
 database-debug.log
 .project/test-reports/
+
+# Deployed git SHA marker — written by deploy workflow on the server
+express-api/.deployed-sha
