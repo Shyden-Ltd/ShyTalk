@@ -1,0 +1,75 @@
+name: 'Cleanup iOS Signing'
+description: 'Scrub all signing material written by setup-ios-signing'
+inputs:
+  app-store-connect-key-id:
+    description: 'App Store Connect key ID (used to remove the .p8 by name)'
+    required: false
+    default: ''
+runs:
+  using: 'composite'
+  steps:
+    # Mirror of every path that setup-ios-signing/action.yml writes. Keep these
+    # in sync — when a new path is added there, add it here. The drift between
+    # the two is the exact bug class that PR #372 audit caught (cleanup
+    # missing 3 paths setup created). Centralising in one composite action
+    # paired with setup means callers only have to invoke it once.
+    - name: Scrub signing material
+      shell: bash
+      env:
+        APP_STORE_CONNECT_KEY_ID: ${{ inputs.app-store-connect-key-id }}
+      run: |
+        set -uo pipefail
+        # Don't `set -e` — individual cleanup commands may legitimately fail
+        # (file already gone, keychain locked) and we want to attempt all of
+        # them rather than abort halfway through. Track failures with a flag
+        # so the warning surface is loud-but-non-blocking.
+        fail=0
+
+        # Extract profile UUID before deleting the source — we need it to
+        # remove the mirrored copy in ~/Library/MobileDevice/.
+        PROFILE_UUID=""
+        if [ -f "$RUNNER_TEMP/profile.mobileprovision" ]; then
+          PROFILE_UUID=$(/usr/bin/security cms -D -i "$RUNNER_TEMP/profile.mobileprovision" 2>/dev/null \
+            | grep -A1 '<key>UUID</key>' | grep '<string>' \
+            | sed 's/.*<string>\(.*\)<\/string>.*/\1/' || true)
+        fi
+
+        # Temp keychain
+        if [ -f "$RUNNER_TEMP/app-signing.keychain-db" ]; then
+          if ! security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db"; then
+            echo "::warning::Failed to delete keychain at $RUNNER_TEMP/app-signing.keychain-db"
+            fail=1
+          fi
+        fi
+
+        # Restore the user keychain search list to defaults so we don't
+        # accumulate references to deleted keychains across runs on the
+        # persistent self-hosted runner.
+        if ! security list-keychain -d user -s "$HOME/Library/Keychains/login.keychain-db"; then
+          echo "::warning::Failed to restore login keychain search list"
+          fail=1
+        fi
+
+        # All signing material in $RUNNER_TEMP (cert .p12, profile, IPA, archive)
+        rm -rf "$RUNNER_TEMP/export" \
+               "$RUNNER_TEMP/iosApp.xcarchive" \
+               "$RUNNER_TEMP/altool-upload.log" || true
+        rm -f "$RUNNER_TEMP/certificate.p12" \
+              "$RUNNER_TEMP/profile.mobileprovision" || true
+
+        # App Store Connect API key (.p8) lives outside $RUNNER_TEMP
+        if [ -n "${APP_STORE_CONNECT_KEY_ID:-}" ]; then
+          rm -f "$HOME/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8" || true
+        fi
+
+        # Mirrored profile in ~/Library/MobileDevice/Provisioning Profiles/
+        if [ -n "$PROFILE_UUID" ]; then
+          rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/${PROFILE_UUID}.mobileprovision" || true
+        fi
+
+        if [ "$fail" -eq 0 ]; then
+          echo "Signing material scrubbed."
+        fi
+        # Always exit 0 — cleanup never fails the deploy. The deploy outcome
+        # reflects the deploy itself, not the cleanup.
+        exit 0
