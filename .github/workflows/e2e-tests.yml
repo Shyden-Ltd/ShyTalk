@@ -180,11 +180,15 @@ jobs:
           # Don't suppress stderr — we need it when the pull fails. Use
           # explicit if so the failure path can warn loudly rather than
           # quietly proceeding to a useless JUnit fallback.
+          # `cd files/allure-results &&` short-circuits if the dir is
+          # missing. If cd succeeds but dir is empty, `tar cf - .` still
+          # exits 0 — the NATIVE_COUNT log below catches that case, so the
+          # success line here intentionally defers to the count check.
           if adb exec-out run-as "$PACKAGE" sh -c 'cd files/allure-results && tar cf - .' \
              | tar xf - -C allure-results-android/; then
-            echo "Allure results pulled from device successfully"
+            echo "Allure pull command succeeded (file count below)"
           else
-            echo "::warning::Failed to pull Allure results from device — package=$PACKAGE may not exist or files/allure-results is empty"
+            echo "::warning::Failed to pull Allure results from device — package=$PACKAGE may not exist or files/allure-results was missing"
           fi
           NATIVE_COUNT=$(find allure-results-android -name "*-result.json" | wc -l | tr -d ' ')
           echo "Native Allure results: $NATIVE_COUNT files"
