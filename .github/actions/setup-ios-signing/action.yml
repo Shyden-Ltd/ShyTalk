@@ -91,12 +91,17 @@ runs:
         KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
         echo "$IOS_CERTIFICATE_BASE64" | base64 -d > "$CERTIFICATE_PATH"
         security create-keychain -p "" "$KEYCHAIN_PATH"
-        # Auto-lock after 30 min instead of 6 h. On a self-hosted Mac if
-        # cleanup ever fails, a 6-hour unlocked keychain gives a coresident
-        # attacker a huge window to dump the cert + private key. 30 min
-        # comfortably exceeds the typical iOS deploy time (~20 min) while
-        # closing that window aggressively.
-        security set-keychain-settings -lut 1800 "$KEYCHAIN_PATH"
+        # Auto-lock after 2 h. The previous 30 min value was based on
+        # "comfortably exceeds typical iOS deploy time (~20 min)" but the
+        # 2026-04-29 deploy hit codesign at 37 min on a slow runner-pool
+        # day, causing errSecInternalComponent because the keychain had
+        # already locked mid-build. The job's hard timeout is 90 min, so
+        # 2 h (7200s) comfortably exceeds even the worst-case run while
+        # still being 3x tighter than the original 6 h. A coresident
+        # attacker who happens to land during this window still has to
+        # bypass file-mode 0600, umask 077, and the partition list — the
+        # auto-lock is defence-in-depth, not the primary boundary.
+        security set-keychain-settings -lut 7200 "$KEYCHAIN_PATH"
         security unlock-keychain -p "" "$KEYCHAIN_PATH"
         security import "$CERTIFICATE_PATH" -P "$IOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
         security set-key-partition-list -S apple-tool:,apple: -k "" "$KEYCHAIN_PATH"
