@@ -96,25 +96,40 @@ jobs:
       - name: Parse commit message for version bump type
         id: bump
         run: |
+          set -euo pipefail
           MSG=$(git log -1 --format='%s')
           BODY=$(git log -1 --format='%b')
 
-          # Check for breaking changes
-          if echo "$MSG" | grep -qE '^[a-z]+!:' || echo "$BODY" | grep -q 'BREAKING CHANGE'; then
+          # Conventional Commits — strict matching. Don't fall back to `patch`
+          # for unrecognised messages: a typo'd `feat broken:` would silently
+          # downgrade what the author intended as a minor bump.
+          if echo "$MSG" | grep -qE '^[a-z]+(\(.+\))?!:' || echo "$BODY" | grep -qE 'BREAKING[ -]CHANGE'; then
             echo "type=major" >> "$GITHUB_OUTPUT"
+            echo "Detected breaking change: $MSG"
           elif echo "$MSG" | grep -qE '^feat(ure)?(\(.+\))?:'; then
             echo "type=minor" >> "$GITHUB_OUTPUT"
-          else
+            echo "Detected feat: $MSG"
+          elif echo "$MSG" | grep -qE '^(fix|chore|ci|build|docs|style|refactor|perf|test|revert)(\(.+\))?:'; then
             echo "type=patch" >> "$GITHUB_OUTPUT"
+            echo "Detected patch-class: $MSG"
+          else
+            echo "::error::Commit message '$MSG' is not Conventional Commits format. Cannot infer bump type — please fix the merge commit message."
+            exit 1
           fi
-          echo "Bump type: $(grep type "$GITHUB_OUTPUT" | cut -d= -f2)"
 
       - name: Bump version
         id: version
         run: |
+          set -euo pipefail
           # Extract current version
           CURRENT=$(grep 'versionName =' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
           CURRENT_CODE=$(grep 'versionCode' app/build.gradle.kts | head -1 | sed 's/[^0-9]//g')
+
+          if [ -z "$CURRENT" ] || [ -z "$CURRENT_CODE" ]; then
+            echo "::error::Could not parse current version from app/build.gradle.kts (got CURRENT='$CURRENT' CURRENT_CODE='$CURRENT_CODE')"
+            grep -E 'versionName|versionCode' app/build.gradle.kts | head -5
+            exit 1
+          fi
 
           IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
           BUMP="${{ steps.bump.outputs.type }}"
@@ -123,6 +138,7 @@ jobs:
             major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
             minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
             patch) PATCH=$((PATCH + 1)) ;;
+            *) echo "::error::Unexpected bump type: $BUMP"; exit 1 ;;
           esac
 
           NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
@@ -137,6 +153,7 @@ jobs:
       - name: Generate release notes
         id: notes
         run: |
+          set -euo pipefail
           SUBJECT=$(git log -1 --format='%s')
           BODY=$(git log -1 --format='%b')
           VERSION="${{ steps.version.outputs.version }}"
@@ -190,17 +207,28 @@ jobs:
 
       - name: Commit version bump
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add app/build.gradle.kts app/src/main/play/release-notes/en-US/internal.txt app/src/main/play/release-notes/en-US/default.txt
           git commit -m "chore: release v${{ steps.version.outputs.version }}"
           git pull --rebase origin main
           git push
+          # Verify the bump landed at HEAD. `git pull --rebase` can race with
+          # other commits on main and silently produce a HEAD whose
+          # versionName doesn't match what we just bumped — leading to a tag
+          # that points at code with the wrong version.
+          PUSHED_VERSION=$(grep 'versionName =' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          if [ "$PUSHED_VERSION" != "${{ steps.version.outputs.version }}" ]; then
+            echo "::error::HEAD versionName is '$PUSHED_VERSION' but expected '${{ steps.version.outputs.version }}' — rebase likely lost the bump commit"
+            exit 1
+          fi
 
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           VERSION="${{ steps.version.outputs.version }}"
           COMMIT_SHA=$(git rev-parse HEAD)
           gh release create "v${VERSION}" \
