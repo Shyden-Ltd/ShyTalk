@@ -37,9 +37,12 @@ jobs:
   analyze-kotlin:
     name: Analyze Kotlin
     # Disabled: CodeQL's Kotlin extractor lags the Kotlin version this project compiles
-    # against. Re-enable by removing this guard once GitHub publishes a compatible
-    # extractor. Track upstream at https://github.com/github/codeql-action.
-    if: false
+    # against. Re-enable by setting repository variable ENABLE_CODEQL_KOTLIN=true once
+    # GitHub publishes a compatible extractor. Track upstream at
+    # https://github.com/github/codeql-action.
+    # Using a repo var instead of `if: false` makes actionlint happy (constant `false`
+    # would otherwise trip if-cond) and allows toggling without a code change.
+    if: ${{ vars.ENABLE_CODEQL_KOTLIN == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

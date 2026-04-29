@@ -60,3 +60,25 @@ jobs:
       - name: Gherkin lint
         if: inputs.app_changed == true || github.event_name == 'workflow_dispatch'
         run: bash .claude/hooks/check-gherkin.sh
+
+      # actionlint embeds shellcheck; together they catch unquoted globs,
+      # missing `set -euo pipefail`, `2>/dev/null || true` (SC2069), and the
+      # other silent-failure shapes that gave us a 7-week TestFlight outage
+      # 2026-03-12 → 2026-04-29. See feedback-larger-runners-paid.md and
+      # PR #372 audit notes for the full pattern catalogue.
+      - name: Install actionlint
+        run: |
+          set -euo pipefail
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) 1.7.7
+          sudo mv ./actionlint /usr/local/bin/
+          actionlint --version
+
+      - name: Run actionlint (workflow + embedded shellcheck)
+        run: |
+          set -euo pipefail
+          # -shellcheck=  passes shellcheck flags into embedded shellcheck.
+          # We disable SC2086 (intentional word-splitting on $RUNNER_TEMP)
+          # repo-wide because GH-managed paths are safe to leave unquoted
+          # in run: blocks where the alternative would be every reference
+          # gaining a quote. Other shellcheck rules apply normally.
+          actionlint -shellcheck='-e SC2086'

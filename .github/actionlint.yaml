@@ -1,0 +1,9 @@
+# actionlint configuration
+# https://github.com/rhysd/actionlint/blob/main/docs/config.md
+
+# Register the self-hosted runner labels we use so actionlint doesn't flag them
+# as unknown. The shytalk-mac runner is a dedicated Mac mini for iOS deploys
+# (memory: project-feature-roadmap.md).
+self-hosted-runner:
+  labels:
+    - shytalk-mac

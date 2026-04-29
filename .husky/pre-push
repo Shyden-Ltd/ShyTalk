@@ -14,8 +14,30 @@ if [ -z "$SONAR_TOKEN" ] && [ -f ".env" ]; then
   export SONAR_TOKEN
 fi
 
-# Skip SonarCloud for workflow-only changes
 CHANGED=$(git diff --name-only origin/main...HEAD 2>/dev/null)
+
+# Run actionlint on workflow changes BEFORE the SonarCloud check (so workflow
+# regressions don't slip through when nothing else changes). This catches
+# unquoted globs, missing `set -euo pipefail`, and other silent-failure
+# shapes locally before they reach CI. Skips silently if actionlint isn't
+# installed locally — CI will catch them.
+HAS_WORKFLOW_CHANGES=false
+if echo "$CHANGED" | grep -qE '^\.github/(workflows|actions)/'; then
+  HAS_WORKFLOW_CHANGES=true
+fi
+
+if [ "$HAS_WORKFLOW_CHANGES" = "true" ] && command -v actionlint >/dev/null 2>&1; then
+  echo "  → actionlint (workflow + embedded shellcheck)..."
+  if ! actionlint -shellcheck='-e SC2086'; then
+    echo ""
+    echo "✗ actionlint failed — push blocked"
+    echo "  Install: brew install actionlint  (or see https://github.com/rhysd/actionlint)"
+    exit 1
+  fi
+  echo "  ✓ actionlint passed"
+fi
+
+# Skip SonarCloud for workflow-only changes
 HAS_CODE=false
 if echo "$CHANGED" | grep -qE '^(app/|shared/|express-api/src/|express-api/tests/)'; then
   HAS_CODE=true
