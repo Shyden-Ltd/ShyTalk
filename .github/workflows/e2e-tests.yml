@@ -160,9 +160,8 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
           script: |
-            ./gradlew connectedLocalDebugAndroidTest --no-parallel > test-output.log 2>&1; RESULT=$?
-            cat test-output.log
-            exit $RESULT
+            set -o pipefail
+            ./gradlew connectedLocalDebugAndroidTest --no-parallel 2>&1 | tee test-output.log
 
       - name: Cleanup Docker containers
         if: always()
@@ -175,16 +174,29 @@ jobs:
       - name: Collect Allure results from JUnit XML
         if: always()
         run: |
+          set -uo pipefail
           mkdir -p allure-results-android
           PACKAGE="com.shyden.shytalk.local"
-          adb exec-out run-as $PACKAGE sh -c 'cd files/allure-results && tar cf - .' 2>/dev/null | \
-            tar xf - -C allure-results-android/ 2>/dev/null || true
-          NATIVE_COUNT=$(find allure-results-android -name "*-result.json" 2>/dev/null | wc -l)
+          # Don't suppress stderr — we need it when the pull fails. Use
+          # explicit if so the failure path can warn loudly rather than
+          # quietly proceeding to a useless JUnit fallback.
+          if adb exec-out run-as "$PACKAGE" sh -c 'cd files/allure-results && tar cf - .' \
+             | tar xf - -C allure-results-android/; then
+            echo "Allure results pulled from device successfully"
+          else
+            echo "::warning::Failed to pull Allure results from device — package=$PACKAGE may not exist or files/allure-results is empty"
+          fi
+          NATIVE_COUNT=$(find allure-results-android -name "*-result.json" | wc -l | tr -d ' ')
           echo "Native Allure results: $NATIVE_COUNT files"
-          if [ "$NATIVE_COUNT" -eq 0 ]; then
-            echo "No native Allure results — using JUnit XML for Allure import"
-            find app/build/outputs/androidTest-results -name "TEST-*.xml" 2>/dev/null \
-              -exec cp {} allure-results-android/ \; || true
+          if [ "${NATIVE_COUNT:-0}" -eq 0 ]; then
+            echo "::warning::No native Allure results — falling back to JUnit XML"
+            if [ -d app/build/outputs/androidTest-results ]; then
+              find app/build/outputs/androidTest-results -name "TEST-*.xml" \
+                -exec cp {} allure-results-android/ \;
+            else
+              echo "::error::No JUnit results either — test execution likely failed before any results were written"
+              exit 1
+            fi
           fi
 
       - name: Write Android environment.properties

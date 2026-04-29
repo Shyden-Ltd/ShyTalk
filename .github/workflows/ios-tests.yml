@@ -170,15 +170,25 @@ jobs:
 
       - name: Install iOS ${{ matrix.ios-version }} simulator runtime
         run: |
+          set -euo pipefail
           RUNTIME_ID="com.apple.CoreSimulator.SimRuntime.iOS-$(echo '${{ matrix.ios-version }}' | tr '.' '-')"
           if xcrun simctl list runtimes | grep -q "$RUNTIME_ID"; then
             echo "Runtime $RUNTIME_ID already installed"
+          elif xcodebuild -downloadPlatform iOS -buildVersion "${{ matrix.ios-version }}"; then
+            echo "Installed iOS ${{ matrix.ios-version }} runtime"
           else
-            xcodebuild -downloadPlatform iOS -buildVersion "${{ matrix.ios-version }}" 2>/dev/null || \
-            xcodebuild -downloadPlatform iOS || \
-            echo "::warning::Could not install iOS ${{ matrix.ios-version }} runtime."
+            echo "::error::Could not install iOS ${{ matrix.ios-version }} runtime via -buildVersion. Check Xcode version on runner."
+            xcrun simctl list runtimes
+            exit 1
           fi
-          xcrun simctl list runtimes
+          # Verify it's now actually present before the next step tries to use it.
+          # Don't fall back to unversioned `-downloadPlatform iOS` — if the matrix
+          # asked for a specific version, getting a different one is a silent regression.
+          if ! xcrun simctl list runtimes | grep -q "$RUNTIME_ID"; then
+            echo "::error::Runtime $RUNTIME_ID still not installed after download attempt"
+            xcrun simctl list runtimes
+            exit 1
+          fi
 
       - name: Boot simulator
         id: sim
