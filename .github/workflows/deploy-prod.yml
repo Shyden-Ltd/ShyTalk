@@ -245,6 +245,14 @@ jobs:
         with:
           ref: ${{ inputs.release-tag }}
 
+      # Pre-cleanup: scrub any signing material left behind by a PRIOR
+      # crashed run on the persistent self-hosted Mac. See deploy-dev.yml
+      # for the full rationale. Idempotent.
+      - name: Pre-cleanup leftovers from prior crashed runs
+        uses: ./.github/actions/cleanup-ios-signing
+        with:
+          app-store-connect-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+
       # Fast pre-flight: assert the export plist hasn't been flipped back to
       # `destination: upload` (which would upload silently and break TestFlight,
       # as happened 2026-03-12 → 2026-04-29). Fails in <1s before we burn 20 min

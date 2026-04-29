@@ -211,6 +211,18 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
+      # Pre-cleanup: scrub any signing material left behind by a PRIOR
+      # crashed run. `if: always()` cleanup at job end doesn't run if the
+      # runner is force-killed (SIGKILL, machine reboot, network partition
+      # past cancel timeout). On the persistent self-hosted Mac, leftover
+      # .p8/.p12/profile from such a crash sits on disk indefinitely. Run
+      # the cleanup composite action FIRST so the new run starts from a
+      # clean slate. Idempotent: silently no-ops when nothing's there.
+      - name: Pre-cleanup leftovers from prior crashed runs
+        uses: ./.github/actions/cleanup-ios-signing
+        with:
+          app-store-connect-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+
       # Fast pre-flight: assert the export plist hasn't been flipped back to
       # `destination: upload` (which would upload silently and break TestFlight,
       # as happened 2026-03-12 → 2026-04-29). Fails in <1s before we burn 20 min
