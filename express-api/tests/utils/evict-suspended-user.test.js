@@ -669,9 +669,11 @@ describe('evictSuspendedUser — RTDB failure tolerance', () => {
       expect(result.rtdbEventsFailed).toBe(0);
     });
 
-    it('counts both RTDB set + remove failures for owner closure', async () => {
+    it('counts owner-closure room with both RTDB ops failing as ONE failed room', async () => {
       // Owner branch fires: ref(.../events/lastEvent).set + ref(...).remove.
-      // Reject both → rtdbEventsFailed=2.
+      // Both reject → rtdbEventsFailed should be 1 (one room failed),
+      // not 2 (number of RTDB ops). The admin-facing counter means
+      // "rooms whose RTDB sync failed", not "RTDB ops attempted".
       mockQueryDocs.mockResolvedValueOnce([]).mockResolvedValueOnce([
         {
           id: 'ownedRoom',
@@ -686,7 +688,7 @@ describe('evictSuspendedUser — RTDB failure tolerance', () => {
       mockRtdbRemove.mockRejectedValueOnce(new Error('rtdb remove fail'));
 
       const result = await evictSuspendedUser('suspended-uid');
-      expect(result.rtdbEventsFailed).toBe(2);
+      expect(result.rtdbEventsFailed).toBe(1);
       expect(result.roomsClosed).toBe(1);
     });
   });

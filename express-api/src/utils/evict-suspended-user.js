@@ -155,7 +155,12 @@ async function evictSuspendedUser(uid) {
   // emitting `room_closed` for a room that's still OPEN in Firestore would lie
   // to live clients listening on the RTDB channel.
   const failedSet = new Set(failedRoomIds);
-  let rtdbEventsFailed = 0;
+  // Track per-room failures via a Set so that owner-closure rooms (which
+  // make TWO RTDB calls — lastEvent + node remove) don't double-count
+  // toward rtdbEventsFailed when both calls fail. The admin-facing counter
+  // should mean "rooms whose RTDB sync failed", not "RTDB ops attempted
+  // and failed".
+  const rtdbFailedRooms = new Set();
   for (const evt of rtdbEvents) {
     if (failedSet.has(evt.roomId)) continue;
     try {
@@ -168,7 +173,7 @@ async function evictSuspendedUser(uid) {
         roomId: evt.roomId,
         error: err.message,
       });
-      rtdbEventsFailed += 1;
+      rtdbFailedRooms.add(evt.roomId);
     }
     // For owner closures, also tear down the RTDB room node entirely so any
     // lingering presence/typing/event children are cleaned up.
@@ -180,10 +185,11 @@ async function evictSuspendedUser(uid) {
           roomId: evt.roomId,
           error: err.message,
         });
-        rtdbEventsFailed += 1;
+        rtdbFailedRooms.add(evt.roomId);
       }
     }
   }
+  const rtdbEventsFailed = rtdbFailedRooms.size;
 
   return {
     roomsClosed,
