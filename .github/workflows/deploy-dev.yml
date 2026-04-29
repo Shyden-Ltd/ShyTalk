@@ -340,9 +340,19 @@ jobs:
         # Self-hosted runner: scrub all signing material to prevent .p8/.p12
         # leaking between jobs. Don't fail the job on cleanup — log warnings
         # instead so the deploy outcome reflects deploy success/failure only.
+        # Mirrors what setup-ios-signing/action.yml writes — keep these in sync.
         run: |
           set -uo pipefail
           fail=0
+          # Extract the profile UUID before deleting the source profile, since
+          # we need it to remove the mirrored copy in ~/Library/MobileDevice/.
+          PROFILE_UUID=""
+          if [ -f "$RUNNER_TEMP/profile.mobileprovision" ]; then
+            PROFILE_UUID=$(/usr/bin/security cms -D -i "$RUNNER_TEMP/profile.mobileprovision" 2>/dev/null \
+              | grep -A1 '<key>UUID</key>' | grep '<string>' \
+              | sed 's/.*<string>\(.*\)<\/string>.*/\1/' || true)
+          fi
+          # Temp keychain
           if [ -f "$RUNNER_TEMP/app-signing.keychain-db" ]; then
             if ! security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db"; then
               echo "::warning::Failed to delete keychain at $RUNNER_TEMP/app-signing.keychain-db"
@@ -355,11 +365,19 @@ jobs:
             echo "::warning::Failed to restore login keychain search list"
             fail=1
           fi
+          # All signing material in $RUNNER_TEMP (cert .p12, profile, IPA, archive, log)
           rm -rf "$RUNNER_TEMP/export" \
                  "$RUNNER_TEMP/iosApp.xcarchive" \
                  "$RUNNER_TEMP/altool-upload.log" || true
+          rm -f "$RUNNER_TEMP/certificate.p12" \
+                "$RUNNER_TEMP/profile.mobileprovision" || true
+          # App Store Connect API key (.p8) lives outside $RUNNER_TEMP
           if [ -n "${APP_STORE_CONNECT_KEY_ID:-}" ]; then
             rm -f "$HOME/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8" || true
+          fi
+          # Mirrored profile in ~/Library/MobileDevice/Provisioning Profiles/
+          if [ -n "$PROFILE_UUID" ]; then
+            rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/${PROFILE_UUID}.mobileprovision" || true
           fi
           if [ "$fail" -eq 0 ]; then
             echo "Signing material scrubbed."
