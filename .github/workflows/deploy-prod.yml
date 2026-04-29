@@ -297,19 +297,22 @@ jobs:
         run: security delete-keychain $RUNNER_TEMP/app-signing.keychain-db 2>/dev/null || true
 
   # ── Smoke tests (after deploys) ────────────────────────────
-  smoke-test-backend-web:
-    name: Smoke Test (API + Web)
-    needs: [validate-release, deploy-backend-prod, deploy-web-prod, deploy-android-prod, deploy-ios-prod]
+  # Smoke tests are split per-surface so the GitHub UI status reflects what
+  # each surface deployed: a red deploy-backend-prod next to a green
+  # smoke-test-api was previously misleading (the smoke-test was running
+  # but skipping the backend checks via inner `if:`). Split jobs make
+  # "X deployed AND smoke-tested" the only way the surface is green.
+  smoke-test-api:
+    name: Smoke Test (API)
+    needs: [validate-release, deploy-backend-prod]
     if: |
       always() &&
       needs.validate-release.result == 'success' &&
-      (needs.deploy-backend-prod.result == 'success' ||
-       needs.deploy-web-prod.result == 'success')
+      needs.deploy-backend-prod.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Verify API health
-        if: needs.deploy-backend-prod.result == 'success'
         run: |
           echo "=== API Health Check ==="
           HEALTH=$(curl -sf https://api.shytalk.shyden.co.uk/api/health)
@@ -317,7 +320,6 @@ jobs:
           echo "$HEALTH" | grep -q '"status":"ok"' || { echo "::error::Health check failed"; exit 1; }
 
       - name: Verify API endpoints respond
-        if: needs.deploy-backend-prod.result == 'success'
         run: |
           echo "=== API Endpoint Checks ==="
           ERRORS=0
@@ -340,8 +342,17 @@ jobs:
           [ "$ERRORS" -eq 0 ] || { echo "::error::${ERRORS} endpoint(s) returned server errors"; exit 1; }
           echo "All API endpoints responding correctly"
 
+  smoke-test-web:
+    name: Smoke Test (Web)
+    needs: [validate-release, deploy-web-prod]
+    if: |
+      always() &&
+      needs.validate-release.result == 'success' &&
+      needs.deploy-web-prod.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
       - name: Verify web landing page
-        if: needs.deploy-web-prod.result == 'success'
         run: |
           echo "=== Web Landing Page ==="
           STATUS=$(curl -s -o /dev/null -w '%{http_code}' "https://shytalk.shyden.co.uk")
@@ -351,7 +362,6 @@ jobs:
           echo "Landing page OK"
 
       - name: Verify admin panel
-        if: needs.deploy-web-prod.result == 'success'
         run: |
           echo "=== Admin Panel ==="
           STATUS=$(curl -s -o /dev/null -w '%{http_code}' "https://shytalk.shyden.co.uk/admin/")
@@ -473,7 +483,7 @@ jobs:
   # ── Alert on failure ───────────────────────────────────────
   alert-desync:
     name: Alert - Deploy Failed
-    needs: [validate-release, deploy-backend-prod, deploy-web-prod, deploy-android-prod, deploy-ios-prod, smoke-test-backend-web, smoke-test-android, smoke-test-ios]
+    needs: [validate-release, deploy-backend-prod, deploy-web-prod, deploy-android-prod, deploy-ios-prod, smoke-test-api, smoke-test-web, smoke-test-android, smoke-test-ios]
     if: |
       always() &&
       needs.validate-release.result == 'success' &&
@@ -481,7 +491,8 @@ jobs:
        needs.deploy-web-prod.result == 'failure' ||
        needs.deploy-android-prod.result == 'failure' ||
        needs.deploy-ios-prod.result == 'failure' ||
-       needs.smoke-test-backend-web.result == 'failure' ||
+       needs.smoke-test-api.result == 'failure' ||
+       needs.smoke-test-web.result == 'failure' ||
        needs.smoke-test-android.result == 'failure' ||
        needs.smoke-test-ios.result == 'failure')
     runs-on: ubuntu-latest
@@ -497,7 +508,8 @@ jobs:
           WEB: ${{ needs.deploy-web-prod.result }}
           ANDROID: ${{ needs.deploy-android-prod.result }}
           IOS: ${{ needs.deploy-ios-prod.result }}
-          SMOKE_API: ${{ needs.smoke-test-backend-web.result }}
+          SMOKE_API: ${{ needs.smoke-test-api.result }}
+          SMOKE_WEB: ${{ needs.smoke-test-web.result }}
           SMOKE_ANDROID: ${{ needs.smoke-test-android.result }}
           SMOKE_IOS: ${{ needs.smoke-test-ios.result }}
         run: |
@@ -506,7 +518,8 @@ jobs:
           [ "$WEB" = "failure" ] && FAILED="${FAILED}- Web deploy\n"
           [ "$ANDROID" = "failure" ] && FAILED="${FAILED}- Android (Play Store)\n"
           [ "$IOS" = "failure" ] && FAILED="${FAILED}- iOS (App Store)\n"
-          [ "$SMOKE_API" = "failure" ] && FAILED="${FAILED}- Smoke test: API + Web\n"
+          [ "$SMOKE_API" = "failure" ] && FAILED="${FAILED}- Smoke test: API\n"
+          [ "$SMOKE_WEB" = "failure" ] && FAILED="${FAILED}- Smoke test: Web\n"
           [ "$SMOKE_ANDROID" = "failure" ] && FAILED="${FAILED}- Smoke test: Android boot\n"
           [ "$SMOKE_IOS" = "failure" ] && FAILED="${FAILED}- Smoke test: iOS boot\n"
 
