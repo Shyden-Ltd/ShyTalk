@@ -90,16 +90,22 @@ router.post('/admin/bans/device', async (req, res) => {
       createdAt: now(),
     });
 
-    // Send system PM if linked to a user (non-blocking)
+    // Send system PM if linked to a user (non-blocking). Track failure so
+    // the admin UI's PartialFailureToast.buildPartialFailureMessage() can
+    // surface it via the standard `pms: { failed, total }` shape.
+    let pmFailed = 0;
+    let pmTotal = 0;
     if (linkedUniqueId) {
+      pmTotal = 1;
       try {
         await sendSystemPm(linkedUniqueId, 'A restriction has been placed on your account.');
       } catch (e) {
         log.warn('system-pm', 'Failed to send', { uniqueId: linkedUniqueId, error: e.message });
+        pmFailed = 1;
       }
     }
 
-    res.json({ success: true });
+    res.json({ success: true, pms: { failed: pmFailed, total: pmTotal } });
   } catch (err) {
     log.error('admin-bans', 'Error banning device', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });
@@ -158,16 +164,22 @@ router.post('/admin/bans/network', async (req, res) => {
       createdAt: now(),
     });
 
-    // Send system PM if linked to a user (non-blocking)
+    // Send system PM if linked to a user (non-blocking). Track failure so
+    // the admin UI's PartialFailureToast.buildPartialFailureMessage() can
+    // surface it via the standard `pms: { failed, total }` shape.
+    let pmFailed = 0;
+    let pmTotal = 0;
     if (linkedUniqueId) {
+      pmTotal = 1;
       try {
         await sendSystemPm(linkedUniqueId, 'A restriction has been placed on your account.');
       } catch (e) {
         log.warn('system-pm', 'Failed to send', { uniqueId: linkedUniqueId, error: e.message });
+        pmFailed = 1;
       }
     }
 
-    res.json({ success: true });
+    res.json({ success: true, pms: { failed: pmFailed, total: pmTotal } });
   } catch (err) {
     log.error('admin-bans', 'Error banning network', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });
@@ -263,14 +275,20 @@ router.post('/admin/bans/unban-all/:uniqueId', async (req, res) => {
       createdAt: now(),
     });
 
-    // Send system PM about restriction lifted (non-blocking)
+    // Send system PM about restriction lifted. Track failure for admin UI.
+    let pmFailed = 0;
     try {
       await sendSystemPm(uniqueId, 'A restriction on your account has been lifted.');
     } catch (e) {
       log.warn('system-pm', 'Failed to send', { uniqueId, error: e.message });
+      pmFailed = 1;
     }
 
-    res.json({ success: true, removed: allDocs.length });
+    res.json({
+      success: true,
+      removed: allDocs.length,
+      pms: { failed: pmFailed, total: 1 },
+    });
   } catch (err) {
     log.error('admin-bans', 'Error unbanning all for user', {
       uniqueId: req.params.uniqueId,

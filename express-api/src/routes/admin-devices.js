@@ -157,8 +157,12 @@ router.delete('/admin/devices/:deviceId', async (req, res) => {
       createdAt: now(),
     });
 
-    // Send system PM to the bound user (non-blocking)
+    // Send system PM to the bound user. Track failure for admin UI's
+    // PartialFailureToast — `pms: { failed, total }` is the standard shape.
+    let pmFailed = 0;
+    let pmTotal = 0;
     if (deviceData.uniqueId) {
+      pmTotal = 1;
       try {
         await sendSystemPm(
           deviceData.uniqueId,
@@ -166,10 +170,11 @@ router.delete('/admin/devices/:deviceId', async (req, res) => {
         );
       } catch (e) {
         log.warn('system-pm', 'Failed to send', { error: e.message });
+        pmFailed = 1;
       }
     }
 
-    res.json({ success: true });
+    res.json({ success: true, pms: { failed: pmFailed, total: pmTotal } });
   } catch (err) {
     log.error('admin-devices', 'Error unbinding device', {
       deviceId: req.params.deviceId,

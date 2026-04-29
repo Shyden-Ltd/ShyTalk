@@ -105,10 +105,12 @@ router.post('/users/:uniqueId/adjust-balance', async (req, res) => {
       }),
     ]);
 
-    // Send system PM about balance adjustment (non-blocking)
+    // Send system PM about balance adjustment. Track failure for admin UI's
+    // PartialFailureToast — `pms: { failed, total }` is the standard shape.
     const currencyName = currency === 'coins' ? 'Shy Coins' : 'Shy Beans';
     const absAmount = Math.abs(amount);
     const action = amount > 0 ? 'were added to' : 'were deducted from';
+    let pmFailed = 0;
     try {
       await sendSystemPm(
         req.params.uniqueId,
@@ -116,9 +118,15 @@ router.post('/users/:uniqueId/adjust-balance', async (req, res) => {
       );
     } catch (e) {
       log.warn('system-pm', 'Failed to send', { uid: req.params.uniqueId, error: e.message });
+      pmFailed = 1;
     }
 
-    res.json({ success: true, newBalance, currency });
+    res.json({
+      success: true,
+      newBalance,
+      currency,
+      pms: { failed: pmFailed, total: 1 },
+    });
   } catch (err) {
     log.error('admin-economy', 'Error adjusting balance', {
       uid: req.params.uniqueId,
