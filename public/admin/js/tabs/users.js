@@ -328,7 +328,14 @@ async function autoSaveListField(field) {
         .filter(Boolean)
         .map(Number)
         .filter((n) => !isNaN(n));
-      await apiCall("PATCH", `/api/user/${currentUid}`, { [field]: items });
+      const result = await apiCall("PATCH", `/api/user/${currentUid}`, { [field]: items });
+      // Partial-failure contract — the route emits `pms: { failed, total }`
+      // when one of the user-visible PMs (display name change, photo
+      // removed, etc.) couldn't be delivered. See partial-failure-toast.js.
+      const partialMessage = window.PartialFailureToast?.buildPartialFailureMessage(result);
+      if (partialMessage) {
+        showToast(partialMessage, "error");
+      }
     }
   } catch (err) {
     showToast(`Failed to save ${field}: ${err.message}`, "error");
@@ -1231,16 +1238,36 @@ export function wireModerationListeners() {
     const endDate = endDateVal ? new Date(endDateVal).toISOString() : null;
     const canAppeal = $("#suspend-can-appeal")?.checked;
     suspendBtn.disabled = true;
-    try { await apiCall("POST", `/api/user/${currentUid}/suspend`, { reason, endDate, canAppeal }); showToast("User suspended"); const data = await apiCall("GET", `/api/user/${currentUid}`); await populateFormFull(data); }
-    catch (err) { showToast(err.message, "error"); }
+    try {
+      const result = await apiCall("POST", `/api/user/${currentUid}/suspend`, { reason, endDate, canAppeal });
+      // Partial-failure: surface "1/1 PMs failed" if the suspension PM didn't
+      // reach the user, so admin can manually retry the notification.
+      const partialMessage = window.PartialFailureToast?.buildPartialFailureMessage(result);
+      if (partialMessage) {
+        showToast(partialMessage, "error");
+      } else {
+        showToast("User suspended");
+      }
+      const data = await apiCall("GET", `/api/user/${currentUid}`);
+      await populateFormFull(data);
+    } catch (err) { showToast(err.message, "error"); }
     suspendBtn.disabled = false;
   });
   // Unsuspend
   const unsuspendBtn = $("#unsuspend-btn");
   if (unsuspendBtn) unsuspendBtn.addEventListener("click", async () => {
     unsuspendBtn.disabled = true;
-    try { await apiCall("POST", `/api/user/${currentUid}/unsuspend`); showToast("User unsuspended"); const data = await apiCall("GET", `/api/user/${currentUid}`); await populateFormFull(data); }
-    catch (err) { showToast(err.message, "error"); }
+    try {
+      const result = await apiCall("POST", `/api/user/${currentUid}/unsuspend`);
+      const partialMessage = window.PartialFailureToast?.buildPartialFailureMessage(result);
+      if (partialMessage) {
+        showToast(partialMessage, "error");
+      } else {
+        showToast("User unsuspended");
+      }
+      const data = await apiCall("GET", `/api/user/${currentUid}`);
+      await populateFormFull(data);
+    } catch (err) { showToast(err.message, "error"); }
     unsuspendBtn.disabled = false;
   });
   // Duration presets
@@ -1460,9 +1487,44 @@ export function wireEconomyListeners() {
   const unlimitedCb = $("#eco-super-shy-unlimited");
   if (unlimitedCb) unlimitedCb.addEventListener("change", () => { const unlimited = unlimitedCb.checked; const expiryEl = $("#eco-super-shy-expiry"); if (!expiryEl) return; if (unlimited) { _prevExpiryValue = expiryEl.value; expiryEl.value = ""; expiryEl.disabled = true; autoSaveEconomyField("superShyExpiry"); } else { expiryEl.disabled = false; expiryEl.value = _prevExpiryValue || "1970-01-01T00:00"; autoSaveEconomyField("superShyExpiry"); } });
   const coinsApply = $("#eco-coins-apply");
-  if (coinsApply) coinsApply.addEventListener("click", async () => { if (!currentUid) return; const op = $("#eco-coins-op")?.value; const amount = parseInt($("#eco-coins-amount")?.value) || 0; if (amount <= 0) { showToast("Enter a positive amount", "error"); return; } try { const result = await apiCall("POST", `/api/users/${currentUid}/adjust-balance`, { currency: "COINS", amount, operation: op }); _ecoCoins = result.newBalance; const cd = $("#eco-coins-display"); if (cd) cd.textContent = _ecoCoins; const ca = $("#eco-coins-amount"); if (ca) ca.value = ""; showToast((op === "add" ? "Added" : "Deducted") + " " + amount + " coins (now " + _ecoCoins + ")"); } catch (err) { showToast(err.message, "error"); } });
+  if (coinsApply) coinsApply.addEventListener("click", async () => {
+    if (!currentUid) return;
+    const op = $("#eco-coins-op")?.value;
+    const amount = parseInt($("#eco-coins-amount")?.value) || 0;
+    if (amount <= 0) { showToast("Enter a positive amount", "error"); return; }
+    try {
+      const result = await apiCall("POST", `/api/users/${currentUid}/adjust-balance`, { currency: "COINS", amount, operation: op });
+      _ecoCoins = result.newBalance;
+      const cd = $("#eco-coins-display"); if (cd) cd.textContent = _ecoCoins;
+      const ca = $("#eco-coins-amount"); if (ca) ca.value = "";
+      // Partial-failure: surface PM delivery failure (balance still adjusted).
+      const partialMessage = window.PartialFailureToast?.buildPartialFailureMessage(result);
+      if (partialMessage) {
+        showToast(partialMessage, "error");
+      } else {
+        showToast((op === "add" ? "Added" : "Deducted") + " " + amount + " coins (now " + _ecoCoins + ")");
+      }
+    } catch (err) { showToast(err.message, "error"); }
+  });
   const beansApply = $("#eco-beans-apply");
-  if (beansApply) beansApply.addEventListener("click", async () => { if (!currentUid) return; const op = $("#eco-beans-op")?.value; const amount = parseInt($("#eco-beans-amount")?.value) || 0; if (amount <= 0) { showToast("Enter a positive amount", "error"); return; } try { const result = await apiCall("POST", `/api/users/${currentUid}/adjust-balance`, { currency: "BEANS", amount, operation: op }); _ecoBeans = result.newBalance; const bd = $("#eco-beans-display"); if (bd) bd.textContent = _ecoBeans; const ba = $("#eco-beans-amount"); if (ba) ba.value = ""; showToast((op === "add" ? "Added" : "Deducted") + " " + amount + " beans (now " + _ecoBeans + ")"); } catch (err) { showToast(err.message, "error"); } });
+  if (beansApply) beansApply.addEventListener("click", async () => {
+    if (!currentUid) return;
+    const op = $("#eco-beans-op")?.value;
+    const amount = parseInt($("#eco-beans-amount")?.value) || 0;
+    if (amount <= 0) { showToast("Enter a positive amount", "error"); return; }
+    try {
+      const result = await apiCall("POST", `/api/users/${currentUid}/adjust-balance`, { currency: "BEANS", amount, operation: op });
+      _ecoBeans = result.newBalance;
+      const bd = $("#eco-beans-display"); if (bd) bd.textContent = _ecoBeans;
+      const ba = $("#eco-beans-amount"); if (ba) ba.value = "";
+      const partialMessage = window.PartialFailureToast?.buildPartialFailureMessage(result);
+      if (partialMessage) {
+        showToast(partialMessage, "error");
+      } else {
+        showToast((op === "add" ? "Added" : "Deducted") + " " + amount + " beans (now " + _ecoBeans + ")");
+      }
+    } catch (err) { showToast(err.message, "error"); }
+  });
   const bpSearch = document.getElementById("backpack-search"); if (bpSearch) bpSearch.addEventListener("input", renderBackpack);
   const bpCatFilter = document.getElementById("backpack-category-filter"); if (bpCatFilter) bpCatFilter.addEventListener("change", renderBackpack);
   const addBtn = $("#backpack-add-btn");
@@ -1700,7 +1762,22 @@ export function wireBansListeners() {
   const banIpBtn = $("#bans-ban-last-ip");
   if (banIpBtn) banIpBtn.addEventListener("click", async () => { if (!currentUid) return; try { const devicesData = await apiCall("GET", `/api/admin/devices/user/${currentUid}`); const devices = devicesData.devices || []; const lastDevice = devices.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0))[0]; if (!lastDevice || !lastDevice.lastIp) { showToast("No IP address found", "error"); return; } if (!confirm("Ban IP " + lastDevice.lastIp + "?")) return; const reason = prompt("Reason (optional):") || ""; await apiCall("POST", "/api/admin/bans/network", { type: "ip", value: lastDevice.lastIp, reason, linkedUniqueId: currentUid }); showToast("IP banned", "success"); populateBansSection(currentUid); } catch (err) { showToast("Failed: " + err.message, "error"); } });
   const unbanAllBtn = $("#bans-unban-all");
-  if (unbanAllBtn) unbanAllBtn.addEventListener("click", async () => { if (!currentUid) return; if (!confirm("Remove all bans for this user?")) return; try { const result = await apiCall("POST", `/api/admin/bans/unban-all/${currentUid}`); showToast("Removed " + (result.removed || 0) + " ban(s)", "success"); populateBansSection(currentUid); } catch (err) { showToast("Failed: " + err.message, "error"); } });
+  if (unbanAllBtn) unbanAllBtn.addEventListener("click", async () => {
+    if (!currentUid) return;
+    if (!confirm("Remove all bans for this user?")) return;
+    try {
+      const result = await apiCall("POST", `/api/admin/bans/unban-all/${currentUid}`);
+      // Surface PM delivery failure (the "restriction lifted" PM didn't reach
+      // the user). Bans were still removed; admin may want to retry the PM.
+      const partialMessage = window.PartialFailureToast?.buildPartialFailureMessage(result);
+      if (partialMessage) {
+        showToast(partialMessage, "error");
+      } else {
+        showToast("Removed " + (result.removed || 0) + " ban(s)", "success");
+      }
+      populateBansSection(currentUid);
+    } catch (err) { showToast("Failed: " + err.message, "error"); }
+  });
   const viewLogsBtn = $("#bans-view-logs");
   if (viewLogsBtn) viewLogsBtn.addEventListener("click", () => { if (!currentUid) return; const logsUserFilter = $("#log-filter-userId"); if (logsUserFilter) logsUserFilter.value = currentUid; _switchTab("logs"); });
   // Identity graph suspend/unsuspend (tabular version)

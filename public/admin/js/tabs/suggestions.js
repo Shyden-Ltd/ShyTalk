@@ -185,8 +185,16 @@ export function init(deps) {
   document.querySelector('#suggestion-complete-dialog .btn-confirm-complete').addEventListener('click', async () => {
     if (!completeSuggestionId) return;
     try {
-      await apiCall('PUT', `/api/admin/suggestions/${completeSuggestionId}/status`, { status: 'completed' });
-      showToast('Suggestion marked as completed', 'success');
+      const result = await apiCall('PUT', `/api/admin/suggestions/${completeSuggestionId}/status`, { status: 'completed' });
+      // Surface partial-failure: subscribers who didn't receive the
+      // "suggestion completed" notification (notifySubscribers in
+      // suggestions.js emits pms: { failed, total } per PR #384).
+      const partialMessage = window.PartialFailureToast?.buildPartialFailureMessage(result);
+      if (partialMessage) {
+        showToast(partialMessage, 'error');
+      } else {
+        showToast('Suggestion marked as completed', 'success');
+      }
       document.getElementById('suggestion-complete-dialog').style.display = 'none';
       completeSuggestionId = null;
       loadSuggestions();
@@ -594,8 +602,13 @@ function renderSuggestionCard(sg) {
   approveBtn.addEventListener('click', async () => {
     try {
       // Backend state machine uses "accepted", not "approved".
-      await apiCall('PUT', `/api/admin/suggestions/${sg.id}/status`, { status: 'accepted' });
-      showToast('Suggestion approved', 'success');
+      const result = await apiCall('PUT', `/api/admin/suggestions/${sg.id}/status`, { status: 'accepted' });
+      const partialMessage = window.PartialFailureToast?.buildPartialFailureMessage(result);
+      if (partialMessage) {
+        showToast(partialMessage, 'error');
+      } else {
+        showToast('Suggestion approved', 'success');
+      }
       loadSuggestions();
     } catch (err) { showToast(err.message, 'error'); }
   });
@@ -612,8 +625,13 @@ function renderSuggestionCard(sg) {
   rejectWrap.querySelector('button').addEventListener('click', async () => {
     const reason = rejectWrap.querySelector('input').value.trim();
     try {
-      await apiCall('PUT', `/api/admin/suggestions/${sg.id}/status`, { status: 'rejected', reason });
-      showToast('Suggestion rejected', 'success');
+      const result = await apiCall('PUT', `/api/admin/suggestions/${sg.id}/status`, { status: 'rejected', reason });
+      const partialMessage = window.PartialFailureToast?.buildPartialFailureMessage(result);
+      if (partialMessage) {
+        showToast(partialMessage, 'error');
+      } else {
+        showToast('Suggestion rejected', 'success');
+      }
       loadSuggestions();
     } catch (err) { showToast(err.message, 'error'); }
   });

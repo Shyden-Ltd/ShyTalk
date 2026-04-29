@@ -215,11 +215,23 @@ function renderDevicesTable(data) {
   }
 }
 
+// Helper: surface partial-failure (PM delivery failed) via the shared toast
+// builder, falling back to the success message when the action succeeded
+// fully. Used by every endpoint that emits `pms: { failed, total }`.
+function showResultToast(result, successMessage) {
+  const partialMessage = window.PartialFailureToast?.buildPartialFailureMessage(result);
+  if (partialMessage) {
+    showToast(partialMessage, 'error');
+  } else {
+    showToast(successMessage, 'success');
+  }
+}
+
 async function unbindDevice(deviceId) {
   if (!confirm(`Unbind device ${deviceId}?`)) return;
   try {
-    await apiCall('DELETE', `/api/admin/devices/${deviceId}`);
-    showToast('Device unbound successfully', 'success');
+    const result = await apiCall('DELETE', `/api/admin/devices/${deviceId}`);
+    showResultToast(result, 'Device unbound successfully');
     loadDevices();
   } catch (err) {
     showToast('Failed to unbind: ' + err.message, 'error');
@@ -231,12 +243,12 @@ async function banDeviceFromDevices(deviceId, userId) {
   if (!confirm('Ban this device?')) return;
   const reason = prompt('Reason (optional):') || '';
   try {
-    await apiCall('POST', '/api/admin/bans/device', {
+    const result = await apiCall('POST', '/api/admin/bans/device', {
       deviceId,
       reason,
       linkedUniqueId: userId || null,
     });
-    showToast('Device banned', 'success');
+    showResultToast(result, 'Device banned');
     loadDevices();
   } catch (err) {
     showToast('Failed to ban device: ' + err.message, 'error');
@@ -251,13 +263,13 @@ async function banNetworkFromDevices(ip, userId) {
   if (!confirm('Ban IP ' + ip + '?')) return;
   const reason = prompt('Reason (optional):') || '';
   try {
-    await apiCall('POST', '/api/admin/bans/network', {
+    const result = await apiCall('POST', '/api/admin/bans/network', {
       type: 'ip',
       value: ip,
       reason,
       linkedUniqueId: userId || null,
     });
-    showToast('Network banned', 'success');
+    showResultToast(result, 'Network banned');
     loadDevices();
   } catch (err) {
     showToast('Failed to ban network: ' + err.message, 'error');
