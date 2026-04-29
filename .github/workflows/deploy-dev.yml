@@ -166,15 +166,27 @@ jobs:
       - name: Locate APK
         id: find-apk
         run: |
-          APK_PATH=$(find dev-release-apk -name "*.apk" -type f | head -1)
-          if [ -z "$APK_PATH" ]; then
+          set -euo pipefail
+          # Glob with explicit count check rather than `find | head -1`. Two
+          # APKs can land in dev-release-apk/ if signing config changes
+          # produce both `app-dev-release.apk` and
+          # `app-dev-release-unsigned.apk`; alphabetical pick would silently
+          # upload the unsigned one to Firebase App Distribution.
+          shopt -s nullglob
+          apks=(dev-release-apk/*.apk)
+          shopt -u nullglob
+          if [ "${#apks[@]}" -eq 0 ]; then
             echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "::error::No APK found"
-          else
-            echo "found=true" >> "$GITHUB_OUTPUT"
-            echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
-            echo "Found APK: $APK_PATH"
+            echo "::error::No APK found in dev-release-apk/"
+            exit 1
           fi
+          if [ "${#apks[@]}" -gt 1 ]; then
+            echo "::error::Expected exactly one APK, found ${#apks[@]}: ${apks[*]}"
+            exit 1
+          fi
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "apk_path=${apks[0]}" >> "$GITHUB_OUTPUT"
+          echo "Found APK: ${apks[0]}"
 
       - name: Upload to Firebase App Distribution
         if: steps.find-apk.outputs.found == 'true'
