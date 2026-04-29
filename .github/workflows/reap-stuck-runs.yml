@@ -1,0 +1,94 @@
+name: Reap Stuck Runs
+
+# Self-heal stuck queued runs. Surfaced by 2026-04-29 incident: PR #370
+# (later reverted) tried to upgrade workflows to paid runner specs that
+# don't exist for personal-account public repos, leaving multiple Release
+# / CodeQL / PR-Checks runs in `queued` state for 4+ hours, blocking the
+# `release-main` concurrency group and downstream deploys.
+#
+# Solution: scheduled workflow that lists all `queued` runs older than the
+# threshold and cancels them. Paid-runner mistakes are now blocked at PR
+# time by `lint.yml` + `scripts/check-no-paid-runners.sh`, but other
+# causes (deleted self-hosted runner, account quota issues, ghosted
+# dispatches) can still produce stuck runs — this reaper handles ALL of
+# them, not just the one we know about.
+
+on:
+  schedule:
+    # Every 15 minutes. Cron stress is negligible (~10s per run, listing
+    # is rate-limited friendly via gh API). Threshold is 30 minutes so
+    # legitimately slow self-hosted Mac iOS jobs aren't reaped — those
+    # show as `in_progress`, not `queued`.
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      threshold-minutes:
+        description: 'Cancel queued runs older than N minutes (default 30)'
+        type: string
+        default: '30'
+
+permissions:
+  actions: write    # gh api -X POST .../cancel
+  contents: read
+
+jobs:
+  reap:
+    name: Cancel runs queued past threshold
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Find and cancel stuck runs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          THRESHOLD_MIN: ${{ inputs.threshold-minutes || '30' }}
+        run: |
+          set -euo pipefail
+          # Compute cutoff timestamp in ISO-8601 (gh api filters by date
+          # client-side via jq — simpler than maintaining server-side
+          # comparison expressions).
+          CUTOFF=$(date -u -v-${THRESHOLD_MIN}M +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
+            || date -u -d "${THRESHOLD_MIN} minutes ago" +%Y-%m-%dT%H:%M:%SZ)
+          echo "Reaping runs queued before $CUTOFF (threshold ${THRESHOLD_MIN} min)"
+
+          # List all currently-queued workflow runs across the repo.
+          # `gh api --paginate` walks all pages so we don't miss old runs
+          # buried below the first 100. Limit results to actionable ones:
+          # `status=queued` is a single API filter that already excludes
+          # in_progress, completed, etc.
+          STUCK=$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/runs?status=queued&per_page=100" \
+            --jq ".workflow_runs[] | select(.created_at < \"$CUTOFF\") | [.id, .name, .created_at, .head_branch] | @tsv")
+
+          if [ -z "$STUCK" ]; then
+            echo "✓ No stuck runs found (queued > ${THRESHOLD_MIN} min)."
+            exit 0
+          fi
+
+          # Show what we're about to cancel for audit trail visibility.
+          echo "Stuck runs to cancel:"
+          echo "$STUCK"
+          echo ""
+
+          CANCELLED=0
+          while IFS=$'\t' read -r run_id run_name created_at branch; do
+            [ -z "$run_id" ] && continue
+            echo "Cancelling run $run_id ($run_name on $branch, queued since $created_at)..."
+            if gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/cancel" \
+                 >/dev/null 2>&1; then
+              CANCELLED=$((CANCELLED + 1))
+            else
+              echo "::warning::Failed to cancel run $run_id (may already be completed/cancelled)"
+            fi
+          done <<< "$STUCK"
+
+          echo ""
+          echo "Cancelled $CANCELLED stuck run(s)."
+          # Job summary (visible in Actions UI without opening the run)
+          {
+            echo "## Reaper summary"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Threshold | ${THRESHOLD_MIN} min |"
+            echo "| Cancelled | ${CANCELLED} |"
+          } >> "$GITHUB_STEP_SUMMARY"
