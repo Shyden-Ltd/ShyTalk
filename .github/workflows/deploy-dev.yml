@@ -208,7 +208,7 @@ jobs:
           set -euo pipefail
           dest=$(/usr/libexec/PlistBuddy -c "Print :destination" iosApp/ExportOptions.plist)
           if [ "$dest" != "export" ]; then
-            echo "::error::iosApp/ExportOptions.plist destination must be 'export' (got '$dest'). 'upload' would upload silently and the altool step would fail."
+            echo "::error::iosApp/ExportOptions.plist destination must be 'export' (got '$dest'). 'upload' uploads silently during exportArchive and writes no local IPA, breaking the next step."
             exit 1
           fi
 
@@ -306,27 +306,21 @@ jobs:
           shopt -s nullglob
           ipas=("$RUNNER_TEMP/export"/*.ipa)
           shopt -u nullglob
-          if [ "${#ipas[@]}" -ne 1 ]; then
-            echo "::error::Expected exactly one .ipa for upload, found ${#ipas[@]}"
-            exit 1
-          fi
+          # Post-export step already verified exactly one IPA exists. Re-glob is
+          # only needed to populate ipas[0] for altool's -f arg.
           # altool is famous for printing product-errors to stdout while exiting 0
-          # (auth-key revoked, asset validation rejection, etc). Capture output and
-          # grep it so we fail loudly when ASC reports an upload-time error.
+          # (auth-key revoked, asset validation rejection, etc). Capture output
+          # and grep it so we fail loudly when ASC reports an upload-time error.
+          # `set -o pipefail` (already on from `set -euo pipefail`) makes a
+          # non-zero altool exit propagate through the `tee` pipe, so we don't
+          # need PIPESTATUS gymnastics — set -e aborts before the grep runs.
           upload_log="$RUNNER_TEMP/altool-upload.log"
-          set +e
           xcrun altool --upload-app \
             -f "${ipas[0]}" \
             -t ios \
             --apiKey "$APP_STORE_CONNECT_KEY_ID" \
             --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID" \
             --output-format xml 2>&1 | tee "$upload_log"
-          rc=${PIPESTATUS[0]}
-          set -e
-          if [ "$rc" -ne 0 ]; then
-            echo "::error::altool exited $rc"
-            exit "$rc"
-          fi
           if grep -qE '<key>product-errors</key>|<key>tool-errors</key>' "$upload_log"; then
             echo "::error::altool reported errors despite exit 0 — see log above"
             exit 1
