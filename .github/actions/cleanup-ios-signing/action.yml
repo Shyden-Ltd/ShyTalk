@@ -57,10 +57,15 @@ runs:
         rm -f "$RUNNER_TEMP/certificate.p12" \
               "$RUNNER_TEMP/profile.mobileprovision" || true
 
-        # App Store Connect API key (.p8) lives outside $RUNNER_TEMP
+        # App Store Connect API key (.p8). Post-PR Phase-0 #63 writes to
+        # $RUNNER_TEMP/private_keys/; legacy path under $HOME is cleaned
+        # too so any leftovers from pre-#63 runs get scrubbed.
         if [ -n "${APP_STORE_CONNECT_KEY_ID:-}" ]; then
+          rm -f "$RUNNER_TEMP/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8" || true
           rm -f "$HOME/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8" || true
         fi
+        # Remove the now-empty $RUNNER_TEMP/private_keys/ directory if present.
+        rmdir "$RUNNER_TEMP/private_keys" 2>/dev/null || true
 
         # Mirrored profile in ~/Library/MobileDevice/Provisioning Profiles/
         if [ -n "$PROFILE_UUID" ]; then

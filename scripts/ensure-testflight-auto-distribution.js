@@ -14,8 +14,10 @@
  *   APP_STORE_CONNECT_KEY_ID — the API key ID (10-char string)
  *   APP_STORE_CONNECT_ISSUER_ID — the issuer ID (UUID)
  *   APP_STORE_CONNECT_KEY_PATH — path to the .p8 file (defaults to
- *     ~/private_keys/AuthKey_<KEY_ID>.p8 — same path setup-ios-signing
- *     writes to)
+ *     $RUNNER_TEMP/private_keys/AuthKey_<KEY_ID>.p8 — same path
+ *     setup-ios-signing writes to as of Phase-0 #63; falls back to the
+ *     legacy ~/private_keys/ path so this script also works during the
+ *     deploy-workflow rollout window)
  *
  * Optional env:
  *   BUNDLE_ID — defaults to com.shyden.shytalk
@@ -26,9 +28,16 @@ const fs = require('node:fs');
 
 const KEY_ID = process.env.APP_STORE_CONNECT_KEY_ID;
 const ISSUER_ID = process.env.APP_STORE_CONNECT_ISSUER_ID;
+// Resolve .p8 path: explicit env > $RUNNER_TEMP (current setup-ios-signing)
+// > legacy $HOME (pre Phase-0 #63). Pick whichever exists.
+const explicitPath = process.env.APP_STORE_CONNECT_KEY_PATH;
+const runnerTempPath = process.env.RUNNER_TEMP
+  ? `${process.env.RUNNER_TEMP}/private_keys/AuthKey_${KEY_ID}.p8`
+  : null;
+const homePath = `${process.env.HOME}/private_keys/AuthKey_${KEY_ID}.p8`;
 const KEY_PATH =
-  process.env.APP_STORE_CONNECT_KEY_PATH ||
-  `${process.env.HOME}/private_keys/AuthKey_${KEY_ID}.p8`;
+  explicitPath ||
+  (runnerTempPath && fs.existsSync(runnerTempPath) ? runnerTempPath : homePath);
 const BUNDLE_ID = process.env.BUNDLE_ID || 'com.shyden.shytalk';
 
 if (!KEY_ID || !ISSUER_ID) {

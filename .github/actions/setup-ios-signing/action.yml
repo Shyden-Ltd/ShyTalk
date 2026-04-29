@@ -63,12 +63,20 @@ runs:
       # of the runner's default umask. On a self-hosted Mac with multiple
       # UIDs, the file-system permission is the actual security boundary —
       # without this the .p8 lands as world-readable 0644.
+      #
+      # Write to $RUNNER_TEMP/private_keys/ instead of $HOME/private_keys/
+      # so the .p8 lives in the runner's per-job temp area. On a self-hosted
+      # Mac this means a force-killed job can't leave the credential
+      # persisting under $HOME indefinitely. The cleanup composite action
+      # cleans both paths so legacy leftovers from before this change still
+      # get scrubbed.
       run: |
         set -euo pipefail
         umask 077
-        mkdir -p ~/private_keys
-        chmod 700 ~/private_keys
-        printf '%s' "$APP_STORE_CONNECT_KEY" > ~/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8
+        KEY_DIR="$RUNNER_TEMP/private_keys"
+        mkdir -p "$KEY_DIR"
+        chmod 700 "$KEY_DIR"
+        printf '%s' "$APP_STORE_CONNECT_KEY" > "$KEY_DIR/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
 
     - name: Decode signing certificate and provisioning profile
       shell: bash
