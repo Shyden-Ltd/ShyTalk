@@ -54,12 +54,17 @@ jobs:
         env:
           TAG: ${{ inputs.release-tag }}
         run: |
+          set -euo pipefail
           if ! git tag -l "$TAG" | grep -q "$TAG"; then
             echo "::error::Tag $TAG does not exist"
             exit 1
           fi
-          if ! git merge-base --is-ancestor "$TAG" origin/main 2>/dev/null; then
-            echo "::warning::Tag $TAG may not be on the main branch"
+          # Hard fail (not warn) if the tag isn't on main. Prod hygiene: only
+          # deploy code that's been merged to main. Don't suppress stderr
+          # from git merge-base — a typo'd tag should produce a real error.
+          if ! git merge-base --is-ancestor "$TAG" origin/main; then
+            echo "::error::Tag $TAG is not an ancestor of origin/main. Refusing to deploy off-main code to prod."
+            exit 1
           fi
           VERSION="${TAG#v}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -202,8 +207,18 @@ jobs:
           name: android-prod-release
           path: android-release
 
-      - name: List downloaded artifacts
-        run: find android-release -type f | head -20
+      - name: Verify AAB present
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          aabs=(android-release/build/outputs/bundle/prodRelease/*.aab)
+          shopt -u nullglob
+          if [ "${#aabs[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one .aab in android-release/build/outputs/bundle/prodRelease/, got ${#aabs[@]}"
+            find android-release -type f
+            exit 1
+          fi
+          echo "AAB present: ${aabs[0]} ($(du -h "${aabs[0]}" | cut -f1))"
 
       - name: Upload to Play Store internal testing track
         uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1
