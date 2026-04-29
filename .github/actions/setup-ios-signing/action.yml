@@ -59,9 +59,16 @@ runs:
       env:
         APP_STORE_CONNECT_KEY: ${{ inputs.app-store-connect-key }}
         APP_STORE_CONNECT_KEY_ID: ${{ inputs.app-store-connect-key-id }}
+      # umask 077 makes secret files mode 0600 (owner-read only) regardless
+      # of the runner's default umask. On a self-hosted Mac with multiple
+      # UIDs, the file-system permission is the actual security boundary —
+      # without this the .p8 lands as world-readable 0644.
       run: |
+        set -euo pipefail
+        umask 077
         mkdir -p ~/private_keys
-        echo "$APP_STORE_CONNECT_KEY" > ~/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8
+        chmod 700 ~/private_keys
+        printf '%s' "$APP_STORE_CONNECT_KEY" > ~/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8
 
     - name: Decode signing certificate and provisioning profile
       shell: bash
@@ -70,11 +77,18 @@ runs:
         IOS_CERTIFICATE_PASSWORD: ${{ inputs.certificate-password }}
         IOS_PROVISION_PROFILE_BASE64: ${{ inputs.provision-profile-base64 }}
       run: |
+        set -euo pipefail
+        umask 077
         CERTIFICATE_PATH=$RUNNER_TEMP/certificate.p12
         KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
         echo "$IOS_CERTIFICATE_BASE64" | base64 -d > "$CERTIFICATE_PATH"
         security create-keychain -p "" "$KEYCHAIN_PATH"
-        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+        # Auto-lock after 30 min instead of 6 h. On a self-hosted Mac if
+        # cleanup ever fails, a 6-hour unlocked keychain gives a coresident
+        # attacker a huge window to dump the cert + private key. 30 min
+        # comfortably exceeds the typical iOS deploy time (~20 min) while
+        # closing that window aggressively.
+        security set-keychain-settings -lut 1800 "$KEYCHAIN_PATH"
         security unlock-keychain -p "" "$KEYCHAIN_PATH"
         security import "$CERTIFICATE_PATH" -P "$IOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
         security set-key-partition-list -S apple-tool:,apple: -k "" "$KEYCHAIN_PATH"
@@ -87,6 +101,13 @@ runs:
         security list-keychain -d user -s "$KEYCHAIN_PATH" "$HOME/Library/Keychains/login.keychain-db"
         PROFILE_PATH=$RUNNER_TEMP/profile.mobileprovision
         echo "$IOS_PROVISION_PROFILE_BASE64" | base64 -d > "$PROFILE_PATH"
-        PROFILE_UUID=$(/usr/bin/security cms -D -i "$PROFILE_PATH" 2>/dev/null | grep -A1 '<key>UUID</key>' | grep '<string>' | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
+        # PlistBuddy is exact and robust against grep/sed brittleness if
+        # Apple changes whitespace or nests <string> tags in a future macOS.
+        PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" /dev/stdin <<<"$(/usr/bin/security cms -D -i "$PROFILE_PATH")")
+        if [ -z "$PROFILE_UUID" ]; then
+          echo "::error::Could not extract UUID from provisioning profile at $PROFILE_PATH"
+          exit 1
+        fi
         mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
         cp "$PROFILE_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/${PROFILE_UUID}.mobileprovision
+        chmod 600 ~/Library/MobileDevice/Provisioning\ Profiles/${PROFILE_UUID}.mobileprovision
