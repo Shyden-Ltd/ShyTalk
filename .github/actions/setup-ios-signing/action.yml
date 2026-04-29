@@ -64,19 +64,33 @@ runs:
       # UIDs, the file-system permission is the actual security boundary —
       # without this the .p8 lands as world-readable 0644.
       #
-      # Write to $RUNNER_TEMP/private_keys/ instead of $HOME/private_keys/
-      # so the .p8 lives in the runner's per-job temp area. On a self-hosted
-      # Mac this means a force-killed job can't leave the credential
-      # persisting under $HOME indefinitely. The cleanup composite action
-      # cleans both paths so legacy leftovers from before this change still
-      # get scrubbed.
+      # Real file: $RUNNER_TEMP/private_keys/AuthKey_<KEY>.p8 (per-job
+      # lifetime, scoped under the runner's temp area).
+      # Symlink:   $HOME/private_keys/AuthKey_<KEY>.p8 → real file.
+      #
+      # The symlink is required because xcrun altool autodiscovers .p8
+      # files in a fixed list of paths (./private_keys, ~/private_keys,
+      # ~/.private_keys, ~/.appstoreconnect/private_keys) and does NOT
+      # accept an explicit path arg. xcodebuild -authenticationKeyPath
+      # accepts an absolute path, so it's fine reading the real file
+      # directly. The cleanup composite action removes both the symlink
+      # AND the real file.
       run: |
         set -euo pipefail
         umask 077
-        KEY_DIR="$RUNNER_TEMP/private_keys"
-        mkdir -p "$KEY_DIR"
-        chmod 700 "$KEY_DIR"
-        printf '%s' "$APP_STORE_CONNECT_KEY" > "$KEY_DIR/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+        REAL_DIR="$RUNNER_TEMP/private_keys"
+        mkdir -p "$REAL_DIR"
+        chmod 700 "$REAL_DIR"
+        REAL_PATH="$REAL_DIR/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+        printf '%s' "$APP_STORE_CONNECT_KEY" > "$REAL_PATH"
+        # Symlink for altool discovery. mkdir -p so $HOME/private_keys/
+        # exists; chmod 700 so the directory is owner-only.
+        SYMLINK_DIR="$HOME/private_keys"
+        mkdir -p "$SYMLINK_DIR"
+        chmod 700 "$SYMLINK_DIR"
+        SYMLINK_PATH="$SYMLINK_DIR/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+        # ln -sf overwrites if the symlink already exists from a prior run.
+        ln -sf "$REAL_PATH" "$SYMLINK_PATH"
 
     - name: Decode signing certificate and provisioning profile
       shell: bash
