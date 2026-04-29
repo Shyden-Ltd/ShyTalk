@@ -330,7 +330,12 @@ jobs:
           check() {
             local endpoint=$1 expected=$2
             local status
-            status=$(curl -s -o /dev/null -w '%{http_code}' "https://api.shytalk.shyden.co.uk${endpoint}")
+            # `--max-time 10` caps DNS+connect+TLS+response. `|| echo "000"`
+            # converts curl's exit-on-network-failure (DNS, refused, timeout)
+            # into a sentinel status so the check fails-loud at the same
+            # whitelist comparison as a wrong HTTP code, rather than `set -e`
+            # aborting the whole verification before the FAIL line prints.
+            status=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "https://api.shytalk.shyden.co.uk${endpoint}" || echo "000")
             if echo "$status" | grep -qE "^(${expected})$"; then
               echo "OK: ${endpoint} → ${status} (expected ${expected})"
             else
