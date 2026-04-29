@@ -239,6 +239,7 @@ jobs:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
+          set -euo pipefail
           cd iosApp
           # Archive
           xcodebuild \
@@ -262,15 +263,37 @@ jobs:
             -authenticationKeyPath ~/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8 \
             -authenticationKeyID $APP_STORE_CONNECT_KEY_ID \
             -authenticationKeyIssuerID $APP_STORE_CONNECT_ISSUER_ID
+          # Verify a single IPA was produced (catches `destination: upload` regressions
+          # that uploaded silently and left no local artifact, breaking the next step)
+          shopt -s nullglob
+          ipas=("$RUNNER_TEMP/export"/*.ipa)
+          shopt -u nullglob
+          if [ "${#ipas[@]}" -eq 0 ]; then
+            echo "::error::xcodebuild -exportArchive completed but no .ipa was written to $RUNNER_TEMP/export/. Check ExportOptions.plist (destination must be 'export', not 'upload')."
+            ls -la "$RUNNER_TEMP/export/" 2>&1 || true
+            exit 1
+          fi
+          if [ "${#ipas[@]}" -gt 1 ]; then
+            echo "::error::Expected exactly one .ipa, found ${#ipas[@]}: ${ipas[*]}"
+            exit 1
+          fi
+          echo "Exported IPA: ${ipas[0]} ($(du -h "${ipas[0]}" | cut -f1))"
 
       - name: Upload to TestFlight
-
         env:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
+          set -euo pipefail
+          shopt -s nullglob
+          ipas=("$RUNNER_TEMP/export"/*.ipa)
+          shopt -u nullglob
+          if [ "${#ipas[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one .ipa for upload, found ${#ipas[@]}"
+            exit 1
+          fi
           xcrun altool --upload-app \
-            -f $RUNNER_TEMP/export/*.ipa \
+            -f "${ipas[0]}" \
             -t ios \
             --apiKey "$APP_STORE_CONNECT_KEY_ID" \
             --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
