@@ -82,3 +82,6 @@ jobs:
           # in run: blocks where the alternative would be every reference
           # gaining a quote. Other shellcheck rules apply normally.
           actionlint -shellcheck='-e SC2086'
+
+      - name: No paid GitHub-hosted runner specs
+        run: bash scripts/check-no-paid-runners.sh

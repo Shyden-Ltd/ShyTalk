@@ -16,6 +16,15 @@ fi
 
 CHANGED=$(git diff --name-only origin/main...HEAD 2>/dev/null)
 
+# Always run paid-runner guard — protects against PR #370-style regressions
+# where a workflow file gets bumped to a paid runner spec that personal-
+# account public repos can't allocate, blocking CI indefinitely. Cost ~10ms.
+if ! bash scripts/check-no-paid-runners.sh; then
+  echo ""
+  echo "✗ Paid runner specs detected — push blocked"
+  exit 1
+fi
+
 # Run actionlint on workflow changes BEFORE the SonarCloud check (so workflow
 # regressions don't slip through when nothing else changes). This catches
 # unquoted globs, missing `set -euo pipefail`, and other silent-failure
