@@ -121,6 +121,12 @@ export function init(deps) {
     const ids = JSON.parse(dialog.dataset.ids || '[]');
     dialog.style.display = 'none';
     try {
+      // Bulk approve uses two-tier endpoint chain (new POST /approve falls
+      // back to legacy PUT /status). We don't aggregate per-id
+      // pms: { failed, total } here because the .catch fallback masks per-call
+      // shape — single-suggestion handlers (~line 188, 605, 628) DO consume
+      // pms via PartialFailureToast. Tracked as follow-up: align bulk +
+      // single shapes once the legacy fallback is removed.
       await Promise.all(ids.map((id) =>
         apiCall('POST', `/api/admin/suggestions/${id}/approve`).catch(() =>
           apiCall('PUT', `/api/admin/suggestions/${id}/status`, { status: 'accepted' }),
@@ -141,6 +147,8 @@ export function init(deps) {
     const reason = document.getElementById('bulk-reject-reason').value || '';
     dialog.style.display = 'none';
     try {
+      // See bulk-approve comment above — same two-tier fallback shape, same
+      // deferred per-id partial-failure aggregation.
       await Promise.all(ids.map((id) =>
         apiCall('POST', `/api/admin/suggestions/${id}/reject`, { reason }).catch(() =>
           apiCall('PUT', `/api/admin/suggestions/${id}/status`, { status: 'rejected', reason }),
@@ -186,15 +194,7 @@ export function init(deps) {
     if (!completeSuggestionId) return;
     try {
       const result = await apiCall('PUT', `/api/admin/suggestions/${completeSuggestionId}/status`, { status: 'completed' });
-      // Surface partial-failure: subscribers who didn't receive the
-      // "suggestion completed" notification (notifySubscribers in
-      // suggestions.js emits pms: { failed, total } per PR #384).
-      const partialMessage = window.PartialFailureToast?.buildPartialFailureMessage(result);
-      if (partialMessage) {
-        showToast(partialMessage, 'error');
-      } else {
-        showToast('Suggestion marked as completed', 'success');
-      }
+      window.PartialFailureToast?.showResultToast(showToast, result, 'Suggestion marked as completed');
       document.getElementById('suggestion-complete-dialog').style.display = 'none';
       completeSuggestionId = null;
       loadSuggestions();
@@ -603,12 +603,7 @@ function renderSuggestionCard(sg) {
     try {
       // Backend state machine uses "accepted", not "approved".
       const result = await apiCall('PUT', `/api/admin/suggestions/${sg.id}/status`, { status: 'accepted' });
-      const partialMessage = window.PartialFailureToast?.buildPartialFailureMessage(result);
-      if (partialMessage) {
-        showToast(partialMessage, 'error');
-      } else {
-        showToast('Suggestion approved', 'success');
-      }
+      window.PartialFailureToast?.showResultToast(showToast, result, 'Suggestion approved');
       loadSuggestions();
     } catch (err) { showToast(err.message, 'error'); }
   });
@@ -626,12 +621,7 @@ function renderSuggestionCard(sg) {
     const reason = rejectWrap.querySelector('input').value.trim();
     try {
       const result = await apiCall('PUT', `/api/admin/suggestions/${sg.id}/status`, { status: 'rejected', reason });
-      const partialMessage = window.PartialFailureToast?.buildPartialFailureMessage(result);
-      if (partialMessage) {
-        showToast(partialMessage, 'error');
-      } else {
-        showToast('Suggestion rejected', 'success');
-      }
+      window.PartialFailureToast?.showResultToast(showToast, result, 'Suggestion rejected');
       loadSuggestions();
     } catch (err) { showToast(err.message, 'error'); }
   });

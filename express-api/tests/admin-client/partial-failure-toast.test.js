@@ -7,7 +7,7 @@
  * fallbacks for missing optional fields.
  */
 const path = require('path');
-const { buildPartialFailureMessage } = require(
+const { buildPartialFailureMessage, showResultToast } = require(
   path.resolve(__dirname, '../../../public/admin/js/lib/partial-failure-toast.js'),
 );
 
@@ -361,5 +361,42 @@ describe('buildPartialFailureMessage — Number.isFinite edge cases (Pass-15 fix
     });
     expect(msg).toContain('2/? PMs failed');
     expect(msg).not.toContain('NaN');
+  });
+});
+
+describe('showResultToast — shared helper for tab handlers', () => {
+  let calls;
+  const fakeToast = (msg, kind) => calls.push({ msg, kind });
+  beforeEach(() => {
+    calls = [];
+  });
+
+  it('shows error toast on partial failure', () => {
+    showResultToast(fakeToast, { pms: { failed: 1, total: 1 } }, 'OK');
+    expect(calls).toHaveLength(1);
+    expect(calls[0].kind).toBe('error');
+    expect(calls[0].msg).toContain('PMs failed');
+  });
+
+  it('shows success toast on full success', () => {
+    showResultToast(fakeToast, { success: true }, 'Done');
+    expect(calls).toEqual([{ msg: 'Done', kind: 'success' }]);
+  });
+
+  it('shows nothing on full success when successMessage is null', () => {
+    // Used by autosave handlers that don't want a success toast.
+    showResultToast(fakeToast, { success: true }, null);
+    expect(calls).toEqual([]);
+  });
+
+  it('shows nothing on full success when successMessage is undefined', () => {
+    showResultToast(fakeToast, { success: true });
+    expect(calls).toEqual([]);
+  });
+
+  it('partial failure overrides null successMessage (always surface failures)', () => {
+    showResultToast(fakeToast, { pms: { failed: 1, total: 2 } }, null);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].kind).toBe('error');
   });
 });

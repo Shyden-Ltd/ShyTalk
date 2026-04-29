@@ -5055,9 +5055,13 @@
 <div class="toast" id="toast"></div>
 
 <script src="config.js"></script>
-<!-- Partial-failure toast lib (UMD) — must load BEFORE main.js so the
-     window.PartialFailureToast global is available when tabs/reports.js
-     processes a /api/reports/:id/resolve response. -->
+<!-- Partial-failure toast lib (UMD) — must remain a CLASSIC <script> tag
+     (no type="module", no defer) so window.PartialFailureToast is set
+     synchronously at parse time. main.js below is type="module" which
+     is implicitly deferred — by the time any tab module's body runs,
+     the global is already populated. If anyone reorders these tags or
+     converts this lib to a module, every tab consumer must also be
+     audited for load-order safety. -->
 <script src="js/lib/partial-failure-toast.js"></script>
 <script type="module" src="js/main.js"></script>
 <script src="/js/language-selector.js"></script>

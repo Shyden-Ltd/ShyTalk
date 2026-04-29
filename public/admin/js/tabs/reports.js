@@ -730,14 +730,14 @@ async function resolveReport(reportedUserId, resolveAll) {
     }
 
     // Partial-failure contract — see public/admin/js/lib/partial-failure-toast.js
-    // for the full key list and ordering rationale. Extracted to a shared lib so
-    // it's testable AND reusable by future admin consumers (bulk-warn, etc.).
-    const partialMessage = window.PartialFailureToast.buildPartialFailureMessage(result);
-    if (partialMessage) {
-      showToast(partialMessage, 'error');
-    } else {
-      showToast(`Report${resolveAll ? 's' : ''} resolved: ${actionLabel}`);
-    }
+    // for the full key list and ordering rationale. Optional chaining defends
+    // against the lib not being loaded (e.g., script-tag reordering); other
+    // tab consumers use the same defensive shape for consistency.
+    window.PartialFailureToast?.showResultToast(
+      showToast,
+      result,
+      `Report${resolveAll ? 's' : ''} resolved: ${actionLabel}`,
+    );
 
     if (result.autoEscalateSuggested) {
       showToast('This user has 5+ warnings. Consider suspending.', 'error');

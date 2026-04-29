@@ -215,23 +215,11 @@ function renderDevicesTable(data) {
   }
 }
 
-// Helper: surface partial-failure (PM delivery failed) via the shared toast
-// builder, falling back to the success message when the action succeeded
-// fully. Used by every endpoint that emits `pms: { failed, total }`.
-function showResultToast(result, successMessage) {
-  const partialMessage = window.PartialFailureToast?.buildPartialFailureMessage(result);
-  if (partialMessage) {
-    showToast(partialMessage, 'error');
-  } else {
-    showToast(successMessage, 'success');
-  }
-}
-
 async function unbindDevice(deviceId) {
   if (!confirm(`Unbind device ${deviceId}?`)) return;
   try {
     const result = await apiCall('DELETE', `/api/admin/devices/${deviceId}`);
-    showResultToast(result, 'Device unbound successfully');
+    window.PartialFailureToast?.showResultToast(showToast, result, 'Device unbound successfully');
     loadDevices();
   } catch (err) {
     showToast('Failed to unbind: ' + err.message, 'error');
@@ -248,7 +236,7 @@ async function banDeviceFromDevices(deviceId, userId) {
       reason,
       linkedUniqueId: userId || null,
     });
-    showResultToast(result, 'Device banned');
+    window.PartialFailureToast?.showResultToast(showToast, result, 'Device banned');
     loadDevices();
   } catch (err) {
     showToast('Failed to ban device: ' + err.message, 'error');
@@ -269,7 +257,7 @@ async function banNetworkFromDevices(ip, userId) {
       reason,
       linkedUniqueId: userId || null,
     });
-    showResultToast(result, 'Network banned');
+    window.PartialFailureToast?.showResultToast(showToast, result, 'Network banned');
     loadDevices();
   } catch (err) {
     showToast('Failed to ban network: ' + err.message, 'error');

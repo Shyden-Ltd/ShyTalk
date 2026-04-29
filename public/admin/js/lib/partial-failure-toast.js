@@ -77,5 +77,24 @@
     return 'Partial: ' + parts.join('; ') + '. Please retry the failed step.';
   }
 
-  return { buildPartialFailureMessage };
+  /**
+   * Show either the partial-failure toast or a normal success toast,
+   * depending on whether the response carries any partial-failure flags.
+   *
+   * @param showToast {(msg: string, kind?: 'success' | 'error') => void}
+   *   The page-level toast function (varies between admin/portal/etc.).
+   * @param result {object} — API response body.
+   * @param successMessage {string | null} — message for the all-clear path.
+   *   Pass null to show NO toast on success (e.g., silent autosave).
+   */
+  function showResultToast(showToast, result, successMessage) {
+    const partialMessage = buildPartialFailureMessage(result);
+    if (partialMessage) {
+      showToast(partialMessage, 'error');
+    } else if (successMessage !== null && successMessage !== undefined) {
+      showToast(successMessage, 'success');
+    }
+  }
+
+  return { buildPartialFailureMessage, showResultToast };
 });

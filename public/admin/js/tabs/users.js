@@ -329,13 +329,10 @@ async function autoSaveListField(field) {
         .map(Number)
         .filter((n) => !isNaN(n));
       const result = await apiCall("PATCH", `/api/user/${currentUid}`, { [field]: items });
-      // Partial-failure contract — the route emits `pms: { failed, total }`
-      // when one of the user-visible PMs (display name change, photo
-      // removed, etc.) couldn't be delivered. See partial-failure-toast.js.
-      const partialMessage = window.PartialFailureToast?.buildPartialFailureMessage(result);
-      if (partialMessage) {
-        showToast(partialMessage, "error");
-      }
+      // Surface partial-failure if the user-visible PM (display name
+      // changed, photo removed, etc.) was silently dropped. Pass null
+      // success message — autosave is silent on success.
+      window.PartialFailureToast?.showResultToast(showToast, result, null);
     }
   } catch (err) {
     showToast(`Failed to save ${field}: ${err.message}`, "error");
@@ -1240,14 +1237,7 @@ export function wireModerationListeners() {
     suspendBtn.disabled = true;
     try {
       const result = await apiCall("POST", `/api/user/${currentUid}/suspend`, { reason, endDate, canAppeal });
-      // Partial-failure: surface "1/1 PMs failed" if the suspension PM didn't
-      // reach the user, so admin can manually retry the notification.
-      const partialMessage = window.PartialFailureToast?.buildPartialFailureMessage(result);
-      if (partialMessage) {
-        showToast(partialMessage, "error");
-      } else {
-        showToast("User suspended");
-      }
+      window.PartialFailureToast?.showResultToast(showToast, result, "User suspended");
       const data = await apiCall("GET", `/api/user/${currentUid}`);
       await populateFormFull(data);
     } catch (err) { showToast(err.message, "error"); }
@@ -1259,12 +1249,7 @@ export function wireModerationListeners() {
     unsuspendBtn.disabled = true;
     try {
       const result = await apiCall("POST", `/api/user/${currentUid}/unsuspend`);
-      const partialMessage = window.PartialFailureToast?.buildPartialFailureMessage(result);
-      if (partialMessage) {
-        showToast(partialMessage, "error");
-      } else {
-        showToast("User unsuspended");
-      }
+      window.PartialFailureToast?.showResultToast(showToast, result, "User unsuspended");
       const data = await apiCall("GET", `/api/user/${currentUid}`);
       await populateFormFull(data);
     } catch (err) { showToast(err.message, "error"); }
@@ -1497,13 +1482,10 @@ export function wireEconomyListeners() {
       _ecoCoins = result.newBalance;
       const cd = $("#eco-coins-display"); if (cd) cd.textContent = _ecoCoins;
       const ca = $("#eco-coins-amount"); if (ca) ca.value = "";
-      // Partial-failure: surface PM delivery failure (balance still adjusted).
-      const partialMessage = window.PartialFailureToast?.buildPartialFailureMessage(result);
-      if (partialMessage) {
-        showToast(partialMessage, "error");
-      } else {
-        showToast((op === "add" ? "Added" : "Deducted") + " " + amount + " coins (now " + _ecoCoins + ")");
-      }
+      window.PartialFailureToast?.showResultToast(
+        showToast, result,
+        (op === "add" ? "Added" : "Deducted") + " " + amount + " coins (now " + _ecoCoins + ")",
+      );
     } catch (err) { showToast(err.message, "error"); }
   });
   const beansApply = $("#eco-beans-apply");
@@ -1517,12 +1499,10 @@ export function wireEconomyListeners() {
       _ecoBeans = result.newBalance;
       const bd = $("#eco-beans-display"); if (bd) bd.textContent = _ecoBeans;
       const ba = $("#eco-beans-amount"); if (ba) ba.value = "";
-      const partialMessage = window.PartialFailureToast?.buildPartialFailureMessage(result);
-      if (partialMessage) {
-        showToast(partialMessage, "error");
-      } else {
-        showToast((op === "add" ? "Added" : "Deducted") + " " + amount + " beans (now " + _ecoBeans + ")");
-      }
+      window.PartialFailureToast?.showResultToast(
+        showToast, result,
+        (op === "add" ? "Added" : "Deducted") + " " + amount + " beans (now " + _ecoBeans + ")",
+      );
     } catch (err) { showToast(err.message, "error"); }
   });
   const bpSearch = document.getElementById("backpack-search"); if (bpSearch) bpSearch.addEventListener("input", renderBackpack);
@@ -1755,26 +1735,79 @@ export function wireBansListeners() {
   const bansDevicesBoundList = $("#bans-devices-bound-list");
   if (bansDevicesBoundList) {
     bansDevicesBoundList.addEventListener("click", (e) => { const header = e.target.closest(".device-card-header"); if (!header) return; const body = header.nextElementSibling; const chevron = header.querySelector(".chevron"); if (body) { body.style.display = body.style.display === "none" ? "block" : "none"; if (chevron) chevron.textContent = body.style.display === "none" ? "\u25B6" : "\u25BC"; } });
-    bansDevicesBoundList.addEventListener("click", async (e) => { const btn = e.target.closest("[data-ban-action]"); if (!btn) return; const action = btn.dataset.banAction; const deviceId = btn.dataset.deviceId; if (action === "ban") { const reasonInput = btn.closest(".device-card-body")?.querySelector(".ban-reason-input"); const durationSelect = btn.closest(".device-card-body")?.querySelector(".ban-duration-select"); try { await apiCall("POST", "/api/admin/bans/device", { deviceId, reason: reasonInput?.value?.trim() || null, duration: durationSelect?.value || null, linkedUniqueId: currentUid }); showToast("Device banned", "success"); populateBansSection(currentUid); } catch (err) { showToast(err.message, "error"); } } else if (action === "unban") { if (!confirm("Unban this device?")) return; try { await apiCall("DELETE", `/api/admin/bans/device/${deviceId}`); showToast("Device unbanned", "success"); populateBansSection(currentUid); } catch (err) { showToast(err.message, "error"); } } });
+    bansDevicesBoundList.addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-ban-action]");
+      if (!btn) return;
+      const action = btn.dataset.banAction;
+      const deviceId = btn.dataset.deviceId;
+      if (action === "ban") {
+        const reasonInput = btn.closest(".device-card-body")?.querySelector(".ban-reason-input");
+        const durationSelect = btn.closest(".device-card-body")?.querySelector(".ban-duration-select");
+        try {
+          // Returns pms: { failed, total } per admin-bans.js POST /admin/bans/device.
+          const result = await apiCall("POST", "/api/admin/bans/device", { deviceId, reason: reasonInput?.value?.trim() || null, duration: durationSelect?.value || null, linkedUniqueId: currentUid });
+          window.PartialFailureToast?.showResultToast(showToast, result, "Device banned");
+          populateBansSection(currentUid);
+        } catch (err) { showToast(err.message, "error"); }
+      } else if (action === "unban") {
+        if (!confirm("Unban this device?")) return;
+        try {
+          await apiCall("DELETE", `/api/admin/bans/device/${deviceId}`);
+          showToast("Device unbanned", "success");
+          populateBansSection(currentUid);
+        } catch (err) { showToast(err.message, "error"); }
+      }
+    });
   }
   const banAllBtn = $("#bans-ban-all-devices");
-  if (banAllBtn) banAllBtn.addEventListener("click", async () => { if (!currentUid) return; if (!confirm("Ban all devices for this user?")) return; const reason = prompt("Reason (optional):") || ""; try { const devicesData = await apiCall("GET", `/api/admin/devices/user/${currentUid}`); const devices = devicesData.devices || []; if (devices.length === 0) { showToast("No devices to ban", "error"); return; } await Promise.all(devices.map(d => apiCall("POST", "/api/admin/bans/device", { deviceId: d.id, reason, linkedUniqueId: currentUid }))); showToast("Banned " + devices.length + " device(s)", "success"); populateBansSection(currentUid); } catch (err) { showToast("Failed: " + err.message, "error"); } });
+  if (banAllBtn) banAllBtn.addEventListener("click", async () => {
+    if (!currentUid) return;
+    if (!confirm("Ban all devices for this user?")) return;
+    const reason = prompt("Reason (optional):") || "";
+    try {
+      const devicesData = await apiCall("GET", `/api/admin/devices/user/${currentUid}`);
+      const devices = devicesData.devices || [];
+      if (devices.length === 0) { showToast("No devices to ban", "error"); return; }
+      // Aggregate per-call partial failures: each /admin/bans/device returns
+      // pms: { failed, total } for the user-visible ban-notice PM. Sum
+      // across the bulk call so the admin sees "N/M PMs failed" once
+      // instead of N separate toasts.
+      const results = await Promise.all(devices.map(d =>
+        apiCall("POST", "/api/admin/bans/device", { deviceId: d.id, reason, linkedUniqueId: currentUid }),
+      ));
+      const aggregate = {
+        pms: results.reduce((acc, r) => ({
+          failed: (acc.failed || 0) + (r?.pms?.failed || 0),
+          total: (acc.total || 0) + (r?.pms?.total || 0),
+        }), { failed: 0, total: 0 }),
+      };
+      window.PartialFailureToast?.showResultToast(showToast, aggregate, "Banned " + devices.length + " device(s)");
+      populateBansSection(currentUid);
+    } catch (err) { showToast("Failed: " + err.message, "error"); }
+  });
   const banIpBtn = $("#bans-ban-last-ip");
-  if (banIpBtn) banIpBtn.addEventListener("click", async () => { if (!currentUid) return; try { const devicesData = await apiCall("GET", `/api/admin/devices/user/${currentUid}`); const devices = devicesData.devices || []; const lastDevice = devices.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0))[0]; if (!lastDevice || !lastDevice.lastIp) { showToast("No IP address found", "error"); return; } if (!confirm("Ban IP " + lastDevice.lastIp + "?")) return; const reason = prompt("Reason (optional):") || ""; await apiCall("POST", "/api/admin/bans/network", { type: "ip", value: lastDevice.lastIp, reason, linkedUniqueId: currentUid }); showToast("IP banned", "success"); populateBansSection(currentUid); } catch (err) { showToast("Failed: " + err.message, "error"); } });
+  if (banIpBtn) banIpBtn.addEventListener("click", async () => {
+    if (!currentUid) return;
+    try {
+      const devicesData = await apiCall("GET", `/api/admin/devices/user/${currentUid}`);
+      const devices = devicesData.devices || [];
+      const lastDevice = devices.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0))[0];
+      if (!lastDevice || !lastDevice.lastIp) { showToast("No IP address found", "error"); return; }
+      if (!confirm("Ban IP " + lastDevice.lastIp + "?")) return;
+      const reason = prompt("Reason (optional):") || "";
+      // Returns pms: { failed, total } per admin-bans.js POST /admin/bans/network.
+      const result = await apiCall("POST", "/api/admin/bans/network", { type: "ip", value: lastDevice.lastIp, reason, linkedUniqueId: currentUid });
+      window.PartialFailureToast?.showResultToast(showToast, result, "IP banned");
+      populateBansSection(currentUid);
+    } catch (err) { showToast("Failed: " + err.message, "error"); }
+  });
   const unbanAllBtn = $("#bans-unban-all");
   if (unbanAllBtn) unbanAllBtn.addEventListener("click", async () => {
     if (!currentUid) return;
     if (!confirm("Remove all bans for this user?")) return;
     try {
       const result = await apiCall("POST", `/api/admin/bans/unban-all/${currentUid}`);
-      // Surface PM delivery failure (the "restriction lifted" PM didn't reach
-      // the user). Bans were still removed; admin may want to retry the PM.
-      const partialMessage = window.PartialFailureToast?.buildPartialFailureMessage(result);
-      if (partialMessage) {
-        showToast(partialMessage, "error");
-      } else {
-        showToast("Removed " + (result.removed || 0) + " ban(s)", "success");
-      }
+      window.PartialFailureToast?.showResultToast(showToast, result, "Removed " + (result.removed || 0) + " ban(s)");
       populateBansSection(currentUid);
     } catch (err) { showToast("Failed: " + err.message, "error"); }
   });
