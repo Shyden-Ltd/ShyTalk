@@ -38,7 +38,13 @@ runs:
         if [ -n "$PROD_BASE64" ]; then
           echo "$PROD_BASE64" | base64 -d > app/src/prod/google-services.json
         else
-          cp app/src/dev/google-services.json app/src/prod/google-services.json
+          # NEVER fall back to dev creds for prod — that would point a prod build
+          # at the dev Firebase project (env isolation breach, see
+          # feedback-environment-isolation.md). Write a placeholder so prod-flavor
+          # builds in dev-only contexts (e.g. PR checks, ios-tests) succeed but
+          # cannot connect to anything real.
+          echo "$PLACEHOLDER" > app/src/prod/google-services.json
+          echo "::warning::Using placeholder prod google-services.json (PROD_BASE64 unavailable). A real prod-flavor build needs the secret."
         fi
 
         if [ "$INCLUDE_LOCAL" = "true" ]; then
