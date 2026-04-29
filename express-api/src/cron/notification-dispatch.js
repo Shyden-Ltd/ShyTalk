@@ -70,8 +70,15 @@ async function dispatchNotifications() {
               await db.doc(`subscriptions/${notif.uid}`).update({
                 pushToken: null,
               });
-            } catch {
-              // Best effort cleanup
+            } catch (cleanupErr) {
+              // Don't fail the notification dispatch over a stale-token
+              // write failure, but log it: stale tokens that linger here
+              // mean future sends keep failing for that user (silent decay).
+              log.warn('notification-dispatch', 'Failed to clear invalid pushToken (best-effort)', {
+                uid: notif.uid,
+                notifId: doc.id,
+                error: cleanupErr.message,
+              });
             }
           }
         } catch (err) {
@@ -107,8 +114,19 @@ async function dispatchNotifications() {
       });
       try {
         await doc.ref.update({ status: 'failed', error: err.message });
-      } catch {
-        // Best effort
+      } catch (statusErr) {
+        // If we can't mark `failed`, the queue item stays `queued` and gets
+        // re-dispatched on every cron tick — potentially re-spamming the
+        // user AND burning Firestore quota. Log so this is visible in
+        // production, even though we can't auto-recover.
+        log.error(
+          'notification-dispatch',
+          'Failed to mark notification as failed (will re-attempt next tick)',
+          {
+            notifId: doc.id,
+            error: statusErr.message,
+          },
+        );
       }
       failed++;
     }
