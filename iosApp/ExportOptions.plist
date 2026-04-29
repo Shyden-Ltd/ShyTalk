@@ -7,11 +7,11 @@
 	<key>teamID</key>
 	<string>F3XX4PM3MF</string>
 	<key>uploadSymbols</key>
-	<true/>
+	<false/>
 	<key>uploadBitcode</key>
 	<false/>
 	<key>destination</key>
-	<string>upload</string>
+	<string>export</string>
 	<key>signingStyle</key>
 	<string>manual</string>
 	<key>provisioningProfiles</key>
