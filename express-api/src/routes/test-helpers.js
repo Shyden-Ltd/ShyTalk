@@ -11,6 +11,7 @@
 const router = require('express').Router();
 const { db, auth } = require('../utils/firebase');
 const { generateId } = require('../utils/helpers');
+const { getFcmCaptures, clearFcmCaptures } = require('../utils/fcm');
 const log = require('../utils/log');
 
 const TEST_PREFIX = 'test_';
@@ -528,6 +529,25 @@ router.post('/test/teardown', async (req, res) => {
     log.error('test-helpers', 'Teardown failed', { error: err.message });
     res.status(500).json({ error: err.message });
   }
+});
+
+// GET /api/test/fcm-captures — read the in-process FCM capture buffer.
+// fcm.js stores `{tokens, data, ts}` entries here whenever sendFcmToTokens
+// runs in NODE_ENV=local. Used by integration test #9 to verify FCM
+// payload shape without contacting real FCM. Returns the captures in
+// order; clear via POST /api/test/fcm-captures/clear before each test.
+router.get('/test/fcm-captures', (req, res) => {
+  if (requireTestApiKey(req, res)) return;
+  res.json({ captures: getFcmCaptures() });
+});
+
+// POST /api/test/fcm-captures/clear — empty the FCM capture buffer.
+// Tests call this in beforeEach to isolate from prior runs in the
+// same Express process.
+router.post('/test/fcm-captures/clear', (req, res) => {
+  if (requireTestApiKey(req, res)) return;
+  clearFcmCaptures();
+  res.json({ success: true });
 });
 
 // POST /api/test/reset — wipe ALL test data

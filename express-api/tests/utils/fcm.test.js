@@ -15,7 +15,12 @@ jest.mock('../../src/utils/firebase', () => ({
   },
 }));
 
-const { sendFcmToTokens, cleanupInvalidTokens } = require('../../src/utils/fcm');
+const {
+  sendFcmToTokens,
+  cleanupInvalidTokens,
+  getFcmCaptures,
+  clearFcmCaptures,
+} = require('../../src/utils/fcm');
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -98,5 +103,49 @@ describe('cleanupInvalidTokens', () => {
   test('removes invalid tokens from user doc', async () => {
     await cleanupInvalidTokens(['bad-token-1', 'bad-token-2'], 'user-1');
     expect(mockDocUpdate).toHaveBeenCalled();
+  });
+});
+
+describe('local-mode FCM capture buffer', () => {
+  const prevEnv = process.env.NODE_ENV;
+  beforeEach(() => {
+    process.env.NODE_ENV = 'local';
+    clearFcmCaptures();
+  });
+  afterEach(() => {
+    process.env.NODE_ENV = prevEnv;
+    clearFcmCaptures();
+  });
+
+  test('captures sends in local mode and returns empty invalid-tokens array', async () => {
+    const result = await sendFcmToTokens(['t1'], { type: 'PM', title: 'hi' });
+    expect(result).toEqual([]);
+    expect(mockSendEachForMulticast).not.toHaveBeenCalled();
+
+    const caps = getFcmCaptures();
+    expect(caps).toHaveLength(1);
+    expect(caps[0].tokens).toEqual(['t1']);
+    expect(caps[0].data).toEqual({ type: 'PM', title: 'hi' });
+    expect(typeof caps[0].ts).toBe('number');
+  });
+
+  test('getFcmCaptures returns a defensive copy (callers cannot mutate buffer)', async () => {
+    await sendFcmToTokens(['t1'], { type: 'PM' });
+    const caps = getFcmCaptures();
+    caps[0].tokens.push('mutated');
+    caps[0].data.injected = 'oops';
+    caps.push({ tokens: ['fake'], data: {}, ts: 0 });
+
+    const fresh = getFcmCaptures();
+    expect(fresh).toHaveLength(1);
+    expect(fresh[0].tokens).toEqual(['t1']);
+    expect(fresh[0].data).toEqual({ type: 'PM' });
+  });
+
+  test('clearFcmCaptures empties the buffer', async () => {
+    await sendFcmToTokens(['t1'], { type: 'PM' });
+    expect(getFcmCaptures()).toHaveLength(1);
+    clearFcmCaptures();
+    expect(getFcmCaptures()).toHaveLength(0);
   });
 });
