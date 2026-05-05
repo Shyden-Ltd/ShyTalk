@@ -411,6 +411,44 @@ describe('POST /api/users/sign-in', () => {
     expect(res.body.uniqueId).toBeUndefined();
   });
 
+  // ── PR #500 (audit M5): suspension check before claims grant ──
+
+  test('returns suspended=true WITHOUT updating firebaseUid or claims', async () => {
+    // Pre-fix: signed in suspended users (updated UID, granted custom
+    // claims) before the auth-middleware suspension check ran. The
+    // suspension cache had a 5-min TTL — brief window for writes.
+    // Now: suspension check happens BEFORE any state mutation.
+    getDoc.mockImplementation((path) => {
+      if (path === 'identityMap/email:suspended@example.com') {
+        return Promise.resolve({
+          uniqueId: 10000050,
+          unlinked: false,
+        });
+      }
+      return Promise.resolve(null);
+    });
+    // User doc returns isSuspended: true
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ isSuspended: true, displayName: 'Suspended User' }),
+    });
+
+    const app = createApp('firebase-uid-new', null);
+    const res = await request(app)
+      .post('/api/users/sign-in')
+      .send({ provider: 'email', identifier: 'suspended@example.com' })
+      .expect(200);
+
+    expect(res.body.found).toBe(true);
+    expect(res.body.suspended).toBe(true);
+    expect(res.body.uniqueId).toBe(10000050);
+
+    // Critical: NO state mutation — no firebaseUid update, no claims
+    // grant. This is the security contract the fix establishes.
+    expect(mockDocUpdate).not.toHaveBeenCalled();
+    expect(mockSetCustomUserClaims).not.toHaveBeenCalled();
+  });
+
   test('returns deactivated flag for unlinked identity', async () => {
     getDoc.mockImplementation((path) => {
       if (path === 'identityMap/email:old@work.com') {

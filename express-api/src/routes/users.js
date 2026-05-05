@@ -223,6 +223,29 @@ router.post('/users/sign-in', async (req, res) => {
 
     const uniqueId = identity.uniqueId;
 
+    // Suspension check BEFORE updating firebaseUid + custom claims.
+    // Audit M5 (Phase 2A): pre-fix signed in suspended users (updated
+    // their UID and granted custom claims) before the auth-middleware
+    // suspension check ran. The suspension cache had a 5-min TTL —
+    // brief window where suspended users could perform writes.
+    //
+    // Now: read the user doc, check isSuspended, return found+suspended
+    // WITHOUT mutating Firebase state. Client surfaces the suspension
+    // to the user; no UID refresh, no custom claim grant.
+    const userSnap = await db.doc(`users/${uniqueId}`).get();
+    if (userSnap.exists) {
+      const userData = userSnap.data();
+      const isSuspended = userData.isSuspended ?? userData.is_suspended ?? false;
+      if (isSuspended) {
+        log.warn('users', 'Sign-in attempt by suspended user', { uniqueId, provider });
+        return res.json({
+          found: true,
+          suspended: true,
+          uniqueId,
+        });
+      }
+    }
+
     // Update firebaseUid to current project's UID + refresh lastSeenAt
     await db.doc(`users/${uniqueId}`).update({
       firebaseUid: req.auth.uid,
