@@ -566,10 +566,37 @@ test.describe("Dev Smoke — IAP coin purchase (sandbox)", () => {
   // we just minted (which we KNOW exists in purchaseReceipts).
   // A standalone replay test would have to seed state first.
   //
-  // State accumulation: each run grants `coins + bonusCoins` to the
-  // smoke account permanently (no refund endpoint exposed). Coins
-  // are virtual currency, JS number-safe up to 2^53 ≈ 9e15, smoke
-  // account is dev-only — accepted as a no-op trade-off.
+  // State accumulation — DESIGN DECISION, NOT TRADE-OFF:
+  // Each run permanently adds `pkg.coins + pkg.bonusCoins` to the
+  // smoke account's balance. This is correct behavior, not a flaw
+  // to engineer around. Reasoning:
+  //
+  //   1. The smoke account models a real user. Real users buy coins
+  //      and KEEP them — the IAP economy is design-permanent.
+  //      Resetting after every test would make the smoke account
+  //      behave UNLIKE production users, weakening the test.
+  //
+  //   2. There is no public refund endpoint. Routing through admin
+  //      to "refund" would require giving smoke admin claims, which
+  //      the spec deliberately avoids (admin bypasses several gates
+  //      and would mask real-user regressions — see file header).
+  //
+  //   3. Engineered "neutralization" via paired spend (gacha pull
+  //      or gift-direct) would: (a) re-couple this test to gacha or
+  //      gifts collection, undoing the decoupling work in PR #482;
+  //      (b) trade coin accumulation for backpack/recipient-bean
+  //      accumulation — a different state pollution; (c) add code
+  //      that exercises no new infrastructure path, only complexity.
+  //
+  //   4. The accumulation has zero operational impact: JS numbers
+  //      are safe to 2^53 (≈9e15); ~100 coins/day × 365 days × 100
+  //      years ≈ 3.6M coins, well below the safety bound. The smoke
+  //      account is dev-only.
+  //
+  // The proper escape hatch if this ever becomes a real issue is a
+  // periodic cleanup cron that resets test-account state — NOT
+  // changes to this test. The right test design is REALISTIC user
+  // behavior, not artificially-isolated state.
 
   test("GET catalog → POST purchase → balance reflects → replay rejected with 409", async () => {
     // Phase 1 — discover the catalog. Public endpoint (no auth on
