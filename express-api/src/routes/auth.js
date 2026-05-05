@@ -148,6 +148,14 @@ router.post('/auth/otp/verify', sensitiveLimiter, async (req, res) => {
     const { email, code } = req.body || {};
     if (!email) return res.status(400).json({ error: 'email required' });
     if (!code) return res.status(400).json({ error: 'code required' });
+    // PR #495 audit H4 — length-validate code BEFORE bcrypt.compare.
+    // Without this, a 1MB-string code (allowed by express.json limit)
+    // would block the Node event loop for hundreds of ms — single
+    // request DoS. OTP codes are 6-digit; 4-32 chars covers backup
+    // codes too without exposing the bcrypt-DoS surface.
+    if (typeof code !== 'string' || code.length < 4 || code.length > 32) {
+      return res.status(400).json({ error: 'code must be a string of 4-32 characters' });
+    }
 
     const emailLower = email.toLowerCase().trim();
     const otpRef = db.doc(`otpCodes/${emailLower}`);
@@ -310,6 +318,12 @@ router.post('/auth/pin/verify', sensitiveLimiter, async (req, res) => {
     const { uniqueId, deviceId, pin } = req.body || {};
     if (!uniqueId || !deviceId || !pin) {
       return res.status(400).json({ error: 'uniqueId, deviceId, and pin required' });
+    }
+    // PR #495 audit H4 — length-validate PIN BEFORE bcrypt.compare.
+    // Same DoS mitigation as users.js delete route. PINs are 4-digit
+    // app-side; 4-16 chars covers any future format expansion.
+    if (typeof pin !== 'string' || pin.length < 4 || pin.length > 16) {
+      return res.status(400).json({ error: 'pin must be a string of 4-16 characters' });
     }
 
     const userRef = db.doc(`users/${uniqueId}`);

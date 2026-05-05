@@ -931,6 +931,21 @@ router.post('/users/:uniqueId/delete', async (req, res) => {
       return res.status(400).json({ error: 'PIN verification required' });
     }
 
+    // Length-validate PIN BEFORE bcrypt.compare. Without this, a
+    // 1MB-string PIN (allowed by express.json limit) would block the
+    // Node event loop for hundreds of ms — single-request DoS. Audit
+    // H4 (Phase 2A). PINs are app-side 4-digit codes; allowing 4-16
+    // chars covers any future format expansion (alphanumeric backup
+    // codes, etc.) without exposing the bcrypt-DoS surface.
+    if (typeof pin !== 'string' || pin.length < 4 || pin.length > 16) {
+      log.warn('users', 'PIN length validation rejected', {
+        uniqueId,
+        pinType: typeof pin,
+        pinLength: typeof pin === 'string' ? pin.length : null,
+      });
+      return res.status(400).json({ error: 'PIN must be a string of 4-16 characters' });
+    }
+
     if (!user.pinHash) {
       return res.status(400).json({ error: 'No PIN set for this account' });
     }

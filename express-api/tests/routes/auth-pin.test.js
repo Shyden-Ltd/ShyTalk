@@ -153,6 +153,44 @@ describe('PIN Routes', () => {
       firebaseUid: 'fb-uid-123',
     };
 
+    // ── PR #495 (audit H4): bcrypt DoS via unvalidated PIN length ──
+
+    it('rejects PIN > 16 characters before bcrypt.compare (DoS guard)', async () => {
+      // Pre-fix: a 1MB-string PIN would be passed to bcrypt.compare
+      // and block the event loop for hundreds of ms. Length validation
+      // BEFORE bcrypt mitigates the single-request DoS.
+      const app = buildApp(null);
+      const res = await request(app)
+        .post('/api/auth/pin/verify')
+        .send({ uniqueId: 12345678, deviceId: 'dev-1', pin: 'a'.repeat(1000) });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/4-16 characters/i);
+      // bcrypt.compare must NOT have been called — the whole point
+      // of the fix is to short-circuit before the expensive compare.
+      expect(bcrypt.compare).not.toHaveBeenCalled();
+    });
+
+    it('rejects PIN < 4 characters', async () => {
+      const app = buildApp(null);
+      const res = await request(app)
+        .post('/api/auth/pin/verify')
+        .send({ uniqueId: 12345678, deviceId: 'dev-1', pin: '12' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/4-16 characters/i);
+    });
+
+    it('rejects non-string PIN (e.g. number) — type coerce DoS guard', async () => {
+      const app = buildApp(null);
+      const res = await request(app)
+        .post('/api/auth/pin/verify')
+        .send({ uniqueId: 12345678, deviceId: 'dev-1', pin: 1234 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/4-16 characters/i);
+    });
+
     it('should return custom token on correct PIN', async () => {
       bcrypt.compare.mockResolvedValueOnce(true);
       mockDocGet.mockResolvedValueOnce({
