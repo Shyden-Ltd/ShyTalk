@@ -1175,15 +1175,28 @@ export async function loadSecurityPanel() {
       if (authRes.biometricKeys.length === 0) {
         keysList.innerHTML = '<p style="color:var(--text2)">No biometric keys registered</p>';
       } else {
-        keysList.innerHTML = authRes.biometricKeys.map(k => `
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-            <div>
-              <strong>Device:</strong> ${escapeHtml(k.deviceId)}<br>
-              <small style="color:var(--text2)">Registered: ${escapeHtml(new Date(k.createdAt).toLocaleString())}</small>
-            </div>
-            <button class="btn btn-danger btn-sm" onclick="revokeBiometricKey('${escapeHtml(uid)}','${escapeHtml(k.deviceId)}')">Revoke</button>
-          </div>
-        `).join("");
+        // Build via DOM API (not innerHTML) so deviceId values containing
+        // apostrophes don't break the inline onclick string. escapeHtml
+        // would convert ' → &#39;, which the browser then decodes back to
+        // ' BEFORE JS parsing — breaking the onclick attribute. Using
+        // dataset + addEventListener avoids the escaping pitfall entirely.
+        keysList.innerHTML = "";
+        for (const k of authRes.biometricKeys) {
+          const row = document.createElement("div");
+          row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)";
+          const info = document.createElement("div");
+          info.innerHTML = `<strong>Device:</strong> ${escapeHtml(k.deviceId)}<br>
+            <small style="color:var(--text2)">Registered: ${escapeHtml(new Date(k.createdAt).toLocaleString())}</small>`;
+          const btn = document.createElement("button");
+          btn.className = "btn btn-danger btn-sm";
+          btn.textContent = "Revoke";
+          btn.dataset.uid = uid;
+          btn.dataset.deviceId = k.deviceId;
+          btn.addEventListener("click", () => revokeBiometricKey(btn.dataset.uid, btn.dataset.deviceId));
+          row.appendChild(info);
+          row.appendChild(btn);
+          keysList.appendChild(row);
+        }
       }
     }
 
@@ -1249,6 +1262,10 @@ export function wireModerationListeners() {
   // Unsuspend
   const unsuspendBtn = $("#unsuspend-btn");
   if (unsuspendBtn) unsuspendBtn.addEventListener("click", async () => {
+    // Symmetry with every other destructive admin action (kick, GCS reset,
+    // schedule deletion, IP ban) — one accidental click on a suspended
+    // user's profile previously lifted the suspension immediately.
+    if (!confirm("Unsuspend this user? Their account will be fully restored.")) return;
     unsuspendBtn.disabled = true;
     try {
       const result = await apiCall("POST", `/api/user/${currentUid}/unsuspend`);

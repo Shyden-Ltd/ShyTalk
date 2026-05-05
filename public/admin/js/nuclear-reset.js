@@ -286,14 +286,18 @@ async function executeNuclearReset() {
   mainBtn.textContent = 'RUNNING...';
   setMaintenanceButtonsDisabled(true);
 
-  const token = await _getToken();
-
+  // Token refresh: Firebase ID tokens expire after 1 hour. The 21-action
+  // reset can run for several minutes; capturing the token once at the
+  // start meant the later actions could 401 if the admin's session was
+  // close to expiry. _getToken() calls user.getIdToken() which Firebase
+  // auto-refreshes near expiry, so calling it per-request keeps the
+  // token fresh.
   // Auto-backup before wipe
   document.getElementById('nuclear-step-label').textContent = 'Creating safety backup...';
   try {
     const backupResp = await fetch(`${_apiBase}/api/admin/backups/trigger`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers: { 'Authorization': `Bearer ${await _getToken()}` },
     });
     if (!backupResp.ok) throw new Error('Backup request failed');
   } catch (backupErr) {
@@ -347,9 +351,10 @@ async function executeNuclearReset() {
     }
     document.getElementById('nuclear-step-label').textContent = `${completed + 1}/${actions.length}: ${action.label}...`;
     try {
+      // Refresh token per-action — see top of run() for rationale.
       const resp = await fetch(`${_apiBase}/api/cleanup/${action.endpoint}`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${await _getToken()}`, 'Content-Type': 'application/json' },
         body: action.body ? JSON.stringify(action.body) : undefined,
       });
       const data = await resp.json();
