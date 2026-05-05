@@ -638,3 +638,89 @@ test.describe("Dev Smoke — IAP coin purchase (sandbox)", () => {
     ).toBe(400);
   });
 });
+
+test.describe("Dev Smoke — gacha wheel spin (transactional coin deduction)", () => {
+  // Catches: atomic coin decrement on user doc, gifts collection
+  // read with showOnWheel=true filter, weighted gift selection,
+  // pity/luck state writes, transaction log, backpack subcollection
+  // write.
+  //
+  // Why gacha and not /economy/redeem-beans: bean redeem requires
+  // the smoke account to HAVE beans, which only come from being
+  // gifted-to in voice rooms. The smoke account never participates
+  // in voice rooms, so it has 0 beans and would always 402. Gacha
+  // exercises the same Firestore-transactional-deduction
+  // infrastructure using coins, which the smoke account accumulates
+  // from the IAP smoke (which runs earlier in this spec).
+  //
+  // State accumulation: each run increments pity/luck on the smoke
+  // user doc and adds a gift to backpack. Same dev-only no-op
+  // trade-off as IAP: virtual state, no operational impact.
+
+  test("POST /api/economy/gacha (1 pull) deducts coins, returns gift, balance reflects", async () => {
+    // Phase 1 — snapshot balance.
+    const before = await smoke.api.get(`${API_BASE}/api/economy/balance`, {
+      headers: authedHeaders(),
+    });
+    expect(before.ok()).toBe(true);
+    const coinsBefore: number = (await before.json()).coins;
+
+    // Phase 2 — pull. pullCount=1 is the cheapest (default 10 coins
+    // per economy config). Cost is a pure function of pullCount, not
+    // pity/luck, so the deduction is deterministic.
+    const pull = await smoke.api.post(`${API_BASE}/api/economy/gacha`, {
+      headers: authedHeaders(),
+      data: { pullCount: 1 },
+    });
+    expect(pull.ok(), `pull: ${pull.status()}: ${await pull.text()}`).toBe(true);
+    const body = await pull.json();
+
+    // Phase 3 — handle the priceChanged path. The route returns 200
+    // with `priceChanged: true` and `coinsSpent: 0` when the client's
+    // expectedCost differs from server's current cost (lines 458-468).
+    // We don't send expectedCost so this should never trigger — but
+    // if economy config races a deploy, treating it as healthy is
+    // strictly correct: the contract IS that 200+priceChanged means
+    // the client should re-fetch costs and retry, not error-boundary.
+    if (body.priceChanged) {
+      expect(body.coinsSpent, "priceChanged path returns 0 spent").toBe(0);
+      return;
+    }
+
+    // Phase 4 — verify happy-path response shape.
+    expect(Array.isArray(body.gifts), "body.gifts must be an array").toBe(true);
+    expect(body.gifts.length, "1 pull returns 1 gift").toBe(1);
+    expect(typeof body.coinsSpent, "coinsSpent must be a number").toBe("number");
+    expect(body.coinsSpent, "coinsSpent must be > 0").toBeGreaterThan(0);
+    expect(typeof body.newBalance, "newBalance must be a number").toBe("number");
+
+    // Phase 5 — verify exact deduction reflects in /economy/balance.
+    // newBalance from the gacha response and coins from /balance must
+    // agree, and both must equal coinsBefore - coinsSpent.
+    const after = await smoke.api.get(`${API_BASE}/api/economy/balance`, {
+      headers: authedHeaders(),
+    });
+    const coinsAfter: number = (await after.json()).coins;
+    expect(
+      coinsAfter,
+      `balance after pull: expected ${coinsBefore - body.coinsSpent}, got ${coinsAfter}`,
+    ).toBe(coinsBefore - body.coinsSpent);
+    expect(
+      body.newBalance,
+      `gacha.newBalance must agree with /balance.coins (${body.newBalance} vs ${coinsAfter})`,
+    ).toBe(coinsAfter);
+  });
+
+  test("POST /api/economy/gacha with invalid pullCount is rejected with 400", async () => {
+    // Invariant: pullCount must be 1, 10, or 100 (route line 448-450).
+    // pullCount=5 is invalid and short-circuits before any DB read.
+    const res = await smoke.api.post(`${API_BASE}/api/economy/gacha`, {
+      headers: authedHeaders(),
+      data: { pullCount: 5 },
+    });
+    expect(
+      res.status(),
+      `expected 400 for pullCount=5, got ${res.status()}`,
+    ).toBe(400);
+  });
+});
