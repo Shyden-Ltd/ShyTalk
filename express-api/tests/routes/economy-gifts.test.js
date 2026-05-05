@@ -609,6 +609,47 @@ describe('POST /api/economy/backpack-send', () => {
     // pre-fix two separate awaits).
     expect(mockBatchCommit).toHaveBeenCalledTimes(1);
   });
+
+  test('large backpack (>499 items) chunks into multiple batches with bean credit on first', async () => {
+    // Coverage for the rare-large-backpack branch in PR #490.
+    // 600 items → first batch has bean credit + 499 deletes (atomic
+    // for the bulk), remaining 101 deletes go in a second batch.
+    // Assertion: batch.commit called twice.
+    mockDocGet
+      .mockResolvedValueOnce(makeUserDoc()) // sender
+      .mockResolvedValueOnce(makeUserDoc({ displayName: 'Bob' })) // recipient
+      .mockResolvedValueOnce(ECONOMY_CONFIG_DOC) // loadEconomyConfig
+      .mockResolvedValue({ exists: false });
+
+    // Build a 600-item backpack
+    const docs = [];
+    for (let i = 0; i < 600; i++) {
+      docs.push({
+        id: `gift-${i}`,
+        data: () => ({ giftId: `gift-${i}`, quantity: 1, coinValue: 1 }),
+      });
+    }
+    mockCollectionGet = jest.fn().mockResolvedValue({ empty: false, docs });
+
+    const app = createApp('user-A');
+    await request(app)
+      .post('/api/economy/backpack-send')
+      .send({ recipientId: 'user-B' })
+      .expect(200);
+
+    // First batch: bean update + 499 deletes
+    // Second batch: remaining 101 deletes
+    expect(mockBatchCommit).toHaveBeenCalledTimes(2);
+    // Bean credit still happened on the FIRST batch (atomic with bulk)
+    expect(mockBatchUpdate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        shyBeans: expect.stringMatching(/increment\(/),
+      }),
+    );
+    // 600 deletes total
+    expect(mockBatchDelete).toHaveBeenCalledTimes(600);
+  });
 });
 
 // ─── Gift block audit logging ─────────────────────────────────────────
