@@ -99,24 +99,42 @@ async function addBroadcast(data) {
     timestamp: now(),
   });
 
-  // Trim old broadcasts (keep last 50) — query oldest beyond 50
+  // Trim old broadcasts (keep last 50). Pre-fix used
+  // `offset(50).limit(100)` which charges Firestore reads for ALL
+  // 50 SKIPPED documents on every call — at high gift volume this
+  // burns the Spark free-tier 50K-reads/day quota fast (50 reads
+  // per broadcast × 1000 broadcasts/day = 50K reads just from
+  // trim alone).
+  //
+  // New strategy:
+  //   1. count() aggregate → ~1 billable read regardless of size
+  //   2. If count <= 50: skip the trim entirely (no extra cost)
+  //   3. If count > 50: read+delete only the OVERFLOW docs (typically 1)
+  //
+  // Steady-state cost per broadcast: 1 set + 1 count + 1 read + 1
+  // delete = 4 ops, down from 51+. Audit H5 (Phase 2A).
+  const countSnap = await db.collection('broadcasts').count().get();
+  const totalCount = countSnap.data().count;
+  const KEEP_LAST = 50;
+  if (totalCount <= KEEP_LAST) return;
+
+  const overflow = totalCount - KEEP_LAST;
   const oldSnap = await db
     .collection('broadcasts')
-    .orderBy('timestamp', 'desc')
-    .offset(50)
-    .limit(100)
+    .orderBy('timestamp', 'asc')
+    .limit(overflow)
     .get();
-  if (!oldSnap.empty) {
-    // Chunk deletes into batches of 500
-    const docs = oldSnap.docs;
-    for (let i = 0; i < docs.length; i += 500) {
-      const batch = db.batch();
-      const chunk = docs.slice(i, i + 500);
-      for (const doc of chunk) {
-        batch.delete(doc.ref);
-      }
-      await batch.commit();
+  if (oldSnap.empty) return;
+
+  // Chunk deletes into batches of 500 (Firestore batch limit).
+  const docs = oldSnap.docs;
+  for (let i = 0; i < docs.length; i += 500) {
+    const batch = db.batch();
+    const chunk = docs.slice(i, i + 500);
+    for (const doc of chunk) {
+      batch.delete(doc.ref);
     }
+    await batch.commit();
   }
 }
 

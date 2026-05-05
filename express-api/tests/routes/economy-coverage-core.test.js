@@ -39,6 +39,10 @@ jest.mock('../../src/utils/firebase', () => ({
     })),
     collection: jest.fn(() => ({
       get: mockCollectionGet,
+      // PR #492: addBroadcast uses count() aggregate (audit H5)
+      count: jest.fn(() => ({
+        get: jest.fn().mockResolvedValue({ data: () => ({ count: 0 }) }),
+      })),
       where: jest.fn(() => ({
         limit: jest.fn(() => ({
           get: mockCollectionGet,
@@ -257,6 +261,9 @@ describe('loadEconomyConfig edge cases', () => {
 
 describe('addBroadcast old broadcast trimming (lines 109-116)', () => {
   test('trims old broadcasts when more than 50 exist', async () => {
+    // PR #492 (audit H5): addBroadcast now uses count() aggregate
+    // + orderBy(asc).limit(overflow) instead of offset(50).limit(100).
+    // Count returns 53 → overflow = 3 → fetch + delete 3 oldest.
     const { db } = require('../../src/utils/firebase');
 
     const oldBroadcastDocs = Array.from({ length: 3 }, (_, i) => ({
@@ -267,6 +274,10 @@ describe('addBroadcast old broadcast trimming (lines 109-116)', () => {
     db.collection.mockImplementation(() => {
       return {
         get: mockCollectionGet,
+        // count() aggregate: simulate 53 broadcasts → 3 overflow
+        count: jest.fn(() => ({
+          get: jest.fn().mockResolvedValue({ data: () => ({ count: 53 }) }),
+        })),
         where: jest.fn(() => ({
           limit: jest.fn(() => ({ get: mockCollectionGet })),
           orderBy: jest.fn(() => ({
@@ -274,16 +285,18 @@ describe('addBroadcast old broadcast trimming (lines 109-116)', () => {
           })),
         })),
         orderBy: jest.fn(() => ({
+          // New trim path: orderBy(asc).limit(overflow) returns oldest
+          limit: jest.fn(() => ({
+            get: jest.fn().mockResolvedValue({
+              empty: false,
+              docs: oldBroadcastDocs,
+            }),
+          })),
+          // Pre-fix path: keep offset() chain for any other callers
           offset: jest.fn(() => ({
             limit: jest.fn(() => ({
-              get: jest.fn().mockResolvedValue({
-                empty: false,
-                docs: oldBroadcastDocs,
-              }),
+              get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
             })),
-          })),
-          limit: jest.fn(() => ({
-            get: jest.fn().mockResolvedValue({ docs: [] }),
           })),
         })),
       };

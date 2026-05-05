@@ -26,6 +26,10 @@ jest.mock('../../src/utils/firebase', () => ({
     })),
     collection: jest.fn(() => ({
       get: mockCollectionGet,
+      // PR #492: addBroadcast uses count() aggregate (audit H5)
+      count: jest.fn(() => ({
+        get: jest.fn().mockResolvedValue({ data: () => ({ count: 0 }) }),
+      })),
       where: jest.fn(() => ({
         orderBy: jest.fn(() => ({
           limit: jest.fn(() => ({
