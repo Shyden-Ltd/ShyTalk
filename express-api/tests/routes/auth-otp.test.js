@@ -303,6 +303,27 @@ describe('OTP Routes', () => {
   // ─── POST /api/auth/otp/verify ────────────────────────────────
 
   describe('POST /api/auth/otp/verify', () => {
+    // ── PR #495 (audit H4): bcrypt DoS via OTP length validation ──
+
+    it('rejects code > 32 characters before bcrypt.compare (DoS guard)', async () => {
+      const res = await request(app)
+        .post('/api/auth/otp/verify')
+        .send({ email: 'user@example.com', code: 'a'.repeat(1000) });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/4-32 characters/i);
+      expect(bcrypt.compare).not.toHaveBeenCalled();
+    });
+
+    it('rejects code < 4 characters', async () => {
+      const res = await request(app)
+        .post('/api/auth/otp/verify')
+        .send({ email: 'user@example.com', code: '12' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/4-32 characters/i);
+    });
+
     it('should return custom token on correct code', async () => {
       bcrypt.compare.mockResolvedValueOnce(true);
       auth.getUserByEmail.mockResolvedValueOnce({ uid: 'firebase-uid-1' });

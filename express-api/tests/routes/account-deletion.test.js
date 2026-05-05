@@ -249,6 +249,38 @@ describe('POST /api/users/:uniqueId/delete', () => {
     await request(app).post('/api/users/10000001/delete').send({ pin: 'wrong' }).expect(401);
   });
 
+  // ── PR #495 (audit H4): bcrypt DoS via PIN length validation ──
+
+  test('rejects PIN > 16 characters before bcrypt.compare (DoS guard)', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path.startsWith('users/')) return Promise.resolve(mockUserDoc(10000001));
+      return Promise.resolve({ exists: false });
+    });
+
+    const res = await request(app)
+      .post('/api/users/10000001/delete')
+      .send({ pin: 'a'.repeat(1000) })
+      .expect(400);
+
+    expect(res.body.error).toMatch(/4-16 characters/i);
+    // bcrypt.compare must NOT have been called — short-circuit guard
+    expect(mockBcryptCompare).not.toHaveBeenCalled();
+  });
+
+  test('rejects PIN < 4 characters', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path.startsWith('users/')) return Promise.resolve(mockUserDoc(10000001));
+      return Promise.resolve({ exists: false });
+    });
+
+    const res = await request(app)
+      .post('/api/users/10000001/delete')
+      .send({ pin: '12' })
+      .expect(400);
+
+    expect(res.body.error).toMatch(/4-16 characters/i);
+  });
+
   test('returns 404 when user not found', async () => {
     mockDocGet.mockResolvedValue({ exists: false });
 
