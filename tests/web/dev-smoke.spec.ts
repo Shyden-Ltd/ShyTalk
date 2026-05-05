@@ -37,6 +37,12 @@ const FIREBASE_API_KEY = process.env.SMOKE_FIREBASE_API_KEY;
 const SMOKE_EMAIL = process.env.SMOKE_TEST_EMAIL;
 const SMOKE_PASSWORD = process.env.SMOKE_TEST_PASSWORD;
 const DEV_BASIC_AUTH_PASSWORD = process.env.DEV_BASIC_AUTH_PASSWORD;
+// Target user the smoke account follows/unfollows during the journey
+// test. MUST be a different uniqueId than the smoke account (the route
+// rejects self-follow with 400). On dev, uniqueId 10000008/10000009
+// are documented orphan accounts safe to use as inert targets — see
+// reference-dev-smoke-account.md.
+const SMOKE_TARGET_UNIQUE_ID = process.env.SMOKE_TARGET_UNIQUE_ID;
 
 // Firebase Auth REST endpoint — production identitytoolkit. The
 // smoke suite never targets the local Auth emulator because its
@@ -46,8 +52,8 @@ const FIREBASE_SIGN_IN_URL = `https://identitytoolkit.googleapis.com/v1/accounts
 // Skip the whole file when prerequisites are missing — keeps `npx
 // playwright test` runnable locally without the full secret bundle.
 test.skip(
-  !API_BASE || !FIREBASE_API_KEY || !SMOKE_EMAIL || !SMOKE_PASSWORD,
-  "dev-smoke requires API_BASE_URL, SMOKE_FIREBASE_API_KEY, SMOKE_TEST_EMAIL, SMOKE_TEST_PASSWORD",
+  !API_BASE || !FIREBASE_API_KEY || !SMOKE_EMAIL || !SMOKE_PASSWORD || !SMOKE_TARGET_UNIQUE_ID,
+  "dev-smoke requires API_BASE_URL, SMOKE_FIREBASE_API_KEY, SMOKE_TEST_EMAIL, SMOKE_TEST_PASSWORD, SMOKE_TARGET_UNIQUE_ID",
 );
 
 // HTTP Basic credentials for the dev web gate (NOT for API). Only
@@ -62,6 +68,7 @@ interface SmokeAuth {
   api: APIRequestContext;
   idToken: string;
   uniqueId: number;
+  targetUniqueId: number;
 }
 
 let smoke: SmokeAuth;
@@ -120,7 +127,20 @@ test.beforeAll(async () => {
   const uniqueId: number = me.uniqueId;
   expect(uniqueId, "uniqueId returned by Express sign-in").toBeTruthy();
 
-  smoke = { api, idToken, uniqueId };
+  // Parse target uniqueId. Strict integer parse so a typo'd secret
+  // (e.g., trailing whitespace, hex value) fails the suite up-front
+  // instead of producing a confusing 404 mid-journey.
+  const targetUniqueId = Number.parseInt(SMOKE_TARGET_UNIQUE_ID!, 10);
+  expect(
+    Number.isInteger(targetUniqueId) && targetUniqueId > 0,
+    `SMOKE_TARGET_UNIQUE_ID must be a positive integer, got "${SMOKE_TARGET_UNIQUE_ID}"`,
+  ).toBe(true);
+  expect(
+    targetUniqueId,
+    "SMOKE_TARGET_UNIQUE_ID must differ from smoke account uniqueId — follow rejects self-follow",
+  ).not.toBe(uniqueId);
+
+  smoke = { api, idToken, uniqueId, targetUniqueId };
 });
 
 test.afterAll(async () => {
@@ -203,5 +223,112 @@ test.describe("Dev Smoke — critical user-facing API journeys", () => {
     expect(res.ok(), `${res.status()}: ${await res.text()}`).toBe(true);
     const body = await res.json();
     expect(body.id || body.suggestionId, "suggestion id returned").toBeTruthy();
+  });
+});
+
+test.describe("Dev Smoke — follow / unfollow journey", () => {
+  // Catches: requireOwner auth gate, atomic two-doc batch write to
+  // `users/{me}.followingIds` + `users/{target}.followerIds`, public
+  // GET path on a non-self user. A regression here breaks the entire
+  // social graph on dev — every profile, leaderboard, and follower
+  // count derives from these two array fields.
+  //
+  // Idempotency strategy: leave-clean. The journey ends with the
+  // smoke account NOT following the target, so repeated runs do not
+  // accumulate state. A best-effort pre-clean unfollow at the start
+  // makes the assertion deterministic even if a previous run crashed
+  // between the follow and unfollow phases.
+  //
+  // Assertion side: we verify the *target's* followerIds rather than
+  // the smoke user's followingIds. The follow handler uses a
+  // transactional `db.batch()` today, so a partial write is impossible
+  // at the storage layer — but if a future refactor splits the batch
+  // into sequential `await`s, this assertion catches the regression.
+  // It also gives the suite its only GET-other-user coverage.
+
+  test("POST follow → GET target shows smoke as a follower → POST unfollow leaves no trace", async () => {
+    const followBody = { targetUserId: smoke.targetUniqueId };
+
+    // Pre-clean: best-effort unfollow. arrayRemove is idempotent so
+    // this is a 200 no-op when the smoke account is not currently
+    // following the target. We do NOT assert success here because the
+    // useful signal is the actual follow assertion below.
+    await smoke.api.post(`${API_BASE}/api/users/${smoke.uniqueId}/unfollow`, {
+      headers: authedHeaders(),
+      data: followBody,
+    });
+
+    // Phase 1 — follow.
+    const followRes = await smoke.api.post(
+      `${API_BASE}/api/users/${smoke.uniqueId}/follow`,
+      { headers: authedHeaders(), data: followBody },
+    );
+    expect(
+      followRes.ok(),
+      `follow expected 200, got ${followRes.status()}: ${await followRes.text()}`,
+    ).toBe(true);
+    expect((await followRes.json()).success, "follow body.success=true").toBe(true);
+
+    // Phase 2 — verify the target's view of the fan-out.
+    const targetAfterFollow = await smoke.api.get(
+      `${API_BASE}/api/users/${smoke.targetUniqueId}`,
+      { headers: authedHeaders() },
+    );
+    expect(
+      targetAfterFollow.ok(),
+      `target GET expected 200, got ${targetAfterFollow.status()}: ${await targetAfterFollow.text()}`,
+    ).toBe(true);
+    const targetBody = await targetAfterFollow.json();
+    expect(
+      Array.isArray(targetBody.followerIds),
+      `target.followerIds must be an array, got ${typeof targetBody.followerIds}`,
+    ).toBe(true);
+    // Coerce both sides to Number — the route stores Number(uniqueId)
+    // but defensive in case a future change introduces strings.
+    const followerIds: number[] = targetBody.followerIds.map(Number);
+    expect(
+      followerIds.includes(Number(smoke.uniqueId)),
+      `target.followerIds=${JSON.stringify(followerIds)} must include smoke uniqueId=${smoke.uniqueId} after follow`,
+    ).toBe(true);
+
+    // Phase 3 — unfollow.
+    const unfollowRes = await smoke.api.post(
+      `${API_BASE}/api/users/${smoke.uniqueId}/unfollow`,
+      { headers: authedHeaders(), data: followBody },
+    );
+    expect(
+      unfollowRes.ok(),
+      `unfollow expected 200, got ${unfollowRes.status()}: ${await unfollowRes.text()}`,
+    ).toBe(true);
+
+    // Phase 4 — verify cleanup. After unfollow the target's
+    // followerIds must NOT include the smoke uniqueId. This is what
+    // makes the test leave-clean — the next run starts from the same
+    // state regardless of how many times this has run before.
+    const targetAfterUnfollow = await smoke.api.get(
+      `${API_BASE}/api/users/${smoke.targetUniqueId}`,
+      { headers: authedHeaders() },
+    );
+    expect(targetAfterUnfollow.ok()).toBe(true);
+    const cleanFollowerIds: number[] = (await targetAfterUnfollow.json()).followerIds.map(
+      Number,
+    );
+    expect(
+      cleanFollowerIds.includes(Number(smoke.uniqueId)),
+      `target.followerIds=${JSON.stringify(cleanFollowerIds)} must NOT include smoke uniqueId=${smoke.uniqueId} after unfollow`,
+    ).toBe(false);
+  });
+
+  test("POST follow with targetUserId === self is rejected with 400", async () => {
+    // Invariant assertion: the same endpoint that succeeds for a real
+    // target must reject self-follow. Costs one extra request and
+    // pins down a contract that the app UI relies on (the Follow
+    // button is hidden on the user's own profile but the server is
+    // the authoritative gate).
+    const res = await smoke.api.post(
+      `${API_BASE}/api/users/${smoke.uniqueId}/follow`,
+      { headers: authedHeaders(), data: { targetUserId: smoke.uniqueId } },
+    );
+    expect(res.status(), `expected 400 for self-follow, got ${res.status()}`).toBe(400);
   });
 });

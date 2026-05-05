@@ -697,11 +697,16 @@ jobs:
           SMOKE_FIREBASE_API_KEY: ${{ secrets.SMOKE_FIREBASE_API_KEY || secrets.DEV_FIREBASE_API_KEY }}
           SMOKE_TEST_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
           SMOKE_TEST_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
+          # uniqueId of the inert dev account the follow/unfollow
+          # journey targets. See reference-dev-smoke-account.md for
+          # the orphan-account candidates (10000008, 10000009).
+          SMOKE_TARGET_UNIQUE_ID: ${{ secrets.SMOKE_TARGET_UNIQUE_ID }}
         run: |
           missing=()
           [ -n "$SMOKE_FIREBASE_API_KEY" ] || missing+=("SMOKE_FIREBASE_API_KEY (or DEV_FIREBASE_API_KEY)")
           [ -n "$SMOKE_TEST_EMAIL" ] || missing+=("SMOKE_TEST_EMAIL")
           [ -n "$SMOKE_TEST_PASSWORD" ] || missing+=("SMOKE_TEST_PASSWORD")
+          [ -n "$SMOKE_TARGET_UNIQUE_ID" ] || missing+=("SMOKE_TARGET_UNIQUE_ID")
           if [ ${#missing[@]} -gt 0 ]; then
             echo "::error::Missing smoke-test secrets: ${missing[*]}"
             echo "::error::See tests/web/dev-smoke.spec.ts header for setup instructions."
@@ -719,6 +724,7 @@ jobs:
           SMOKE_FIREBASE_API_KEY: ${{ secrets.SMOKE_FIREBASE_API_KEY || secrets.DEV_FIREBASE_API_KEY }}
           SMOKE_TEST_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
           SMOKE_TEST_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
+          SMOKE_TARGET_UNIQUE_ID: ${{ secrets.SMOKE_TARGET_UNIQUE_ID }}
           # Smoke spec only hits API + Firebase Auth REST. No web
           # surface, so DEV_BASIC_AUTH_PASSWORD is not required here.
         run: npx playwright test tests/web/dev-smoke.spec.ts --project=chromium --reporter=list
