@@ -500,19 +500,31 @@ test.describe("Dev Smoke — R2 image upload", () => {
       `delete expected 200, got ${del.status()}: ${await del.text()} for key=${key}`,
     ).toBe(true);
 
-    // Phase 4 — verify the object is actually gone. The DELETE
-    // endpoint returns 200 on the API call; that doesn't prove R2
-    // actually deleted the object (e.g., a future refactor that
-    // makes the route a no-op would silently leave orphans
-    // accumulating forever). R2 has read-after-write consistency on
-    // deletes too, so a fresh GET should now 404 (or 403, depending
-    // on bucket public-read policy for missing keys).
-    const verifyDel = await smoke.api.get(body.url);
+    // Phase 4 — verify the object is actually gone. CRITICAL: the
+    // upload sets `Cache-Control: public, max-age=31536000, immutable`
+    // (r2.js:58), so the Cloudflare edge fronting the bucket will
+    // serve a cached 200 for the URL we GET'd in Phase 2 for up to
+    // a year. We MUST cache-bust to force a real origin lookup,
+    // otherwise this assertion would silently pass even when DELETE
+    // is fully broken.
+    //
+    // Cache-buster strategy: append a unique query string. CF treats
+    // query strings as part of the cache key by default, so the
+    // bust-URL is guaranteed-uncached. If CF is configured to strip
+    // query strings (it isn't on shytalk-dev today), this assertion
+    // would fail with `expected 404, got 200 (cache)` — a real
+    // configuration regression worth catching.
+    //
+    // Status: strict 404. R2 returns 404 for missing keys; we don't
+    // accept 403 (which would indicate bucket-policy leak / creds
+    // rotation gone wrong, NOT a successful delete).
+    const verifyDel = await smoke.api.get(`${body.url}?cb=${Date.now()}`);
     expect(
-      [403, 404].includes(verifyDel.status()),
-      `expected 403/404 after DELETE, got ${verifyDel.status()} for ${body.url} — ` +
-        `object was NOT actually removed and orphans will accumulate`,
-    ).toBe(true);
+      verifyDel.status(),
+      `expected 404 after DELETE, got ${verifyDel.status()} for ${body.url} — ` +
+        `object was NOT actually removed and orphans will accumulate. ` +
+        `If status is 200, the cache-buster failed to bypass CDN; check CF caching policy.`,
+    ).toBe(404);
   });
 
   test("POST /api/storage/upload with disallowed path is rejected with 400", async () => {
