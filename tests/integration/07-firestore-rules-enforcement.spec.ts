@@ -255,3 +255,95 @@ test.describe("Integration — Firestore rules: warnings subcollection", () => {
     );
   });
 });
+
+test.describe("Integration — Firestore rules: conversations privacy", () => {
+  test("non-participant CANNOT read a conversation (privacy fix)", async () => {
+    // Critical security rule fix: deterministic conversation IDs
+    // (`dm_<smallerUid>_<largerUid>`) made guessing+enumerating DM
+    // doc IDs trivial. Without the participantIds gate on `get`, any
+    // authed user could read any DM. This test pins the gate.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const adminDb = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(adminDb, "conversations", "dm_alice_bob"), {
+        participantIds: ["uid-alice", "uid-bob"],
+        createdAt: Date.now(),
+      });
+    });
+
+    const eve = testEnv.authenticatedContext("uid-eve");
+    const eveDb = eve.firestore() as unknown as Firestore;
+    await assertFails(getDoc(doc(eveDb, "conversations", "dm_alice_bob")));
+  });
+
+  test("participant CAN read their own conversation", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const adminDb = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(adminDb, "conversations", "dm_alice_bob_2"), {
+        participantIds: ["uid-alice", "uid-bob"],
+        createdAt: Date.now(),
+      });
+    });
+
+    const alice = testEnv.authenticatedContext("uid-alice");
+    const aliceDb = alice.firestore() as unknown as Firestore;
+    await assertSucceeds(
+      getDoc(doc(aliceDb, "conversations", "dm_alice_bob_2")),
+    );
+  });
+});
+
+test.describe("Integration — Firestore rules: room messages authz", () => {
+  test("non-participant CANNOT create a message in a room", async () => {
+    // Critical security rule fix: any authed user could spam any
+    // room via direct Firestore writes. Now create requires the
+    // caller to be the room owner or in participantIds.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const adminDb = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(adminDb, "users", "999999"), {
+        firebaseUid: "uid-attacker",
+        uniqueId: 999999,
+      });
+      await setDoc(doc(adminDb, "rooms", "room-1"), {
+        ownerId: "100000010",
+        participantIds: ["100000010", "100000011"],
+        state: "ACTIVE",
+      });
+    });
+
+    const attacker = testEnv.authenticatedContext("uid-attacker");
+    const attackerDb = attacker.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(attackerDb, "rooms", "room-1", "messages", "m1"), {
+        senderId: "999999",
+        text: "spam",
+        createdAt: Date.now(),
+      }),
+    );
+  });
+});
+
+test.describe("Integration — Firestore rules: suspensionAppeals authz", () => {
+  test("user CANNOT forge an appeal under another user's uniqueId", async () => {
+    // Critical security rule fix: previously `allow create: if
+    // request.auth != null` let any user create an appeal under any
+    // uniqueId. Now create binds to the caller's resolved uniqueId.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const adminDb = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(adminDb, "users", "100000020"), {
+        firebaseUid: "uid-attacker",
+        uniqueId: 100000020,
+      });
+    });
+
+    const attacker = testEnv.authenticatedContext("uid-attacker");
+    const attackerDb = attacker.firestore() as unknown as Firestore;
+    // Forged uniqueId belongs to a different user.
+    await assertFails(
+      setDoc(doc(attackerDb, "suspensionAppeals", "appeal1"), {
+        uniqueId: "100000099",
+        text: "I am the victim",
+        createdAt: Date.now(),
+      }),
+    );
+  });
+});

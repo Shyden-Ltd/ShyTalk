@@ -122,10 +122,15 @@ service cloud.firestore {
       allow delete: if request.auth != null
         && string(callerUniqueId()) == resource.data.ownerId;
 
-      // Room chat messages
+      // Room chat messages — read open to all authed users (room is
+      // public-read by design); CREATE must be a participant or the
+      // owner. Without this gate, any authenticated user could spam
+      // arbitrary rooms via direct Firestore writes bypassing the API.
       match /messages/{messageId} {
         allow read: if request.auth != null;
-        allow create: if request.auth != null;
+        allow create: if request.auth != null
+          && (string(callerUniqueId()) == get(/databases/$(database)/documents/rooms/$(roomId)).data.ownerId
+              || string(callerUniqueId()) in get(/databases/$(database)/documents/rooms/$(roomId)).data.participantIds);
         allow update, delete: if request.auth != null
           && string(callerUniqueId()) == resource.data.senderId;
       }
@@ -141,8 +146,13 @@ service cloud.firestore {
     }
 
     // ── Conversations ────────────────────────────────────────────
+    // SECURITY: `get` MUST gate on participants — without the
+    // participantIds check, any authed user could read any DM by
+    // guessing or enumerating conversation IDs (deterministic id
+    // format: `dm_<smallerUid>_<largerUid>` is trivial to construct).
     match /conversations/{conversationId} {
-      allow get: if request.auth != null;
+      allow get: if request.auth != null
+                  && string(callerUniqueId()) in resource.data.participantIds;
       allow list: if request.auth != null
                   && string(callerUniqueId()) in resource.data.participantIds;
       allow create: if request.auth != null;
@@ -258,10 +268,14 @@ service cloud.firestore {
     }
 
     // ── Suspension appeals ───────────────────────────────────────
+    // SECURITY: create MUST bind to the caller's uniqueId — without
+    // this, any authenticated user could file an appeal on behalf of
+    // ANOTHER user (forge an appeal record under their identity).
     match /suspensionAppeals/{appealId} {
       allow read: if request.auth != null
         && resource.data.uniqueId == string(callerUniqueId());
-      allow create: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.uniqueId == string(callerUniqueId());
     }
 
     // ── Fun facts — auth read, server write ──────────────────────
