@@ -26,6 +26,7 @@ jobs:
       app_changed: ${{ steps.changes.outputs.app_changed }}
       backend_changed: ${{ steps.changes.outputs.backend_changed }}
       web_changed: ${{ steps.changes.outputs.web_changed }}
+      integration_changed: ${{ steps.changes.outputs.integration_changed }}
       workflow_only: ${{ steps.changes.outputs.workflow_only }}
       skip_android_e2e: ${{ steps.changes.outputs.skip_android_e2e }}
       skip_ios_e2e: ${{ steps.changes.outputs.skip_ios_e2e }}
@@ -44,20 +45,25 @@ jobs:
           # latest push only touches workflow files.
           MERGE_BASE=$(git merge-base "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}")
           CHANGED=$(git diff --name-only "$MERGE_BASE...${{ github.event.pull_request.head.sha }}")
-          APP=false BACKEND=false WEB=false OTHER=false
+          APP=false BACKEND=false WEB=false INTEGRATION=false OTHER=false
           while IFS= read -r file; do
             [ -z "$file" ] && continue
             case "$file" in
               public/*.md) WEB=true ;;
               public/*) WEB=true ;;
               app/*|shared/*|iosApp/*|gradle/*|*.gradle.kts|gradle.properties|gradlew|gradlew.bat) APP=true ;;
+              # Integration test files match BEFORE express-api/* so a
+              # PR that changes ONLY tests/integration/ files runs the
+              # integration job without dragging in the heavier
+              # backend-changed gate (Sonar, full backend suite).
+              tests/integration/*|playwright.integration.config.ts) INTEGRATION=true ;;
               express-api/*|firestore.rules|database.rules.json) BACKEND=true ;;
               .github/*|.claude/*|.project/*|*.md|.gitignore|.gitattributes) ;;
               *) OTHER=true ;;
             esac
           done <<< "$CHANGED"
           WORKFLOW_ONLY=false
-          if [ "$APP" = "false" ] && [ "$BACKEND" = "false" ] && [ "$WEB" = "false" ] && [ "$OTHER" = "false" ]; then
+          if [ "$APP" = "false" ] && [ "$BACKEND" = "false" ] && [ "$WEB" = "false" ] && [ "$INTEGRATION" = "false" ] && [ "$OTHER" = "false" ]; then
             WORKFLOW_ONLY=true
           fi
           # Explicit per-platform E2E skip markers in the PR body. Use when the
@@ -79,10 +85,10 @@ jobs:
           if printf '%s' "$PR_BODY" | grep -qE '^[[:space:]]*\[skip-ios-e2e\][[:space:]]*$'; then
             SKIP_IOS_E2E=true
           fi
-          for v in app_changed=$APP backend_changed=$BACKEND web_changed=$WEB workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E; do
+          for v in app_changed=$APP backend_changed=$BACKEND web_changed=$WEB integration_changed=$INTEGRATION workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E; do
             echo "$v" >> "$GITHUB_OUTPUT"
           done
-          echo "Detection results: app=$APP backend=$BACKEND web=$WEB workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E"
+          echo "Detection results: app=$APP backend=$BACKEND web=$WEB integration=$INTEGRATION workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E"
 
   lint:
     needs: [detect-changes]
@@ -228,6 +234,26 @@ jobs:
       report_env: pr
     secrets: inherit
 
+  integration-tests:
+    # Cross-service contract tests (Express ↔ Firestore ↔ RTDB ↔ R2).
+    # Triggers on backend, integration-test, OR app/shared changes —
+    # the last because shared KMP-side contract changes (request
+    # shapes, response parsing) can break the integration tier even
+    # when no Express file moves. Runs after backend unit tests pass
+    # — no point lighting up the full local stack in CI if the
+    # backend's own jest suite is red.
+    needs: [detect-changes, test-backend]
+    if: |
+      always() &&
+      (needs.detect-changes.outputs.backend_changed == 'true' ||
+       needs.detect-changes.outputs.integration_changed == 'true' ||
+       needs.detect-changes.outputs.app_changed == 'true') &&
+      (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped')
+    uses: ./.github/workflows/integration-tests.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+    secrets: inherit
+
   ios-e2e:
     needs: [detect-changes, build-and-test, sonarcloud, test-backend]
     if: |
@@ -246,7 +272,7 @@ jobs:
 
   gate:
     name: PR Gate
-    needs: [detect-changes, lint, build-and-test, sonarcloud, test-backend, android-e2e, playwright-web, ios-e2e]
+    needs: [detect-changes, lint, build-and-test, sonarcloud, test-backend, android-e2e, playwright-web, integration-tests, ios-e2e]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -267,6 +293,7 @@ jobs:
             "${{ needs.test-backend.result }}" \
             "${{ needs.android-e2e.result }}" \
             "${{ needs.playwright-web.result }}" \
+            "${{ needs.integration-tests.result }}" \
             "${{ needs.ios-e2e.result }}"; do
             if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
               echo "Required check failed: $result"

@@ -1,0 +1,127 @@
+name: Integration Tests
+
+# Reusable workflow that brings up the full local stack (Firebase
+# Emulators + LiveKit Docker + MinIO + Mailpit + Express API) and
+# runs the integration test suite at `tests/integration/`.
+#
+# Distinct from `playwright-tests.yml` (browser tests) and
+# `test-backend.yml` (Jest unit tests with mocked Firestore) —
+# integration sits between them and exercises real cross-service
+# contracts (Express ↔ Firestore ↔ RTDB ↔ R2).
+#
+# Per `.project/plans/2026-05-05-integration-test-framework.md` PR G.
+# Locally: `bash local/start.sh && cd express-api && npm run local`,
+# then `npm run test:integration` from repo root.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git ref to test'
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref to test (default: main)'
+        type: string
+        default: 'main'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-tests-${{ inputs.ref }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: ./.github/actions/setup-jdk-gradle
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - uses: ./.github/actions/start-local-services
+
+      - uses: ./.github/actions/start-firebase-emulators
+
+      - name: Install Express API and seed data
+        run: |
+          cd express-api && npm ci
+          NODE_PATH=./node_modules NODE_ENV=local node ../local/seed.js
+
+      - name: Start Express API
+        run: |
+          cd express-api
+          # Match the playwright-tests.yml pattern verbatim: background
+          # the daemon, block on /api/health via `until`, let the step
+          # exit naturally. Using `exit 0` here would terminate the
+          # step's shell before the runner processes the backgrounded
+          # node — empirically the until-loop variant survives, the
+          # explicit-exit variant does not.
+          # LIVEKIT_API_KEY/SECRET added vs playwright-tests.yml so
+          # /api/livekit/token can sign — required by test #2.
+          NODE_ENV=local TEST_API_KEY=local-test-key FIREBASE_WEB_API_KEY=fake-ci-key FIREBASE_PROJECT_ID=demo-shytalk LIVEKIT_API_KEY=devkey LIVEKIT_API_SECRET=devsecret node src/index.js &
+          until curl -s http://localhost:3000/api/health > /dev/null 2>&1; do sleep 1; done
+
+      - name: Run integration tests
+        env:
+          API_BASE_URL: http://localhost:3000
+          TEST_API_KEY: local-test-key
+          ALLURE_ENABLED: 'true'
+          ALLURE_PROJECT: integration
+        run: npm run test:integration
+
+      - name: Cleanup Docker containers
+        if: always()
+        run: |
+          docker logs livekit 2>/dev/null || true
+          docker logs minio 2>/dev/null || true
+          docker logs mailpit 2>/dev/null || true
+          docker rm -f livekit minio mailpit 2>/dev/null || true
+
+      - name: Write environment.properties
+        if: always()
+        run: |
+          DIR="allure-results/integration"
+          mkdir -p "$DIR"
+          sed 's/^ *//' > "$DIR/environment.properties" <<'INTEOF'
+          tier=Integration
+          base_url=localhost:3000
+          stack=Local Emulators (Firestore, Auth, RTDB, MinIO, LiveKit)
+          INTEOF
+
+      - name: Upload Allure results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always()
+        with:
+          name: allure-results-integration
+          path: allure-results/
+          retention-days: 14
+
+      - name: Upload failure traces
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: failure()
+        with:
+          name: integration-failures
+          path: |
+            test-results/
+            playwright-report-integration/
+            playwright-results-integration.xml
+          retention-days: 7
