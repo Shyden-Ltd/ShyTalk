@@ -523,8 +523,21 @@ describe('POST /api/economy/purchase — additional coverage', () => {
 // ═══════════════════════════════════════════════════════════════════
 
 describe('POST /api/economy/trial-claim — additional coverage', () => {
-  test('returns 404 when user not found', async () => {
+  test('returns 404 when user not found (PR #487 — tx-internal check)', async () => {
+    // Per PR #487: trial-claim now reads user inside Firestore tx.
+    // Override the default tx mock (which returns backpack-shaped data)
+    // to route tx.get() through mockDocGet so {exists:false} flows
+    // correctly to the user-not-found branch.
     mockDocGet.mockResolvedValue({ exists: false });
+    mockRunTransaction.mockImplementation(async (cb) => {
+      const tx = {
+        get: (ref) => mockDocGet(ref),
+        update: jest.fn(),
+        set: jest.fn(),
+        delete: jest.fn(),
+      };
+      return cb(tx);
+    });
 
     const app = createApp('user-A');
     const res = await request(app).post('/api/economy/trial-claim').send({});

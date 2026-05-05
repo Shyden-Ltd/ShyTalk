@@ -1478,23 +1478,52 @@ router.post('/economy/trial-claim', async (req, res) => {
   try {
     const uniqueId = req.auth.uniqueId;
 
-    const userSnap = await db.doc(`users/${uniqueId}`).get();
-    if (!userSnap.exists) return res.status(404).json({ error: 'User not found' });
-    const user = userSnap.data();
-
-    const hasClaimed = userField(user, 'hasClaimedSuperShyTrial', 'has_claimed_super_shy_trial');
-    if (hasClaimed) return res.status(409).json({ error: 'Trial already claimed' });
-
-    const shyCoins = userField(user, 'shyCoins', 'shy_coins') || 0;
-
-    await db.doc(`users/${uniqueId}`).update({ hasClaimedSuperShyTrial: true });
-
-    // Add trial item to backpack
-    await db.doc(`users/${uniqueId}/backpack/super_shy_trial`).set({
-      giftId: 'super_shy_trial',
-      quantity: 1,
-      giftName: 'Super Shy Trial',
-    });
+    // Atomic claim: read+set+backpack-write in a single transaction.
+    // Without this, two concurrent trial-claim requests both read
+    // hasClaimedSuperShyTrial=false, both pass the guard, both write
+    // hasClaimedSuperShyTrial=true and add the trial item to backpack
+    // (set with no merge → quantity:1 each time, so backpack ends up
+    // with quantity:1 either way, but the user has effectively claimed
+    // a paid feature unlock TWICE — duplicate audit log entries, double
+    // analytics trigger, and potentially double-applied entitlement on
+    // the client side which observes both writes).
+    //
+    // Audit C3 (Phase 2A): /economy/trial-claim TOCTOU race.
+    const userRef = db.doc(`users/${uniqueId}`);
+    const backpackRef = db.doc(`users/${uniqueId}/backpack/super_shy_trial`);
+    let shyCoins;
+    try {
+      shyCoins = await db.runTransaction(async (t) => {
+        const snap = await t.get(userRef);
+        if (!snap.exists) {
+          throw new Error('User not found');
+        }
+        const data = snap.data();
+        const hasClaimed = userField(
+          data,
+          'hasClaimedSuperShyTrial',
+          'has_claimed_super_shy_trial',
+        );
+        if (hasClaimed) {
+          throw new Error('Trial already claimed');
+        }
+        t.update(userRef, { hasClaimedSuperShyTrial: true });
+        t.set(backpackRef, {
+          giftId: 'super_shy_trial',
+          quantity: 1,
+          giftName: 'Super Shy Trial',
+        });
+        return userField(data, 'shyCoins', 'shy_coins') || 0;
+      });
+    } catch (txErr) {
+      if (txErr.message === 'User not found') {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      if (txErr.message === 'Trial already claimed') {
+        return res.status(409).json({ error: 'Trial already claimed' });
+      }
+      throw txErr;
+    }
 
     const trialClaimTxId = generateId();
     await writeTransaction(uniqueId, trialClaimTxId, {

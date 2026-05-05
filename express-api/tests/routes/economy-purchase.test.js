@@ -594,7 +594,11 @@ describe('POST /api/economy/purchase', () => {
 // ─── Tests: POST /api/economy/trial-claim ────────────────────────
 
 describe('POST /api/economy/trial-claim', () => {
-  test('returns 409 when trial already claimed', async () => {
+  // PR #487: trial-claim now wraps the read+update+backpack-set in a
+  // Firestore transaction. Tests now capture tx.update/tx.set rather
+  // than the global mockDocUpdate/mockDocSet.
+
+  test('returns 409 when trial already claimed (tx-internal check)', async () => {
     mockDocGet.mockResolvedValue({
       exists: true,
       data: () => ({ shyCoins: 100, hasClaimedSuperShyTrial: true }),
@@ -607,10 +611,22 @@ describe('POST /api/economy/trial-claim', () => {
     expect(res.body.error).toMatch(/already claimed/i);
   });
 
-  test('returns 200 and adds trial item to backpack', async () => {
+  test('returns 200 and adds trial item to backpack via transaction', async () => {
     mockDocGet.mockResolvedValue({
       exists: true,
       data: () => ({ shyCoins: 100, hasClaimedSuperShyTrial: false }),
+    });
+    // Capture tx.update + tx.set
+    const txUpdate = jest.fn();
+    const txSet = jest.fn();
+    mockRunTransaction.mockImplementationOnce(async (cb) => {
+      const tx = {
+        get: (ref) => mockDocGet(ref),
+        update: txUpdate,
+        set: txSet,
+        delete: jest.fn(),
+      };
+      return cb(tx);
     });
 
     const app = createApp('user-A');
@@ -618,20 +634,46 @@ describe('POST /api/economy/trial-claim', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-
-    // Should update hasClaimedSuperShyTrial
-    expect(mockDocUpdate).toHaveBeenCalledWith(
+    expect(txUpdate).toHaveBeenCalledWith(
+      expect.anything(),
       expect.objectContaining({ hasClaimedSuperShyTrial: true }),
     );
-
-    // Should write trial item to backpack
-    expect(mockDocSet).toHaveBeenCalledWith(
+    expect(txSet).toHaveBeenCalledWith(
+      expect.anything(),
       expect.objectContaining({
         giftId: 'super_shy_trial',
         quantity: 1,
         giftName: 'Super Shy Trial',
       }),
     );
+  });
+
+  // ── TOCTOU race coverage (PR #487 audit C3) ────────────────────────
+
+  test('aborts on concurrent claim — second tx-internal read sees hasClaimed=true', async () => {
+    // Outer read sees hasClaimed=false (sufficient at outer level under
+    // pre-fix code). Fresh tx-internal read sees hasClaimed=true (a
+    // concurrent claim already won). Tx must throw, route 409.
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ shyCoins: 100, hasClaimedSuperShyTrial: true }), // tx sees claimed
+    });
+
+    const app = createApp('user-A');
+    const res = await request(app).post('/api/economy/trial-claim').send({});
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/already claimed/i);
+  });
+
+  test('returns 404 when user doc does not exist', async () => {
+    mockDocGet.mockResolvedValue({ exists: false });
+
+    const app = createApp('user-A');
+    const res = await request(app).post('/api/economy/trial-claim').send({});
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/user not found/i);
   });
 });
 
