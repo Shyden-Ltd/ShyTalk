@@ -424,3 +424,102 @@ test.describe("Dev Smoke — voice-room token issuance", () => {
     expect(res.status(), `expected 400 for missing roomName, got ${res.status()}`).toBe(400);
   });
 });
+
+// Smallest valid PNG: 1x1 transparent. Used to exercise the upload
+// pipeline end-to-end without sending real image data. Sharp will
+// successfully compress this; the path-allowlist invariant test
+// reuses a truncated copy that never reaches the compression step.
+const ONE_PIXEL_PNG = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+  0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89,
+  0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41, 0x54,
+  0x78, 0x9c, 0x62, 0x00, 0x01, 0x00, 0x00, 0x05,
+  0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4,
+  0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44,
+  0xae, 0x42, 0x60, 0x82,
+]);
+
+test.describe("Dev Smoke — R2 image upload", () => {
+  // Catches: R2 credentials, R2 PUT path, multer multipart parsing,
+  // sharp/imageCompressor pipeline, public-read URL signing.
+  //
+  // Idempotency strategy: leave-clean at the side-effect level. Each
+  // upload creates a unique R2 object; the test DELETEs it before
+  // returning so we don't accumulate orphaned objects across runs.
+  // The 'evidence' upload-path is chosen because it does NOT update
+  // any user-doc field (vs 'profiles' which would mutate
+  // smoke.profilePhotoUrl).
+
+  test("POST /api/storage/upload accepts a PNG, URL is reachable, DELETE cleans up", async () => {
+    // Phase 1 — upload via multipart. NOTE: do NOT include
+    // Content-Type in headers; Playwright's `multipart` option sets
+    // the multipart/form-data boundary automatically.
+    const upload = await smoke.api.post(`${API_BASE}/api/storage/upload`, {
+      headers: { Authorization: `Bearer ${smoke.idToken}` },
+      multipart: {
+        path: "evidence",
+        file: {
+          name: "smoke.png",
+          mimeType: "image/png",
+          buffer: ONE_PIXEL_PNG,
+        },
+      },
+    });
+    expect(
+      upload.ok(),
+      `upload expected 200, got ${upload.status()}: ${await upload.text()}`,
+    ).toBe(true);
+
+    const body = await upload.json();
+    expect(typeof body.url, `body.url shape: ${JSON.stringify(body)}`).toBe("string");
+    expect(body.url, `URL must be https://`).toMatch(/^https:\/\//);
+
+    // Phase 2 — verify the object is publicly reachable. R2 has
+    // read-after-write consistency so no retry is needed.
+    const fetched = await smoke.api.get(body.url);
+    expect(
+      fetched.ok(),
+      `fetch-back expected 200, got ${fetched.status()} for ${body.url}`,
+    ).toBe(true);
+    const ct = fetched.headers()["content-type"] || "";
+    expect(ct, `fetched content-type must be image/*, got "${ct}"`).toMatch(/^image\//);
+
+    // Phase 3 — cleanup. Extract the R2 key from the public URL
+    // pathname (DELETE expects ?key=, NOT the full URL).
+    const key = new URL(body.url).pathname.replace(/^\//, "");
+    const del = await smoke.api.delete(
+      `${API_BASE}/api/storage/delete?key=${encodeURIComponent(key)}`,
+      { headers: authedHeaders() },
+    );
+    expect(
+      del.ok(),
+      `delete expected 200, got ${del.status()}: ${await del.text()} for key=${key}`,
+    ).toBe(true);
+  });
+
+  test("POST /api/storage/upload with disallowed path is rejected with 400", async () => {
+    // Invariant: the path-allowlist is the upload-target ACL. If
+    // someone adds a new path-handling code branch but forgets to
+    // update ALLOWED_UPLOAD_PATHS, the gate would silently fail open.
+    // Path check happens BEFORE compression (line 45-48 in storage.js)
+    // so the body content doesn't matter — 8 bytes of PNG signature
+    // is enough.
+    const res = await smoke.api.post(`${API_BASE}/api/storage/upload`, {
+      headers: { Authorization: `Bearer ${smoke.idToken}` },
+      multipart: {
+        path: "smoke-invalid-path",
+        file: {
+          name: "x.png",
+          mimeType: "image/png",
+          buffer: ONE_PIXEL_PNG.subarray(0, 8),
+        },
+      },
+    });
+    expect(
+      res.status(),
+      `expected 400 for disallowed path, got ${res.status()}: ${await res.text()}`,
+    ).toBe(400);
+  });
+});
