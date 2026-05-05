@@ -618,65 +618,25 @@ describe('11.72 — GDPR Data Export & Account Deletion', () => {
       expect(res.body).toBeDefined();
     }
   });
-  test('data export includes user votes', async () => {
-    mockCollectionGet.mockResolvedValueOnce({
-      empty: false,
-      docs: [
-        makeVoteDoc('v1', { voterUid: 1001 }),
-        makeVoteDoc('v2', { voterUid: 1001, direction: 'down' }),
-      ],
-      size: 2,
-    });
-    expect(mockCollectionGet).toBeDefined();
-  });
-  test('data export includes user comments', async () => {
-    mockCollectionGet.mockResolvedValueOnce({
-      empty: false,
-      docs: [makeCommentDoc('c1', { authorUid: 1001 })],
-      size: 1,
-    });
-    expect(mockCollectionGet).toBeDefined();
-  });
-  test('account deletion cascade: user suggestions anonymized or deleted', async () => {
-    setupDocMocks({ 'users/1001': makeUserDoc(1001) });
-    mockCollectionGet.mockResolvedValueOnce({
-      empty: false,
-      docs: [
-        makeSuggestionDoc('s1', { submitterUid: 1001 }),
-        makeSuggestionDoc('s2', { submitterUid: 1001 }),
-      ],
-      size: 2,
-    });
-    expect(true).toBe(true);
-  });
-  test('account deletion cascade: user votes removed and counts decremented', async () => {
-    mockCollectionGet.mockResolvedValueOnce({
-      empty: false,
-      docs: [makeVoteDoc('v1', { voterUid: 1001, direction: 'up' })],
-      size: 1,
-    });
-    expect(true).toBe(true);
-  });
-  test('account deletion cascade: user comments anonymized', async () => {
-    mockCollectionGet.mockResolvedValueOnce({
-      empty: false,
-      docs: [makeCommentDoc('c1', { authorUid: 1001 })],
-      size: 1,
-    });
-    expect(true).toBe(true);
-  });
-  test('account deletion cascade: subscription preferences removed', async () => {
-    setupDocMocks({ 'subscriptions/1001': makeSubscriptionDoc(1001) });
-    expect(mockDocDelete).toBeDefined();
-  });
-  test('account deletion cascade: notification inbox cleared', async () => {
-    mockCollectionGet.mockResolvedValueOnce({
-      empty: false,
-      docs: [makeNotifDoc('n1'), makeNotifDoc('n2')],
-      size: 2,
-    });
-    expect(true).toBe(true);
-  });
+  // Both of these placeholder tests asserted only that the mock
+  // collection helper exists (always true), not that the data export
+  // actually included votes/comments. Honest TODO until the export
+  // path is integration-tested.
+  test.skip('TODO: data export includes user votes', async () => {});
+  test.skip('TODO: data export includes user comments', async () => {});
+  // ── Account-deletion cascade — TODO group ───────────────────────
+  // These tests currently set up mocks but assert nothing meaningful
+  // (`expect(true).toBe(true)` or `expect(mockX).toBeDefined()`).
+  // Marked test.skip to surface honestly that the cascade behaviour
+  // is NOT covered, rather than passing falsely. Implement properly
+  // when the suggestions cascade logic is hardened, OR migrate to
+  // the integration framework (cron #8 pattern in PR #514) which
+  // exercises real Firestore + the cron.
+  test.skip('TODO: account deletion cascade: user suggestions anonymized or deleted', async () => {});
+  test.skip('TODO: account deletion cascade: user votes removed and counts decremented', async () => {});
+  test.skip('TODO: account deletion cascade: user comments anonymized', async () => {});
+  test.skip('TODO: account deletion cascade: subscription preferences removed', async () => {});
+  test.skip('TODO: account deletion cascade: notification inbox cleared', async () => {});
   test('GDPR export: suspended user can still request data export', async () => {
     const res = await request(createApp({ uniqueId: 1001, isSuspended: true })).get(
       '/api/suggestions/mine',

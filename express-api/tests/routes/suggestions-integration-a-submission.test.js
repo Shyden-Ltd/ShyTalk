@@ -605,10 +605,11 @@ describe('11.31 — Integration Tests Full Flows', () => {
         .send(VALID_SUGGESTION);
       expect(res.status).toBe(403);
     });
-    test('ban cascade: user ban marks their suggestions for review', async () => {
-      setupDocMocks({ 'users/5555': makeUserDoc(5555, { isSuspended: true }) });
-      expect(mockDocGet).toBeDefined();
-    });
+    // The ban cascade behaviour (user-ban → existing-suggestions
+    // re-flagged for review) is not asserted here. Marked skip until
+    // implemented properly, rather than passing falsely on a check
+    // that the mock helper exists.
+    test.skip('TODO: ban cascade: user ban marks their suggestions for review', async () => {});
   });
 
   describe('Multi-account flow', () => {
