@@ -528,3 +528,108 @@ test.describe("Dev Smoke — R2 image upload", () => {
     ).toBe(400);
   });
 });
+
+test.describe("Dev Smoke — IAP coin purchase (sandbox)", () => {
+  // Catches: GET /api/coin-packages catalog shape, purchase
+  // verification bypass on non-prod (`economy.js:1300-1330`),
+  // atomic balance increment + purchaseReceipts write + transaction
+  // log, replay-protection on duplicate purchaseToken (409 path).
+  //
+  // Why a single test combines purchase + replay: putting the replay
+  // assertion at the end of the same flow lets us reuse the token
+  // we just minted (which we KNOW exists in purchaseReceipts).
+  // A standalone replay test would have to seed state first.
+  //
+  // State accumulation: each run grants `coins + bonusCoins` to the
+  // smoke account permanently (no refund endpoint exposed). Coins
+  // are virtual currency, JS number-safe up to 2^53 ≈ 9e15, smoke
+  // account is dev-only — accepted as a no-op trade-off.
+
+  test("GET catalog → POST purchase → balance reflects → replay rejected with 409", async () => {
+    // Phase 1 — discover the catalog. Public endpoint (no auth on
+    // coin-packages route per config.js:786). A regression here
+    // means the IAP UI in the app would be empty for every user.
+    const cat = await smoke.api.get(`${API_BASE}/api/coin-packages`);
+    expect(cat.ok(), `catalog: ${cat.status()}: ${await cat.text()}`).toBe(true);
+    const packages = await cat.json();
+    expect(Array.isArray(packages), "catalog must be an array").toBe(true);
+    expect(
+      packages.length,
+      "dev must expose at least one active coin package",
+    ).toBeGreaterThan(0);
+    const pkg = packages[0];
+    expect(typeof pkg.productId, "package productId").toBe("string");
+    const expectedTotal = (pkg.coins ?? 0) + (pkg.bonusCoins ?? 0);
+    expect(
+      expectedTotal,
+      `package must grant > 0 coins (got coins=${pkg.coins} bonus=${pkg.bonusCoins})`,
+    ).toBeGreaterThan(0);
+
+    // Phase 2 — snapshot balance.
+    const before = await smoke.api.get(`${API_BASE}/api/economy/balance`, {
+      headers: authedHeaders(),
+    });
+    expect(before.ok()).toBe(true);
+    const coinsBefore: number = (await before.json()).coins;
+    expect(typeof coinsBefore, "coins must be a number").toBe("number");
+
+    // Phase 3 — purchase. Ephemeral purchaseToken to avoid colliding
+    // with purchaseReceipts from previous smoke runs (replay-protected).
+    // platform: 'google' is the route default but we set it explicitly
+    // so the assertion contract is unambiguous.
+    const purchaseToken = `smoke-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const buy = await smoke.api.post(`${API_BASE}/api/economy/purchase`, {
+      headers: authedHeaders(),
+      data: { productId: pkg.productId, purchaseToken, platform: "google" },
+    });
+    expect(
+      buy.ok(),
+      `purchase expected 200, got ${buy.status()}: ${await buy.text()}`,
+    ).toBe(true);
+    const buyBody = await buy.json();
+    expect(buyBody.success, "purchase body.success").toBe(true);
+    expect(
+      buyBody.coinsAdded,
+      `coinsAdded must equal package total ${expectedTotal}`,
+    ).toBe(expectedTotal);
+
+    // Phase 4 — verify balance increment is exactly the granted amount.
+    // Catches a regression where the purchase succeeds but the increment
+    // races with a concurrent write (very unlikely on dev with one
+    // smoke runner, but the assertion costs one GET).
+    const after = await smoke.api.get(`${API_BASE}/api/economy/balance`, {
+      headers: authedHeaders(),
+    });
+    const coinsAfter: number = (await after.json()).coins;
+    expect(
+      coinsAfter,
+      `balance must increase by ${expectedTotal}: before=${coinsBefore}, after=${coinsAfter}`,
+    ).toBe(coinsBefore + expectedTotal);
+
+    // Phase 5 — replay protection. Same token must 409. Without this,
+    // a refund-then-replay attack would let users grant themselves
+    // unlimited coins by re-submitting old purchase tokens.
+    const replay = await smoke.api.post(`${API_BASE}/api/economy/purchase`, {
+      headers: authedHeaders(),
+      data: { productId: pkg.productId, purchaseToken },
+    });
+    expect(
+      replay.status(),
+      `replay must 409, got ${replay.status()}: ${await replay.text()}`,
+    ).toBe(409);
+  });
+
+  test("POST /api/economy/purchase without productId is rejected with 400", async () => {
+    // Invariant: both productId and purchaseToken are required. The
+    // route checks at line 1279-1280 before any DB query, so this
+    // 400 is fast and pre-authorized.
+    const res = await smoke.api.post(`${API_BASE}/api/economy/purchase`, {
+      headers: authedHeaders(),
+      data: { purchaseToken: `smoke-noprod-${Date.now()}` },
+    });
+    expect(
+      res.status(),
+      `expected 400 for missing productId, got ${res.status()}`,
+    ).toBe(400);
+  });
+});
