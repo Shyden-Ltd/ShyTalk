@@ -333,3 +333,94 @@ test.describe("Dev Smoke — follow / unfollow journey", () => {
     expect(res.status(), `expected 400 for self-follow, got ${res.status()}`).toBe(400);
   });
 });
+
+test.describe("Dev Smoke — voice-room token issuance", () => {
+  // Catches: LiveKit AccessToken signing on Express, region resolution
+  // (`getRegion`/`getRegionConfig`), LIVEKIT_KEY_*/SECRET_* env vars,
+  // auth → identity mapping, response shape contract.
+  //
+  // Scope: token-only. We verify the JWT *payload structure* but do
+  // NOT verify the signature (the smoke runner intentionally has no
+  // LiveKit secret — defense-in-depth) and we do NOT actually connect
+  // to LiveKit. Real WebRTC reachability would need @livekit/rtc-node
+  // (heavy native dep) and would create real participants on the
+  // LiveKit server — that belongs in a dedicated integration suite,
+  // not a fast smoke gate.
+  //
+  // Region note: GitHub Actions runners hit dev without Cloudflare's
+  // `cf-ipcountry` header, so `getRegion` defaults to 'asia'. Per
+  // livekit-region.js, dev should configure all regions to the same
+  // LiveKit instance, so this is fine.
+
+  test("POST /api/livekit/token returns a signed JWT with correct grants", async () => {
+    // Ephemeral roomName — every run uses a new value so we can assert
+    // the JWT's `video.room` claim equals exactly what we asked for.
+    // No state side-effect: tokens are stateless until used to connect.
+    const roomName = `smoke-${Date.now()}`;
+
+    const res = await smoke.api.post(`${API_BASE}/api/livekit/token`, {
+      headers: authedHeaders(),
+      data: { roomName },
+    });
+    expect(res.ok(), `${res.status()}: ${await res.text()}`).toBe(true);
+
+    const body = await res.json();
+    expect(typeof body.token, `token shape: ${JSON.stringify(body)}`).toBe("string");
+
+    // The dev environment MUST include the LiveKit server URL — only
+    // local mode (NODE_ENV === 'local') omits it. Missing URL on dev
+    // means LIVEKIT_URL_* env vars are unset, which the iOS/Android
+    // clients cannot fall back from.
+    expect(
+      typeof body.url,
+      `url must be returned on dev (NODE_ENV !== 'local'): ${JSON.stringify(body)}`,
+    ).toBe("string");
+    expect(body.url, `LiveKit URL must be wss:// or ws://`).toMatch(/^wss?:\/\//);
+
+    // Decode JWT payload without signature verification. The smoke
+    // runner does NOT have the LiveKit signing secret (defense-in-depth)
+    // so we trust the server's claim and inspect structure only. A
+    // future signature-verifying test would require giving CI the
+    // secret, which we deliberately avoid.
+    const parts: string[] = body.token.split(".");
+    expect(parts.length, `JWT must have 3 segments, got ${parts.length}`).toBe(3);
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString());
+
+    // Identity = stringified uniqueId (route does String(req.auth.uniqueId)).
+    // A drift here means auth → identity mapping is broken; users would
+    // appear with random or empty identities in voice rooms.
+    expect(payload.sub, "JWT sub must equal stringified smoke uniqueId").toBe(
+      String(smoke.uniqueId),
+    );
+
+    // Expiry: route sets ttl: '24h'. Window of 23-25h tolerates clock
+    // skew between CI runner and dev API. A token with 0 or 1h TTL
+    // would silently break long voice sessions.
+    const nowSec = Math.floor(Date.now() / 1000);
+    const ttlSec = payload.exp - nowSec;
+    expect(
+      ttlSec > 23 * 3600 && ttlSec < 25 * 3600,
+      `JWT TTL must be ~24h (got ${ttlSec}s = ${(ttlSec / 3600).toFixed(2)}h)`,
+    ).toBe(true);
+
+    // Grants: must allow joining the requested room AND publishing AND
+    // subscribing. Missing canPublish would silently mute every user;
+    // missing canSubscribe would silently deafen them.
+    expect(payload.video?.roomJoin, "video.roomJoin grant").toBe(true);
+    expect(payload.video?.room, "video.room must equal requested roomName").toBe(roomName);
+    expect(payload.video?.canPublish, "video.canPublish grant").toBe(true);
+    expect(payload.video?.canSubscribe, "video.canSubscribe grant").toBe(true);
+  });
+
+  test("POST /api/livekit/token without roomName is rejected with 400", async () => {
+    // Invariant: roomName is required. Missing roomName must reject
+    // pre-flight rather than minting a useless empty-room token (which
+    // would burn a LiveKit signing operation and produce a token that
+    // the client cannot actually use).
+    const res = await smoke.api.post(`${API_BASE}/api/livekit/token`, {
+      headers: authedHeaders(),
+      data: {},
+    });
+    expect(res.status(), `expected 400 for missing roomName, got ${res.status()}`).toBe(400);
+  });
+});
