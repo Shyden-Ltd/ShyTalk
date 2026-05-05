@@ -94,6 +94,14 @@ class MainActivity : AppCompatActivity() {
     private val showLeaveConfirmationState = mutableStateOf(false)
     private var lastSeenJob: Job? = null
 
+    // Tracked so we can removeObserver in onDestroy. ProcessLifecycleOwner
+    // is process-scoped, so observers registered in Activity onCreate
+    // outlive the Activity. Without explicit removal, every config change
+    // (rotation, locale switch via attachBaseContext) accumulates a new
+    // observer, each independently calling appLockRepository on every
+    // background transition.
+    private var processLifecycleObserver: DefaultLifecycleObserver? = null
+
     override fun attachBaseContext(newBase: Context) {
         val language = LanguagePreference.get()
         val locale = java.util.Locale.forLanguageTag(language)
@@ -122,15 +130,19 @@ class MainActivity : AppCompatActivity() {
         biometricAuth.setActivity(this)
         enableEdgeToEdge()
 
-        // Track app background/foreground for lock timeout
-        ProcessLifecycleOwner.get().lifecycle.addObserver(
+        // Track app background/foreground for lock timeout. Save the
+        // observer so it can be removed in onDestroy — ProcessLifecycleOwner
+        // is process-scoped and would otherwise accumulate observers
+        // across config-change Activity recreations.
+        val observer =
             object : DefaultLifecycleObserver {
                 override fun onStop(owner: LifecycleOwner) {
                     // App went to background — record timestamp
                     appLockRepository.updateLastActiveTimestamp()
                 }
-            },
-        )
+            }
+        ProcessLifecycleOwner.get().lifecycle.addObserver(observer)
+        processLifecycleObserver = observer
 
         setContent {
             ShyTalkTheme(darkTheme = true) {
@@ -619,5 +631,13 @@ class MainActivity : AppCompatActivity() {
                 showLeaveConfirmationState.value = true
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        processLifecycleObserver?.let {
+            ProcessLifecycleOwner.get().lifecycle.removeObserver(it)
+        }
+        processLifecycleObserver = null
     }
 }
