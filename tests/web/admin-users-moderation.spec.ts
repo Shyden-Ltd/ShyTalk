@@ -162,10 +162,9 @@ test.describe('Admin Users - Moderation Subtab', () => {
     const appData = await testData.api.get(`/api/users/${uid}`);
     expect(appData.isSuspended).toBe(true);
 
-    // Unsuspend — accept the confirmation dialog the admin panel now
-    // shows (added for symmetry with other destructive actions). The
-    // dialog must be handled BEFORE the click that triggers it.
-    page.once("dialog", (dialog) => dialog.accept());
+    // Unsuspend — the confirmation dialog (added for symmetry with
+    // other destructive actions) is auto-accepted by the suite-level
+    // beforeEach handler `page.on('dialog', ...)` at line 24-30.
     await page.locator('#unsuspend-btn').click();
 
     // Wait for unsuspend to take effect
