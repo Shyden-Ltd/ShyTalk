@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "test:web": "playwright test",
+    "test:integration": "playwright test --config=playwright.integration.config.ts",
     "seed:dev": "node scripts/seed-dev-fixtures.mjs",
     "prepare": "husky"
   },
