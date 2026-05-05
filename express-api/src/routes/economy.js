@@ -274,48 +274,76 @@ router.post('/economy/daily-reward', async (req, res) => {
     const today = todayStr();
     const yesterday = yesterdayStr();
 
-    const userSnap = await db.doc(`users/${uniqueId}`).get();
-    if (!userSnap.exists) return res.status(404).json({ error: 'User not found' });
-    const user = userSnap.data();
+    // Atomic claim per audit H6 — wraps user-read + already-claimed
+    // check + user-update + backpack-merge in a Firestore transaction.
+    // Pattern matches PRs #485-#488. Sentinel errors caught after.
+    const userRef = db.doc(`users/${uniqueId}`);
+    const ERR_USER_NOT_FOUND = 'User not found';
+    const ERR_ALREADY_CLAIMED = 'Already claimed today';
+    let txResult;
+    try {
+      txResult = await db.runTransaction(async (t) => {
+        const userSnap = await t.get(userRef);
+        if (!userSnap.exists) {
+          throw new Error(ERR_USER_NOT_FOUND);
+        }
+        const user = userSnap.data();
+        const shyCoins = userField(user, 'shyCoins', 'shy_coins') || 0;
+        const isSuperShy = userField(user, 'isSuperShy', 'is_super_shy') || false;
+        const loginStreak = userField(user, 'loginStreak', 'login_streak') || 0;
+        const lastLoginDate = userField(user, 'lastLoginDate', 'last_login_date');
+        const lastLoginRewardDate = userField(
+          user,
+          'lastLoginRewardDate',
+          'last_login_reward_date',
+        );
 
-    const shyCoins = userField(user, 'shyCoins', 'shy_coins') || 0;
-    const isSuperShy = userField(user, 'isSuperShy', 'is_super_shy') || false;
-    const loginStreak = userField(user, 'loginStreak', 'login_streak') || 0;
-    const lastLoginDate = userField(user, 'lastLoginDate', 'last_login_date');
-    const lastLoginRewardDate = userField(user, 'lastLoginRewardDate', 'last_login_reward_date');
+        if (lastLoginRewardDate === today) {
+          throw new Error(ERR_ALREADY_CLAIMED);
+        }
 
-    if (lastLoginRewardDate === today) {
-      return res.status(409).json({ error: 'Already claimed today' });
-    }
+        const newStreak = lastLoginDate === yesterday ? loginStreak + 1 : 1;
+        const reward = computeDailyReward(config, newStreak, isSuperShy);
+        const newBalance = shyCoins + reward.coinReward;
 
-    const newStreak = lastLoginDate === yesterday ? loginStreak + 1 : 1;
-    const { coinReward, giftReward, isMilestone } = computeDailyReward(
-      config,
-      newStreak,
-      isSuperShy,
-    );
+        const userUpdates = {
+          loginStreak: newStreak,
+          lastLoginDate: today,
+          lastLoginRewardDate: today,
+        };
+        if (reward.coinReward > 0) userUpdates.shyCoins = newBalance;
+        t.update(userRef, userUpdates);
 
-    const newBalance = shyCoins + coinReward;
+        if (reward.giftReward) {
+          const bpRef = db.doc(`users/${uniqueId}/backpack/${reward.giftReward.giftId}`);
+          const bpSnap = await t.get(bpRef);
+          const currentQty = bpSnap.exists ? bpSnap.data().quantity || 0 : 0;
+          t.set(bpRef, {
+            giftId: reward.giftReward.giftId,
+            quantity: currentQty + reward.giftReward.quantity,
+            lastAcquired: now(),
+          });
+        }
 
-    // Update user doc
-    const userUpdates = {
-      loginStreak: newStreak,
-      lastLoginDate: today,
-      lastLoginRewardDate: today,
-    };
-    if (coinReward > 0) userUpdates.shyCoins = newBalance;
-    await db.doc(`users/${uniqueId}`).update(userUpdates);
-
-    // Add gift to backpack if gift reward
-    if (giftReward) {
-      const bpSnap = await db.doc(`users/${uniqueId}/backpack/${giftReward.giftId}`).get();
-      const currentQty = bpSnap.exists ? bpSnap.data().quantity || 0 : 0;
-      await db.doc(`users/${uniqueId}/backpack/${giftReward.giftId}`).set({
-        giftId: giftReward.giftId,
-        quantity: currentQty + giftReward.quantity,
-        lastAcquired: now(),
+        return {
+          coinReward: reward.coinReward,
+          giftReward: reward.giftReward,
+          isMilestone: reward.isMilestone,
+          newBalance,
+          newStreak,
+        };
       });
+    } catch (txErr) {
+      if (txErr.message === ERR_USER_NOT_FOUND) {
+        return res.status(404).json({ error: ERR_USER_NOT_FOUND });
+      }
+      if (txErr.message === ERR_ALREADY_CLAIMED) {
+        return res.status(409).json({ error: ERR_ALREADY_CLAIMED });
+      }
+      throw txErr;
     }
+
+    const { coinReward, giftReward, isMilestone, newBalance, newStreak } = txResult;
 
     // Transaction record
     const txId = generateId();

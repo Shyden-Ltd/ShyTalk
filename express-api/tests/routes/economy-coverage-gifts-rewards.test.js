@@ -228,6 +228,22 @@ function makeBackpackDoc(quantity = 5) {
 // ═══════════════════════════════════════════════════════════════════
 
 describe('POST /api/economy/daily-reward — gift milestone rewards', () => {
+  // PR #489: daily-reward now wraps user-read + check + writes in
+  // a Firestore transaction. Override the default tx mock (which
+  // returns backpack-shaped {quantity:10}) so tx.get → mockDocGet
+  // and the existing call-count sequencing still works.
+  beforeEach(() => {
+    mockRunTransaction.mockImplementation(async (cb) => {
+      const tx = {
+        get: (ref) => mockDocGet(ref),
+        update: jest.fn(),
+        set: jest.fn(),
+        delete: jest.fn(),
+      };
+      return cb(tx);
+    });
+  });
+
   test('returns gift reward for milestone with type=gift (lines 258-260, 282-290, 307-310)', async () => {
     let callCount = 0;
     mockDocGet.mockImplementation(() => {

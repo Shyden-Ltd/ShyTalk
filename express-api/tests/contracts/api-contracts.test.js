@@ -14,6 +14,7 @@ const request = require('supertest');
 const mockDocGet = jest.fn();
 const mockDocUpdate = jest.fn().mockResolvedValue();
 const mockDocSet = jest.fn().mockResolvedValue();
+const mockRunTransaction = jest.fn();
 
 jest.mock('../../src/utils/firebase', () => ({
   db: {
@@ -39,7 +40,7 @@ jest.mock('../../src/utils/firebase', () => ({
       delete: jest.fn(),
       commit: jest.fn().mockResolvedValue(),
     })),
-    runTransaction: jest.fn(),
+    runTransaction: mockRunTransaction,
     getAll: jest.fn().mockResolvedValue([]),
   },
   auth: {
@@ -123,6 +124,20 @@ beforeEach(() => {
   mockDocSet.mockReset();
   mockDocUpdate.mockResolvedValue();
   mockDocSet.mockResolvedValue();
+  // Default tx mock — invokes the callback with a tx whose get/update
+  // route through the existing mockDocGet/mockDocUpdate/mockDocSet,
+  // so existing tests that mock those work unchanged with the new
+  // tx-based daily-reward / purchase / etc. routes (PR #485-#489).
+  mockRunTransaction.mockReset();
+  mockRunTransaction.mockImplementation(async (cb) => {
+    const tx = {
+      get: (ref) => mockDocGet(ref?._path),
+      update: (ref, data) => mockDocUpdate(ref?._path, data),
+      set: (ref, data) => mockDocSet(ref?._path, data),
+      delete: jest.fn(),
+    };
+    return cb(tx);
+  });
   // Reset the economy config cache between tests
   try {
     economyRouter._resetConfigCache();

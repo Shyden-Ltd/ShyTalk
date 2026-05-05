@@ -6,6 +6,7 @@ const request = require('supertest');
 const mockDocGet = jest.fn();
 const mockDocUpdate = jest.fn().mockResolvedValue();
 const mockDocSet = jest.fn().mockResolvedValue();
+const mockRunTransaction = jest.fn();
 
 jest.mock('../../src/utils/firebase', () => ({
   db: {
@@ -34,6 +35,7 @@ jest.mock('../../src/utils/firebase', () => ({
       update: jest.fn(),
       commit: jest.fn().mockResolvedValue(),
     })),
+    runTransaction: mockRunTransaction,
   },
   FieldValue: {
     increment: jest.fn((n) => `increment(${n})`),
@@ -59,6 +61,17 @@ jest.mock('../../src/utils/helpers', () => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Default tx mock: routes tx.get → mockDocGet so daily-reward
+  // tests work with the existing mockDocGet sequencing (PR #489).
+  mockRunTransaction.mockImplementation(async (cb) => {
+    const tx = {
+      get: (ref) => mockDocGet(ref),
+      update: jest.fn(),
+      set: jest.fn(),
+      delete: jest.fn(),
+    };
+    return cb(tx);
+  });
   // Reset the in-memory economy config cache between tests
   economyRouter._resetConfigCache();
 });
