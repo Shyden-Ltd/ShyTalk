@@ -699,14 +699,18 @@ test.describe("Dev Smoke — gacha wheel spin (transactional coin deduction)", (
     // Read current balance. If we already have enough coins from
     // prior runs (the typical case), no top-up needed — keeps the
     // smoke gate fast and avoids unnecessary IAP infrastructure load.
-    const bal = await smoke.api.get(`${API_BASE}/api/economy/balance`, {
-      headers: authedHeaders(),
-    });
-    expect(
-      bal.ok(),
-      `gacha-seed balance check: ${bal.status()}: ${await bal.text()}`,
-    ).toBe(true);
-    const coins: number = (await bal.json()).coins;
+    async function fetchCoins(): Promise<number> {
+      const bal = await smoke.api.get(`${API_BASE}/api/economy/balance`, {
+        headers: authedHeaders(),
+      });
+      expect(
+        bal.ok(),
+        `gacha-seed balance check: ${bal.status()}: ${await bal.text()}`,
+      ).toBe(true);
+      return (await bal.json()).coins;
+    }
+
+    let coins = await fetchCoins();
     if (coins >= GACHA_MIN_COINS) return;
 
     // Top-up via IAP catalog. We deliberately reuse the IAP path
@@ -731,18 +735,39 @@ test.describe("Dev Smoke — gacha wheel spin (transactional coin deduction)", (
     ).toBe(true);
     const pkg = packages[0];
 
-    const buy = await smoke.api.post(`${API_BASE}/api/economy/purchase`, {
-      headers: authedHeaders(),
-      data: {
-        productId: pkg.productId,
-        purchaseToken: `gacha-seed-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        platform: "google",
-      },
-    });
+    // Loop top-ups until threshold reached, with a safety cap to
+    // avoid infinite loops on pathological config (e.g. package
+    // grants 0 coins). `packages[0]` is sorted by `order` not size,
+    // so a single buy may grant fewer coins than GACHA_MIN_COINS.
+    // Looping is correct under any package size; the cap protects
+    // against silent infinite loops.
+    const MAX_SEED_ITERATIONS = 10;
+    for (let i = 0; i < MAX_SEED_ITERATIONS && coins < GACHA_MIN_COINS; i++) {
+      const buy = await smoke.api.post(`${API_BASE}/api/economy/purchase`, {
+        headers: authedHeaders(),
+        data: {
+          productId: pkg.productId,
+          purchaseToken: `gacha-seed-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          platform: "google",
+        },
+      });
+      expect(
+        buy.ok(),
+        `gacha-seed top-up #${i + 1}/${MAX_SEED_ITERATIONS}: ${buy.status()}: ${await buy.text()}`,
+      ).toBe(true);
+      coins = await fetchCoins();
+    }
+
+    // Final assertion: even after MAX_SEED_ITERATIONS top-ups, did
+    // we reach the threshold? If not, the package config is
+    // pathological (e.g., grants 0 coins) and the operator needs to
+    // know explicitly rather than seeing the gacha 402 with no clue
+    // that the seed loop already gave up.
     expect(
-      buy.ok(),
-      `gacha-seed top-up purchase: ${buy.status()}: ${await buy.text()}`,
-    ).toBe(true);
+      coins,
+      `gacha-seed: after up to ${MAX_SEED_ITERATIONS} top-ups, coins=${coins} < required ${GACHA_MIN_COINS}. ` +
+        `Either packages[0] (productId=${pkg.productId}) grants too few coins per buy, or GACHA_MIN_COINS is misconfigured.`,
+    ).toBeGreaterThanOrEqual(GACHA_MIN_COINS);
   });
 
   test("POST /api/economy/gacha (1 pull) deducts coins, returns gift, balance reflects", async () => {
