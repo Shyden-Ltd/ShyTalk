@@ -550,6 +550,37 @@ router.post('/test/fcm-captures/clear', (req, res) => {
   res.json({ success: true });
 });
 
+// POST /api/test/run-cron/:cronName — manually trigger a cron job once.
+// Used by the integration suite to verify cron-driven cascades
+// (account deletion, subscription expiry, etc.) without waiting for
+// the schedule. Whitelist enforced — only crons safe to invoke
+// directly from a test (no external network calls beyond the
+// emulator) are listed.
+const ALLOWED_CRONS = {
+  'account-deletion': require('../cron/accountDeletion'),
+};
+
+router.post('/test/run-cron/:cronName', async (req, res) => {
+  if (requireTestApiKey(req, res)) return;
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({ error: 'Not available in production' });
+  }
+  const { cronName } = req.params;
+  const cronFn = ALLOWED_CRONS[cronName];
+  if (!cronFn) {
+    return res.status(400).json({
+      error: `Cron '${cronName}' not allowed. Available: ${Object.keys(ALLOWED_CRONS).join(', ')}`,
+    });
+  }
+  try {
+    await cronFn();
+    res.json({ success: true });
+  } catch (err) {
+    log.error('test-helpers', 'Cron trigger failed', { cronName, error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/test/reset — wipe ALL test data
 router.post('/test/reset', async (req, res) => {
   try {
