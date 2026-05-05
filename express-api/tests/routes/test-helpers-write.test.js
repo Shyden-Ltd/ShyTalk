@@ -203,6 +203,9 @@ describe('POST /api/test/write/:collection', () => {
       'reports',
       'suspensionAppeals',
       'alerts',
+      'suggestions',
+      'ageVerificationSubmissions',
+      'coinPackages',
     ];
 
     for (const collection of allowedCollections) {

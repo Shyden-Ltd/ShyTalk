@@ -233,8 +233,9 @@ describe('POST /api/test/teardown', () => {
       .send({ testRunId: 'test_run456' })
       .expect(200);
 
-    // New implementation queries: users, deviceBindings, deviceBans (0 users so no ban queries),
-    // then gifts, rooms, banners, funFacts, conversations, reports, suspensionAppeals, alerts = 10 collections total
+    // New implementation queries: users, deviceBindings, deviceBans
+    // (0 users so no ban queries), then the `otherCollections` list
+    // in test-helpers.js — keep this in sync with that array.
     const expectedCollections = [
       'users',
       'deviceBindings',
@@ -246,6 +247,8 @@ describe('POST /api/test/teardown', () => {
       'reports',
       'suspensionAppeals',
       'alerts',
+      'reportLocks',
+      'coinPackages',
     ];
     for (const col of expectedCollections) {
       expect(mockCollection).toHaveBeenCalledWith(col);

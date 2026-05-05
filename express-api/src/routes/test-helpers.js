@@ -401,6 +401,11 @@ router.post('/test/write/:collection', async (req, res) => {
       'alerts',
       'suggestions',
       'ageVerificationSubmissions',
+      // Phase 3 PR F (integration test #10): seed real coinPackages
+      // docs so /api/economy/purchase can match a productId during
+      // tests. Teardown sweeps these via the `_testRun` field
+      // (deleteTestData → otherCollections list).
+      'coinPackages',
     ];
     if (!ALLOWED_COLLECTIONS.includes(collection)) {
       return res.status(400).json({ error: 'Collection not allowed' });
@@ -622,6 +627,11 @@ async function deleteTestData(testRunId) {
     'suspensionAppeals',
     'alerts',
     'reportLocks',
+    // Phase 3 PR F: integration tests seed coinPackages tagged with
+    // `_testRun` for /api/economy/purchase tests. Without this entry
+    // tested packages would persist across runs and pollute later
+    // queries on `coinPackages`.
+    'coinPackages',
   ];
   for (const col of otherCollections) {
     let query;
