@@ -325,6 +325,9 @@ describe('POST /api/economy/gift-direct — additional coverage', () => {
   });
 
   test('writes room message when sender is in a room (lines 825-828)', async () => {
+    // PR #485: gift-direct now wraps coin deduction in a Firestore
+    // transaction. Tests must mock mockRunTransaction to return a tx
+    // object with sufficient coins.
     mockDocGet
       .mockResolvedValueOnce(makeGiftDoc({ coinValue: 10 }))
       .mockResolvedValueOnce(
@@ -335,6 +338,13 @@ describe('POST /api/economy/gift-direct — additional coverage', () => {
       .mockResolvedValueOnce({ exists: false })
       .mockResolvedValueOnce({ exists: false })
       .mockResolvedValue({ exists: false });
+    mockRunTransaction.mockImplementationOnce(async (cb) => {
+      const tx = {
+        get: jest.fn().mockResolvedValue(makeUserDoc({ shyCoins: 500 })),
+        update: jest.fn(),
+      };
+      return cb(tx);
+    });
 
     const app = createApp('user-A');
     const res = await request(app)

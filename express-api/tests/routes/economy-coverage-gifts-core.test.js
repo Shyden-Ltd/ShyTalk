@@ -531,6 +531,15 @@ describe('updateGiftRankings error handling (line 222)', () => {
       if (callCount === 6) return Promise.reject(new Error('Rankings fetch failed')); // giftRankings
       return Promise.resolve({ exists: false });
     });
+    // PR #485: gift-direct now uses Firestore transaction for coin
+    // deduction. Mock the transaction to succeed with sufficient coins.
+    mockRunTransaction.mockImplementationOnce(async (cb) => {
+      const tx = {
+        get: jest.fn().mockResolvedValue(makeUserDoc({ shyCoins: 500 })),
+        update: jest.fn(),
+      };
+      return cb(tx);
+    });
 
     const app = createApp('user-A');
     const res = await request(app)

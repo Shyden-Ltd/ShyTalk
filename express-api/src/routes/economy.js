@@ -837,17 +837,34 @@ router.post('/economy/gift-direct', async (req, res) => {
 
     const coinValue = gift.coinValue || gift.coin_value || 0;
     const totalCost = coinValue * quantity;
-    const senderCoins = userField(sender, 'shyCoins', 'shy_coins') || 0;
-    if (senderCoins < totalCost) return res.status(402).json({ error: 'Insufficient coins' });
 
     const config = await loadEconomyConfig();
     const beanReward = Math.floor(coinValue * config.beanConversionRate * quantity);
-    const newSenderCoins = senderCoins - totalCost;
     const recipientBeans = userField(recipient, 'shyBeans', 'shy_beans') || 0;
     const timestamp = now();
 
-    // Deduct coins (atomic)
-    await db.doc(`users/${uniqueId}`).update({ shyCoins: FieldValue.increment(-totalCost) });
+    // Atomic coin deduction. Without the transaction, two concurrent
+    // gift-direct requests at the sender's exact balance both pass the
+    // pre-check and both call FieldValue.increment(-totalCost), pushing
+    // the balance below 0. The transaction reads `shyCoins` fresh and
+    // aborts on insufficient funds before decrementing — matches the
+    // pattern at /economy/gift-batch (line 1006-1011).
+    const senderRef = db.doc(`users/${uniqueId}`);
+    let newSenderCoins;
+    try {
+      newSenderCoins = await db.runTransaction(async (t) => {
+        const snap = await t.get(senderRef);
+        const coins = snap.exists ? userField(snap.data(), 'shyCoins', 'shy_coins') || 0 : 0;
+        if (coins < totalCost) throw new Error('Insufficient coins');
+        t.update(senderRef, { shyCoins: FieldValue.increment(-totalCost) });
+        return coins - totalCost;
+      });
+    } catch (txErr) {
+      if (txErr.message === 'Insufficient coins') {
+        return res.status(402).json({ error: 'Insufficient coins' });
+      }
+      throw txErr;
+    }
 
     // Gift wall
     await updateGiftWall(recipientId, giftId, uniqueId, quantity);

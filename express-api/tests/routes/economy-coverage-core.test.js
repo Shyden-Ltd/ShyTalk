@@ -297,6 +297,14 @@ describe('addBroadcast old broadcast trimming (lines 109-116)', () => {
       .mockResolvedValueOnce({ exists: false })
       .mockResolvedValueOnce({ exists: false })
       .mockResolvedValue({ exists: false });
+    // PR #485: gift-direct uses Firestore transaction for coin deduction
+    mockRunTransaction.mockImplementationOnce(async (cb) => {
+      const tx = {
+        get: jest.fn().mockResolvedValue(makeUserDoc({ shyCoins: 500 })),
+        update: jest.fn(),
+      };
+      return cb(tx);
+    });
 
     const app = createApp('user-A');
     const res = await request(app)

@@ -303,11 +303,22 @@ describe('POST /api/economy/gift-direct', () => {
   // ── Insufficient coins ────────────────────────────────────────────
 
   test('returns 402 when sender has insufficient coins', async () => {
-    // gift costs 100 coins, sender has only 50
+    // gift costs 100 coins, sender has only 50. The check now happens
+    // INSIDE a Firestore transaction (PR #485 race fix), so we mock the
+    // transaction to throw 'Insufficient coins' which the route maps to 402.
     mockDocGet
       .mockResolvedValueOnce(makeGiftDoc({ coinValue: 100 })) // gift
-      .mockResolvedValueOnce(makeUserDoc({ shyCoins: 50 })) // sender
-      .mockResolvedValueOnce(makeUserDoc({ displayName: 'Bob' })); // recipient
+      .mockResolvedValueOnce(makeUserDoc({ shyCoins: 50 })) // sender (outer read for displayName/block)
+      .mockResolvedValueOnce(makeUserDoc({ displayName: 'Bob' })) // recipient
+      .mockResolvedValueOnce(ECONOMY_CONFIG_DOC); // loadEconomyConfig
+    // Transaction reads sender's coins fresh; returns 50 < 100 cost → throws
+    mockRunTransaction.mockImplementationOnce(async (cb) => {
+      const tx = {
+        get: jest.fn().mockResolvedValue(makeUserDoc({ shyCoins: 50 })),
+        update: jest.fn(),
+      };
+      return cb(tx);
+    });
 
     const app = createApp('user-A');
     const res = await request(app)
@@ -321,10 +332,11 @@ describe('POST /api/economy/gift-direct', () => {
   // ── Happy path ────────────────────────────────────────────────────
 
   test('returns 200 and deducts coins on success', async () => {
-    // gift costs 10 coins, sender has 500 coins
+    // gift costs 10 coins, sender has 500 coins. Per PR #485, the
+    // deduction is now in a Firestore transaction.
     mockDocGet
       .mockResolvedValueOnce(makeGiftDoc({ coinValue: 10 })) // gift
-      .mockResolvedValueOnce(makeUserDoc({ shyCoins: 500 })) // sender
+      .mockResolvedValueOnce(makeUserDoc({ shyCoins: 500 })) // sender (outer read)
       .mockResolvedValueOnce(makeUserDoc({ displayName: 'Bob' })) // recipient
       // loadEconomyConfig
       .mockResolvedValueOnce(ECONOMY_CONFIG_DOC)
@@ -334,6 +346,14 @@ describe('POST /api/economy/gift-direct', () => {
       .mockResolvedValueOnce({ exists: false })
       // writeTransaction calls
       .mockResolvedValue({ exists: false });
+    // Transaction reads sender's coins fresh inside the tx; sufficient → updates
+    mockRunTransaction.mockImplementationOnce(async (cb) => {
+      const tx = {
+        get: jest.fn().mockResolvedValue(makeUserDoc({ shyCoins: 500 })),
+        update: jest.fn(),
+      };
+      return cb(tx);
+    });
 
     const app = createApp('user-A');
     const res = await request(app)
@@ -344,6 +364,38 @@ describe('POST /api/economy/gift-direct', () => {
     expect(res.body.success).toBe(true);
     expect(res.body.coinsSpent).toBe(10);
     expect(res.body.giftName).toBe('Rose');
+    // Verify the transaction was actually invoked (atomicity contract)
+    expect(mockRunTransaction).toHaveBeenCalled();
+  });
+
+  // ── Race condition coverage (PR #485) ─────────────────────────────
+
+  test('aborts when concurrent send empties balance between outer read and tx read', async () => {
+    // Outer read sees shyCoins=100 (sufficient for 100-coin gift).
+    // Inside the transaction, the FRESH read sees shyCoins=0 (a
+    // concurrent send has emptied the balance). Tx must throw, route
+    // must 402. This is the bug the audit caught: pre-fix, the route
+    // trusted the stale outer read and went negative.
+    mockDocGet
+      .mockResolvedValueOnce(makeGiftDoc({ coinValue: 100 })) // gift
+      .mockResolvedValueOnce(makeUserDoc({ shyCoins: 100 })) // sender (stale)
+      .mockResolvedValueOnce(makeUserDoc({ displayName: 'Bob' })) // recipient
+      .mockResolvedValueOnce(ECONOMY_CONFIG_DOC); // loadEconomyConfig
+    mockRunTransaction.mockImplementationOnce(async (cb) => {
+      const tx = {
+        get: jest.fn().mockResolvedValue(makeUserDoc({ shyCoins: 0 })), // FRESH read
+        update: jest.fn(),
+      };
+      return cb(tx);
+    });
+
+    const app = createApp('user-A');
+    const res = await request(app)
+      .post('/api/economy/gift-direct')
+      .send({ recipientId: 'user-B', giftId: 'gift-rose', quantity: 1 });
+
+    expect(res.status).toBe(402);
+    expect(res.body.error).toMatch(/insufficient coins/i);
   });
 });
 
