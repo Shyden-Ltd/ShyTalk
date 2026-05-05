@@ -623,6 +623,20 @@ router.post('/users/:uniqueId/appeal', async (req, res) => {
     }
 
     const uniqueId = req.params.uniqueId;
+
+    // Idempotency check: if a pending appeal already exists, reject
+    // with 409. Without this, a user could spam the endpoint, creating
+    // unbounded suspensionAppeals docs (Spark quota burn) and admin
+    // noise. Audit H2 (Phase 2A).
+    const userSnap = await db.doc(`users/${uniqueId}`).get();
+    if (userSnap.exists) {
+      const userData = userSnap.data();
+      const currentStatus = userData.suspensionAppealStatus;
+      if (currentStatus === 'pending') {
+        return res.status(409).json({ error: 'Appeal already pending' });
+      }
+    }
+
     log.info('users', 'Suspension appeal submitted', { uniqueId });
 
     await Promise.all([

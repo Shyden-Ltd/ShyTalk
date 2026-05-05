@@ -122,6 +122,13 @@ describe('POST /api/users/:uniqueId/appeal', () => {
   });
 
   it('returns 200 and creates appeal + updates user on success', async () => {
+    // PR #496 (audit H2): the route now reads the user doc to check
+    // for an existing pending appeal. Mock user.exists with no pending
+    // status so the new check passes through to the create path.
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ suspensionAppealStatus: null }),
+    });
     const app = createApp('uid-A', 10000001);
     const res = await request(app)
       .post('/api/users/10000001/appeal')
@@ -145,6 +152,27 @@ describe('POST /api/users/:uniqueId/appeal', () => {
       'users/10000001',
       expect.objectContaining({ suspensionAppealStatus: 'pending' }),
     );
+  });
+
+  // ── PR #496 (audit H2): idempotency — reject duplicate pending ──
+
+  it('rejects duplicate appeal with 409 when one is already pending', async () => {
+    // Pre-fix: user could spam the endpoint creating unbounded
+    // suspensionAppeals docs. Now the route reads suspensionAppealStatus
+    // and 409s if already pending.
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ suspensionAppealStatus: 'pending' }),
+    });
+    const app = createApp('uid-A', 10000001);
+    const res = await request(app)
+      .post('/api/users/10000001/appeal')
+      .send({ appealText: 'Spam attempt' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/already pending/i);
+    // No new appeal doc should have been created
+    expect(mockDocSet).not.toHaveBeenCalled();
   });
 });
 
