@@ -333,16 +333,21 @@ describe('POST /api/user/:uniqueId/warnings/:warningId/revoke', () => {
     expect(res.body.restoredGcs).toBe(90); // 80 + 10
     expect(res.body.deduction).toBe(10);
 
-    // Warning should be marked revoked
-    expect(mockDocUpdate).toHaveBeenCalledWith(
-      'users/10000001/warnings/warn-1',
+    // PR #491: revoke now uses db.batch() for atomicity (audit H7).
+    // The 3 writes (warning revoke, user GCS restore, audit log) are
+    // committed in ONE atomic batch — assert on mockBatchUpdate /
+    // mockBatchSet rather than the global mockDocUpdate / mockDocSet.
+    expect(mockBatchUpdate).toHaveBeenCalledWith(
+      expect.anything(),
       expect.objectContaining({ revoked: true, revokedBy: 'admin-uid' }),
     );
-    // User GCS should be restored
-    expect(mockDocUpdate).toHaveBeenCalledWith(
-      'users/10000001',
+    expect(mockBatchUpdate).toHaveBeenCalledWith(
+      expect.anything(),
       expect.objectContaining({ gcsScore: 90, warningCount: 1 }),
     );
+    // Single batch.commit — proves the 3 writes are atomic, not
+    // 3 separate Promise.all awaits as in the pre-fix code.
+    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
   });
 });
 

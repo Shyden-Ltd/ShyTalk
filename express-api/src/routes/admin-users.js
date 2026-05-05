@@ -595,27 +595,33 @@ router.post('/user/:uniqueId/warnings/:warningId/revoke', async (req, res) => {
       restored: deduction,
     });
 
-    await Promise.all([
-      // Mark warning as revoked
-      db.doc(`users/${uniqueId}/warnings/${warningId}`).update({
-        revoked: true,
-        revokedAt: timestamp,
-        revokedBy: req.auth.uid,
-      }),
-      // Restore GCS points and decrement warning count
-      db.doc(`users/${uniqueId}`).update({
-        gcsScore: restoredGcs,
-        warningCount: Math.max(0, currentCount - 1),
-      }),
-      // Audit log
-      db.doc(`adminAuditLog/${generateId()}`).set({
-        adminId: req.auth.uid,
-        action: 'REVOKE_WARNING',
-        targetUserId: uniqueId,
-        details: `Revoked warning ${warningId}, restored ${deduction} GCS (${currentGcs} → ${restoredGcs})`,
-        createdAt: timestamp,
-      }),
-    ]);
+    // Atomic three-write commit. Pre-fix used Promise.all which is
+    // CONCURRENT, not atomic — if the user-doc update failed after
+    // the warning was marked revoked, the warning would be stuck in
+    // a "revoked" state with GCS NOT restored, and the retry path
+    // (line 579 'Warning already revoked' guard) would block the
+    // operator from fixing it. Audit H7 (Phase 2A).
+    //
+    // Pattern matches the warning-CREATION path at line 440 which
+    // already uses db.batch() correctly.
+    const batch = db.batch();
+    batch.update(db.doc(`users/${uniqueId}/warnings/${warningId}`), {
+      revoked: true,
+      revokedAt: timestamp,
+      revokedBy: req.auth.uid,
+    });
+    batch.update(db.doc(`users/${uniqueId}`), {
+      gcsScore: restoredGcs,
+      warningCount: Math.max(0, currentCount - 1),
+    });
+    batch.set(db.doc(`adminAuditLog/${generateId()}`), {
+      adminId: req.auth.uid,
+      action: 'REVOKE_WARNING',
+      targetUserId: uniqueId,
+      details: `Revoked warning ${warningId}, restored ${deduction} GCS (${currentGcs} → ${restoredGcs})`,
+      createdAt: timestamp,
+    });
+    await batch.commit();
 
     res.json({ success: true, restoredGcs, deduction });
   } catch (err) {
