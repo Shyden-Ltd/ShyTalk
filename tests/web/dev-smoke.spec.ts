@@ -559,6 +559,11 @@ test.describe("Dev Smoke — IAP coin purchase (sandbox)", () => {
     ).toBeGreaterThan(0);
     const pkg = packages[0];
     expect(typeof pkg.productId, "package productId").toBe("string");
+    // The route reads `pkg.coins`/`pkg.bonusCoins` as camelCase
+    // (economy.js:1387-1389). If a future migration moves the
+    // coinPackages schema to snake_case (the codebase does this
+    // elsewhere via userField), expectedTotal would compute 0 and
+    // the next guard would fail loud — that's the intended signal.
     const expectedTotal = (pkg.coins ?? 0) + (pkg.bonusCoins ?? 0);
     expect(
       expectedTotal,
