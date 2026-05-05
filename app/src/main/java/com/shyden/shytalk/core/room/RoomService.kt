@@ -25,6 +25,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -320,6 +321,12 @@ class RoomService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // Cancel the parent scope so SupervisorJob and any in-flight or
+        // subsequently-launched child coroutines are torn down with the
+        // service. The individual job cancels below are now redundant
+        // (children are cancelled when the parent is) but kept for
+        // explicit readability around which observers existed.
+        serviceScope.cancel()
         observerJob?.cancel()
         chatHeadJob?.cancel()
         roomClosedJob?.cancel()
