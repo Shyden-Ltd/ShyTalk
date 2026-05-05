@@ -9,7 +9,7 @@
  */
 
 const router = require('express').Router();
-const { db } = require('../utils/firebase');
+const { db, auth } = require('../utils/firebase');
 const { generateId } = require('../utils/helpers');
 const log = require('../utils/log');
 
@@ -421,6 +421,86 @@ router.post('/test/write/:collection', async (req, res) => {
 
     res.json({ success: true, id: docId });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/test/mint-id-token
+//
+// Mint a Firebase ID token for a test user, suitable for use as a
+// Bearer Authorization header against the auth-protected Express
+// routes. Used by the integration test framework
+// (Phase 3, PR C) to authenticate as multi-account scenarios
+// (sender, recipient, admin) without going through the real
+// Firebase Auth REST flow.
+//
+// Flow:
+//   1. Caller provides a Firebase UID (already created via
+//      /test/setup or /test/create-user).
+//   2. Server uses Firebase Admin to mint a *custom token* for that
+//      UID.
+//   3. Custom token is exchanged for a regular ID token via the
+//      Auth Emulator's signInWithCustomToken REST endpoint.
+//
+// Step 3 happens server-side rather than in the test runner because
+// the emulator host is reachable from inside the local stack
+// (`http://localhost:9099` from Express). This avoids exposing the
+// emulator host config to test code.
+//
+// Production safety: this route is gated by NODE_ENV !== 'production'
+// AND by TEST_API_KEY. Even if NODE_ENV was misconfigured, the
+// TEST_API_KEY check fails-closed.
+router.post('/test/mint-id-token', async (req, res) => {
+  try {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({ error: 'Not available in production' });
+    }
+    if (requireTestApiKey(req, res)) return;
+
+    const { uid } = req.body || {};
+    if (!uid || typeof uid !== 'string') {
+      return res.status(400).json({ error: 'uid (string) required' });
+    }
+
+    // Step 1: mint custom token via Admin SDK
+    const customToken = await auth.createCustomToken(uid);
+
+    // Step 2: exchange for ID token via Auth Emulator REST.
+    // FIREBASE_AUTH_EMULATOR_HOST = 'localhost:9099' in local mode.
+    // FIREBASE_WEB_API_KEY can be any non-empty string in emulator
+    // mode — the emulator doesn't validate it.
+    const emulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST || 'localhost:9099';
+    const apiKey = process.env.FIREBASE_WEB_API_KEY || 'fake-api-key';
+    const exchangeUrl = `http://${emulatorHost}/identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${apiKey}`;
+
+    const resp = await fetch(exchangeUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: customToken, returnSecureToken: true }),
+    });
+    if (!resp.ok) {
+      const errBody = await resp.text();
+      log.error('test-helpers', 'mint-id-token exchange failed', {
+        status: resp.status,
+        body: errBody.slice(0, 500),
+      });
+      return res.status(502).json({
+        error: 'Failed to exchange custom token for ID token',
+        details: `${resp.status}: ${errBody.slice(0, 200)}`,
+      });
+    }
+    const exchangeBody = await resp.json();
+    const idToken = exchangeBody.idToken;
+    if (!idToken) {
+      return res.status(502).json({
+        error: 'Auth Emulator did not return idToken',
+        details: JSON.stringify(exchangeBody).slice(0, 200),
+      });
+    }
+
+    res.json({ idToken });
+  } catch (err) {
+    log.error('test-helpers', 'mint-id-token failed', { error: err.message });
     res.status(500).json({ error: err.message });
   }
 });
