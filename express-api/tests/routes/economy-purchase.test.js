@@ -10,6 +10,7 @@ const mockDocDelete = jest.fn().mockResolvedValue();
 const mockBatchSet = jest.fn();
 const mockBatchUpdate = jest.fn();
 const mockBatchCommit = jest.fn().mockResolvedValue();
+const mockRunTransaction = jest.fn();
 
 // Mutable ref so individual tests can override the collection mock
 let mockCollectionGet = jest.fn().mockResolvedValue({ empty: true, docs: [] });
@@ -51,6 +52,7 @@ jest.mock('../../src/utils/firebase', () => ({
       update: mockBatchUpdate,
       commit: mockBatchCommit,
     })),
+    runTransaction: mockRunTransaction,
   },
   FieldValue: {
     increment: jest.fn((n) => `increment(${n})`),
@@ -102,6 +104,20 @@ beforeEach(() => {
   mockDocSet.mockResolvedValue();
   mockDocUpdate.mockResolvedValue();
   mockDocDelete.mockResolvedValue();
+  // Default transaction: invokes the callback with a mock tx whose
+  // get() resolves the same value mockDocGet would resolve (test
+  // tests configure mockDocGet sequence; the tx reuses it). Tests
+  // that need a different value inside-tx (e.g., race-coverage tests)
+  // override mockRunTransaction explicitly.
+  mockRunTransaction.mockImplementation(async (cb) => {
+    const tx = {
+      get: (ref) => mockDocGet(ref),
+      update: jest.fn(),
+      set: jest.fn(),
+      delete: jest.fn(),
+    };
+    return cb(tx);
+  });
   // Reset economy config cache so each test starts fresh
   economyRouter._resetConfigCache();
   // Reset collection mock to default (empty)
@@ -713,37 +729,44 @@ describe('POST /api/economy/redeem-beans', () => {
     expect(res.body.error).toMatch(/positive/i);
   });
 
-  test('returns 402 when user has insufficient beans', async () => {
-    mockDocGet.mockResolvedValue({
-      exists: true,
-      data: () => ({ shyBeans: 50, shyCoins: 100 }),
+  // PR #486: redeem-beans now uses Firestore transaction. The route
+  // loads economy config FIRST, then enters the transaction which
+  // does the user read+update atomically. Test mock order: call 1 =
+  // config doc, subsequent calls = user doc (via tx.get).
+
+  test('returns 402 when user has insufficient beans (race-safe via tx)', async () => {
+    let callCount = 0;
+    mockDocGet.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) return Promise.resolve(makeConfigDoc()); // config
+      // tx.get(userRef) — user has 50 beans, requesting 100
+      return Promise.resolve({
+        exists: true,
+        data: () => ({ shyBeans: 50, shyCoins: 100 }),
+      });
     });
 
     const app = createApp('user-A');
-    const res = await request(app).post('/api/economy/redeem-beans').send({ amount: 100 }); // user only has 50
+    const res = await request(app).post('/api/economy/redeem-beans').send({ amount: 100 });
 
     expect(res.status).toBe(402);
     expect(res.body.error).toMatch(/insufficient beans/i);
   });
 
   test('returns 200 and converts beans to coins (no bonus below threshold)', async () => {
-    // loadEconomyConfig calls db.doc().get() first (config), then user
     let callCount = 0;
     mockDocGet.mockImplementation(() => {
       callCount++;
-      if (callCount === 1) {
-        // User doc (redeem-beans reads user before config)
-        return Promise.resolve({
-          exists: true,
-          data: () => ({ shyBeans: 500, shyCoins: 100 }),
-        });
-      }
-      // Economy config (loadEconomyConfig)
-      return Promise.resolve(makeConfigDoc());
+      if (callCount === 1) return Promise.resolve(makeConfigDoc()); // config first
+      // tx.get(userRef)
+      return Promise.resolve({
+        exists: true,
+        data: () => ({ shyBeans: 500, shyCoins: 100 }),
+      });
     });
 
     const app = createApp('user-A');
-    const res = await request(app).post('/api/economy/redeem-beans').send({ amount: 100 }); // below beanRedeemBonusThreshold of 2000
+    const res = await request(app).post('/api/economy/redeem-beans').send({ amount: 100 }); // below 2000 threshold
 
     expect(res.status).toBe(200);
     expect(res.body.coinsReceived).toBe(100); // 1:1 below threshold
@@ -755,49 +778,94 @@ describe('POST /api/economy/redeem-beans', () => {
     let callCount = 0;
     mockDocGet.mockImplementation(() => {
       callCount++;
-      if (callCount === 1) {
-        // User doc
-        return Promise.resolve({
-          exists: true,
-          data: () => ({ shyBeans: 5000, shyCoins: 0 }),
-        });
-      }
-      // Economy config
-      return Promise.resolve(makeConfigDoc());
+      if (callCount === 1) return Promise.resolve(makeConfigDoc());
+      return Promise.resolve({
+        exists: true,
+        data: () => ({ shyBeans: 5000, shyCoins: 0 }),
+      });
     });
 
     const app = createApp('user-A');
-    const res = await request(app).post('/api/economy/redeem-beans').send({ amount: 2000 }); // at beanRedeemBonusThreshold (2000)
+    const res = await request(app).post('/api/economy/redeem-beans').send({ amount: 2000 });
 
     expect(res.status).toBe(200);
-    // 2000 * 1.1 = 2200 (floored)
     expect(res.body.coinsReceived).toBe(2200);
-    expect(res.body.newCoinBalance).toBe(2200); // 0 + 2200
-    expect(res.body.newBeanBalance).toBe(3000); // 5000 - 2000
+    expect(res.body.newCoinBalance).toBe(2200);
+    expect(res.body.newBeanBalance).toBe(3000);
   });
 
-  test('calls db.doc().update() with correct bean/coin increments', async () => {
+  test('calls update with correct bean/coin increments inside transaction', async () => {
     let callCount = 0;
     mockDocGet.mockImplementation(() => {
       callCount++;
-      if (callCount === 1) {
-        return Promise.resolve({
-          exists: true,
-          data: () => ({ shyBeans: 200, shyCoins: 50 }),
-        });
-      }
-      return Promise.resolve(makeConfigDoc());
+      if (callCount === 1) return Promise.resolve(makeConfigDoc());
+      return Promise.resolve({
+        exists: true,
+        data: () => ({ shyBeans: 200, shyCoins: 50 }),
+      });
+    });
+    // Capture the tx.update call
+    const txUpdate = jest.fn();
+    mockRunTransaction.mockImplementationOnce(async (cb) => {
+      const tx = {
+        get: (ref) => mockDocGet(ref),
+        update: txUpdate,
+        set: jest.fn(),
+        delete: jest.fn(),
+      };
+      return cb(tx);
     });
 
     const app = createApp('user-A');
     await request(app).post('/api/economy/redeem-beans').send({ amount: 50 }).expect(200);
 
-    expect(mockDocUpdate).toHaveBeenCalledWith(
+    expect(txUpdate).toHaveBeenCalledWith(
+      expect.anything(),
       expect.objectContaining({
         shyBeans: 'increment(-50)',
         shyCoins: 'increment(50)',
       }),
     );
+  });
+
+  // ── Race condition coverage (PR #486 audit C2) ────────────────────
+
+  test('aborts when concurrent redeem empties balance between outer calc and tx read', async () => {
+    // loadEconomyConfig returns normal config; tx.get sees 0 beans
+    // (a concurrent redeem has emptied them). Tx must throw, route 402.
+    let callCount = 0;
+    mockDocGet.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) return Promise.resolve(makeConfigDoc());
+      // Fresh tx read sees 0 beans (concurrent redeem won the race)
+      return Promise.resolve({
+        exists: true,
+        data: () => ({ shyBeans: 0, shyCoins: 100 }),
+      });
+    });
+
+    const app = createApp('user-A');
+    const res = await request(app).post('/api/economy/redeem-beans').send({ amount: 100 });
+
+    expect(res.status).toBe(402);
+    expect(res.body.error).toMatch(/insufficient beans/i);
+  });
+
+  test('returns 404 when user doc does not exist (tx-internal check)', async () => {
+    // The tx.get returns a non-existent doc. Tx throws 'User not found'
+    // and the route maps to 404.
+    let callCount = 0;
+    mockDocGet.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) return Promise.resolve(makeConfigDoc());
+      return Promise.resolve({ exists: false });
+    });
+
+    const app = createApp('user-A');
+    const res = await request(app).post('/api/economy/redeem-beans').send({ amount: 100 });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/user not found/i);
   });
 
   // ── All preset redemption amounts (matching UI buttons) ──
@@ -814,13 +882,11 @@ describe('POST /api/economy/redeem-beans', () => {
       let callCount = 0;
       mockDocGet.mockImplementation(() => {
         callCount++;
-        if (callCount === 1) {
-          return Promise.resolve({
-            exists: true,
-            data: () => ({ shyBeans: beanBalance, shyCoins: 0 }),
-          });
-        }
-        return Promise.resolve(makeConfigDoc());
+        if (callCount === 1) return Promise.resolve(makeConfigDoc()); // config first
+        return Promise.resolve({
+          exists: true,
+          data: () => ({ shyBeans: beanBalance, shyCoins: 0 }),
+        });
       });
 
       const app = createApp('user-A');
@@ -838,13 +904,11 @@ describe('POST /api/economy/redeem-beans', () => {
     let callCount = 0;
     mockDocGet.mockImplementation(() => {
       callCount++;
-      if (callCount === 1) {
-        return Promise.resolve({
-          exists: true,
-          data: () => ({ shyBeans: fullBalance, shyCoins: 200 }),
-        });
-      }
-      return Promise.resolve(makeConfigDoc());
+      if (callCount === 1) return Promise.resolve(makeConfigDoc());
+      return Promise.resolve({
+        exists: true,
+        data: () => ({ shyBeans: fullBalance, shyCoins: 200 }),
+      });
     });
 
     const app = createApp('user-A');

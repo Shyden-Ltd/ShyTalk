@@ -1248,24 +1248,48 @@ router.post('/economy/redeem-beans', async (req, res) => {
       return res.status(400).json({ error: 'amount must be a positive number' });
     }
 
-    const userSnap = await db.doc(`users/${uniqueId}`).get();
-    if (!userSnap.exists) return res.status(404).json({ error: 'User not found' });
-    const user = userSnap.data();
-
-    const shyBeans = userField(user, 'shyBeans', 'shy_beans') || 0;
-    const shyCoins = userField(user, 'shyCoins', 'shy_coins') || 0;
-    if (shyBeans < amount) return res.status(402).json({ error: 'Insufficient beans' });
-
     const config = await loadEconomyConfig();
     const hasBonus = amount >= config.beanRedeemBonusThreshold;
     const coins = hasBonus ? Math.floor(amount * config.beanRedeemBonusMultiplier) : amount;
-    const newBeans = shyBeans - amount;
-    const newCoins = shyCoins + coins;
 
-    await db.doc(`users/${uniqueId}`).update({
-      shyBeans: FieldValue.increment(-amount),
-      shyCoins: FieldValue.increment(coins),
-    });
+    // Atomic bean→coin conversion. Without the transaction, two
+    // concurrent redeem requests at the user's exact bean balance
+    // both pass the `shyBeans < amount` check and both decrement,
+    // pushing balance below 0. Coins would also be over-credited.
+    // The transaction reads beans fresh inside the tx; aborts on
+    // insufficient; performs the swap atomically.
+    //
+    // Audit C2 (Phase 2A): /economy/redeem-beans race condition.
+    const userRef = db.doc(`users/${uniqueId}`);
+    let newBeans;
+    let newCoins;
+    try {
+      ({ newBeans, newCoins } = await db.runTransaction(async (t) => {
+        const snap = await t.get(userRef);
+        if (!snap.exists) {
+          throw new Error('User not found');
+        }
+        const data = snap.data();
+        const beans = userField(data, 'shyBeans', 'shy_beans') || 0;
+        const coinsNow = userField(data, 'shyCoins', 'shy_coins') || 0;
+        if (beans < amount) {
+          throw new Error('Insufficient beans');
+        }
+        t.update(userRef, {
+          shyBeans: FieldValue.increment(-amount),
+          shyCoins: FieldValue.increment(coins),
+        });
+        return { newBeans: beans - amount, newCoins: coinsNow + coins };
+      }));
+    } catch (txErr) {
+      if (txErr.message === 'User not found') {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      if (txErr.message === 'Insufficient beans') {
+        return res.status(402).json({ error: 'Insufficient beans' });
+      }
+      throw txErr;
+    }
 
     const bonusPct = Math.round((config.beanRedeemBonusMultiplier - 1) * 100);
     const redeemTxId = generateId();

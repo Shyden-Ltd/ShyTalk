@@ -361,8 +361,21 @@ describe('addBroadcast old broadcast trimming (lines 109-116)', () => {
 // ═══════════════════════════════════════════════════════════════════
 
 describe('POST /api/economy/redeem-beans — additional coverage', () => {
-  test('returns 404 when user not found', async () => {
+  test('returns 404 when user not found (PR #486 — tx-internal check)', async () => {
+    // Per PR #486: redeem-beans now reads user inside Firestore
+    // transaction. Override the default tx mock (which returns
+    // backpack-shaped data) to route tx.get() through mockDocGet so
+    // {exists:false} flows correctly to the user-not-found branch.
     mockDocGet.mockResolvedValue({ exists: false });
+    mockRunTransaction.mockImplementation(async (cb) => {
+      const tx = {
+        get: (ref) => mockDocGet(ref),
+        update: jest.fn(),
+        set: jest.fn(),
+        delete: jest.fn(),
+      };
+      return cb(tx);
+    });
 
     const app = createApp('user-A');
     const res = await request(app).post('/api/economy/redeem-beans').send({ amount: 100 });
