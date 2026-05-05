@@ -232,6 +232,65 @@ describe('POST /api/users', () => {
     expect(res.body.success).toBe(true);
   });
 
+  // ── PR #493 (audit H1): calendar-year age math ──────────────────
+
+  test('rejects user whose 16th birthday is TOMORROW (boundary just below)', async () => {
+    // Pre-fix used (now - dob) / yearMs which produces fractional
+    // years and would accept this case if the fraction rounded up.
+    // Calendar-year math correctly says: today's month/day is BEFORE
+    // birth month/day → subtract 1 from yearDiff → age = 15 → reject.
+    //
+    // Use Date.UTC for construction so the test is timezone-independent.
+    const today = new Date();
+    // Compute tomorrow's Y/M/D in UTC, then build DOB exactly 16
+    // years earlier on the same calendar date.
+    const tomorrowMs = Date.UTC(
+      today.getUTCFullYear(),
+      today.getUTCMonth(),
+      today.getUTCDate() + 1,
+    );
+    const tomorrow = new Date(tomorrowMs);
+    const dobMs = Date.UTC(
+      tomorrow.getUTCFullYear() - 16,
+      tomorrow.getUTCMonth(),
+      tomorrow.getUTCDate(),
+    );
+    const dob = new Date(dobMs);
+    const app = createApp('new-user-uid', null);
+    const res = await request(app)
+      .post('/api/users')
+      .send({
+        provider: 'google',
+        identifier: 'birthday-tomorrow@gmail.com',
+        dateOfBirth: dob.toISOString().slice(0, 10),
+      })
+      .expect(403);
+
+    expect(res.body.error).toBe('Must be at least 16 years old');
+  });
+
+  test('accepts user whose 16th birthday is TODAY (boundary at exactly 16)', async () => {
+    // Calendar math: yearDiff = 16, monthDiff = 0, dayDiff = 0 →
+    // age stays at 16 → accept. Pre-fix used ms-difference which
+    // could be one day short on the birthday itself due to leap-year
+    // accumulation.
+    mockTransactionGet.mockResolvedValue({ exists: false });
+    const today = new Date();
+    const dobMs = Date.UTC(today.getUTCFullYear() - 16, today.getUTCMonth(), today.getUTCDate());
+    const dob = new Date(dobMs);
+    const app = createApp('new-user-uid', null);
+    const res = await request(app)
+      .post('/api/users')
+      .send({
+        provider: 'google',
+        identifier: 'birthday-today@gmail.com',
+        dateOfBirth: dob.toISOString().slice(0, 10),
+      })
+      .expect(200);
+
+    expect(res.body.success).toBe(true);
+  });
+
   test('accepts 18 year old (above new minimum, will be eligible for verification)', async () => {
     mockTransactionGet.mockResolvedValue({ exists: false });
     const today = new Date();

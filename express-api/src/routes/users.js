@@ -73,9 +73,23 @@ router.post('/users', async (req, res) => {
     if (Number.isNaN(dob.getTime())) {
       return res.status(400).json({ error: 'Invalid date of birth format' });
     }
-    const ageDiff = Date.now() - dob.getTime();
-    const ageDate = new Date(ageDiff);
-    const age = Math.abs(ageDate.getUTCFullYear() - 1970);
+    // Calendar-year age computation. Pre-fix used (Date.now() - dob)
+    // / year-in-ms which produces wrong values around leap years
+    // (Feb 29 birthdays return 15.99... years for ~5 days after the
+    // 16th birthday) AND can be off-by-one near year boundaries due
+    // to UTC offset handling. Audit H1 (Phase 2A): regulatory issue
+    // (COPPA, GDPR, Apple age gate require accurate age).
+    //
+    // Correct algorithm: yearDiff, then subtract 1 if today's
+    // month/day is BEFORE the birth month/day (haven't had this
+    // year's birthday yet).
+    const today = new Date();
+    let age = today.getUTCFullYear() - dob.getUTCFullYear();
+    const monthDiff = today.getUTCMonth() - dob.getUTCMonth();
+    const dayDiff = today.getUTCDate() - dob.getUTCDate();
+    if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+      age -= 1;
+    }
     // Minimum sign-up age bumped 13 → 16 on 2026-05-03 for Apple App
     // Store content-guideline compliance — see
     // `.project/plans/2026-05-03-age-verification.md`. The 16-17 cohort
