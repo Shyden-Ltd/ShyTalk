@@ -140,15 +140,29 @@ async function addBroadcast(data) {
 
 /**
  * Write a gift to a user's gift wall (upsert receivedCount, update senders).
+ *
+ * Audit M6 (Phase 2A): receivedCount updates use FieldValue.increment
+ * for atomicity. Pre-fix used (read currentCount) → (write current+qty)
+ * which lost concurrent updates: two simultaneous gifts to the same
+ * recipient/giftId both read receivedCount=5, both wrote 6, true count
+ * was 7. Under a room burst-gift scenario this lost gift counts visibly
+ * (rankings, profile display).
+ *
+ * Sender list update is best-effort: it's NOT atomic against itself
+ * because senders is an array that needs in-place mutation (find + sort
+ * + trim). Two concurrent updates can each lose the OTHER's sender
+ * entry. This is documented as known partial-failure for the senders
+ * field — the receivedCount remains accurate, which is the
+ * primary-display value.
  */
 async function updateGiftWall(recipientId, giftId, senderId, quantity) {
-  const wallSnap = await db.doc(`users/${recipientId}/giftWall/${giftId}`).get();
+  const wallRef = db.doc(`users/${recipientId}/giftWall/${giftId}`);
+  const wallSnap = await wallRef.get();
   const wallDoc = wallSnap.exists ? wallSnap.data() : null;
 
-  const currentCount = wallDoc?.receivedCount || 0;
   const senders = wallDoc?.senders || [];
 
-  // Update or add sender
+  // Update or add sender (best-effort — see function header)
   const existingSender = senders.find((s) => s.senderId === senderId);
   if (existingSender) {
     existingSender.sendCount = (existingSender.sendCount || 0) + quantity;
@@ -161,11 +175,24 @@ async function updateGiftWall(recipientId, giftId, senderId, quantity) {
   senders.sort((a, b) => (b.sendCount || 0) - (a.sendCount || 0));
   const trimmedSenders = senders.slice(0, 50);
 
-  await db.doc(`users/${recipientId}/giftWall/${giftId}`).set({
-    giftId,
-    receivedCount: currentCount + quantity,
-    senders: trimmedSenders,
-  });
+  if (wallSnap.exists) {
+    // Atomic-increment for the count + overwrite for the senders.
+    // The senders update is read-modify-write so it's NOT race-safe
+    // against itself (documented above), but the count IS race-safe
+    // because increment is server-side atomic.
+    await wallRef.update({
+      giftId,
+      receivedCount: FieldValue.increment(quantity),
+      senders: trimmedSenders,
+    });
+  } else {
+    // Create path — set is fine here, count starts at quantity.
+    await wallRef.set({
+      giftId,
+      receivedCount: quantity,
+      senders: trimmedSenders,
+    });
+  }
 }
 
 /**
@@ -200,13 +227,19 @@ async function writeRoomGiftMessage(roomId, senderId, senderName, text, giftId, 
 /**
  * Incrementally update gift rankings when a gift is sent.
  * Replaces the old hourly cron job with real-time updates.
+ *
+ * Audit M6 (Phase 2A): totalSent uses FieldValue.increment for atomic
+ * server-side increment. The rankings array still has the same partial-
+ * failure window as updateGiftWall.senders — read-modify-write under
+ * concurrent updates can drop entries — but the totalSent counter
+ * remains accurate.
  */
 async function updateGiftRankings(recipientId, giftId, quantity) {
   try {
-    const rankSnap = await db.doc(`giftRankings/${giftId}`).get();
+    const rankRef = db.doc(`giftRankings/${giftId}`);
+    const rankSnap = await rankRef.get();
     const rankDoc = rankSnap.exists ? rankSnap.data() : {};
     const rankings = rankDoc.rankings || [];
-    const totalSent = (rankDoc.totalSent || 0) + quantity;
 
     // Find or add recipient in rankings
     const existing = rankings.find((r) => r.userId === recipientId);
@@ -233,11 +266,19 @@ async function updateGiftRankings(recipientId, giftId, quantity) {
       r.rank = i + 1;
     });
 
-    await db.doc(`giftRankings/${giftId}`).set({
-      rankings: trimmed,
-      totalSent,
-      lastUpdated: now(),
-    });
+    if (rankSnap.exists) {
+      await rankRef.update({
+        rankings: trimmed,
+        totalSent: FieldValue.increment(quantity),
+        lastUpdated: now(),
+      });
+    } else {
+      await rankRef.set({
+        rankings: trimmed,
+        totalSent: quantity,
+        lastUpdated: now(),
+      });
+    }
   } catch (err) {
     log.error('economy', 'Failed to update gift rankings', { error: err.message });
   }
