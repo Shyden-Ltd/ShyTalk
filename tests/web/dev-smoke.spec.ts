@@ -283,11 +283,12 @@ test.describe("Dev Smoke — follow / unfollow journey", () => {
       Array.isArray(targetBody.followerIds),
       `target.followerIds must be an array, got ${typeof targetBody.followerIds}`,
     ).toBe(true);
-    // Coerce both sides to Number — the route stores Number(uniqueId)
-    // but defensive in case a future change introduces strings.
+    // Defensive coerce on the API side — the route stores
+    // Number(uniqueId) today, but the cast guards against a future
+    // change that introduces strings (cf. PR #473 asBool() drift).
     const followerIds: number[] = targetBody.followerIds.map(Number);
     expect(
-      followerIds.includes(Number(smoke.uniqueId)),
+      followerIds.includes(smoke.uniqueId),
       `target.followerIds=${JSON.stringify(followerIds)} must include smoke uniqueId=${smoke.uniqueId} after follow`,
     ).toBe(true);
 
@@ -314,7 +315,7 @@ test.describe("Dev Smoke — follow / unfollow journey", () => {
       Number,
     );
     expect(
-      cleanFollowerIds.includes(Number(smoke.uniqueId)),
+      cleanFollowerIds.includes(smoke.uniqueId),
       `target.followerIds=${JSON.stringify(cleanFollowerIds)} must NOT include smoke uniqueId=${smoke.uniqueId} after unfollow`,
     ).toBe(false);
   });
