@@ -276,15 +276,22 @@ test.describe("Integration — Firestore rules: conversations privacy", () => {
   });
 
   test("participant CAN read their own conversation", async () => {
+    // The rule uses `string(callerUniqueId()) in participantIds`, and
+    // `callerUniqueId()` reads the `uniqueId` custom claim. The
+    // rules-unit-testing harness sets claims via authenticatedContext's
+    // second arg. participantIds must hold the STRING form of uniqueId
+    // (matches the rule's `string(...)` coercion).
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       const adminDb = ctx.firestore() as unknown as Firestore;
       await setDoc(doc(adminDb, "conversations", "dm_alice_bob_2"), {
-        participantIds: ["uid-alice", "uid-bob"],
+        participantIds: ["100000200", "100000201"],
         createdAt: Date.now(),
       });
     });
 
-    const alice = testEnv.authenticatedContext("uid-alice");
+    const alice = testEnv.authenticatedContext("uid-alice", {
+      uniqueId: "100000200",
+    });
     const aliceDb = alice.firestore() as unknown as Firestore;
     await assertSucceeds(
       getDoc(doc(aliceDb, "conversations", "dm_alice_bob_2")),
