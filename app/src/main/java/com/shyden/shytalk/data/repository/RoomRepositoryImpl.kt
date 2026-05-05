@@ -145,26 +145,38 @@ class RoomRepositoryImpl(
         userId: String,
     ): Resource<Unit> =
         firebaseCall("Failed to leave room") {
-            // Get current room to find user's seat
-            val doc = firestore.document("rooms/$roomId").get().await()
-            val data = doc.data
-            val updates =
-                mutableMapOf<String, Any?>(
-                    "participantIds" to FieldValue.arrayRemove(userId),
-                )
-            // Clear any seat occupied by this user
-            if (data != null) {
-                val seatsRaw = data["seats"] as? Map<*, *>
-                seatsRaw?.forEach { (index, seatData) ->
-                    val seat = seatData as? Map<*, *>
-                    if (seat?.get("userId") == userId) {
-                        updates["seats.$index.userId"] = null
-                        updates["seats.$index.state"] = "EMPTY"
-                        updates["seats.$index.isMuted"] = false
+            // Atomic: read seats + clear-by-user in one transaction so a
+            // concurrent moveSeat (also transactional) can't swap the seat
+            // mid-flight, which would otherwise leave us writing the
+            // pre-move user's seat clear (stale data) or missing the
+            // target's actual seat. moveSeat at line 219 uses the same
+            // pattern; this brings leaveRoom's read-then-write to parity.
+            val roomRef = firestore.document("rooms/$roomId")
+            firestore
+                .runTransaction { transaction ->
+                    val doc = transaction.get(roomRef)
+                    val data = doc.data
+                    val updates =
+                        mutableMapOf<String, Any?>(
+                            "participantIds" to FieldValue.arrayRemove(userId),
+                        )
+                    if (data != null) {
+                        val seatsRaw = data["seats"] as? Map<*, *>
+                        seatsRaw?.forEach { (index, seatData) ->
+                            val seat = seatData as? Map<*, *>
+                            if (seat?.get("userId") == userId) {
+                                updates["seats.$index.userId"] = null
+                                updates["seats.$index.state"] = "EMPTY"
+                                updates["seats.$index.isMuted"] = false
+                            }
+                        }
                     }
-                }
-            }
-            firestore.document("rooms/$roomId").update(updates).await()
+                    transaction.update(roomRef, updates)
+                }.await()
+            // user-doc update is intentionally outside the transaction —
+            // Firestore transactions can't span unrelated docs without a
+            // multi-doc read; if the user-doc write fails, the user has a
+            // stale currentRoomId but the room is correctly cleared.
             firestore.document("users/$userId").update("currentRoomId", null).await()
         }
 
@@ -252,36 +264,42 @@ class RoomRepositoryImpl(
     ): Resource<Unit> =
         firebaseCall("Failed to kick user") {
             val effectiveReason = reason.ifBlank { "No reason given" }
-            val updates =
-                mutableMapOf<String, Any?>(
-                    "participantIds" to FieldValue.arrayRemove(userId),
-                    "bannedUserIds" to FieldValue.arrayUnion(userId),
-                    "kickInfo.$userId" to
-                        mapOf(
-                            "kickerName" to kickerName,
-                            "reason" to effectiveReason,
-                        ),
-                )
-            // Clear any seat occupied by this user
-            if (seatIndex != null) {
-                updates["seats.$seatIndex.userId"] = null
-                updates["seats.$seatIndex.state"] = "EMPTY"
-                updates["seats.$seatIndex.isMuted"] = false
-            } else {
-                // Find and clear seat by reading room data
-                val doc = firestore.document("rooms/$roomId").get().await()
-                val data = doc.data
-                val seatsRaw = data?.get("seats") as? Map<*, *>
-                seatsRaw?.forEach { (index, seatData) ->
-                    val seat = seatData as? Map<*, *>
-                    if (seat?.get("userId") == userId) {
-                        updates["seats.$index.userId"] = null
-                        updates["seats.$index.state"] = "EMPTY"
-                        updates["seats.$index.isMuted"] = false
+            val roomRef = firestore.document("rooms/$roomId")
+            // Atomic: when seatIndex is unknown we MUST read seats inside
+            // the same transaction as the clear, otherwise a concurrent
+            // moveSeat can shuffle the target's seat between our read and
+            // write, leaving us blanking the wrong seat.
+            firestore
+                .runTransaction { transaction ->
+                    val updates =
+                        mutableMapOf<String, Any?>(
+                            "participantIds" to FieldValue.arrayRemove(userId),
+                            "bannedUserIds" to FieldValue.arrayUnion(userId),
+                            "kickInfo.$userId" to
+                                mapOf(
+                                    "kickerName" to kickerName,
+                                    "reason" to effectiveReason,
+                                ),
+                        )
+                    if (seatIndex != null) {
+                        updates["seats.$seatIndex.userId"] = null
+                        updates["seats.$seatIndex.state"] = "EMPTY"
+                        updates["seats.$seatIndex.isMuted"] = false
+                    } else {
+                        val doc = transaction.get(roomRef)
+                        val data = doc.data
+                        val seatsRaw = data?.get("seats") as? Map<*, *>
+                        seatsRaw?.forEach { (index, seatData) ->
+                            val seat = seatData as? Map<*, *>
+                            if (seat?.get("userId") == userId) {
+                                updates["seats.$index.userId"] = null
+                                updates["seats.$index.state"] = "EMPTY"
+                                updates["seats.$index.isMuted"] = false
+                            }
+                        }
                     }
-                }
-            }
-            firestore.document("rooms/$roomId").update(updates).await()
+                    transaction.update(roomRef, updates)
+                }.await()
             firestore.document("users/$userId").update("currentRoomId", null).await()
         }
 
@@ -492,23 +510,31 @@ class RoomRepositoryImpl(
                     .await()
             for (doc in snapshot.documents) {
                 if (doc.id == exceptRoomId) continue
-                val data = doc.data ?: continue
-                val updates =
-                    mutableMapOf<String, Any?>(
-                        "participantIds" to FieldValue.arrayRemove(userId),
-                    )
-                // Clear any seat occupied by this user
-                val seatsRaw = data["seats"] as? Map<*, *>
-                seatsRaw?.forEach { (index, seatData) ->
-                    val seat = seatData as? Map<*, *>
-                    if (seat?.get("userId") == userId) {
-                        updates["seats.$index.userId"] = null
-                        updates["seats.$index.state"] = "EMPTY"
-                        updates["seats.$index.isMuted"] = false
-                    }
-                }
+                // Atomic per-room: read seats + clear under one transaction
+                // so a concurrent moveSeat can't shuffle this user's seat
+                // between our read and write. Each room is independent so
+                // a per-room transaction (not multi-doc) is sufficient.
+                val roomRef = firestore.document("rooms/${doc.id}")
                 try {
-                    firestore.document("rooms/${doc.id}").update(updates).await()
+                    firestore
+                        .runTransaction { transaction ->
+                            val freshDoc = transaction.get(roomRef)
+                            val data = freshDoc.data ?: return@runTransaction
+                            val updates =
+                                mutableMapOf<String, Any?>(
+                                    "participantIds" to FieldValue.arrayRemove(userId),
+                                )
+                            val seatsRaw = data["seats"] as? Map<*, *>
+                            seatsRaw?.forEach { (index, seatData) ->
+                                val seat = seatData as? Map<*, *>
+                                if (seat?.get("userId") == userId) {
+                                    updates["seats.$index.userId"] = null
+                                    updates["seats.$index.state"] = "EMPTY"
+                                    updates["seats.$index.isMuted"] = false
+                                }
+                            }
+                            transaction.update(roomRef, updates)
+                        }.await()
                 } catch (e: Exception) {
                     Log.w(TAG, "Room operation failed", e)
                 }
@@ -561,25 +587,29 @@ class RoomRepositoryImpl(
         userId: String,
     ): Resource<Unit> =
         firebaseCall("Failed to remove disconnected user") {
-            // Same logic as leaveRoom
-            val doc = firestore.document("rooms/$roomId").get().await()
-            val data = doc.data
-            val updates =
-                mutableMapOf<String, Any?>(
-                    "participantIds" to FieldValue.arrayRemove(userId),
-                )
-            if (data != null) {
-                val seatsRaw = data["seats"] as? Map<*, *>
-                seatsRaw?.forEach { (index, seatData) ->
-                    val seat = seatData as? Map<*, *>
-                    if (seat?.get("userId") == userId) {
-                        updates["seats.$index.userId"] = null
-                        updates["seats.$index.state"] = "EMPTY"
-                        updates["seats.$index.isMuted"] = false
+            // Same race-safety logic as leaveRoom.
+            val roomRef = firestore.document("rooms/$roomId")
+            firestore
+                .runTransaction { transaction ->
+                    val doc = transaction.get(roomRef)
+                    val data = doc.data
+                    val updates =
+                        mutableMapOf<String, Any?>(
+                            "participantIds" to FieldValue.arrayRemove(userId),
+                        )
+                    if (data != null) {
+                        val seatsRaw = data["seats"] as? Map<*, *>
+                        seatsRaw?.forEach { (index, seatData) ->
+                            val seat = seatData as? Map<*, *>
+                            if (seat?.get("userId") == userId) {
+                                updates["seats.$index.userId"] = null
+                                updates["seats.$index.state"] = "EMPTY"
+                                updates["seats.$index.isMuted"] = false
+                            }
+                        }
                     }
-                }
-            }
-            firestore.document("rooms/$roomId").update(updates).await()
+                    transaction.update(roomRef, updates)
+                }.await()
             firestore.document("users/$userId").update("currentRoomId", null).await()
         }
 }

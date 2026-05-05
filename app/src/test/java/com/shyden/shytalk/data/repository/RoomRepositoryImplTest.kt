@@ -136,7 +136,10 @@ class RoomRepositoryImplTest {
     @Test
     fun `leaveRoom returns Error on exception`() =
         runTest {
-            every { mockDocRef.get() } returns Tasks.forException(RuntimeException("Fail"))
+            // leaveRoom now reads + writes inside a transaction (race-safety
+            // fix for the seat-clear path), so failures surface via
+            // runTransaction rather than the standalone get/update calls.
+            every { firestore.runTransaction<Unit>(any()) } returns Tasks.forException(RuntimeException("Fail"))
 
             val result = repo.leaveRoom("room-1", "user-1")
             assertTrue(result is Resource.Error)
@@ -218,7 +221,9 @@ class RoomRepositoryImplTest {
     @Test
     fun `kickUser returns Error on exception`() =
         runTest {
-            every { mockDocRef.update(any<Map<String, Any>>()) } returns Tasks.forException(RuntimeException("Fail"))
+            // kickUser now reads + writes inside a transaction; failure
+            // surfaces via runTransaction.
+            every { firestore.runTransaction<Unit>(any()) } returns Tasks.forException(RuntimeException("Fail"))
 
             val result = repo.kickUser("room-1", "bad-user", 2)
             assertTrue(result is Resource.Error)
@@ -448,7 +453,9 @@ class RoomRepositoryImplTest {
     @Test
     fun `removeDisconnectedUser returns Error on exception`() =
         runTest {
-            every { mockDocRef.get() } returns Tasks.forException(RuntimeException("Fail"))
+            // removeDisconnectedUser now reads + writes inside a transaction;
+            // failure surfaces via runTransaction.
+            every { firestore.runTransaction<Unit>(any()) } returns Tasks.forException(RuntimeException("Fail"))
 
             val result = repo.removeDisconnectedUser("room-1", "user-1")
             assertTrue(result is Resource.Error)
