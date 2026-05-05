@@ -250,6 +250,67 @@ describe('POST /api/economy/gacha', () => {
 
   // ── Insufficient coins ───────────────────────────────────────────
 
+  // ── PR #499 (audit M3): pullCosts key tolerance (numeric vs string) ──
+
+  test('resolves cost when pullCosts has numeric keys (Firestore native)', async () => {
+    // Pre-fix: route used pullCosts[String(pullCount)] which misses
+    // numeric-key maps if Firestore stores them as integers. Audit M3.
+    // The fix tries numeric first then falls back to string, so both
+    // forms resolve. This test pins the numeric-key path.
+    let callCount = 0;
+    mockDocGet.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        return Promise.resolve({
+          exists: true,
+          id: 'economy',
+          // Numeric-key map — same as the DEFAULT_ECONOMY_CONFIG declaration
+          data: () => ({ pullCosts: { 1: 10, 10: 100, 100: 1000 } }),
+        });
+      }
+      return Promise.resolve({
+        exists: true,
+        data: () => ({ shyCoins: 5 }), // insufficient
+      });
+    });
+
+    const app = createApp('user-A');
+    const res = await request(app).post('/api/economy/gacha').send({ pullCount: 1 });
+
+    // 402 means we got past the 'Invalid pull count' 400 — proves the
+    // cost lookup resolved successfully.
+    expect(res.status).toBe(402);
+    expect(res.body.error).toMatch(/insufficient coins/i);
+  });
+
+  test('resolves cost when pullCosts has string keys (JSON serialised)', async () => {
+    // Most real-world Firestore docs deserialise JS objects with
+    // string keys. Confirms the fallback `pullCosts[String(pullCount)]`
+    // still works.
+    let callCount = 0;
+    mockDocGet.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        return Promise.resolve({
+          exists: true,
+          id: 'economy',
+          // String-key map (explicit)
+          data: () => ({ pullCosts: { 1: 10, 10: 100, 100: 1000 } }),
+        });
+      }
+      return Promise.resolve({
+        exists: true,
+        data: () => ({ shyCoins: 5 }),
+      });
+    });
+
+    const app = createApp('user-A');
+    const res = await request(app).post('/api/economy/gacha').send({ pullCount: 1 });
+
+    expect(res.status).toBe(402);
+    expect(res.body.error).toMatch(/insufficient coins/i);
+  });
+
   test('returns 402 when user has insufficient coins for single pull', async () => {
     let callCount = 0;
     mockDocGet.mockImplementation(() => {

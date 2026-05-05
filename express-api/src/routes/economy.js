@@ -498,7 +498,13 @@ router.post('/economy/gacha', async (req, res) => {
 
     const config = await loadEconomyConfig();
     const pullCosts = config.pullCosts || { 1: 10, 10: 100, 100: 1000 };
-    const cost = pullCosts[String(pullCount)];
+    // Tolerate either string or numeric keys. The DEFAULT_ECONOMY_CONFIG
+    // declares pullCosts with numeric keys (`{ 1: 10, ... }`) which
+    // JS coerces to strings; if Firestore ever stores them as numeric
+    // map keys (Firestore preserves the type the doc was written with),
+    // a string lookup would miss. Audit M3 (Phase 2A): try numeric
+    // first, fall back to string. Either form resolves correctly.
+    const cost = pullCosts[pullCount] ?? pullCosts[String(pullCount)];
     if (!cost) return res.status(400).json({ error: 'Invalid pull count' });
 
     // Price validation
