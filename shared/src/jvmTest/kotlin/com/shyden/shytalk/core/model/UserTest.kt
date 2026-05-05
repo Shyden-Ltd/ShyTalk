@@ -484,6 +484,20 @@ class UserTest {
     }
 
     @Test
+    fun `default createdAt and lastSeenAt are 0L (not capture-time)`() {
+        // Regression test: default-constructed User must NOT capture
+        // currentTimeMillis() at construction time. If it did, writing
+        // a default-constructed User via UserRepository.createOrUpdateUser
+        // would overwrite the server's authoritative createdAt with
+        // wall-clock-at-construction. fromMap() populates these fields
+        // from the Firestore doc; client-built User instances must
+        // explicitly set them when the value matters.
+        val user = User()
+        assertEquals(0L, user.createdAt)
+        assertEquals(0L, user.lastSeenAt)
+    }
+
+    @Test
     fun `isPendingDeletion is true when both timestamps are set`() {
         val user =
             User(

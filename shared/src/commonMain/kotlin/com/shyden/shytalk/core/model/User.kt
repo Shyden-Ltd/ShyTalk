@@ -25,9 +25,16 @@ data class User(
     val email: String? = null,
     val currentRoomId: String? = null,
     val lastRoomName: String? = null,
-    val createdAt: Long = currentTimeMillis(),
+    // 0L sentinel so a default-constructed User() does NOT capture the
+    // current timestamp at construction time. Default-constructing a User
+    // and then writing it via UserRepository.createOrUpdateUser would
+    // overwrite the server's authoritative createdAt/lastSeenAt with
+    // wall-clock-at-construction. fromMap() populates these from the
+    // Firestore doc; client-built User instances should always set the
+    // field explicitly when the value matters.
+    val createdAt: Long = 0L,
     val userType: UserType = UserType.MEMBER,
-    val lastSeenAt: Long = currentTimeMillis(),
+    val lastSeenAt: Long = 0L,
     val stalkerCount: Long = 0,
     val newStalkerCount: Long = 0,
     val stalkersLastViewedAt: Long = 0,
