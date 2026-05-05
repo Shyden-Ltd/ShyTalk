@@ -499,6 +499,20 @@ test.describe("Dev Smoke — R2 image upload", () => {
       del.ok(),
       `delete expected 200, got ${del.status()}: ${await del.text()} for key=${key}`,
     ).toBe(true);
+
+    // Phase 4 — verify the object is actually gone. The DELETE
+    // endpoint returns 200 on the API call; that doesn't prove R2
+    // actually deleted the object (e.g., a future refactor that
+    // makes the route a no-op would silently leave orphans
+    // accumulating forever). R2 has read-after-write consistency on
+    // deletes too, so a fresh GET should now 404 (or 403, depending
+    // on bucket public-read policy for missing keys).
+    const verifyDel = await smoke.api.get(body.url);
+    expect(
+      [403, 404].includes(verifyDel.status()),
+      `expected 403/404 after DELETE, got ${verifyDel.status()} for ${body.url} — ` +
+        `object was NOT actually removed and orphans will accumulate`,
+    ).toBe(true);
   });
 
   test("POST /api/storage/upload with disallowed path is rejected with 400", async () => {
