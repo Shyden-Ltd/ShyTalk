@@ -19,8 +19,12 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
@@ -193,6 +197,14 @@ class IosUserRepositoryImpl(
                     .collection("users")
                     .document(userId)
                     .snapshots
+                    // Skip non-existent docs (deletion or never-created):
+                    // dataMap() on a missing doc yields an empty map, and
+                    // User.fromMap of an empty map produces a zero-value
+                    // ghost User (uid="", uniqueId=0) that propagates into
+                    // seat rendering and follower-counts with no error
+                    // signal. Guard matches the observeUserFlags pattern
+                    // already in this file at line 178.
+                    .filter { it.exists }
                     .map { snapshot ->
                         docToUser(snapshot, userId)
                     }
@@ -203,20 +215,41 @@ class IosUserRepositoryImpl(
 
     override suspend fun createOrUpdateUser(user: User): Resource<Unit> =
         firebaseCall("Failed to create/update user") {
-            val body =
-                JsonObject(
-                    user.toMap().mapValues { (_, v) ->
-                        when (v) {
-                            null -> JsonPrimitive(null as String?)
-                            is String -> JsonPrimitive(v)
-                            is Number -> JsonPrimitive(v)
-                            is Boolean -> JsonPrimitive(v)
-                            else -> JsonPrimitive(v.toString())
-                        }
-                    },
-                )
+            val body = JsonObject(user.toMap().mapValues { (_, v) -> toJsonElement(v) })
             api.post("/api/users", body)
             _userUpdates.tryEmit(user)
+        }
+
+    /**
+     * Recursively convert a value to the matching kotlinx.serialization JsonElement.
+     * Critical: List/Map values must NOT fall through to JsonPrimitive(v.toString()),
+     * which yields strings like "[uid1, uid2]" or "{key=value}" instead of valid
+     * JSON arrays/objects. The Express API receives those as strings and either
+     * rejects the request or stores garbage. List<String> fields like blockedUserIds,
+     * followingIds, providers must round-trip as JSON arrays.
+     */
+    private fun toJsonElement(v: Any?): JsonElement =
+        when (v) {
+            null -> JsonNull
+
+            is String -> JsonPrimitive(v)
+
+            is Number -> JsonPrimitive(v)
+
+            is Boolean -> JsonPrimitive(v)
+
+            is Map<*, *> ->
+                JsonObject(
+                    v.entries.associate { (k, value) ->
+                        k.toString() to toJsonElement(value)
+                    },
+                )
+
+            is List<*> -> JsonArray(v.map { toJsonElement(it) })
+
+            is Set<*> -> JsonArray(v.map { toJsonElement(it) })
+
+            else -> JsonPrimitive(v.toString())
         }
 
     override suspend fun updateDisplayName(
