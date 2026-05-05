@@ -40,7 +40,10 @@ const PROBES: ProbeTarget[] = [
       if (status !== 200) return `expected 200, got ${status}`;
       try {
         const json = JSON.parse(body);
-        if (json.ok !== true) return `body.ok must be true, got ${JSON.stringify(json)}`;
+        // health.js returns `{status: 'ok', timestamp, subsystems}` — see
+        // express-api/src/routes/health.js. The "ok" field does NOT exist.
+        if (json.status !== "ok")
+          return `body.status must be "ok", got ${JSON.stringify(json)}`;
       } catch {
         return `body must be JSON, got: ${body.slice(0, 200)}`;
       }
@@ -59,7 +62,12 @@ const PROBES: ProbeTarget[] = [
   },
 ];
 
-async function probe(api: ReturnType<typeof pwRequest.newContext> extends Promise<infer T> ? T : never, target: ProbeTarget): Promise<string | null> {
+async function probe(
+  api: ReturnType<typeof pwRequest.newContext> extends Promise<infer T>
+    ? T
+    : never,
+  target: ProbeTarget,
+): Promise<string | null> {
   try {
     const res = await api.get(target.url, { timeout: PROBE_TIMEOUT_MS });
     const body = await res.text();

@@ -16,34 +16,50 @@ import { test, expect } from "@playwright/test";
  *   3. Express → Firestore connectivity through the actual stack
  *      (not the mocked-Firestore Jest tests in `express-api/tests/`)
  *
- * Why /api/coin-packages: it's a public endpoint (no auth required) that
- * does a Firestore .where().orderBy() query. If Express can't talk to
- * Firestore, this returns 500 or hangs. If the seed data isn't loaded,
- * it returns an empty array (still a valid round-trip).
+ * Why /api/config/startingScreens: it's an explicitly auth-exempt
+ * endpoint (see express-api/src/index.js — `req.path === '/config/startingScreens'`
+ * in the unauthenticated allow-list) that performs a Firestore
+ * `db.doc('config/startingScreens').get()` read. If Express can't
+ * talk to Firestore, this returns 500. If the doc doesn't exist
+ * the route returns `{}` — still a valid round-trip. We previously
+ * tested /api/coin-packages, but that endpoint requires auth, which
+ * makes it inappropriate for a foundation/no-fixture test.
  */
 
 const API_BASE = process.env.API_BASE_URL || "http://localhost:3000";
 
 test.describe("Integration — Express ↔ Firestore", () => {
-  test("GET /api/health responds OK from a real Express instance", async ({ request }) => {
+  test("GET /api/health responds OK from a real Express instance", async ({
+    request,
+  }) => {
     const res = await request.get(`${API_BASE}/api/health`);
     expect(res.ok(), `${res.status()}: ${await res.text()}`).toBe(true);
     const body = await res.json();
-    expect(body.ok).toBe(true);
+    // health.js returns `{status: 'ok', timestamp, subsystems}` — see
+    // express-api/src/routes/health.js. There is no `ok` field.
+    expect(body.status).toBe("ok");
   });
 
-  test("GET /api/coin-packages does a real Firestore round-trip", async ({ request }) => {
-    // Public endpoint, no auth. Hits Firestore emulator via Express.
-    // A 500 here means Express can't talk to Firestore. An empty
-    // array means Firestore is reachable but no data is seeded —
-    // still a valid round-trip, but the local seed should populate
-    // at least one coin package per local/seed.js.
-    const res = await request.get(`${API_BASE}/api/coin-packages`);
+  test("GET /api/config/startingScreens does a real Firestore round-trip", async ({
+    request,
+  }) => {
+    // Public endpoint (allow-listed in src/index.js), so no fixture
+    // setup needed. Express performs `db.doc('config/startingScreens').get()`
+    // — a real Firestore round-trip. A 500 here means Express can't
+    // talk to Firestore. An empty `{}` means the doc doesn't exist
+    // but the round-trip succeeded, which is also valid for this tier.
+    const res = await request.get(`${API_BASE}/api/config/startingScreens`);
     expect(res.ok(), `${res.status()}: ${await res.text()}`).toBe(true);
     const body = await res.json();
-    expect(Array.isArray(body), `body must be array, got ${typeof body}`).toBe(true);
-    // Note: we don't assert length > 0 because the seed is best-effort.
-    // The point of this test is the round-trip works — payload contents
-    // are a separate concern handled by data-shape tests in PR B+.
+    // Body is an object (possibly empty if no config doc exists). We
+    // assert shape rather than contents — content tests belong to the
+    // route's unit tests, not the integration tier.
+    expect(typeof body, `body must be object, got ${typeof body}`).toBe(
+      "object",
+    );
+    expect(body, "body must not be null").not.toBeNull();
+    expect(Array.isArray(body), "body must be plain object, not array").toBe(
+      false,
+    );
   });
 });
