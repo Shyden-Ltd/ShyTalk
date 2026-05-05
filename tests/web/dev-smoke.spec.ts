@@ -425,21 +425,23 @@ test.describe("Dev Smoke — voice-room token issuance", () => {
   });
 });
 
-// Smallest valid PNG: 1x1 transparent. Used to exercise the upload
-// pipeline end-to-end without sending real image data. Sharp will
-// successfully compress this; the path-allowlist invariant test
-// reuses a truncated copy that never reaches the compression step.
-const ONE_PIXEL_PNG = Buffer.from([
-  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-  0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
-  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-  0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89,
-  0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41, 0x54,
-  0x78, 0x9c, 0x62, 0x00, 0x01, 0x00, 0x00, 0x05,
-  0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4,
-  0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44,
-  0xae, 0x42, 0x60, 0x82,
-]);
+// 100x100 black PNG, ~130 bytes. Generated once via:
+//   sharp({create:{width:100,height:100,channels:3,background:'#000'}}).png()
+// Embedded as base64 to keep this spec self-contained — no fixture
+// file, no new dep. The dimensions matter: imageCompressor.js
+// enforces MIN_DIMENSION = 100 and rejects smaller images with
+// ImagePolicyError → 400. A 1x1 PNG would silently fail every run.
+//
+// Reused by the disallowed-path invariant too. Even though that test
+// targets a check that runs BEFORE compression, using the same valid
+// fixture means the assertion can only fail for the reason we're
+// testing — not because the PNG is malformed.
+const TEST_PNG_100X100 = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAIAAAD/gAIDAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAA" +
+    "NElEQVR4nO3BAQ0AAADCoPdPbQ43oAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAujF1lAAB" +
+    "e5jSrAAAAABJRU5ErkJggg==",
+  "base64",
+);
 
 test.describe("Dev Smoke — R2 image upload", () => {
   // Catches: R2 credentials, R2 PUT path, multer multipart parsing,
@@ -463,7 +465,7 @@ test.describe("Dev Smoke — R2 image upload", () => {
         file: {
           name: "smoke.png",
           mimeType: "image/png",
-          buffer: ONE_PIXEL_PNG,
+          buffer: TEST_PNG_100X100,
         },
       },
     });
@@ -503,9 +505,12 @@ test.describe("Dev Smoke — R2 image upload", () => {
     // Invariant: the path-allowlist is the upload-target ACL. If
     // someone adds a new path-handling code branch but forgets to
     // update ALLOWED_UPLOAD_PATHS, the gate would silently fail open.
-    // Path check happens BEFORE compression (line 45-48 in storage.js)
-    // so the body content doesn't matter — 8 bytes of PNG signature
-    // is enough.
+    //
+    // Reuses the same valid 100x100 PNG as the happy path — even
+    // though the path check runs BEFORE compression today, using a
+    // valid PNG means the assertion can ONLY fail for the reason
+    // we're testing. A future reorder of checks won't silently make
+    // this test pass for the wrong reason.
     const res = await smoke.api.post(`${API_BASE}/api/storage/upload`, {
       headers: { Authorization: `Bearer ${smoke.idToken}` },
       multipart: {
@@ -513,7 +518,7 @@ test.describe("Dev Smoke — R2 image upload", () => {
         file: {
           name: "x.png",
           mimeType: "image/png",
-          buffer: ONE_PIXEL_PNG.subarray(0, 8),
+          buffer: TEST_PNG_100X100,
         },
       },
     });
