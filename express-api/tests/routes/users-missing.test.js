@@ -231,6 +231,57 @@ describe('POST /api/users/:uniqueId/lift-suspension', () => {
   });
 });
 
+// ─── POST /api/users/:uniqueId/follow (PR #494 — audit H3) ──────
+
+describe('POST /api/users/:uniqueId/follow', () => {
+  it('rejects targetUserId with path-traversal style string (NaN guard)', async () => {
+    // Pre-fix: Number('evil../path') = NaN; arrayUnion(NaN) corrupted
+    // followingIds. Strict-integer parse + round-trip equality rejects.
+    const app = createApp('uid-A', 10000001);
+    const res = await request(app)
+      .post('/api/users/10000001/follow')
+      .send({ targetUserId: 'evil../path' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/positive integer/i);
+  });
+
+  it('rejects targetUserId with mixed alphanumeric (parseInt truncation guard)', async () => {
+    // parseInt('123abc', 10) = 123 — silent truncation. Round-trip
+    // equality on String(parsed) vs String(input) catches this.
+    const app = createApp('uid-A', 10000001);
+    const res = await request(app)
+      .post('/api/users/10000001/follow')
+      .send({ targetUserId: '123abc' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/positive integer/i);
+  });
+
+  it('rejects negative targetUserId', async () => {
+    // Note: 0 is rejected by the existing falsy check; -1 is truthy
+    // but my integer check should still reject it.
+    const app = createApp('uid-A', 10000001);
+    const res = await request(app).post('/api/users/10000001/follow').send({ targetUserId: -1 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/positive integer/i);
+  });
+
+  it('returns 404 when target user does not exist', async () => {
+    // Pre-fix: target-doesnt-exist caused a 500 (Firestore batch
+    // update on non-existent doc). Now returns the correct 404.
+    mockDocGet.mockResolvedValueOnce({ exists: false });
+    const app = createApp('uid-A', 10000001);
+    const res = await request(app)
+      .post('/api/users/10000001/follow')
+      .send({ targetUserId: 99999999 });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/target user not found/i);
+  });
+});
+
 // ─── POST /api/users/:uniqueId/unfollow ──────────────────────────
 
 describe('POST /api/users/:uniqueId/unfollow', () => {

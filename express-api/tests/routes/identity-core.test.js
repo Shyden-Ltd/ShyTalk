@@ -490,6 +490,9 @@ describe('Route parameter migration (:uid → :uniqueId)', () => {
 
   test('POST /api/users/:uniqueId/follow uses uniqueId for ownership check', async () => {
     const app = createApp('firebase-uid-1', 10000005);
+    // PR #494 (audit H3): the route now verifies the target user
+    // exists before writing. Mock target.exists = true.
+    mockDocGet.mockResolvedValue({ exists: true, data: () => ({}) });
 
     await request(app)
       .post('/api/users/10000005/follow')

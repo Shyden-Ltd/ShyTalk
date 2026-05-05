@@ -700,19 +700,43 @@ router.post('/users/:uniqueId/lift-suspension', async (req, res) => {
 router.post('/users/:uniqueId/follow', async (req, res) => {
   try {
     const body = req.body;
-    const targetId = body?.targetUserId;
-    if (!targetId) return res.status(400).json({ error: 'targetUserId required' });
+    const rawTargetId = body?.targetUserId;
+    if (!rawTargetId) return res.status(400).json({ error: 'targetUserId required' });
     if (requireOwner(req, res)) return;
-    if (String(req.params.uniqueId) === String(targetId))
-      return res.status(400).json({ error: 'Cannot follow yourself' });
 
-    const uniqueId = req.params.uniqueId;
+    // Strict integer validation. Pre-fix used Number(targetId) which
+    // turns 'evil../path' into NaN and stuffs NaN into followingIds via
+    // arrayUnion(NaN). NaN poisoning corrupts every subsequent array
+    // operation against the field. Audit H3 (Phase 2A).
+    const targetId = Number.parseInt(String(rawTargetId), 10);
+    if (!Number.isInteger(targetId) || targetId <= 0) {
+      return res.status(400).json({ error: 'targetUserId must be a positive integer' });
+    }
+    if (String(targetId) !== String(rawTargetId).trim()) {
+      // Reject inputs like '123abc' that parseInt would silently
+      // truncate to 123 — strict round-trip equality.
+      return res.status(400).json({ error: 'targetUserId must be a positive integer' });
+    }
+
+    const uniqueId = Number(req.params.uniqueId);
+    if (uniqueId === targetId) {
+      return res.status(400).json({ error: 'Cannot follow yourself' });
+    }
+
+    // Verify target user exists. Pre-fix would let the batch write
+    // fail with a Firestore error and return 500; with the validation
+    // here, the API returns the correct 404 contract.
+    const targetSnap = await db.doc(`users/${targetId}`).get();
+    if (!targetSnap.exists) {
+      return res.status(404).json({ error: 'Target user not found' });
+    }
+
     const batch = db.batch();
     batch.update(db.doc(`users/${uniqueId}`), {
-      followingIds: FieldValue.arrayUnion(Number(targetId)),
+      followingIds: FieldValue.arrayUnion(targetId),
     });
     batch.update(db.doc(`users/${targetId}`), {
-      followerIds: FieldValue.arrayUnion(Number(uniqueId)),
+      followerIds: FieldValue.arrayUnion(uniqueId),
     });
     await batch.commit();
     log.info('users', 'User followed', { uniqueId, targetUserId: targetId });
