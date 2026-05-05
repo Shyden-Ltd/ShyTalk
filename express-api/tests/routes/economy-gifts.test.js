@@ -564,6 +564,51 @@ describe('POST /api/economy/backpack-send', () => {
     // Batch commit called to delete the backpack items
     expect(mockBatchCommit).toHaveBeenCalled();
   });
+
+  // ── Atomicity coverage (PR #490 audit H8) ─────────────────────────
+
+  test('bean credit + backpack deletes are in the SAME batch (atomic)', async () => {
+    // Per PR #490: previously bean credit and backpack deletes were
+    // separate awaits — a transient failure between them left the
+    // recipient credited with the sender's items still present
+    // (double-credit on retry). Now they MUST be in one atomic batch.
+    mockDocGet
+      .mockResolvedValueOnce(makeUserDoc()) // sender
+      .mockResolvedValueOnce(makeUserDoc({ displayName: 'Bob' })) // recipient
+      .mockResolvedValueOnce(ECONOMY_CONFIG_DOC) // loadEconomyConfig
+      .mockResolvedValueOnce({ exists: false }) // giftWall
+      .mockResolvedValueOnce({ exists: false }) // giftRankings
+      .mockResolvedValue({ exists: false });
+
+    mockCollectionGet = jest.fn().mockResolvedValue({
+      empty: false,
+      docs: [
+        { id: 'gift-rose', data: () => ({ giftId: 'gift-rose', quantity: 3, coinValue: 10 }) },
+      ],
+    });
+
+    const app = createApp('user-A');
+    await request(app)
+      .post('/api/economy/backpack-send')
+      .send({ recipientId: 'user-B' })
+      .expect(200);
+
+    // The bean credit (batch.update on recipient with shyBeans
+    // increment) and the backpack delete must both be on the SAME
+    // batch — assert mockBatchUpdate was called with shyBeans, AND
+    // mockBatchDelete was called for the gift item, both on a batch
+    // that received exactly one commit (proves single-batch).
+    expect(mockBatchUpdate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        shyBeans: expect.stringMatching(/increment\(/),
+      }),
+    );
+    expect(mockBatchDelete).toHaveBeenCalled();
+    // For a 1-item backpack, exactly ONE batch.commit (not the
+    // pre-fix two separate awaits).
+    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ─── Gift block audit logging ─────────────────────────────────────────

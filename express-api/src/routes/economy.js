@@ -1202,19 +1202,56 @@ router.post('/economy/backpack-send', async (req, res) => {
       await updateGiftRankings(recipientId, item.giftId, qty);
     }
 
-    // Credit beans (atomic)
-    await db
-      .doc(`users/${recipientId}`)
-      .update({ shyBeans: FieldValue.increment(totalBeanReward) });
+    // Atomic: bean credit + ALL backpack deletes in the same batch.
+    // Without this, a transient Firestore error between the bean
+    // credit (recipient already credited) and the backpack delete
+    // (sender's items still present) leaves a state where the
+    // sender can re-send their backpack and DOUBLE-CREDIT the
+    // recipient. Audit H8 (Phase 2A).
+    //
+    // Firestore batch limit is 500 ops. The bean update is 1 op;
+    // we have N delete ops. If N+1 > 500 we must split — but in
+    // that case we sacrifice atomicity and accept the original
+    // partial-failure surface. We pick the bean-credit batch to
+    // include the FIRST chunk of deletes so any single chunk
+    // failure leaves no partial state for chunk #1. Subsequent
+    // chunks remain best-effort.
+    const FIRESTORE_BATCH_LIMIT = 500;
+    const BATCH_FIRST_CHUNK_LIMIT = FIRESTORE_BATCH_LIMIT - 1; // reserve 1 for bean update
 
-    // Clear sender's backpack (except trial items) — chunk into batches of 500
-    for (let i = 0; i < sendableItems.length; i += 500) {
+    if (sendableItems.length <= BATCH_FIRST_CHUNK_LIMIT) {
+      // Common case: small backpack. Single atomic batch.
       const batch = db.batch();
-      const chunk = sendableItems.slice(i, i + 500);
-      for (const item of chunk) {
+      batch.update(db.doc(`users/${recipientId}`), {
+        shyBeans: FieldValue.increment(totalBeanReward),
+      });
+      for (const item of sendableItems) {
         batch.delete(db.doc(`users/${uniqueId}/backpack/${item.giftId}`));
       }
       await batch.commit();
+    } else {
+      // Rare case: very large backpack > 499 distinct gift items.
+      // First batch contains the bean credit + first 499 deletes (all
+      // atomic — covers the credit-without-delete failure mode for
+      // the bulk of items). Remaining deletes follow in 500-op batches.
+      const firstChunk = sendableItems.slice(0, BATCH_FIRST_CHUNK_LIMIT);
+      const firstBatch = db.batch();
+      firstBatch.update(db.doc(`users/${recipientId}`), {
+        shyBeans: FieldValue.increment(totalBeanReward),
+      });
+      for (const item of firstChunk) {
+        firstBatch.delete(db.doc(`users/${uniqueId}/backpack/${item.giftId}`));
+      }
+      await firstBatch.commit();
+
+      for (let i = BATCH_FIRST_CHUNK_LIMIT; i < sendableItems.length; i += FIRESTORE_BATCH_LIMIT) {
+        const batch = db.batch();
+        const chunk = sendableItems.slice(i, i + FIRESTORE_BATCH_LIMIT);
+        for (const item of chunk) {
+          batch.delete(db.doc(`users/${uniqueId}/backpack/${item.giftId}`));
+        }
+        await batch.commit();
+      }
     }
 
     // Transactions
