@@ -675,17 +675,17 @@ test.describe("Dev Smoke — gacha wheel spin (transactional coin deduction)", (
     expect(pull.ok(), `pull: ${pull.status()}: ${await pull.text()}`).toBe(true);
     const body = await pull.json();
 
-    // Phase 3 — handle the priceChanged path. The route returns 200
-    // with `priceChanged: true` and `coinsSpent: 0` when the client's
-    // expectedCost differs from server's current cost (lines 458-468).
-    // We don't send expectedCost so this should never trigger — but
-    // if economy config races a deploy, treating it as healthy is
-    // strictly correct: the contract IS that 200+priceChanged means
-    // the client should re-fetch costs and retry, not error-boundary.
-    if (body.priceChanged) {
-      expect(body.coinsSpent, "priceChanged path returns 0 spent").toBe(0);
-      return;
-    }
+    // Phase 3 — assert priceChanged is NOT set. The route returns
+    // priceChanged=true ONLY when the client sends an expectedCost
+    // that disagrees with the server (lines 458-468). We don't send
+    // expectedCost, so priceChanged should be false/undefined under
+    // our preconditions. Asserting that explicitly catches a future
+    // route regression that returns priceChanged unsolicited — which
+    // would otherwise silently swallow the rest of the assertions.
+    expect(
+      body.priceChanged,
+      `priceChanged must not be set when no expectedCost was sent: ${JSON.stringify(body)}`,
+    ).toBeFalsy();
 
     // Phase 4 — verify happy-path response shape.
     expect(Array.isArray(body.gifts), "body.gifts must be an array").toBe(true);
