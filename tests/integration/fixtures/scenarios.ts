@@ -24,11 +24,18 @@ import {
  *     expect(res.ok()).toBe(true);
  *   });
  *
- * Currently exposes a single `sender` fixture. A multi-account
- * `recipient` fixture (paired with sender via a shared testRunId)
- * will be added when the first cross-account test is written —
- * shipping it ahead of a real consumer would let an unverified
- * lifecycle leak into green CI.
+ * Two fixtures are exposed:
+ *   - `sender` — a single user with starter coins. Use for
+ *     single-account flows (token mint, photo upload, etc.).
+ *   - `pair`   — sender + recipient + a 100-coin gift, all created
+ *     by ONE /api/test/setup call so they share a testRunId and
+ *     tear down together. Use for cross-account flows
+ *     (gift-direct, follow, PM, etc.).
+ *
+ * Tests should pick exactly one of the two — composing both wastes
+ * provisioning calls and creates two unrelated testRunIds. The
+ * fixture mechanics don't enforce this, but the convention is
+ * deliberate.
  */
 
 const API_BASE = process.env.API_BASE_URL || "http://localhost:3000";
@@ -45,11 +52,34 @@ export interface IntegrationUser {
   idToken: string;
 }
 
+/**
+ * A fixed-cost gift created by /api/test/setup, used by gift-direct
+ * tests. The id matches the pattern `{testRunId}_gift_{generateId()}`
+ * — see test-helpers.js:130.
+ */
+export interface IntegrationGift {
+  id: string;
+  coinValue: number;
+}
+
+export interface IntegrationPair {
+  /** Sender — funded with enough coins to send the paired gift. */
+  sender: IntegrationUser;
+  /** Recipient — starts at 0 beans so bean-credit assertions are unambiguous. */
+  recipient: IntegrationUser;
+  /** A 100-coin gift created in the same /api/test/setup call. */
+  gift: IntegrationGift;
+  /** Shared testRunId — single teardown removes all paired entities. */
+  testRunId: string;
+}
+
 export interface IntegrationFixtures {
   /** A request context shared across the test — disposed in fixture teardown. */
   api: APIRequestContext;
-  /** A regular (non-admin) test user. Created on first access. */
+  /** A single (non-admin) test user. Created on first access. */
   sender: IntegrationUser;
+  /** Sender + recipient + gift in one scenario. Created on first access. */
+  pair: IntegrationPair;
 }
 
 /**
@@ -115,6 +145,100 @@ async function provisionUser(
 }
 
 /**
+ * Mint a Firebase ID token for the given Firebase UID via the local
+ * Auth emulator. Throws on any failure.
+ */
+async function mintIdToken(
+  api: APIRequestContext,
+  uid: string,
+): Promise<string> {
+  const mintRes = await api.post(`${API_BASE}/api/test/mint-id-token`, {
+    headers: { "X-Test-API-Key": TEST_API_KEY },
+    data: { uid },
+  });
+  if (!mintRes.ok()) {
+    throw new Error(
+      `mintIdToken failed: ${mintRes.status()}: ${await mintRes.text()}`,
+    );
+  }
+  const { idToken } = await mintRes.json();
+  if (!idToken) {
+    throw new Error("mintIdToken: emulator returned no idToken");
+  }
+  return idToken;
+}
+
+/**
+ * Provision a sender + recipient + 100-coin gift in a SINGLE
+ * /api/test/setup call so they share a testRunId. The recipient
+ * starts at 0 beans to keep bean-credit assertions unambiguous.
+ *
+ * Returns the full pair record. Caller is responsible for teardown.
+ */
+async function provisionPair(api: APIRequestContext): Promise<IntegrationPair> {
+  const setupRes = await api.post(`${API_BASE}/api/test/setup`, {
+    headers: { "X-Test-API-Key": TEST_API_KEY },
+    data: {
+      users: [
+        { name: "sender", shyCoins: 1000, shyBeans: 0 },
+        { name: "recipient", shyCoins: 0, shyBeans: 0 },
+      ],
+      gifts: [{ name: "Test gift", coinValue: 100 }],
+    },
+  });
+  if (!setupRes.ok()) {
+    throw new Error(
+      `provisionPair /test/setup failed: ${setupRes.status()}: ${await setupRes.text()}.`,
+    );
+  }
+  const setupBody = await setupRes.json();
+  const testRunId: string = setupBody.testRunId;
+  const userRecords = setupBody.users || [];
+  const giftRecords = setupBody.gifts || [];
+  // /test/setup creates users in the order specified, so [0] is
+  // sender and [1] is recipient. Asserting array length here is what
+  // catches a future server change that returns them in a map or
+  // re-orders them.
+  if (
+    userRecords.length !== 2 ||
+    giftRecords.length !== 1 ||
+    typeof userRecords[0].uniqueId !== "number" ||
+    typeof userRecords[1].uniqueId !== "number" ||
+    typeof giftRecords[0].id !== "string" ||
+    typeof giftRecords[0].coinValue !== "number"
+  ) {
+    throw new Error(
+      `provisionPair: /test/setup returned unexpected shape: ${JSON.stringify(setupBody)}`,
+    );
+  }
+
+  const [senderToken, recipientToken] = await Promise.all([
+    mintIdToken(api, userRecords[0].uid),
+    mintIdToken(api, userRecords[1].uid),
+  ]);
+
+  return {
+    testRunId,
+    sender: {
+      uniqueId: userRecords[0].uniqueId,
+      uid: userRecords[0].uid,
+      displayName: userRecords[0].displayName || "sender",
+      idToken: senderToken,
+    },
+    recipient: {
+      uniqueId: userRecords[1].uniqueId,
+      uid: userRecords[1].uid,
+      displayName: userRecords[1].displayName || "recipient",
+      idToken: recipientToken,
+    },
+    gift: {
+      id: giftRecords[0].id,
+      coinValue: giftRecords[0].coinValue,
+    },
+  };
+}
+
+/**
  * Tear down the test scenario by deleting all data tagged with the
  * given testRunId. Best-effort: failures are logged but don't fail
  * the test. We DO inspect the HTTP status — `api.post` only rejects
@@ -162,6 +286,14 @@ export const test = base.extend<IntegrationFixtures>({
       await use(user);
     } finally {
       await teardown(api, testRunId);
+    }
+  },
+  pair: async ({ api }, use) => {
+    const scenario = await provisionPair(api);
+    try {
+      await use(scenario);
+    } finally {
+      await teardown(api, scenario.testRunId);
     }
   },
 });
