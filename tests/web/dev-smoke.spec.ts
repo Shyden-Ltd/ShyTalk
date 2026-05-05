@@ -567,9 +567,10 @@ test.describe("Dev Smoke — IAP coin purchase (sandbox)", () => {
   // A standalone replay test would have to seed state first.
   //
   // State accumulation — DESIGN DECISION, NOT TRADE-OFF:
-  // Each run permanently adds `pkg.coins + pkg.bonusCoins` to the
-  // smoke account's balance. This is correct behavior, not a flaw
-  // to engineer around. Reasoning:
+  // Each run permanently writes TWO things to dev Firestore:
+  //   - `users/{smokeUid}.shyCoins` increment by `pkg.coins + pkg.bonusCoins`
+  //   - A new `purchaseReceipts/{receiptId}` document
+  // This is correct behavior, not a flaw to engineer around. Reasoning:
   //
   //   1. The smoke account models a real user. Real users buy coins
   //      and KEEP them — the IAP economy is design-permanent.
@@ -588,14 +589,36 @@ test.describe("Dev Smoke — IAP coin purchase (sandbox)", () => {
   //      accumulation — a different state pollution; (c) add code
   //      that exercises no new infrastructure path, only complexity.
   //
-  //   4. The accumulation has zero operational impact: JS numbers
+  //   4. The coin balance has zero operational impact: JS numbers
   //      are safe to 2^53 (≈9e15); ~100 coins/day × 365 days × 100
-  //      years ≈ 3.6M coins, well below the safety bound. The smoke
-  //      account is dev-only.
+  //      years ≈ 3.6M coins, well below the safety bound.
   //
-  // The proper escape hatch if this ever becomes a real issue is a
-  // periodic cleanup cron that resets test-account state — NOT
-  // changes to this test. The right test design is REALISTIC user
+  //   5. The `purchaseReceipts` doc count grows by 1 per run AND
+  //      per gacha-seed top-up (PR #482). On dev Firestore Spark
+  //      free tier (per `feedback-firestore-quota`), this matters
+  //      more than coin balance does: 1 doc/day × 365 days × 10y
+  //      ≈ 3650 docs — still tiny vs the 1M-doc free tier limit,
+  //      but bounded growth is worth being honest about. The
+  //      duplicate-token replay-protection scan
+  //      (`economy.js:1287-1295`) is index-backed (Firestore
+  //      auto-indexes single-field `where(==)` queries) so it
+  //      stays O(log n) regardless of receipt count.
+  //
+  // Verification note: the test asserts on balance delta only, but
+  // the route writes the receipt BEFORE updating the balance
+  // (`economy.js:1402-1415`). A successful balance delta therefore
+  // implies a successful receipt write — they're in the same code
+  // path. We don't separately read `purchaseReceipts` because the
+  // smoke account isn't admin and can't query other users' docs;
+  // its own receipt would require a custom endpoint we deliberately
+  // don't have.
+  //
+  // Future cleanup: a periodic cron that resets test-account state
+  // (coin balance back to 0, purchaseReceipts older than 30d
+  // deleted) is the proper escape hatch if accumulation becomes a
+  // real concern — NOT changes to this test. The cron does not
+  // exist today; if it becomes necessary, a roadmap entry should
+  // be created. The right test design remains REALISTIC user
   // behavior, not artificially-isolated state.
 
   test("GET catalog → POST purchase → balance reflects → replay rejected with 409", async () => {
