@@ -154,9 +154,23 @@ router.get('/suggestions/search', async (req, res) => {
     }
 
     const page = parseInt(req.query.page, 10) || 1;
+    // Cap the collection scan at 500 docs. Pre-fix had no .limit() —
+    // every search read the ENTIRE eligible suggestions collection,
+    // burning 1 read per doc. On Spark free tier (50K reads/day) a
+    // 1000-doc collection would exhaust quota in 50 searches. Audit
+    // M1 (Phase 2A).
+    //
+    // Trade-off: at >500 matches we won't find newer-than-newest-500
+    // entries. Order is by Firestore insertion (no orderBy specified
+    // here — uses index order), so this caps practical search to the
+    // most-recently-indexed 500 candidates. Acceptable for v1; a
+    // future PR can add a normalized search index if we cross 500
+    // active suggestions.
+    const SEARCH_SCAN_LIMIT = 500;
     const snap = await db
       .collection('suggestions')
       .where('status', 'in', [...PUBLIC_STATUSES, 'pending'])
+      .limit(SEARCH_SCAN_LIMIT)
       .get();
 
     const query = q.toLowerCase().trim();

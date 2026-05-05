@@ -404,6 +404,18 @@ describe('GET /api/suggestions/search — Search', () => {
     expect(res.body.results.length).toBeLessThanOrEqual(3);
     expect(res.body).toHaveProperty('hasMore');
   });
+
+  test('caps the collection scan at 500 docs (audit M1 — Spark quota)', async () => {
+    // PR #497 (audit M1): the search route now applies .limit(500)
+    // before the .get() to bound read-quota burn on Spark free tier.
+    // Without this, every search read the entire eligible collection.
+    mockCollectionGet.mockResolvedValueOnce({ empty: true, docs: [], size: 0 });
+    const app = createApp();
+    await request(app).get('/api/suggestions/search?q=test').expect(200);
+
+    // Verify .limit() was called with the 500 cap before the .get()
+    expect(mockLimit).toHaveBeenCalledWith(500);
+  });
 });
 
 describe('GET /api/suggestions/:id — Get single', () => {
