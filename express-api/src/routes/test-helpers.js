@@ -182,12 +182,13 @@ router.post('/test/setup', async (req, res) => {
 
     // Create test conversations with messages subcollection
     // (seeded BEFORE reports so reports can reference conversationIndex)
+    // Production reads `participantIds`; legacy `participants` accepted for backward compat.
     for (const convSpec of spec.conversations || []) {
       const convId = `${testRunId}_conv_${generateId()}`;
-      const participants = convSpec.participants || [];
+      const participantIds = convSpec.participantIds || convSpec.participants || [];
       const convData = {
         id: convId,
-        participants,
+        participantIds,
         createdAt: now,
         _testRun: testRunId,
       };

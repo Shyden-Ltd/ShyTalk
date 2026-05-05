@@ -781,7 +781,7 @@ describe('POST /api/test/setup', () => {
     expect(alert.status).toBe('new');
   });
 
-  test('creates test conversation with messages subcollection', async () => {
+  test('creates test conversation with messages subcollection (participantIds field)', async () => {
     const app = createApp();
     const res = await request(app)
       .post('/api/test/setup')
@@ -789,7 +789,7 @@ describe('POST /api/test/setup', () => {
       .send({
         conversations: [
           {
-            participants: ['uid1', 'uid2'],
+            participantIds: ['uid1', 'uid2'],
             messages: [
               { text: 'Hello!', senderId: 'uid1' },
               { text: 'Hi there!', senderId: 'uid2' },
@@ -801,7 +801,11 @@ describe('POST /api/test/setup', () => {
 
     expect(res.body.conversations).toHaveLength(1);
     const conv = res.body.conversations[0];
-    expect(conv.participants).toEqual(['uid1', 'uid2']);
+    // The doc field is `participantIds` (matches the production
+    // route at conversations.js:229). The legacy `participants` key
+    // remains accepted at the input level for backward compat with
+    // older test fixtures (verified in the next test).
+    expect(conv.participantIds).toEqual(['uid1', 'uid2']);
     expect(conv._testRun).toBe(res.body.testRunId);
     expect(conv.id).toContain(res.body.testRunId);
     expect(mockDoc).toHaveBeenCalledWith(`conversations/${conv.id}`);
@@ -816,13 +820,47 @@ describe('POST /api/test/setup', () => {
     );
   });
 
+  test('legacy `participants` input key still maps to participantIds', async () => {
+    // Backward compat: pre-rename fixtures pass `participants`. The
+    // route maps it to `participantIds` so the seeded doc still
+    // satisfies the production participant check.
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({
+        conversations: [{ participants: ['legacy-uid'] }],
+      })
+      .expect(200);
+
+    expect(res.body.conversations[0].participantIds).toEqual(['legacy-uid']);
+  });
+
+  test('conversation with neither key falls back to empty participantIds', async () => {
+    // Branch coverage for the `|| []` fallback when callers pass an
+    // empty spec. A test seeding a conversation with no participants
+    // is unrealistic for actual scenarios, but the route should not
+    // crash — it should yield a conversation doc with an empty array.
+    // SonarCloud's branch-coverage gate caught this missing case.
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/test/setup')
+      .set('X-Test-Api-Key', VALID_API_KEY)
+      .send({
+        conversations: [{}],
+      })
+      .expect(200);
+
+    expect(res.body.conversations[0].participantIds).toEqual([]);
+  });
+
   test('creates conversation without messages when none specified', async () => {
     const app = createApp();
     const res = await request(app)
       .post('/api/test/setup')
       .set('X-Test-Api-Key', VALID_API_KEY)
       .send({
-        conversations: [{ participants: ['uid1'] }],
+        conversations: [{ participantIds: ['uid1'] }],
       })
       .expect(200);
 
