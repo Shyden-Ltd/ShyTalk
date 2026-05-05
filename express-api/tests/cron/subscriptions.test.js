@@ -252,4 +252,49 @@ describe('subscriptions cron', () => {
 
     await expect(subscriptions()).resolves.not.toThrow();
   });
+
+  // ── PR #498 (audit M2): truncation warning ──────────────────────
+
+  test('logs warning when query hits CRON_LIMIT (truncation suspected)', async () => {
+    const log = require('../../src/utils/log');
+    // Build 500 expired non-lifetime users to fill CRON_LIMIT exactly
+    const docs = Array.from({ length: 500 }, (_, i) => ({
+      id: `user-${i}`,
+      data: () => ({ isSuperShy: true, superShyExpiry: pastTimestamp(), superShyTier: 'monthly' }),
+    }));
+
+    mockUsersGet.mockResolvedValue({ empty: false, docs, size: 500 });
+
+    await subscriptions();
+
+    // Pre-fix: query hit limit, cron silently ran another day before
+    // catching 501+ users. Now: warn + audit fields visible.
+    expect(log.warn).toHaveBeenCalledWith(
+      'cron',
+      expect.stringMatching(/truncation/i),
+      expect.objectContaining({ limit: 500, processed: 500 }),
+    );
+  });
+
+  test('does NOT log truncation warning when query returns fewer than CRON_LIMIT', async () => {
+    const log = require('../../src/utils/log');
+    mockUsersGet.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          id: 'user-1',
+          data: () => ({
+            isSuperShy: true,
+            superShyExpiry: pastTimestamp(),
+            superShyTier: 'monthly',
+          }),
+        },
+      ],
+      size: 1,
+    });
+
+    await subscriptions();
+
+    expect(log.warn).not.toHaveBeenCalled();
+  });
 });
