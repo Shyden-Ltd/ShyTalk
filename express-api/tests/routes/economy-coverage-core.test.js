@@ -405,9 +405,25 @@ describe('POST /api/economy/redeem-beans — additional coverage', () => {
 // ═══════════════════════════════════════════════════════════════════
 
 describe('POST /api/economy/purchase — additional coverage', () => {
+  // PR #488: purchase route now uses deterministic receipt doc ID +
+  // tx-wrapped grant. Override the default tx mock (which returns
+  // backpack-shaped data) to route tx.get → mockDocGet.
+  const setupTxMock = () => {
+    mockRunTransaction.mockImplementation(async (cb) => {
+      const tx = {
+        get: (ref) => mockDocGet(ref),
+        update: jest.fn(),
+        set: jest.fn(),
+        delete: jest.fn(),
+      };
+      return cb(tx);
+    });
+  };
+
   test('returns 400 for unknown subscription productId (line 1313)', async () => {
+    setupTxMock();
+    mockDocGet.mockResolvedValue({ exists: false }); // pre-flight passes
     mockCollectionGet = jest.fn().mockResolvedValue({ empty: true, docs: [] });
-    mockDocGet.mockResolvedValue(makeUserDoc());
 
     const app = createApp('user-A');
     const res = await request(app).post('/api/economy/purchase').send({
@@ -421,11 +437,9 @@ describe('POST /api/economy/purchase — additional coverage', () => {
   });
 
   test('returns 404 when coin package not found (line 1343)', async () => {
-    mockCollectionGet = jest.fn().mockImplementation(() => {
-      return Promise.resolve({ empty: true, docs: [] });
-    });
-
-    mockDocGet.mockResolvedValue(makeUserDoc());
+    setupTxMock();
+    mockDocGet.mockResolvedValue({ exists: false }); // pre-flight passes
+    mockCollectionGet = jest.fn().mockResolvedValue({ empty: true, docs: [] }); // no package
 
     const app = createApp('user-A');
     const res = await request(app).post('/api/economy/purchase').send({
@@ -438,24 +452,13 @@ describe('POST /api/economy/purchase — additional coverage', () => {
   });
 
   test('returns 404 when user not found for coin package (line 1348)', async () => {
-    let collectionCallCount = 0;
-    mockCollectionGet = jest.fn().mockImplementation(() => {
-      collectionCallCount++;
-      if (collectionCallCount === 1) {
-        return Promise.resolve({ empty: true, docs: [] });
-      }
-      return Promise.resolve({
-        empty: false,
-        docs: [
-          {
-            id: 'pkg-1',
-            data: () => ({ productId: 'coins_100', coins: 100, bonusCoins: 10 }),
-          },
-        ],
-      });
-    });
-
+    setupTxMock();
+    // pre-flight + tx-receipt + tx-user — all return missing
     mockDocGet.mockResolvedValue({ exists: false });
+    mockCollectionGet = jest.fn().mockResolvedValue({
+      empty: false,
+      docs: [{ id: 'pkg-1', data: () => ({ productId: 'coins_100', coins: 100, bonusCoins: 10 }) }],
+    });
 
     const app = createApp('user-A');
     const res = await request(app).post('/api/economy/purchase').send({
@@ -468,8 +471,8 @@ describe('POST /api/economy/purchase — additional coverage', () => {
   });
 
   test('handles yearly subscription', async () => {
-    mockCollectionGet = jest.fn().mockResolvedValue({ empty: true, docs: [] });
-    mockDocGet.mockResolvedValue(makeUserDoc());
+    setupTxMock();
+    mockDocGet.mockResolvedValue({ exists: false }); // pre-flight + tx receipt
 
     const app = createApp('user-A');
     const res = await request(app).post('/api/economy/purchase').send({
@@ -484,8 +487,8 @@ describe('POST /api/economy/purchase — additional coverage', () => {
   });
 
   test('handles lifetime subscription', async () => {
-    mockCollectionGet = jest.fn().mockResolvedValue({ empty: true, docs: [] });
-    mockDocGet.mockResolvedValue(makeUserDoc());
+    setupTxMock();
+    mockDocGet.mockResolvedValue({ exists: false });
 
     const app = createApp('user-A');
     const res = await request(app).post('/api/economy/purchase').send({
@@ -734,30 +737,35 @@ describe('POST /api/economy/purchase — production verification (lines 1272-128
     process.env.NODE_ENV = originalEnv;
   });
 
+  // PR #488: purchase route now uses deterministic receipt doc ID +
+  // tx-wrapped grant. Pre-flight check uses mockDocGet on the receipt.
+  const setupTxMock = () => {
+    mockRunTransaction.mockImplementation(async (cb) => {
+      const tx = {
+        get: (ref) => mockDocGet(ref),
+        update: jest.fn(),
+        set: jest.fn(),
+        delete: jest.fn(),
+      };
+      return cb(tx);
+    });
+  };
+
   test('calls verifyProductPurchase in production for non-subscription', async () => {
     process.env.NODE_ENV = 'production';
-
-    mockCollectionGet = jest.fn().mockResolvedValue({ empty: true, docs: [] });
-    mockDocGet.mockResolvedValue(makeUserDoc());
-
-    verifyProductPurchase.mockResolvedValue({ orderId: 'prod-order-123' });
-
-    let collectionCallCount = 0;
-    mockCollectionGet = jest.fn().mockImplementation(() => {
-      collectionCallCount++;
-      if (collectionCallCount === 1) {
-        return Promise.resolve({ empty: true, docs: [] }); // No duplicate receipt
-      }
-      return Promise.resolve({
-        empty: false,
-        docs: [
-          {
-            id: 'pkg-1',
-            data: () => ({ productId: 'coins_100', coins: 100, bonusCoins: 10 }),
-          },
-        ],
-      });
+    setupTxMock();
+    // pre-flight + tx-receipt = no receipt; tx-user = user
+    let docCallCount = 0;
+    mockDocGet.mockImplementation(() => {
+      docCallCount++;
+      if (docCallCount <= 2) return Promise.resolve({ exists: false });
+      return Promise.resolve(makeUserDoc());
     });
+    mockCollectionGet = jest.fn().mockResolvedValue({
+      empty: false,
+      docs: [{ id: 'pkg-1', data: () => ({ productId: 'coins_100', coins: 100, bonusCoins: 10 }) }],
+    });
+    verifyProductPurchase.mockResolvedValue({ orderId: 'prod-order-123' });
 
     const app = createApp('user-A');
     const res = await request(app).post('/api/economy/purchase').send({
@@ -775,10 +783,8 @@ describe('POST /api/economy/purchase — production verification (lines 1272-128
 
   test('calls verifySubscription in production for subscription', async () => {
     process.env.NODE_ENV = 'production';
-
-    mockCollectionGet = jest.fn().mockResolvedValue({ empty: true, docs: [] });
-    mockDocGet.mockResolvedValue(makeUserDoc());
-
+    setupTxMock();
+    mockDocGet.mockResolvedValue({ exists: false });
     verifySubscription.mockResolvedValue({ orderId: 'sub-order-123' });
 
     const app = createApp('user-A');
@@ -798,10 +804,8 @@ describe('POST /api/economy/purchase — production verification (lines 1272-128
 
   test('returns 403 when production verification fails (lines 1278-1285)', async () => {
     process.env.NODE_ENV = 'production';
-
-    mockCollectionGet = jest.fn().mockResolvedValue({ empty: true, docs: [] });
-    mockDocGet.mockResolvedValue(makeUserDoc());
-
+    setupTxMock();
+    mockDocGet.mockResolvedValue({ exists: false }); // pre-flight passes; verification will reject
     verifyProductPurchase.mockRejectedValue(new Error('Invalid purchase'));
 
     const app = createApp('user-A');
@@ -824,10 +828,8 @@ describe('POST /api/economy/purchase — production verification (lines 1272-128
 
   test('returns 403 when subscription verification fails', async () => {
     process.env.NODE_ENV = 'production';
-
-    mockCollectionGet = jest.fn().mockResolvedValue({ empty: true, docs: [] });
-    mockDocGet.mockResolvedValue(makeUserDoc());
-
+    setupTxMock();
+    mockDocGet.mockResolvedValue({ exists: false });
     verifySubscription.mockRejectedValue(new Error('Invalid subscription'));
 
     const app = createApp('user-A');

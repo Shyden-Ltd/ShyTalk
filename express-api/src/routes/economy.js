@@ -21,6 +21,7 @@
  * GET  /api/users/:uniqueId/gift-wall/:giftId/senders → Get gift wall senders
  */
 
+const crypto = require('node:crypto');
 const router = require('express').Router();
 const { db, FieldValue } = require('../utils/firebase');
 const { generateId, now, todayStr, yesterdayStr } = require('../utils/helpers');
@@ -1324,14 +1325,29 @@ router.post('/economy/purchase', async (req, res) => {
     // historically omitted the field. iOS clients MUST send `platform: 'apple'`.
     const purchasePlatform = platform === 'apple' ? 'apple' : 'google';
 
-    // Check for duplicate purchase token to prevent replay attacks
-    const existingSnap = await db
-      .collection('purchaseReceipts')
-      .where('purchaseToken', '==', purchaseToken)
-      .limit(1)
-      .get();
-    if (!existingSnap.empty) {
-      log.warn('economy', 'Duplicate purchase token rejected', { userId: uniqueId, productId });
+    // Deterministic receipt doc ID derived from purchaseToken.
+    // SHA-256 collisions are infeasible; any two requests with the
+    // SAME token write to the SAME doc, making the receipt set
+    // idempotent at the storage layer. Combined with the inside-tx
+    // existence check below, this closes the replay race window
+    // that the previous where-query duplicate check could not.
+    //
+    // Audit C4 (Phase 2A): /economy/purchase replay race.
+    const receiptId = crypto.createHash('sha256').update(String(purchaseToken)).digest('hex');
+    const receiptRef = db.doc(`purchaseReceipts/${receiptId}`);
+
+    // Pre-flight (cheap fast-path on already-processed tokens).
+    // The authoritative duplicate check happens inside the
+    // transaction below — this just avoids paying the verification
+    // cost (network call to Google/Apple) for tokens we've already
+    // seen. A race between this check and the tx is fine: the tx
+    // will catch the duplicate and reject.
+    const existingSnap = await receiptRef.get();
+    if (existingSnap.exists) {
+      log.warn('economy', 'Duplicate purchase token rejected (pre-flight)', {
+        userId: uniqueId,
+        productId,
+      });
       return res.status(409).json({ error: 'Purchase already processed' });
     }
 
@@ -1372,36 +1388,63 @@ router.post('/economy/purchase', async (req, res) => {
 
     const orderId = verification.orderId || verification.latestOrderId || null;
     const timestamp = now();
-    const receiptId = generateId();
+    const userRef = db.doc(`users/${uniqueId}`);
+
+    // Sentinels for tx-internal aborts. Caught after the tx and
+    // mapped to the appropriate HTTP status.
+    const ERR_DUPLICATE = 'Purchase already processed';
+    const ERR_UNKNOWN_SUB = 'Unknown subscription product';
+    const ERR_USER_NOT_FOUND = 'User not found';
+    const ERR_UNKNOWN_PKG = 'Unknown coin package';
 
     if (isSubscription) {
       const sub = SUBSCRIPTION_TIERS[productId];
-      if (!sub) return res.status(400).json({ error: 'Unknown subscription product' });
+      if (!sub) return res.status(400).json({ error: ERR_UNKNOWN_SUB });
 
       const expiry = sub.days ? timestamp + sub.days * 86400000 : null;
 
-      // Store receipt AFTER tier resolution so we can persist the granted
-      // tier + days. The refund handler reads from the receipt instead of
-      // re-deriving from the (mutable) SUBSCRIPTION_TIERS map, so a future
-      // tier change cannot retroactively rewrite the refund's reversal.
-      await db.doc(`purchaseReceipts/${receiptId}`).set({
-        userId: uniqueId,
-        productId,
-        purchaseToken,
-        platform: purchasePlatform,
-        isSubscription: true,
-        createdAt: timestamp,
-        verified: true,
-        orderId,
-        tierGranted: sub.tier,
-        daysGranted: sub.days,
-      });
-
-      await db.doc(`users/${uniqueId}`).update({
-        isSuperShy: true,
-        superShyExpiry: expiry,
-        superShyTier: sub.tier,
-      });
+      // Atomic: re-check receipt + write receipt + grant subscription.
+      // Firestore transactions retry on contention; a concurrent
+      // request that wins the race will populate the receipt before
+      // this tx's t.get() sees it, causing this attempt to abort
+      // with ERR_DUPLICATE on retry.
+      try {
+        await db.runTransaction(async (t) => {
+          const rcptSnap = await t.get(receiptRef);
+          if (rcptSnap.exists) {
+            throw new Error(ERR_DUPLICATE);
+          }
+          // Persist tier + days for refund-time reversal (see
+          // pre-fix comment): refund reads from receipt rather
+          // than re-deriving from mutable SUBSCRIPTION_TIERS map.
+          t.set(receiptRef, {
+            userId: uniqueId,
+            productId,
+            purchaseToken,
+            platform: purchasePlatform,
+            isSubscription: true,
+            createdAt: timestamp,
+            verified: true,
+            orderId,
+            tierGranted: sub.tier,
+            daysGranted: sub.days,
+          });
+          t.update(userRef, {
+            isSuperShy: true,
+            superShyExpiry: expiry,
+            superShyTier: sub.tier,
+          });
+        });
+      } catch (txErr) {
+        if (txErr.message === ERR_DUPLICATE) {
+          log.warn('economy', 'Duplicate purchase rejected (tx)', {
+            userId: uniqueId,
+            productId,
+          });
+          return res.status(409).json({ error: ERR_DUPLICATE });
+        }
+        throw txErr;
+      }
 
       const subTxId = generateId();
       await writeTransaction(uniqueId, subTxId, {
@@ -1416,46 +1459,67 @@ router.post('/economy/purchase', async (req, res) => {
       return res.json({ success: true, tier: sub.tier });
     }
 
-    // Coin package
+    // Coin package — look up package OUTSIDE the tx (read-only,
+    // stable). Fail fast on unknown package before opening the tx.
     const pkgSnap = await db
       .collection('coinPackages')
       .where('productId', '==', productId)
       .limit(1)
       .get();
     const pkg = pkgSnap.empty ? null : { id: pkgSnap.docs[0].id, ...pkgSnap.docs[0].data() };
-    if (!pkg) return res.status(404).json({ error: 'Unknown coin package' });
+    if (!pkg) return res.status(404).json({ error: ERR_UNKNOWN_PKG });
 
     const coinsGranted = pkg.coins || 0;
     const bonusCoinsGranted = pkg.bonusCoins || 0;
     const totalCoins = coinsGranted + bonusCoinsGranted;
 
-    const userSnap = await db.doc(`users/${uniqueId}`).get();
-    if (!userSnap.exists) return res.status(404).json({ error: 'User not found' });
-    const user = userSnap.data();
+    // Atomic: re-check receipt + read user + write receipt + grant
+    // coins, all in one transaction. Reading the user inside the tx
+    // ensures `newBalance` reflects post-grant state consistently
+    // even under concurrent purchases.
+    let newBalance;
+    try {
+      newBalance = await db.runTransaction(async (t) => {
+        const rcptSnap = await t.get(receiptRef);
+        if (rcptSnap.exists) {
+          throw new Error(ERR_DUPLICATE);
+        }
+        const userSnap = await t.get(userRef);
+        if (!userSnap.exists) {
+          throw new Error(ERR_USER_NOT_FOUND);
+        }
+        const user = userSnap.data();
+        const shyCoins = userField(user, 'shyCoins', 'shy_coins') || 0;
+        // Persist actual granted amounts on the receipt so the refund
+        // handler can reverse the original entitlement even if
+        // `coinPackages` is later mutated (price changes, promotional
+        // bonus weekends, deprecated SKUs).
+        t.set(receiptRef, {
+          userId: uniqueId,
+          productId,
+          purchaseToken,
+          platform: purchasePlatform,
+          isSubscription: false,
+          createdAt: timestamp,
+          verified: true,
+          orderId,
+          coinsGranted,
+          bonusCoinsGranted,
+        });
+        t.update(userRef, { shyCoins: FieldValue.increment(totalCoins) });
+        return shyCoins + totalCoins;
+      });
+    } catch (txErr) {
+      if (txErr.message === ERR_DUPLICATE) {
+        log.warn('economy', 'Duplicate purchase rejected (tx)', { userId: uniqueId, productId });
+        return res.status(409).json({ error: ERR_DUPLICATE });
+      }
+      if (txErr.message === ERR_USER_NOT_FOUND) {
+        return res.status(404).json({ error: ERR_USER_NOT_FOUND });
+      }
+      throw txErr;
+    }
 
-    const shyCoins = userField(user, 'shyCoins', 'shy_coins') || 0;
-
-    // Persist the actual granted amounts on the receipt so the refund
-    // handler can reverse the original entitlement even if `coinPackages`
-    // is later mutated (price changes, promotional bonus weekends,
-    // deprecated SKUs). Without this the refund would reverse today's
-    // package config, not what the user originally received.
-    await db.doc(`purchaseReceipts/${receiptId}`).set({
-      userId: uniqueId,
-      productId,
-      purchaseToken,
-      platform: purchasePlatform,
-      isSubscription: false,
-      createdAt: timestamp,
-      verified: true,
-      orderId,
-      coinsGranted,
-      bonusCoinsGranted,
-    });
-
-    await db.doc(`users/${uniqueId}`).update({ shyCoins: FieldValue.increment(totalCoins) });
-
-    const newBalance = shyCoins + totalCoins;
     const purchaseTxId = generateId();
     await writeTransaction(uniqueId, purchaseTxId, {
       type: 'PURCHASE',
