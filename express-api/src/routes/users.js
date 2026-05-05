@@ -36,7 +36,18 @@ const MAX_IDENTIFIERS_PER_PROVIDER = 5;
 // ─── Helper: ownership check ────────────────────────────────────
 
 function requireOwner(req, res) {
+  // Audit L1 (Phase 2A): explicit NaN guard. Without this, a non-
+  // numeric :uniqueId param produces NaN from Number(), and the
+  // comparison `req.auth.uniqueId !== NaN` is always true (NaN
+  // is unequal to everything including itself), so the route fails
+  // closed (403) — safe but obscure. Returning a clearer 400 makes
+  // a malformed-route-param the visible failure mode rather than
+  // a misleading 'Cannot modify another user'.
   const paramId = Number(req.params.uniqueId);
+  if (!Number.isInteger(paramId)) {
+    res.status(400).json({ error: 'uniqueId must be a positive integer' });
+    return true; // blocked
+  }
   if (req.auth.uniqueId !== paramId) {
     res.status(403).json({ error: 'Cannot modify another user' });
     return true; // blocked

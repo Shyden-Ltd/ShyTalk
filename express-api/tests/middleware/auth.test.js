@@ -785,3 +785,54 @@ describe('cache eviction', () => {
     expect(mockCollectionQuery).toHaveBeenCalledTimes(1);
   });
 });
+
+// ─── PR #502 (audit L2): requireAdmin defensive optional chaining ──
+
+describe('requireAdmin defensive checks', () => {
+  test('returns 403 when req.auth is undefined (defensive)', () => {
+    const req = {};
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    };
+    const blocked = requireAdmin(req, res);
+    expect(blocked).toBe(true);
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+
+  test('returns 403 when req.auth.token is undefined (defensive)', () => {
+    // Pre-fix used `req.auth?.token.admin` — would throw TypeError
+    // here. Now `req.auth?.token?.admin` returns undefined → falsy →
+    // 403. Fail closed.
+    const req = { auth: { uid: 'some-uid' /* no token field */ } };
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    };
+    const blocked = requireAdmin(req, res);
+    expect(blocked).toBe(true);
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+
+  test('returns 403 when admin claim is false', () => {
+    const req = { auth: { uid: 'some-uid', token: { admin: false } } };
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    };
+    const blocked = requireAdmin(req, res);
+    expect(blocked).toBe(true);
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+
+  test('returns false (allows) when admin claim is true', () => {
+    const req = { auth: { uid: 'admin-uid', token: { admin: true } } };
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    };
+    const blocked = requireAdmin(req, res);
+    expect(blocked).toBe(false);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+});

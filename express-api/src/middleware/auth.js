@@ -169,7 +169,14 @@ async function authMiddlewareStrict(req, res, next) {
  * Returns true if blocked (response already sent), false if admin.
  */
 function requireAdmin(req, res) {
-  if (!req.auth?.token.admin) {
+  // Audit L2 (Phase 2A): defensive optional-chaining all the way
+  // down. Pre-fix used `req.auth?.token.admin` which throws TypeError
+  // if `req.auth` is set but `token` is undefined. In practice the
+  // auth middleware always sets both, but a future refactor that
+  // changes the shape would crash the request rather than fail-closed.
+  // `req.auth?.token?.admin` returns undefined → falls into the 403
+  // branch — fail closed.
+  if (!req.auth?.token?.admin) {
     res.status(403).json({ error: 'Admin access required' });
     return true;
   }

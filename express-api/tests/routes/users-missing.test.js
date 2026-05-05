@@ -92,6 +92,22 @@ beforeEach(() => {
 // ─── POST /api/users/:uniqueId/appeal ────────────────────────────
 
 describe('POST /api/users/:uniqueId/appeal', () => {
+  // ── PR #502 (audit L1): requireOwner NaN guard ────────────────────
+
+  it('returns 400 when :uniqueId is non-numeric (NaN guard)', async () => {
+    // Pre-fix: Number('not-a-number') → NaN, comparison NaN !== auth
+    // is always true → 403 'Cannot modify another user'. Confusing
+    // error message for a malformed-route-param. Now: explicit 400
+    // before the ownership check.
+    const app = createApp('uid-A', 10000001);
+    const res = await request(app)
+      .post('/api/users/not-a-number/appeal')
+      .send({ appealText: 'test' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/positive integer/i);
+  });
+
   it('returns 403 when caller does not own the account', async () => {
     // caller is 10000001, trying to appeal on behalf of 10000099
     const app = createApp('uid-A', 10000001);
