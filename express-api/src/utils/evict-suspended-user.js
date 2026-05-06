@@ -21,7 +21,7 @@
  * single participants-only query would miss them and leave the room running.
  */
 
-const { db, rtdb } = require('./firebase');
+const { db, rtdb, FieldValue } = require('./firebase');
 const { queryDocs } = require('./firestore-helpers');
 const { now } = require('./helpers');
 const log = require('./log');
@@ -80,7 +80,11 @@ async function evictSuspendedUser(uid) {
     const isOwner = room.ownerId === uid;
 
     if (isOwner) {
+      // Closure replaces room state wholesale — set+merge is intentional here
+      // because we're CLOSING (any concurrent participant/seat write should
+      // also be invalidated by the CLOSED state).
       batchOps.push({
+        method: 'set',
         path: `rooms/${room.id}`,
         data: {
           state: 'CLOSED',
@@ -94,28 +98,37 @@ async function evictSuspendedUser(uid) {
       continue;
     }
 
-    const participantIds = (room.participantIds || []).filter((id) => id !== uid);
-    const hostIds = (room.hostIds || []).filter((id) => id !== uid);
+    // Race-safe non-owner eviction: use `batch.update` with FieldValue.arrayRemove
+    // (atomic array removal, no full-array overwrite) and dot-path seat writes
+    // (atomic per-seat replacement, preserves sibling seats from concurrent
+    // client claims). The previous `set+merge` of {participantIds, hostIds, seats}
+    // overwrote the entire seats map and entire arrays, clobbering concurrent
+    // writes from clients (which use dot-paths like `seats.2.userId`).
+    const updates = {
+      participantIds: FieldValue.arrayRemove(uid),
+      hostIds: FieldValue.arrayRemove(uid),
+    };
 
-    // Clear any seat occupied by this user. Field shape matches the Seat data
-    // class (userId, state, isMuted) — the previous admin-users.js code wrote
-    // `status` and `index` keys which are not part of the data model.
-    const seats = room.seats ? { ...room.seats } : {};
-    for (const [index, seat] of Object.entries(seats)) {
-      if (seat && (seat.userId === uid || seat.user_id === uid)) {
-        seats[index] = { userId: null, state: 'EMPTY', isMuted: false };
+    // Clear any seat occupied by this user via dot-path writes. Field shape
+    // matches the Seat data class (userId, state, isMuted).
+    if (room.seats) {
+      for (const [index, seat] of Object.entries(room.seats)) {
+        if (seat && (seat.userId === uid || seat.user_id === uid)) {
+          updates[`seats.${index}`] = { userId: null, state: 'EMPTY', isMuted: false };
+        }
       }
     }
 
     batchOps.push({
+      method: 'update',
       path: `rooms/${room.id}`,
-      data: { participantIds, hostIds, seats },
+      data: updates,
     });
     rtdbEvents.push({ roomId: room.id, type: 'room_updated' });
     roomsUpdated += 1;
   }
 
-  batchOps.push({ path: `users/${uid}`, data: { currentRoomId: null } });
+  batchOps.push({ method: 'set', path: `users/${uid}`, data: { currentRoomId: null } });
 
   // Firestore batch (chunked at 500 to respect Firestore limits). Track which
   // room chunks AND the user-doc op failed so the caller can distinguish a
@@ -129,7 +142,11 @@ async function evictSuspendedUser(uid) {
     const chunk = batchOps.slice(i, i + 500);
     const batch = db.batch();
     for (const op of chunk) {
-      batch.set(db.doc(op.path), op.data, { merge: true });
+      if (op.method === 'update') {
+        batch.update(db.doc(op.path), op.data);
+      } else {
+        batch.set(db.doc(op.path), op.data, { merge: true });
+      }
     }
     try {
       await batch.commit();

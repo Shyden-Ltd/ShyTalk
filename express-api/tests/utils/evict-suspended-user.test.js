@@ -31,8 +31,13 @@
 const mockDocUpdate = jest.fn().mockResolvedValue();
 const mockDocSet = jest.fn().mockResolvedValue();
 const mockBatchSet = jest.fn();
+const mockBatchUpdate = jest.fn();
 const mockBatchCommit = jest.fn().mockResolvedValue();
-const mockBatch = jest.fn(() => ({ set: mockBatchSet, commit: mockBatchCommit }));
+const mockBatch = jest.fn(() => ({
+  set: mockBatchSet,
+  update: mockBatchUpdate,
+  commit: mockBatchCommit,
+}));
 const mockDoc = jest.fn(() => ({ update: mockDocUpdate, set: mockDocSet }));
 // Collection chain returns a self-referential proxy so .where().where().get() etc.
 // all resolve. queryDocs is mocked separately so the actual return is irrelevant.
@@ -57,6 +62,11 @@ jest.mock('../../src/utils/firebase', () => ({
   },
   rtdb: {
     ref: (...args) => mockRtdbRef(...args),
+  },
+  // Sentinel-string return so assertions can match the FieldValue without
+  // depending on a real admin SDK Sentinel instance.
+  FieldValue: {
+    arrayRemove: jest.fn((...args) => `arrayRemove(${args.join(',')})`),
   },
 }));
 
@@ -84,6 +94,7 @@ beforeEach(() => {
   mockDocSet.mockReset();
   mockDocSet.mockResolvedValue();
   mockBatchSet.mockReset();
+  mockBatchUpdate.mockReset();
   mockBatchCommit.mockReset();
   mockBatchCommit.mockResolvedValue();
   mockRtdbSet.mockReset();
@@ -133,10 +144,12 @@ function mockRoomsQueries({ participantRooms = [], ownerRooms = [] } = {}) {
   mockQueryDocs.mockResolvedValueOnce(ownerRooms);
 }
 
-/** Locate the data payload for a given doc path in batch.set() calls. */
+/**
+ * Locate the data payload for a given doc path in batch.set() OR batch.update()
+ * calls. Owner closures + user-doc go through batch.set(merge); non-owner room
+ * evictions go through batch.update with FieldValue + dot-path keys.
+ */
 function findWrittenData(path) {
-  // Each batch.set(ref, data, opts) call: ref is whatever db.doc(path) returned.
-  // Track which ref came from which path via mockDoc.mock.calls.
   const docCalls = mockDoc.mock.calls;
   const docResults = mockDoc.mock.results.map((r) => r.value);
   const targetIndices = docCalls.map((c, i) => (c[0] === path ? i : -1)).filter((i) => i >= 0);
@@ -144,6 +157,8 @@ function findWrittenData(path) {
     const ref = docResults[i];
     const setCall = mockBatchSet.mock.calls.find((c) => c[0] === ref);
     if (setCall) return setCall[1];
+    const updateCall = mockBatchUpdate.mock.calls.find((c) => c[0] === ref);
+    if (updateCall) return updateCall[1];
   }
   return null;
 }
@@ -228,16 +243,16 @@ describe('evictSuspendedUser — host role (seated)', () => {
 
     const written = findWrittenData('rooms/room-full');
     expect(written).toBeDefined();
-    expect(written.participantIds).not.toContain('host-1');
-    expect(written.participantIds).toContain('owner-1');
-    expect(written.participantIds).toContain('host-2');
-    expect(written.participantIds.length).toBe(7); // 8 - host-1
-    expect(written.hostIds).toEqual(['host-2']);
-    expect(written.seats[1]).toEqual({ userId: null, state: 'EMPTY', isMuted: false });
-    // Other seats untouched
-    expect(written.seats[0].userId).toBe('owner-1');
-    expect(written.seats[2].userId).toBe('host-2');
-    expect(written.seats[3].userId).toBe('att-1');
+    // Race-safe writes: arrayRemove sentinel for arrays, dot-path for the seat
+    // we cleared. Other seats are NOT in the write payload (preserved from
+    // concurrent client claims).
+    expect(written.participantIds).toBe('arrayRemove(host-1)');
+    expect(written.hostIds).toBe('arrayRemove(host-1)');
+    expect(written['seats.1']).toEqual({ userId: null, state: 'EMPTY', isMuted: false });
+    // Other seats not written → preserved on Firestore side
+    expect(written['seats.0']).toBeUndefined();
+    expect(written['seats.2']).toBeUndefined();
+    expect(written['seats.3']).toBeUndefined();
     expect(written.state).toBeUndefined(); // room not closed
   });
 
@@ -278,19 +293,20 @@ describe('evictSuspendedUser — host role (not seated)', () => {
     await evictSuspendedUser('walking-host');
 
     const written = findWrittenData('rooms/room-1');
-    expect(written.hostIds).toEqual([]);
-    expect(written.participantIds).not.toContain('walking-host');
-    // Seats unchanged — none were occupied by walking-host
-    expect(written.seats[0].userId).toBe('owner-1');
-    expect(written.seats[1].userId).toBe('someone-else');
-    expect(written.seats[2].state).toBe('EMPTY');
+    expect(written.hostIds).toBe('arrayRemove(walking-host)');
+    expect(written.participantIds).toBe('arrayRemove(walking-host)');
+    // No seat writes — walking-host wasn't in any seat. The other seats are
+    // preserved server-side because we didn't touch them in the update.
+    expect(written['seats.0']).toBeUndefined();
+    expect(written['seats.1']).toBeUndefined();
+    expect(written['seats.2']).toBeUndefined();
   });
 });
 
 // ── Seated non-host suspension ───────────────────────────────────
 
 describe('evictSuspendedUser — seated non-host role', () => {
-  it('clears seat + removes from participantIds; hostIds untouched', async () => {
+  it('clears seat + removes from participantIds; hostIds untouched (server-side)', async () => {
     const room = makeFullRoom({
       ownerId: 'owner-1',
       host1Id: 'host-1',
@@ -302,13 +318,16 @@ describe('evictSuspendedUser — seated non-host role', () => {
     await evictSuspendedUser('att-3');
 
     const written = findWrittenData('rooms/room-full');
-    expect(written.participantIds).not.toContain('att-3');
-    expect(written.hostIds).toEqual(['host-1', 'host-2']); // untouched
-    expect(written.seats[5]).toEqual({ userId: null, state: 'EMPTY', isMuted: false });
-    // Other seats untouched
-    expect(written.seats[0].userId).toBe('owner-1');
-    expect(written.seats[1].userId).toBe('host-1');
-    expect(written.seats[3].userId).toBe('att-1');
+    // arrayRemove(att-3) on hostIds is a no-op server-side since att-3 isn't
+    // a host — but we always issue the remove for shape-uniformity. This is
+    // safe: arrayRemove of a non-member is a no-op on Firestore.
+    expect(written.participantIds).toBe('arrayRemove(att-3)');
+    expect(written.hostIds).toBe('arrayRemove(att-3)');
+    expect(written['seats.5']).toEqual({ userId: null, state: 'EMPTY', isMuted: false });
+    // Other seats not written (preserved from concurrent claims)
+    expect(written['seats.0']).toBeUndefined();
+    expect(written['seats.1']).toBeUndefined();
+    expect(written['seats.3']).toBeUndefined();
     expect(written.state).toBeUndefined();
   });
 });
@@ -334,11 +353,12 @@ describe('evictSuspendedUser — visitor role (not seated)', () => {
     await evictSuspendedUser('visitor-1');
 
     const written = findWrittenData('rooms/room-1');
-    expect(written.participantIds).toEqual(['owner-1', 'host-1']);
-    expect(written.hostIds).toEqual(['host-1']);
-    expect(written.seats[0].userId).toBe('owner-1');
-    expect(written.seats[1].userId).toBe('host-1');
-    expect(written.seats[2].state).toBe('EMPTY');
+    expect(written.participantIds).toBe('arrayRemove(visitor-1)');
+    expect(written.hostIds).toBe('arrayRemove(visitor-1)');
+    // No seat writes (visitor wasn't in a seat)
+    expect(written['seats.0']).toBeUndefined();
+    expect(written['seats.1']).toBeUndefined();
+    expect(written['seats.2']).toBeUndefined();
     expect(written.state).toBeUndefined();
   });
 });
@@ -377,11 +397,15 @@ describe('evictSuspendedUser — multi-room cascade', () => {
 
     const owned = findWrittenData('rooms/room-owned');
     const hosted = findWrittenData('rooms/room-hosted');
+    // Owner closure → set+merge with full state replacement.
     expect(owned.state).toBe('CLOSED');
+    expect(owned.participantIds).toEqual([]);
+    expect(owned.hostIds).toEqual([]);
+    // Host eviction → batch.update with arrayRemove + dot-path seat.
     expect(hosted.state).toBeUndefined();
-    expect(hosted.hostIds).toEqual([]);
-    expect(hosted.participantIds).toEqual(['someone-else']);
-    expect(hosted.seats[2]).toEqual({ userId: null, state: 'EMPTY', isMuted: false });
+    expect(hosted.participantIds).toBe('arrayRemove(multi-1)');
+    expect(hosted.hostIds).toBe('arrayRemove(multi-1)');
+    expect(hosted['seats.2']).toEqual({ userId: null, state: 'EMPTY', isMuted: false });
   });
 
   it('clears currentRoomId on the user even when they are not in any rooms', async () => {
@@ -430,7 +454,7 @@ describe('evictSuspendedUser — legacy snake_case seat fields', () => {
     await evictSuspendedUser('snake-user');
 
     const written = findWrittenData('rooms/room-1');
-    expect(written.seats[0]).toEqual({ userId: null, state: 'EMPTY', isMuted: false });
+    expect(written['seats.0']).toEqual({ userId: null, state: 'EMPTY', isMuted: false });
   });
 });
 
@@ -690,6 +714,122 @@ describe('evictSuspendedUser — RTDB failure tolerance', () => {
       const result = await evictSuspendedUser('suspended-uid');
       expect(result.rtdbEventsFailed).toBe(1);
       expect(result.roomsClosed).toBe(1);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────
+  // Race-safety contract: dot-path seat writes + arrayRemove for arrays
+  // ─────────────────────────────────────────────────────────────────
+  // Phase 2A util audit (PR after #526): the previous implementation did
+  //   batch.set(roomRef, { participantIds: [...], hostIds: [...], seats: {...} },
+  //             { merge: true })
+  // which replaces the entire seats map and entire arrays — clobbering any
+  // concurrent client write (clients use dot-paths like seats.2.userId and
+  // FieldValue.arrayUnion(uid) for participantIds). The current code uses
+  // batch.update with FieldValue.arrayRemove + dot-path 'seats.X' keys, so
+  // sibling seats and concurrent participant additions survive.
+  //
+  // These tests pin the wire-format so a regression to set+merge shows up
+  // immediately — not only as a race in production but as a unit-test failure.
+  describe('race-safety wire-format (Phase 2A util audit)', () => {
+    it('uses FieldValue.arrayRemove for participantIds (not literal-array overwrite)', async () => {
+      const room = {
+        id: 'roomA',
+        ownerId: 'someone',
+        participantIds: ['target', 'other-1', 'other-2'],
+        hostIds: [],
+        seats: {},
+      };
+      mockRoomsQueries({ participantRooms: [room], ownerRooms: [] });
+
+      await evictSuspendedUser('target');
+
+      const written = findWrittenData('rooms/roomA');
+      // Sentinel from FieldValue.arrayRemove mock; literal arrays would race.
+      expect(written.participantIds).toBe('arrayRemove(target)');
+      expect(Array.isArray(written.participantIds)).toBe(false);
+    });
+
+    it('uses FieldValue.arrayRemove for hostIds (not literal-array overwrite)', async () => {
+      const room = {
+        id: 'roomA',
+        ownerId: 'someone',
+        participantIds: ['target', 'other'],
+        hostIds: ['target'],
+        seats: {},
+      };
+      mockRoomsQueries({ participantRooms: [room], ownerRooms: [] });
+
+      await evictSuspendedUser('target');
+
+      const written = findWrittenData('rooms/roomA');
+      expect(written.hostIds).toBe('arrayRemove(target)');
+      expect(Array.isArray(written.hostIds)).toBe(false);
+    });
+
+    it('uses dot-path seat keys (never writes the full seats map)', async () => {
+      const room = makeFullRoom({
+        ownerId: 'owner',
+        host1Id: 'h1',
+        host2Id: 'h2',
+        attendees: ['target', 'a', 'b', 'c', 'd'],
+      });
+      mockRoomsQueries({ participantRooms: [room], ownerRooms: [] });
+
+      await evictSuspendedUser('target');
+
+      const written = findWrittenData('rooms/room-full');
+      // The cleared seat is keyed by dot-path; the full `seats` map is NEVER
+      // present in the write payload (which would race with concurrent
+      // dot-path claims on other seats from clients).
+      expect(written['seats.3']).toEqual({ userId: null, state: 'EMPTY', isMuted: false });
+      expect(written.seats).toBeUndefined();
+    });
+
+    it('uses batch.update (not batch.set) for non-owner room evictions', async () => {
+      const room = {
+        id: 'roomA',
+        ownerId: 'someone',
+        participantIds: ['target'],
+        hostIds: [],
+        seats: {},
+      };
+      mockRoomsQueries({ participantRooms: [room], ownerRooms: [] });
+
+      await evictSuspendedUser('target');
+
+      // The room write went through batch.update — not batch.set+merge.
+      expect(mockBatchUpdate).toHaveBeenCalled();
+      // Find the room update specifically (user-doc still uses set+merge).
+      const updateCalls = mockBatchUpdate.mock.calls;
+      const roomUpdate = updateCalls.find(([_, data]) => data.participantIds !== undefined);
+      expect(roomUpdate).toBeDefined();
+    });
+
+    it('owner closure still uses batch.set (full-state replacement is intentional)', async () => {
+      const room = {
+        id: 'roomA',
+        ownerId: 'target',
+        participantIds: ['target', 'other'],
+        hostIds: [],
+        seats: { 0: { userId: 'target', state: 'OCCUPIED', isMuted: false } },
+      };
+      mockRoomsQueries({ participantRooms: [room], ownerRooms: [room] });
+
+      await evictSuspendedUser('target');
+
+      const written = findWrittenData('rooms/roomA');
+      // Owner closure carries the full state-replacement payload.
+      expect(written.state).toBe('CLOSED');
+      expect(written.participantIds).toEqual([]);
+      expect(written.hostIds).toEqual([]);
+      // Closure goes via batch.set+merge, not batch.update.
+      expect(mockBatchSet).toHaveBeenCalled();
+      const setCallForRoom = mockBatchSet.mock.calls.find(([_, data]) => data.state === 'CLOSED');
+      expect(setCallForRoom).toBeDefined();
+      // The merge option must still be passed so we don't accidentally drop
+      // ownerId, createdAt, or other fields the route relies on for audit.
+      expect(setCallForRoom[2]).toEqual({ merge: true });
     });
   });
 });

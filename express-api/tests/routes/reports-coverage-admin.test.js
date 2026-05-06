@@ -11,6 +11,7 @@ const mockDocSet = jest.fn().mockResolvedValue();
 const mockDocDelete = jest.fn().mockResolvedValue();
 const mockBatchCommit = jest.fn().mockResolvedValue();
 const mockBatchSet = jest.fn();
+const mockBatchUpdate = jest.fn();
 const mockRtdbSet = jest.fn().mockResolvedValue();
 const mockRtdbRemove = jest.fn().mockResolvedValue();
 
@@ -31,11 +32,15 @@ jest.mock('../../src/utils/firebase', () => ({
       };
       return chain;
     }),
-    batch: jest.fn(() => ({ set: mockBatchSet, commit: mockBatchCommit })),
+    batch: jest.fn(() => ({
+      set: mockBatchSet,
+      update: mockBatchUpdate,
+      commit: mockBatchCommit,
+    })),
   },
   rtdb: { ref: jest.fn(() => ({ set: mockRtdbSet, remove: mockRtdbRemove })) },
   FieldValue: {
-    arrayRemove: jest.fn(),
+    arrayRemove: jest.fn((...args) => 'arrayRemove(' + args.join(',') + ')'),
     arrayUnion: jest.fn(),
     increment: jest.fn((n) => 'increment(' + n + ')'),
   },
@@ -384,7 +389,9 @@ describe('evictSuspendedUser - via suspend', () => {
       .send({ reason: 'Test', canAppeal: false });
     expect(res.status).toBe(200);
     await new Promise((r) => setTimeout(r, 100));
-    expect(mockBatchSet).toHaveBeenCalled();
+    // Non-owner eviction now writes via batch.update (race-safe arrayRemove +
+    // dot-path seat keys); user-doc currentRoomId clear still uses batch.set.
+    expect(mockBatchUpdate).toHaveBeenCalled();
     expect(mockBatchCommit).toHaveBeenCalled();
   });
 
@@ -426,6 +433,9 @@ describe('evictSuspendedUser - via suspend', () => {
     expect(res.status).toBe(200);
     await new Promise((r) => setTimeout(r, 100));
     expect(mockBatchCommit).toHaveBeenCalled();
+    // The room write happens even though seats is null — arrayRemove on
+    // participantIds still fires.
+    expect(mockBatchUpdate).toHaveBeenCalled();
   });
 
   it('handles RTDB event write failure', async () => {
@@ -484,8 +494,12 @@ describe('evictSuspendedUser - via suspend', () => {
       .send({ reason: 'Test', canAppeal: false });
     expect(res.status).toBe(200);
     await new Promise((r) => setTimeout(r, 100));
-    const call = mockBatchSet.mock.calls.find((c) => c[1]?.seats !== undefined);
-    expect(call[1].seats['0']).toEqual({ userId: null, state: 'EMPTY', isMuted: false });
+    // New shape: dot-path seat key on the batch.update payload, not a full
+    // `seats` map on a batch.set+merge call.
+    const call = mockBatchUpdate.mock.calls.find((c) => c[1]?.['seats.0'] !== undefined);
+    expect(call[1]['seats.0']).toEqual({ userId: null, state: 'EMPTY', isMuted: false });
+    // Seat 1 was occupied by 'other' — must NOT be touched in our write.
+    expect(call[1]['seats.1']).toBeUndefined();
   });
 
   it('handles multiple rooms', async () => {
@@ -499,7 +513,10 @@ describe('evictSuspendedUser - via suspend', () => {
       .send({ reason: 'Test', canAppeal: false });
     expect(res.status).toBe(200);
     await new Promise((r) => setTimeout(r, 100));
-    expect(mockBatchSet).toHaveBeenCalledTimes(3);
+    // 1 batch.set (owner closure of room-2) + 1 batch.set (user-doc currentRoomId)
+    // + 1 batch.update (non-owner room-1 eviction).
+    expect(mockBatchSet).toHaveBeenCalledTimes(2);
+    expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
   });
 });
 

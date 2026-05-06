@@ -25,6 +25,7 @@ jest.mock('../../src/utils/firebase', () => ({
       return chain;
     }),
     batch: jest.fn(() => ({
+      set: jest.fn(),
       update: jest.fn(),
       commit: jest.fn().mockResolvedValue(),
     })),
@@ -35,6 +36,11 @@ jest.mock('../../src/utils/firebase', () => ({
       email: null,
       providerData: [],
     }),
+  },
+  FieldValue: {
+    arrayRemove: jest.fn((...args) => 'arrayRemove(' + args.join(',') + ')'),
+    arrayUnion: jest.fn((...args) => 'arrayUnion(' + args.join(',') + ')'),
+    increment: jest.fn((n) => 'increment(' + n + ')'),
   },
 }));
 
@@ -1010,23 +1016,27 @@ describe('POST /api/user/:uniqueId/suspend --- room eviction', () => {
     expect(res.status).toBe(200);
     await flushPromises();
 
-    // The shared evictSuspendedUser util in src/utils/evict-suspended-user.js
-    // uses `batch.set(ref, data, { merge: true })` (not `batch.update(...)`),
-    // and writes the canonical Seat shape `{ userId, state, isMuted }` (not the
-    // old `{ index, status, userId, isMuted }` form which never matched the
-    // commonMain Seat data class). Test mirrors the new behaviour.
-    expect(mockBatchSet).toHaveBeenCalled();
+    // Race-safe writes: non-owner room evictions go through batch.update with
+    // FieldValue.arrayRemove + dot-path 'seats.X' keys (so concurrent client
+    // dot-path writes for OTHER seats don't get clobbered). The user-doc
+    // currentRoomId clear still uses batch.set+merge.
+    expect(mockBatchUpdate).toHaveBeenCalled();
 
-    const roomUpdateCall = mockBatchSet.mock.calls.find(
-      (call) => call[1]?.participantIds && call[1]?.seats,
+    const roomUpdateCall = mockBatchUpdate.mock.calls.find(
+      (call) => call[1]?.participantIds !== undefined,
     );
     expect(roomUpdateCall).toBeDefined();
-    expect(roomUpdateCall[1].participantIds).not.toContain('user-evict');
-    expect(roomUpdateCall[1].seats[0].state).toBe('EMPTY');
-    expect(roomUpdateCall[1].seats[0].userId).toBeNull();
-    // The other seat is read-through unchanged from the source room (still
-    // shows OCCUPIED with its original userId).
-    expect(roomUpdateCall[1].seats[1].userId).toBe('other-user');
+    // arrayRemove sentinel from FieldValue mock — proves we're not building a
+    // literal filtered array (which would race with concurrent arrayUnion).
+    expect(roomUpdateCall[1].participantIds).toBe('arrayRemove(user-evict)');
+    // Cleared seat written via dot-path key.
+    expect(roomUpdateCall[1]['seats.0']).toEqual({
+      userId: null,
+      state: 'EMPTY',
+      isMuted: false,
+    });
+    // The other seat must NOT be in the write — server-side preserves it.
+    expect(roomUpdateCall[1]['seats.1']).toBeUndefined();
   });
 });
 
