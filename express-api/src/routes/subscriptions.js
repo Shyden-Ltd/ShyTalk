@@ -27,6 +27,8 @@ const DEFAULT_PREFS = {
   commentOnSuggestion: { email: false, push: false, inApp: true, systemMessage: false },
 };
 
+const { computeRoadmapOptedIn } = require('../utils/notification-prefs');
+
 function requireAuth(req, res) {
   if (!req.auth || !req.auth.uniqueId) {
     res.status(401).json({ error: 'Authentication required' });
@@ -103,6 +105,17 @@ router.put('/subscriptions/me', async (req, res) => {
     }
 
     if (scope) updates.scope = scope;
+
+    // Maintain the denormalised opt-in flag so roadmap-notify can use a
+    // server-side filter instead of scanning the whole collection. We
+    // recompute against the *full* prefs object (caller-supplied OR
+    // existing-doc fallback) so a partial update like `{ inApp: true }`
+    // doesn't silently flip the flag to false because the other channels
+    // are absent from the request body.
+    if (updates.channelPreferences) {
+      const roadmapPrefs = updates.channelPreferences.roadmapUpdate;
+      updates.roadmapUpdateOptedIn = computeRoadmapOptedIn(roadmapPrefs);
+    }
 
     await db.doc(`subscriptions/${req.auth.uniqueId}`).set(updates, { merge: true });
 

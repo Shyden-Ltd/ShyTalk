@@ -19,7 +19,16 @@ const BATCH_LIMIT = 400;
  */
 async function notifyRoadmapSubscribers(message) {
   try {
-    const snap = await db.collection('subscriptions').get();
+    // Server-side filter on the denormalised `roadmapUpdateOptedIn` flag
+    // (Phase 2A finding #2). The previous full-collection scan was a
+    // quota grenade — at 5K subs every roadmap edit cost 5K reads
+    // regardless of how few opted in. The flag is maintained on every
+    // PUT /subscriptions/me and backfilled by the
+    // `backfillRoadmapOptedIn` cron for legacy subs.
+    const snap = await db
+      .collection('subscriptions')
+      .where('roadmapUpdateOptedIn', '==', true)
+      .get();
 
     if (snap.empty) return;
 
@@ -31,7 +40,9 @@ async function notifyRoadmapSubscribers(message) {
       const sub = doc.data();
       const prefs = sub.channelPreferences?.roadmapUpdate;
 
-      // Skip if no roadmapUpdate preference or all channels disabled
+      // Defensive double-check: if the denormalised flag drifted from
+      // the actual prefs (race between PUT and notify), trust the prefs.
+      // Drift recovers on the next PUT — log and skip this tick.
       if (!prefs) continue;
       const hasAnyChannel = prefs.email || prefs.push || prefs.inApp || prefs.systemMessage;
       if (!hasAnyChannel) continue;

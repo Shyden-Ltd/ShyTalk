@@ -35,6 +35,7 @@ jest.mock('../../src/cron/accountDeletion', () => jest.fn());
 jest.mock('../../src/cron/expireDataExports', () => jest.fn());
 jest.mock('../../src/cron/notification-dispatch', () => jest.fn());
 jest.mock('../../src/cron/ageVerificationAuditReconcile', () => jest.fn());
+jest.mock('../../src/cron/backfillRoadmapOptedIn', () => jest.fn());
 const { startCronJobs } = require('../../src/cron/index');
 const log = require('../../src/utils/log');
 
@@ -121,8 +122,13 @@ describe('startCronJobs', () => {
       // ageVerificationAuditReconcile — daily 05:00 UTC
       expect(schedules).toContain('0 5 * * *');
 
-      // Total: 12 schedules in production (staleRooms + serverHealth share */5, + accountDeletion, + expireDataExports, + notification-dispatch, + ageVerificationAuditReconcile)
-      expect(mockSchedule).toHaveBeenCalledTimes(12);
+      // backfillRoadmapOptedIn — daily 04:30 UTC (Phase 2A finding #2)
+      expect(schedules).toContain('30 4 * * *');
+
+      // Total: 13 schedules in production (staleRooms + serverHealth share */5,
+      // + accountDeletion, + expireDataExports, + notification-dispatch,
+      // + ageVerificationAuditReconcile, + backfillRoadmapOptedIn)
+      expect(mockSchedule).toHaveBeenCalledTimes(13);
     });
 
     test('does not register testDataCleanup in production', () => {

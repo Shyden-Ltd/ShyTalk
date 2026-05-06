@@ -17,6 +17,7 @@ const expireDataExports = require('./expireDataExports');
 const alertManager = require('../utils/alertManagerInstance');
 const dispatchNotifications = require('./notification-dispatch');
 const ageVerificationAuditReconcile = require('./ageVerificationAuditReconcile');
+const backfillRoadmapOptedIn = require('./backfillRoadmapOptedIn');
 
 function startCronJobs() {
   const isProd = process.env.NODE_ENV === 'production';
@@ -96,6 +97,17 @@ function startCronJobs() {
     log.info('cron', 'Running expireDataExports');
     expireDataExports().catch((err) =>
       log.error('cron', 'expireDataExports failed', { error: err.message }),
+    );
+  });
+
+  // Backfill roadmapUpdateOptedIn flag on legacy subscriptions — daily 04:30
+  // UTC. Idempotent + self-stopping (no-op once every doc has the field
+  // populated). Phase 2A finding #2 — see backfillRoadmapOptedIn.js header
+  // for the migration rationale.
+  cron.schedule('30 4 * * *', () => {
+    log.info('cron', 'Running backfillRoadmapOptedIn');
+    backfillRoadmapOptedIn().catch((err) =>
+      log.error('cron', 'backfillRoadmapOptedIn failed', { error: err.message }),
     );
   });
 

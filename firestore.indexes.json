@@ -220,6 +220,11 @@
         { "fieldPath": "voterId", "order": "ASCENDING" },
         { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "subscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "roadmapUpdateOptedIn", "order": "ASCENDING" }]
     }
   ],
   "fieldOverrides": []
