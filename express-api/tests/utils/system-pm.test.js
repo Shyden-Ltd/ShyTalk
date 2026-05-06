@@ -52,13 +52,23 @@ jest.mock('../../src/utils/log', () => ({
   fatal: jest.fn(),
 }));
 
-const { sendSystemPm, SYSTEM_UID, systemConversationId } = require('../../src/utils/system-pm');
+const {
+  sendSystemPm,
+  SYSTEM_UID,
+  systemConversationId,
+  _resetSystemUserCache,
+} = require('../../src/utils/system-pm');
 const { db: _db, rtdb, FieldValue } = require('../../src/utils/firebase');
 
 // ─── Tests ────────────────────────────────────────────────────────
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Reset the process-lifetime cache so each test starts with a clean
+  // ensureSystemUser state. Without this, the second test's mockResolvedValueOnce
+  // sequence is consumed by the conversation read instead of the system-user
+  // existence check, masking the system-user-write expectation.
+  _resetSystemUserCache();
   // Default: system user does not exist, conversation does not exist
   mockGet.mockResolvedValue({ exists: false });
 });
@@ -275,5 +285,64 @@ describe('sendSystemPm()', () => {
       'Failed to write RTDB event',
       expect.objectContaining({ error: 'RTDB down' }),
     );
+  });
+
+  // ─── ensureSystemUser cache (Phase 2A util audit, finding #5) ──────
+  // The system-user existence check used to fire on EVERY sendSystemPm
+  // invocation — burning one Firestore read per call on a no-op (the doc
+  // is created at most once per process). Cache short-circuits subsequent
+  // calls until the process restarts. Without this test, a regression that
+  // drops the cache would silently re-introduce the per-call read.
+  describe('ensureSystemUser process-lifetime cache', () => {
+    test('reads users/SHYTALK_SYSTEM only once across multiple sendSystemPm calls', async () => {
+      // Conversation reads need a `.data()` accessor since system-pm.js
+      // pulls participantIds off it. exists:true with empty data — fine.
+      mockGet.mockResolvedValue({ exists: true, data: () => ({}) });
+
+      await sendSystemPm('recipient1', 'msg1');
+      await sendSystemPm('recipient1', 'msg2');
+      await sendSystemPm('recipient2', 'msg3');
+
+      const systemUserGetCalls = mockDocFn.mock.calls.filter(
+        (call) => call[0] === `users/${SYSTEM_UID}`,
+      );
+      // db.doc(`users/${SYSTEM_UID}`) is referenced ONCE (the first call's
+      // existence check); subsequent calls short-circuit on the cache and
+      // never call .doc(...) for the system-user path again.
+      expect(systemUserGetCalls).toHaveLength(1);
+    });
+
+    test('skips system-user write on second call when cache says ensured', async () => {
+      // First call: system user doc missing → triggers a write
+      mockGet
+        .mockResolvedValueOnce({ exists: false }) // users/SYSTEM
+        .mockResolvedValueOnce({ exists: false }); // conv
+
+      await sendSystemPm('recipient1', 'first');
+
+      // Second call: cache says ensured, no system-user read at all
+      mockSet.mockClear();
+      mockGet.mockResolvedValueOnce({ exists: false }); // conv
+      await sendSystemPm('recipient1', 'second');
+
+      const systemUserSetCall = mockSet.mock.calls.find(
+        (call) => call[0] && call[0].id === SYSTEM_UID && call[0].userType === 'SYSTEM',
+      );
+      expect(systemUserSetCall).toBeUndefined();
+    });
+
+    test('cache reset (test helper) restores per-call existence check', async () => {
+      mockGet.mockResolvedValue({ exists: true, data: () => ({}) });
+
+      await sendSystemPm('recipient1', 'msg1');
+      _resetSystemUserCache();
+      await sendSystemPm('recipient1', 'msg2');
+
+      const systemUserGetCalls = mockDocFn.mock.calls.filter(
+        (call) => call[0] === `users/${SYSTEM_UID}`,
+      );
+      // Reset between calls means the second call re-checks existence.
+      expect(systemUserGetCalls.length).toBeGreaterThanOrEqual(2);
+    });
   });
 });

@@ -5,7 +5,15 @@ const log = require('./log');
 const SYSTEM_UID = 'SHYTALK_SYSTEM';
 const SYSTEM_DISPLAY_NAME = 'ShyTalk System';
 
+// Process-lifetime cache: the system-user doc is created at most once per
+// process lifetime. Without this, every `sendSystemPm` call (and there are
+// many — every age-verification decision, mod warning, admin device action)
+// burns one Firestore read for a no-op existence check on Spark-tier quota.
+// Reset on cold-start; first call after process restart re-validates.
+let systemUserEnsured = false;
+
 async function ensureSystemUser() {
+  if (systemUserEnsured) return;
   const snap = await db.doc(`users/${SYSTEM_UID}`).get();
   if (!snap.exists) {
     const timestamp = now();
@@ -17,6 +25,13 @@ async function ensureSystemUser() {
       lastSeenAt: timestamp,
     });
   }
+  systemUserEnsured = true;
+}
+
+// Test-only — reset the cache between unit-test runs so each test starts
+// with a clean slate. Production callers should never invoke this.
+function _resetSystemUserCache() {
+  systemUserEnsured = false;
 }
 
 function systemConversationId(recipientUid) {
@@ -80,4 +95,4 @@ async function sendSystemPm(recipientUid, text) {
   }
 }
 
-module.exports = { sendSystemPm, SYSTEM_UID, systemConversationId };
+module.exports = { sendSystemPm, SYSTEM_UID, systemConversationId, _resetSystemUserCache };
