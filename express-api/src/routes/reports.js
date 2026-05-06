@@ -597,6 +597,7 @@ router.post('/reports/:id/resolve', async (req, res) => {
           description: null,
           currentRoomId: null,
         });
+        clearSuspensionCache(Number(reportedUniqueId)); // Phase 2H finding #1
 
         // Awaited (was fire-and-forget) so cascade partial-failure surfaces in
         // the response and the admin UI can warn about manual cleanup.
@@ -853,6 +854,7 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
           description: null,
           currentRoomId: null,
         });
+        clearSuspensionCache(Number(reportedUniqueId));
 
         try {
           cascade = await evictSuspendedUser(reportedUniqueId);
@@ -1272,6 +1274,7 @@ router.post('/admin/users/:uniqueId/suspend', async (req, res) => {
         { merge: true },
       ),
     ]);
+    clearSuspensionCache(Number(req.params.uniqueId));
 
     // Awaited (was fire-and-forget) so cascade partial-failure is visible to admin.
     // cascade is unconditionally assigned below (success: evictSuspendedUser

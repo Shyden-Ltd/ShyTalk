@@ -12,6 +12,7 @@ const router = require('express').Router();
 const { db } = require('../utils/firebase');
 const { generateId, now } = require('../utils/helpers');
 const log = require('../utils/log');
+const { clearSuspensionCache } = require('../middleware/auth');
 
 function requireAdmin(req, res) {
   if (!req.auth?.token?.admin) {
@@ -173,6 +174,7 @@ router.post('/admin/identity-graph/:id/suspend-all', async (req, res) => {
         },
         { merge: true },
       );
+      clearSuspensionCache(Number(id)); // Phase 2H finding #1
     } catch (e) {
       log.warn('identity-graph', 'User suspend propagation failed', { error: e.message });
     }

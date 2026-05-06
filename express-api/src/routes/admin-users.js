@@ -917,6 +917,13 @@ router.post('/user/:uniqueId/suspend', async (req, res) => {
       }),
     ]);
 
+    // Phase 2H finding #1: invalidate the 5-min checkSuspension cache so
+    // the just-suspended user can't keep making API calls during the
+    // active-moderation window. See clearSuspensionCache JSDoc for full
+    // rationale; mirrored at every other suspend site (reports.js,
+    // identity-graph.js).
+    clearSuspensionCache(Number(req.params.uniqueId));
+
     // Create a suspension warning that sets GCS to 0
     const currentGcs = user.gcsScore ?? user.gcs_score ?? 100;
     if (currentGcs > 0) {

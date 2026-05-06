@@ -1099,4 +1099,27 @@ describe('POST /api/user/:uniqueId/suspend --- timed ban duration', () => {
   });
 });
 
+// --- Suspend cache invalidation (Phase 2H finding #1) ----------------------
+describe('POST /api/user/:uniqueId/suspend --- cache invalidation', () => {
+  let app;
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+  });
+  it('calls clearSuspensionCache after suspend', async () => {
+    const { clearSuspensionCache } = require('../../src/middleware/auth');
+    const futureDate = new Date(Date.now() + 86400000).toISOString();
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: 'u',
+      data: () => ({ displayName: 'U', gcsScore: 100 }),
+    });
+    await request(app)
+      .post('/api/user/u/suspend')
+      .send({ reason: 'T', canAppeal: false, endDate: futureDate });
+    await flushPromises();
+    expect(clearSuspensionCache).toHaveBeenCalled();
+  });
+});
+
 // --- GET /api/conversations/:id/messages ------------------------------------
