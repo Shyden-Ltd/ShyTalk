@@ -19,6 +19,15 @@ const uniqueIdCache = new Map();
 // uniqueId → { isSuspended, expiresAt }
 const suspensionCache = new Map();
 
+// In-flight Promise dedup. Without these, N concurrent first-touch requests
+// for the same key issue N parallel Firestore reads — Spark-tier free quota
+// is 50K reads/day and a typical app cold-start fires 5-10 parallel API
+// calls per user, so 1000 users × 10 = 10K reads in the warmup minute alone
+// without dedup (vs ~1K with). Keys mirror their respective caches.
+// (Phase 2H finding #5)
+const uniqueIdInFlight = new Map(); // uid → Promise<uniqueId|null>
+const suspensionInFlight = new Map(); // uniqueId → Promise<boolean>
+
 function evictOldest(cache) {
   if (cache.size > MAX_CACHE_SIZE) {
     const firstKey = cache.keys().next().value;
@@ -39,14 +48,27 @@ async function resolveUniqueId(uid) {
     return cached.uniqueId;
   }
 
-  const snap = await db.collection('users').where('firebaseUid', '==', uid).limit(1).get();
+  // Inflight dedup: if another caller is already resolving this uid, await
+  // their Promise instead of issuing a parallel Firestore query.
+  const existing = uniqueIdInFlight.get(uid);
+  if (existing) return existing;
 
-  const uniqueId = snap.empty ? null : (snap.docs[0].data().uniqueId ?? null);
-
-  uniqueIdCache.set(uid, { uniqueId, expiresAt: Date.now() + CACHE_TTL });
-  evictOldest(uniqueIdCache);
-
-  return uniqueId;
+  const promise = (async () => {
+    try {
+      const snap = await db.collection('users').where('firebaseUid', '==', uid).limit(1).get();
+      const uniqueId = snap.empty ? null : (snap.docs[0].data().uniqueId ?? null);
+      uniqueIdCache.set(uid, { uniqueId, expiresAt: Date.now() + CACHE_TTL });
+      evictOldest(uniqueIdCache);
+      return uniqueId;
+    } finally {
+      // Always release the inflight slot — including on Firestore errors —
+      // so a transient outage doesn't pin a stuck Promise that subsequent
+      // callers keep awaiting forever.
+      uniqueIdInFlight.delete(uid);
+    }
+  })();
+  uniqueIdInFlight.set(uid, promise);
+  return promise;
 }
 
 // ─── Suspension check ────────────────────────────────────────────
@@ -63,14 +85,24 @@ async function checkSuspension(uniqueId) {
     return cached.isSuspended;
   }
 
-  const snap = await db.doc(`users/${uniqueId}`).get();
-  const user = snap.exists ? snap.data() : null;
-  const isSuspended = !!(user?.isSuspended || user?.is_suspended);
+  // Inflight dedup — see resolveUniqueId for rationale.
+  const existing = suspensionInFlight.get(uniqueId);
+  if (existing) return existing;
 
-  suspensionCache.set(uniqueId, { isSuspended, expiresAt: Date.now() + CACHE_TTL });
-  evictOldest(suspensionCache);
-
-  return isSuspended;
+  const promise = (async () => {
+    try {
+      const snap = await db.doc(`users/${uniqueId}`).get();
+      const user = snap.exists ? snap.data() : null;
+      const isSuspended = !!(user?.isSuspended || user?.is_suspended);
+      suspensionCache.set(uniqueId, { isSuspended, expiresAt: Date.now() + CACHE_TTL });
+      evictOldest(suspensionCache);
+      return isSuspended;
+    } finally {
+      suspensionInFlight.delete(uniqueId);
+    }
+  })();
+  suspensionInFlight.set(uniqueId, promise);
+  return promise;
 }
 
 // ─── Middleware ───────────────────────────────────────────────────
@@ -185,14 +217,19 @@ function requireAdmin(req, res) {
 
 function clearSuspensionCache(uniqueId) {
   suspensionCache.delete(uniqueId);
+  // Also drop any inflight Promise so the NEXT caller refetches from
+  // Firestore (the inflight Promise was about to resolve to the OLD value).
+  suspensionInFlight.delete(uniqueId);
 }
 
 /** Clear uniqueId cache entry — call after firebaseUid is updated. */
 function clearUniqueIdCache(uid) {
   if (uid) {
     uniqueIdCache.delete(uid);
+    uniqueIdInFlight.delete(uid);
   } else {
     uniqueIdCache.clear();
+    uniqueIdInFlight.clear();
   }
 }
 

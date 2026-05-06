@@ -836,3 +836,67 @@ describe('requireAdmin defensive checks', () => {
     expect(res.status).not.toHaveBeenCalled();
   });
 });
+
+// Phase 2H finding #5: in-flight Promise dedup. Without these, N concurrent
+// first-touch requests for the same key fire N parallel Firestore reads
+// — a quota grenade on cold-start where 5-10 parallel calls per user each
+// miss the cache. The fix caches the in-flight Promise itself so the
+// second+ caller awaits the first caller's lookup. These tests pin the
+// behaviour so a regression that drops the dedup fails CI.
+describe('in-flight Promise dedup (resolveUniqueId)', () => {
+  test('5 concurrent same-uid requests issue ONE Firestore query, not 5', async () => {
+    // Slow Firestore mock so all 5 requests land in the inflight window.
+    let resolveQuery;
+    const queryPromise = new Promise((r) => {
+      resolveQuery = r;
+    });
+    mockCollectionQuery.mockReturnValueOnce(queryPromise);
+    // verifyIdToken returns the same uid for all 5 requests.
+    mockVerifyIdToken.mockResolvedValue({ uid: 'concurrent-uid' });
+    // suspension check is uid-keyed; resolve immediately.
+    mockDocGet.mockResolvedValue({ exists: true, data: () => ({ isSuspended: false }) });
+
+    const app = createApp();
+    const fired = Array.from({ length: 5 }, () =>
+      request(app).get('/api/users/10000080').set('Authorization', 'Bearer t'),
+    );
+    // Let all 5 requests dispatch through middleware up to the inflight await.
+    await new Promise((r) => setTimeout(r, 10));
+
+    // Resolve the slow Firestore query with a real result so the dedup'd
+    // callers all return the same uniqueId.
+    resolveQuery({
+      empty: false,
+      docs: [
+        { id: '10000080', data: () => ({ uniqueId: 10000080, firebaseUid: 'concurrent-uid' }) },
+      ],
+    });
+    await Promise.all(fired);
+
+    // Single Firestore call across the 5 concurrent requests — the dedup
+    // contract is real, not just a happy-path optimisation.
+    expect(mockCollectionQuery).toHaveBeenCalledTimes(1);
+  });
+
+  test('inflight slot released on Firestore error so retry refetches', async () => {
+    // First call: rejects.
+    mockCollectionQuery.mockRejectedValueOnce(new Error('Firestore down'));
+    // Second call: succeeds.
+    mockCollectionQuery.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ id: '10000081', data: () => ({ uniqueId: 10000081, firebaseUid: 'retry-uid' }) }],
+    });
+    mockVerifyIdToken.mockResolvedValue({ uid: 'retry-uid' });
+    mockDocGet.mockResolvedValue({ exists: true, data: () => ({ isSuspended: false }) });
+
+    const app = createApp();
+    // First request hits the rejecting query path. Middleware catches and
+    // returns 401 (auth boundary fails closed). The inflight slot must be
+    // released regardless — the next retry should re-issue the query.
+    await request(app).get('/api/users/10000081').set('Authorization', 'Bearer t');
+    await request(app).get('/api/users/10000081').set('Authorization', 'Bearer t');
+
+    // Both calls fired Firestore — second wasn't pinned to the rejected Promise.
+    expect(mockCollectionQuery).toHaveBeenCalledTimes(2);
+  });
+});
