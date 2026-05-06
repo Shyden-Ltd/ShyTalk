@@ -454,3 +454,56 @@ describe('non-production skip', () => {
     }
   });
 });
+
+// Phase 2H finding #4: BoundedLruRateLimitStore.
+describe('BoundedLruRateLimitStore — keyspace cap', () => {
+  let store;
+  beforeEach(() => {
+    jest.isolateModules(() => {
+      const rateLimitMod = require('../../src/middleware/rateLimit');
+      const StoreClass = rateLimitMod.BoundedLruRateLimitStore;
+      store = new StoreClass({ windowMs: 1000, maxKeys: 3 });
+    });
+  });
+
+  test('evicts the oldest key when over the cap', async () => {
+    await store.increment('a');
+    await store.increment('b');
+    await store.increment('c');
+    expect(store._size()).toBe(3);
+    await store.increment('d');
+    expect(store._size()).toBe(3);
+    expect(store.hits.has('a')).toBe(false);
+    expect(store.hits.has('d')).toBe(true);
+  });
+
+  test('LRU touch keeps recently-accessed key alive', async () => {
+    await store.increment('a');
+    await store.increment('b');
+    await store.increment('c');
+    await store.increment('a');
+    await store.increment('d');
+    expect(store.hits.has('a')).toBe(true);
+    expect(store.hits.has('b')).toBe(false);
+    expect(store.hits.has('d')).toBe(true);
+  });
+
+  test('expired entry is replaced (not preserved across windowMs)', async () => {
+    const result1 = await store.increment('exp');
+    expect(result1.totalHits).toBe(1);
+    const expiredEntry = store.hits.get('exp');
+    expiredEntry.resetTime = new Date(Date.now() - 1);
+    const result2 = await store.increment('exp');
+    expect(result2.totalHits).toBe(1);
+  });
+
+  test('resetKey clears a single key; resetAll clears the whole store', async () => {
+    await store.increment('x');
+    await store.increment('y');
+    await store.resetKey('x');
+    expect(store.hits.has('x')).toBe(false);
+    expect(store.hits.has('y')).toBe(true);
+    await store.resetAll();
+    expect(store._size()).toBe(0);
+  });
+});
