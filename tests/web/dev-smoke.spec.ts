@@ -697,10 +697,15 @@ test.describe("Dev Smoke — IAP coin purchase (sandbox)", () => {
   // behavior, not artificially-isolated state.
 
   test("GET catalog → POST purchase → balance reflects → replay rejected with 409", async () => {
-    // Phase 1 — discover the catalog. Public endpoint (no auth on
-    // coin-packages route per config.js:786). A regression here
-    // means the IAP UI in the app would be empty for every user.
-    const cat = await smoke.api.get(`${API_BASE}/api/coin-packages`);
+    // Phase 1 — discover the catalog. Despite the route handler not
+    // checking auth itself (config.js:786), the global auth
+    // middleware (index.js:82-113) gates every /api path NOT in the
+    // allow-list, and /coin-packages is NOT allow-listed. Pass the
+    // smoke runner's bearer token. A regression here means the IAP
+    // UI in the app would be empty for every user.
+    const cat = await smoke.api.get(`${API_BASE}/api/coin-packages`, {
+      headers: authedHeaders(),
+    });
     expect(cat.ok(), `catalog: ${cat.status()}: ${await cat.text()}`).toBe(true);
     const packages = await cat.json();
     expect(Array.isArray(packages), "catalog must be an array").toBe(true);
