@@ -49,8 +49,17 @@ jest.mock('../../src/utils/r2', () => ({
   deleteObjects: jest.fn().mockResolvedValue(undefined),
 }));
 
+// Mock log so we can assert on truncation warnings without polluting stderr
+jest.mock('../../src/utils/log', () => ({
+  debug: jest.fn(),
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+}));
+
 const rotateLogs = require('../../src/cron/rotateLogs');
 const r2 = require('../../src/utils/r2');
+const log = require('../../src/utils/log');
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -181,5 +190,52 @@ describe('rotateLogs', () => {
     expect(mockWhere).toHaveBeenCalledWith('timestamp', '<', expectedCutoff);
 
     Date.now.mockRestore();
+  });
+
+  // ─── CRON_LIMIT truncation warning (Phase 2-cron batch 2) ──────────
+  // rotateLogs always pulls a capped page (CRON_LIMIT=500) from `logs`. If
+  // the page is full, we're behind on rotation — the next tick will pick
+  // up the rest, but operators need a signal so they can lean in (raise
+  // retentionHours? add a sweep cron?) before backlog snowballs and ages
+  // past compliance thresholds. Without this warn, a stuck rotation cron
+  // is silent until R2 storage starts getting noisy.
+  test('logs truncation warning when query hits CRON_LIMIT (500)', async () => {
+    // Config: default retention OK
+    mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ retentionHours: 48 }) });
+
+    // 500 log docs returned — fills the page exactly.
+    const fullPage = Array.from({ length: 500 }, (_, i) =>
+      makeLogDoc(`log${i}`, { timestamp: '2020-01-01T00:00:00Z', message: `msg ${i}` }),
+    );
+    mockGet.mockResolvedValueOnce({ empty: false, size: 500, docs: fullPage });
+
+    await rotateLogs();
+
+    expect(log.warn).toHaveBeenCalledWith(
+      'cron',
+      expect.stringContaining('hit CRON_LIMIT'),
+      expect.objectContaining({ limit: 500 }),
+    );
+    // Verify the limit was actually applied (so the cap is real, not just logged)
+    expect(mockLimit).toHaveBeenCalledWith(500);
+  });
+
+  test('does NOT log truncation warning when query returns < CRON_LIMIT', async () => {
+    mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ retentionHours: 48 }) });
+    // Smaller page than the cap
+    const partialPage = Array.from({ length: 100 }, (_, i) =>
+      makeLogDoc(`log${i}`, { timestamp: '2020-01-01T00:00:00Z', message: `msg ${i}` }),
+    );
+    mockGet.mockResolvedValueOnce({ empty: false, size: 100, docs: partialPage });
+
+    await rotateLogs();
+
+    // The warn message must be specifically about CRON_LIMIT — other
+    // log.warn callers in this cron (none today, but defensively) won't
+    // mask a regression that drops the truncation check.
+    const truncationWarn = log.warn.mock.calls.find(
+      ([_, msg]) => typeof msg === 'string' && msg.includes('hit CRON_LIMIT'),
+    );
+    expect(truncationWarn).toBeUndefined();
   });
 });

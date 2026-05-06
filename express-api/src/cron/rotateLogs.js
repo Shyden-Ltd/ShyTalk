@@ -15,6 +15,12 @@ const log = require('../utils/log');
 const DEFAULT_RETENTION_HOURS = 48;
 const PRUNE_DAYS = 90;
 
+// Per-tick page size for the logs query. Pattern matches expireBans.js +
+// expireDataExports.js + subscriptions.js: a hard cap protects Spark-tier
+// quota, and we surface a truncation warning when the page is full so an
+// operator can see backlog growth before the next tick eats it.
+const CRON_LIMIT = 500;
+
 async function rotateLogs() {
   // 1. Read config
   let retentionHours = DEFAULT_RETENTION_HOURS;
@@ -39,8 +45,13 @@ async function rotateLogs() {
     .collection('logs')
     .where('timestamp', '<', cutoff)
     .orderBy('timestamp')
-    .limit(500)
+    .limit(CRON_LIMIT)
     .get();
+  if (snapshot.size === CRON_LIMIT) {
+    log.warn('cron', 'rotateLogs: hit CRON_LIMIT — possible truncation', {
+      limit: CRON_LIMIT,
+    });
+  }
 
   if (!snapshot.empty) {
     const docs = snapshot.docs;
