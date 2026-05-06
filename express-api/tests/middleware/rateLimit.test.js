@@ -339,6 +339,52 @@ describe('keyGenerator', () => {
   });
 });
 
+// Phase 2H finding #3: recoveryLimiter must trim+lowercase the email so
+// `victim@x.com`, ` victim@x.com`, and `victim@x.com ` are ONE bucket, not
+// three. Without `.trim()` an attacker could spam OTPs to a victim's inbox
+// by cycling whitespace variants of the same email.
+describe('recoveryLimiter — email normalisation', () => {
+  function freshRecovery() {
+    jest.resetModules();
+    process.env.NODE_ENV = 'production';
+    return require('../../src/middleware/rateLimit').recoveryLimiter;
+  }
+
+  function appFor(limiter) {
+    const app = express();
+    app.use(express.json());
+    app.use('/recover', limiter);
+    app.post('/recover', (_req, res) => res.json({ ok: true }));
+    return app;
+  }
+
+  test('whitespace and case variants share one bucket', async () => {
+    const limiter = freshRecovery();
+    const app = appFor(limiter);
+
+    // 3-per-24h limit. Exhaust with the canonical form first.
+    for (let i = 0; i < 3; i++) {
+      await request(app).post('/recover').send({ email: 'victim@example.com' }).expect(200);
+    }
+    // Whitespace variant — must hit the SAME bucket and 429.
+    await request(app).post('/recover').send({ email: ' victim@example.com' }).expect(429);
+    // Case variant — same bucket.
+    await request(app).post('/recover').send({ email: 'VICTIM@example.com' }).expect(429);
+    // Trailing whitespace — same bucket.
+    await request(app).post('/recover').send({ email: 'victim@example.com ' }).expect(429);
+  });
+
+  test('non-string email body falls back to req.ip key (no crash)', async () => {
+    const limiter = freshRecovery();
+    const app = appFor(limiter);
+    // Object-shaped body should not throw — keyGenerator returns req.ip.
+    await request(app)
+      .post('/recover')
+      .send({ email: { not: 'a string' } })
+      .expect(200);
+  });
+});
+
 describe('non-production skip', () => {
   // Counter-test the suite-wide `process.env.NODE_ENV = 'production'` setup:
   // when NODE_ENV is anything other than 'production', ALL limiters become

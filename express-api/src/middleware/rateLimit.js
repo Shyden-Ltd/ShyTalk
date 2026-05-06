@@ -89,7 +89,15 @@ const recoveryLimiter = rateLimit({
   max: 3,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req) => req.body?.email?.toLowerCase() || req.ip,
+  // Trim AND lowercase to match the route-side normalisation (portal.js:524
+  // does `email.trim().toLowerCase()` before user lookup). Without `.trim()`
+  // an attacker could spam OTPs to `victim@x.com` by alternating
+  // ` victim@x.com`, `victim@x.com `, and `victim@x.com` — three distinct
+  // rate-limit buckets all targeting the same Firebase user (Phase 2H finding #3).
+  keyGenerator: (req) => {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : null;
+    return email || req.ip;
+  },
   validate: false,
   skip: () => isNonProd(),
 });
