@@ -134,4 +134,34 @@ describe('expireDataExports cron', () => {
     // Should not delete active exports
     expect(mockDeleteObjects).not.toHaveBeenCalled();
   });
+
+  test('logs truncation warning when query hits CRON_LIMIT (500)', async () => {
+    // All 500 docs are not-yet-expired (future expiresAt), so the loop hits
+    // `continue` for every one — keeps the test fast while still tripping
+    // the `size === CRON_LIMIT` truncation branch.
+    const futureExpiry = Date.now() + 24 * 3600000;
+    const fullPage = Array.from({ length: 500 }, (_, i) => ({
+      id: `1000${String(i).padStart(4, '0')}`,
+      data: () => ({
+        dataExportStatus: 'ready',
+        dataExportR2Key: `exports/1000${String(i).padStart(4, '0')}/gen.zip`,
+        dataExportExpiresAt: futureExpiry,
+      }),
+    }));
+    mockCollectionGet.mockResolvedValueOnce({
+      docs: fullPage,
+      size: 500,
+      empty: false,
+    });
+
+    await expireDataExports();
+
+    expect(log.warn).toHaveBeenCalledWith(
+      'cron',
+      expect.stringContaining('hit CRON_LIMIT'),
+      expect.objectContaining({ limit: 500 }),
+    );
+    // No deletions because all docs are not-yet-expired
+    expect(mockDeleteObjects).not.toHaveBeenCalled();
+  });
 });

@@ -420,4 +420,53 @@ describe('expireBans', () => {
 
     expect(mockCleanupInvalidTokens).toHaveBeenCalledWith(['invalid-token'], 'admin1');
   });
+
+  test('logs truncation warning when query hits CRON_LIMIT (500)', async () => {
+    const log = require('../../src/utils/log');
+    const warnSpy = jest.spyOn(log, 'warn').mockImplementation(() => {});
+
+    // 500 device bans (= CRON_LIMIT) — none expired so no batch work
+    const futureExpiry = new Date(Date.now() + 86400000).toISOString();
+    const fullPage = Array.from({ length: 500 }, (_, i) => ({
+      id: `dev${i}`,
+      data: () => ({ expiresAt: futureExpiry }),
+      ref: { path: `deviceBans/dev${i}` },
+    }));
+    mockCollectionGet.mockResolvedValueOnce({ docs: fullPage, size: 500 });
+    mockCollectionGet.mockResolvedValueOnce({ docs: [], size: 0 });
+
+    await expireBans();
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      'cron',
+      expect.stringContaining('deviceBans hit CRON_LIMIT'),
+      expect.objectContaining({ limit: 500 }),
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  test('logs truncation warning on networkBans hitting CRON_LIMIT', async () => {
+    const log = require('../../src/utils/log');
+    const warnSpy = jest.spyOn(log, 'warn').mockImplementation(() => {});
+
+    const futureExpiry = new Date(Date.now() + 86400000).toISOString();
+    mockCollectionGet.mockResolvedValueOnce({ docs: [], size: 0 });
+    const fullPage = Array.from({ length: 500 }, (_, i) => ({
+      id: `net${i}`,
+      data: () => ({ expiresAt: futureExpiry }),
+      ref: { path: `networkBans/net${i}` },
+    }));
+    mockCollectionGet.mockResolvedValueOnce({ docs: fullPage, size: 500 });
+
+    await expireBans();
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      'cron',
+      expect.stringContaining('networkBans hit CRON_LIMIT'),
+      expect.objectContaining({ limit: 500 }),
+    );
+
+    warnSpy.mockRestore();
+  });
 });
