@@ -49,6 +49,22 @@ const { queryDocs } = require('../../src/utils/firestore-helpers');
 beforeEach(() => {
   jest.clearAllMocks();
   mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
+  // Reset the db.collection implementation between tests — `clearAllMocks`
+  // clears call history but not `.mockImplementation(...)` overrides, so
+  // a test that selectively rejects (e.g., `name === 'reports' ? throw`)
+  // would otherwise leak that override into subsequent tests and cause
+  // unexpected failures (failedSections contaminated, partial=true on a
+  // test expecting all-success). Per `[Test mock isolation]` memory rule.
+  const { db } = require('../../src/utils/firebase');
+  db.collection.mockImplementation(() => {
+    const chain = {
+      where: jest.fn().mockImplementation(() => chain),
+      orderBy: jest.fn().mockImplementation(() => chain),
+      limit: jest.fn().mockImplementation(() => chain),
+      get: mockCollectionGet,
+    };
+    return chain;
+  });
 });
 
 // ── Tests ───────────────────────────────────────────────────────
@@ -275,9 +291,15 @@ describe('buildDataExport', () => {
     const log = require('../../src/utils/log');
     expect(log.error).toHaveBeenCalledWith(
       'data-export',
-      'Failed to query messages for conversation',
-      expect.objectContaining({ conversationId: 'conv-err' }),
+      // recordFailure tags by section name; per-conversation message
+      // failures use `conversations/{convId}/messages` so operators can
+      // tell exactly which conversation poisoned the export.
+      'Failed to query conversations/conv-err/messages',
+      expect.objectContaining({ uniqueId: '10000001' }),
     );
+    // Partial-failure contract: this section is in failedSections.
+    expect(result.partial).toBe(true);
+    expect(result.failedSections).toContain('conversations/conv-err/messages');
   });
 
   // --- Error paths for each collection query --------------------------------
@@ -441,9 +463,11 @@ describe('buildDataExport', () => {
     const log = require('../../src/utils/log');
     expect(log.error).toHaveBeenCalledWith(
       'data-export',
-      'Failed to query device bindings',
+      'Failed to query deviceBindings',
       expect.objectContaining({ uniqueId: '10000001' }),
     );
+    expect(result.partial).toBe(true);
+    expect(result.failedSections).toContain('deviceBindings');
   });
 
   test('handles suggestions query error gracefully', async () => {
@@ -610,9 +634,11 @@ describe('buildDataExport', () => {
     const log = require('../../src/utils/log');
     expect(log.error).toHaveBeenCalledWith(
       'data-export',
-      'Failed to query subscriptions',
+      'Failed to query subscriptionPrefs',
       expect.objectContaining({ uniqueId: '10000001' }),
     );
+    expect(result.partial).toBe(true);
+    expect(result.failedSections).toContain('subscriptionPrefs');
   });
 
   // --- Suggestion votes error path ------------------------------------------
@@ -655,7 +681,7 @@ describe('buildDataExport', () => {
     const log = require('../../src/utils/log');
     expect(log.error).toHaveBeenCalledWith(
       'data-export',
-      'Failed to query suggestion votes',
+      'Failed to query suggestionVotes',
       expect.objectContaining({ uniqueId: '10000001' }),
     );
   });
@@ -738,5 +764,82 @@ describe('buildDataExport', () => {
       'Failed to query conversations',
       expect.objectContaining({ uniqueId: '10000001' }),
     );
+  });
+
+  // ─── Partial-failure contract (Phase 2A finding #4) ─────────────────
+  // GDPR Article 20 requires the user know what data was retrieved. Before
+  // this contract every transient query failure produced a ZIP that
+  // claimed completeness while silently missing sections. The new contract
+  // returns `{partial, failedSections}` and includes a manifest.json in the
+  // ZIP enumerating each section's status. These tests pin both halves of
+  // the contract so a regression that drops them fails CI immediately.
+  describe('partial-failure contract', () => {
+    test('returns partial=false + empty failedSections when all queries succeed', async () => {
+      mockDocGet.mockResolvedValue({ exists: true, data: () => testUser });
+      queryDocs.mockResolvedValue([]);
+      mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
+
+      const result = await buildDataExport('10000001');
+
+      expect(result.partial).toBe(false);
+      expect(result.failedSections).toEqual([]);
+    });
+
+    test('returns partial=true with the failing section name when ONE query fails', async () => {
+      mockDocGet.mockResolvedValue({ exists: true, data: () => testUser });
+      queryDocs.mockResolvedValue([]);
+      const { db } = require('../../src/utils/firebase');
+      // Only `appeals` rejects; everything else uses the default empty mock
+      db.collection.mockImplementation((name) => {
+        const chain = {
+          where: jest.fn().mockReturnThis(),
+          orderBy: jest.fn().mockReturnThis(),
+          limit: jest.fn().mockReturnThis(),
+          get:
+            name === 'suspensionAppeals'
+              ? jest.fn().mockRejectedValue(new Error('appeals down'))
+              : mockCollectionGet,
+        };
+        return chain;
+      });
+      mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
+
+      const result = await buildDataExport('10000001');
+
+      expect(result.partial).toBe(true);
+      expect(result.failedSections).toEqual(['appeals']);
+    });
+
+    test('failedSections lists every distinct section that errored', async () => {
+      mockDocGet.mockResolvedValue({ exists: true, data: () => testUser });
+      queryDocs.mockResolvedValue([]);
+      const { db } = require('../../src/utils/firebase');
+      // Both reports AND deviceBindings reject — both must surface in
+      // failedSections (no early-exit, no swallowing).
+      db.collection.mockImplementation((name) => {
+        const chain = {
+          where: jest.fn().mockReturnThis(),
+          orderBy: jest.fn().mockReturnThis(),
+          limit: jest.fn().mockReturnThis(),
+          get:
+            name === 'reports'
+              ? jest.fn().mockRejectedValue(new Error('reports down'))
+              : name === 'deviceBindings'
+                ? jest.fn().mockRejectedValue(new Error('deviceBindings down'))
+                : mockCollectionGet,
+        };
+        return chain;
+      });
+      mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
+
+      const result = await buildDataExport('10000001');
+
+      expect(result.partial).toBe(true);
+      expect(result.failedSections).toEqual(expect.arrayContaining(['reports', 'deviceBindings']));
+      // Buffer is still produced even with multiple section failures (the
+      // user gets SOMETHING back, not an empty error response).
+      expect(result.buffer).toBeInstanceOf(Buffer);
+      expect(result.buffer.length).toBeGreaterThan(0);
+    });
   });
 });

@@ -4,8 +4,16 @@
  * Collects all personal data from Firestore, strips sensitive internal
  * fields, and assembles a ZIP buffer using archiver.
  *
+ * Partial-failure contract: each subcollection query is wrapped in a try
+ * block. On failure the section is omitted (or empty), the failure is
+ * recorded in `failedSections`, and the export still completes. The caller
+ * MUST surface partial state to the user (per GDPR Article 20 — exports
+ * claiming completeness while silently missing data are a compliance
+ * issue). The ZIP itself includes a `manifest.json` enumerating all
+ * sections + their status, so the user can see exactly what was retrieved.
+ *
  * @param {string} uniqueId - The user's uniqueId
- * @returns {Promise<{buffer: Buffer}>}
+ * @returns {Promise<{buffer: Buffer, partial: boolean, failedSections: string[]}>}
  */
 
 const archiver = require('archiver');
@@ -30,6 +38,20 @@ const STRIP_FIELDS = [
 ];
 
 async function buildDataExport(uniqueId) {
+  // Track every section's outcome so the manifest + caller can see exactly
+  // which subcollection queries succeeded. Insertion order matches the order
+  // of section reads below — useful for debugging which doc is failing on
+  // a given user.
+  const failedSections = [];
+  function recordFailure(section, err) {
+    failedSections.push(section);
+    log.error('data-export', `Failed to query ${section}`, {
+      uniqueId,
+      section,
+      error: err.message,
+    });
+  }
+
   // Read user doc
   const userSnap = await db.doc(`users/${uniqueId}`).get();
   if (!userSnap.exists) {
@@ -79,11 +101,33 @@ async function buildDataExport(uniqueId) {
     pityCounter: userData.pityCounter || 0,
   };
 
-  // Subcollections
-  const backpack = await queryDocs(db.collection(`users/${uniqueId}/backpack`));
-  const giftWall = await queryDocs(db.collection(`users/${uniqueId}/giftWall`));
-  const transactions = await queryDocs(db.collection(`users/${uniqueId}/transactions`));
-  const warnings = await queryDocs(db.collection(`users/${uniqueId}/warnings`));
+  // Subcollections — each individually try-catched so a transient failure
+  // on one (e.g., a bad rules deploy on `warnings`) doesn't abort the
+  // entire export and lose the rest of the user's data.
+  let backpack = [];
+  try {
+    backpack = await queryDocs(db.collection(`users/${uniqueId}/backpack`));
+  } catch (err) {
+    recordFailure('backpack', err);
+  }
+  let giftWall = [];
+  try {
+    giftWall = await queryDocs(db.collection(`users/${uniqueId}/giftWall`));
+  } catch (err) {
+    recordFailure('giftWall', err);
+  }
+  let transactions = [];
+  try {
+    transactions = await queryDocs(db.collection(`users/${uniqueId}/transactions`));
+  } catch (err) {
+    recordFailure('transactions', err);
+  }
+  let warnings = [];
+  try {
+    warnings = await queryDocs(db.collection(`users/${uniqueId}/warnings`));
+  } catch (err) {
+    recordFailure('warnings', err);
+  }
 
   // Conversations (only user's own messages)
   let conversations = [];
@@ -122,18 +166,14 @@ async function buildDataExport(uniqueId) {
           userMessages.push({ conversationId: conv.id, id: m.id, ...m.data() });
         }
       } catch (msgErr) {
-        log.error('data-export', 'Failed to query messages for conversation', {
-          uniqueId,
-          conversationId: conv.id,
-          error: msgErr.message,
-        });
+        // Per-conversation message failure: record the conversation id in
+        // the section name so operators can identify which conversation
+        // is poisoned without needing log correlation.
+        recordFailure(`conversations/${conv.id}/messages`, msgErr);
       }
     }
   } catch (err) {
-    log.error('data-export', 'Failed to query conversations', {
-      uniqueId,
-      error: err.message,
-    });
+    recordFailure('conversations', err);
   }
 
   // Rooms owned by user
@@ -142,10 +182,7 @@ async function buildDataExport(uniqueId) {
     const roomSnap = await db.collection('rooms').where('ownerId', '==', uniqueId).get();
     roomsOwned = roomSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch (err) {
-    log.error('data-export', 'Failed to query rooms', {
-      uniqueId,
-      error: err.message,
-    });
+    recordFailure('rooms', err);
   }
 
   // Reports filed by user
@@ -154,10 +191,7 @@ async function buildDataExport(uniqueId) {
     const reportSnap = await db.collection('reports').where('reporterId', '==', uniqueId).get();
     reportsFiled = reportSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch (err) {
-    log.error('data-export', 'Failed to query reports', {
-      uniqueId,
-      error: err.message,
-    });
+    recordFailure('reports', err);
   }
 
   // Appeals
@@ -169,10 +203,7 @@ async function buildDataExport(uniqueId) {
       .get();
     appeals = appealSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch (err) {
-    log.error('data-export', 'Failed to query appeals', {
-      uniqueId,
-      error: err.message,
-    });
+    recordFailure('appeals', err);
   }
 
   // Identity
@@ -184,10 +215,7 @@ async function buildDataExport(uniqueId) {
       .get();
     identity = idSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch (err) {
-    log.error('data-export', 'Failed to query identity', {
-      uniqueId,
-      error: err.message,
-    });
+    recordFailure('identity', err);
   }
 
   // Device bindings
@@ -199,10 +227,7 @@ async function buildDataExport(uniqueId) {
       .get();
     deviceBindings = bindSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch (err) {
-    log.error('data-export', 'Failed to query device bindings', {
-      uniqueId,
-      error: err.message,
-    });
+    recordFailure('deviceBindings', err);
   }
 
   // Suggestions (GDPR: include all user's suggestions)
@@ -214,7 +239,7 @@ async function buildDataExport(uniqueId) {
       .get();
     suggestions = sugSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch (err) {
-    log.error('data-export', 'Failed to query suggestions', { uniqueId, error: err.message });
+    recordFailure('suggestions', err);
   }
 
   // Suggestion votes by this user
@@ -229,7 +254,7 @@ async function buildDataExport(uniqueId) {
       }
     }
   } catch (err) {
-    log.error('data-export', 'Failed to query suggestion votes', { uniqueId, error: err.message });
+    recordFailure('suggestionVotes', err);
   }
 
   // Subscription preferences
@@ -238,7 +263,7 @@ async function buildDataExport(uniqueId) {
     const subSnap = await db.doc(`subscriptions/${uniqueId}`).get();
     if (subSnap.exists) subscriptionPrefs = subSnap.data();
   } catch (err) {
-    log.error('data-export', 'Failed to query subscriptions', { uniqueId, error: err.message });
+    recordFailure('subscriptionPrefs', err);
   }
 
   // Notification history
@@ -250,8 +275,42 @@ async function buildDataExport(uniqueId) {
       .get();
     notificationHistory = notifSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch (err) {
-    log.error('data-export', 'Failed to query notifications', { uniqueId, error: err.message });
+    recordFailure('notifications', err);
   }
+
+  const partial = failedSections.length > 0;
+
+  // Manifest enumerates every section in the export — its presence in the
+  // ZIP guarantees the user can reconstruct what was attempted vs. what
+  // succeeded, even years later when this code has changed. The `partial`
+  // flag drives caller-side notification ("we couldn't get all your data,
+  // please retry") and the entry in failedSections is what they retry on.
+  const manifest = {
+    uniqueId,
+    exportDate: new Date().toISOString(),
+    partial,
+    failedSections,
+    sections: {
+      profile: 'ok',
+      settings: 'ok',
+      identity: failedSections.includes('identity') ? 'failed' : 'ok',
+      followers: 'ok',
+      blocked: 'ok',
+      backpack: failedSections.includes('backpack') ? 'failed' : 'ok',
+      giftWall: failedSections.includes('giftWall') ? 'failed' : 'ok',
+      transactions: failedSections.includes('transactions') ? 'failed' : 'ok',
+      warnings: failedSections.includes('warnings') ? 'failed' : 'ok',
+      conversations: failedSections.includes('conversations') ? 'failed' : 'ok',
+      rooms: failedSections.includes('rooms') ? 'failed' : 'ok',
+      reports: failedSections.includes('reports') ? 'failed' : 'ok',
+      appeals: failedSections.includes('appeals') ? 'failed' : 'ok',
+      deviceBindings: failedSections.includes('deviceBindings') ? 'failed' : 'ok',
+      suggestions: failedSections.includes('suggestions') ? 'failed' : 'ok',
+      suggestionVotes: failedSections.includes('suggestionVotes') ? 'failed' : 'ok',
+      subscriptionPrefs: failedSections.includes('subscriptionPrefs') ? 'failed' : 'ok',
+      notifications: failedSections.includes('notifications') ? 'failed' : 'ok',
+    },
+  };
 
   // Build ZIP
   const buffer = await new Promise((resolve, reject) => {
@@ -262,16 +321,39 @@ async function buildDataExport(uniqueId) {
     archive.on('end', () => resolve(Buffer.concat(chunks)));
     archive.on('error', reject);
 
-    const readme = [
+    const readmeLines = [
       'ShyTalk Data Export',
       '===================',
       '',
       `User ID: ${uniqueId}`,
       `Export date: ${new Date().toISOString()}`,
       '',
-      'This ZIP contains all personal data associated with your ShyTalk account.',
-      '',
+    ];
+    if (partial) {
+      // Surface partial-export state explicitly in the README so the user
+      // sees it without parsing manifest.json. The list of failed sections
+      // tells them exactly what they're missing.
+      readmeLines.push(
+        '⚠️  PARTIAL EXPORT',
+        '',
+        'This export is incomplete. The following sections could not be',
+        'retrieved due to a transient backend failure:',
+        '',
+        ...failedSections.map((s) => `  - ${s}`),
+        '',
+        'You can request a fresh export in 24 hours. We apologise for the',
+        'inconvenience — this is a compliance issue we take seriously.',
+        '',
+      );
+    } else {
+      readmeLines.push(
+        'This ZIP contains all personal data associated with your ShyTalk account.',
+        '',
+      );
+    }
+    readmeLines.push(
       'Files:',
+      '  manifest.json     — Section-by-section status of this export',
       '  profile.json      — Your profile information',
       '  settings.json     — Your privacy and notification settings',
       '  identity.json     — Your linked sign-in providers',
@@ -284,9 +366,11 @@ async function buildDataExport(uniqueId) {
       '  reports/          — Reports you filed and appeals',
       '  devices/          — Your device bindings',
       '  moderation/       — Your warning history',
-    ].join('\n');
+    );
+    const readme = readmeLines.join('\n');
 
     archive.append(readme, { name: 'README.txt' });
+    archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
     archive.append(JSON.stringify(profile, null, 2), { name: 'profile.json' });
     archive.append(JSON.stringify(settings, null, 2), {
       name: 'settings.json',
@@ -349,7 +433,7 @@ async function buildDataExport(uniqueId) {
     archive.finalize();
   });
 
-  return { buffer };
+  return { buffer, partial, failedSections };
 }
 
 module.exports = buildDataExport;

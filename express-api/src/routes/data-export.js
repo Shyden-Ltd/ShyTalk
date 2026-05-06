@@ -100,10 +100,15 @@ router.post('/users/:uniqueId/data-export', async (req, res) => {
             : 'https://dev-api.shytalk.shyden.co.uk');
         const downloadUrl = `${apiBase}/api/users/${uniqueId}/data-export/download?token=${downloadToken}&expiresAt=${expiresAt}`;
 
+        // Persist partial-failure state on the user doc so the status
+        // endpoint can surface it without re-running the export. Per GDPR
+        // Article 20, the user has a right to know what data was retrieved.
         await db.doc(`users/${uniqueId}`).update({
           dataExportStatus: 'ready',
           dataExportR2Key: r2Key,
           dataExportExpiresAt: expiresAt,
+          dataExportPartial: result.partial,
+          dataExportFailedSections: result.failedSections,
         });
 
         // Send email with download link
@@ -112,6 +117,8 @@ router.post('/users/:uniqueId/data-export', async (req, res) => {
             const template = buildDataExportReadyEmail(
               downloadUrl,
               new Date(expiresAt).toISOString(),
+              result.partial,
+              result.failedSections,
             );
             await sendEmail(user.email, template.subject, template.html);
           } catch (emailErr) {
@@ -121,7 +128,12 @@ router.post('/users/:uniqueId/data-export', async (req, res) => {
           }
         }
 
-        log.info('data-export', 'Export ready', { uniqueId, r2Key });
+        log.info('data-export', 'Export ready', {
+          uniqueId,
+          r2Key,
+          partial: result.partial,
+          failedSectionCount: result.failedSections.length,
+        });
       } catch (err) {
         log.error('data-export', 'Export build failed', {
           uniqueId,
@@ -180,6 +192,13 @@ router.get('/users/:uniqueId/data-export/status', async (req, res) => {
       requestedAt: user.lastDataExportRequestedAt || null,
       readyAt: status === 'ready' ? user.lastDataExportRequestedAt : null,
       expiresAt: user.dataExportExpiresAt || null,
+      // Surface partial-failure state so clients can warn the user before
+      // they download. `partial` is only meaningful when status === 'ready'.
+      partial: status === 'ready' ? Boolean(user.dataExportPartial) : false,
+      failedSections:
+        status === 'ready' && Array.isArray(user.dataExportFailedSections)
+          ? user.dataExportFailedSections
+          : [],
     });
   } catch (err) {
     log.error('data-export', 'Failed to get export status', {

@@ -2,6 +2,19 @@ const CDN_URL = process.env.CDN_URL || 'https://images.shytalk.shyden.co.uk';
 
 const LOGO_URL = `${CDN_URL}/branding/logo.png`;
 
+// Minimal HTML-escape for user-influenced strings interpolated into email
+// templates (e.g., the failedSections list in the partial-export notice).
+// Section names are server-controlled today, but a future refactor that
+// includes user-supplied identifiers must not be an injection vector.
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function wrapTemplate(bodyHtml) {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -98,17 +111,36 @@ function buildDeletionCompleteEmail() {
   return { subject: 'Your ShyTalk account has been deleted', html };
 }
 
-function buildDataExportReadyEmail(downloadUrl, expiresAt) {
+function buildDataExportReadyEmail(downloadUrl, expiresAt, partial = false, failedSections = []) {
+  // Partial-export notice surfaces ABOVE the download CTA so the user
+  // sees it before they click. The list of failed sections lets them
+  // decide whether to use this export or wait 24h and re-request.
+  const partialNotice = partial
+    ? `
+    <div style="background:#3a2630;border-left:4px solid #ff8b8b;padding:12px 16px;margin:0 0 16px;border-radius:6px;">
+      <p style="margin:0 0 8px;color:#ffd0d0;font-weight:700;">⚠ Partial export</p>
+      <p style="margin:0 0 8px;color:#d0d0e0;font-size:13px;">We couldn't retrieve every section of your data due to a transient backend failure. The following sections are missing or incomplete:</p>
+      <ul style="margin:0;padding-left:20px;color:#d0d0e0;font-size:13px;">
+        ${failedSections.map((s) => `<li>${escapeHtml(s)}</li>`).join('')}
+      </ul>
+      <p style="margin:8px 0 0;color:#7a7a9e;font-size:12px;">You can request a fresh export in 24 hours. The ZIP also contains a <code>manifest.json</code> with the full section status.</p>
+    </div>
+  `
+    : '';
   const html = wrapTemplate(`
     <p style="margin:0 0 8px;color:#d0d0e0;">Hi there,</p>
     <p style="margin:0 0 12px;color:#d0d0e0;">Your ShyTalk data export is ready for download.</p>
+    ${partialNotice}
     <div style="text-align:center;margin:24px 0;">
       <a href="${downloadUrl}" style="display:inline-block;background:#8b7fff;color:#fff;padding:14px 28px;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;">Download Your Data</a>
     </div>
     <p style="margin:0 0 12px;color:#7a7a9e;font-size:13px;">This link expires on ${expiresAt}. After that, you can request a new export.</p>
     <p style="margin:0;color:#7a7a9e;font-size:13px;">If you have any questions, contact <a href="mailto:shytalk.help@gmail.com" style="color:#8b7fff;">shytalk.help@gmail.com</a></p>
   `);
-  return { subject: 'Your ShyTalk data export is ready', html };
+  const subject = partial
+    ? 'Your ShyTalk data export is ready (partial)'
+    : 'Your ShyTalk data export is ready';
+  return { subject, html };
 }
 
 module.exports = {
