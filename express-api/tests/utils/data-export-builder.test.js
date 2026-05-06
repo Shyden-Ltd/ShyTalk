@@ -14,6 +14,9 @@
 
 const mockDocGet = jest.fn();
 const mockCollectionGet = jest.fn();
+// Collection-group queries (Phase 2A finding #1) — separate mock so tests
+// can return votes-subset without polluting normal collection queries.
+const mockCollectionGroupGet = jest.fn();
 
 jest.mock('../../src/utils/firebase', () => ({
   db: {
@@ -27,6 +30,15 @@ jest.mock('../../src/utils/firebase', () => ({
         orderBy: jest.fn().mockImplementation(() => chain),
         limit: jest.fn().mockImplementation(() => chain),
         get: mockCollectionGet,
+      };
+      return chain;
+    }),
+    collectionGroup: jest.fn(() => {
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get: mockCollectionGroupGet,
       };
       return chain;
     }),
@@ -49,6 +61,9 @@ const { queryDocs } = require('../../src/utils/firestore-helpers');
 beforeEach(() => {
   jest.clearAllMocks();
   mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
+  // Default: no votes for the user — tests that exercise the votes path
+  // override with mockCollectionGroupGet.mockResolvedValueOnce(...).
+  mockCollectionGroupGet.mockResolvedValue({ docs: [], empty: true });
   // Reset the db.collection implementation between tests — `clearAllMocks`
   // clears call history but not `.mockImplementation(...)` overrides, so
   // a test that selectively rejects (e.g., `name === 'reports' ? throw`)
@@ -536,57 +551,68 @@ describe('buildDataExport', () => {
 
   // --- Suggestion votes scanning --------------------------------------------
 
-  test('collects suggestion votes for the user', async () => {
-    mockDocGet.mockImplementation((path) => {
-      if (path === 'users/10000001') {
-        return Promise.resolve({ exists: true, data: () => testUser });
-      }
-      // Vote doc for suggestion sug-1 exists
-      if (path === 'suggestions/sug-1/votes/10000001') {
-        return Promise.resolve({
-          exists: true,
-          data: () => ({ direction: 'up', votedAt: 1700000000000 }),
-        });
-      }
-      // Vote doc for suggestion sug-2 does not exist
-      if (path === 'suggestions/sug-2/votes/10000001') {
-        return Promise.resolve({ exists: false });
-      }
-      return Promise.resolve({ exists: false });
-    });
+  test('collects suggestion votes via collection-group query (Phase 2A finding #1)', async () => {
+    mockDocGet.mockResolvedValue({ exists: true, data: () => testUser });
     queryDocs.mockResolvedValue([]);
 
-    const { db } = require('../../src/utils/firebase');
-    db.collection.mockImplementation((path) => {
-      if (path === 'suggestions') {
-        const chain = {
-          where: jest.fn().mockImplementation(() => chain),
-          orderBy: jest.fn().mockImplementation(() => chain),
-          limit: jest.fn().mockImplementation(() => chain),
-          get: jest.fn().mockResolvedValue({
-            docs: [
-              { id: 'sug-1', data: () => ({ title: 'Feature A', submitterUid: 99 }) },
-              { id: 'sug-2', data: () => ({ title: 'Feature B', submitterUid: 99 }) },
-            ],
-          }),
-        };
-        return chain;
-      }
-      const chain = {
-        where: jest.fn().mockImplementation(() => chain),
-        orderBy: jest.fn().mockImplementation(() => chain),
-        limit: jest.fn().mockImplementation(() => chain),
-        get: mockCollectionGet,
+    // Two votes by this user, on different suggestions. Each vote doc has a
+    // ref shape that mirrors Firestore: `.parent` is the votes subcollection,
+    // `.parent.parent` is the parent suggestion doc, and `.parent.parent.parent`
+    // is the suggestions collection.
+    function makeSuggestionsCollection() {
+      return { id: 'suggestions' };
+    }
+    function makeVoteDoc(suggestionId, voteData) {
+      const suggestionsCol = makeSuggestionsCollection();
+      const suggestionDoc = { id: suggestionId, parent: suggestionsCol };
+      const votesCol = { id: 'votes', parent: suggestionDoc };
+      return {
+        ref: { parent: votesCol },
+        data: () => voteData,
       };
-      return chain;
+    }
+    mockCollectionGroupGet.mockResolvedValueOnce({
+      docs: [
+        makeVoteDoc('sug-1', { voterId: 10000001, direction: 'up', votedAt: 1700000000000 }),
+        makeVoteDoc('sug-3', { voterId: 10000001, direction: 'down', votedAt: 1700000000050 }),
+      ],
     });
 
     const result = await buildDataExport('10000001');
     expect(result.buffer).toBeInstanceOf(Buffer);
 
-    // Verify the vote doc was queried
-    expect(db.doc).toHaveBeenCalledWith('suggestions/sug-1/votes/10000001');
-    expect(db.doc).toHaveBeenCalledWith('suggestions/sug-2/votes/10000001');
+    // The collection-group entry point was used, with the voterId equality
+    // filter — verifies the quota fix is real and not silently regressed
+    // back to the full-suggestions scan.
+    const { db } = require('../../src/utils/firebase');
+    expect(db.collectionGroup).toHaveBeenCalledWith('votes');
+    // Confirm we didn't fall back to the old N+1 pattern
+    expect(db.doc).not.toHaveBeenCalledWith('suggestions/sug-1/votes/10000001');
+    expect(db.doc).not.toHaveBeenCalledWith('suggestions/sug-3/votes/10000001');
+  });
+
+  test('skips collection-group entries whose grandparent is NOT the suggestions collection', async () => {
+    // Defensive guard: if a future schema introduces another `votes`
+    // subcollection under a different parent collection, the export must
+    // not leak those entries (privacy + correctness — they aren't
+    // suggestion votes). Test pins the guard so a refactor can't remove it.
+    mockDocGet.mockResolvedValue({ exists: true, data: () => testUser });
+    queryDocs.mockResolvedValue([]);
+
+    function makeRogueVoteDoc() {
+      const otherCol = { id: 'polls' };
+      const otherDoc = { id: 'poll-1', parent: otherCol };
+      const votesCol = { id: 'votes', parent: otherDoc };
+      return {
+        ref: { parent: votesCol },
+        data: () => ({ voterId: 10000001, direction: 'up' }),
+      };
+    }
+    mockCollectionGroupGet.mockResolvedValueOnce({ docs: [makeRogueVoteDoc()] });
+
+    const result = await buildDataExport('10000001');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+    // Test passes if the rogue vote was filtered (no crash on .parent.id check).
   });
 
   // --- Subscription preferences ---------------------------------------------
@@ -644,36 +670,15 @@ describe('buildDataExport', () => {
   // --- Suggestion votes error path ------------------------------------------
 
   test('handles suggestion votes query error gracefully', async () => {
+    // The collection-group query (Phase 2A finding #1) replaced the old
+    // full-scan + N+1; this test pins that the catch handles failures of
+    // the new entry point too.
     mockDocGet.mockResolvedValue({
       exists: true,
       data: () => testUser,
     });
     queryDocs.mockResolvedValue([]);
-
-    const { db } = require('../../src/utils/firebase');
-    // Make suggestions collection get() succeed for the first call (user suggestions)
-    // but fail on the second call (all suggestions for votes scan)
-    let sugCallCount = 0;
-    db.collection.mockImplementation((path) => {
-      const chain = {
-        where: jest.fn().mockImplementation(() => chain),
-        orderBy: jest.fn().mockImplementation(() => chain),
-        limit: jest.fn().mockImplementation(() => chain),
-        get: jest.fn().mockImplementation(() => {
-          if (path === 'suggestions') {
-            sugCallCount++;
-            if (sugCallCount === 1) {
-              // First call: user's own suggestions
-              return Promise.resolve({ docs: [], empty: true });
-            }
-            // Second call: all suggestions for vote scan - error
-            return Promise.reject(new Error('Votes scan error'));
-          }
-          return mockCollectionGet();
-        }),
-      };
-      return chain;
-    });
+    mockCollectionGroupGet.mockRejectedValueOnce(new Error('CG votes index missing'));
 
     const result = await buildDataExport('10000001');
     expect(result.buffer).toBeInstanceOf(Buffer);

@@ -242,16 +242,26 @@ async function buildDataExport(uniqueId) {
     recordFailure('suggestions', err);
   }
 
-  // Suggestion votes by this user
+  // Suggestion votes by this user — collection-group query (Phase 2A finding #1).
+  // Previously this read EVERY suggestion in the corpus then did N+1 individual
+  // vote lookups per suggestion. With ~1000 suggestions that's 2K reads per
+  // export, on a Spark-tier 50K/day quota that's a quota grenade once exports
+  // become routine. The collection-group query reads ONLY the docs where
+  // `voterId === uniqueId` — at most ~hundreds per user. Requires a
+  // collection-group composite index on `votes.voterId` (added in firestore.indexes.json).
   const suggestionVotes = [];
   try {
-    // Query all suggestions where user has voted (scan — GDPR requires completeness)
-    const allSugSnap = await db.collection('suggestions').get();
-    for (const sDoc of allSugSnap.docs) {
-      const voteSnap = await db.doc(`suggestions/${sDoc.id}/votes/${uniqueId}`).get();
-      if (voteSnap.exists) {
-        suggestionVotes.push({ suggestionId: sDoc.id, ...voteSnap.data() });
-      }
+    const numericUid = Number.parseInt(uniqueId, 10);
+    const votesSnap = await db.collectionGroup('votes').where('voterId', '==', numericUid).get();
+    for (const voteDoc of votesSnap.docs) {
+      // votes are stored at suggestions/{suggestionId}/votes/{voterId}, so the
+      // suggestion ID is the parent's parent (the votes subcollection's parent
+      // doc, which is the suggestion). Defensive null check in case a future
+      // collection-group expansion introduces a different `votes` subcollection
+      // at another nesting level.
+      const suggestionRef = voteDoc.ref.parent.parent;
+      if (!suggestionRef || suggestionRef.parent.id !== 'suggestions') continue;
+      suggestionVotes.push({ suggestionId: suggestionRef.id, ...voteDoc.data() });
     }
   } catch (err) {
     recordFailure('suggestionVotes', err);

@@ -212,6 +212,14 @@
         { "fieldPath": "linkedUniqueId", "order": "ASCENDING" },
         { "fieldPath": "autoApplied", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "votes",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "voterId", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
