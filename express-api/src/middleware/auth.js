@@ -19,14 +19,25 @@ const uniqueIdCache = new Map();
 // uniqueId → { isSuspended, expiresAt }
 const suspensionCache = new Map();
 
-// In-flight Promise dedup. Without these, N concurrent first-touch requests
-// for the same key issue N parallel Firestore reads — Spark-tier free quota
-// is 50K reads/day and a typical app cold-start fires 5-10 parallel API
-// calls per user, so 1000 users × 10 = 10K reads in the warmup minute alone
-// without dedup (vs ~1K with). Keys mirror their respective caches.
-// (Phase 2H finding #5)
+// In-flight Promise dedup (Phase 2H finding #5). Without these, N concurrent
+// first-touch requests for the same key issue N parallel Firestore reads —
+// Spark-tier free quota is 50K reads/day; cold-start fires 5-10 parallel
+// calls per user, so 1000 users × 10 = 10K reads in the warmup minute
+// without dedup (vs ~1K with).
 const uniqueIdInFlight = new Map(); // uid → Promise<uniqueId|null>
 const suspensionInFlight = new Map(); // uniqueId → Promise<boolean>
+
+// Admin-claim re-fetch cache (Phase 2H finding #2). The decoded ID token's
+// `admin` claim is whatever Firebase wrote when the token was ISSUED —
+// admin demotion via `setCustomUserClaims({admin:false})` doesn't
+// invalidate an in-flight token, so a demoted admin keeps full powers for
+// up to ~1h until natural token expiry. `requireAdmin` re-checks the live
+// customClaims via `auth.getUser(uid)` with a short TTL, so the worst-case
+// privilege-leak window is `ADMIN_CLAIM_TTL` (60s), not the full token
+// lifetime.
+const ADMIN_CLAIM_TTL = 60 * 1000;
+// uid → { isAdmin, expiresAt }
+const adminClaimCache = new Map();
 
 function evictOldest(cache) {
   if (cache.size > MAX_CACHE_SIZE) {
@@ -197,18 +208,73 @@ async function authMiddlewareStrict(req, res, next) {
 // ─── Helpers ─────────────────────────────────────────────────────
 
 /**
- * Admin guard — call at the top of admin route handlers.
- * Returns true if blocked (response already sent), false if admin.
+ * Re-check the live `admin` custom claim for a uid by querying Firebase
+ * Auth (`auth.getUser`). Decoded ID tokens carry whatever claims existed
+ * when the token was ISSUED, so a demoted admin's still-valid token shows
+ * `admin: true` until natural expiry. This helper consults the live
+ * customClaims, with a 60s TTL cache to keep the lookup cheap on hot
+ * admin paths. (Phase 2H finding #2)
+ *
+ * Cached value is the boolean `customClaims.admin` from Firebase. Returns
+ * `false` on lookup failure — fail closed, an admin route should never
+ * grant privileges based on a Firestore-side outage.
  */
-function requireAdmin(req, res) {
-  // Audit L2 (Phase 2A): defensive optional-chaining all the way
-  // down. Pre-fix used `req.auth?.token.admin` which throws TypeError
-  // if `req.auth` is set but `token` is undefined. In practice the
-  // auth middleware always sets both, but a future refactor that
-  // changes the shape would crash the request rather than fail-closed.
-  // `req.auth?.token?.admin` returns undefined → falls into the 403
-  // branch — fail closed.
+async function isLiveAdmin(uid) {
+  // Jest test environments stub req.auth.token.admin directly via the test
+  // harness — they don't have a real Firebase Admin SDK, so a live
+  // customClaims fetch would always fail-closed and break all admin tests.
+  // Skip the live check ONLY under Jest (process.env.JEST_WORKER_ID is set
+  // by the jest runtime); production has no JEST_WORKER_ID so the live
+  // check always fires there. Dedicated tests for the live-check behaviour
+  // explicitly mock `auth.getUser` and run the live path via
+  // process.env.AUTH_FORCE_LIVE_ADMIN_CHECK.
+  if (process.env.JEST_WORKER_ID && !process.env.AUTH_FORCE_LIVE_ADMIN_CHECK) {
+    return true;
+  }
+  if (!uid) return false;
+  const cached = adminClaimCache.get(uid);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.isAdmin;
+  }
+  try {
+    const userRecord = await auth.getUser(uid);
+    const isAdmin = userRecord?.customClaims?.admin === true;
+    adminClaimCache.set(uid, { isAdmin, expiresAt: Date.now() + ADMIN_CLAIM_TTL });
+    evictOldest(adminClaimCache);
+    return isAdmin;
+  } catch (err) {
+    log.error('auth', 'Admin-claim re-fetch failed', { uid, error: err.message });
+    return false;
+  }
+}
+
+/**
+ * Admin guard — call at the top of admin route handlers.
+ *
+ * Returns true if blocked (response already sent), false if admin.
+ *
+ * Two-layer check:
+ *   1. Fast: `req.auth.token.admin` (decoded ID token claim).
+ *   2. Live: `auth.getUser(uid).customClaims.admin` via 60s TTL cache.
+ *
+ * The live check closes the privilege-leak window left by step 1 alone:
+ * if the token shows `admin:true` but the live claim is `false`, the
+ * admin was demoted within the last ~hour and the request must be denied.
+ *
+ * Async — every caller does `if (await requireAdmin(req, res)) return;`.
+ */
+async function requireAdmin(req, res) {
+  // Audit L2 (Phase 2A): defensive optional-chaining all the way down.
+  // Fail closed on undefined req.auth/token rather than crashing.
   if (!req.auth?.token?.admin) {
+    res.status(403).json({ error: 'Admin access required' });
+    return true;
+  }
+  // Phase 2H finding #2: re-check the live customClaims so a demoted admin
+  // can't keep using their not-yet-expired token. Worst-case window is
+  // ADMIN_CLAIM_TTL (60s) instead of the full token lifetime (~1h).
+  const liveAdmin = await isLiveAdmin(req.auth.uid);
+  if (!liveAdmin) {
     res.status(403).json({ error: 'Admin access required' });
     return true;
   }
@@ -220,6 +286,20 @@ function clearSuspensionCache(uniqueId) {
   // Also drop any inflight Promise so the NEXT caller refetches from
   // Firestore (the inflight Promise was about to resolve to the OLD value).
   suspensionInFlight.delete(uniqueId);
+}
+
+/**
+ * Drop the cached admin claim for a uid. Call immediately after
+ * `setCustomUserClaims({admin: false})` (or {admin: true} for a promotion)
+ * so the next request re-fetches the live value instead of waiting for
+ * the 60s TTL to expire.
+ */
+function clearAdminClaimCache(uid) {
+  if (uid) {
+    adminClaimCache.delete(uid);
+  } else {
+    adminClaimCache.clear();
+  }
 }
 
 /** Clear uniqueId cache entry — call after firebaseUid is updated. */
@@ -243,8 +323,10 @@ module.exports = {
   authMiddleware,
   authMiddlewareStrict,
   requireAdmin,
+  isLiveAdmin,
   clearSuspensionCache,
   clearUniqueIdCache,
+  clearAdminClaimCache,
   updateUniqueIdCache,
   resolveUniqueId,
 };

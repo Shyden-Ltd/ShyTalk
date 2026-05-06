@@ -847,13 +847,7 @@ router.post('/suggestions/:id/comments', async (req, res) => {
 // Admin suggestion moderation routes
 // ═══════════════════════════════════════════════════════════════
 
-function requireAdmin(req, res) {
-  if (!req.auth?.token?.admin) {
-    res.status(403).json({ error: 'Admin access required' });
-    return true;
-  }
-  return false;
-}
+const { requireAdmin } = require('../middleware/auth'); // shared — live claim check
 
 async function createAuditEntry(adminUid, action, targetType, targetId, details) {
   try {
@@ -938,7 +932,7 @@ const VALID_ADMIN_TRANSITIONS = {
 
 router.get('/admin/suggestions/disputes', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const snap = await db
       .collection('suggestion_disputes')
@@ -958,7 +952,7 @@ router.get('/admin/suggestions/disputes', async (req, res) => {
 
 router.put('/admin/suggestions/disputes/:id', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const { id } = req.params;
     const { resolution } = req.body;
@@ -1029,7 +1023,7 @@ router.put('/admin/suggestions/disputes/:id', async (req, res) => {
 
 router.get('/admin/suggestions', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const { q, status } = req.query;
     const snap = await db.collection('suggestions').get();
@@ -1071,7 +1065,7 @@ router.get('/admin/suggestions', async (req, res) => {
 
 router.put('/admin/suggestions/:id/status', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const { id } = req.params;
     const { status: newStatus, reason, linkedRoadmapFeature, mergeInto } = req.body;
@@ -1291,7 +1285,7 @@ router.put('/admin/suggestions/:id/status', async (req, res) => {
 
 router.put('/admin/suggestions/:id/link', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const { id } = req.params;
     const { roadmapFeatureId } = req.body;
@@ -1353,7 +1347,7 @@ router.put('/admin/suggestions/:id/link', async (req, res) => {
 
 router.post('/admin/suggestions/:id/merge', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const { id } = req.params;
     // Accept multiple field names for the target suggestion ID
@@ -1451,7 +1445,7 @@ router.post('/admin/suggestions/:id/merge', async (req, res) => {
 // timeline test that asserts an edit diff shows in the history.
 router.patch('/admin/suggestions/:id', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
     const { id } = req.params;
     const ref = db.doc(`suggestions/${id}`);
     const doc = await ref.get();
@@ -1486,7 +1480,7 @@ router.patch('/admin/suggestions/:id', async (req, res) => {
 // don't authenticate as the submitter).
 router.post('/admin/suggestions/:id/dispute', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
     const { id } = req.params;
     const { reason } = req.body || {};
     const ref = db.doc(`suggestions/${id}`);
@@ -1515,7 +1509,7 @@ router.post('/admin/suggestions/:id/dispute', async (req, res) => {
 // on the same suggestion return 409.
 router.post('/admin/suggestions/:id/dispute/uphold', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
     const { id } = req.params;
     const ref = db.doc(`suggestions/${id}`);
     const doc = await ref.get();
@@ -1555,7 +1549,7 @@ router.post('/admin/suggestions/:id/dispute/uphold', async (req, res) => {
 // reviewed again independently.
 router.post('/admin/suggestions/:id/dispute/reject', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
     const { id } = req.params;
     const ref = db.doc(`suggestions/${id}`);
     const doc = await ref.get();
@@ -1579,7 +1573,7 @@ router.post('/admin/suggestions/:id/dispute/reject', async (req, res) => {
 // ─── GET /admin/suggestions/:id ─────────────────────────────────
 router.get('/admin/suggestions/:id', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
     const { id } = req.params;
     const doc = await db.doc(`suggestions/${id}`).get();
     if (!doc.exists) return res.status(404).json({ error: 'Suggestion not found' });
@@ -1593,7 +1587,7 @@ router.get('/admin/suggestions/:id', async (req, res) => {
 // ─── POST /admin/suggestions/:id/approve ────────────────────────
 router.post('/admin/suggestions/:id/approve', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
     const { id } = req.params;
     const doc = await db.doc(`suggestions/${id}`).get();
     if (!doc.exists) return res.status(404).json({ error: 'Suggestion not found' });
@@ -1620,7 +1614,7 @@ router.post('/admin/suggestions/:id/approve', async (req, res) => {
 // ─── POST /admin/suggestions/:id/reject ─────────────────────────
 router.post('/admin/suggestions/:id/reject', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
     const { id } = req.params;
     let { reason } = req.body || {};
     const doc = await db.doc(`suggestions/${id}`).get();
@@ -1653,7 +1647,7 @@ router.post('/admin/suggestions/:id/reject', async (req, res) => {
 // ─── POST /admin/suggestions/:id/overturn ───────────────────────
 router.post('/admin/suggestions/:id/overturn', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
     const { id } = req.params;
     const { targetStatus, reason } = req.body || {};
     if (!targetStatus) return res.status(400).json({ error: 'targetStatus is required' });
@@ -1682,7 +1676,7 @@ router.post('/admin/suggestions/:id/overturn', async (req, res) => {
 // ─── POST /admin/suggestions/:id/status ─────────────────────────
 router.post('/admin/suggestions/:id/status', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
     const { id } = req.params;
     const { status: newStatus } = req.body || {};
     if (!newStatus) return res.status(400).json({ error: 'Status is required' });
@@ -1707,7 +1701,7 @@ router.post('/admin/suggestions/:id/status', async (req, res) => {
 // ─── POST /admin/suggestions/:id/add-votes ──────────────────────
 router.post('/admin/suggestions/:id/add-votes', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
     const { id } = req.params;
     const { count } = req.body || {};
     const n = Number(count) || 0;
@@ -1734,7 +1728,7 @@ router.post('/admin/suggestions/:id/add-votes', async (req, res) => {
 // a merge creates a notification for the submitter.
 router.get('/admin/notifications', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
     const { userId, type } = req.query;
     const snap = await db.collection('notifications').get();
     let notifications = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -1760,7 +1754,7 @@ router.get('/admin/notifications', async (req, res) => {
 // ─── GET /admin/suggestions/:id/history ─────────────────────────
 router.get('/admin/suggestions/:id/history', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
     const { id } = req.params;
     // Audit entries for suggestions may live in any of three collections:
     //   - moderationLog: approve/reject/overturn/edit (via createAuditEntry)
@@ -1843,7 +1837,7 @@ router.get('/admin/suggestions/:id/history', async (req, res) => {
 
 router.delete('/admin/suggestions/blocked/:id', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const { id } = req.params;
 

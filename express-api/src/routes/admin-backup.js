@@ -53,7 +53,7 @@ function isSafeKey(key) {
 // ── List available backups (full backup dates with manifests) ──
 router.get('/admin/backups', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     // List all manifest files under backups/full/
     const objects = await listObjectsWithMeta('backups/full/');
@@ -101,7 +101,7 @@ router.get('/admin/backups', async (req, res) => {
 // ── Trigger immediate full backup ──
 router.post('/admin/backups/trigger', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const result = await backupFn();
     res.json({
@@ -126,7 +126,7 @@ const ALLOWED_BACKUP_COLLECTIONS = new Set([
 
 router.get('/admin/backups/:date/:collection', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const { date, collection } = req.params;
     if (!BACKUP_DATE_REGEX.test(date)) {
@@ -170,7 +170,7 @@ router.get('/admin/backups/:date/:collection', async (req, res) => {
 // ── Download legacy users backup (backwards compat) ──
 router.get('/admin/backups/:date', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     if (!BACKUP_DATE_REGEX.test(req.params.date)) {
       log.warn('admin-backup', 'Invalid date format in legacy backup download', {
@@ -261,7 +261,7 @@ async function restoreCollection(date, collName, mode, results) {
 // ── Restore from a backup ──
 router.post('/admin/backups/restore/:date', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const { date } = req.params;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -346,7 +346,7 @@ async function recoverPhotosFromFolder(folder, CDN_URL) {
 // ── Recover profile/cover photos from R2 ──
 router.post('/admin/backups/recover-photos', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const CDN_URL = r2.CDN_URL;
     let recovered = 0;

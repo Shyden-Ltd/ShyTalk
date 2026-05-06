@@ -21,7 +21,7 @@ const MAX_LIMIT = 200;
 
 // GET /admin/alerts — List alerts with optional filters
 router.get('/admin/alerts', async (req, res) => {
-  if (requireAdmin(req, res)) return;
+  if (await requireAdmin(req, res)) return;
 
   try {
     const { type, severity, status } = req.query;
@@ -49,7 +49,7 @@ router.get('/admin/alerts', async (req, res) => {
 
 // POST /admin/alerts — Create a new alert
 router.post('/admin/alerts', async (req, res) => {
-  if (requireAdmin(req, res)) return;
+  if (await requireAdmin(req, res)) return;
 
   try {
     const { type, severity, message, status } = req.body;
@@ -79,7 +79,7 @@ router.post('/admin/alerts', async (req, res) => {
 
 // GET /admin/alerts/:alertId — Get single alert
 router.get('/admin/alerts/:alertId', async (req, res) => {
-  if (requireAdmin(req, res)) return;
+  if (await requireAdmin(req, res)) return;
 
   try {
     const { alertId } = req.params;
@@ -101,7 +101,7 @@ router.get('/admin/alerts/:alertId', async (req, res) => {
 
 // PATCH /admin/alerts/:alertId — Update alert status
 router.patch('/admin/alerts/:alertId', async (req, res) => {
-  if (requireAdmin(req, res)) return;
+  if (await requireAdmin(req, res)) return;
 
   try {
     const { alertId } = req.params;
@@ -142,7 +142,7 @@ router.patch('/admin/alerts/:alertId', async (req, res) => {
 
 // GET /admin/alert-config — Get alert thresholds
 router.get('/admin/alert-config', async (req, res) => {
-  if (requireAdmin(req, res)) return;
+  if (await requireAdmin(req, res)) return;
 
   try {
     const snap = await db.collection('alertConfig').doc('settings').get();
@@ -159,7 +159,7 @@ router.get('/admin/alert-config', async (req, res) => {
 
 // PATCH /admin/alert-config — Update alert thresholds
 router.patch('/admin/alert-config', async (req, res) => {
-  if (requireAdmin(req, res)) return;
+  if (await requireAdmin(req, res)) return;
 
   try {
     const allowedKeys = Object.keys(DEFAULT_ALERT_CONFIG);

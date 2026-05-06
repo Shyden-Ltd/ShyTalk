@@ -16,7 +16,7 @@ const log = require('../utils/log');
 // ── Check ID availability ──
 router.get('/admin/users/check-id/:id', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
     const id = Number.parseInt(req.params.id, 10);
     if (!id || id < 10000000) return res.status(400).json({ error: 'Invalid ID' });
 
@@ -47,7 +47,7 @@ router.get('/admin/users/check-id/:id', async (req, res) => {
 // ── Set temporary unique ID ──
 router.post('/admin/users/:uniqueId/temp-id', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const { tempUniqueId, expiryDate } = req.body || {};
     if (!tempUniqueId || tempUniqueId < 10000000) {
@@ -128,7 +128,7 @@ router.post('/admin/users/:uniqueId/temp-id', async (req, res) => {
 // ── Clear temporary unique ID ──
 router.delete('/admin/users/:uniqueId/temp-id', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const targetUniqueId = req.params.uniqueId;
     const timestamp = now();

@@ -47,7 +47,7 @@ router.get('/log-config', async (req, res) => {
 
 // GET /admin/log-config — Admin only
 router.get('/admin/log-config', async (req, res) => {
-  if (requireAdmin(req, res)) return;
+  if (await requireAdmin(req, res)) return;
 
   try {
     const doc = await db.doc('logConfig/settings').get();
@@ -60,7 +60,7 @@ router.get('/admin/log-config', async (req, res) => {
 
 // PATCH /admin/log-config — Admin only, update settings
 router.patch('/admin/log-config', async (req, res) => {
-  if (requireAdmin(req, res)) return;
+  if (await requireAdmin(req, res)) return;
 
   try {
     const updates = {};

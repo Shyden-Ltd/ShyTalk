@@ -86,6 +86,7 @@ const { requireAdmin } = require('../../src/middleware/auth');
 jest.mock('../../src/middleware/auth', () => ({
   requireAdmin: jest.fn(() => false), // Allow all requests by default
   clearSuspensionCache: jest.fn(),
+  clearAdminClaimCache: jest.fn(),
 }));
 
 const { auth } = require('../../src/utils/firebase');

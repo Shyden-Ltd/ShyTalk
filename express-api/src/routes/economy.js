@@ -1791,7 +1791,7 @@ router.post('/economy/trial-activate', async (req, res) => {
 // ── Test coins (admin only) ──
 router.post('/economy/test-coins', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const uniqueId = req.auth.uniqueId;
     const body = req.body;

@@ -56,7 +56,7 @@ router.get('/banners/active', async (req, res) => {
 // ── All banners (admin) ──
 router.get('/admin/banners', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const results = await queryDocs(db.collection('banners'));
     results.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
@@ -71,7 +71,7 @@ router.get('/admin/banners', async (req, res) => {
 // ── Create banner (admin) ──
 router.post('/admin/banners', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const body = req.body;
     if (!body) return res.status(400).json({ error: 'Invalid JSON body' });
@@ -114,7 +114,7 @@ router.post('/admin/banners', async (req, res) => {
 // ── Batch reorder (admin) — must be before /:id route ──
 router.put('/admin/banners/reorder', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const body = req.body;
     if (!Array.isArray(body))
@@ -149,7 +149,7 @@ router.put('/admin/banners/reorder', async (req, res) => {
 // ── Update banner (admin) ──
 router.put('/admin/banners/:id', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const body = req.body;
     if (!body) return res.status(400).json({ error: 'Invalid JSON body' });
@@ -197,7 +197,7 @@ router.put('/admin/banners/:id', async (req, res) => {
 // ── Delete banner (admin) ──
 router.delete('/admin/banners/:id', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const banner = await getDoc(`banners/${req.params.id}`);
     if (!banner) return res.status(404).json({ error: 'Banner not found' });
@@ -224,8 +224,8 @@ router.delete('/admin/banners/:id', async (req, res) => {
 // ── Upload banner image to R2 (admin) ──
 router.post(
   '/admin/banners/upload',
-  (req, res, next) => {
-    if (requireAdmin(req, res)) return;
+  async (req, res, next) => {
+    if (await requireAdmin(req, res)) return;
     next();
   },
   (req, res, next) => {

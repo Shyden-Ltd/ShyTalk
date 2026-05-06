@@ -3,13 +3,14 @@ const { db } = require('../utils/firebase');
 const log = require('../utils/log');
 const { now } = require('../utils/helpers');
 
-function requireAdmin(req, res) {
-  if (!req.auth || !req.auth.token || !req.auth.token.admin) {
-    res.status(403).json({ error: 'Admin access required' });
-    return true;
-  }
-  return false;
-}
+const { requireAdmin } = require('../middleware/auth'); // shared — live claim check
+
+// Every route in this file is admin-only — gate by path prefix.
+const adminGuard = async (req, res, next) => {
+  if (await requireAdmin(req, res)) return;
+  next();
+};
+router.use('/admin/maintenance', adminGuard);
 
 async function deleteCollection(name) {
   const snap = await db.collection(name).get();
@@ -21,7 +22,6 @@ async function deleteCollection(name) {
 
 router.post('/admin/maintenance/clear-suggestions', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
     const deleted = await deleteCollection('suggestions');
     await db.collection('adminAuditLog').add({
       adminUid: req.auth.uniqueId,
@@ -40,7 +40,6 @@ router.post('/admin/maintenance/clear-suggestions', async (req, res) => {
 
 router.post('/admin/maintenance/clear-subscriptions', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
     const deleted = await deleteCollection('subscriptions');
     res.json({ success: true, deleted });
   } catch (err) {
@@ -51,7 +50,6 @@ router.post('/admin/maintenance/clear-subscriptions', async (req, res) => {
 
 router.post('/admin/maintenance/clear-notifications', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
     const deleted = await deleteCollection('notifications');
     res.json({ success: true, deleted });
   } catch (err) {
@@ -62,7 +60,6 @@ router.post('/admin/maintenance/clear-notifications', async (req, res) => {
 
 router.post('/admin/maintenance/clear-identity-graphs', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
     if (!req.body.confirmDangerous)
       return res.status(400).json({ error: 'Confirmation required: set confirmDangerous to true' });
     const deleted = await deleteCollection('identityGraphs');
@@ -75,7 +72,6 @@ router.post('/admin/maintenance/clear-identity-graphs', async (req, res) => {
 
 router.post('/admin/maintenance/clear-audit-log', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
     const deleted = await deleteCollection('adminAuditLog');
     res.json({ success: true, deleted });
   } catch (err) {

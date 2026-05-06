@@ -168,7 +168,7 @@ router.get('/config/startingScreens', async (req, res) => {
 // -- Get starting screens for admin (includes allowlist + lastModifiedBy) --
 router.get('/config/startingScreens/admin', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const snap = await db.doc('config/startingScreens').get();
     if (!snap.exists) return res.json({});
@@ -447,7 +447,7 @@ function buildCleanScreen(screen, result) {
 // -- Update starting screens (admin) --
 router.put('/config/startingScreens', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const body = req.body;
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -516,7 +516,7 @@ router.put('/config/startingScreens', async (req, res) => {
 // -- Restore a soft-deleted starting screen (admin) --
 router.post('/config/startingScreens/:screenId/restore', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const { screenId } = req.params;
     if (!screenId || !/^[a-zA-Z0-9_-]+$/.test(screenId)) {
@@ -562,7 +562,7 @@ router.post('/config/startingScreens/:screenId/restore', async (req, res) => {
 // With ?permanent=true: hard-delete (removes from Firestore)
 router.delete('/config/startingScreens/:screenId', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const { screenId } = req.params;
     if (!screenId || !/^[a-zA-Z0-9_-]+$/.test(screenId)) {
@@ -664,7 +664,7 @@ router.get('/config/:key', async (req, res) => {
 // Must be defined BEFORE the generic PUT /config/:key route
 router.put('/config/economy', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const body = req.body;
     if (!body) return res.status(400).json({ error: 'Invalid JSON body' });
@@ -726,7 +726,7 @@ const CONFIG_ALLOWED_FIELDS = {
 // -- Update config value (admin) --
 router.put('/config/:key', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const body = req.body;
     if (!body || typeof body !== 'object')

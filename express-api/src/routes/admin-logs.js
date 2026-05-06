@@ -17,7 +17,7 @@ const MAX_TRACE_LIMIT = 500;
 // GET /admin/logs — Query logs with filters
 router.get('/admin/logs', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
     const {
       level,
       source,
@@ -83,7 +83,7 @@ router.get('/admin/logs', async (req, res) => {
 // GET /admin/logs/trace/:traceId — Get all logs for a session trace
 router.get('/admin/logs/trace/:traceId', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
     const { traceId } = req.params;
 
     const snapshot = await db

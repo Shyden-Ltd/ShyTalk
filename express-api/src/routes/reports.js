@@ -239,7 +239,7 @@ router.post('/reports', async (req, res) => {
 // ── List reports (admin — enriched, filterable) ──
 router.get('/reports', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const statusFilter = req.query.status || 'pending';
     const userIdFilter = req.query.userId;
@@ -430,7 +430,7 @@ function normaliseAction(raw) {
 // ── Resolve report (admin — full logic) ──
 router.post('/reports/:id/resolve', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const body = req.body;
     if (body?.reason && body.reason.length > REASON_MAX_LENGTH)
@@ -717,7 +717,7 @@ router.post('/reports/:id/resolve', async (req, res) => {
 // ── Resolve all pending reports for a user ──
 router.post('/reports/resolve-all/:userId', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const body = req.body;
     if (body?.reason && body.reason.length > REASON_MAX_LENGTH)
@@ -1043,7 +1043,7 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
 // ── Report statistics ──
 router.get('/reports/stats', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -1107,7 +1107,7 @@ router.get('/reports/stats', async (req, res) => {
 // ── CSV export ──
 router.get('/reports/export', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const from = req.query.from;
     const to = req.query.to;
@@ -1172,7 +1172,7 @@ router.get('/reports/export', async (req, res) => {
 // ── Lock report (admin) ──
 router.post('/reports/:id/lock', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const admin = await getDoc(`users/${req.auth.uniqueId}`);
     const displayName = admin?.displayName ?? admin?.display_name ?? null;
@@ -1200,7 +1200,7 @@ router.post('/reports/:id/lock', async (req, res) => {
 // ── Unlock report (admin) ──
 router.delete('/reports/:id/lock', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     await db.doc(`reportLocks/${req.params.id}`).delete();
 
@@ -1221,7 +1221,7 @@ router.delete('/reports/:id/lock', async (req, res) => {
 // ── Suspend user ──
 router.post('/admin/users/:uniqueId/suspend', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const body = req.body;
     if (!body?.reason) return res.status(400).json({ error: 'reason is required' });
@@ -1304,7 +1304,7 @@ router.post('/admin/users/:uniqueId/suspend', async (req, res) => {
 // ── Unsuspend user ──
 router.post('/admin/users/:uniqueId/unsuspend', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const user = await getDoc(`users/${req.params.uniqueId}`);
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -1414,7 +1414,7 @@ router.post('/appeals', async (req, res) => {
 // ── List appeals (admin) ──
 router.get('/appeals', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const statusFilter = req.query.status;
 
@@ -1464,7 +1464,7 @@ router.get('/appeals', async (req, res) => {
 // ── Review appeal (admin) ──
 router.patch('/appeals/:id', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const body = req.body;
     const status = body?.status;

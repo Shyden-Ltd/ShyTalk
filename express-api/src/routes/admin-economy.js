@@ -19,11 +19,16 @@ const { generateId, now } = require('../utils/helpers');
 const { sendSystemPm } = require('../utils/system-pm');
 const log = require('../utils/log');
 
+// Every route in this file is admin-only — gate by path prefix.
+const adminGuard = async (req, res, next) => {
+  if (await requireAdmin(req, res)) return;
+  next();
+};
+router.use('/users', adminGuard);
+
 // ── Economy snapshot ──
 router.get('/users/:uniqueId/economy', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     const snap = await db.doc(`users/${req.params.uniqueId}`).get();
     if (!snap.exists) return res.status(404).json({ error: 'User not found' });
     const user = snap.data();
@@ -53,8 +58,6 @@ router.get('/users/:uniqueId/economy', async (req, res) => {
 // ── Adjust balance (coins or beans) ──
 router.post('/users/:uniqueId/adjust-balance', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     const body = req.body;
     if (!body) return res.status(400).json({ error: 'Invalid JSON body' });
 
@@ -139,8 +142,6 @@ router.post('/users/:uniqueId/adjust-balance', async (req, res) => {
 // ── Set backpack item quantity (admin) ──
 router.post('/users/:uniqueId/backpack', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     const body = req.body;
     if (!body?.giftId) return res.status(400).json({ error: 'giftId required' });
     if (typeof body.quantity !== 'number' || body.quantity < 0) {
@@ -203,8 +204,6 @@ router.post('/users/:uniqueId/backpack', async (req, res) => {
 // ── Get luck + pity ──
 router.get('/users/:uniqueId/luck', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     const snap = await db.doc(`users/${req.params.uniqueId}`).get();
     if (!snap.exists) return res.status(404).json({ error: 'User not found' });
     const user = snap.data();
@@ -225,8 +224,6 @@ router.get('/users/:uniqueId/luck', async (req, res) => {
 // ── Update luck/pity ──
 router.post('/users/:uniqueId/luck', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     const body = req.body;
     if (!body) return res.status(400).json({ error: 'Invalid JSON body' });
 
@@ -272,8 +269,6 @@ router.post('/users/:uniqueId/luck', async (req, res) => {
 // ── Transaction history (admin view — any user) ──
 router.get('/users/:uniqueId/transactions', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     const limit = Math.min(Number.parseInt(req.query.limit, 10) || 50, 200);
     const filterType = req.query.type;
 
@@ -302,8 +297,6 @@ router.get('/users/:uniqueId/transactions', async (req, res) => {
 // ── Gacha guarantee: check ──
 router.get('/users/:uniqueId/guarantee-next-pull', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     const snap = await db.doc(`users/${req.params.uniqueId}`).get();
     if (!snap.exists) return res.status(404).json({ error: 'User not found' });
     const user = snap.data();
@@ -345,8 +338,6 @@ router.get('/users/:uniqueId/guarantee-next-pull', async (req, res) => {
 // ── Gacha guarantee: set ──
 router.post('/users/:uniqueId/guarantee-next-pull', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     const body = req.body;
     if (!body?.giftId) return res.status(400).json({ error: 'giftId required' });
 
@@ -384,8 +375,6 @@ router.post('/users/:uniqueId/guarantee-next-pull', async (req, res) => {
 // ── Gacha guarantee: revoke ──
 router.delete('/users/:uniqueId/guarantee-next-pull', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     await Promise.all([
       db.doc(`users/${req.params.uniqueId}`).update({ guaranteedNextPullGiftId: null }),
 

@@ -9,19 +9,13 @@ const router = require('express').Router();
 const { db } = require('../utils/firebase');
 const log = require('../utils/log');
 
-function requireAdmin(req, res) {
-  if (!req.auth?.token?.admin) {
-    res.status(403).json({ error: 'Admin access required' });
-    return true;
-  }
-  return false;
-}
+const { requireAdmin } = require('../middleware/auth'); // shared — live claim check
 
 // ─── GET /admin/audit-log/export ────────────────────────────────
 
 router.get('/admin/audit-log/export', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const [auditSnap, adminSnap, modSnap] = await Promise.all([
       db.collection('auditLog').orderBy('timestamp', 'desc').get(),
@@ -64,7 +58,7 @@ router.get('/admin/audit-log/export', async (req, res) => {
 
 router.get('/admin/audit-log', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     // Accept both canonical and shortened query param names so the admin
     // panel frontend (which uses `action`, `admin`, `target`, `start`, `end`)

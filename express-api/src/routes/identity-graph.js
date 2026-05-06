@@ -14,13 +14,7 @@ const { generateId, now } = require('../utils/helpers');
 const log = require('../utils/log');
 const { clearSuspensionCache } = require('../middleware/auth');
 
-function requireAdmin(req, res) {
-  if (!req.auth?.token?.admin) {
-    res.status(403).json({ error: 'Admin access required' });
-    return true;
-  }
-  return false;
-}
+const { requireAdmin } = require('../middleware/auth'); // shared — live claim check
 
 function normaliseIp(ip) {
   if (!ip || typeof ip !== 'string') return null;
@@ -38,7 +32,7 @@ function isPrivateIp(ip) {
 
 router.post('/admin/bans/graph', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const { identifiers } = req.body;
     if (!identifiers || !Array.isArray(identifiers) || identifiers.length === 0) {
@@ -91,7 +85,7 @@ router.post('/admin/bans/graph', async (req, res) => {
 
 router.get('/admin/bans/graph/:id', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const doc = await db.doc(`identityGraphs/${req.params.id}`).get();
     if (!doc.exists) return res.status(404).json({ error: 'Identity graph not found' });
@@ -111,7 +105,7 @@ router.get('/admin/bans/graph/:id', async (req, res) => {
 // shows a sensible "No identity data" message rather than 404.
 router.get('/admin/identity-graph/:id', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
     const doc = await db.doc(`identityGraphs/${req.params.id}`).get();
     if (!doc.exists) {
       return res.json({ id: req.params.id, nodes: [], edges: [] });
@@ -132,7 +126,7 @@ router.get('/admin/identity-graph/:id', async (req, res) => {
 // sets the target user's isSuspended flag so downstream checks fire.
 router.post('/admin/identity-graph/:id/suspend-all', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
     const { id } = req.params;
     const { duration, scope, reason } = req.body || {};
     const ref = db.doc(`identityGraphs/${id}`);
@@ -200,7 +194,7 @@ router.post('/admin/identity-graph/:id/suspend-all', async (req, res) => {
 // ─── POST /admin/identity-graph/:id/unsuspend-all ───────────────
 router.post('/admin/identity-graph/:id/unsuspend-all', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
     const { id } = req.params;
     const ref = db.doc(`identityGraphs/${id}`);
     const doc = await ref.get();
@@ -252,7 +246,7 @@ router.post('/admin/identity-graph/:id/unsuspend-all', async (req, res) => {
 // ─── POST /admin/identity-graph/:id/node/:nodeId/unsuspend ─────
 router.post('/admin/identity-graph/:id/node/:nodeId/unsuspend', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
     const { id, nodeId } = req.params;
     const ref = db.doc(`identityGraphs/${id}`);
     const doc = await ref.get();
@@ -271,7 +265,7 @@ router.post('/admin/identity-graph/:id/node/:nodeId/unsuspend', async (req, res)
 
 router.put('/admin/bans/graph/:id', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const doc = await db.doc(`identityGraphs/${req.params.id}`).get();
     if (!doc.exists) return res.status(404).json({ error: 'Identity graph not found' });
@@ -353,7 +347,7 @@ router.put('/admin/bans/graph/:id', async (req, res) => {
 
 router.delete('/admin/bans/graph/:id', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const doc = await db.doc(`identityGraphs/${req.params.id}`).get();
     if (!doc.exists) return res.status(404).json({ error: 'Identity graph not found' });
@@ -388,7 +382,7 @@ router.delete('/admin/bans/graph/:id', async (req, res) => {
 
 router.get('/admin/bans/check', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     // Coerce query params to strings — Express may parse repeated params as arrays
     const ip =

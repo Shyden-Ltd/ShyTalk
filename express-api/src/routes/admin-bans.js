@@ -35,7 +35,7 @@ function parseExpiry(duration) {
 
 router.get('/admin/bans', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const [deviceSnap, networkSnap] = await Promise.all([
       db.collection('deviceBans').get(),
@@ -63,7 +63,7 @@ router.get('/admin/bans', async (req, res) => {
 
 router.post('/admin/bans/device', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const { deviceId, reason, duration, linkedUniqueId } = req.body || {};
     if (!deviceId) return res.status(400).json({ error: 'deviceId is required' });
@@ -116,7 +116,7 @@ router.post('/admin/bans/device', async (req, res) => {
 
 router.post('/admin/bans/network', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const { type, value, reason, duration, linkedUniqueId } = req.body || {};
 
@@ -190,7 +190,7 @@ router.post('/admin/bans/network', async (req, res) => {
 
 router.delete('/admin/bans/device/:deviceId', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     await db.doc(`deviceBans/${req.params.deviceId}`).delete();
 
@@ -215,7 +215,7 @@ router.delete('/admin/bans/device/:deviceId', async (req, res) => {
 
 router.delete('/admin/bans/network/:banId', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     await db.doc(`networkBans/${req.params.banId}`).delete();
 
@@ -240,7 +240,7 @@ router.delete('/admin/bans/network/:banId', async (req, res) => {
 
 router.post('/admin/bans/unban-all/:uniqueId', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const uniqueId = req.params.uniqueId;
     const numericId = Number(uniqueId);
@@ -302,7 +302,7 @@ router.post('/admin/bans/unban-all/:uniqueId', async (req, res) => {
 
 router.get('/admin/bans/user/:uniqueId', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const uniqueId = req.params.uniqueId;
     const numericId = Number(uniqueId);

@@ -19,7 +19,7 @@ const log = require('../utils/log');
 
 router.get('/admin/devices', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const searchQuery = (req.query.q || '').toLowerCase().trim();
     const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 50, 1), 200);
@@ -60,7 +60,7 @@ router.get('/admin/devices', async (req, res) => {
 
 router.post('/admin/devices', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const { deviceId, uniqueId, manufacturer, model, lastIp, isp } = req.body;
 
@@ -91,7 +91,7 @@ router.post('/admin/devices', async (req, res) => {
 
 router.get('/admin/devices/user/:uniqueId', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const uniqueId = Number(req.params.uniqueId);
     const snap = await db.collection('deviceBindings').where('uniqueId', '==', uniqueId).get();
@@ -112,7 +112,7 @@ router.get('/admin/devices/user/:uniqueId', async (req, res) => {
 
 router.get('/admin/devices/:deviceId', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const deviceId = req.params.deviceId;
     const snap = await db.doc(`deviceBindings/${deviceId}`).get();
@@ -135,7 +135,7 @@ router.get('/admin/devices/:deviceId', async (req, res) => {
 
 router.delete('/admin/devices/:deviceId', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const deviceId = req.params.deviceId;
 

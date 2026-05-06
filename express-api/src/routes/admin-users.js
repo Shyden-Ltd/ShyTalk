@@ -25,7 +25,7 @@
 
 const router = require('express').Router();
 const { db, auth, FieldValue } = require('../utils/firebase');
-const { requireAdmin, clearSuspensionCache } = require('../middleware/auth');
+const { requireAdmin, clearSuspensionCache, clearAdminClaimCache } = require('../middleware/auth');
 const { generateId, now } = require('../utils/helpers');
 const { computeDisplayScore } = require('../utils/gcs');
 const { sendSystemPm } = require('../utils/system-pm');
@@ -139,7 +139,7 @@ async function backfillAuthInfo(user, uniqueId, firebaseUid) {
 // ── Get user profile (admin — no ownership check) ──
 router.get('/user/:uniqueId', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const snap = await db.doc(`users/${req.params.uniqueId}`).get();
     if (!snap.exists) return res.status(404).json({ error: 'User not found' });
@@ -159,7 +159,7 @@ router.get('/user/:uniqueId', async (req, res) => {
 // ── Debug: raw Firebase Auth lookup ──
 router.get('/user/:uid/auth-debug', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const userRecord = await auth.getUser(req.params.uid);
     res.json({
@@ -181,7 +181,7 @@ router.get('/user/:uid/auth-debug', async (req, res) => {
 // ── Update user fields (admin — whitelisted fields) ──
 router.patch('/user/:uniqueId', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const body = req.body;
     if (!body) return res.status(400).json({ error: 'Invalid JSON body' });
@@ -327,7 +327,7 @@ router.patch('/user/:uniqueId', async (req, res) => {
 // ── Batched change notification ──
 router.post('/user/:uniqueId/notify-changes', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const { fields } = req.body;
     if (!Array.isArray(fields) || fields.length === 0) {
@@ -380,7 +380,7 @@ router.post('/user/:uniqueId/notify-changes', async (req, res) => {
 // ── Read stalkers list (admin) ──
 router.get('/user/:uniqueId/stalkers', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const snap = await db.collection(`users/${req.params.uniqueId}/stalkers`).get();
     const stalkerIds = snap.docs.map((doc) => doc.id);
@@ -478,7 +478,7 @@ async function createWarning(
 // ── Issue warning ──
 router.post('/user/:uniqueId/warn', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const body = req.body;
     if (!body?.reason) return res.status(400).json({ error: 'reason is required' });
@@ -537,7 +537,7 @@ router.post('/user/:uniqueId/warn', async (req, res) => {
 // ── List warnings ──
 router.get('/user/:uniqueId/warnings', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const limit = Math.min(Number.parseInt(req.query.limit, 10) || 20, 100);
     const startAfter = req.query.startAfter ? Number.parseInt(req.query.startAfter, 10) : null;
@@ -568,7 +568,7 @@ router.get('/user/:uniqueId/warnings', async (req, res) => {
 // ── Revoke warning ──
 router.post('/user/:uniqueId/warnings/:warningId/revoke', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const uniqueId = req.params.uniqueId;
     const warningId = req.params.warningId;
@@ -637,7 +637,7 @@ router.post('/user/:uniqueId/warnings/:warningId/revoke', async (req, res) => {
 // ── Reset GCS ──
 router.post('/user/:uniqueId/reset-gcs', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const timestamp = now();
 
@@ -680,7 +680,7 @@ const VALID_USER_TYPES = ['MEMBER', 'SHYTALK_OFFICIAL', 'MC_SINGER', 'MC_EVENT_H
 
 router.post('/user/:uniqueId/change-role', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const { userType } = req.body || {};
     if (!userType || !VALID_USER_TYPES.includes(userType)) {
@@ -708,6 +708,11 @@ router.post('/user/:uniqueId/change-role', async (req, res) => {
     // If demoting from admin, remove admin claim
     if (user.isAdmin) {
       await auth.setCustomUserClaims(firebaseUid, { admin: false });
+      // Drop the cached admin-claim entry immediately (Phase 2H finding #2)
+      // so the next request from this uid re-fetches the live customClaims
+      // and sees the demotion. Without this, the demoted admin keeps
+      // privileges for up to ADMIN_CLAIM_TTL (60s).
+      clearAdminClaimCache(firebaseUid);
     }
 
     log.info('admin-users', 'Changed user role', {
@@ -733,7 +738,7 @@ router.post('/user/:uniqueId/change-role', async (req, res) => {
 
 router.get('/conversations/:id/messages', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const messageLimit = Math.min(Number.parseInt(req.query.limit, 10) || 50, 200);
 
@@ -763,7 +768,7 @@ router.get('/conversations/:id/messages', async (req, res) => {
 // ── Search by unique ID ──
 router.get('/search/uniqueId/:id', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const uniqueId = Number.parseInt(req.params.id, 10);
     const snapshot = await db.collection('users').where('uniqueId', '==', uniqueId).limit(1).get();
@@ -799,7 +804,7 @@ router.get('/search/uniqueId/:id', async (req, res) => {
 // ── UID → Unique ID resolver ──
 router.post('/resolve/uids-to-uniqueIds', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const uids = req.body?.uids || [];
     if (uids.length === 0) return res.json({});
@@ -827,7 +832,7 @@ router.post('/resolve/uids-to-uniqueIds', async (req, res) => {
 // ── Unique ID → UID resolver ──
 router.post('/resolve/uniqueIds-to-uids', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const uniqueIds = req.body?.uniqueIds || [];
     if (uniqueIds.length === 0) return res.json({});
@@ -858,7 +863,7 @@ router.post('/resolve/uniqueIds-to-uids', async (req, res) => {
 // ── Suspend user ──
 router.post('/user/:uniqueId/suspend', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const body = req.body;
     if (!body?.reason) return res.status(400).json({ error: 'reason is required' });
@@ -1013,7 +1018,7 @@ router.post('/user/:uniqueId/suspend', async (req, res) => {
 // ── Unsuspend user ──
 router.post('/user/:uniqueId/unsuspend', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const snap = await db.doc(`users/${req.params.uniqueId}`).get();
     if (!snap.exists) return res.status(404).json({ error: 'User not found' });
@@ -1090,7 +1095,7 @@ router.post('/user/:uniqueId/unsuspend', async (req, res) => {
 // ── Report locks by uniqueId ──
 router.post('/report-locks/:uniqueId/lock', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     // Look up admin display name for the lock (admin doc keyed by uniqueId)
     const adminSnap = await db.doc(`users/${req.auth.uniqueId}`).get();
@@ -1116,7 +1121,7 @@ router.post('/report-locks/:uniqueId/lock', async (req, res) => {
 
 router.delete('/report-locks/:uniqueId', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     await db.doc(`reportLocks/${req.params.uniqueId}`).delete();
 
@@ -1287,7 +1292,7 @@ const { evictSuspendedUser, buildCascadeFailure } = require('../utils/evict-susp
 // GET /user/:uniqueId/auth-status — PIN, biometric, lockout state
 router.get('/user/:uniqueId/auth-status', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
     const { uniqueId } = req.params;
 
     const userDoc = await getDoc(`users/${uniqueId}`);
@@ -1324,7 +1329,7 @@ router.get('/user/:uniqueId/auth-status', async (req, res) => {
 // POST /user/:uniqueId/reset-pin-lockout — Clear PIN lockout
 router.post('/user/:uniqueId/reset-pin-lockout', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
     const { uniqueId } = req.params;
 
     await db.doc(`users/${uniqueId}`).update({
@@ -1344,7 +1349,7 @@ router.post('/user/:uniqueId/reset-pin-lockout', async (req, res) => {
 // DELETE /user/:uniqueId/biometric-keys/:deviceId — Revoke biometric key
 router.delete('/user/:uniqueId/biometric-keys/:deviceId', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
     const { uniqueId, deviceId } = req.params;
 
     await db.doc(`biometricKeys/${uniqueId}:${deviceId}`).delete();
@@ -1360,7 +1365,7 @@ router.delete('/user/:uniqueId/biometric-keys/:deviceId', async (req, res) => {
 // GET /metrics/otp — Daily OTP email metrics
 router.get('/metrics/otp', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const metricsDoc = await db.doc('emailMetrics/daily').get();
     if (!metricsDoc.exists) {
@@ -1385,7 +1390,7 @@ router.get('/metrics/otp', async (req, res) => {
 
 router.post('/user/:uniqueId/delete', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const uniqueId = req.params.uniqueId;
     const { reason } = req.body || {};
@@ -1475,7 +1480,7 @@ router.post('/user/:uniqueId/delete', async (req, res) => {
 
 router.post('/user/:uniqueId/cancel-delete', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const uniqueId = req.params.uniqueId;
 

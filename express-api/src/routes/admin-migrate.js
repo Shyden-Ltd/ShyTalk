@@ -167,7 +167,7 @@ async function runMigrationOp(results, collectionName, phase, fn) {
 }
 
 router.post('/admin/migrate-prod-data', async (req, res) => {
-  if (requireAdmin(req, res)) return;
+  if (await requireAdmin(req, res)) return;
   if (process.env.NODE_ENV === 'production') {
     return res.status(403).json({ error: 'This endpoint is disabled in production' });
   }

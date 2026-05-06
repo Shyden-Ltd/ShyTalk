@@ -593,42 +593,42 @@ describe('Firebase token verification', () => {
 // ─── requireAdmin helper ─────────────────────────────────────────
 
 describe('requireAdmin', () => {
-  test('returns true and sends 403 when user is not admin', () => {
+  test('returns true and sends 403 when user is not admin', async () => {
     const req = { auth: { token: { admin: false } } };
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
 
-    const blocked = requireAdmin(req, res);
+    const blocked = await requireAdmin(req, res);
 
     expect(blocked).toBe(true);
     expect(res.status).toHaveBeenCalledWith(403);
     expect(res.json).toHaveBeenCalledWith({ error: 'Admin access required' });
   });
 
-  test('returns true and sends 403 when admin claim is undefined', () => {
+  test('returns true and sends 403 when admin claim is undefined', async () => {
     const req = { auth: { token: {} } };
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
 
-    const blocked = requireAdmin(req, res);
+    const blocked = await requireAdmin(req, res);
 
     expect(blocked).toBe(true);
     expect(res.status).toHaveBeenCalledWith(403);
   });
 
-  test('returns false when user is admin', () => {
+  test('returns false when user is admin', async () => {
     const req = { auth: { token: { admin: true } } };
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
 
-    const blocked = requireAdmin(req, res);
+    const blocked = await requireAdmin(req, res);
 
     expect(blocked).toBe(false);
     expect(res.status).not.toHaveBeenCalled();
   });
 
-  test('returns true when req.auth is missing', () => {
+  test('returns true when req.auth is missing', async () => {
     const req = {};
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
 
-    const blocked = requireAdmin(req, res);
+    const blocked = await requireAdmin(req, res);
 
     expect(blocked).toBe(true);
     expect(res.status).toHaveBeenCalledWith(403);
@@ -789,18 +789,18 @@ describe('cache eviction', () => {
 // ─── PR #502 (audit L2): requireAdmin defensive optional chaining ──
 
 describe('requireAdmin defensive checks', () => {
-  test('returns 403 when req.auth is undefined (defensive)', () => {
+  test('returns 403 when req.auth is undefined (defensive)', async () => {
     const req = {};
     const res = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn(),
     };
-    const blocked = requireAdmin(req, res);
+    const blocked = await requireAdmin(req, res);
     expect(blocked).toBe(true);
     expect(res.status).toHaveBeenCalledWith(403);
   });
 
-  test('returns 403 when req.auth.token is undefined (defensive)', () => {
+  test('returns 403 when req.auth.token is undefined (defensive)', async () => {
     // Pre-fix used `req.auth?.token.admin` — would throw TypeError
     // here. Now `req.auth?.token?.admin` returns undefined → falsy →
     // 403. Fail closed.
@@ -809,29 +809,29 @@ describe('requireAdmin defensive checks', () => {
       status: jest.fn().mockReturnThis(),
       json: jest.fn(),
     };
-    const blocked = requireAdmin(req, res);
+    const blocked = await requireAdmin(req, res);
     expect(blocked).toBe(true);
     expect(res.status).toHaveBeenCalledWith(403);
   });
 
-  test('returns 403 when admin claim is false', () => {
+  test('returns 403 when admin claim is false', async () => {
     const req = { auth: { uid: 'some-uid', token: { admin: false } } };
     const res = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn(),
     };
-    const blocked = requireAdmin(req, res);
+    const blocked = await requireAdmin(req, res);
     expect(blocked).toBe(true);
     expect(res.status).toHaveBeenCalledWith(403);
   });
 
-  test('returns false (allows) when admin claim is true', () => {
+  test('returns false (allows) when admin claim is true', async () => {
     const req = { auth: { uid: 'admin-uid', token: { admin: true } } };
     const res = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn(),
     };
-    const blocked = requireAdmin(req, res);
+    const blocked = await requireAdmin(req, res);
     expect(blocked).toBe(false);
     expect(res.status).not.toHaveBeenCalled();
   });
@@ -898,5 +898,108 @@ describe('in-flight Promise dedup (resolveUniqueId)', () => {
 
     // Both calls fired Firestore — second wasn't pinned to the rejected Promise.
     expect(mockCollectionQuery).toHaveBeenCalledTimes(2);
+  });
+});
+
+// Phase 2H finding #2: live admin claim re-fetch via auth.getUser.
+// Default test mode (JEST_WORKER_ID set) skips the live check so most
+// admin tests don't need to mock auth.getUser. AUTH_FORCE_LIVE_ADMIN_CHECK=1
+// forces the live path on so we can pin its behaviour explicitly.
+describe('requireAdmin — live customClaims re-fetch (Phase 2H finding #2)', () => {
+  let originalForceLiveCheck;
+  let mockGetUser;
+
+  beforeEach(() => {
+    originalForceLiveCheck = process.env.AUTH_FORCE_LIVE_ADMIN_CHECK;
+    process.env.AUTH_FORCE_LIVE_ADMIN_CHECK = '1';
+    jest.resetModules();
+    mockGetUser = jest.fn();
+    jest.doMock('../../src/utils/firebase', () => ({
+      auth: {
+        verifyIdToken: jest.fn(),
+        getUser: (...args) => mockGetUser(...args),
+      },
+      db: {
+        doc: jest.fn(() => ({ get: jest.fn() })),
+        collection: jest.fn(() => ({
+          where: jest.fn(() => ({ limit: jest.fn(() => ({ get: jest.fn() })) })),
+        })),
+      },
+    }));
+    jest.doMock('../../src/utils/log', () => ({
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+    }));
+  });
+
+  afterEach(() => {
+    if (originalForceLiveCheck === undefined) {
+      delete process.env.AUTH_FORCE_LIVE_ADMIN_CHECK;
+    } else {
+      process.env.AUTH_FORCE_LIVE_ADMIN_CHECK = originalForceLiveCheck;
+    }
+  });
+
+  test('denies even when token.admin=true if live customClaims show admin=false (demoted admin)', async () => {
+    const { requireAdmin: liveRequireAdmin } = require('../../src/middleware/auth');
+    mockGetUser.mockResolvedValue({ customClaims: { admin: false } });
+    const req = { auth: { uid: 'demoted-admin-uid', token: { admin: true } } };
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const blocked = await liveRequireAdmin(req, res);
+    expect(blocked).toBe(true);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(mockGetUser).toHaveBeenCalledWith('demoted-admin-uid');
+  });
+
+  test('allows when both token.admin=true AND live customClaims confirm admin=true', async () => {
+    const { requireAdmin: liveRequireAdmin } = require('../../src/middleware/auth');
+    mockGetUser.mockResolvedValue({ customClaims: { admin: true } });
+    const req = { auth: { uid: 'real-admin-uid', token: { admin: true } } };
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const blocked = await liveRequireAdmin(req, res);
+    expect(blocked).toBe(false);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  test('caches the live result for TTL — second call within TTL skips auth.getUser', async () => {
+    const { requireAdmin: liveRequireAdmin } = require('../../src/middleware/auth');
+    mockGetUser.mockResolvedValue({ customClaims: { admin: true } });
+    const req = { auth: { uid: 'cached-uid', token: { admin: true } } };
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    await liveRequireAdmin(req, res);
+    await liveRequireAdmin(req, res);
+    await liveRequireAdmin(req, res);
+    expect(mockGetUser).toHaveBeenCalledTimes(1);
+  });
+
+  test('clearAdminClaimCache forces a fresh live re-check on the next call', async () => {
+    const {
+      requireAdmin: liveRequireAdmin,
+      clearAdminClaimCache,
+    } = require('../../src/middleware/auth');
+    mockGetUser.mockResolvedValue({ customClaims: { admin: true } });
+    const req = { auth: { uid: 'invalidate-uid', token: { admin: true } } };
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    await liveRequireAdmin(req, res);
+    expect(mockGetUser).toHaveBeenCalledTimes(1);
+
+    // Simulate admin demotion: clear cache + change live response.
+    clearAdminClaimCache('invalidate-uid');
+    mockGetUser.mockResolvedValue({ customClaims: { admin: false } });
+
+    const blocked = await liveRequireAdmin(req, res);
+    expect(blocked).toBe(true);
+    expect(mockGetUser).toHaveBeenCalledTimes(2);
+  });
+
+  test('fail-closed when auth.getUser throws (Firebase Auth outage)', async () => {
+    const { requireAdmin: liveRequireAdmin } = require('../../src/middleware/auth');
+    mockGetUser.mockRejectedValue(new Error('Firebase Auth unavailable'));
+    const req = { auth: { uid: 'outage-uid', token: { admin: true } } };
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const blocked = await liveRequireAdmin(req, res);
+    expect(blocked).toBe(true);
+    expect(res.status).toHaveBeenCalledWith(403);
   });
 });

@@ -15,7 +15,7 @@ const log = require('../utils/log');
 // ── Create gift ──
 router.post('/gifts', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const body = req.body;
     if (!body?.name || body.coinValue === null || body.coinValue === undefined) {
@@ -59,7 +59,7 @@ router.post('/gifts', async (req, res) => {
 // ── Update gift ──
 router.put('/gifts/:id', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const body = req.body;
     if (!body) return res.status(400).json({ error: 'Invalid JSON body' });
@@ -106,7 +106,7 @@ router.put('/gifts/:id', async (req, res) => {
 // ── Delete gift ──
 router.delete('/gifts/:id', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     await Promise.all([
       db.doc(`gifts/${req.params.id}`).delete(),

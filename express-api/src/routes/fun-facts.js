@@ -37,7 +37,7 @@ router.get('/fun-facts', async (req, res) => {
 // -- All facts (admin) --
 router.get('/admin/fun-facts', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const results = await queryDocs(db.collection('funFacts').orderBy('createdAt', 'desc'));
 
@@ -51,7 +51,7 @@ router.get('/admin/fun-facts', async (req, res) => {
 // -- Create fact (admin) --
 router.post('/admin/fun-facts', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const body = req.body;
     if (!body) return res.status(400).json({ error: 'Invalid JSON body' });
@@ -81,7 +81,7 @@ router.post('/admin/fun-facts', async (req, res) => {
 // -- Update fact (admin) --
 router.put('/admin/fun-facts/:id', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const body = req.body;
     if (!body) return res.status(400).json({ error: 'Invalid JSON body' });
@@ -121,7 +121,7 @@ router.put('/admin/fun-facts/:id', async (req, res) => {
 // -- Delete fact (admin) --
 router.delete('/admin/fun-facts/:id', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
+    if (await requireAdmin(req, res)) return;
 
     const docRef = db.doc(`funFacts/${req.params.id}`);
     const snap = await docRef.get();

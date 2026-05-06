@@ -36,6 +36,18 @@ const r2 = require('../utils/r2');
 const { queryDocs } = require('../utils/firestore-helpers');
 const log = require('../utils/log');
 
+// Every route in this file is admin-only — gate by path prefix so the
+// middleware is scoped to this router's own routes (without a prefix,
+// `router.use` would intercept every /api/* request that just happens
+// to share the same /api mount point — including /api/test/setup which
+// integration tests POST to).
+const adminGuard = async (req, res, next) => {
+  if (await requireAdmin(req, res)) return;
+  next();
+};
+router.use('/cleanup', adminGuard);
+router.use('/storage', adminGuard);
+
 const listObjectsWithMeta = r2.listObjectsWithMetadata;
 
 /**
@@ -113,8 +125,6 @@ async function deleteR2Prefix(prefix) {
 // ── Delete duplicate system conversations ──
 router.post('/cleanup/system-conversations', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     log.info('admin-cleanup', 'Deleting duplicate system conversations', {
       adminId: req.auth.uniqueId,
     });
@@ -159,8 +169,6 @@ router.post('/cleanup/system-conversations', async (req, res) => {
 // ── Delete ALL system conversations ──
 router.post('/cleanup/all-system-conversations', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     log.info('admin-cleanup', 'Deleting all system conversations', { adminId: req.auth.uniqueId });
 
     const snap = await db
@@ -183,8 +191,6 @@ router.post('/cleanup/all-system-conversations', async (req, res) => {
 // ── Delete all reports ──
 router.post('/cleanup/all-reports', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     log.info('admin-cleanup', 'Deleting all reports', { adminId: req.auth.uniqueId });
 
     // Delete R2 evidence files first
@@ -221,8 +227,6 @@ router.post('/cleanup/all-reports', async (req, res) => {
 // ── Reset all warnings ──
 router.post('/cleanup/all-warnings', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     log.info('admin-cleanup', 'Resetting all warnings', { adminId: req.auth.uniqueId });
 
     const [usersSnap, activeSnap] = await Promise.all([
@@ -262,8 +266,6 @@ router.post('/cleanup/all-warnings', async (req, res) => {
 // ── Clear all backpacks ──
 router.post('/cleanup/all-backpacks', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     log.info('admin-cleanup', 'Clearing all backpacks', { adminId: req.auth.uniqueId });
 
     const usersSnap = await db.collection('users').orderBy('uid').get();
@@ -296,8 +298,6 @@ router.post('/cleanup/all-backpacks', async (req, res) => {
 // ── Clear all gift walls ──
 router.post('/cleanup/all-giftwalls', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     log.info('admin-cleanup', 'Clearing all gift walls', { adminId: req.auth.uniqueId });
 
     const usersSnap = await db.collection('users').orderBy('uid').get();
@@ -330,8 +330,6 @@ router.post('/cleanup/all-giftwalls', async (req, res) => {
 // ── Reset all coins ──
 router.post('/cleanup/all-coins', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     log.info('admin-cleanup', 'Resetting all coin balances', { adminId: req.auth.uniqueId });
 
     const snap = await db.collection('users').where('shyCoins', '>', 0).get();
@@ -355,8 +353,6 @@ router.post('/cleanup/all-coins', async (req, res) => {
 // ── Reset all beans ──
 router.post('/cleanup/all-beans', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     log.info('admin-cleanup', 'Resetting all bean balances', { adminId: req.auth.uniqueId });
 
     const snap = await db.collection('users').where('shyBeans', '>', 0).get();
@@ -380,8 +376,6 @@ router.post('/cleanup/all-beans', async (req, res) => {
 // ── Delete gacha spin history + reset pity ──
 router.post('/cleanup/all-spin-history', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     log.info('admin-cleanup', 'Deleting all spin history', { adminId: req.auth.uniqueId });
 
     // Clear pity counters on all users who have one
@@ -430,8 +424,6 @@ router.post('/cleanup/all-spin-history', async (req, res) => {
 // ── Clear Super Shy status ──
 router.post('/cleanup/all-supershy', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     log.info('admin-cleanup', 'Clearing all Super Shy status', { adminId: req.auth.uniqueId });
 
     const snap = await db.collection('users').where('isSuperShy', '==', true).get();
@@ -460,8 +452,6 @@ router.post('/cleanup/all-supershy', async (req, res) => {
 // ── Clear all transactions (all types) ──
 router.post('/cleanup/all-transactions', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     log.info('admin-cleanup', 'Deleting all transactions', { adminId: req.auth.uniqueId });
 
     const usersSnap = await db.collection('users').orderBy('uid').get();
@@ -494,8 +484,6 @@ router.post('/cleanup/all-transactions', async (req, res) => {
 // ── Delete all suspension appeals ──
 router.post('/cleanup/all-appeals', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     log.info('admin-cleanup', 'Deleting all suspension appeals', { adminId: req.auth.uniqueId });
 
     const snap = await db.collection('suspensionAppeals').get();
@@ -519,8 +507,6 @@ router.post('/cleanup/all-appeals', async (req, res) => {
 // ── Backfill userType for users missing it ──
 router.post('/cleanup/backfill-user-type', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     log.info('admin-cleanup', 'Backfilling userType', { adminId: req.auth.uniqueId });
 
     const snap = await db.collection('users').limit(5000).get();
@@ -572,8 +558,6 @@ async function deleteConversationMedia(convId, CDN_PREFIX) {
 // ── Delete all private messages (1-on-1 conversations) + R2 media ──
 router.post('/cleanup/all-private-messages', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     log.info('admin-cleanup', 'Deleting all private messages', { adminId: req.auth.uniqueId });
 
     const snap = await db.collection('conversations').limit(5000).get();
@@ -607,8 +591,6 @@ router.post('/cleanup/all-private-messages', async (req, res) => {
 // ── Delete all group chats + R2 media ──
 router.post('/cleanup/all-group-chats', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     log.info('admin-cleanup', 'Deleting all group chats', { adminId: req.auth.uniqueId });
 
     const snap = await db
@@ -658,8 +640,6 @@ router.post('/cleanup/all-group-chats', async (req, res) => {
 // ── Delete all closed rooms + subcollections ──
 router.post('/cleanup/all-rooms', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     log.info('admin-cleanup', 'Deleting all closed rooms', { adminId: req.auth.uniqueId });
 
     const snap = await db.collection('rooms').where('state', '==', 'CLOSED').limit(200).get();
@@ -692,8 +672,6 @@ router.post('/cleanup/all-rooms', async (req, res) => {
 // ── Delete all broadcasts ──
 router.post('/cleanup/all-broadcasts', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     log.info('admin-cleanup', 'Deleting all broadcasts', { adminId: req.auth.uniqueId });
 
     const snap = await db.collection('broadcasts').limit(5000).get();
@@ -721,8 +699,6 @@ router.post('/cleanup/all-broadcasts', async (req, res) => {
 // ── Delete all admin audit logs ──
 router.post('/cleanup/all-audit-logs', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     log.info('admin-cleanup', 'Deleting all audit logs', { adminId: req.auth.uniqueId });
 
     const snap = await db.collection('adminAuditLog').limit(5000).get();
@@ -750,8 +726,6 @@ router.post('/cleanup/all-audit-logs', async (req, res) => {
 // ── Clean up destroyed user profiles ──
 router.post('/cleanup/destroyed-users', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     log.info('admin-cleanup', 'Cleaning up destroyed user profiles', {
       adminId: req.auth.uniqueId,
     });
@@ -789,8 +763,6 @@ router.post('/cleanup/destroyed-users', async (req, res) => {
 // ── Delete all device bindings ──
 router.post('/cleanup/all-device-bindings', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     log.info('admin-cleanup', 'Deleting all device bindings', { adminId: req.auth.uniqueId });
 
     const snap = await db.collection('deviceBindings').limit(5000).get();
@@ -818,8 +790,6 @@ router.post('/cleanup/all-device-bindings', async (req, res) => {
 // ── Delete device binding for a specific user ──
 router.post('/cleanup/device-binding/:uniqueId', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     const rawId = req.params.uniqueId;
     const numId = Number(rawId);
     // Query both string and number variants — Firestore equality is type-strict
@@ -862,8 +832,6 @@ router.post('/cleanup/device-binding/:uniqueId', async (req, res) => {
 // ── R2 folder audit ──
 router.get('/storage/audit', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     const folders = [
       'profiles/',
       'covers/',
@@ -989,8 +957,6 @@ async function collectImageMessageKeys(docs, collectionName, CDN_PREFIX, referen
 // ── Smart R2 orphan cleanup ──
 router.post('/cleanup/orphaned-storage', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     log.info('admin-cleanup', 'Running orphaned storage cleanup', { adminId: req.auth.uniqueId });
 
     const CDN_PREFIX = r2.CDN_URL + '/';
@@ -1026,8 +992,6 @@ router.post('/cleanup/orphaned-storage', async (req, res) => {
 // ── Clear all stalkers from all users ──
 router.post('/cleanup/all-stalkers', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
-
     log.info('admin-cleanup', 'Clearing all stalkers', { adminId: req.auth.uniqueId });
 
     const usersSnap = await db.collection('users').orderBy('uid').get();
@@ -1077,7 +1041,6 @@ router.post('/cleanup/all-stalkers', async (req, res) => {
 // POST /api/cleanup/user-coins/:uniqueId — reset coins for a single user
 router.post('/cleanup/user-coins/:uniqueId', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
     await db.doc(`users/${req.params.uniqueId}`).update({ shyCoins: 0 });
     res.json({ success: true });
   } catch (err) {
@@ -1092,7 +1055,6 @@ router.post('/cleanup/user-coins/:uniqueId', async (req, res) => {
 // POST /api/cleanup/user-beans/:uniqueId — reset beans for a single user
 router.post('/cleanup/user-beans/:uniqueId', async (req, res) => {
   try {
-    if (requireAdmin(req, res)) return;
     await db.doc(`users/${req.params.uniqueId}`).update({ shyBeans: 0 });
     res.json({ success: true });
   } catch (err) {
