@@ -309,3 +309,91 @@ describe('requestLogger middleware — pin/code redaction end-to-end', () => {
     expect(loggedBody.uniqueId).toBe('10000001');
   });
 });
+
+// Phase 2H finding #6: nested credentials + extended denylist.
+describe('sanitizeBody — recursion + extended denylist (Phase 2H finding #6)', () => {
+  const { sanitizeBody } = require('../../src/middleware/requestLogger');
+
+  test('strips nested password under a DTO wrapper', () => {
+    const out = sanitizeBody({ user: { password: 'p', email: 'a@b.c' } });
+    expect(out.user).not.toHaveProperty('password');
+    expect(out.user.email).toBe('a@b.c');
+  });
+
+  test('strips nested idToken inside an array element', () => {
+    const out = sanitizeBody({ batch: [{ idToken: 'eyJ', name: 'first' }] });
+    expect(out.batch[0]).not.toHaveProperty('idToken');
+    expect(out.batch[0].name).toBe('first');
+  });
+
+  test('strips passcode / otp / totp / verifier (previously missing)', () => {
+    const out = sanitizeBody({
+      passcode: '1234',
+      otp: '5678',
+      totp: '9012',
+      verifier: 'sig',
+      kept: 'ok',
+    });
+    expect(out).not.toHaveProperty('passcode');
+    expect(out).not.toHaveProperty('otp');
+    expect(out).not.toHaveProperty('totp');
+    expect(out).not.toHaveProperty('verifier');
+    expect(out.kept).toBe('ok');
+  });
+
+  test('strips clientSecret / apiKey / recoveryCode / appleSignedPayload', () => {
+    const out = sanitizeBody({
+      clientSecret: 'cs',
+      apiKey: 'ak',
+      recoveryCode: 'rc',
+      appleSignedPayload: 'asp',
+      keep: 1,
+    });
+    expect(out).not.toHaveProperty('clientSecret');
+    expect(out).not.toHaveProperty('apiKey');
+    expect(out).not.toHaveProperty('recoveryCode');
+    expect(out).not.toHaveProperty('appleSignedPayload');
+    expect(out.keep).toBe(1);
+  });
+
+  test('strips key with sensitive substring even when surrounded (idToken, refreshToken, oldPin, passwordHash)', () => {
+    const out = sanitizeBody({
+      idToken: 'a',
+      refreshToken: 'b',
+      oldPin: 'c',
+      passwordHash: 'd',
+      regular: 'e',
+    });
+    expect(out).not.toHaveProperty('idToken');
+    expect(out).not.toHaveProperty('refreshToken');
+    expect(out).not.toHaveProperty('oldPin');
+    expect(out).not.toHaveProperty('passwordHash');
+    expect(out.regular).toBe('e');
+  });
+
+  test('caps recursion at SANITIZE_DEPTH_LIMIT (DoS guard)', () => {
+    // Build a 20-deep nested object — well past the cap of 8.
+    let obj = { v: 'leaf' };
+    for (let i = 0; i < 20; i++) obj = { wrap: obj };
+    const out = sanitizeBody(obj);
+    // Walk down until we hit a non-object — the cap returns `null` so we
+    // can detect it. Anything deeper than the limit collapses to null.
+    let cur = out;
+    let depth = 0;
+    while (cur && typeof cur === 'object' && cur.wrap !== undefined) {
+      cur = cur.wrap;
+      depth++;
+      if (depth > 50) break; // safety against an infinite loop on regression
+    }
+    // Below the limit we keep returning objects; at the limit we get null.
+    expect(cur).toBeNull();
+    expect(depth).toBeLessThanOrEqual(20);
+  });
+
+  test('preserves non-object values (string/number/null) untouched', () => {
+    expect(sanitizeBody('hello')).toBe('hello');
+    expect(sanitizeBody(42)).toBe(42);
+    expect(sanitizeBody(null)).toBeNull();
+    expect(sanitizeBody(undefined)).toBeUndefined();
+  });
+});

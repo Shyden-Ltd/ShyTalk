@@ -9,27 +9,42 @@
 
 const crypto = require('node:crypto');
 
-const SENSITIVE_BODY_KEYS = new Set([
-  'password',
-  'token',
-  'idtoken',
-  'accesstoken',
-  'refreshtoken',
-  'secret',
-  'credential',
-  'pin',
-  'code',
-]);
+// Substring-match denylist. The previous shallow + exact-match list missed
+// nested credentials (`{ user: { password } }`, `{ data: { idToken } }`)
+// and credential field names not on the explicit list (`passcode`, `otp`,
+// `totp`, `verifier`, `clientSecret`, `apiKey`, `recoveryCode`,
+// `appleSignedPayload`, `firebaseIdToken`, etc.). Logs are searchable by
+// uid; an admin reviewing one user's logs could grab another user's
+// still-valid credentials. Phase 2H finding #6.
+//
+// Pattern matches whole-key substrings — `pin`, `pinHash`, `oldPin`,
+// `userPasscode`, `idToken`, `accessToken`, `apiKey`, `clientSecret`,
+// `recoveryCode`, `appleSignedPayload`, etc. all redact correctly.
+const SENSITIVE_KEY_PATTERN =
+  /token|secret|password|passcode|pin|otp|totp|code|credential|verifier|signature|recovery|apple.*payload|hash|apikey/i;
+
+// Cap recursion depth defensively. Express body-parser has its own
+// `parameterLimit` and `depth` defaults that bound the inbound payload,
+// but a custom express.raw() route could feed in a deeper structure.
+// 8 is plenty for any legitimate API DTO and is far below Node's stack
+// limit on a stock Mac/Linux build.
+const SANITIZE_DEPTH_LIMIT = 8;
 
 /**
- * Strip sensitive fields from request body (shallow clone, one level deep).
+ * Strip sensitive fields from request body. Recurses into nested objects
+ * and arrays so credentials nested under DTO wrappers (`{ user: { password } }`,
+ * `{ data: { idToken } }`) are also removed. Sensitive keys are deleted
+ * (not present in output) to match the existing log-consumer contract.
  */
-function sanitizeBody(body) {
-  if (!body || typeof body !== 'object') return body;
+function sanitizeBody(body, depth = 0) {
+  if (depth > SANITIZE_DEPTH_LIMIT) return null;
+  if (body === null || body === undefined) return body;
+  if (Array.isArray(body)) return body.map((v) => sanitizeBody(v, depth + 1));
+  if (typeof body !== 'object') return body;
   const clean = {};
   for (const [key, value] of Object.entries(body)) {
-    if (SENSITIVE_BODY_KEYS.has(key.toLowerCase())) continue;
-    clean[key] = value;
+    if (SENSITIVE_KEY_PATTERN.test(key)) continue;
+    clean[key] = sanitizeBody(value, depth + 1);
   }
   return clean;
 }
