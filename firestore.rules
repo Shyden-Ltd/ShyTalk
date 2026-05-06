@@ -94,10 +94,15 @@ service cloud.firestore {
       }
     }
 
-    // ── Identity Map — auth read, server write only ──────────────
+    // ── Identity Map — server-only read/write ────────────────────
+    // SECURITY: previously open to any authed user. Combined with the
+    // deterministic DM conversation ID format (`dm_<smallerUid>_<largerUid>`),
+    // any user could enumerate the UID↔uniqueId mapping and forge
+    // private-conversation IDs. The Express API uses Admin SDK
+    // (bypasses rules); no client path references identityMap directly
+    // (verified by grep across shared/src, app/src/main, public/).
     match /identityMap/{docId} {
-      allow read: if request.auth != null;
-      allow write: if false;
+      allow read, write: if false;
     }
 
     // ── Counters — server only ───────────────────────────────────
@@ -135,10 +140,14 @@ service cloud.firestore {
           && string(callerUniqueId()) == resource.data.senderId;
       }
 
-      // Seat requests — owner can approve/deny, requester can cancel own
+      // Seat requests — owner can approve/deny, requester can cancel own.
+      // SECURITY: create MUST bind userId to the caller; otherwise any
+      // authed user could file a seat request attributed to ANOTHER
+      // user, causing the room owner to promote the wrong account.
       match /seatRequests/{requestId} {
         allow read: if request.auth != null;
-        allow create: if request.auth != null;
+        allow create: if request.auth != null
+          && request.resource.data.userId == string(callerUniqueId());
         allow update: if request.auth != null
           && (string(callerUniqueId()) == get(/databases/$(database)/documents/rooms/$(roomId)).data.ownerId
               || string(callerUniqueId()) == resource.data.userId);
@@ -218,10 +227,17 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // ── Device bindings — auth read own, API creates ─────────────
-    // Client writes "userId" field, API writes "uniqueId" — accept either
+    // ── Device bindings — auth read OWN, API creates ─────────────
+    // Client writes "userId" field, API writes "uniqueId" — accept either.
+    // SECURITY: previously `allow read: if request.auth != null`,
+    // exposing every device↔user binding to any authed user (useful
+    // for device-fingerprinting / ban-evasion correlation). Now
+    // gated to the device's owner OR an admin.
     match /deviceBindings/{deviceId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null
+        && (resource.data.userId == string(callerUniqueId())
+            || resource.data.uniqueId == string(callerUniqueId())
+            || request.auth.token.admin == true);
       allow create: if request.auth != null
         && (request.resource.data.userId == string(callerUniqueId())
             || request.resource.data.uniqueId == string(callerUniqueId()));
@@ -410,9 +426,13 @@ service cloud.firestore {
     }
 
     // ── Suggestion disputes — submitter create, admin resolve ───
+    // SECURITY: create MUST bind submitterUid to the caller; otherwise
+    // any authed user could file a dispute attributed to ANOTHER user,
+    // spoofing the complainant identity.
     match /suggestionDisputes/{disputeId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.submitterUid == string(callerUniqueId());
       allow update: if request.auth != null && request.auth.token.admin == true;
     }
 

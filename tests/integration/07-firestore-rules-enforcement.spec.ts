@@ -354,3 +354,106 @@ test.describe("Integration — Firestore rules: suspensionAppeals authz", () => 
     );
   });
 });
+
+test.describe("Integration — Firestore rules: identityMap server-only", () => {
+  test("client CANNOT read identityMap (server-only)", async () => {
+    // Critical privacy fix: previously any authed user could enumerate
+    // the full UID↔uniqueId mapping. Combined with the deterministic
+    // DM conversation ID format, that let attackers forge valid
+    // conversation IDs for any user pair.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const adminDb = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(adminDb, "identityMap", "uid-target"), {
+        firebaseUid: "uid-target",
+        uniqueId: 100000300,
+      });
+    });
+
+    const reader = testEnv.authenticatedContext("uid-reader");
+    const readerDb = reader.firestore() as unknown as Firestore;
+    await assertFails(getDoc(doc(readerDb, "identityMap", "uid-target")));
+  });
+});
+
+test.describe("Integration — Firestore rules: seatRequests authz", () => {
+  test("user CANNOT forge a seat request under another user's uniqueId", async () => {
+    // Without the field binding, any authed user could file a seat
+    // request attributed to ANOTHER user — the room owner approving
+    // that request would promote the wrong account.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const adminDb = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(adminDb, "rooms", "room-seat-test"), {
+        ownerId: "100000400",
+        participantIds: ["100000400"],
+        state: "ACTIVE",
+      });
+    });
+
+    const attacker = testEnv.authenticatedContext("uid-attacker", {
+      uniqueId: "100000401",
+    });
+    const attackerDb = attacker.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(
+        doc(attackerDb, "rooms", "room-seat-test", "seatRequests", "req1"),
+        {
+          userId: "100000999", // forged — NOT the attacker's uniqueId
+          createdAt: Date.now(),
+        },
+      ),
+    );
+  });
+});
+
+test.describe("Integration — Firestore rules: suggestionDisputes authz", () => {
+  test("user CANNOT forge a dispute under another user's uniqueId", async () => {
+    const attacker = testEnv.authenticatedContext("uid-attacker", {
+      uniqueId: "100000500",
+    });
+    const attackerDb = attacker.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(attackerDb, "suggestionDisputes", "dispute1"), {
+        submitterUid: "100000999", // forged
+        suggestionId: "s1",
+        text: "I dispute this — but as someone else",
+      }),
+    );
+  });
+});
+
+test.describe("Integration — Firestore rules: deviceBindings privacy", () => {
+  test("user CANNOT read another user's device binding", async () => {
+    // Critical privacy fix: previously any authed user could read all
+    // device↔user bindings, useful for device-fingerprinting and
+    // ban-evasion correlation. Now restricted to the device's owner.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const adminDb = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(adminDb, "deviceBindings", "device-victim"), {
+        userId: "100000600",
+        deviceId: "device-victim",
+      });
+    });
+
+    const attacker = testEnv.authenticatedContext("uid-attacker", {
+      uniqueId: "100000601",
+    });
+    const attackerDb = attacker.firestore() as unknown as Firestore;
+    await assertFails(getDoc(doc(attackerDb, "deviceBindings", "device-victim")));
+  });
+
+  test("user CAN read their own device binding", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const adminDb = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(adminDb, "deviceBindings", "device-owner"), {
+        userId: "100000700",
+        deviceId: "device-owner",
+      });
+    });
+
+    const owner = testEnv.authenticatedContext("uid-owner", {
+      uniqueId: "100000700",
+    });
+    const ownerDb = owner.firestore() as unknown as Firestore;
+    await assertSucceeds(getDoc(doc(ownerDb, "deviceBindings", "device-owner")));
+  });
+});
