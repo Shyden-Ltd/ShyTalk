@@ -21,8 +21,12 @@ jest.mock('../../src/utils/firebase', () => ({
       update: (...args) => mockDocUpdate(path, ...args),
     })),
     collection: jest.fn(() => {
+      // Chain supports `.where().where().limit().get()` for the cron's
+      // CRON_LIMIT cap. limit returns the same chain so further calls
+      // (and .get()) work uniformly.
       const chain = {
         where: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
         get: mockCollectionGet,
       };
       return chain;

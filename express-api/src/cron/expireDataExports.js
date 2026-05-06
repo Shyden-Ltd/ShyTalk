@@ -9,12 +9,23 @@ const { db } = require('../utils/firebase');
 const r2 = require('../utils/r2');
 const log = require('../utils/log');
 
+// Cap per-tick reads to keep Spark-tier quota bounded. Daily cron;
+// any backlog beyond CRON_LIMIT processes on the next day's tick.
+// Pattern matches subscriptions.js / expireBans.js cron caps.
+const CRON_LIMIT = 500;
+
 async function expireDataExports() {
   const expiredSnap = await db
     .collection('users')
     .where('dataExportStatus', '==', 'ready')
     .where('dataExportExpiresAt', '>', 0)
+    .limit(CRON_LIMIT)
     .get();
+  if (expiredSnap.size === CRON_LIMIT) {
+    log.warn('cron', 'expireDataExports: hit CRON_LIMIT — possible truncation', {
+      limit: CRON_LIMIT,
+    });
+  }
 
   let expired = 0;
   for (const doc of expiredSnap.docs) {

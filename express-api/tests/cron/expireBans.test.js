@@ -5,14 +5,20 @@ const mockCollectionGet = jest.fn();
 const mockBatchDelete = jest.fn();
 const mockBatchCommit = jest.fn().mockResolvedValue();
 
+// Query chain supports `.where(...).limit(N).get()` for the cron's
+// CRON_LIMIT cap. The chain returns the same `mockCollectionGet`
+// regardless of the limit value, so existing test expectations still
+// hold.
+const mockLimit = jest.fn(() => ({ get: mockCollectionGet }));
 const mockWhere = jest.fn(() => ({
   get: mockCollectionGet,
+  limit: mockLimit,
 }));
 
 const mockCollection = jest.fn(() => ({
   where: (...args) => {
     mockWhere(...args);
-    return { get: mockCollectionGet };
+    return { get: mockCollectionGet, limit: mockLimit };
   },
 }));
 

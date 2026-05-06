@@ -10,19 +10,43 @@ const { db } = require('../utils/firebase');
 const { sendFcmToTokens, cleanupInvalidTokens } = require('../utils/fcm');
 const log = require('../utils/log');
 
+// Cap per-tick reads to keep Spark-tier quota bounded. The cron runs
+// every 15min; if there are >CRON_LIMIT non-null-expiresAt bans, the
+// remainder are processed on the next tick. We log a truncation warning
+// so operators see the backlog. Pattern matches subscriptions.js cron.
+const CRON_LIMIT = 500;
+
 async function expireBans() {
   const nowIso = new Date().toISOString();
 
-  // Query expired device bans
-  const deviceSnap = await db.collection('deviceBans').where('expiresAt', '!=', null).get();
+  // Query expired device bans (capped — see CRON_LIMIT comment)
+  const deviceSnap = await db
+    .collection('deviceBans')
+    .where('expiresAt', '!=', null)
+    .limit(CRON_LIMIT)
+    .get();
+  if (deviceSnap.size === CRON_LIMIT) {
+    log.warn('cron', 'expireBans: deviceBans hit CRON_LIMIT — possible truncation', {
+      limit: CRON_LIMIT,
+    });
+  }
 
   const expiredDeviceDocs = deviceSnap.docs.filter((d) => {
     const expiresAt = d.data().expiresAt;
     return expiresAt && expiresAt < nowIso;
   });
 
-  // Query expired network bans
-  const networkSnap = await db.collection('networkBans').where('expiresAt', '!=', null).get();
+  // Query expired network bans (capped — see CRON_LIMIT comment)
+  const networkSnap = await db
+    .collection('networkBans')
+    .where('expiresAt', '!=', null)
+    .limit(CRON_LIMIT)
+    .get();
+  if (networkSnap.size === CRON_LIMIT) {
+    log.warn('cron', 'expireBans: networkBans hit CRON_LIMIT — possible truncation', {
+      limit: CRON_LIMIT,
+    });
+  }
 
   const expiredNetworkDocs = networkSnap.docs.filter((d) => {
     const expiresAt = d.data().expiresAt;
