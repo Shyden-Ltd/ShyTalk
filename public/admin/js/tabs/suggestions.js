@@ -115,26 +115,41 @@ export function init(deps) {
     dialog.dataset.ids = JSON.stringify(selected);
   });
 
+  // Bulk handler — runs each id's primary endpoint, falls back to the
+  // legacy PUT /status endpoint, and reports per-id success/failure.
+  // Uses Promise.allSettled so a single failure does not mask the
+  // outcome of the other ids (Promise.all would reject on the first
+  // failure and showToast(`Approved N`) on the success path was firing
+  // even when some/all ids individually failed both endpoints).
+  async function runBulkSuggestionAction({ ids, primary, fallback, verb }) {
+    const settled = await Promise.allSettled(ids.map(async (id) => {
+      try { return await primary(id); } catch (_) { return await fallback(id); }
+    }));
+    const failed = [];
+    settled.forEach((r, i) => { if (r.status === 'rejected') failed.push({ id: ids[i], error: r.reason?.message || String(r.reason) }); });
+    if (failed.length === 0) {
+      showToast(`${verb} ${ids.length} suggestion(s)`, 'success');
+    } else if (failed.length === ids.length) {
+      showToast(`${verb} failed for all ${ids.length} suggestion(s): ${failed[0].error}`, 'error');
+    } else {
+      const sample = failed.slice(0, 3).map((f) => f.id).join(', ');
+      const more = failed.length > 3 ? ` (+${failed.length - 3} more)` : '';
+      showToast(`${verb} ${ids.length - failed.length} of ${ids.length} — failed: ${sample}${more}`, 'error');
+    }
+    loadSuggestions();
+  }
+
   // ── Confirm bulk action ──
   document.querySelector('#suggestions-bulk-confirm-dialog .btn-confirm-bulk').addEventListener('click', async () => {
     const dialog = document.getElementById('suggestions-bulk-confirm-dialog');
     const ids = JSON.parse(dialog.dataset.ids || '[]');
     dialog.style.display = 'none';
-    try {
-      // Bulk approve uses two-tier endpoint chain (new POST /approve falls
-      // back to legacy PUT /status). We don't aggregate per-id
-      // pms: { failed, total } here because the .catch fallback masks per-call
-      // shape — single-suggestion handlers (~line 188, 605, 628) DO consume
-      // pms via PartialFailureToast. Tracked as follow-up: align bulk +
-      // single shapes once the legacy fallback is removed.
-      await Promise.all(ids.map((id) =>
-        apiCall('POST', `/api/admin/suggestions/${id}/approve`).catch(() =>
-          apiCall('PUT', `/api/admin/suggestions/${id}/status`, { status: 'accepted' }),
-        ),
-      ));
-      showToast(`Approved ${ids.length} suggestion(s)`, 'success');
-      loadSuggestions();
-    } catch (err) { showToast(err.message, 'error'); }
+    await runBulkSuggestionAction({
+      ids,
+      verb: 'Approved',
+      primary: (id) => apiCall('POST', `/api/admin/suggestions/${id}/approve`),
+      fallback: (id) => apiCall('PUT', `/api/admin/suggestions/${id}/status`, { status: 'accepted' }),
+    });
   });
   document.querySelector('#suggestions-bulk-confirm-dialog .btn-cancel-bulk').addEventListener('click', () => {
     document.getElementById('suggestions-bulk-confirm-dialog').style.display = 'none';
@@ -146,17 +161,12 @@ export function init(deps) {
     const ids = JSON.parse(dialog.dataset.ids || '[]');
     const reason = document.getElementById('bulk-reject-reason').value || '';
     dialog.style.display = 'none';
-    try {
-      // See bulk-approve comment above — same two-tier fallback shape, same
-      // deferred per-id partial-failure aggregation.
-      await Promise.all(ids.map((id) =>
-        apiCall('POST', `/api/admin/suggestions/${id}/reject`, { reason }).catch(() =>
-          apiCall('PUT', `/api/admin/suggestions/${id}/status`, { status: 'rejected', reason }),
-        ),
-      ));
-      showToast(`Rejected ${ids.length} suggestion(s)`, 'success');
-      loadSuggestions();
-    } catch (err) { showToast(err.message, 'error'); }
+    await runBulkSuggestionAction({
+      ids,
+      verb: 'Rejected',
+      primary: (id) => apiCall('POST', `/api/admin/suggestions/${id}/reject`, { reason }),
+      fallback: (id) => apiCall('PUT', `/api/admin/suggestions/${id}/status`, { status: 'rejected', reason }),
+    });
   });
   document.querySelector('#suggestions-bulk-reject-dialog .btn-cancel-bulk-reject').addEventListener('click', () => {
     document.getElementById('suggestions-bulk-reject-dialog').style.display = 'none';
