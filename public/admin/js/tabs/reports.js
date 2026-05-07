@@ -413,8 +413,8 @@ function renderMoreCards() {
       <div class="report-user-name" data-navigate-uid="${escapeHtml(String(user.uniqueId || user.uid))}">${escapeHtml(user.displayName || 'Unknown')}${user.isSuspended ? ' <span style="color:var(--danger);font-size:11px;font-weight:600;background:rgba(231,76,60,0.1);padding:1px 6px;border-radius:4px;">Suspended</span>' : ''}</div>
       <div class="report-user-id">ID: ${escapeHtml(String(user.uniqueId || '?'))} | Warnings: ${escapeHtml(String(user.warningCount || 0))}</div>
     </div>`;
-    headerHtml += `<span class="gcs-badge ${_gcsClass(gcsScore)}">${_gcsEmoji(gcsScore)} ${gcsScore}</span>`;
-    headerHtml += `<span class="report-count-badge">${user.reportCount} report${user.reportCount !== 1 ? 's' : ''}</span>`;
+    headerHtml += `<span class="gcs-badge ${_gcsClass(gcsScore)}">${_gcsEmoji(gcsScore)} ${escapeHtml(String(gcsScore))}</span>`;
+    headerHtml += `<span class="report-count-badge">${escapeHtml(String(user.reportCount || 0))} report${user.reportCount !== 1 ? 's' : ''}</span>`;
 
     // Review lock badge
     if (user.lock && user.lock.adminUid !== myUid) {
@@ -492,7 +492,7 @@ function renderMoreCards() {
         </div>
         <div class="resolve-buttons">
           <button class="btn-resolve" data-resolve-first="${safeUid}">Resolve Latest</button>
-          <button class="btn-resolve-all" data-resolve-all="${safeUid}">Resolve All (${user.reportCount})</button>
+          <button class="btn-resolve-all" data-resolve-all="${safeUid}">Resolve All (${escapeHtml(String(user.reportCount || 0))})</button>
         </div>
       </div>`;
     }
