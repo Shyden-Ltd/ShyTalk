@@ -13,6 +13,14 @@
 const router = require('express').Router();
 const { db } = require('../utils/firebase');
 const { requireAdmin } = require('../middleware/auth');
+
+// Phase 2H finding #2 dedup: scope admin guard by path prefix.
+const _adminGuardWrapper = async (req, res, next) => {
+  if (await requireAdmin(req, res)) return;
+  next();
+};
+router.use('/admin/bans', _adminGuardWrapper);
+
 const { generateId, now } = require('../utils/helpers');
 const { sendSystemPm } = require('../utils/system-pm');
 const log = require('../utils/log');
@@ -35,8 +43,6 @@ function parseExpiry(duration) {
 
 router.get('/admin/bans', async (req, res) => {
   try {
-    if (await requireAdmin(req, res)) return;
-
     const [deviceSnap, networkSnap] = await Promise.all([
       db.collection('deviceBans').get(),
       db.collection('networkBans').get(),
@@ -63,8 +69,6 @@ router.get('/admin/bans', async (req, res) => {
 
 router.post('/admin/bans/device', async (req, res) => {
   try {
-    if (await requireAdmin(req, res)) return;
-
     const { deviceId, reason, duration, linkedUniqueId } = req.body || {};
     if (!deviceId) return res.status(400).json({ error: 'deviceId is required' });
     if (!reason) return res.status(400).json({ error: 'reason is required' });
@@ -116,8 +120,6 @@ router.post('/admin/bans/device', async (req, res) => {
 
 router.post('/admin/bans/network', async (req, res) => {
   try {
-    if (await requireAdmin(req, res)) return;
-
     const { type, value, reason, duration, linkedUniqueId } = req.body || {};
 
     const validTypes = ['ip', 'subnet', 'asn'];
@@ -190,8 +192,6 @@ router.post('/admin/bans/network', async (req, res) => {
 
 router.delete('/admin/bans/device/:deviceId', async (req, res) => {
   try {
-    if (await requireAdmin(req, res)) return;
-
     await db.doc(`deviceBans/${req.params.deviceId}`).delete();
 
     await db.doc(`adminAuditLog/${generateId()}`).set({
@@ -215,8 +215,6 @@ router.delete('/admin/bans/device/:deviceId', async (req, res) => {
 
 router.delete('/admin/bans/network/:banId', async (req, res) => {
   try {
-    if (await requireAdmin(req, res)) return;
-
     await db.doc(`networkBans/${req.params.banId}`).delete();
 
     await db.doc(`adminAuditLog/${generateId()}`).set({
@@ -240,8 +238,6 @@ router.delete('/admin/bans/network/:banId', async (req, res) => {
 
 router.post('/admin/bans/unban-all/:uniqueId', async (req, res) => {
   try {
-    if (await requireAdmin(req, res)) return;
-
     const uniqueId = req.params.uniqueId;
     const numericId = Number(uniqueId);
     const stringId = String(uniqueId);
@@ -302,8 +298,6 @@ router.post('/admin/bans/unban-all/:uniqueId', async (req, res) => {
 
 router.get('/admin/bans/user/:uniqueId', async (req, res) => {
   try {
-    if (await requireAdmin(req, res)) return;
-
     const uniqueId = req.params.uniqueId;
     const numericId = Number(uniqueId);
     const stringId = String(uniqueId);

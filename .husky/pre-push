@@ -1,5 +1,31 @@
 #!/usr/bin/env sh
 
+# Block force-pushes locally — backed by repo ruleset 16058327
+# (`non_fast_forward` enforcement on `~ALL` refs) but the local check
+# fails fast without a network round-trip. Force-pushes erase commit
+# history, break PR references, and confuse SonarCloud's PR analysis.
+# See feedback-no-force-push memory for rationale.
+#
+# Reads stdin (git's pre-push protocol): `<local ref> <local sha> <remote ref> <remote sha>`
+# A force-push is a non-fast-forward update — i.e. the remote sha is NOT
+# an ancestor of the local sha (and neither is zero, which signals delete
+# or new branch).
+ZERO=0000000000000000000000000000000000000000
+while read -r local_ref local_sha remote_ref remote_sha; do
+  # New branch (remote_sha is zero) or delete (local_sha is zero) — allowed.
+  if [ "$remote_sha" = "$ZERO" ] || [ "$local_sha" = "$ZERO" ]; then
+    continue
+  fi
+  # Check fast-forward: remote_sha must be reachable from local_sha.
+  if ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
+    echo ""
+    echo "✗ Force-push blocked: $local_ref → $remote_ref is not a fast-forward."
+    echo "  Create a new commit instead of amending + force-pushing."
+    echo "  See ~/.claude/projects/.../memory/feedback-no-force-push.md"
+    exit 1
+  fi
+done
+
 # Regenerate public roadmap JSON if the internal roadmap has changed
 node scripts/generate-roadmap-json.js 2>/dev/null
 if ! git diff --quiet public/roadmap-data.json 2>/dev/null; then

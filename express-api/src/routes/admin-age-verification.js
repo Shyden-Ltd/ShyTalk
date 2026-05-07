@@ -62,6 +62,13 @@ const { now } = require('../utils/helpers');
 const log = require('../utils/log');
 const { requireAdmin } = require('../middleware/auth');
 
+// Phase 2H finding #2 dedup: scope admin guard by path prefix.
+const _adminGuardWrapper = async (req, res, next) => {
+  if (await requireAdmin(req, res)) return;
+  next();
+};
+router.use('/admin/age-verification', _adminGuardWrapper);
+
 function isAtLeast18FromDob(dateOfBirthMs) {
   if (typeof dateOfBirthMs !== 'number' || !Number.isFinite(dateOfBirthMs)) return false;
   const today = new Date();

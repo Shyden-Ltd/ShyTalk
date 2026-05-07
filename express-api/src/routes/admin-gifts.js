@@ -9,14 +9,20 @@
 const router = require('express').Router();
 const { db } = require('../utils/firebase');
 const { requireAdmin } = require('../middleware/auth');
+
+// Phase 2H finding #2 dedup: scope admin guard by path prefix.
+const _adminGuardWrapper = async (req, res, next) => {
+  if (await requireAdmin(req, res)) return;
+  next();
+};
+router.use('/gifts', _adminGuardWrapper);
+
 const { generateId, now } = require('../utils/helpers');
 const log = require('../utils/log');
 
 // ── Create gift ──
 router.post('/gifts', async (req, res) => {
   try {
-    if (await requireAdmin(req, res)) return;
-
     const body = req.body;
     if (!body?.name || body.coinValue === null || body.coinValue === undefined) {
       return res.status(400).json({ error: 'name and coinValue required' });
@@ -59,8 +65,6 @@ router.post('/gifts', async (req, res) => {
 // ── Update gift ──
 router.put('/gifts/:id', async (req, res) => {
   try {
-    if (await requireAdmin(req, res)) return;
-
     const body = req.body;
     if (!body) return res.status(400).json({ error: 'Invalid JSON body' });
 
@@ -106,8 +110,6 @@ router.put('/gifts/:id', async (req, res) => {
 // ── Delete gift ──
 router.delete('/gifts/:id', async (req, res) => {
   try {
-    if (await requireAdmin(req, res)) return;
-
     await Promise.all([
       db.doc(`gifts/${req.params.id}`).delete(),
 
