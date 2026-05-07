@@ -76,6 +76,10 @@ firebase-export-*/
 
 # Claude Code session-local state
 .claude/scheduled_tasks.lock
+# Personal /config + auto-mode auto-writes; matches the documented
+# settings-load-order convention (project/settings.local.json is the
+# personal-overrides slot, not committed to the repo).
+.claude/settings.local.json
 
 # Investigation screenshots that don't belong in source
 apple-edit-profile.png
