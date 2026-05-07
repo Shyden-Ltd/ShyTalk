@@ -32,3 +32,26 @@ expect suspend fun performAppleSignInFlow(
  * Caller should treat as silent — no error toast.
  */
 class AppleSignInCancelledException : Exception("Apple Sign-In cancelled by user")
+
+/**
+ * Thrown by the iOS implementation when it cannot find a foreground-
+ * active `UIWindowScene` to use as the `ASPresentationAnchor` for
+ * `ASAuthorizationController`. Apple's contract requires the anchor
+ * to belong to such a scene; a bare `UIWindow()` (no scene) silently
+ * fails to present on iOS 15+. The caller should treat this as a real
+ * failure (snackbar), distinct from a user-initiated cancellation.
+ *
+ * Cross-platform type so consumers can match it without depending on
+ * iOS-specific exception classes.
+ */
+class AppleSignInPresentationException : Exception("Apple Sign-In: no active UIWindow to anchor presentation")
+
+/**
+ * Thrown by the iOS implementation when ASAuthorizationController
+ * reports success but the returned `ASAuthorizationAppleIDCredential`
+ * has no `identityToken`. Apple's contract guarantees the token on
+ * the success path, so encountering this is an SDK contract violation
+ * — typed so observability can distinguish it from generic auth
+ * failures (e.g. network, provider error).
+ */
+class AppleSignInMissingTokenException : Exception("Apple Sign-In: no identity token")

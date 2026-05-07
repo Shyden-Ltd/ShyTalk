@@ -56,13 +56,12 @@ suspend fun performAppleSignIn(): AppleSignInResult =
         // scene-attached UIWindow as presentation anchor. Returning a
         // bare UIWindow() (no scene) is an Apple contract violation and
         // results in silent presentation failure on iPad multi-scene
-        // state. Fail loudly here so the caller's existing snackbar path
-        // surfaces it, instead of waiting for a no-op auth controller.
+        // state. Fail loudly here via the typed
+        // [AppleSignInPresentationException] so the caller's snackbar
+        // path surfaces it, instead of waiting for a no-op auth controller.
         val anchorWindow = activePresentationWindow()
         if (anchorWindow == null) {
-            continuation.resumeWithException(
-                Exception("Apple Sign-In: no active UIWindow to anchor presentation"),
-            )
+            continuation.resumeWithException(AppleSignInPresentationException())
             return@suspendCancellableCoroutine
         }
 
@@ -107,7 +106,7 @@ suspend fun performAppleSignIn(): AppleSignInResult =
                         }
                     }
                     if (continuation.isActive) {
-                        continuation.resumeWithException(Exception("Apple Sign-In: no identity token"))
+                        continuation.resumeWithException(AppleSignInMissingTokenException())
                     }
                 }
 
