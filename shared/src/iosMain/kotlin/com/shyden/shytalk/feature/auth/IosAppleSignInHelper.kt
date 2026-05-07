@@ -26,6 +26,7 @@ import platform.Security.SecRandomCopyBytes
 import platform.Security.errSecSuccess
 import platform.Security.kSecRandomDefault
 import platform.UIKit.UIApplication
+import platform.UIKit.UISceneActivationStateForegroundActive
 import platform.UIKit.UIWindow
 import platform.UIKit.UIWindowScene
 import platform.darwin.NSObject
@@ -51,6 +52,20 @@ data class AppleSignInResult(
  */
 suspend fun performAppleSignIn(): AppleSignInResult =
     suspendCancellableCoroutine { continuation ->
+        // Pre-flight: ASAuthorizationController on iOS 15+ requires a
+        // scene-attached UIWindow as presentation anchor. Returning a
+        // bare UIWindow() (no scene) is an Apple contract violation and
+        // results in silent presentation failure on iPad multi-scene
+        // state. Fail loudly here so the caller's existing snackbar path
+        // surfaces it, instead of waiting for a no-op auth controller.
+        val anchorWindow = activePresentationWindow()
+        if (anchorWindow == null) {
+            continuation.resumeWithException(
+                Exception("Apple Sign-In: no active UIWindow to anchor presentation"),
+            )
+            return@suspendCancellableCoroutine
+        }
+
         val rawNonce = generateNonce(32)
         val hashedNonce = sha256(rawNonce)
 
@@ -132,20 +147,8 @@ suspend fun performAppleSignIn(): AppleSignInResult =
 
         val contextProvider =
             object : NSObject(), ASAuthorizationControllerPresentationContextProvidingProtocol {
-                override fun presentationAnchorForAuthorizationController(controller: ASAuthorizationController): ASPresentationAnchor {
-                    // Use connectedScenes (iOS 13+) to find the active window scene
-                    val windowScene =
-                        UIApplication.sharedApplication.connectedScenes
-                            .filterIsInstance<UIWindowScene>()
-                            .firstOrNull()
-                    val window =
-                        windowScene
-                            ?.windows
-                            ?.filterIsInstance<UIWindow>()
-                            ?.firstOrNull { it.isKeyWindow() }
-                            ?: windowScene?.windows?.firstOrNull() as? UIWindow
-                    return window ?: UIWindow()
-                }
+                override fun presentationAnchorForAuthorizationController(controller: ASAuthorizationController): ASPresentationAnchor =
+                    anchorWindow
             }
 
         // Hold strong references
@@ -162,6 +165,28 @@ suspend fun performAppleSignIn(): AppleSignInResult =
             strongContextProvider = null
         }
     }
+
+/**
+ * Returns the active scene-attached UIWindow suitable as an
+ * `ASPresentationAnchor`, or null if the app is not in a foreground-
+ * active scene state. Apple requires the anchor to belong to a
+ * UIWindowScene whose `activationState == foregroundActive`; a window
+ * from a backgrounded or inactive scene is the same category of
+ * contract violation as a bare unattached `UIWindow()`. iPad multi-
+ * scene apps can have several connected scenes simultaneously where
+ * only one is foreground-active, so filter explicitly.
+ */
+private fun activePresentationWindow(): UIWindow? {
+    val windowScene =
+        UIApplication.sharedApplication.connectedScenes
+            .filterIsInstance<UIWindowScene>()
+            .firstOrNull { it.activationState == UISceneActivationStateForegroundActive }
+            ?: return null
+    return windowScene.windows
+        .filterIsInstance<UIWindow>()
+        .firstOrNull { it.isKeyWindow() }
+        ?: windowScene.windows.firstOrNull() as? UIWindow
+}
 
 private fun generateNonce(length: Int): String {
     val bytes = ByteArray(length)
