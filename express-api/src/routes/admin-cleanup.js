@@ -40,13 +40,16 @@ const log = require('../utils/log');
 // middleware is scoped to this router's own routes (without a prefix,
 // `router.use` would intercept every /api/* request that just happens
 // to share the same /api mount point — including /api/test/setup which
-// integration tests POST to).
+// integration tests POST to). The prefix MUST be the narrowest one that
+// covers only this file's routes — using `/storage` would intercept
+// /api/storage/upload + /api/storage/delete in routes/storage.js because
+// sibling routers share the same /api mount point.
 const adminGuard = async (req, res, next) => {
   if (await requireAdmin(req, res)) return;
   next();
 };
 router.use('/cleanup', adminGuard);
-router.use('/storage', adminGuard);
+router.use('/storage/audit', adminGuard);
 
 const listObjectsWithMeta = r2.listObjectsWithMetadata;
 
