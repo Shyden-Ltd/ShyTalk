@@ -73,8 +73,13 @@ class IosDeviceRepositoryImpl(
                 Resource.Success(BanStatus())
             }
         } catch (e: Exception) {
-            logW("DeviceRepository", "Ban check failed, allowing through: ${e.message}")
-            Resource.Success(BanStatus())
+            // Surface as Error so the caller can log/telemeter. AuthViewModel
+            // already treats Error leniently (see AuthViewModelBanTest.kt:144
+            // "ban check error is lenient") — same user-facing outcome as
+            // the prior Resource.Success(BanStatus()), but iOS no longer
+            // hides the error signal from anything else that might want it.
+            logW("DeviceRepository", "Ban check failed: ${e.message}")
+            Resource.Error("Ban check failed: ${e.message}")
         }
 }
 
