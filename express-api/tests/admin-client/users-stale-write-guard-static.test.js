@@ -22,10 +22,12 @@ const USERS_JS = fs.readFileSync(
   'utf8',
 );
 
-// Each entry: [function name, the unique line within the function that
-// MUST be immediately followed by the uid !== currentUid guard].
-// We pick a unique substring from the function (its first await call)
-// and verify the next non-blank statement is the guard.
+// Each entry: function name to anchor the search, plus the unique
+// substring within that function that marks its first await. We anchor
+// by function name first because two loaders share an identical await
+// (populateBansSection and populateDeviceBindingCard both fetch
+// /api/admin/devices/user/${uid}); a bare indexOf would inspect the
+// wrong function for the second loader.
 const LOADERS = [
   {
     name: 'loadReportHistory',
@@ -33,7 +35,7 @@ const LOADERS = [
   },
   { name: 'loadWarningHistory', awaitMarker: 'await apiCall("GET", url)' },
   { name: 'loadBackpack', awaitMarker: 'apiCall("GET", "/api/users/" + uid + "/backpack")' },
-  { name: 'populateBansSection', awaitMarker: 'apiCall("GET", `/api/admin/devices/user/${uid}`)' },
+  { name: 'populateBansSection', awaitMarker: 'apiCall("GET", `/api/admin/bans/user/${uid}`)' },
   {
     name: 'populateDeviceBindingCard',
     awaitMarker: 'apiCall("GET", `/api/admin/devices/user/${uid}`)',
@@ -52,20 +54,33 @@ describe('users.js — stale-write guard on rapid user switch', () => {
 
   for (const { name, awaitMarker } of LOADERS) {
     test(`${name} bails on stale uid before mutating DOM`, () => {
-      const idx = USERS_JS.indexOf(awaitMarker);
-      expect(idx).toBeGreaterThan(-1); // sanity — marker must exist
-      // Take the next ~200 chars after the marker; the guard must
-      // appear before any innerHTML / appendChild / textContent /
-      // _backpackItems = / loadedData. assignment.
+      // Anchor at the function declaration so the marker search is
+      // scoped to this loader's body. Without this anchor, two loaders
+      // that share an await string (populateBansSection +
+      // populateDeviceBindingCard both call /api/admin/devices/user)
+      // would both inspect the FIRST occurrence and the second
+      // function's test would silently no-op.
+      const fnStart = USERS_JS.indexOf(`function ${name}(`);
+      expect(fnStart).toBeGreaterThan(-1);
+      const idx = USERS_JS.indexOf(awaitMarker, fnStart);
+      expect(idx).toBeGreaterThan(-1); // sanity — marker must exist after fn start
+      // Take the next ~400 chars after the marker; the guard must
+      // appear before any DOM- or state-mutation token.
       const after = USERS_JS.substring(idx, idx + 400);
       const guardIdx = after.indexOf('uid !== currentUid');
       expect(guardIdx).toBeGreaterThan(-1);
-      // Ensure the guard appears BEFORE any DOM-mutation token
+      // Mutation tokens to guard against. Adding `loadedData.` and
+      // `_stalkerCount` covers loadStalkers' mutation of the shared
+      // `loadedData` object — without these the loadStalkers test
+      // would pass even if the guard were misplaced after the
+      // `loadedData._stalkerCount = data.count` write.
       const mutationTokens = [
         'innerHTML',
         'appendChild',
         '_backpackItems =',
         '_warningLastTimestamp =',
+        'loadedData.',
+        '_stalkerCount',
       ];
       for (const tok of mutationTokens) {
         const tokIdx = after.indexOf(tok);
