@@ -144,7 +144,7 @@ class GroupPermissionsTest {
     }
 
     @Test
-    fun `OWNER_ONLY denies MEMBER, MOD, and ADMIN`() {
+    fun `OWNER_ONLY denies MEMBER MOD and ADMIN`() {
         val level = GroupPermissions.PermissionLevel.OWNER_ONLY
         assertFalse(level.isAllowed(GroupRole.MEMBER))
         assertFalse(level.isAllowed(GroupRole.MOD))

@@ -31,7 +31,7 @@ class ReportJsonParserTest {
     }
 
     @Test
-    fun `timestamp is read from createdAt JSON key (not legacy timestamp)`() {
+    fun `timestamp is read from createdAt JSON key not legacy timestamp`() {
         val obj =
             json.parseToJsonElement(
                 """{"id":"r1","createdAt":1700000000,"timestamp":42}""",
