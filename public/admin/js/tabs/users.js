@@ -992,6 +992,7 @@ export async function loadReportHistory(uid) {
   reportHistoryList.innerHTML = '<div style="color:var(--text2);font-size:12px;">Loading...</div>';
   try {
     const result = await apiCall("GET", "/api/reports?status=resolved&userId=" + uid);
+    if (uid !== currentUid) return; // admin switched users mid-load — drop stale write
     const allReports = Array.isArray(result) ? result : (result.users ? result.users.flatMap((u) => u.reports) : []);
     if (allReports.length === 0) { reportHistoryList.innerHTML = '<div style="color:var(--text2);font-size:12px;font-style:italic;">No report history</div>'; return; }
     reportHistoryList.innerHTML = "";
@@ -1035,6 +1036,7 @@ export async function loadWarningHistory(uid, append) {
     let url = "/api/user/" + uid + "/warnings?limit=20";
     if (_warningLastTimestamp) url += "&startAfter=" + _warningLastTimestamp;
     const data = await apiCall("GET", url);
+    if (uid !== currentUid) return; // admin switched users mid-load — drop stale write
     const warnings = data.warnings || [];
     if (!append) warningHistoryList.textContent = "";
     if (warnings.length === 0 && !append) {
@@ -1114,7 +1116,7 @@ export async function populateFormFull(data) {
     loadBackpack(uid),
     populateBansSection(uid),
     populateDeviceBindingCard(uid),
-    loadStalkers(currentUid),
+    loadStalkers(uid),
   ]);
   const profilePreview = document.getElementById("profile-preview");
   if (profilePreview) profilePreview.style.display = "flex";
@@ -1394,6 +1396,7 @@ export async function loadBackpack(uid) {
   _backpackEdits = {};
   try {
     const data = await apiCall("GET", "/api/users/" + uid + "/backpack");
+    if (uid !== currentUid) return; // admin switched users mid-load — drop stale write
     _backpackItems = Array.isArray(data) ? data : (data.items || []);
     renderBackpack();
     populateCategoryFilter();
@@ -1645,6 +1648,7 @@ export async function populateBansSection(uid) {
       apiCall("GET", `/api/admin/bans/user/${uid}`),
       apiCall("GET", `/api/admin/devices/user/${uid}`),
     ]);
+    if (uid !== currentUid) return; // admin switched users mid-load — drop stale write
     // Device bans
     const deviceBans = bansData.deviceBans || [];
     if (bansDeviceList) {
@@ -1682,6 +1686,7 @@ export async function populateDeviceBindingCard(uid) {
   if (emptyEl) emptyEl.style.display = "none";
   try {
     const data = await apiCall("GET", `/api/admin/devices/user/${uid}`);
+    if (uid !== currentUid) return; // admin switched users mid-load — drop stale write
     const devices = data.devices || [];
     if (devices.length === 0) { if (emptyEl) emptyEl.style.display = "block"; if (cardsEl) cardsEl.innerHTML = ""; return; }
     if (cardsEl) cardsEl.innerHTML = devices.map(d => { const rows = [["Manufacturer", d.manufacturer || "Unknown"],["Model", d.model || "Unknown"],["OS Version", d.osVersion || "N/A"],["App Version", (d.appVersion || "N/A") + (d.buildNumber ? " (" + d.buildNumber + ")" : "")],["Screen", d.screenResolution || "N/A"],["Density", d.screenDensity || "N/A"],["Network Type", d.networkType || "N/A"],["Carrier", d.carrier || "N/A"],["Last IP", d.lastIp || "N/A"],["ISP", d.isp || "N/A"],["ASN", d.asn || "N/A"],["Country", d.country || "N/A"],["Region", d.region || "N/A"],["First Seen", d.firstSeen ? new Date(d.firstSeen).toLocaleString() : "N/A"],["Last Seen", d.lastSeen ? new Date(d.lastSeen).toLocaleString() : "N/A"]]; return '<div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:8px;"><div style="font-weight:600;font-size:14px;margin-bottom:8px;color:var(--text);">' + escapeHtml((d.manufacturer || "") + " " + (d.model || d.id)) + '</div><div style="display:grid;grid-template-columns:140px 1fr;gap:4px 12px;font-size:12px;">' + rows.map(([label, val]) => '<div style="color:var(--text2);font-weight:500;">' + label + '</div><div style="color:var(--text);">' + escapeHtml(String(val)) + '</div>').join("") + '</div><div style="margin-top:8px;font-size:11px;color:var(--text2);">Device ID: ' + escapeHtml(d.id) + '</div></div>'; }).join("");
@@ -1747,6 +1752,7 @@ function setPreviewCounts(id, data) { const el = document.getElementById(id); if
 export async function loadStalkers(uid) {
   try {
     const data = await apiCall("GET", "/api/user/" + uid + "/stalkers");
+    if (uid !== currentUid) return; // admin switched users mid-load — drop stale write
     loadedData._stalkerCount = data.count;
     const container = document.getElementById("stalkers-list"); if (!container) return;
     while (container.firstChild) container.removeChild(container.firstChild);
