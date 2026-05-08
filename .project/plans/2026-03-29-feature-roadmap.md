@@ -19,7 +19,7 @@ The next batch to push toward DONE, in order:
 6. **W1 — Shared header on all web pages** (Phase 6) — bundles 4 latent web bugs (COOP, /api/firebase-config 503, watch-bell re-prompt, Google `select_account`).
 7. **C8 PR 14 — manual-QA cycle** (Phase 1) — final gate for the age-verification initiative; triggers DEV + PROD deploy. Multi-day work, defer until other Top Priority items are stacked up to bundle into one DEV deploy. See `.project/plans/2026-05-03-age-verification.md`.
 
-**Resource.Loading silent-failure follow-up** (out-of-scope of PR #553 but flagged): `AgeVerificationSubmitViewModel.submit()` lines 215/232/256 — pre-existing branches that silently leave `isSubmitting = true` if the repo contract is ever violated. Tiny follow-up PR worth doing alongside B6.12.
+**Resource.Loading silent-failure follow-up** — DONE (PR #556, 2026-05-08). `AgeVerificationSubmitViewModel.submit()` lines 215/232/256 now route through `handleUnexpectedLoading(stage)` (logE + reset state) instead of silent `return@launch`/`Unit`. Three RED→GREEN tests pin the recovery contract.
 
 Phase order (top-of-stack first): Phase 1 (Compliance) → Phase 2 (Platform/iOS finishing) → Phase 0 (Infra & test) → Phase 6 (Website) → Phase 3 (Revenue) → Phase 4 (Social) → Phase 5 (QoL) → Phase 7 (Entertainment) → Phase 8 (Support).
 
