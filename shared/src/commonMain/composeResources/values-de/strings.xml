@@ -1686,4 +1686,8 @@
     <string name="age_verif_submit_error_no_image">Bitte fügen Sie vor dem Absenden ein Foto hinzu.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_error_generic">Konnte nicht gesendet werden. Bitte überprüfen Sie Ihre Verbindung und versuchen Sie es erneut.</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_label">Testumgebung</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_warning">Laden Sie ein beliebiges Bild hoch – dies ist eine Testumgebung, echte IDs sind nicht erforderlich und werden nicht langfristig gespeichert.</string>
 </resources>

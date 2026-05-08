@@ -1688,4 +1688,8 @@
     <string name="age_verif_submit_error_no_image">提交前请添加照片。</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_error_generic">无法提交 - 请检查您的连接并重试。</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_label">测试环境</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_warning">上传任何图像 - 这是一个测试环境，不需要真实 ID，也不会长期存储。</string>
 </resources>

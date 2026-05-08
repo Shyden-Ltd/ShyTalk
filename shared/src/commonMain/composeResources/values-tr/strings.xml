@@ -1688,4 +1688,8 @@
     <string name="age_verif_submit_error_no_image">Lütfen göndermeden önce bir fotoğraf ekleyin.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_error_generic">Gönderilemedi; lütfen bağlantınızı kontrol edip tekrar deneyin.</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_label">Test ortamı</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_warning">Herhangi bir görsel yükleyin — bu bir test ortamıdır, gerçek kimlikler gerekli değildir ve uzun süre saklanmaz.</string>
 </resources>

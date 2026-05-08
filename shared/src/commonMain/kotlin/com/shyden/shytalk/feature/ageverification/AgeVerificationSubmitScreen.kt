@@ -60,6 +60,8 @@ import com.shyden.shytalk.resources.age_verif_step_submitted_body
 import com.shyden.shytalk.resources.age_verif_step_submitted_done
 import com.shyden.shytalk.resources.age_verif_step_submitted_title
 import com.shyden.shytalk.resources.age_verif_submit_title
+import com.shyden.shytalk.resources.age_verif_test_env_label
+import com.shyden.shytalk.resources.age_verif_test_env_warning
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -71,6 +73,7 @@ const val TAG_AGE_VERIF_PICK_IMAGE = "ageVerif_pickImage"
 const val TAG_AGE_VERIF_SUBMIT = "ageVerif_submit"
 const val TAG_AGE_VERIF_DONE = "ageVerif_done"
 const val TAG_AGE_VERIF_BACK = "ageVerif_back"
+const val TAG_AGE_VERIF_TEST_ENV_WARNING = "ageVerif_testEnvWarning"
 
 /**
  * 4-step user-facing verification flow (PR 9).
@@ -128,7 +131,10 @@ fun AgeVerificationSubmitScreen(
                 AgeVerificationSubmitStep.PickMethod -> PickMethodStep(viewModel::selectMethod)
 
                 AgeVerificationSubmitStep.PickImage ->
-                    PickImageStep(uiState.imageBytes != null) { bytes, ct ->
+                    PickImageStep(
+                        photoAlreadyAttached = uiState.imageBytes != null,
+                        showTestEnvWarning = uiState.isPreviewBuild,
+                    ) { bytes, ct ->
                         viewModel.setImage(bytes, ct)
                     }
 
@@ -206,6 +212,7 @@ private fun PickMethodStep(onMethodSelected: (IdMethod) -> Unit) {
 @Composable
 private fun PickImageStep(
     photoAlreadyAttached: Boolean,
+    showTestEnvWarning: Boolean,
     onImagePicked: (ByteArray, ContentType) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -218,6 +225,9 @@ private fun PickImageStep(
             stringResource(Res.string.age_verif_step_image_body),
             style = MaterialTheme.typography.bodyMedium,
         )
+        if (showTestEnvWarning) {
+            TestEnvironmentWarning()
+        }
         Spacer(Modifier.height(4.dp))
         // PlatformImagePicker emits JPEG bytes via the gallery picker.
         // Camera support is a follow-up — the existing
@@ -333,6 +343,41 @@ private fun SubmittedStep(onDone: () -> Unit) {
         ) {
             Text(stringResource(Res.string.age_verif_step_submitted_done))
         }
+    }
+}
+
+/**
+ * Prominent banner shown above the image picker on local + dev builds
+ * (driven by [AgeVerificationSubmitUiState.isPreviewBuild]). Reassures
+ * the tester not to upload a real ID — the spec rule is that non-prod
+ * environments simulate the flow without long-term retention of PII
+ * (`.project/plans/2026-05-03-age-verification.md` → "Non-prod
+ * simulation").
+ */
+@Composable
+private fun TestEnvironmentWarning() {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .testTag(TAG_AGE_VERIF_TEST_ENV_WARNING)
+                .background(
+                    MaterialTheme.colorScheme.tertiaryContainer,
+                    RoundedCornerShape(8.dp),
+                ).padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            stringResource(Res.string.age_verif_test_env_label),
+            color = MaterialTheme.colorScheme.onTertiaryContainer,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            stringResource(Res.string.age_verif_test_env_warning),
+            color = MaterialTheme.colorScheme.onTertiaryContainer,
+            style = MaterialTheme.typography.bodySmall,
+        )
     }
 }
 

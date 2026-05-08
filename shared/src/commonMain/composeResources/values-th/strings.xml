@@ -1686,4 +1686,8 @@
     <string name="age_verif_submit_error_no_image">กรุณาเพิ่มภาพถ่ายก่อนที่จะส่ง</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_error_generic">ไม่สามารถส่งได้ — โปรดตรวจสอบการเชื่อมต่อของคุณแล้วลองอีกครั้ง</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_label">สภาพแวดล้อมการทดสอบ</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_warning">อัปโหลดรูปภาพใดๆ — นี่เป็นสภาพแวดล้อมการทดสอบ ไม่จำเป็นต้องใช้ ID จริงและไม่ได้จัดเก็บไว้ในระยะยาว</string>
 </resources>

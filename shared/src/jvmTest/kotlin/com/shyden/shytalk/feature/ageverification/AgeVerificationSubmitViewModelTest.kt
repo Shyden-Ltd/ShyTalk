@@ -36,7 +36,7 @@ class AgeVerificationSubmitViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         repo = FakeAgeVerificationRepository()
-        viewModel = AgeVerificationSubmitViewModel(repo)
+        viewModel = AgeVerificationSubmitViewModel(repo, isPreviewBuild = false)
     }
 
     @AfterTest
@@ -53,6 +53,48 @@ class AgeVerificationSubmitViewModelTest {
         assertNull(viewModel.uiState.value.imageBytes)
         assertFalse(viewModel.uiState.value.isSubmitting)
         assertNull(viewModel.uiState.value.error)
+    }
+
+    // ─── Non-prod simulation warning flag ───────────────────────
+    //
+    // Spec (`.project/plans/2026-05-03-age-verification.md` Non-prod
+    // simulation): on local + dev builds the user must be prominently
+    // warned not to upload a real ID. Surfacing the flag through UI
+    // state so the screen renders the warning conditionally without
+    // each call site needing to know about BuildVariant.
+
+    @Test
+    fun `isPreviewBuild=true is exposed via uiState from initial state`() {
+        val previewVm = AgeVerificationSubmitViewModel(repo, isPreviewBuild = true)
+        assertTrue(previewVm.uiState.value.isPreviewBuild)
+    }
+
+    @Test
+    fun `isPreviewBuild=false is exposed via uiState from initial state`() {
+        val prodVm = AgeVerificationSubmitViewModel(repo, isPreviewBuild = false)
+        assertFalse(prodVm.uiState.value.isPreviewBuild)
+    }
+
+    @Test
+    fun `isPreviewBuild flag survives state transitions (copy preserves it)`() {
+        val previewVm = AgeVerificationSubmitViewModel(repo, isPreviewBuild = true)
+        previewVm.acknowledgeExplanation()
+        previewVm.selectMethod(IdMethod.Passport)
+        previewVm.setImage(byteArrayOf(0x01), ContentType.Jpeg)
+        // Now at Confirm; flag must still be true so the screen can
+        // re-display the warning if the user steps back to PickImage.
+        assertTrue(previewVm.uiState.value.isPreviewBuild)
+    }
+
+    @Test
+    fun `isPreviewBuild flag is still true when stepping back to PickImage from Confirm`() {
+        val previewVm = AgeVerificationSubmitViewModel(repo, isPreviewBuild = true)
+        previewVm.acknowledgeExplanation()
+        previewVm.selectMethod(IdMethod.Passport)
+        previewVm.setImage(byteArrayOf(0x01), ContentType.Jpeg)
+        previewVm.back() // Confirm → PickImage; warning is rendered here
+        assertEquals(AgeVerificationSubmitStep.PickImage, previewVm.uiState.value.step)
+        assertTrue(previewVm.uiState.value.isPreviewBuild)
     }
 
     // ─── Forward transitions ────────────────────────────────────

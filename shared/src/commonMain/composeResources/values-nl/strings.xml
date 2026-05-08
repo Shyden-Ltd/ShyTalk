@@ -1688,4 +1688,8 @@
     <string name="age_verif_submit_error_no_image">Voeg een foto toe voordat u deze verzendt.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_error_generic">Kan niet verzenden. Controleer uw verbinding en probeer het opnieuw.</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_label">Testomgeving</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_warning">Upload een afbeelding – dit is een testomgeving, echte ID’s zijn niet vereist en worden niet langdurig bewaard.</string>
 </resources>

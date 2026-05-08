@@ -1688,4 +1688,8 @@
     <string name="age_verif_submit_error_no_image">送信する前に写真を追加してください。</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_error_generic">送信できませんでした — 接続を確認して、もう一度試してください。</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_label">テスト環境</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_warning">任意の画像をアップロードします。これはテスト環境であり、実際の ID は必要なく、長期保存されません。</string>
 </resources>

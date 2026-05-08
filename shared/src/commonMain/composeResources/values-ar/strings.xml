@@ -1688,4 +1688,8 @@
     <string name="age_verif_submit_error_no_image">الرجاء إضافة صورة قبل الإرسال.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_error_generic">تعذر الإرسال — يرجى التحقق من الاتصال والمحاولة مرة أخرى.</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_label">بيئة الاختبار</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_warning">قم بتحميل أي صورة - هذه بيئة اختبار، ولا يلزم وجود معرفات حقيقية ولا يتم تخزينها على المدى الطويل.</string>
 </resources>

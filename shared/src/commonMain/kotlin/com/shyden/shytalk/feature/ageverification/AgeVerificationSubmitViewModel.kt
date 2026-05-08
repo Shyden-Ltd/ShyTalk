@@ -2,6 +2,7 @@ package com.shyden.shytalk.feature.ageverification
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.shyden.shytalk.core.BuildVariant
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.UiText
 import com.shyden.shytalk.core.util.logE
@@ -51,6 +52,13 @@ data class AgeVerificationSubmitUiState(
     val imageContentType: ContentType? = null,
     val isSubmitting: Boolean = false,
     val error: UiText? = null,
+    /**
+     * `true` on local + dev builds — drives the prominent
+     * "test environment, do not upload a real ID" warning on the
+     * PickImage step (spec `.project/plans/2026-05-03-age-verification.md`
+     * Non-prod simulation).
+     */
+    val isPreviewBuild: Boolean = false,
 ) {
     /**
      * Custom equals to compare by reference / size for [imageBytes] —
@@ -65,7 +73,8 @@ data class AgeVerificationSubmitUiState(
             imageBytes === other.imageBytes &&
             imageContentType == other.imageContentType &&
             isSubmitting == other.isSubmitting &&
-            error == other.error
+            error == other.error &&
+            isPreviewBuild == other.isPreviewBuild
     }
 
     override fun hashCode(): Int {
@@ -75,18 +84,20 @@ data class AgeVerificationSubmitUiState(
         result = 31 * result + (imageContentType?.hashCode() ?: 0)
         result = 31 * result + isSubmitting.hashCode()
         result = 31 * result + (error?.hashCode() ?: 0)
+        result = 31 * result + isPreviewBuild.hashCode()
         return result
     }
 }
 
 class AgeVerificationSubmitViewModel(
     private val repository: AgeVerificationRepository,
+    isPreviewBuild: Boolean = BuildVariant.isPreviewBuild,
 ) : ViewModel() {
     companion object {
         private const val TAG = "AgeVerifSubmitVM"
     }
 
-    private val _uiState = MutableStateFlow(AgeVerificationSubmitUiState())
+    private val _uiState = MutableStateFlow(AgeVerificationSubmitUiState(isPreviewBuild = isPreviewBuild))
     val uiState: StateFlow<AgeVerificationSubmitUiState> = _uiState.asStateFlow()
 
     /**

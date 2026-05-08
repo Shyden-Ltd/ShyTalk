@@ -1687,4 +1687,8 @@
     <string name="age_verif_submit_error_no_image">Lägg till ett foto innan du skickar in.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_error_generic">Det gick inte att skicka – kontrollera din anslutning och försök igen.</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_label">Testmiljö</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_warning">Ladda upp vilken bild som helst – det här är en testmiljö, riktiga ID:n krävs inte och lagras inte på lång sikt.</string>
 </resources>

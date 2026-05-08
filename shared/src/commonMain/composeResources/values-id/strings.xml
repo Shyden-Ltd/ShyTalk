@@ -1688,4 +1688,8 @@
     <string name="age_verif_submit_error_no_image">Silakan tambahkan foto sebelum mengirimkan.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_error_generic">Tidak dapat mengirimkan — harap periksa koneksi Anda dan coba lagi.</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_label">Lingkungan pengujian</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_warning">Unggah gambar apa pun — ini adalah lingkungan pengujian, ID asli tidak diperlukan dan tidak disimpan dalam jangka panjang.</string>
 </resources>

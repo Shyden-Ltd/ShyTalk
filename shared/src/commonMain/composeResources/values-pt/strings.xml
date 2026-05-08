@@ -1688,4 +1688,8 @@
     <string name="age_verif_submit_error_no_image">Adicione uma foto antes de enviar.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_error_generic">Não foi possível enviar. Verifique sua conexão e tente novamente.</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_label">Ambiente de teste</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_warning">Faça upload de qualquer imagem – este é um ambiente de teste, IDs reais não são necessários e não são armazenados por longo prazo.</string>
 </resources>

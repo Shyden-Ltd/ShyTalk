@@ -978,5 +978,7 @@
     <string name="age_verif_submit_error_no_method">Please pick an ID type before submitting.</string>
     <string name="age_verif_submit_error_no_image">Please add a photo before submitting.</string>
     <string name="age_verif_submit_error_generic">Could not submit — please check your connection and try again.</string>
+    <string name="age_verif_test_env_label">Test environment</string>
+    <string name="age_verif_test_env_warning">Upload any image — this is a test environment, real IDs are not required and not stored long-term.</string>
 
 </resources>

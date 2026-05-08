@@ -1687,4 +1687,8 @@
     <string name="age_verif_submit_error_no_image">Перед надсиланням додайте фото.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_error_generic">Не вдалося надіслати — перевірте з’єднання та повторіть спробу.</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_label">Тестове середовище</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_warning">Завантажте будь-яке зображення — це тестове середовище, справжні ідентифікатори не потрібні та не зберігаються довго.</string>
 </resources>

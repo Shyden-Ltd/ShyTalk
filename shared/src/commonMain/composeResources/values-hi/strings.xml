@@ -1688,4 +1688,8 @@
     <string name="age_verif_submit_error_no_image">कृपया सबमिट करने से पहले एक फ़ोटो जोड़ें.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_error_generic">सबमिट नहीं किया जा सका - कृपया अपना कनेक्शन जांचें और पुनः प्रयास करें।</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_label">परीक्षण वातावरण</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_warning">कोई भी छवि अपलोड करें - यह एक परीक्षण वातावरण है, वास्तविक आईडी की आवश्यकता नहीं है और इसे लंबे समय तक संग्रहीत नहीं किया जाता है।</string>
 </resources>

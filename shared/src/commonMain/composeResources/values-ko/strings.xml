@@ -1688,4 +1688,8 @@
     <string name="age_verif_submit_error_no_image">제출하기 전에 사진을 추가하세요.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_error_generic">제출할 수 없습니다. 연결을 확인하고 다시 시도하십시오.</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_label">테스트 환경</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_warning">이미지 업로드 - 이는 테스트 환경이므로 실제 ID가 필요하지 않으며 장기간 저장되지 않습니다.</string>
 </resources>

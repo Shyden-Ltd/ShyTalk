@@ -1684,4 +1684,8 @@
     <string name="age_verif_submit_error_no_image">Veuillez ajouter une photo avant de soumettre.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_error_generic">Impossible de soumettre. Veuillez vérifier votre connexion et réessayer.</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_label">Environnement de test</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_warning">Téléchargez n\'importe quelle image : il s\'agit d\'un environnement de test, les véritables identifiants ne sont pas requis et ne sont pas stockés à long terme.</string>
 </resources>

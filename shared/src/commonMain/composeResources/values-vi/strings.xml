@@ -1688,4 +1688,8 @@
     <string name="age_verif_submit_error_no_image">Vui lòng thêm ảnh trước khi gửi.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_error_generic">Không thể gửi - vui lòng kiểm tra kết nối của bạn và thử lại.</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_label">Môi trường thử nghiệm</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_warning">Tải lên bất kỳ hình ảnh nào - đây là môi trường thử nghiệm, không yêu cầu ID thực và không được lưu trữ lâu dài.</string>
 </resources>

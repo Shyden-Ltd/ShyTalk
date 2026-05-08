@@ -1773,4 +1773,8 @@
     <string name="age_verif_submit_error_no_image">សូមបន្ថែមរូបថតមុនពេលដាក់ស្នើ។</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_error_generic">មិនអាចដាក់ស្នើបានទេ — សូមពិនិត្យមើលការតភ្ជាប់របស់អ្នក ហើយព្យាយាមម្តងទៀត។</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_label">បរិយាកាសសាកល្បង</string>
+    <!-- google-translated 2026-05-08 -->
+    <string name="age_verif_test_env_warning">បង្ហោះរូបភាពណាមួយ — នេះគឺជាបរិយាកាសសាកល្បង លេខសម្គាល់ពិតប្រាកដមិនត្រូវបានទាមទារ និងមិនត្រូវបានរក្សាទុករយៈពេលវែង។</string>
 </resources>
