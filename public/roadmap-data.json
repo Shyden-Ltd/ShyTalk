@@ -1,10 +1,10 @@
 {
-  "lastUpdated": "2026-05-06",
+  "lastUpdated": "2026-05-08",
   "currentlyWorkingOn": [
     {
-      "name": "`resolveReport` partial-failure flag surfacing",
-      "description": "admin UI must show per-sub-action failures (`warning.failed`, `suspension.failed`, `auditLog.failed`, `pms.failed`, `cascade`) currently swallowed by `Resource<Unit>`. Mostly DONE for admin-bans / economy / devices / warn / backpack PMs (PRs #385, #392, #393). Remaining: re-audit `resolveReport` itself + `reportMessage` / `reportUser` paths and any iOS admin surface when added",
-      "phase": "Platform & iOS",
+      "name": "Age-gating per feature",
+      "description": "separate age gates for voice rooms / gifting / DMs-with-strangers. Currently single 13+ gate at signup; needs per-feature age sensitivity",
+      "phase": "Safety & Compliance",
       "i18n": {}
     },
     {
@@ -89,6 +89,12 @@
           "d": "更流畅的购买体验"
         }
       }
+    },
+    {
+      "name": "`resolveReport` partial-failure flag surfacing",
+      "description": "admin UI must show per-sub-action failures (`warning.failed`, `suspension.failed`, `auditLog.failed`, `pms.failed`, `cascade`) currently swallowed by `Resource<Unit>`. Mostly DONE for admin-bans / economy / devices / warn / backpack PMs (PRs #385, #392, #393). Remaining: re-audit `resolveReport` itself + `reportMessage` / `reportUser` paths and any iOS admin surface when added",
+      "phase": "Platform & iOS",
+      "i18n": {}
     }
   ],
   "phases": [
@@ -121,6 +127,410 @@
         "total": 19
       },
       "features": [
+        {
+          "name": "Age-gating per feature",
+          "description": "separate age gates for voice rooms / gifting / DMs-with-strangers. Currently single 13+ gate at signup; needs per-feature age sensitivity",
+          "status": "in-progress",
+          "i18n": {}
+        },
+        {
+          "name": "Room message reporting",
+          "description": "UK OSA, report mechanism on every UGC screen",
+          "status": "planned",
+          "i18n": {
+            "ar": {
+              "n": "الإبلاغ عن الرسائل",
+              "d": "أبلغ عن رسائل غير لائقة من أي غرفة"
+            },
+            "de": {
+              "n": "Nachrichtenmeldung",
+              "d": "Unangemessene Nachrichten melden"
+            },
+            "es": {
+              "n": "Reportar mensajes",
+              "d": "Reporta mensajes inapropiados de cualquier sala"
+            },
+            "fr": {
+              "n": "Signaler des messages",
+              "d": "Signalez les messages inappropriés"
+            },
+            "hi": {
+              "n": "संदेश रिपोर्ट",
+              "d": "किसी भी कमरे से अनुचित संदेश रिपोर्ट करें"
+            },
+            "id": {
+              "n": "Laporkan pesan",
+              "d": "Laporkan pesan tidak pantas dari ruangan mana pun"
+            },
+            "it": {
+              "n": "Segnala messaggi",
+              "d": "Segnala messaggi inappropriati"
+            },
+            "ja": {
+              "n": "メッセージ通報",
+              "d": "不適切なメッセージを報告"
+            },
+            "ko": {
+              "n": "메시지 신고",
+              "d": "부적절한 메시지 신고"
+            },
+            "nl": {
+              "n": "Berichten melden",
+              "d": "Meld ongepaste berichten"
+            },
+            "pl": {
+              "n": "Zgłaszanie wiadomości",
+              "d": "Zgłoś nieodpowiednie wiadomości"
+            },
+            "pt": {
+              "n": "Denunciar mensagens",
+              "d": "Denuncie mensagens inadequadas"
+            },
+            "ru": {
+              "n": "Жалоба на сообщения",
+              "d": "Пожалуйтесь на неуместные сообщения"
+            },
+            "sv": {
+              "n": "Rapportera meddelanden",
+              "d": "Rapportera olämpliga meddelanden"
+            },
+            "th": {
+              "n": "รายงานข้อความ",
+              "d": "รายงานข้อความที่ไม่เหมาะสม"
+            },
+            "tr": {
+              "n": "Mesaj bildirimi",
+              "d": "Uygunsuz mesajları bildirin"
+            },
+            "uk": {
+              "n": "Скарга на повідомлення",
+              "d": "Повідомте про неприйнятні повідомлення"
+            },
+            "vi": {
+              "n": "Báo cáo tin nhắn",
+              "d": "Báo cáo tin nhắn không phù hợp"
+            },
+            "zh": {
+              "n": "消息举报",
+              "d": "举报不当消息"
+            }
+          }
+        },
+        {
+          "name": "Gift-blocked-but-profile-viewable gap",
+          "description": "block-list integrity bug: blocked user can still view profile + see public gifts even though they can't send",
+          "status": "planned",
+          "i18n": {}
+        },
+        {
+          "name": "Age-based segregation",
+          "description": "UK OSA, adults/minors must not interact",
+          "status": "planned",
+          "i18n": {
+            "ar": {
+              "n": "فصل حسب العمر",
+              "d": "مساحات منفصلة للبالغين والقاصرين"
+            },
+            "de": {
+              "n": "Altersbasierte Trennung",
+              "d": "Getrennte Bereiche für Erwachsene und Minderjährige"
+            },
+            "es": {
+              "n": "Separación por edad",
+              "d": "Espacios separados para adultos y menores"
+            },
+            "fr": {
+              "n": "Séparation par âge",
+              "d": "Espaces séparés pour adultes et mineurs"
+            },
+            "hi": {
+              "n": "आयु-आधारित अलगाव",
+              "d": "वयस्कों और नाबालिगों के लिए अलग स्थान"
+            },
+            "id": {
+              "n": "Pemisahan usia",
+              "d": "Ruang terpisah untuk dewasa dan anak"
+            },
+            "it": {
+              "n": "Separazione per età",
+              "d": "Spazi separati per adulti e minori"
+            },
+            "ja": {
+              "n": "年齢別スペース",
+              "d": "大人と未成年者のための別々のスペース"
+            },
+            "ko": {
+              "n": "연령 기반 분리",
+              "d": "성인과 미성년자를 위한 별도 공간"
+            },
+            "nl": {
+              "n": "Leeftijdsscheiding",
+              "d": "Aparte ruimtes voor volwassenen en minderjarigen"
+            },
+            "pl": {
+              "n": "Segregacja wiekowa",
+              "d": "Oddzielne przestrzenie dla dorosłych i nieletnich"
+            },
+            "pt": {
+              "n": "Separação por idade",
+              "d": "Espaços separados para adultos e menores"
+            },
+            "ru": {
+              "n": "Разделение по возрасту",
+              "d": "Отдельные пространства для взрослых и несовершеннолетних"
+            },
+            "sv": {
+              "n": "Åldersbaserad separation",
+              "d": "Separata utrymmen för vuxna och minderåriga"
+            },
+            "th": {
+              "n": "แบ่งตามอายุ",
+              "d": "พื้นที่แยกสำหรับผู้ใหญ่และเยาวชน"
+            },
+            "tr": {
+              "n": "Yaşa göre ayrım",
+              "d": "Yetişkinler ve küçükler için ayrı alanlar"
+            },
+            "uk": {
+              "n": "Розділення за віком",
+              "d": "Окремі простори для дорослих і неповнолітніх"
+            },
+            "vi": {
+              "n": "Phân chia theo tuổi",
+              "d": "Không gian riêng cho người lớn và trẻ em"
+            },
+            "zh": {
+              "n": "年龄分区",
+              "d": "为成人和未成年人提供独立空间"
+            }
+          }
+        },
+        {
+          "name": "Voice content reporting",
+          "description": "reporting mechanism for live voice content (record-on-report, server-side review). UK OSA + Apple guidelines",
+          "status": "planned",
+          "i18n": {}
+        },
+        {
+          "name": "Automated content moderation",
+          "description": "AI-powered detection: image nudity, voice toxicity (speech-to-text), text profanity. Auto-flag or auto-action based on severity",
+          "status": "planned",
+          "i18n": {}
+        },
+        {
+          "name": "Privacy policy rewrite",
+          "description": "GDPR, missing data controller, lawful basis, DPO, children's section",
+          "status": "planned",
+          "i18n": {
+            "ar": {
+              "n": "سياسة الخصوصية",
+              "d": "سياسة خصوصية محدثة وشاملة"
+            },
+            "de": {
+              "n": "Datenschutzrichtlinie",
+              "d": "Aktualisierte Datenschutzrichtlinie"
+            },
+            "es": {
+              "n": "Política de privacidad",
+              "d": "Política de privacidad actualizada"
+            },
+            "fr": {
+              "n": "Politique de confidentialité",
+              "d": "Politique de confidentialité mise à jour"
+            },
+            "hi": {
+              "n": "गोपनीयता नीति",
+              "d": "अद्यतन गोपनीयता नीति"
+            },
+            "id": {
+              "n": "Kebijakan privasi",
+              "d": "Kebijakan privasi yang diperbarui"
+            },
+            "it": {
+              "n": "Privacy policy",
+              "d": "Privacy policy aggiornata"
+            },
+            "ja": {
+              "n": "プライバシーポリシー",
+              "d": "更新されたプライバシーポリシー"
+            },
+            "ko": {
+              "n": "개인정보 처리방침",
+              "d": "업데이트된 개인정보 처리방침"
+            },
+            "nl": {
+              "n": "Privacybeleid",
+              "d": "Bijgewerkt privacybeleid"
+            },
+            "pl": {
+              "n": "Polityka prywatności",
+              "d": "Zaktualizowana polityka prywatności"
+            },
+            "pt": {
+              "n": "Política de privacidade",
+              "d": "Política de privacidade atualizada"
+            },
+            "ru": {
+              "n": "Конфиденциальность",
+              "d": "Обновлённая политика конфиденциальности"
+            },
+            "sv": {
+              "n": "Integritetspolicy",
+              "d": "Uppdaterad integritetspolicy"
+            },
+            "th": {
+              "n": "นโยบายความเป็นส่วนตัว",
+              "d": "นโยบายความเป็นส่วนตัวที่อัปเดต"
+            },
+            "tr": {
+              "n": "Gizlilik politikası",
+              "d": "Güncellenmiş gizlilik politikası"
+            },
+            "uk": {
+              "n": "Конфіденційність",
+              "d": "Оновлена політика конфіденційності"
+            },
+            "vi": {
+              "n": "Chính sách riêng tư",
+              "d": "Chính sách quyền riêng tư cập nhật"
+            },
+            "zh": {
+              "n": "隐私政策",
+              "d": "更新的隐私政策"
+            }
+          }
+        },
+        {
+          "name": "EU DSA transparency reporting + designated point-of-contact",
+          "description": "annual transparency report on moderation actions; named EU point-of-contact published on the website",
+          "status": "planned",
+          "i18n": {}
+        },
+        {
+          "name": "Granular consent mechanism",
+          "description": "separate opt-ins per processing purpose (analytics, marketing, etc.) instead of single blanket accept",
+          "status": "planned",
+          "i18n": {}
+        },
+        {
+          "name": "Consent withdrawal mechanism",
+          "description": "users can revoke each previously-granted consent at any time, persisted server-side",
+          "status": "planned",
+          "i18n": {}
+        },
+        {
+          "name": "Defined retention periods + UI surfacing",
+          "description": "publish per-data-type retention windows in the privacy policy + show users in-app",
+          "status": "planned",
+          "i18n": {}
+        },
+        {
+          "name": "Data-breach notification process",
+          "description": "defined runbook + 72-hour notification template + user-facing in-app banner mechanism for triggered breaches",
+          "status": "planned",
+          "i18n": {}
+        },
+        {
+          "name": "Gambling self-exclusion",
+          "description": "responsible gambling regulation, irreversible opt-out",
+          "status": "planned",
+          "i18n": {
+            "ar": {
+              "n": "الاستبعاد الذاتي",
+              "d": "الانسحاب نهائياً من ميزات القمار"
+            },
+            "de": {
+              "n": "Selbstausschluss",
+              "d": "Dauerhaft von Glücksspielen ausschließen"
+            },
+            "es": {
+              "n": "Autoexclusión",
+              "d": "Excluirse permanentemente de juegos de azar"
+            },
+            "fr": {
+              "n": "Auto-exclusion",
+              "d": "Se retirer définitivement des jeux de hasard"
+            },
+            "hi": {
+              "n": "स्व-बहिष्कार",
+              "d": "जुआ सुविधाओं से स्थायी बहिष्कार"
+            },
+            "id": {
+              "n": "Pengecualian diri",
+              "d": "Keluar permanen dari fitur perjudian"
+            },
+            "it": {
+              "n": "Autoesclusione",
+              "d": "Escludersi permanentemente dal gioco"
+            },
+            "ja": {
+              "n": "自己排除",
+              "d": "ギャンブル機能から永久除外"
+            },
+            "ko": {
+              "n": "자체 제외",
+              "d": "도박 기능에서 영구 제외"
+            },
+            "nl": {
+              "n": "Zelfuitsluiting",
+              "d": "Permanent uitsluiten van gokken"
+            },
+            "pl": {
+              "n": "Samowykluczenie",
+              "d": "Trwała rezygnacja z hazardu"
+            },
+            "pt": {
+              "n": "Autoexclusão",
+              "d": "Excluir-se permanentemente de apostas"
+            },
+            "ru": {
+              "n": "Самоисключение",
+              "d": "Навсегда отказаться от азартных игр"
+            },
+            "sv": {
+              "n": "Självavstängning",
+              "d": "Permanent uteslutning från spel"
+            },
+            "th": {
+              "n": "กีดกันตนเอง",
+              "d": "ยกเลิกฟีเจอร์การพนันถาวร"
+            },
+            "tr": {
+              "n": "Kendini dışlama",
+              "d": "Kumar özelliklerinden kalıcı çıkış"
+            },
+            "uk": {
+              "n": "Самовиключення",
+              "d": "Назавжди відмовитися від азартних ігор"
+            },
+            "vi": {
+              "n": "Tự loại trừ",
+              "d": "Từ chối vĩnh viễn tính năng cờ bạc"
+            },
+            "zh": {
+              "n": "自我排除",
+              "d": "永久退出赌博功能"
+            }
+          }
+        },
+        {
+          "name": "VPN detection and blocking",
+          "description": "prevent VPN connections. Cascading ban system risks banning innocent users sharing VPN exit nodes",
+          "status": "planned",
+          "i18n": {}
+        },
+        {
+          "name": "Account sharing detection & prevention",
+          "description": "detect concurrent sessions from different devices/IPs/geolocations, impossible travel. Alert admin, force re-auth or lock",
+          "status": "planned",
+          "i18n": {}
+        },
+        {
+          "name": "Inactive account deletion",
+          "description": "automated process to delete accounts inactive for extended period. Needs discussion on retention period, warnings, data handling",
+          "status": "planned",
+          "i18n": {}
+        },
         {
           "name": "Account deletion",
           "description": "GDPR Art.17, Google Play & Apple requirement",
@@ -288,413 +698,9 @@
           }
         },
         {
-          "name": "Age-based segregation",
-          "description": "UK OSA, adults/minors must not interact",
-          "status": "planned",
-          "i18n": {
-            "ar": {
-              "n": "فصل حسب العمر",
-              "d": "مساحات منفصلة للبالغين والقاصرين"
-            },
-            "de": {
-              "n": "Altersbasierte Trennung",
-              "d": "Getrennte Bereiche für Erwachsene und Minderjährige"
-            },
-            "es": {
-              "n": "Separación por edad",
-              "d": "Espacios separados para adultos y menores"
-            },
-            "fr": {
-              "n": "Séparation par âge",
-              "d": "Espaces séparés pour adultes et mineurs"
-            },
-            "hi": {
-              "n": "आयु-आधारित अलगाव",
-              "d": "वयस्कों और नाबालिगों के लिए अलग स्थान"
-            },
-            "id": {
-              "n": "Pemisahan usia",
-              "d": "Ruang terpisah untuk dewasa dan anak"
-            },
-            "it": {
-              "n": "Separazione per età",
-              "d": "Spazi separati per adulti e minori"
-            },
-            "ja": {
-              "n": "年齢別スペース",
-              "d": "大人と未成年者のための別々のスペース"
-            },
-            "ko": {
-              "n": "연령 기반 분리",
-              "d": "성인과 미성년자를 위한 별도 공간"
-            },
-            "nl": {
-              "n": "Leeftijdsscheiding",
-              "d": "Aparte ruimtes voor volwassenen en minderjarigen"
-            },
-            "pl": {
-              "n": "Segregacja wiekowa",
-              "d": "Oddzielne przestrzenie dla dorosłych i nieletnich"
-            },
-            "pt": {
-              "n": "Separação por idade",
-              "d": "Espaços separados para adultos e menores"
-            },
-            "ru": {
-              "n": "Разделение по возрасту",
-              "d": "Отдельные пространства для взрослых и несовершеннолетних"
-            },
-            "sv": {
-              "n": "Åldersbaserad separation",
-              "d": "Separata utrymmen för vuxna och minderåriga"
-            },
-            "th": {
-              "n": "แบ่งตามอายุ",
-              "d": "พื้นที่แยกสำหรับผู้ใหญ่และเยาวชน"
-            },
-            "tr": {
-              "n": "Yaşa göre ayrım",
-              "d": "Yetişkinler ve küçükler için ayrı alanlar"
-            },
-            "uk": {
-              "n": "Розділення за віком",
-              "d": "Окремі простори для дорослих і неповнолітніх"
-            },
-            "vi": {
-              "n": "Phân chia theo tuổi",
-              "d": "Không gian riêng cho người lớn và trẻ em"
-            },
-            "zh": {
-              "n": "年龄分区",
-              "d": "为成人和未成年人提供独立空间"
-            }
-          }
-        },
-        {
-          "name": "Room message reporting",
-          "description": "UK OSA, report mechanism on every UGC screen",
-          "status": "planned",
-          "i18n": {
-            "ar": {
-              "n": "الإبلاغ عن الرسائل",
-              "d": "أبلغ عن رسائل غير لائقة من أي غرفة"
-            },
-            "de": {
-              "n": "Nachrichtenmeldung",
-              "d": "Unangemessene Nachrichten melden"
-            },
-            "es": {
-              "n": "Reportar mensajes",
-              "d": "Reporta mensajes inapropiados de cualquier sala"
-            },
-            "fr": {
-              "n": "Signaler des messages",
-              "d": "Signalez les messages inappropriés"
-            },
-            "hi": {
-              "n": "संदेश रिपोर्ट",
-              "d": "किसी भी कमरे से अनुचित संदेश रिपोर्ट करें"
-            },
-            "id": {
-              "n": "Laporkan pesan",
-              "d": "Laporkan pesan tidak pantas dari ruangan mana pun"
-            },
-            "it": {
-              "n": "Segnala messaggi",
-              "d": "Segnala messaggi inappropriati"
-            },
-            "ja": {
-              "n": "メッセージ通報",
-              "d": "不適切なメッセージを報告"
-            },
-            "ko": {
-              "n": "메시지 신고",
-              "d": "부적절한 메시지 신고"
-            },
-            "nl": {
-              "n": "Berichten melden",
-              "d": "Meld ongepaste berichten"
-            },
-            "pl": {
-              "n": "Zgłaszanie wiadomości",
-              "d": "Zgłoś nieodpowiednie wiadomości"
-            },
-            "pt": {
-              "n": "Denunciar mensagens",
-              "d": "Denuncie mensagens inadequadas"
-            },
-            "ru": {
-              "n": "Жалоба на сообщения",
-              "d": "Пожалуйтесь на неуместные сообщения"
-            },
-            "sv": {
-              "n": "Rapportera meddelanden",
-              "d": "Rapportera olämpliga meddelanden"
-            },
-            "th": {
-              "n": "รายงานข้อความ",
-              "d": "รายงานข้อความที่ไม่เหมาะสม"
-            },
-            "tr": {
-              "n": "Mesaj bildirimi",
-              "d": "Uygunsuz mesajları bildirin"
-            },
-            "uk": {
-              "n": "Скарга на повідомлення",
-              "d": "Повідомте про неприйнятні повідомлення"
-            },
-            "vi": {
-              "n": "Báo cáo tin nhắn",
-              "d": "Báo cáo tin nhắn không phù hợp"
-            },
-            "zh": {
-              "n": "消息举报",
-              "d": "举报不当消息"
-            }
-          }
-        },
-        {
-          "name": "Gambling self-exclusion",
-          "description": "responsible gambling regulation, irreversible opt-out",
-          "status": "planned",
-          "i18n": {
-            "ar": {
-              "n": "الاستبعاد الذاتي",
-              "d": "الانسحاب نهائياً من ميزات القمار"
-            },
-            "de": {
-              "n": "Selbstausschluss",
-              "d": "Dauerhaft von Glücksspielen ausschließen"
-            },
-            "es": {
-              "n": "Autoexclusión",
-              "d": "Excluirse permanentemente de juegos de azar"
-            },
-            "fr": {
-              "n": "Auto-exclusion",
-              "d": "Se retirer définitivement des jeux de hasard"
-            },
-            "hi": {
-              "n": "स्व-बहिष्कार",
-              "d": "जुआ सुविधाओं से स्थायी बहिष्कार"
-            },
-            "id": {
-              "n": "Pengecualian diri",
-              "d": "Keluar permanen dari fitur perjudian"
-            },
-            "it": {
-              "n": "Autoesclusione",
-              "d": "Escludersi permanentemente dal gioco"
-            },
-            "ja": {
-              "n": "自己排除",
-              "d": "ギャンブル機能から永久除外"
-            },
-            "ko": {
-              "n": "자체 제외",
-              "d": "도박 기능에서 영구 제외"
-            },
-            "nl": {
-              "n": "Zelfuitsluiting",
-              "d": "Permanent uitsluiten van gokken"
-            },
-            "pl": {
-              "n": "Samowykluczenie",
-              "d": "Trwała rezygnacja z hazardu"
-            },
-            "pt": {
-              "n": "Autoexclusão",
-              "d": "Excluir-se permanentemente de apostas"
-            },
-            "ru": {
-              "n": "Самоисключение",
-              "d": "Навсегда отказаться от азартных игр"
-            },
-            "sv": {
-              "n": "Självavstängning",
-              "d": "Permanent uteslutning från spel"
-            },
-            "th": {
-              "n": "กีดกันตนเอง",
-              "d": "ยกเลิกฟีเจอร์การพนันถาวร"
-            },
-            "tr": {
-              "n": "Kendini dışlama",
-              "d": "Kumar özelliklerinden kalıcı çıkış"
-            },
-            "uk": {
-              "n": "Самовиключення",
-              "d": "Назавжди відмовитися від азартних ігор"
-            },
-            "vi": {
-              "n": "Tự loại trừ",
-              "d": "Từ chối vĩnh viễn tính năng cờ bạc"
-            },
-            "zh": {
-              "n": "自我排除",
-              "d": "永久退出赌博功能"
-            }
-          }
-        },
-        {
-          "name": "Privacy policy rewrite",
-          "description": "GDPR, missing data controller, lawful basis, DPO, children's section",
-          "status": "planned",
-          "i18n": {
-            "ar": {
-              "n": "سياسة الخصوصية",
-              "d": "سياسة خصوصية محدثة وشاملة"
-            },
-            "de": {
-              "n": "Datenschutzrichtlinie",
-              "d": "Aktualisierte Datenschutzrichtlinie"
-            },
-            "es": {
-              "n": "Política de privacidad",
-              "d": "Política de privacidad actualizada"
-            },
-            "fr": {
-              "n": "Politique de confidentialité",
-              "d": "Politique de confidentialité mise à jour"
-            },
-            "hi": {
-              "n": "गोपनीयता नीति",
-              "d": "अद्यतन गोपनीयता नीति"
-            },
-            "id": {
-              "n": "Kebijakan privasi",
-              "d": "Kebijakan privasi yang diperbarui"
-            },
-            "it": {
-              "n": "Privacy policy",
-              "d": "Privacy policy aggiornata"
-            },
-            "ja": {
-              "n": "プライバシーポリシー",
-              "d": "更新されたプライバシーポリシー"
-            },
-            "ko": {
-              "n": "개인정보 처리방침",
-              "d": "업데이트된 개인정보 처리방침"
-            },
-            "nl": {
-              "n": "Privacybeleid",
-              "d": "Bijgewerkt privacybeleid"
-            },
-            "pl": {
-              "n": "Polityka prywatności",
-              "d": "Zaktualizowana polityka prywatności"
-            },
-            "pt": {
-              "n": "Política de privacidade",
-              "d": "Política de privacidade atualizada"
-            },
-            "ru": {
-              "n": "Конфиденциальность",
-              "d": "Обновлённая политика конфиденциальности"
-            },
-            "sv": {
-              "n": "Integritetspolicy",
-              "d": "Uppdaterad integritetspolicy"
-            },
-            "th": {
-              "n": "นโยบายความเป็นส่วนตัว",
-              "d": "นโยบายความเป็นส่วนตัวที่อัปเดต"
-            },
-            "tr": {
-              "n": "Gizlilik politikası",
-              "d": "Güncellenmiş gizlilik politikası"
-            },
-            "uk": {
-              "n": "Конфіденційність",
-              "d": "Оновлена політика конфіденційності"
-            },
-            "vi": {
-              "n": "Chính sách riêng tư",
-              "d": "Chính sách quyền riêng tư cập nhật"
-            },
-            "zh": {
-              "n": "隐私政策",
-              "d": "更新的隐私政策"
-            }
-          }
-        },
-        {
-          "name": "Inactive account deletion",
-          "description": "automated process to delete accounts inactive for extended period. Needs discussion on retention period, warnings, data handling",
-          "status": "planned",
-          "i18n": {}
-        },
-        {
-          "name": "VPN detection and blocking",
-          "description": "prevent VPN connections. Cascading ban system risks banning innocent users sharing VPN exit nodes",
-          "status": "planned",
-          "i18n": {}
-        },
-        {
-          "name": "Account sharing detection & prevention",
-          "description": "detect concurrent sessions from different devices/IPs/geolocations, impossible travel. Alert admin, force re-auth or lock",
-          "status": "planned",
-          "i18n": {}
-        },
-        {
-          "name": "Automated content moderation",
-          "description": "AI-powered detection: image nudity, voice toxicity (speech-to-text), text profanity. Auto-flag or auto-action based on severity",
-          "status": "planned",
-          "i18n": {}
-        },
-        {
-          "name": "EU DSA transparency reporting + designated point-of-contact",
-          "description": "annual transparency report on moderation actions; named EU point-of-contact published on the website",
-          "status": "planned",
-          "i18n": {}
-        },
-        {
           "name": "CCPA \"Do Not Sell My Personal Information\" link",
           "description": "required on all pages for CA users. Even though we don't sell, the link is mandatory for compliance",
           "status": "done",
-          "i18n": {}
-        },
-        {
-          "name": "Granular consent mechanism",
-          "description": "separate opt-ins per processing purpose (analytics, marketing, etc.) instead of single blanket accept",
-          "status": "planned",
-          "i18n": {}
-        },
-        {
-          "name": "Consent withdrawal mechanism",
-          "description": "users can revoke each previously-granted consent at any time, persisted server-side",
-          "status": "planned",
-          "i18n": {}
-        },
-        {
-          "name": "Defined retention periods + UI surfacing",
-          "description": "publish per-data-type retention windows in the privacy policy + show users in-app",
-          "status": "planned",
-          "i18n": {}
-        },
-        {
-          "name": "Data-breach notification process",
-          "description": "defined runbook + 72-hour notification template + user-facing in-app banner mechanism for triggered breaches",
-          "status": "planned",
-          "i18n": {}
-        },
-        {
-          "name": "Gift-blocked-but-profile-viewable gap",
-          "description": "block-list integrity bug: blocked user can still view profile + see public gifts even though they can't send",
-          "status": "planned",
-          "i18n": {}
-        },
-        {
-          "name": "Age-gating per feature",
-          "description": "separate age gates for voice rooms / gifting / DMs-with-strangers. Currently single 13+ gate at signup; needs per-feature age sensitivity",
-          "status": "planned",
-          "i18n": {}
-        },
-        {
-          "name": "Voice content reporting",
-          "description": "reporting mechanism for live voice content (record-on-report, server-side review). UK OSA + Apple guidelines",
-          "status": "planned",
           "i18n": {}
         }
       ]
@@ -724,10 +730,111 @@
       },
       "status": "in-progress",
       "progress": {
-        "done": 12,
+        "done": 13,
         "total": 17
       },
       "features": [
+        {
+          "name": "Billing v7→v8",
+          "description": "Google Play Billing major version, deprecation deadline",
+          "status": "in-progress",
+          "i18n": {
+            "ar": {
+              "n": "ترقية الفواتير",
+              "d": "عمليات شراء أكثر سلاسة"
+            },
+            "de": {
+              "n": "Billing-Upgrade",
+              "d": "Reibungslosere Käufe"
+            },
+            "es": {
+              "n": "Actualización de pagos",
+              "d": "Compras más fluidas"
+            },
+            "fr": {
+              "n": "Mise à jour paiements",
+              "d": "Achats plus fluides"
+            },
+            "hi": {
+              "n": "बिलिंग अपग्रेड",
+              "d": "आसान खरीदारी"
+            },
+            "id": {
+              "n": "Upgrade billing",
+              "d": "Pembelian lebih lancar"
+            },
+            "it": {
+              "n": "Aggiornamento billing",
+              "d": "Acquisti più fluidi"
+            },
+            "ja": {
+              "n": "課金アップグレード",
+              "d": "よりスムーズな購入"
+            },
+            "ko": {
+              "n": "결제 업그레이드",
+              "d": "더 원활한 구매"
+            },
+            "nl": {
+              "n": "Billing-upgrade",
+              "d": "Soepelere aankopen"
+            },
+            "pl": {
+              "n": "Aktualizacja płatności",
+              "d": "Płynniejsze zakupy"
+            },
+            "pt": {
+              "n": "Atualização de pagamento",
+              "d": "Compras mais suaves"
+            },
+            "ru": {
+              "n": "Обновление оплаты",
+              "d": "Более плавные покупки"
+            },
+            "sv": {
+              "n": "Betalningsuppgradering",
+              "d": "Smidigare köp"
+            },
+            "th": {
+              "n": "อัปเกรดการชำระเงิน",
+              "d": "การซื้อที่ราบรื่นขึ้น"
+            },
+            "tr": {
+              "n": "Ödeme yükseltme",
+              "d": "Daha akıcı satın alma"
+            },
+            "uk": {
+              "n": "Оновлення оплати",
+              "d": "Зручніші покупки"
+            },
+            "vi": {
+              "n": "Nâng cấp thanh toán",
+              "d": "Mua hàng mượt mà hơn"
+            },
+            "zh": {
+              "n": "支付升级",
+              "d": "更流畅的购买体验"
+            }
+          }
+        },
+        {
+          "name": "`resolveReport` partial-failure flag surfacing",
+          "description": "admin UI must show per-sub-action failures (`warning.failed`, `suspension.failed`, `auditLog.failed`, `pms.failed`, `cascade`) currently swallowed by `Resource<Unit>`. Mostly DONE for admin-bans / economy / devices / warn / backpack PMs (PRs #385, #392, #393). Remaining: re-audit `resolveReport` itself + `reportMessage` / `reportUser` paths and any iOS admin surface when added",
+          "status": "in-progress",
+          "i18n": {}
+        },
+        {
+          "name": "iOS StoreKit billing integration",
+          "description": "mirrors Android Billing v8. Full 4-step plan at `.project/plans/2026-04-30-ios-storekit-blocker.md`",
+          "status": "planned",
+          "i18n": {}
+        },
+        {
+          "name": "iOS dev sign-in multi-account picker",
+          "description": "Phase 4 simplified iOS to single-account dev sign-in (parity with Android). Restoring the picker on both platforms requires `BuildVariant.localDevEmails: List<String>`. Defer pending UX decision",
+          "status": "planned",
+          "i18n": {}
+        },
         {
           "name": "iOS build fix",
           "description": "K/N AutoboxingTransformer crash blocking iOS linking; resolved by upgrading to Kotlin 2.4.0-Beta2 + static frameworks + Koin init fix",
@@ -862,25 +969,13 @@
         {
           "name": "iOS `deviceId` expect/actual via `UIDevice.identifierForVendor`",
           "description": "replace `\"ios-device-placeholder\"` in `IosSmallRepositories.kt`",
-          "status": "planned",
-          "i18n": {}
-        },
-        {
-          "name": "iOS StoreKit billing integration",
-          "description": "mirrors Android Billing v8. Full 4-step plan at `.project/plans/2026-04-30-ios-storekit-blocker.md`",
-          "status": "planned",
+          "status": "done",
           "i18n": {}
         },
         {
           "name": "Apple Sign-In Android typed cancellation exception",
           "description": "replace English-literal cancel detection in `AuthRepositoryImpl.signInWithAppleViaProvider` with a typed exception (Phase 4 follow-up)",
           "status": "done",
-          "i18n": {}
-        },
-        {
-          "name": "`resolveReport` partial-failure flag surfacing",
-          "description": "admin UI must show per-sub-action failures (`warning.failed`, `suspension.failed`, `auditLog.failed`, `pms.failed`, `cascade`) currently swallowed by `Resource<Unit>`. Mostly DONE for admin-bans / economy / devices / warn / backpack PMs (PRs #385, #392, #393). Remaining: re-audit `resolveReport` itself + `reportMessage` / `reportUser` paths and any iOS admin surface when added",
-          "status": "in-progress",
           "i18n": {}
         },
         {
@@ -894,95 +989,6 @@
           "description": "currently rendered with placeholder `WEB_CLIENT_ID = \"placeholder-local\"`; tap fails with cryptic Google framework error. Hide on local flavour or set empty + treat as unavailable",
           "status": "done",
           "i18n": {}
-        },
-        {
-          "name": "iOS dev sign-in multi-account picker",
-          "description": "Phase 4 simplified iOS to single-account dev sign-in (parity with Android). Restoring the picker on both platforms requires `BuildVariant.localDevEmails: List<String>`. Defer pending UX decision",
-          "status": "planned",
-          "i18n": {}
-        },
-        {
-          "name": "Billing v7→v8",
-          "description": "Google Play Billing major version, deprecation deadline",
-          "status": "in-progress",
-          "i18n": {
-            "ar": {
-              "n": "ترقية الفواتير",
-              "d": "عمليات شراء أكثر سلاسة"
-            },
-            "de": {
-              "n": "Billing-Upgrade",
-              "d": "Reibungslosere Käufe"
-            },
-            "es": {
-              "n": "Actualización de pagos",
-              "d": "Compras más fluidas"
-            },
-            "fr": {
-              "n": "Mise à jour paiements",
-              "d": "Achats plus fluides"
-            },
-            "hi": {
-              "n": "बिलिंग अपग्रेड",
-              "d": "आसान खरीदारी"
-            },
-            "id": {
-              "n": "Upgrade billing",
-              "d": "Pembelian lebih lancar"
-            },
-            "it": {
-              "n": "Aggiornamento billing",
-              "d": "Acquisti più fluidi"
-            },
-            "ja": {
-              "n": "課金アップグレード",
-              "d": "よりスムーズな購入"
-            },
-            "ko": {
-              "n": "결제 업그레이드",
-              "d": "더 원활한 구매"
-            },
-            "nl": {
-              "n": "Billing-upgrade",
-              "d": "Soepelere aankopen"
-            },
-            "pl": {
-              "n": "Aktualizacja płatności",
-              "d": "Płynniejsze zakupy"
-            },
-            "pt": {
-              "n": "Atualização de pagamento",
-              "d": "Compras mais suaves"
-            },
-            "ru": {
-              "n": "Обновление оплаты",
-              "d": "Более плавные покупки"
-            },
-            "sv": {
-              "n": "Betalningsuppgradering",
-              "d": "Smidigare köp"
-            },
-            "th": {
-              "n": "อัปเกรดการชำระเงิน",
-              "d": "การซื้อที่ราบรื่นขึ้น"
-            },
-            "tr": {
-              "n": "Ödeme yükseltme",
-              "d": "Daha akıcı satın alma"
-            },
-            "uk": {
-              "n": "Оновлення оплати",
-              "d": "Зручніші покупки"
-            },
-            "vi": {
-              "n": "Nâng cấp thanh toán",
-              "d": "Mua hàng mượt mà hơn"
-            },
-            "zh": {
-              "n": "支付升级",
-              "d": "更流畅的购买体验"
-            }
-          }
         }
       ]
     },
@@ -1016,85 +1022,85 @@
       },
       "features": [
         {
-          "name": "Nobility system",
-          "description": "ranks from gift value sent, perks per rank",
+          "name": "Decorations",
+          "description": "profile decorations, avatar borders, speech bubbles, entrance effects, room backgrounds",
           "status": "planned",
           "i18n": {
             "ar": {
-              "n": "نظام النبلاء",
-              "d": "احصل على رتب من الإهداء واحصل على امتيازات"
+              "n": "الزخارف",
+              "d": "إطارات الملف الشخصي وفقاعات الكلام وتأثيرات الدخول"
             },
             "de": {
-              "n": "Adelsystem",
-              "d": "Ränge durch Schenken verdienen, Vorteile freischalten"
+              "n": "Dekorationen",
+              "d": "Profilrahmen, Sprechblasen, Eingangseffekte"
             },
             "es": {
-              "n": "Sistema de nobleza",
-              "d": "Gana rangos al regalar, desbloquea beneficios"
+              "n": "Decoraciones",
+              "d": "Marcos de perfil, burbujas de chat, efectos de entrada"
             },
             "fr": {
-              "n": "Système de noblesse",
-              "d": "Gagnez des rangs en offrant, débloquez des avantages"
+              "n": "Décorations",
+              "d": "Cadres de profil, bulles de chat, effets d'entrée"
             },
             "hi": {
-              "n": "कुलीनता प्रणाली",
-              "d": "उपहार देकर रैंक अर्जित करें, लाभ अनलॉक करें"
+              "n": "सजावट",
+              "d": "प्रोफ़ाइल बॉर्डर, स्पीच बबल, प्रवेश प्रभाव"
             },
             "id": {
-              "n": "Sistem bangsawan",
-              "d": "Dapatkan peringkat dari memberi hadiah, buka keuntungan"
+              "n": "Dekorasi",
+              "d": "Bingkai profil, gelembung chat, efek masuk"
             },
             "it": {
-              "n": "Sistema nobiltà",
-              "d": "Guadagna ranghi regalando, sblocca vantaggi"
+              "n": "Decorazioni",
+              "d": "Cornici profilo, fumetti, effetti ingresso"
             },
             "ja": {
-              "n": "貴族システム",
-              "d": "ギフトでランクを獲得し、特典をアンロック"
+              "n": "デコレーション",
+              "d": "プロフィール枠、吹き出し、入室エフェクト"
             },
             "ko": {
-              "n": "귀족 시스템",
-              "d": "선물로 등급을 얻고 혜택 잠금 해제"
+              "n": "장식",
+              "d": "프로필 테두리, 말풍선, 입장 효과"
             },
             "nl": {
-              "n": "Adelsysteem",
-              "d": "Verdien rangen door te schenken, ontgrendel voordelen"
+              "n": "Decoraties",
+              "d": "Profielkaders, tekstballonnen, entree-effecten"
             },
             "pl": {
-              "n": "System szlachecki",
-              "d": "Zdobywaj rangi przez prezenty, odblokowuj korzyści"
+              "n": "Dekoracje",
+              "d": "Ramki profilu, dymki, efekty wejścia"
             },
             "pt": {
-              "n": "Sistema de nobreza",
-              "d": "Ganhe patentes presenteando, desbloqueie vantagens"
+              "n": "Decorações",
+              "d": "Molduras de perfil, balões de fala, efeitos de entrada"
             },
             "ru": {
-              "n": "Система знати",
-              "d": "Получайте ранги за подарки, открывайте привилегии"
+              "n": "Украшения",
+              "d": "Рамки профиля, пузыри речи, эффекты входа"
             },
             "sv": {
-              "n": "Adelssystem",
-              "d": "Tjäna rang genom gåvor, lås upp förmåner"
+              "n": "Dekorationer",
+              "d": "Profilramar, pratbubblor, entréeffekter"
             },
             "th": {
-              "n": "ระบบขุนนาง",
-              "d": "รับยศจากการให้ของขวัญ ปลดล็อคสิทธิพิเศษ"
+              "n": "ตกแต่ง",
+              "d": "กรอบโปรไฟล์ กรอบข้อความ เอฟเฟกต์เข้าห้อง"
             },
             "tr": {
-              "n": "Asalet sistemi",
-              "d": "Hediye vererek rütbe kazanın, ayrıcalıklar açın"
+              "n": "Dekorasyonlar",
+              "d": "Profil çerçeveleri, konuşma balonları, giriş efektleri"
             },
             "uk": {
-              "n": "Система знаті",
-              "d": "Отримуйте ранги за подарунки, відкривайте привілеї"
+              "n": "Декорації",
+              "d": "Рамки профілю, бульбашки мови, ефекти входу"
             },
             "vi": {
-              "n": "Hệ thống quý tộc",
-              "d": "Nhận cấp bậc từ tặng quà, mở khóa đặc quyền"
+              "n": "Trang trí",
+              "d": "Khung hồ sơ, bong bóng chat, hiệu ứng vào phòng"
             },
             "zh": {
-              "n": "贵族系统",
-              "d": "通过送礼获得等级，解锁特权"
+              "n": "装饰",
+              "d": "头像边框、聊天气泡、入场特效"
             }
           }
         },
@@ -1182,85 +1188,85 @@
           }
         },
         {
-          "name": "Decorations",
-          "description": "profile decorations, avatar borders, speech bubbles, entrance effects, room backgrounds",
+          "name": "Nobility system",
+          "description": "ranks from gift value sent, perks per rank",
           "status": "planned",
           "i18n": {
             "ar": {
-              "n": "الزخارف",
-              "d": "إطارات الملف الشخصي وفقاعات الكلام وتأثيرات الدخول"
+              "n": "نظام النبلاء",
+              "d": "احصل على رتب من الإهداء واحصل على امتيازات"
             },
             "de": {
-              "n": "Dekorationen",
-              "d": "Profilrahmen, Sprechblasen, Eingangseffekte"
+              "n": "Adelsystem",
+              "d": "Ränge durch Schenken verdienen, Vorteile freischalten"
             },
             "es": {
-              "n": "Decoraciones",
-              "d": "Marcos de perfil, burbujas de chat, efectos de entrada"
+              "n": "Sistema de nobleza",
+              "d": "Gana rangos al regalar, desbloquea beneficios"
             },
             "fr": {
-              "n": "Décorations",
-              "d": "Cadres de profil, bulles de chat, effets d'entrée"
+              "n": "Système de noblesse",
+              "d": "Gagnez des rangs en offrant, débloquez des avantages"
             },
             "hi": {
-              "n": "सजावट",
-              "d": "प्रोफ़ाइल बॉर्डर, स्पीच बबल, प्रवेश प्रभाव"
+              "n": "कुलीनता प्रणाली",
+              "d": "उपहार देकर रैंक अर्जित करें, लाभ अनलॉक करें"
             },
             "id": {
-              "n": "Dekorasi",
-              "d": "Bingkai profil, gelembung chat, efek masuk"
+              "n": "Sistem bangsawan",
+              "d": "Dapatkan peringkat dari memberi hadiah, buka keuntungan"
             },
             "it": {
-              "n": "Decorazioni",
-              "d": "Cornici profilo, fumetti, effetti ingresso"
+              "n": "Sistema nobiltà",
+              "d": "Guadagna ranghi regalando, sblocca vantaggi"
             },
             "ja": {
-              "n": "デコレーション",
-              "d": "プロフィール枠、吹き出し、入室エフェクト"
+              "n": "貴族システム",
+              "d": "ギフトでランクを獲得し、特典をアンロック"
             },
             "ko": {
-              "n": "장식",
-              "d": "프로필 테두리, 말풍선, 입장 효과"
+              "n": "귀족 시스템",
+              "d": "선물로 등급을 얻고 혜택 잠금 해제"
             },
             "nl": {
-              "n": "Decoraties",
-              "d": "Profielkaders, tekstballonnen, entree-effecten"
+              "n": "Adelsysteem",
+              "d": "Verdien rangen door te schenken, ontgrendel voordelen"
             },
             "pl": {
-              "n": "Dekoracje",
-              "d": "Ramki profilu, dymki, efekty wejścia"
+              "n": "System szlachecki",
+              "d": "Zdobywaj rangi przez prezenty, odblokowuj korzyści"
             },
             "pt": {
-              "n": "Decorações",
-              "d": "Molduras de perfil, balões de fala, efeitos de entrada"
+              "n": "Sistema de nobreza",
+              "d": "Ganhe patentes presenteando, desbloqueie vantagens"
             },
             "ru": {
-              "n": "Украшения",
-              "d": "Рамки профиля, пузыри речи, эффекты входа"
+              "n": "Система знати",
+              "d": "Получайте ранги за подарки, открывайте привилегии"
             },
             "sv": {
-              "n": "Dekorationer",
-              "d": "Profilramar, pratbubblor, entréeffekter"
+              "n": "Adelssystem",
+              "d": "Tjäna rang genom gåvor, lås upp förmåner"
             },
             "th": {
-              "n": "ตกแต่ง",
-              "d": "กรอบโปรไฟล์ กรอบข้อความ เอฟเฟกต์เข้าห้อง"
+              "n": "ระบบขุนนาง",
+              "d": "รับยศจากการให้ของขวัญ ปลดล็อคสิทธิพิเศษ"
             },
             "tr": {
-              "n": "Dekorasyonlar",
-              "d": "Profil çerçeveleri, konuşma balonları, giriş efektleri"
+              "n": "Asalet sistemi",
+              "d": "Hediye vererek rütbe kazanın, ayrıcalıklar açın"
             },
             "uk": {
-              "n": "Декорації",
-              "d": "Рамки профілю, бульбашки мови, ефекти входу"
+              "n": "Система знаті",
+              "d": "Отримуйте ранги за подарунки, відкривайте привілеї"
             },
             "vi": {
-              "n": "Trang trí",
-              "d": "Khung hồ sơ, bong bóng chat, hiệu ứng vào phòng"
+              "n": "Hệ thống quý tộc",
+              "d": "Nhận cấp bậc từ tặng quà, mở khóa đặc quyền"
             },
             "zh": {
-              "n": "装饰",
-              "d": "头像边框、聊天气泡、入场特效"
+              "n": "贵族系统",
+              "d": "通过送礼获得等级，解锁特权"
             }
           }
         }
@@ -1295,89 +1301,6 @@
         "total": 7
       },
       "features": [
-        {
-          "name": "Posts & Stories",
-          "description": "social feed + ephemeral stories",
-          "status": "planned",
-          "i18n": {
-            "ar": {
-              "n": "المنشورات والقصص",
-              "d": "تغذية اجتماعية وقصص مؤقتة"
-            },
-            "de": {
-              "n": "Beiträge & Stories",
-              "d": "Social Feed und vergängliche Stories"
-            },
-            "es": {
-              "n": "Publicaciones e historias",
-              "d": "Feed social e historias efímeras"
-            },
-            "fr": {
-              "n": "Publications et stories",
-              "d": "Fil social et stories éphémères"
-            },
-            "hi": {
-              "n": "पोस्ट और स्टोरीज",
-              "d": "सोशल फीड और अस्थायी स्टोरीज"
-            },
-            "id": {
-              "n": "Postingan & Cerita",
-              "d": "Feed sosial dan cerita sementara"
-            },
-            "it": {
-              "n": "Post e storie",
-              "d": "Feed social e storie effimere"
-            },
-            "ja": {
-              "n": "投稿とストーリー",
-              "d": "ソーシャルフィードと一時的なストーリー"
-            },
-            "ko": {
-              "n": "게시물 및 스토리",
-              "d": "소셜 피드와 임시 스토리"
-            },
-            "nl": {
-              "n": "Posts & verhalen",
-              "d": "Social feed en vergankelijke verhalen"
-            },
-            "pl": {
-              "n": "Posty i relacje",
-              "d": "Feed społecznościowy i efemeryczne relacje"
-            },
-            "pt": {
-              "n": "Publicações e stories",
-              "d": "Feed social e stories temporárias"
-            },
-            "ru": {
-              "n": "Посты и истории",
-              "d": "Социальная лента и временные истории"
-            },
-            "sv": {
-              "n": "Inlägg & stories",
-              "d": "Socialt flöde och flyktiga stories"
-            },
-            "th": {
-              "n": "โพสต์และสตอรี่",
-              "d": "ฟีดโซเชียลและสตอรี่ชั่วคราว"
-            },
-            "tr": {
-              "n": "Gönderiler ve hikayeler",
-              "d": "Sosyal akış ve geçici hikayeler"
-            },
-            "uk": {
-              "n": "Пости та історії",
-              "d": "Соціальна стрічка та тимчасові історії"
-            },
-            "vi": {
-              "n": "Bài đăng và tin",
-              "d": "Bảng tin xã hội và tin tạm thời"
-            },
-            "zh": {
-              "n": "帖子和动态",
-              "d": "社交动态和限时故事"
-            }
-          }
-        },
         {
           "name": "User search",
           "description": "discovery of met/unmet users, advanced filters behind SuperShy",
@@ -1458,172 +1381,6 @@
             "zh": {
               "n": "搜索用户",
               "d": "通过高级筛选发现用户"
-            }
-          }
-        },
-        {
-          "name": "Leaderboards",
-          "description": "multiple categories, daily/weekly/monthly/all-time",
-          "status": "planned",
-          "i18n": {
-            "ar": {
-              "n": "لوحات المتصدرين",
-              "d": "تصنيفات يومية وأسبوعية وشهرية"
-            },
-            "de": {
-              "n": "Bestenlisten",
-              "d": "Tägliche, wöchentliche, monatliche Rankings"
-            },
-            "es": {
-              "n": "Tablas de clasificación",
-              "d": "Rankings diarios, semanales y mensuales"
-            },
-            "fr": {
-              "n": "Classements",
-              "d": "Classements quotidiens, hebdomadaires, mensuels"
-            },
-            "hi": {
-              "n": "लीडरबोर्ड",
-              "d": "दैनिक, साप्ताहिक, मासिक रैंकिंग"
-            },
-            "id": {
-              "n": "Papan peringkat",
-              "d": "Peringkat harian, mingguan, bulanan"
-            },
-            "it": {
-              "n": "Classifiche",
-              "d": "Classifiche giornaliere, settimanali, mensili"
-            },
-            "ja": {
-              "n": "リーダーボード",
-              "d": "日次、週次、月次ランキング"
-            },
-            "ko": {
-              "n": "리더보드",
-              "d": "일별, 주별, 월별 순위"
-            },
-            "nl": {
-              "n": "Ranglijsten",
-              "d": "Dagelijkse, wekelijkse, maandelijkse rankings"
-            },
-            "pl": {
-              "n": "Rankingi",
-              "d": "Dzienne, tygodniowe, miesięczne rankingi"
-            },
-            "pt": {
-              "n": "Classificações",
-              "d": "Rankings diários, semanais e mensais"
-            },
-            "ru": {
-              "n": "Рейтинги",
-              "d": "Ежедневные, еженедельные, ежемесячные рейтинги"
-            },
-            "sv": {
-              "n": "Topplistor",
-              "d": "Dagliga, veckovisa, månatliga rankingar"
-            },
-            "th": {
-              "n": "กระดานผู้นำ",
-              "d": "อันดับรายวัน รายสัปดาห์ รายเดือน"
-            },
-            "tr": {
-              "n": "Sıralamalar",
-              "d": "Günlük, haftalık, aylık sıralamalar"
-            },
-            "uk": {
-              "n": "Рейтинги",
-              "d": "Щоденні, щотижневі, щомісячні рейтинги"
-            },
-            "vi": {
-              "n": "Bảng xếp hạng",
-              "d": "Xếp hạng hàng ngày, hàng tuần, hàng tháng"
-            },
-            "zh": {
-              "n": "排行榜",
-              "d": "每日、每周、每月排名"
-            }
-          }
-        },
-        {
-          "name": "Hall of Fame",
-          "description": "weekly & monthly top-up leaderboards",
-          "status": "planned",
-          "i18n": {
-            "ar": {
-              "n": "قاعة الشهرة",
-              "d": "لوحات متصدري الشحن الأسبوعي والشهري"
-            },
-            "de": {
-              "n": "Ruhmeshalle",
-              "d": "Wöchentliche und monatliche Top-Auflade-Bestenlisten"
-            },
-            "es": {
-              "n": "Salón de la fama",
-              "d": "Rankings semanales y mensuales de recarga"
-            },
-            "fr": {
-              "n": "Temple de la renommée",
-              "d": "Classements de recharge hebdomadaires et mensuels"
-            },
-            "hi": {
-              "n": "हॉल ऑफ फेम",
-              "d": "साप्ताहिक और मासिक टॉप-अप लीडरबोर्ड"
-            },
-            "id": {
-              "n": "Hall of Fame",
-              "d": "Papan peringkat top-up mingguan dan bulanan"
-            },
-            "it": {
-              "n": "Hall of Fame",
-              "d": "Classifiche ricarica settimanali e mensili"
-            },
-            "ja": {
-              "n": "殿堂",
-              "d": "週間・月間チャージランキング"
-            },
-            "ko": {
-              "n": "명예의 전당",
-              "d": "주간 및 월간 충전 순위"
-            },
-            "nl": {
-              "n": "Hall of Fame",
-              "d": "Wekelijkse en maandelijkse opwaardeerranglijsten"
-            },
-            "pl": {
-              "n": "Galeria sławy",
-              "d": "Tygodniowe i miesięczne rankingi doładowań"
-            },
-            "pt": {
-              "n": "Hall da fama",
-              "d": "Rankings semanais e mensais de recarga"
-            },
-            "ru": {
-              "n": "Зал славы",
-              "d": "Еженедельные и ежемесячные рейтинги пополнения"
-            },
-            "sv": {
-              "n": "Hall of Fame",
-              "d": "Veckovisa och månatliga topplistor"
-            },
-            "th": {
-              "n": "หอเกียรติยศ",
-              "d": "อันดับเติมเงินรายสัปดาห์และรายเดือน"
-            },
-            "tr": {
-              "n": "Şöhret salonu",
-              "d": "Haftalık ve aylık yükleme sıralamaları"
-            },
-            "uk": {
-              "n": "Зала слави",
-              "d": "Щотижневі та щомісячні рейтинги поповнення"
-            },
-            "vi": {
-              "n": "Đại sảnh danh vọng",
-              "d": "Bảng xếp hạng nạp tiền hàng tuần và hàng tháng"
-            },
-            "zh": {
-              "n": "名人堂",
-              "d": "每周和每月充值排行榜"
             }
           }
         },
@@ -1711,6 +1468,172 @@
           }
         },
         {
+          "name": "Hall of Fame",
+          "description": "weekly & monthly top-up leaderboards",
+          "status": "planned",
+          "i18n": {
+            "ar": {
+              "n": "قاعة الشهرة",
+              "d": "لوحات متصدري الشحن الأسبوعي والشهري"
+            },
+            "de": {
+              "n": "Ruhmeshalle",
+              "d": "Wöchentliche und monatliche Top-Auflade-Bestenlisten"
+            },
+            "es": {
+              "n": "Salón de la fama",
+              "d": "Rankings semanales y mensuales de recarga"
+            },
+            "fr": {
+              "n": "Temple de la renommée",
+              "d": "Classements de recharge hebdomadaires et mensuels"
+            },
+            "hi": {
+              "n": "हॉल ऑफ फेम",
+              "d": "साप्ताहिक और मासिक टॉप-अप लीडरबोर्ड"
+            },
+            "id": {
+              "n": "Hall of Fame",
+              "d": "Papan peringkat top-up mingguan dan bulanan"
+            },
+            "it": {
+              "n": "Hall of Fame",
+              "d": "Classifiche ricarica settimanali e mensili"
+            },
+            "ja": {
+              "n": "殿堂",
+              "d": "週間・月間チャージランキング"
+            },
+            "ko": {
+              "n": "명예의 전당",
+              "d": "주간 및 월간 충전 순위"
+            },
+            "nl": {
+              "n": "Hall of Fame",
+              "d": "Wekelijkse en maandelijkse opwaardeerranglijsten"
+            },
+            "pl": {
+              "n": "Galeria sławy",
+              "d": "Tygodniowe i miesięczne rankingi doładowań"
+            },
+            "pt": {
+              "n": "Hall da fama",
+              "d": "Rankings semanais e mensais de recarga"
+            },
+            "ru": {
+              "n": "Зал славы",
+              "d": "Еженедельные и ежемесячные рейтинги пополнения"
+            },
+            "sv": {
+              "n": "Hall of Fame",
+              "d": "Veckovisa och månatliga topplistor"
+            },
+            "th": {
+              "n": "หอเกียรติยศ",
+              "d": "อันดับเติมเงินรายสัปดาห์และรายเดือน"
+            },
+            "tr": {
+              "n": "Şöhret salonu",
+              "d": "Haftalık ve aylık yükleme sıralamaları"
+            },
+            "uk": {
+              "n": "Зала слави",
+              "d": "Щотижневі та щомісячні рейтинги поповнення"
+            },
+            "vi": {
+              "n": "Đại sảnh danh vọng",
+              "d": "Bảng xếp hạng nạp tiền hàng tuần và hàng tháng"
+            },
+            "zh": {
+              "n": "名人堂",
+              "d": "每周和每月充值排行榜"
+            }
+          }
+        },
+        {
+          "name": "Leaderboards",
+          "description": "multiple categories, daily/weekly/monthly/all-time",
+          "status": "planned",
+          "i18n": {
+            "ar": {
+              "n": "لوحات المتصدرين",
+              "d": "تصنيفات يومية وأسبوعية وشهرية"
+            },
+            "de": {
+              "n": "Bestenlisten",
+              "d": "Tägliche, wöchentliche, monatliche Rankings"
+            },
+            "es": {
+              "n": "Tablas de clasificación",
+              "d": "Rankings diarios, semanales y mensuales"
+            },
+            "fr": {
+              "n": "Classements",
+              "d": "Classements quotidiens, hebdomadaires, mensuels"
+            },
+            "hi": {
+              "n": "लीडरबोर्ड",
+              "d": "दैनिक, साप्ताहिक, मासिक रैंकिंग"
+            },
+            "id": {
+              "n": "Papan peringkat",
+              "d": "Peringkat harian, mingguan, bulanan"
+            },
+            "it": {
+              "n": "Classifiche",
+              "d": "Classifiche giornaliere, settimanali, mensili"
+            },
+            "ja": {
+              "n": "リーダーボード",
+              "d": "日次、週次、月次ランキング"
+            },
+            "ko": {
+              "n": "리더보드",
+              "d": "일별, 주별, 월별 순위"
+            },
+            "nl": {
+              "n": "Ranglijsten",
+              "d": "Dagelijkse, wekelijkse, maandelijkse rankings"
+            },
+            "pl": {
+              "n": "Rankingi",
+              "d": "Dzienne, tygodniowe, miesięczne rankingi"
+            },
+            "pt": {
+              "n": "Classificações",
+              "d": "Rankings diários, semanais e mensais"
+            },
+            "ru": {
+              "n": "Рейтинги",
+              "d": "Ежедневные, еженедельные, ежемесячные рейтинги"
+            },
+            "sv": {
+              "n": "Topplistor",
+              "d": "Dagliga, veckovisa, månatliga rankingar"
+            },
+            "th": {
+              "n": "กระดานผู้นำ",
+              "d": "อันดับรายวัน รายสัปดาห์ รายเดือน"
+            },
+            "tr": {
+              "n": "Sıralamalar",
+              "d": "Günlük, haftalık, aylık sıralamalar"
+            },
+            "uk": {
+              "n": "Рейтинги",
+              "d": "Щоденні, щотижневі, щомісячні рейтинги"
+            },
+            "vi": {
+              "n": "Bảng xếp hạng",
+              "d": "Xếp hạng hàng ngày, hàng tuần, hàng tháng"
+            },
+            "zh": {
+              "n": "排行榜",
+              "d": "每日、每周、每月排名"
+            }
+          }
+        },
+        {
           "name": "Gift wall overhaul",
           "description": "leaderboard, history, categories, full customization",
           "status": "planned",
@@ -1790,6 +1713,89 @@
             "zh": {
               "n": "礼物墙改版",
               "d": "排行榜、历史记录、完全自定义"
+            }
+          }
+        },
+        {
+          "name": "Posts & Stories",
+          "description": "social feed + ephemeral stories",
+          "status": "planned",
+          "i18n": {
+            "ar": {
+              "n": "المنشورات والقصص",
+              "d": "تغذية اجتماعية وقصص مؤقتة"
+            },
+            "de": {
+              "n": "Beiträge & Stories",
+              "d": "Social Feed und vergängliche Stories"
+            },
+            "es": {
+              "n": "Publicaciones e historias",
+              "d": "Feed social e historias efímeras"
+            },
+            "fr": {
+              "n": "Publications et stories",
+              "d": "Fil social et stories éphémères"
+            },
+            "hi": {
+              "n": "पोस्ट और स्टोरीज",
+              "d": "सोशल फीड और अस्थायी स्टोरीज"
+            },
+            "id": {
+              "n": "Postingan & Cerita",
+              "d": "Feed sosial dan cerita sementara"
+            },
+            "it": {
+              "n": "Post e storie",
+              "d": "Feed social e storie effimere"
+            },
+            "ja": {
+              "n": "投稿とストーリー",
+              "d": "ソーシャルフィードと一時的なストーリー"
+            },
+            "ko": {
+              "n": "게시물 및 스토리",
+              "d": "소셜 피드와 임시 스토리"
+            },
+            "nl": {
+              "n": "Posts & verhalen",
+              "d": "Social feed en vergankelijke verhalen"
+            },
+            "pl": {
+              "n": "Posty i relacje",
+              "d": "Feed społecznościowy i efemeryczne relacje"
+            },
+            "pt": {
+              "n": "Publicações e stories",
+              "d": "Feed social e stories temporárias"
+            },
+            "ru": {
+              "n": "Посты и истории",
+              "d": "Социальная лента и временные истории"
+            },
+            "sv": {
+              "n": "Inlägg & stories",
+              "d": "Socialt flöde och flyktiga stories"
+            },
+            "th": {
+              "n": "โพสต์และสตอรี่",
+              "d": "ฟีดโซเชียลและสตอรี่ชั่วคราว"
+            },
+            "tr": {
+              "n": "Gönderiler ve hikayeler",
+              "d": "Sosyal akış ve geçici hikayeler"
+            },
+            "uk": {
+              "n": "Пости та історії",
+              "d": "Соціальна стрічка та тимчасові історії"
+            },
+            "vi": {
+              "n": "Bài đăng và tin",
+              "d": "Bảng tin xã hội và tin tạm thời"
+            },
+            "zh": {
+              "n": "帖子和动态",
+              "d": "社交动态和限时故事"
             }
           }
         },
@@ -1910,6 +1916,101 @@
             "zh": {
               "n": "自动翻译",
               "d": "实时消息翻译"
+            }
+          }
+        },
+        {
+          "name": "App startup redesign",
+          "description": "prevent login screen flash on auto-login (race condition), improve perceived startup time, better loading states",
+          "status": "planned",
+          "i18n": {}
+        },
+        {
+          "name": "Error notification UX redesign",
+          "description": "replace the current red, opaque, blocking error toast with a lighter, transparent, tap-through notification: dark text on a low-alpha (≤0.6) blurred/translucent background, no card chrome, no input interception. Buttons rendered underneath must remain clickable while the notification is visible. Add Compose UI test asserting hit-testing passes through, plus a snapshot test to lock the styling. Deferred from 2026-05-04 bug-triage session",
+          "status": "planned",
+          "i18n": {}
+        },
+        {
+          "name": "Room filters",
+          "description": "filter rooms by language, category, activity",
+          "status": "planned",
+          "i18n": {
+            "ar": {
+              "n": "فلاتر الغرف",
+              "d": "تصفية حسب اللغة والفئة والنشاط"
+            },
+            "de": {
+              "n": "Raumfilter",
+              "d": "Nach Sprache, Kategorie, Aktivität filtern"
+            },
+            "es": {
+              "n": "Filtros de salas",
+              "d": "Filtra por idioma, categoría, actividad"
+            },
+            "fr": {
+              "n": "Filtres de salons",
+              "d": "Filtrer par langue, catégorie, activité"
+            },
+            "hi": {
+              "n": "रूम फ़िल्टर",
+              "d": "भाषा, श्रेणी, गतिविधि से फ़िल्टर करें"
+            },
+            "id": {
+              "n": "Filter ruangan",
+              "d": "Filter berdasarkan bahasa, kategori, aktivitas"
+            },
+            "it": {
+              "n": "Filtri stanze",
+              "d": "Filtra per lingua, categoria, attività"
+            },
+            "ja": {
+              "n": "ルームフィルター",
+              "d": "言語、カテゴリー、アクティビティでフィルター"
+            },
+            "ko": {
+              "n": "방 필터",
+              "d": "언어, 카테고리, 활동별 필터"
+            },
+            "nl": {
+              "n": "Kamerfilters",
+              "d": "Filter op taal, categorie, activiteit"
+            },
+            "pl": {
+              "n": "Filtry pokojów",
+              "d": "Filtruj po języku, kategorii, aktywności"
+            },
+            "pt": {
+              "n": "Filtros de salas",
+              "d": "Filtre por idioma, categoria, atividade"
+            },
+            "ru": {
+              "n": "Фильтры комнат",
+              "d": "Фильтрация по языку, категории, активности"
+            },
+            "sv": {
+              "n": "Rumsfilter",
+              "d": "Filtrera efter språk, kategori, aktivitet"
+            },
+            "th": {
+              "n": "ตัวกรองห้อง",
+              "d": "กรองตามภาษา หมวดหมู่ กิจกรรม"
+            },
+            "tr": {
+              "n": "Oda filtreleri",
+              "d": "Dil, kategori, aktiviteye göre filtrele"
+            },
+            "uk": {
+              "n": "Фільтри кімнат",
+              "d": "Фільтрувати за мовою, категорією, активністю"
+            },
+            "vi": {
+              "n": "Bộ lọc phòng",
+              "d": "Lọc theo ngôn ngữ, danh mục, hoạt động"
+            },
+            "zh": {
+              "n": "房间筛选",
+              "d": "按语言、分类、活动筛选"
             }
           }
         },
@@ -2080,85 +2181,251 @@
           }
         },
         {
-          "name": "Room filters",
-          "description": "filter rooms by language, category, activity",
+          "name": "Report reliability score",
+          "description": "track report accuracy per user",
           "status": "planned",
           "i18n": {
             "ar": {
-              "n": "فلاتر الغرف",
-              "d": "تصفية حسب اللغة والفئة والنشاط"
+              "n": "درجة موثوقية البلاغ",
+              "d": "تتبع دقة بلاغات المستخدم"
             },
             "de": {
-              "n": "Raumfilter",
-              "d": "Nach Sprache, Kategorie, Aktivität filtern"
+              "n": "Meldezuverlässigkeit",
+              "d": "Genauigkeit der Nutzermeldungen verfolgen"
             },
             "es": {
-              "n": "Filtros de salas",
-              "d": "Filtra por idioma, categoría, actividad"
+              "n": "Puntuación de confiabilidad",
+              "d": "Rastrear la precisión de los reportes"
             },
             "fr": {
-              "n": "Filtres de salons",
-              "d": "Filtrer par langue, catégorie, activité"
+              "n": "Score de fiabilité",
+              "d": "Suivre la précision des signalements"
             },
             "hi": {
-              "n": "रूम फ़िल्टर",
-              "d": "भाषा, श्रेणी, गतिविधि से फ़िल्टर करें"
+              "n": "रिपोर्ट विश्वसनीयता स्कोर",
+              "d": "उपयोगकर्ता रिपोर्ट की सटीकता ट्रैक करें"
             },
             "id": {
-              "n": "Filter ruangan",
-              "d": "Filter berdasarkan bahasa, kategori, aktivitas"
+              "n": "Skor keandalan laporan",
+              "d": "Lacak akurasi laporan pengguna"
             },
             "it": {
-              "n": "Filtri stanze",
-              "d": "Filtra per lingua, categoria, attività"
+              "n": "Punteggio affidabilità",
+              "d": "Traccia l'accuratezza delle segnalazioni"
             },
             "ja": {
-              "n": "ルームフィルター",
-              "d": "言語、カテゴリー、アクティビティでフィルター"
+              "n": "通報信頼度スコア",
+              "d": "ユーザー通報の正確性を追跡"
             },
             "ko": {
-              "n": "방 필터",
-              "d": "언어, 카테고리, 활동별 필터"
+              "n": "신고 신뢰도 점수",
+              "d": "사용자 신고의 정확도 추적"
             },
             "nl": {
-              "n": "Kamerfilters",
-              "d": "Filter op taal, categorie, activiteit"
+              "n": "Meldingsbetrouwbaarheid",
+              "d": "Nauwkeurigheid van meldingen bijhouden"
             },
             "pl": {
-              "n": "Filtry pokojów",
-              "d": "Filtruj po języku, kategorii, aktywności"
+              "n": "Wiarygodność zgłoszeń",
+              "d": "Śledź dokładność zgłoszeń użytkownika"
             },
             "pt": {
-              "n": "Filtros de salas",
-              "d": "Filtre por idioma, categoria, atividade"
+              "n": "Confiabilidade de denúncias",
+              "d": "Rastrear precisão das denúncias"
             },
             "ru": {
-              "n": "Фильтры комнат",
-              "d": "Фильтрация по языку, категории, активности"
+              "n": "Надёжность жалоб",
+              "d": "Отслеживание точности жалоб пользователей"
             },
             "sv": {
-              "n": "Rumsfilter",
-              "d": "Filtrera efter språk, kategori, aktivitet"
+              "n": "Rapportpålitlighet",
+              "d": "Spåra noggrannheten av användarrapporter"
             },
             "th": {
-              "n": "ตัวกรองห้อง",
-              "d": "กรองตามภาษา หมวดหมู่ กิจกรรม"
+              "n": "คะแนนความน่าเชื่อถือ",
+              "d": "ติดตามความถูกต้องของรายงาน"
             },
             "tr": {
-              "n": "Oda filtreleri",
-              "d": "Dil, kategori, aktiviteye göre filtrele"
+              "n": "Bildirim güvenilirliği",
+              "d": "Kullanıcı bildirimlerinin doğruluğunu izle"
             },
             "uk": {
-              "n": "Фільтри кімнат",
-              "d": "Фільтрувати за мовою, категорією, активністю"
+              "n": "Надійність скарг",
+              "d": "Відстеження точності скарг користувачів"
             },
             "vi": {
-              "n": "Bộ lọc phòng",
-              "d": "Lọc theo ngôn ngữ, danh mục, hoạt động"
+              "n": "Điểm tin cậy báo cáo",
+              "d": "Theo dõi độ chính xác của báo cáo"
             },
             "zh": {
-              "n": "房间筛选",
-              "d": "按语言、分类、活动筛选"
+              "n": "举报可靠性评分",
+              "d": "跟踪用户举报的准确性"
+            }
+          }
+        },
+        {
+          "name": "Granular suspensions",
+          "description": "suspend specific features per user",
+          "status": "planned",
+          "i18n": {
+            "ar": {
+              "n": "إيقاف تفصيلي",
+              "d": "إيقاف ميزات محددة لمستخدم"
+            },
+            "de": {
+              "n": "Gezielte Sperrung",
+              "d": "Einzelne Funktionen pro Nutzer sperren"
+            },
+            "es": {
+              "n": "Suspensiones detalladas",
+              "d": "Suspender funciones específicas por usuario"
+            },
+            "fr": {
+              "n": "Suspensions ciblées",
+              "d": "Suspendre des fonctions spécifiques par utilisateur"
+            },
+            "hi": {
+              "n": "विस्तृत निलंबन",
+              "d": "प्रति उपयोगकर्ता विशिष्ट सुविधाएं निलंबित करें"
+            },
+            "id": {
+              "n": "Penangguhan terperinci",
+              "d": "Tangguhkan fitur tertentu per pengguna"
+            },
+            "it": {
+              "n": "Sospensioni mirate",
+              "d": "Sospendi funzioni specifiche per utente"
+            },
+            "ja": {
+              "n": "部分的停止",
+              "d": "ユーザーごとに特定の機能を停止"
+            },
+            "ko": {
+              "n": "세부 정지",
+              "d": "사용자별 특정 기능 정지"
+            },
+            "nl": {
+              "n": "Gerichte schorsing",
+              "d": "Specifieke functies per gebruiker schorsen"
+            },
+            "pl": {
+              "n": "Szczegółowe zawieszenia",
+              "d": "Zawieś określone funkcje dla użytkownika"
+            },
+            "pt": {
+              "n": "Suspensões granulares",
+              "d": "Suspender recursos específicos por usuário"
+            },
+            "ru": {
+              "n": "Точечные ограничения",
+              "d": "Ограничить конкретные функции для пользователя"
+            },
+            "sv": {
+              "n": "Detaljerade avstängningar",
+              "d": "Stäng av specifika funktioner per användare"
+            },
+            "th": {
+              "n": "ระงับแบบละเอียด",
+              "d": "ระงับฟีเจอร์เฉพาะต่อผู้ใช้"
+            },
+            "tr": {
+              "n": "Ayrıntılı askıya alma",
+              "d": "Kullanıcı başına belirli özellikleri askıya al"
+            },
+            "uk": {
+              "n": "Детальні обмеження",
+              "d": "Обмежити конкретні функції для користувача"
+            },
+            "vi": {
+              "n": "Đình chỉ chi tiết",
+              "d": "Đình chỉ tính năng cụ thể cho từng người"
+            },
+            "zh": {
+              "n": "精细化限制",
+              "d": "按用户限制特定功能"
+            }
+          }
+        },
+        {
+          "name": "Announcements",
+          "description": "room-wide & global messages, gated behind nobility rank",
+          "status": "planned",
+          "i18n": {
+            "ar": {
+              "n": "الإعلانات",
+              "d": "رسائل على مستوى الغرفة والتطبيق"
+            },
+            "de": {
+              "n": "Ankündigungen",
+              "d": "Raum- und App-weite Nachrichten"
+            },
+            "es": {
+              "n": "Anuncios",
+              "d": "Mensajes a nivel de sala y global"
+            },
+            "fr": {
+              "n": "Annonces",
+              "d": "Messages à l'échelle du salon et de l'appli"
+            },
+            "hi": {
+              "n": "घोषणाएं",
+              "d": "रूम और ऐप-व्यापी संदेश"
+            },
+            "id": {
+              "n": "Pengumuman",
+              "d": "Pesan seluruh ruangan dan aplikasi"
+            },
+            "it": {
+              "n": "Annunci",
+              "d": "Messaggi a livello di stanza e app"
+            },
+            "ja": {
+              "n": "アナウンス",
+              "d": "ルーム全体・アプリ全体メッセージ"
+            },
+            "ko": {
+              "n": "공지사항",
+              "d": "방 전체 및 앱 전체 메시지"
+            },
+            "nl": {
+              "n": "Aankondigingen",
+              "d": "Kamer- en app-brede berichten"
+            },
+            "pl": {
+              "n": "Ogłoszenia",
+              "d": "Wiadomości pokojowe i globalne"
+            },
+            "pt": {
+              "n": "Anúncios",
+              "d": "Mensagens para toda a sala e app"
+            },
+            "ru": {
+              "n": "Объявления",
+              "d": "Сообщения на уровне комнаты и приложения"
+            },
+            "sv": {
+              "n": "Meddelanden",
+              "d": "Rums- och app-övergripande meddelanden"
+            },
+            "th": {
+              "n": "ประกาศ",
+              "d": "ข้อความทั่วห้องและทั่วแอป"
+            },
+            "tr": {
+              "n": "Duyurular",
+              "d": "Oda ve uygulama çapında mesajlar"
+            },
+            "uk": {
+              "n": "Оголошення",
+              "d": "Повідомлення на рівні кімнати та додатку"
+            },
+            "vi": {
+              "n": "Thông báo",
+              "d": "Tin nhắn toàn phòng và toàn ứng dụng"
+            },
+            "zh": {
+              "n": "公告",
+              "d": "房间级和全局消息"
             }
           }
         },
@@ -2327,267 +2594,6 @@
               "d": "完成套装获得特别奖励"
             }
           }
-        },
-        {
-          "name": "Announcements",
-          "description": "room-wide & global messages, gated behind nobility rank",
-          "status": "planned",
-          "i18n": {
-            "ar": {
-              "n": "الإعلانات",
-              "d": "رسائل على مستوى الغرفة والتطبيق"
-            },
-            "de": {
-              "n": "Ankündigungen",
-              "d": "Raum- und App-weite Nachrichten"
-            },
-            "es": {
-              "n": "Anuncios",
-              "d": "Mensajes a nivel de sala y global"
-            },
-            "fr": {
-              "n": "Annonces",
-              "d": "Messages à l'échelle du salon et de l'appli"
-            },
-            "hi": {
-              "n": "घोषणाएं",
-              "d": "रूम और ऐप-व्यापी संदेश"
-            },
-            "id": {
-              "n": "Pengumuman",
-              "d": "Pesan seluruh ruangan dan aplikasi"
-            },
-            "it": {
-              "n": "Annunci",
-              "d": "Messaggi a livello di stanza e app"
-            },
-            "ja": {
-              "n": "アナウンス",
-              "d": "ルーム全体・アプリ全体メッセージ"
-            },
-            "ko": {
-              "n": "공지사항",
-              "d": "방 전체 및 앱 전체 메시지"
-            },
-            "nl": {
-              "n": "Aankondigingen",
-              "d": "Kamer- en app-brede berichten"
-            },
-            "pl": {
-              "n": "Ogłoszenia",
-              "d": "Wiadomości pokojowe i globalne"
-            },
-            "pt": {
-              "n": "Anúncios",
-              "d": "Mensagens para toda a sala e app"
-            },
-            "ru": {
-              "n": "Объявления",
-              "d": "Сообщения на уровне комнаты и приложения"
-            },
-            "sv": {
-              "n": "Meddelanden",
-              "d": "Rums- och app-övergripande meddelanden"
-            },
-            "th": {
-              "n": "ประกาศ",
-              "d": "ข้อความทั่วห้องและทั่วแอป"
-            },
-            "tr": {
-              "n": "Duyurular",
-              "d": "Oda ve uygulama çapında mesajlar"
-            },
-            "uk": {
-              "n": "Оголошення",
-              "d": "Повідомлення на рівні кімнати та додатку"
-            },
-            "vi": {
-              "n": "Thông báo",
-              "d": "Tin nhắn toàn phòng và toàn ứng dụng"
-            },
-            "zh": {
-              "n": "公告",
-              "d": "房间级和全局消息"
-            }
-          }
-        },
-        {
-          "name": "Granular suspensions",
-          "description": "suspend specific features per user",
-          "status": "planned",
-          "i18n": {
-            "ar": {
-              "n": "إيقاف تفصيلي",
-              "d": "إيقاف ميزات محددة لمستخدم"
-            },
-            "de": {
-              "n": "Gezielte Sperrung",
-              "d": "Einzelne Funktionen pro Nutzer sperren"
-            },
-            "es": {
-              "n": "Suspensiones detalladas",
-              "d": "Suspender funciones específicas por usuario"
-            },
-            "fr": {
-              "n": "Suspensions ciblées",
-              "d": "Suspendre des fonctions spécifiques par utilisateur"
-            },
-            "hi": {
-              "n": "विस्तृत निलंबन",
-              "d": "प्रति उपयोगकर्ता विशिष्ट सुविधाएं निलंबित करें"
-            },
-            "id": {
-              "n": "Penangguhan terperinci",
-              "d": "Tangguhkan fitur tertentu per pengguna"
-            },
-            "it": {
-              "n": "Sospensioni mirate",
-              "d": "Sospendi funzioni specifiche per utente"
-            },
-            "ja": {
-              "n": "部分的停止",
-              "d": "ユーザーごとに特定の機能を停止"
-            },
-            "ko": {
-              "n": "세부 정지",
-              "d": "사용자별 특정 기능 정지"
-            },
-            "nl": {
-              "n": "Gerichte schorsing",
-              "d": "Specifieke functies per gebruiker schorsen"
-            },
-            "pl": {
-              "n": "Szczegółowe zawieszenia",
-              "d": "Zawieś określone funkcje dla użytkownika"
-            },
-            "pt": {
-              "n": "Suspensões granulares",
-              "d": "Suspender recursos específicos por usuário"
-            },
-            "ru": {
-              "n": "Точечные ограничения",
-              "d": "Ограничить конкретные функции для пользователя"
-            },
-            "sv": {
-              "n": "Detaljerade avstängningar",
-              "d": "Stäng av specifika funktioner per användare"
-            },
-            "th": {
-              "n": "ระงับแบบละเอียด",
-              "d": "ระงับฟีเจอร์เฉพาะต่อผู้ใช้"
-            },
-            "tr": {
-              "n": "Ayrıntılı askıya alma",
-              "d": "Kullanıcı başına belirli özellikleri askıya al"
-            },
-            "uk": {
-              "n": "Детальні обмеження",
-              "d": "Обмежити конкретні функції для користувача"
-            },
-            "vi": {
-              "n": "Đình chỉ chi tiết",
-              "d": "Đình chỉ tính năng cụ thể cho từng người"
-            },
-            "zh": {
-              "n": "精细化限制",
-              "d": "按用户限制特定功能"
-            }
-          }
-        },
-        {
-          "name": "Report reliability score",
-          "description": "track report accuracy per user",
-          "status": "planned",
-          "i18n": {
-            "ar": {
-              "n": "درجة موثوقية البلاغ",
-              "d": "تتبع دقة بلاغات المستخدم"
-            },
-            "de": {
-              "n": "Meldezuverlässigkeit",
-              "d": "Genauigkeit der Nutzermeldungen verfolgen"
-            },
-            "es": {
-              "n": "Puntuación de confiabilidad",
-              "d": "Rastrear la precisión de los reportes"
-            },
-            "fr": {
-              "n": "Score de fiabilité",
-              "d": "Suivre la précision des signalements"
-            },
-            "hi": {
-              "n": "रिपोर्ट विश्वसनीयता स्कोर",
-              "d": "उपयोगकर्ता रिपोर्ट की सटीकता ट्रैक करें"
-            },
-            "id": {
-              "n": "Skor keandalan laporan",
-              "d": "Lacak akurasi laporan pengguna"
-            },
-            "it": {
-              "n": "Punteggio affidabilità",
-              "d": "Traccia l'accuratezza delle segnalazioni"
-            },
-            "ja": {
-              "n": "通報信頼度スコア",
-              "d": "ユーザー通報の正確性を追跡"
-            },
-            "ko": {
-              "n": "신고 신뢰도 점수",
-              "d": "사용자 신고의 정확도 추적"
-            },
-            "nl": {
-              "n": "Meldingsbetrouwbaarheid",
-              "d": "Nauwkeurigheid van meldingen bijhouden"
-            },
-            "pl": {
-              "n": "Wiarygodność zgłoszeń",
-              "d": "Śledź dokładność zgłoszeń użytkownika"
-            },
-            "pt": {
-              "n": "Confiabilidade de denúncias",
-              "d": "Rastrear precisão das denúncias"
-            },
-            "ru": {
-              "n": "Надёжность жалоб",
-              "d": "Отслеживание точности жалоб пользователей"
-            },
-            "sv": {
-              "n": "Rapportpålitlighet",
-              "d": "Spåra noggrannheten av användarrapporter"
-            },
-            "th": {
-              "n": "คะแนนความน่าเชื่อถือ",
-              "d": "ติดตามความถูกต้องของรายงาน"
-            },
-            "tr": {
-              "n": "Bildirim güvenilirliği",
-              "d": "Kullanıcı bildirimlerinin doğruluğunu izle"
-            },
-            "uk": {
-              "n": "Надійність скарг",
-              "d": "Відстеження точності скарг користувачів"
-            },
-            "vi": {
-              "n": "Điểm tin cậy báo cáo",
-              "d": "Theo dõi độ chính xác của báo cáo"
-            },
-            "zh": {
-              "n": "举报可靠性评分",
-              "d": "跟踪用户举报的准确性"
-            }
-          }
-        },
-        {
-          "name": "App startup redesign",
-          "description": "prevent login screen flash on auto-login (race condition), improve perceived startup time, better loading states",
-          "status": "planned",
-          "i18n": {}
-        },
-        {
-          "name": "Error notification UX redesign",
-          "description": "replace the current red, opaque, blocking error toast with a lighter, transparent, tap-through notification: dark text on a low-alpha (≤0.6) blurred/translucent background, no card chrome, no input interception. Buttons rendered underneath must remain clickable while the notification is visible. Add Compose UI test asserting hit-testing passes through, plus a snapshot test to lock the styling. Deferred from 2026-05-04 bug-triage session",
-          "status": "planned",
-          "i18n": {}
         }
       ]
     },
@@ -2621,87 +2627,22 @@
       },
       "features": [
         {
-          "name": "Unified web portal",
-          "description": "single login page where users authenticate with their ShyTalk account. Routes to Admin panel, MC Host panel, MC Singer panel, Teacher panel, or suggestions+roadmap based on role. Must be done BEFORE admin restructure (#41)",
-          "status": "done",
-          "i18n": {
-            "ar": {
-              "n": "بوابة الويب الموحدة",
-              "d": "سجّل الدخول من متصفحك لإدارة حسابك"
-            },
-            "de": {
-              "n": "Web-Portal",
-              "d": "Melde dich im Browser an, um dein Konto zu verwalten"
-            },
-            "es": {
-              "n": "Portal web",
-              "d": "Inicia sesión en tu navegador para gestionar tu cuenta"
-            },
-            "fr": {
-              "n": "Portail web",
-              "d": "Connectez-vous depuis votre navigateur pour gérer votre compte"
-            },
-            "hi": {
-              "n": "वेब पोर्टल",
-              "d": "अपने खाते को प्रबंधित करने के लिए ब्राउज़र से साइन इन करें"
-            },
-            "id": {
-              "n": "Portal web",
-              "d": "Masuk dari browser untuk mengelola akun Anda"
-            },
-            "it": {
-              "n": "Portale web",
-              "d": "Accedi dal browser per gestire il tuo account"
-            },
-            "ja": {
-              "n": "Web ポータル",
-              "d": "ブラウザからサインインしてアカウントを管理"
-            },
-            "ko": {
-              "n": "웹 포털",
-              "d": "브라우저에서 로그인하여 계정 관리"
-            },
-            "nl": {
-              "n": "Webportaal",
-              "d": "Log in vanuit je browser om je account te beheren"
-            },
-            "pl": {
-              "n": "Portal internetowy",
-              "d": "Zaloguj się w przeglądarce, aby zarządzać kontem"
-            },
-            "pt": {
-              "n": "Portal web",
-              "d": "Entre pelo navegador para gerenciar sua conta"
-            },
-            "ru": {
-              "n": "Веб-портал",
-              "d": "Войдите из браузера, чтобы управлять аккаунтом"
-            },
-            "sv": {
-              "n": "Webbportal",
-              "d": "Logga in från webbläsaren för att hantera ditt konto"
-            },
-            "th": {
-              "n": "เว็บพอร์ทัล",
-              "d": "เข้าสู่ระบบจากเบราว์เซอร์เพื่อจัดการบัญชี"
-            },
-            "tr": {
-              "n": "Web portalı",
-              "d": "Hesabınızı yönetmek için tarayıcıdan giriş yapın"
-            },
-            "uk": {
-              "n": "Веб-портал",
-              "d": "Увійдіть з браузера, щоб керувати обліковим записом"
-            },
-            "vi": {
-              "n": "Cổng web",
-              "d": "Đăng nhập từ trình duyệt để quản lý tài khoản"
-            },
-            "zh": {
-              "n": "网页门户",
-              "d": "通过浏览器登录管理您的账户"
-            }
-          }
+          "name": "Shared header component on all web pages",
+          "description": "single source of truth for nav/auth/language across all `public/*.html` pages. Bundled bugs to fix in same PR: COOP errors on prod, `/api/firebase-config` 503 on prod (FIREBASE_WEB_API_KEY missing in Cloudflare Pages env), watch bells re-prompt sign-in, `prompt: 'select_account'` on Google sign-in. Tracked at `project-shared-header.md`",
+          "status": "planned",
+          "i18n": {}
+        },
+        {
+          "name": "Homepage redesign",
+          "description": "fix non-clickable \"coming soon\" elements, general design pass",
+          "status": "planned",
+          "i18n": {}
+        },
+        {
+          "name": "Slogan rebrand",
+          "description": "replace \"Voice chat rooms, reimagined\" with language-learning + cultural-exchange positioning (matches the user's core mission). Coordinated with W2 above",
+          "status": "planned",
+          "i18n": {}
         },
         {
           "name": "Website About section",
@@ -2870,170 +2811,28 @@
           }
         },
         {
-          "name": "Website interactive demo",
-          "description": "screenshots + simulated video recordings of realistic users",
+          "name": "Khmer New Year event page i18n cleanup",
+          "description": "remaining hardcoded strings on `public/events/khmer-new-year.html`: hero `<h1 lang=\"km\">`, year-badge, individual greeting cards (lines ~593-622)",
           "status": "planned",
-          "i18n": {
-            "ar": {
-              "n": "عرض تفاعلي",
-              "d": "لقطات وفيديوهات محاكاة للتطبيق"
-            },
-            "de": {
-              "n": "Interaktive Demo",
-              "d": "Screenshots und simulierte Videos der App"
-            },
-            "es": {
-              "n": "Demo interactiva",
-              "d": "Capturas y videos simulados de la app"
-            },
-            "fr": {
-              "n": "Démo interactive",
-              "d": "Captures et vidéos simulées de l'appli"
-            },
-            "hi": {
-              "n": "इंटरैक्टिव डेमो",
-              "d": "ऐप के स्क्रीनशॉट और सिमुलेटेड वीडियो"
-            },
-            "id": {
-              "n": "Demo interaktif",
-              "d": "Screenshot dan video simulasi aplikasi"
-            },
-            "it": {
-              "n": "Demo interattiva",
-              "d": "Screenshot e video simulati dell'app"
-            },
-            "ja": {
-              "n": "インタラクティブデモ",
-              "d": "アプリのスクリーンショットとシミュレーション動画"
-            },
-            "ko": {
-              "n": "인터랙티브 데모",
-              "d": "앱 스크린샷과 시뮬레이션 영상"
-            },
-            "nl": {
-              "n": "Interactieve demo",
-              "d": "Screenshots en gesimuleerde video's van de app"
-            },
-            "pl": {
-              "n": "Interaktywne demo",
-              "d": "Zrzuty ekranu i symulowane filmy z aplikacji"
-            },
-            "pt": {
-              "n": "Demo interativa",
-              "d": "Capturas e vídeos simulados do app"
-            },
-            "ru": {
-              "n": "Интерактивная демо",
-              "d": "Скриншоты и симулированные видео приложения"
-            },
-            "sv": {
-              "n": "Interaktiv demo",
-              "d": "Skärmbilder och simulerade videor av appen"
-            },
-            "th": {
-              "n": "เดโมโต้ตอบ",
-              "d": "ภาพหน้าจอและวิดีโอจำลองของแอป"
-            },
-            "tr": {
-              "n": "İnteraktif demo",
-              "d": "Uygulama ekran görüntüleri ve simüle videolar"
-            },
-            "uk": {
-              "n": "Інтерактивна демо",
-              "d": "Скріншоти та симульовані відео додатку"
-            },
-            "vi": {
-              "n": "Demo tương tác",
-              "d": "Ảnh chụp và video mô phỏng ứng dụng"
-            },
-            "zh": {
-              "n": "互动演示",
-              "d": "应用截图和模拟视频"
-            }
-          }
+          "i18n": {}
         },
         {
-          "name": "Website public roadmap",
-          "description": "show upcoming features so users can see what's planned. Keep it high-level (no internal details), update when phases complete",
-          "status": "done",
-          "i18n": {
-            "ar": {
-              "n": "خارطة الطريق العامة",
-              "d": "تعرّف على الميزات القادمة"
-            },
-            "de": {
-              "n": "Öffentliche Roadmap",
-              "d": "Erfahre, welche Funktionen geplant sind"
-            },
-            "es": {
-              "n": "Hoja de ruta pública",
-              "d": "Ve qué funciones están planeadas"
-            },
-            "fr": {
-              "n": "Feuille de route publique",
-              "d": "Découvrez les fonctionnalités prévues"
-            },
-            "hi": {
-              "n": "सार्वजनिक रोडमैप",
-              "d": "देखें कौन सी सुविधाएं योजनाबद्ध हैं"
-            },
-            "id": {
-              "n": "Peta jalan publik",
-              "d": "Lihat fitur apa yang direncanakan"
-            },
-            "it": {
-              "n": "Roadmap pubblica",
-              "d": "Scopri le funzionalità pianificate"
-            },
-            "ja": {
-              "n": "公開ロードマップ",
-              "d": "計画されている機能を確認"
-            },
-            "ko": {
-              "n": "공개 로드맵",
-              "d": "계획된 기능 확인"
-            },
-            "nl": {
-              "n": "Publieke roadmap",
-              "d": "Bekijk welke functies gepland zijn"
-            },
-            "pl": {
-              "n": "Publiczna mapa drogowa",
-              "d": "Zobacz jakie funkcje są planowane"
-            },
-            "pt": {
-              "n": "Roadmap público",
-              "d": "Veja quais recursos estão planejados"
-            },
-            "ru": {
-              "n": "Публичная дорожная карта",
-              "d": "Узнайте, какие функции запланированы"
-            },
-            "sv": {
-              "n": "Offentlig roadmap",
-              "d": "Se vilka funktioner som är planerade"
-            },
-            "th": {
-              "n": "แผนงานสาธารณะ",
-              "d": "ดูว่าฟีเจอร์ใดที่วางแผนไว้"
-            },
-            "tr": {
-              "n": "Halka açık yol haritası",
-              "d": "Hangi özelliklerin planlandığını görün"
-            },
-            "uk": {
-              "n": "Публічна дорожня карта",
-              "d": "Дізнайтеся, які функції заплановані"
-            },
-            "vi": {
-              "n": "Lộ trình công khai",
-              "d": "Xem những tính năng được lên kế hoạch"
-            },
-            "zh": {
-              "n": "公开路线图",
-              "d": "查看计划中的功能"
-            }
-          }
+          "name": "Portal CSS/i18n unification",
+          "description": "migrate portal from separate portal-translations.js + portal.css to shared language-selector.js + inline styles",
+          "status": "planned",
+          "i18n": {}
+        },
+        {
+          "name": "Roadmap page redesign",
+          "description": "replace Star Wars theme with standard ShyTalk dark theme; remove crawl/intro/audio assets., `test/clear/:collection` endpoint, `refreshSuggestionsList()` fix, factCard `.first()`) and resolving the rotating ~10 inter-file dependency failures (admin-funfacts, admin-keyboard, admin-economy-config, admin-cross-tab, admin-suggestions, admin-reports, admin-logs)",
+          "status": "planned",
+          "i18n": {}
+        },
+        {
+          "name": "Roadmap page features",
+          "description": "subscribe-to-updates form (email) + comments/suggestions form on the public roadmap",
+          "status": "planned",
+          "i18n": {}
         },
         {
           "name": "Web personal profile",
@@ -3119,135 +2918,93 @@
           }
         },
         {
-          "name": "Web page i18n completion",
-          "description": "full translations for all web pages including admin panel, legal pages. Language selector on every page",
-          "status": "planned",
-          "i18n": {
-            "ar": {
-              "n": "ترجمة موقع الويب",
-              "d": "جميع صفحات الموقع بـ 19 لغة"
-            },
-            "de": {
-              "n": "Mehrsprachige Website",
-              "d": "Alle Website-Seiten in 19 Sprachen"
-            },
-            "es": {
-              "n": "Sitio web multilingüe",
-              "d": "Todas las páginas del sitio en 19 idiomas"
-            },
-            "fr": {
-              "n": "Site multilingue",
-              "d": "Toutes les pages du site en 19 langues"
-            },
-            "hi": {
-              "n": "बहुभाषी वेबसाइट",
-              "d": "19 भाषाओं में सभी वेबसाइट पेज"
-            },
-            "id": {
-              "n": "Situs multibahasa",
-              "d": "Semua halaman situs dalam 19 bahasa"
-            },
-            "it": {
-              "n": "Sito multilingue",
-              "d": "Tutte le pagine del sito in 19 lingue"
-            },
-            "ja": {
-              "n": "多言語ウェブサイト",
-              "d": "すべてのウェブサイトページを19言語で"
-            },
-            "ko": {
-              "n": "다국어 웹사이트",
-              "d": "모든 웹사이트 페이지를 19개 언어로"
-            },
-            "nl": {
-              "n": "Meertalige website",
-              "d": "Alle websitepagina's in 19 talen"
-            },
-            "pl": {
-              "n": "Wielojęzyczna strona",
-              "d": "Wszystkie strony w 19 językach"
-            },
-            "pt": {
-              "n": "Site multilíngue",
-              "d": "Todas as páginas do site em 19 idiomas"
-            },
-            "ru": {
-              "n": "Многоязычный сайт",
-              "d": "Все страницы сайта на 19 языках"
-            },
-            "sv": {
-              "n": "Flerspråkig webbplats",
-              "d": "Alla webbplatssidor på 19 språk"
-            },
-            "th": {
-              "n": "เว็บหลายภาษา",
-              "d": "ทุกหน้าเว็บใน 19 ภาษา"
-            },
-            "tr": {
-              "n": "Çok dilli site",
-              "d": "Tüm web sayfaları 19 dilde"
-            },
-            "uk": {
-              "n": "Багатомовний сайт",
-              "d": "Усі сторінки сайту 19 мовами"
-            },
-            "vi": {
-              "n": "Website đa ngôn ngữ",
-              "d": "Tất cả trang web bằng 19 ngôn ngữ"
-            },
-            "zh": {
-              "n": "多语言网站",
-              "d": "所有网页支持19种语言"
-            }
-          }
-        },
-        {
-          "name": "Khmer New Year event page i18n cleanup",
-          "description": "remaining hardcoded strings on `public/events/khmer-new-year.html`: hero `<h1 lang=\"km\">`, year-badge, individual greeting cards (lines ~593-622)",
-          "status": "planned",
-          "i18n": {}
-        },
-        {
-          "name": "Portal CSS/i18n unification",
-          "description": "migrate portal from separate portal-translations.js + portal.css to shared language-selector.js + inline styles",
-          "status": "planned",
-          "i18n": {}
-        },
-        {
-          "name": "Shared header component on all web pages",
-          "description": "single source of truth for nav/auth/language across all `public/*.html` pages. Bundled bugs to fix in same PR: COOP errors on prod, `/api/firebase-config` 503 on prod (FIREBASE_WEB_API_KEY missing in Cloudflare Pages env), watch bells re-prompt sign-in, `prompt: 'select_account'` on Google sign-in. Tracked at `project-shared-header.md`",
-          "status": "planned",
-          "i18n": {}
-        },
-        {
-          "name": "Homepage redesign",
-          "description": "fix non-clickable \"coming soon\" elements, general design pass",
-          "status": "planned",
-          "i18n": {}
-        },
-        {
-          "name": "Slogan rebrand",
-          "description": "replace \"Voice chat rooms, reimagined\" with language-learning + cultural-exchange positioning (matches the user's core mission). Coordinated with W2 above",
-          "status": "planned",
-          "i18n": {}
-        },
-        {
-          "name": "Roadmap page redesign",
-          "description": "replace Star Wars theme with standard ShyTalk dark theme; remove crawl/intro/audio assets., `test/clear/:collection` endpoint, `refreshSuggestionsList()` fix, factCard `.first()`) and resolving the rotating ~10 inter-file dependency failures (admin-funfacts, admin-keyboard, admin-economy-config, admin-cross-tab, admin-suggestions, admin-reports, admin-logs)",
-          "status": "planned",
-          "i18n": {}
-        },
-        {
-          "name": "Roadmap page features",
-          "description": "subscribe-to-updates form (email) + comments/suggestions form on the public roadmap",
-          "status": "planned",
-          "i18n": {}
-        },
-        {
           "name": "Shyden Ltd company website",
           "description": "professional company site at shyden.co.uk with portfolio, mission page, AI-powered open-source software focus. Coordinated with #58 (org migration)",
           "status": "planned",
           "i18n": {}
+        },
+        {
+          "name": "Website interactive demo",
+          "description": "screenshots + simulated video recordings of realistic users",
+          "status": "planned",
+          "i18n": {
+            "ar": {
+              "n": "عرض تفاعلي",
+              "d": "لقطات وفيديوهات محاكاة للتطبيق"
+            },
+            "de": {
+              "n": "Interaktive Demo",
+              "d": "Screenshots und simulierte Videos der App"
+            },
+            "es": {
+              "n": "Demo interactiva",
+              "d": "Capturas y videos simulados de la app"
+            },
+            "fr": {
+              "n": "Démo interactive",
+              "d": "Captures et vidéos simulées de l'appli"
+            },
+            "hi": {
+              "n": "इंटरैक्टिव डेमो",
+              "d": "ऐप के स्क्रीनशॉट और सिमुलेटेड वीडियो"
+            },
+            "id": {
+              "n": "Demo interaktif",
+              "d": "Screenshot dan video simulasi aplikasi"
+            },
+            "it": {
+              "n": "Demo interattiva",
+              "d": "Screenshot e video simulati dell'app"
+            },
+            "ja": {
+              "n": "インタラクティブデモ",
+              "d": "アプリのスクリーンショットとシミュレーション動画"
+            },
+            "ko": {
+              "n": "인터랙티브 데모",
+              "d": "앱 스크린샷과 시뮬레이션 영상"
+            },
+            "nl": {
+              "n": "Interactieve demo",
+              "d": "Screenshots en gesimuleerde video's van de app"
+            },
+            "pl": {
+              "n": "Interaktywne demo",
+              "d": "Zrzuty ekranu i symulowane filmy z aplikacji"
+            },
+            "pt": {
+              "n": "Demo interativa",
+              "d": "Capturas e vídeos simulados do app"
+            },
+            "ru": {
+              "n": "Интерактивная демо",
+              "d": "Скриншоты и симулированные видео приложения"
+            },
+            "sv": {
+              "n": "Interaktiv demo",
+              "d": "Skärmbilder och simulerade videor av appen"
+            },
+            "th": {
+              "n": "เดโมโต้ตอบ",
+              "d": "ภาพหน้าจอและวิดีโอจำลองของแอป"
+            },
+            "tr": {
+              "n": "İnteraktif demo",
+              "d": "Uygulama ekran görüntüleri ve simüle videolar"
+            },
+            "uk": {
+              "n": "Інтерактивна демо",
+              "d": "Скріншоти та симульовані відео додатку"
+            },
+            "vi": {
+              "n": "Demo tương tác",
+              "d": "Ảnh chụp và video mô phỏng ứng dụng"
+            },
+            "zh": {
+              "n": "互动演示",
+              "d": "应用截图和模拟视频"
+            }
+          }
         },
         {
           "name": "Admin role-based access control",
@@ -3598,6 +3355,255 @@
               "d": "教师专用的学生和课程管理面板"
             }
           }
+        },
+        {
+          "name": "Unified web portal",
+          "description": "single login page where users authenticate with their ShyTalk account. Routes to Admin panel, MC Host panel, MC Singer panel, Teacher panel, or suggestions+roadmap based on role. Must be done BEFORE admin restructure (#41)",
+          "status": "done",
+          "i18n": {
+            "ar": {
+              "n": "بوابة الويب الموحدة",
+              "d": "سجّل الدخول من متصفحك لإدارة حسابك"
+            },
+            "de": {
+              "n": "Web-Portal",
+              "d": "Melde dich im Browser an, um dein Konto zu verwalten"
+            },
+            "es": {
+              "n": "Portal web",
+              "d": "Inicia sesión en tu navegador para gestionar tu cuenta"
+            },
+            "fr": {
+              "n": "Portail web",
+              "d": "Connectez-vous depuis votre navigateur pour gérer votre compte"
+            },
+            "hi": {
+              "n": "वेब पोर्टल",
+              "d": "अपने खाते को प्रबंधित करने के लिए ब्राउज़र से साइन इन करें"
+            },
+            "id": {
+              "n": "Portal web",
+              "d": "Masuk dari browser untuk mengelola akun Anda"
+            },
+            "it": {
+              "n": "Portale web",
+              "d": "Accedi dal browser per gestire il tuo account"
+            },
+            "ja": {
+              "n": "Web ポータル",
+              "d": "ブラウザからサインインしてアカウントを管理"
+            },
+            "ko": {
+              "n": "웹 포털",
+              "d": "브라우저에서 로그인하여 계정 관리"
+            },
+            "nl": {
+              "n": "Webportaal",
+              "d": "Log in vanuit je browser om je account te beheren"
+            },
+            "pl": {
+              "n": "Portal internetowy",
+              "d": "Zaloguj się w przeglądarce, aby zarządzać kontem"
+            },
+            "pt": {
+              "n": "Portal web",
+              "d": "Entre pelo navegador para gerenciar sua conta"
+            },
+            "ru": {
+              "n": "Веб-портал",
+              "d": "Войдите из браузера, чтобы управлять аккаунтом"
+            },
+            "sv": {
+              "n": "Webbportal",
+              "d": "Logga in från webbläsaren för att hantera ditt konto"
+            },
+            "th": {
+              "n": "เว็บพอร์ทัล",
+              "d": "เข้าสู่ระบบจากเบราว์เซอร์เพื่อจัดการบัญชี"
+            },
+            "tr": {
+              "n": "Web portalı",
+              "d": "Hesabınızı yönetmek için tarayıcıdan giriş yapın"
+            },
+            "uk": {
+              "n": "Веб-портал",
+              "d": "Увійдіть з браузера, щоб керувати обліковим записом"
+            },
+            "vi": {
+              "n": "Cổng web",
+              "d": "Đăng nhập từ trình duyệt để quản lý tài khoản"
+            },
+            "zh": {
+              "n": "网页门户",
+              "d": "通过浏览器登录管理您的账户"
+            }
+          }
+        },
+        {
+          "name": "Website public roadmap",
+          "description": "show upcoming features so users can see what's planned. Keep it high-level (no internal details), update when phases complete",
+          "status": "done",
+          "i18n": {
+            "ar": {
+              "n": "خارطة الطريق العامة",
+              "d": "تعرّف على الميزات القادمة"
+            },
+            "de": {
+              "n": "Öffentliche Roadmap",
+              "d": "Erfahre, welche Funktionen geplant sind"
+            },
+            "es": {
+              "n": "Hoja de ruta pública",
+              "d": "Ve qué funciones están planeadas"
+            },
+            "fr": {
+              "n": "Feuille de route publique",
+              "d": "Découvrez les fonctionnalités prévues"
+            },
+            "hi": {
+              "n": "सार्वजनिक रोडमैप",
+              "d": "देखें कौन सी सुविधाएं योजनाबद्ध हैं"
+            },
+            "id": {
+              "n": "Peta jalan publik",
+              "d": "Lihat fitur apa yang direncanakan"
+            },
+            "it": {
+              "n": "Roadmap pubblica",
+              "d": "Scopri le funzionalità pianificate"
+            },
+            "ja": {
+              "n": "公開ロードマップ",
+              "d": "計画されている機能を確認"
+            },
+            "ko": {
+              "n": "공개 로드맵",
+              "d": "계획된 기능 확인"
+            },
+            "nl": {
+              "n": "Publieke roadmap",
+              "d": "Bekijk welke functies gepland zijn"
+            },
+            "pl": {
+              "n": "Publiczna mapa drogowa",
+              "d": "Zobacz jakie funkcje są planowane"
+            },
+            "pt": {
+              "n": "Roadmap público",
+              "d": "Veja quais recursos estão planejados"
+            },
+            "ru": {
+              "n": "Публичная дорожная карта",
+              "d": "Узнайте, какие функции запланированы"
+            },
+            "sv": {
+              "n": "Offentlig roadmap",
+              "d": "Se vilka funktioner som är planerade"
+            },
+            "th": {
+              "n": "แผนงานสาธารณะ",
+              "d": "ดูว่าฟีเจอร์ใดที่วางแผนไว้"
+            },
+            "tr": {
+              "n": "Halka açık yol haritası",
+              "d": "Hangi özelliklerin planlandığını görün"
+            },
+            "uk": {
+              "n": "Публічна дорожня карта",
+              "d": "Дізнайтеся, які функції заплановані"
+            },
+            "vi": {
+              "n": "Lộ trình công khai",
+              "d": "Xem những tính năng được lên kế hoạch"
+            },
+            "zh": {
+              "n": "公开路线图",
+              "d": "查看计划中的功能"
+            }
+          }
+        },
+        {
+          "name": "Web page i18n completion",
+          "description": "full translations for all web pages including admin panel, legal pages. Language selector on every page",
+          "status": "planned",
+          "i18n": {
+            "ar": {
+              "n": "ترجمة موقع الويب",
+              "d": "جميع صفحات الموقع بـ 19 لغة"
+            },
+            "de": {
+              "n": "Mehrsprachige Website",
+              "d": "Alle Website-Seiten in 19 Sprachen"
+            },
+            "es": {
+              "n": "Sitio web multilingüe",
+              "d": "Todas las páginas del sitio en 19 idiomas"
+            },
+            "fr": {
+              "n": "Site multilingue",
+              "d": "Toutes les pages du site en 19 langues"
+            },
+            "hi": {
+              "n": "बहुभाषी वेबसाइट",
+              "d": "19 भाषाओं में सभी वेबसाइट पेज"
+            },
+            "id": {
+              "n": "Situs multibahasa",
+              "d": "Semua halaman situs dalam 19 bahasa"
+            },
+            "it": {
+              "n": "Sito multilingue",
+              "d": "Tutte le pagine del sito in 19 lingue"
+            },
+            "ja": {
+              "n": "多言語ウェブサイト",
+              "d": "すべてのウェブサイトページを19言語で"
+            },
+            "ko": {
+              "n": "다국어 웹사이트",
+              "d": "모든 웹사이트 페이지를 19개 언어로"
+            },
+            "nl": {
+              "n": "Meertalige website",
+              "d": "Alle websitepagina's in 19 talen"
+            },
+            "pl": {
+              "n": "Wielojęzyczna strona",
+              "d": "Wszystkie strony w 19 językach"
+            },
+            "pt": {
+              "n": "Site multilíngue",
+              "d": "Todas as páginas do site em 19 idiomas"
+            },
+            "ru": {
+              "n": "Многоязычный сайт",
+              "d": "Все страницы сайта на 19 языках"
+            },
+            "sv": {
+              "n": "Flerspråkig webbplats",
+              "d": "Alla webbplatssidor på 19 språk"
+            },
+            "th": {
+              "n": "เว็บหลายภาษา",
+              "d": "ทุกหน้าเว็บใน 19 ภาษา"
+            },
+            "tr": {
+              "n": "Çok dilli site",
+              "d": "Tüm web sayfaları 19 dilde"
+            },
+            "uk": {
+              "n": "Багатомовний сайт",
+              "d": "Усі сторінки сайту 19 мовами"
+            },
+            "vi": {
+              "n": "Website đa ngôn ngữ",
+              "d": "Tất cả trang web bằng 19 ngôn ngữ"
+            },
+            "zh": {
+              "n": "多语言网站",
+              "d": "所有网页支持19种语言"
+            }
+          }
         }
       ]
     },
@@ -3714,89 +3720,6 @@
           }
         },
         {
-          "name": "PK battles",
-          "description": "two rooms compete via gifts, winners get beans bonus",
-          "status": "planned",
-          "i18n": {
-            "ar": {
-              "n": "معارك PK",
-              "d": "غرفتان تتنافسان — الفائزون يربحون مكافآت"
-            },
-            "de": {
-              "n": "PK-Kämpfe",
-              "d": "Zwei Räume treten an — Gewinner erhalten Bonus"
-            },
-            "es": {
-              "n": "Batallas PK",
-              "d": "Dos salas compiten — ganadores reciben bonus"
-            },
-            "fr": {
-              "n": "Batailles PK",
-              "d": "Deux salons s'affrontent — les gagnants reçoivent un bonus"
-            },
-            "hi": {
-              "n": "PK लड़ाई",
-              "d": "दो कमरे प्रतिस्पर्धा करते हैं — विजेताओं को बोनस"
-            },
-            "id": {
-              "n": "Pertarungan PK",
-              "d": "Dua ruangan bersaing — pemenang dapat bonus"
-            },
-            "it": {
-              "n": "Battaglie PK",
-              "d": "Due stanze competono — i vincitori ricevono bonus"
-            },
-            "ja": {
-              "n": "PKバトル",
-              "d": "2つのルームが競争 — 勝者にボーナス"
-            },
-            "ko": {
-              "n": "PK 배틀",
-              "d": "두 방이 경쟁 — 승자에게 보너스"
-            },
-            "nl": {
-              "n": "PK-gevechten",
-              "d": "Twee kamers strijden — winnaars krijgen bonus"
-            },
-            "pl": {
-              "n": "Bitwy PK",
-              "d": "Dwa pokoje rywalizują — zwycięzcy dostają bonus"
-            },
-            "pt": {
-              "n": "Batalhas PK",
-              "d": "Duas salas competem — vencedores ganham bônus"
-            },
-            "ru": {
-              "n": "PK-битвы",
-              "d": "Две комнаты соревнуются — победители получают бонус"
-            },
-            "sv": {
-              "n": "PK-strider",
-              "d": "Två rum tävlar — vinnarna får bonus"
-            },
-            "th": {
-              "n": "การต่อสู้ PK",
-              "d": "สองห้องแข่งขัน — ผู้ชนะได้โบนัส"
-            },
-            "tr": {
-              "n": "PK savaşları",
-              "d": "İki oda yarışır — kazananlar bonus alır"
-            },
-            "uk": {
-              "n": "PK-битви",
-              "d": "Дві кімнати змагаються — переможці отримують бонус"
-            },
-            "vi": {
-              "n": "Đấu PK",
-              "d": "Hai phòng thi đấu — người thắng nhận thưởng"
-            },
-            "zh": {
-              "n": "PK对战",
-              "d": "两个房间竞争 — 获胜者获得奖励"
-            }
-          }
-        },
-        {
           "name": "Video & screen sharing",
           "description": "camera toggle + screen share in voice rooms (depends on self-hosted LiveKit #76 for cost reasons)",
           "status": "planned",
@@ -3880,251 +3803,168 @@
           }
         },
         {
-          "name": "In-room games",
-          "description": "pool/billiards, ludo playable within voice rooms",
+          "name": "PK battles",
+          "description": "two rooms compete via gifts, winners get beans bonus",
           "status": "planned",
           "i18n": {
             "ar": {
-              "n": "ألعاب داخل الغرفة",
-              "d": "بلياردو ولودو والمزيد بدون مغادرة الغرفة"
+              "n": "معارك PK",
+              "d": "غرفتان تتنافسان — الفائزون يربحون مكافآت"
             },
             "de": {
-              "n": "Spiele im Raum",
-              "d": "Billard, Ludo und mehr, ohne den Raum zu verlassen"
+              "n": "PK-Kämpfe",
+              "d": "Zwei Räume treten an — Gewinner erhalten Bonus"
             },
             "es": {
-              "n": "Juegos en sala",
-              "d": "Billar, ludo y más sin salir de la sala"
+              "n": "Batallas PK",
+              "d": "Dos salas compiten — ganadores reciben bonus"
             },
             "fr": {
-              "n": "Jeux dans le salon",
-              "d": "Billard, ludo et plus sans quitter le salon"
+              "n": "Batailles PK",
+              "d": "Deux salons s'affrontent — les gagnants reçoivent un bonus"
             },
             "hi": {
-              "n": "रूम में खेल",
-              "d": "कमरा छोड़े बिना बिलियर्ड, लूडो और अधिक"
+              "n": "PK लड़ाई",
+              "d": "दो कमरे प्रतिस्पर्धा करते हैं — विजेताओं को बोनस"
             },
             "id": {
-              "n": "Game di ruangan",
-              "d": "Biliar, ludo, dan lainnya tanpa keluar ruangan"
+              "n": "Pertarungan PK",
+              "d": "Dua ruangan bersaing — pemenang dapat bonus"
             },
             "it": {
-              "n": "Giochi nella stanza",
-              "d": "Biliardo, ludo e altro senza uscire dalla stanza"
+              "n": "Battaglie PK",
+              "d": "Due stanze competono — i vincitori ricevono bonus"
             },
             "ja": {
-              "n": "ルーム内ゲーム",
-              "d": "ルームを離れずにビリヤード、ルドーなど"
+              "n": "PKバトル",
+              "d": "2つのルームが競争 — 勝者にボーナス"
             },
             "ko": {
-              "n": "방 내 게임",
-              "d": "방을 나가지 않고 당구, 루도 등"
+              "n": "PK 배틀",
+              "d": "두 방이 경쟁 — 승자에게 보너스"
             },
             "nl": {
-              "n": "Kamerspellen",
-              "d": "Biljart, ludo en meer zonder de kamer te verlaten"
+              "n": "PK-gevechten",
+              "d": "Twee kamers strijden — winnaars krijgen bonus"
             },
             "pl": {
-              "n": "Gry w pokoju",
-              "d": "Bilard, ludo i więcej bez wychodzenia z pokoju"
+              "n": "Bitwy PK",
+              "d": "Dwa pokoje rywalizują — zwycięzcy dostają bonus"
             },
             "pt": {
-              "n": "Jogos na sala",
-              "d": "Sinuca, ludo e mais sem sair da sala"
+              "n": "Batalhas PK",
+              "d": "Duas salas competem — vencedores ganham bônus"
             },
             "ru": {
-              "n": "Игры в комнате",
-              "d": "Бильярд, лудо и другие, не покидая комнату"
+              "n": "PK-битвы",
+              "d": "Две комнаты соревнуются — победители получают бонус"
             },
             "sv": {
-              "n": "Spel i rummet",
-              "d": "Biljard, ludo och mer utan att lämna rummet"
+              "n": "PK-strider",
+              "d": "Två rum tävlar — vinnarna får bonus"
             },
             "th": {
-              "n": "เกมในห้อง",
-              "d": "บิลเลียด ลูโด และอื่นๆ โดยไม่ต้องออกจากห้อง"
+              "n": "การต่อสู้ PK",
+              "d": "สองห้องแข่งขัน — ผู้ชนะได้โบนัส"
             },
             "tr": {
-              "n": "Oda içi oyunlar",
-              "d": "Odadan çıkmadan bilardo, ludo ve daha fazlası"
+              "n": "PK savaşları",
+              "d": "İki oda yarışır — kazananlar bonus alır"
             },
             "uk": {
-              "n": "Ігри в кімнаті",
-              "d": "Більярд, лудо та інше, не виходячи з кімнати"
+              "n": "PK-битви",
+              "d": "Дві кімнати змагаються — переможці отримують бонус"
             },
             "vi": {
-              "n": "Trò chơi trong phòng",
-              "d": "Bi-da, ludo và hơn thế mà không cần rời phòng"
+              "n": "Đấu PK",
+              "d": "Hai phòng thi đấu — người thắng nhận thưởng"
             },
             "zh": {
-              "n": "房间内游戏",
-              "d": "不离开房间即可玩台球、飞行棋等"
+              "n": "PK对战",
+              "d": "两个房间竞争 — 获胜者获得奖励"
             }
           }
         },
         {
-          "name": "Karaoke",
-          "description": "turn-taking singing, background music, audience scoring",
+          "name": "Admin events",
+          "description": "one-time events with prizes/gifts for winners",
           "status": "planned",
           "i18n": {
             "ar": {
-              "n": "كاريوكي",
-              "d": "غناء مع موسيقى خلفية وتقييم الجمهور"
+              "n": "أحداث خاصة",
+              "d": "أحداث لمرة واحدة مع جوائز وهدايا"
             },
             "de": {
-              "n": "Karaoke",
-              "d": "Singen mit Hintergrundmusik und Publikumsbewertung"
+              "n": "Admin-Events",
+              "d": "Einmalige Events mit Preisen und Geschenken"
             },
             "es": {
-              "n": "Karaoke",
-              "d": "Canta con música de fondo y puntuación del público"
+              "n": "Eventos especiales",
+              "d": "Eventos únicos con premios y regalos"
             },
             "fr": {
-              "n": "Karaoké",
-              "d": "Chantez avec musique de fond et notes du public"
+              "n": "Événements spéciaux",
+              "d": "Événements ponctuels avec prix et cadeaux"
             },
             "hi": {
-              "n": "कराओके",
-              "d": "बैकग्राउंड म्यूज़िक के साथ गाएं, दर्शक स्कोर करें"
+              "n": "विशेष आयोजन",
+              "d": "पुरस्कारों और उपहारों के साथ एकबारगी आयोजन"
             },
             "id": {
-              "n": "Karaoke",
-              "d": "Bernyanyi dengan musik latar dan penilaian penonton"
+              "n": "Acara khusus",
+              "d": "Acara satu kali dengan hadiah dan hadiah"
             },
             "it": {
-              "n": "Karaoke",
-              "d": "Canta con musica di sottofondo e voto del pubblico"
+              "n": "Eventi speciali",
+              "d": "Eventi una tantum con premi e regali"
             },
             "ja": {
-              "n": "カラオケ",
-              "d": "BGM付きで歌い、観客が採点"
+              "n": "特別イベント",
+              "d": "賞品とギフトのある一回限りのイベント"
             },
             "ko": {
-              "n": "노래방",
-              "d": "배경 음악과 관객 채점으로 노래"
+              "n": "특별 이벤트",
+              "d": "상품과 선물이 있는 일회성 이벤트"
             },
             "nl": {
-              "n": "Karaoke",
-              "d": "Zing met achtergrondmuziek en publieksscore"
+              "n": "Speciale evenementen",
+              "d": "Eenmalige evenementen met prijzen en cadeaus"
             },
             "pl": {
-              "n": "Karaoke",
-              "d": "Śpiewaj z muzyką w tle i oceną publiczności"
+              "n": "Specjalne wydarzenia",
+              "d": "Jednorazowe wydarzenia z nagrodami i prezentami"
             },
             "pt": {
-              "n": "Karaokê",
-              "d": "Cante com música de fundo e avaliação do público"
+              "n": "Eventos especiais",
+              "d": "Eventos únicos com prêmios e presentes"
             },
             "ru": {
-              "n": "Караоке",
-              "d": "Пойте с фоновой музыкой и оценкой аудитории"
+              "n": "Спецсобытия",
+              "d": "Разовые события с призами и подарками"
             },
             "sv": {
-              "n": "Karaoke",
-              "d": "Sjung med bakgrundsmusik och publikbetyg"
+              "n": "Specialevenemang",
+              "d": "Engångsevenemang med priser och gåvor"
             },
             "th": {
-              "n": "คาราโอเกะ",
-              "d": "ร้องเพลงพร้อมเพลงประกอบ ผู้ชมให้คะแนน"
+              "n": "อีเวนต์พิเศษ",
+              "d": "อีเวนต์ครั้งเดียวพร้อมรางวัลและของขวัญ"
             },
             "tr": {
-              "n": "Karaoke",
-              "d": "Arka plan müziğiyle şarkı söyleyin, seyirciler puanlasın"
+              "n": "Özel etkinlikler",
+              "d": "Ödüller ve hediyelerle bir defalık etkinlikler"
             },
             "uk": {
-              "n": "Караоке",
-              "d": "Співайте з фоновою музикою та оцінкою аудиторії"
+              "n": "Спеціальні події",
+              "d": "Разові події з призами та подарунками"
             },
             "vi": {
-              "n": "Karaoke",
-              "d": "Hát với nhạc nền và khán giả chấm điểm"
+              "n": "Sự kiện đặc biệt",
+              "d": "Sự kiện một lần với giải thưởng và quà tặng"
             },
             "zh": {
-              "n": "卡拉OK",
-              "d": "伴奏演唱，观众评分"
-            }
-          }
-        },
-        {
-          "name": "Singing competitions",
-          "description": "MC Singer role, special rooms, time-limited",
-          "status": "planned",
-          "i18n": {
-            "ar": {
-              "n": "مسابقات الغناء",
-              "d": "غرف خاصة لمسابقات الغناء المحددة بوقت"
-            },
-            "de": {
-              "n": "Gesangswettbewerbe",
-              "d": "Spezielle Räume für zeitbegrenzte Gesangswettbewerbe"
-            },
-            "es": {
-              "n": "Competiciones de canto",
-              "d": "Salas especiales para competiciones de canto cronometradas"
-            },
-            "fr": {
-              "n": "Concours de chant",
-              "d": "Salons spéciaux pour concours de chant chronométrés"
-            },
-            "hi": {
-              "n": "गायन प्रतियोगिता",
-              "d": "समय-सीमित गायन प्रतियोगिताओं के लिए विशेष कमरे"
-            },
-            "id": {
-              "n": "Kompetisi menyanyi",
-              "d": "Ruangan khusus untuk kompetisi menyanyi berdurasi"
-            },
-            "it": {
-              "n": "Gare di canto",
-              "d": "Stanze speciali per gare di canto a tempo"
-            },
-            "ja": {
-              "n": "歌唱コンテスト",
-              "d": "時間限定歌唱コンテスト用の特別ルーム"
-            },
-            "ko": {
-              "n": "노래 대회",
-              "d": "시간 제한 노래 대회를 위한 특별 방"
-            },
-            "nl": {
-              "n": "Zangwedstrijden",
-              "d": "Speciale kamers voor getimede zangwedstrijden"
-            },
-            "pl": {
-              "n": "Konkurs wokalny",
-              "d": "Specjalne pokoje na konkursy wokalne z limitem czasu"
-            },
-            "pt": {
-              "n": "Competições de canto",
-              "d": "Salas especiais para competições de canto cronometradas"
-            },
-            "ru": {
-              "n": "Конкурсы пения",
-              "d": "Специальные комнаты для конкурсов пения с ограничением по времени"
-            },
-            "sv": {
-              "n": "Sångtävlingar",
-              "d": "Specialrum för tidsbegränsade sångtävlingar"
-            },
-            "th": {
-              "n": "การแข่งขันร้องเพลง",
-              "d": "ห้องพิเศษสำหรับการแข่งขันร้องเพลงแบบจำกัดเวลา"
-            },
-            "tr": {
-              "n": "Şarkı yarışmaları",
-              "d": "Zamanlı şarkı yarışmaları için özel odalar"
-            },
-            "uk": {
-              "n": "Конкурси співу",
-              "d": "Спеціальні кімнати для конкурсів співу з обмеженням часу"
-            },
-            "vi": {
-              "n": "Thi hát",
-              "d": "Phòng đặc biệt cho cuộc thi hát có thời hạn"
-            },
-            "zh": {
-              "n": "唱歌比赛",
-              "d": "限时唱歌比赛专用房间"
+              "n": "特别活动",
+              "d": "带有奖品和礼物的一次性活动"
             }
           }
         },
@@ -4212,85 +4052,251 @@
           }
         },
         {
-          "name": "Admin events",
-          "description": "one-time events with prizes/gifts for winners",
+          "name": "Singing competitions",
+          "description": "MC Singer role, special rooms, time-limited",
           "status": "planned",
           "i18n": {
             "ar": {
-              "n": "أحداث خاصة",
-              "d": "أحداث لمرة واحدة مع جوائز وهدايا"
+              "n": "مسابقات الغناء",
+              "d": "غرف خاصة لمسابقات الغناء المحددة بوقت"
             },
             "de": {
-              "n": "Admin-Events",
-              "d": "Einmalige Events mit Preisen und Geschenken"
+              "n": "Gesangswettbewerbe",
+              "d": "Spezielle Räume für zeitbegrenzte Gesangswettbewerbe"
             },
             "es": {
-              "n": "Eventos especiales",
-              "d": "Eventos únicos con premios y regalos"
+              "n": "Competiciones de canto",
+              "d": "Salas especiales para competiciones de canto cronometradas"
             },
             "fr": {
-              "n": "Événements spéciaux",
-              "d": "Événements ponctuels avec prix et cadeaux"
+              "n": "Concours de chant",
+              "d": "Salons spéciaux pour concours de chant chronométrés"
             },
             "hi": {
-              "n": "विशेष आयोजन",
-              "d": "पुरस्कारों और उपहारों के साथ एकबारगी आयोजन"
+              "n": "गायन प्रतियोगिता",
+              "d": "समय-सीमित गायन प्रतियोगिताओं के लिए विशेष कमरे"
             },
             "id": {
-              "n": "Acara khusus",
-              "d": "Acara satu kali dengan hadiah dan hadiah"
+              "n": "Kompetisi menyanyi",
+              "d": "Ruangan khusus untuk kompetisi menyanyi berdurasi"
             },
             "it": {
-              "n": "Eventi speciali",
-              "d": "Eventi una tantum con premi e regali"
+              "n": "Gare di canto",
+              "d": "Stanze speciali per gare di canto a tempo"
             },
             "ja": {
-              "n": "特別イベント",
-              "d": "賞品とギフトのある一回限りのイベント"
+              "n": "歌唱コンテスト",
+              "d": "時間限定歌唱コンテスト用の特別ルーム"
             },
             "ko": {
-              "n": "특별 이벤트",
-              "d": "상품과 선물이 있는 일회성 이벤트"
+              "n": "노래 대회",
+              "d": "시간 제한 노래 대회를 위한 특별 방"
             },
             "nl": {
-              "n": "Speciale evenementen",
-              "d": "Eenmalige evenementen met prijzen en cadeaus"
+              "n": "Zangwedstrijden",
+              "d": "Speciale kamers voor getimede zangwedstrijden"
             },
             "pl": {
-              "n": "Specjalne wydarzenia",
-              "d": "Jednorazowe wydarzenia z nagrodami i prezentami"
+              "n": "Konkurs wokalny",
+              "d": "Specjalne pokoje na konkursy wokalne z limitem czasu"
             },
             "pt": {
-              "n": "Eventos especiais",
-              "d": "Eventos únicos com prêmios e presentes"
+              "n": "Competições de canto",
+              "d": "Salas especiais para competições de canto cronometradas"
             },
             "ru": {
-              "n": "Спецсобытия",
-              "d": "Разовые события с призами и подарками"
+              "n": "Конкурсы пения",
+              "d": "Специальные комнаты для конкурсов пения с ограничением по времени"
             },
             "sv": {
-              "n": "Specialevenemang",
-              "d": "Engångsevenemang med priser och gåvor"
+              "n": "Sångtävlingar",
+              "d": "Specialrum för tidsbegränsade sångtävlingar"
             },
             "th": {
-              "n": "อีเวนต์พิเศษ",
-              "d": "อีเวนต์ครั้งเดียวพร้อมรางวัลและของขวัญ"
+              "n": "การแข่งขันร้องเพลง",
+              "d": "ห้องพิเศษสำหรับการแข่งขันร้องเพลงแบบจำกัดเวลา"
             },
             "tr": {
-              "n": "Özel etkinlikler",
-              "d": "Ödüller ve hediyelerle bir defalık etkinlikler"
+              "n": "Şarkı yarışmaları",
+              "d": "Zamanlı şarkı yarışmaları için özel odalar"
             },
             "uk": {
-              "n": "Спеціальні події",
-              "d": "Разові події з призами та подарунками"
+              "n": "Конкурси співу",
+              "d": "Спеціальні кімнати для конкурсів співу з обмеженням часу"
             },
             "vi": {
-              "n": "Sự kiện đặc biệt",
-              "d": "Sự kiện một lần với giải thưởng và quà tặng"
+              "n": "Thi hát",
+              "d": "Phòng đặc biệt cho cuộc thi hát có thời hạn"
             },
             "zh": {
-              "n": "特别活动",
-              "d": "带有奖品和礼物的一次性活动"
+              "n": "唱歌比赛",
+              "d": "限时唱歌比赛专用房间"
+            }
+          }
+        },
+        {
+          "name": "Karaoke",
+          "description": "turn-taking singing, background music, audience scoring",
+          "status": "planned",
+          "i18n": {
+            "ar": {
+              "n": "كاريوكي",
+              "d": "غناء مع موسيقى خلفية وتقييم الجمهور"
+            },
+            "de": {
+              "n": "Karaoke",
+              "d": "Singen mit Hintergrundmusik und Publikumsbewertung"
+            },
+            "es": {
+              "n": "Karaoke",
+              "d": "Canta con música de fondo y puntuación del público"
+            },
+            "fr": {
+              "n": "Karaoké",
+              "d": "Chantez avec musique de fond et notes du public"
+            },
+            "hi": {
+              "n": "कराओके",
+              "d": "बैकग्राउंड म्यूज़िक के साथ गाएं, दर्शक स्कोर करें"
+            },
+            "id": {
+              "n": "Karaoke",
+              "d": "Bernyanyi dengan musik latar dan penilaian penonton"
+            },
+            "it": {
+              "n": "Karaoke",
+              "d": "Canta con musica di sottofondo e voto del pubblico"
+            },
+            "ja": {
+              "n": "カラオケ",
+              "d": "BGM付きで歌い、観客が採点"
+            },
+            "ko": {
+              "n": "노래방",
+              "d": "배경 음악과 관객 채점으로 노래"
+            },
+            "nl": {
+              "n": "Karaoke",
+              "d": "Zing met achtergrondmuziek en publieksscore"
+            },
+            "pl": {
+              "n": "Karaoke",
+              "d": "Śpiewaj z muzyką w tle i oceną publiczności"
+            },
+            "pt": {
+              "n": "Karaokê",
+              "d": "Cante com música de fundo e avaliação do público"
+            },
+            "ru": {
+              "n": "Караоке",
+              "d": "Пойте с фоновой музыкой и оценкой аудитории"
+            },
+            "sv": {
+              "n": "Karaoke",
+              "d": "Sjung med bakgrundsmusik och publikbetyg"
+            },
+            "th": {
+              "n": "คาราโอเกะ",
+              "d": "ร้องเพลงพร้อมเพลงประกอบ ผู้ชมให้คะแนน"
+            },
+            "tr": {
+              "n": "Karaoke",
+              "d": "Arka plan müziğiyle şarkı söyleyin, seyirciler puanlasın"
+            },
+            "uk": {
+              "n": "Караоке",
+              "d": "Співайте з фоновою музикою та оцінкою аудиторії"
+            },
+            "vi": {
+              "n": "Karaoke",
+              "d": "Hát với nhạc nền và khán giả chấm điểm"
+            },
+            "zh": {
+              "n": "卡拉OK",
+              "d": "伴奏演唱，观众评分"
+            }
+          }
+        },
+        {
+          "name": "In-room games",
+          "description": "pool/billiards, ludo playable within voice rooms",
+          "status": "planned",
+          "i18n": {
+            "ar": {
+              "n": "ألعاب داخل الغرفة",
+              "d": "بلياردو ولودو والمزيد بدون مغادرة الغرفة"
+            },
+            "de": {
+              "n": "Spiele im Raum",
+              "d": "Billard, Ludo und mehr, ohne den Raum zu verlassen"
+            },
+            "es": {
+              "n": "Juegos en sala",
+              "d": "Billar, ludo y más sin salir de la sala"
+            },
+            "fr": {
+              "n": "Jeux dans le salon",
+              "d": "Billard, ludo et plus sans quitter le salon"
+            },
+            "hi": {
+              "n": "रूम में खेल",
+              "d": "कमरा छोड़े बिना बिलियर्ड, लूडो और अधिक"
+            },
+            "id": {
+              "n": "Game di ruangan",
+              "d": "Biliar, ludo, dan lainnya tanpa keluar ruangan"
+            },
+            "it": {
+              "n": "Giochi nella stanza",
+              "d": "Biliardo, ludo e altro senza uscire dalla stanza"
+            },
+            "ja": {
+              "n": "ルーム内ゲーム",
+              "d": "ルームを離れずにビリヤード、ルドーなど"
+            },
+            "ko": {
+              "n": "방 내 게임",
+              "d": "방을 나가지 않고 당구, 루도 등"
+            },
+            "nl": {
+              "n": "Kamerspellen",
+              "d": "Biljart, ludo en meer zonder de kamer te verlaten"
+            },
+            "pl": {
+              "n": "Gry w pokoju",
+              "d": "Bilard, ludo i więcej bez wychodzenia z pokoju"
+            },
+            "pt": {
+              "n": "Jogos na sala",
+              "d": "Sinuca, ludo e mais sem sair da sala"
+            },
+            "ru": {
+              "n": "Игры в комнате",
+              "d": "Бильярд, лудо и другие, не покидая комнату"
+            },
+            "sv": {
+              "n": "Spel i rummet",
+              "d": "Biljard, ludo och mer utan att lämna rummet"
+            },
+            "th": {
+              "n": "เกมในห้อง",
+              "d": "บิลเลียด ลูโด และอื่นๆ โดยไม่ต้องออกจากห้อง"
+            },
+            "tr": {
+              "n": "Oda içi oyunlar",
+              "d": "Odadan çıkmadan bilardo, ludo ve daha fazlası"
+            },
+            "uk": {
+              "n": "Ігри в кімнаті",
+              "d": "Більярд, лудо та інше, не виходячи з кімнати"
+            },
+            "vi": {
+              "n": "Trò chơi trong phòng",
+              "d": "Bi-da, ludo và hơn thế mà không cần rời phòng"
+            },
+            "zh": {
+              "n": "房间内游戏",
+              "d": "不离开房间即可玩台球、飞行棋等"
             }
           }
         }
