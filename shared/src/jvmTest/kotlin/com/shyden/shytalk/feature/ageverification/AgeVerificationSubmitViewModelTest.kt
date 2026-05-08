@@ -277,6 +277,76 @@ class AgeVerificationSubmitViewModelTest {
             assertFalse(viewModel.uiState.value.isSubmitting)
         }
 
+    // ─── Resource.Loading contract-violation paths ──────────────
+    //
+    // `requestUploadUrl`, `uploadImage`, and `submit` are suspend
+    // functions returning Resource<T>. By contract they should resolve
+    // to Success or Error — never Loading (Loading is a Flow-emission
+    // state). But `Resource<T>` is a 3-state sealed class, so a buggy
+    // or refactored repo impl could leak Loading. Without defensive
+    // handling the user is stranded with `isSubmitting = true` forever
+    // and no error to retry on. These tests pin the recovery contract:
+    // treat Loading as a generic submit error so the user can retry.
+
+    @Test
+    fun `submit Loading from requestUploadUrl recovers as error and stops spinner`() =
+        runTest(testDispatcher) {
+            repo.uploadUrlResult = Resource.Loading
+            viewModel.acknowledgeExplanation()
+            viewModel.selectMethod(IdMethod.Passport)
+            viewModel.setImage(byteArrayOf(0x01), ContentType.Jpeg)
+
+            viewModel.submit()
+            advanceUntilIdle()
+
+            assertEquals(AgeVerificationSubmitStep.Confirm, viewModel.uiState.value.step)
+            assertNotNull(viewModel.uiState.value.error)
+            assertFalse(viewModel.uiState.value.isSubmitting)
+            assertEquals(0, repo.uploadImageCalls)
+            assertEquals(0, repo.submitCalls)
+        }
+
+    @Test
+    fun `submit Loading from uploadImage recovers as error and stops spinner`() =
+        runTest(testDispatcher) {
+            repo.uploadUrlResult =
+                Resource.Success(UploadHandle("https://r2/sig", "age-verification/u1/k.jpg", 300))
+            repo.uploadImageResult = Resource.Loading
+            viewModel.acknowledgeExplanation()
+            viewModel.selectMethod(IdMethod.Passport)
+            viewModel.setImage(byteArrayOf(0x01), ContentType.Jpeg)
+
+            viewModel.submit()
+            advanceUntilIdle()
+
+            assertEquals(AgeVerificationSubmitStep.Confirm, viewModel.uiState.value.step)
+            assertNotNull(viewModel.uiState.value.error)
+            assertFalse(viewModel.uiState.value.isSubmitting)
+            // Crucially: submit() must NOT have been called — without
+            // bytes in R2, marking the submission pending would surface
+            // a broken record to the admin (mirrors the Error path).
+            assertEquals(0, repo.submitCalls)
+        }
+
+    @Test
+    fun `submit Loading from submit() recovers as error and stops spinner`() =
+        runTest(testDispatcher) {
+            repo.uploadUrlResult =
+                Resource.Success(UploadHandle("https://r2/sig", "age-verification/u1/k.jpg", 300))
+            repo.uploadImageResult = Resource.Success(Unit)
+            repo.submitResult = Resource.Loading
+            viewModel.acknowledgeExplanation()
+            viewModel.selectMethod(IdMethod.Passport)
+            viewModel.setImage(byteArrayOf(0x01), ContentType.Jpeg)
+
+            viewModel.submit()
+            advanceUntilIdle()
+
+            assertEquals(AgeVerificationSubmitStep.Confirm, viewModel.uiState.value.step)
+            assertNotNull(viewModel.uiState.value.error)
+            assertFalse(viewModel.uiState.value.isSubmitting)
+        }
+
     @Test
     fun `clearError nulls the error`() =
         runTest(testDispatcher) {

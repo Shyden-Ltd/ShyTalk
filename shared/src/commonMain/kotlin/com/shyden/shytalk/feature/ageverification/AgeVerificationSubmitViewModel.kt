@@ -212,7 +212,10 @@ class AgeVerificationSubmitViewModel(
                         return@launch
                     }
 
-                    is Resource.Loading -> return@launch
+                    is Resource.Loading -> {
+                        handleUnexpectedLoading("requestUploadUrl")
+                        return@launch
+                    }
                 }
 
             when (val r = repository.uploadImage(handle.uploadUrl, contentType, bytes)) {
@@ -229,7 +232,10 @@ class AgeVerificationSubmitViewModel(
                     return@launch
                 }
 
-                is Resource.Loading -> return@launch
+                is Resource.Loading -> {
+                    handleUnexpectedLoading("uploadImage")
+                    return@launch
+                }
             }
 
             when (val r = repository.submit(method, handle.r2Key)) {
@@ -253,8 +259,39 @@ class AgeVerificationSubmitViewModel(
                     }
                 }
 
-                is Resource.Loading -> Unit
+                is Resource.Loading -> {
+                    handleUnexpectedLoading("submit")
+                    return@launch
+                }
             }
+        }
+    }
+
+    /**
+     * Defensive recovery for the contract violation where a
+     * `suspend fun` returning `Resource<T>` resolves to
+     * [Resource.Loading]. Loading is a Flow-emission state — suspend
+     * functions should resolve to Success or Error only. If a
+     * misbehaving / refactored repo impl ever leaks Loading, the
+     * three call sites in [submit] would otherwise strand the user
+     * with `isSubmitting = true` forever and no error to retry on.
+     *
+     * Strategy: **log + recover**. Emit a distinct error log so the
+     * violation is grep-able in dev / staging logs (it's a
+     * programming mistake, not a transient network error), then
+     * reset `isSubmitting` and surface the generic error UiText so
+     * the user can retry. Mirrors the logE-then-update pattern used
+     * by the Error branches at the three call sites.
+     *
+     * @param stage call-site name (for logs).
+     */
+    private fun handleUnexpectedLoading(stage: String) {
+        logE(TAG, "Repo contract violation: $stage returned Resource.Loading")
+        _uiState.update {
+            it.copy(
+                isSubmitting = false,
+                error = UiText.Res(Res.string.age_verif_submit_error_generic),
+            )
         }
     }
 
