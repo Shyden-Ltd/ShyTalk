@@ -130,6 +130,11 @@ router.get('/suggestions/mine', async (req, res) => {
   try {
     if (requireAuth(req, res)) return;
 
+    // Composite where+orderBy on different fields requires a Firestore
+    // composite index (see `firestore.indexes.json` — suggestions:
+    // submitterUid ASC, createdAt DESC). Emulator skips this check, so
+    // unit tests pass without it; real Firestore returns
+    // FAILED_PRECONDITION → 500.
     const snap = await db
       .collection('suggestions')
       .where('submitterUid', '==', req.auth.uniqueId)

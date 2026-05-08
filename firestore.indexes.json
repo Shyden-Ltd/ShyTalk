@@ -9,6 +9,14 @@
       ]
     },
     {
+      "collectionGroup": "suggestions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "submitterUid", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "transactions",
       "queryScope": "COLLECTION",
       "fields": [
@@ -185,11 +193,6 @@
       ]
     },
     {
-      "collectionGroup": "backpack",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [{ "fieldPath": "expiresAt", "order": "ASCENDING" }]
-    },
-    {
       "collectionGroup": "conversations",
       "queryScope": "COLLECTION",
       "fields": [
@@ -212,19 +215,6 @@
         { "fieldPath": "linkedUniqueId", "order": "ASCENDING" },
         { "fieldPath": "autoApplied", "order": "ASCENDING" }
       ]
-    },
-    {
-      "collectionGroup": "votes",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "voterId", "order": "ASCENDING" },
-        { "fieldPath": "__name__", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "subscriptions",
-      "queryScope": "COLLECTION",
-      "fields": [{ "fieldPath": "roadmapUpdateOptedIn", "order": "ASCENDING" }]
     }
   ],
   "fieldOverrides": []
