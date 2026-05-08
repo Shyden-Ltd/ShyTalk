@@ -14,6 +14,7 @@ import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.BannerRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.UserRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -345,6 +346,17 @@ class HomeViewModel(
 
     fun signOut() {
         logI(TAG, "User signing out")
-        viewModelScope.launch { authRepository.signOut() }
+        // Catch + log so an exception isn't swallowed silently by viewModelScope's
+        // default handler. Rethrow CancellationException so structured concurrency
+        // remains intact when the scope is cancelled mid-flight.
+        viewModelScope.launch {
+            try {
+                authRepository.signOut()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logE(TAG, "authRepository.signOut() failed: ${e.message}", e)
+            }
+        }
     }
 }

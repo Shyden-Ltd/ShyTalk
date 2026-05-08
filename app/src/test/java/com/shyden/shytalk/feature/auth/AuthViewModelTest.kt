@@ -15,6 +15,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.job
@@ -447,6 +448,81 @@ class AuthViewModelTest {
 
             assertFalse(vm.uiState.value.isAuthenticated)
             coVerify { authRepository.signOut() }
+        }
+
+    /**
+     * `AuthRepositorySignOutContractTest` proves platform sign-out can throw.
+     * If we don't catch here, the cleanup steps after `authRepository.signOut()`
+     * never run — `consumeChatDeepLink()` (cross-account leak risk) and
+     * `_uiState.value = AuthUiState()` (UI stays in authenticated state).
+     */
+    @Test
+    fun `signOut clears UI state even when authRepository throws`() =
+        runTest {
+            setupSignInIdentity()
+            coEvery { authRepository.signInWithGoogleIdToken("token") } returns Resource.Success("firebase-uid")
+            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
+            coEvery { userRepository.getUser(uniqueIdStr) } returns
+                Resource.Success(
+                    TestData.createTestUser(uid = uniqueIdStr, dateOfBirth = testDob),
+                )
+            coEvery { authRepository.signOut() } throws IllegalStateException("platform sign-out failure")
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+            vm.signInWithGoogle("token")
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.isAuthenticated)
+
+            vm.signOut()
+            advanceUntilIdle()
+
+            assertFalse(
+                "UI must be reset to default even if platform sign-out failed — otherwise the user" +
+                    " stays on an authenticated screen with stale session state.",
+                vm.uiState.value.isAuthenticated,
+            )
+            assertNull(vm.uiState.value.error)
+            coVerify { authRepository.signOut() }
+        }
+
+    /**
+     * Catching `Exception` would swallow `CancellationException` (it extends
+     * `IllegalStateException`), breaking structured concurrency: a config-change
+     * cancelling the launch mid-`signOut()` would be silently absorbed and the
+     * post-try cleanup (UI reset) would run against a dead scope. The fix is a
+     * sibling `catch (e: CancellationException) { throw e }` BEFORE the broad
+     * catch. Observable signal: `_uiState.value = AuthUiState()` must NOT run
+     * after the rethrow, so `isAuthenticated` stays at its pre-signOut value.
+     */
+    @Test
+    fun `signOut propagates CancellationException — cleanup after rethrow must not run`() =
+        runTest {
+            setupSignInIdentity()
+            coEvery { authRepository.signInWithGoogleIdToken("token") } returns Resource.Success("firebase-uid")
+            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
+            coEvery { userRepository.getUser(uniqueIdStr) } returns
+                Resource.Success(
+                    TestData.createTestUser(uid = uniqueIdStr, dateOfBirth = testDob),
+                )
+            coEvery { authRepository.signOut() } throws CancellationException("scope cancelled mid-signOut")
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+            vm.signInWithGoogle("token")
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.isAuthenticated)
+
+            vm.signOut()
+            advanceUntilIdle()
+
+            assertTrue(
+                "CancellationException must propagate — UI reset line must NOT execute, otherwise" +
+                    " a broad catch is silently swallowing structured cancellation.",
+                vm.uiState.value.isAuthenticated,
+            )
         }
 
     @Test

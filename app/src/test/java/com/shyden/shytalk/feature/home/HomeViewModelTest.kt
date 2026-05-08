@@ -200,6 +200,27 @@ class HomeViewModelTest {
             coVerify { authRepository.signOut() }
         }
 
+    /**
+     * `AuthRepositorySignOutContractTest` proves platform sign-out can throw.
+     * `HomeViewModel.signOut` is fire-and-forget — an uncaught exception would
+     * be swallowed by `viewModelScope`'s default handler and leak into
+     * `Thread.UncaughtExceptionHandler` on Android, surfacing as an error log
+     * with no diagnostic context. Catch + log explicitly here.
+     */
+    @Test
+    fun `signOut does not crash when authRepository throws`() =
+        runTest {
+            coEvery { authRepository.signOut() } throws IllegalStateException("platform sign-out failure")
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.signOut()
+            advanceUntilIdle()
+
+            coVerify { authRepository.signOut() }
+        }
+
     @Test
     fun `isLoading becomes false after rooms emit`() =
         runTest {

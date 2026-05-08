@@ -21,6 +21,7 @@ import com.shyden.shytalk.data.repository.UserRepository
 import com.shyden.shytalk.feature.legal.CURRENT_LEGAL_VERSION
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -769,7 +770,18 @@ class AuthViewModel(
             // Clear local credentials and Firebase session after revoke completes
             appLockRepository?.clearCredential()
             resolvedUniqueId = null
-            authRepository.signOut()
+            // Catch platform sign-out failure so the cleanup below (deep-link
+            // clear + UI reset) still runs — leaving the chat deep link or an
+            // authenticated UI behind on shared devices is the worse outcome.
+            // CancellationException must propagate so structured concurrency
+            // remains intact (e.g. config-change cancelling the launch).
+            try {
+                authRepository.signOut()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logE(TAG, "authRepository.signOut() failed: ${e.message}", e)
+            }
             // Allow migration path to run again on next sign-in
             migrationCompleted = false
             // Clear any pending push deep link so a notification tapped just

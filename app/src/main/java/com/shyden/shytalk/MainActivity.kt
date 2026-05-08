@@ -68,6 +68,7 @@ import com.shyden.shytalk.navigation.Screen
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.ui.theme.ShyTalkTheme
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -464,8 +465,16 @@ class MainActivity : AppCompatActivity() {
                                     workerApiClient.clearTokenCache()
                                     // Process-scoped: sign-out must finish even if this
                                     // Activity is destroyed by the navigation it triggers.
+                                    // Rethrow CancellationException to keep structured
+                                    // concurrency intact when the scope is cancelled.
                                     ProcessLifecycleOwner.get().lifecycleScope.launch {
-                                        authRepository.signOut()
+                                        try {
+                                            authRepository.signOut()
+                                        } catch (e: CancellationException) {
+                                            throw e
+                                        } catch (e: Exception) {
+                                            Log.e(TAG, "authRepository.signOut() failed: ${e.message}", e)
+                                        }
                                     }
                                 },
                             )
