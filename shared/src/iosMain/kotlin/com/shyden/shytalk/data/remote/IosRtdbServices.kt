@@ -4,6 +4,7 @@ import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.repository.TypingRepository
 import dev.gitlive.firebase.database.FirebaseDatabase
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -41,6 +42,8 @@ class IosTypingRepositoryImpl(
                 } else {
                     ref.removeValue()
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logW(TAG, "setTyping failed: ${e.message}")
             }
@@ -60,6 +63,8 @@ class IosTypingRepositoryImpl(
                     // Consider typing if timestamp is within 6 seconds
                     (currentTimeMillis() - timestamp) < 6000
                 }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logW(TAG, "observeTyping failed: ${e.message}")
             emptyFlow()
@@ -89,6 +94,8 @@ class IosPresenceServiceImpl(
                 val ref = database.reference("rooms/$roomId/presence/$userId")
                 ref.setValue(currentTimeMillis())
                 ref.onDisconnect().removeValue()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logW(TAG, "setPresence failed: ${e.message}")
             }
@@ -101,6 +108,8 @@ class IosPresenceServiceImpl(
         scope.launch {
             try {
                 database.reference("rooms/$roomId/presence/$userId").removeValue()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logW(TAG, "removePresence failed: ${e.message}")
             }
@@ -120,6 +129,8 @@ class IosPresenceServiceImpl(
                             child.key
                         }.toSet()
                 }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logW(TAG, "observeRoomPresence failed: ${e.message}")
             emptyFlow()
@@ -133,6 +144,8 @@ class IosPresenceServiceImpl(
             val snapshot = database.reference("rooms/$roomId/presence/$userId").valueEvents
             // Simple check — if value exists, user is present
             false // Default to false — full implementation needs one-shot read
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             false
         }
@@ -165,6 +178,8 @@ class IosConversationWebSocketServiceImpl(
         scope.launch {
             try {
                 database.reference("conversations/$convId/typing/$userId").removeValue()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logW(TAG, "disconnect cleanup failed: ${e.message}")
             }
@@ -184,6 +199,8 @@ class IosConversationWebSocketServiceImpl(
                 } else {
                     ref.removeValue()
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logW(TAG, "sendTyping failed: ${e.message}")
             }

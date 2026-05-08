@@ -8,6 +8,7 @@ import com.shyden.shytalk.core.model.Seat
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.data.remote.WorkerApiClient
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -35,6 +36,8 @@ class RoomRepositoryImpl(
                     val data = doc.data ?: return@mapNotNull null
                     ChatRoom.fromMap(data, doc.id)
                 }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "Failed to prefetch active rooms", e)
         }
@@ -462,6 +465,8 @@ class RoomRepositoryImpl(
             for (uid in participantIds) {
                 try {
                     firestore.document("users/$uid").update("currentRoomId", null).await()
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.w(TAG, "Room operation failed", e)
                 }
@@ -478,6 +483,8 @@ class RoomRepositoryImpl(
                     .get()
                     .await()
             snapshot.documents.firstOrNull()?.id
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "Failed to find active room by owner", e)
             null
@@ -535,6 +542,8 @@ class RoomRepositoryImpl(
                             }
                             transaction.update(roomRef, updates)
                         }.await()
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.w(TAG, "Room operation failed", e)
                 }
@@ -572,10 +581,14 @@ class RoomRepositoryImpl(
                     for (uid in participantIds) {
                         try {
                             firestore.document("users/$uid").update("currentRoomId", null).await()
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (e: Exception) {
                             Log.w(TAG, "Room operation failed", e)
                         }
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.w(TAG, "Room operation failed", e)
                 }

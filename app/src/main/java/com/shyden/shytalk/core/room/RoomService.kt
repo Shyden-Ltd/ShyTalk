@@ -21,6 +21,7 @@ import com.shyden.shytalk.core.chathead.ChatHeadManager
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.UserRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -158,6 +159,8 @@ class RoomService : Service() {
                 } else {
                     Log.w(TAG, "performDismiss: no active room — cleaning up chathead only")
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "performDismiss: error during close/leave", e)
             }
@@ -305,6 +308,11 @@ class RoomService : Service() {
         // Run cleanup on a background thread, then stop the service
         Thread {
             runBlocking {
+                // Intentionally catch CancellationException (via Exception) here:
+                // `withTimeout` throws TimeoutCancellationException on its 2s deadline,
+                // which IS the expected path. Rethrowing would propagate out of
+                // runBlocking and crash this background Thread before stopSelf() runs.
+                // No outer coroutine scope exists to propagate cancellation to.
                 try {
                     withTimeout(2000L) {
                         activeRoomManager.leaveRoom()

@@ -10,6 +10,7 @@ import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.core.util.toMap
 import com.shyden.shytalk.data.remote.WorkerApiClient
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -36,6 +37,8 @@ class UserRepositoryImpl(
             val data = doc.data ?: return
             val user = User.fromMap(data, userId)
             _userUpdates.tryEmit(user)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "Failed to emit user update for $userId", e)
         }
@@ -131,6 +134,8 @@ class UserRepositoryImpl(
                         val data = doc.data ?: return@mapNotNull null
                         User.fromMap(data, doc.id)
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to batch-load ${chunk.size} users", e)
                     emptyList()
@@ -290,6 +295,8 @@ class UserRepositoryImpl(
                                     ?.filterIsInstance<String>() ?: emptyList()
                             if (targetUserId in blockedIds) doc.id else null
                         }
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         Log.w(TAG, "Failed to batch-check blocks for ${chunk.size} users", e)
                         emptyList()

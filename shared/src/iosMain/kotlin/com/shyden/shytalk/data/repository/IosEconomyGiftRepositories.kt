@@ -18,6 +18,7 @@ import com.shyden.shytalk.data.firestore.dataMap
 import com.shyden.shytalk.data.remote.IosApiClient
 import dev.gitlive.firebase.firestore.Direction
 import dev.gitlive.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.map
@@ -218,6 +219,8 @@ class IosEconomyRepositoryImpl(
                     .storeKitPurchase(productId, isSubscription)
             } catch (_: com.shyden.shytalk.economy.StoreKitCancelledException) {
                 return Resource.Error("Purchase cancelled by user")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 return Resource.Error(e.message ?: "StoreKit purchase failed")
             }

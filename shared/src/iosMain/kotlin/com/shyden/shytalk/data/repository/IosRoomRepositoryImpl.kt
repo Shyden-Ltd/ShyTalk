@@ -10,6 +10,7 @@ import com.shyden.shytalk.data.firestore.dataMap
 import com.shyden.shytalk.data.remote.IosApiClient
 import dev.gitlive.firebase.firestore.FieldValue
 import dev.gitlive.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.JsonObject
@@ -36,6 +37,8 @@ class IosRoomRepositoryImpl(
                     val data = doc.dataMap()
                     ChatRoom.fromMap(data, doc.id)
                 }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logW(TAG, "Failed to prefetch active rooms")
         }
@@ -395,6 +398,8 @@ class IosRoomRepositoryImpl(
             for (uid in participantIds) {
                 try {
                     firestore.collection("users").document(uid).updateFields { "currentRoomId" to null }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     logW(TAG, "Failed to clear currentRoomId for $uid")
                 }
@@ -413,6 +418,8 @@ class IosRoomRepositoryImpl(
                         )
                     }.get()
             snapshot.documents.firstOrNull()?.id
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logW(TAG, "Failed to find active room by owner")
             null
@@ -469,6 +476,8 @@ class IosRoomRepositoryImpl(
                             }
                         }
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     logW(TAG, "Failed to leave room ${doc.id}")
                 }
@@ -504,10 +513,14 @@ class IosRoomRepositoryImpl(
                     for (uid in participantIds) {
                         try {
                             firestore.collection("users").document(uid).updateFields { "currentRoomId" to null }
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (e: Exception) {
                             logW(TAG, "Failed to clear currentRoomId for $uid")
                         }
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     logW(TAG, "Failed to close room ${doc.id}")
                 }

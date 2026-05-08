@@ -17,6 +17,7 @@ import com.shyden.shytalk.data.remote.IosApiClient
 import dev.gitlive.firebase.firestore.Direction
 import dev.gitlive.firebase.firestore.FieldValue
 import dev.gitlive.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.JsonArray
@@ -55,6 +56,8 @@ class IosPrivateMessageRepositoryImpl(
                         null
                     }
                 }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logW(TAG, "Failed to prefetch conversations")
         }
