@@ -76,6 +76,23 @@ const val TAG_AGE_VERIF_BACK = "ageVerif_back"
 const val TAG_AGE_VERIF_TEST_ENV_WARNING = "ageVerif_testEnvWarning"
 
 /**
+ * Pure-helper for the "test environment, do not upload a real ID" warning
+ * banner. The banner is shown only on the [AgeVerificationSubmitStep.PickImage]
+ * step (the step where the user is about to attach an image) AND only when
+ * the build is non-prod ([AgeVerificationSubmitUiState.isPreviewBuild] true).
+ *
+ * Extracted to a top-level non-Composable function so the rendering decision
+ * is unit-testable in `commonTest` without Compose UI test infrastructure —
+ * the project's pattern, mirroring `SuspensionScreen.shouldShowReason`.
+ *
+ * Per the spec at `.project/plans/2026-05-03-age-verification.md` "Non-prod
+ * simulation": local + dev builds must prominently warn the tester not to
+ * upload a real ID. Production builds never show the warning.
+ */
+internal fun shouldShowTestEnvWarning(uiState: AgeVerificationSubmitUiState): Boolean =
+    uiState.step == AgeVerificationSubmitStep.PickImage && uiState.isPreviewBuild
+
+/**
  * 4-step user-facing verification flow (PR 9).
  *
  * State machine in [AgeVerificationSubmitViewModel] drives which step
@@ -133,7 +150,7 @@ fun AgeVerificationSubmitScreen(
                 AgeVerificationSubmitStep.PickImage ->
                     PickImageStep(
                         photoAlreadyAttached = uiState.imageBytes != null,
-                        showTestEnvWarning = uiState.isPreviewBuild,
+                        showTestEnvWarning = shouldShowTestEnvWarning(uiState),
                     ) { bytes, ct ->
                         viewModel.setImage(bytes, ct)
                     }
