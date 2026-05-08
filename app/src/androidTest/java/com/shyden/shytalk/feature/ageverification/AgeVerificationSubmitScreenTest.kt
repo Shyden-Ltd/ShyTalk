@@ -82,14 +82,24 @@ class AgeVerificationSubmitScreenTest {
             .assertIsDisplayed()
         // Also verify the actual warning copy renders (catches the case
         // where the container is present but `stringResource` failed
-        // silently, leaving the banner as a blank box). The label and
-        // body strings live in `composeResources/values/strings.xml`.
+        // silently, leaving the banner as a blank box). Use exact-match
+        // for both the label and the body so each onNodeWithText resolves
+        // to exactly one node — substring matches surface BOTH the label
+        // ("Test environment") AND the body (which contains "test
+        // environment" inside it), which fails onNodeWithText's
+        // single-node contract. Strings come from
+        // `composeResources/values/strings.xml`:
+        //   age_verif_test_env_label = "Test environment"
+        //   age_verif_test_env_warning = "Upload any image — this is a
+        //     test environment, real IDs are not required and not
+        //     stored long-term."
         composeTestRule
             .onNodeWithText("Test environment")
             .assertIsDisplayed()
         composeTestRule
-            .onNodeWithText("test environment", substring = true, ignoreCase = true)
-            .assertIsDisplayed()
+            .onNodeWithText(
+                "Upload any image — this is a test environment, real IDs are not required and not stored long-term.",
+            ).assertIsDisplayed()
     }
 
     // ─── Prod build: warning absent on every step ──────────────────
