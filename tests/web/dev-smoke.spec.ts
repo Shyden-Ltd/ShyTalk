@@ -207,8 +207,40 @@ test.describe("Dev Smoke — critical user-facing API journeys", () => {
   test("POST /api/suggestions accepts a smoke submission (public-write path + sanitisation)", async () => {
     // Catches: input sanitisation, language detection, tag
     // validation, Firestore rule on the `suggestions` collection.
-    // The submission is tagged via title prefix so the smoke entries
-    // are filterable in Firestore for cleanup if needed.
+    //
+    // Pre-clean: withdraw any orphaned `[smoke]`-prefixed pending
+    // suggestions from prior runs. Without this, every deploy adds a
+    // pending entry that nobody reviews, and after 10 runs the route
+    // returns HTTP 429 (`MAX_PENDING_PER_USER` in
+    // express-api/src/utils/suggestion-constants.js — observed on the
+    // second back-to-back DEV deploy on 2026-05-08). Same idiom as the
+    // follow/unfollow journey's pre-clean: assert success because a
+    // pre-clean failure would let the rest of the test give misleading
+    // results.
+    const minePre = await smoke.api.get(`${API_BASE}/api/suggestions/mine`, {
+      headers: authedHeaders(),
+    });
+    expect(
+      minePre.ok(),
+      `pre-clean GET /suggestions/mine expected 200, got ${minePre.status()}: ${await minePre.text()}`,
+    ).toBe(true);
+    const minePreBody = (await minePre.json()) as { suggestions?: Array<Record<string, unknown>> };
+    const orphans = (minePreBody.suggestions ?? []).filter(
+      (s) =>
+        s.status === "pending" &&
+        typeof s.title === "string" &&
+        (s.title as string).startsWith("[smoke]"),
+    );
+    for (const s of orphans) {
+      const del = await smoke.api.delete(`${API_BASE}/api/suggestions/${s.id}`, {
+        headers: authedHeaders(),
+      });
+      expect(
+        del.ok(),
+        `pre-clean DELETE /suggestions/${s.id} expected 200, got ${del.status()}: ${await del.text()}`,
+      ).toBe(true);
+    }
+
     const stamp = new Date().toISOString();
     const res = await smoke.api.post(`${API_BASE}/api/suggestions`, {
       headers: authedHeaders(),
@@ -222,7 +254,16 @@ test.describe("Dev Smoke — critical user-facing API journeys", () => {
     });
     expect(res.ok(), `${res.status()}: ${await res.text()}`).toBe(true);
     const body = await res.json();
-    expect(body.id || body.suggestionId, "suggestion id returned").toBeTruthy();
+    const newId = (body.id || body.suggestionId) as string | undefined;
+    expect(newId, "suggestion id returned").toBeTruthy();
+
+    // Post-clean: withdraw the suggestion we just created. Best-effort
+    // — the next run's pre-clean catches anything we miss here.
+    if (newId) {
+      await smoke.api
+        .delete(`${API_BASE}/api/suggestions/${newId}`, { headers: authedHeaders() })
+        .catch(() => {});
+    }
   });
 });
 
