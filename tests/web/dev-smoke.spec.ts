@@ -967,3 +967,161 @@ test.describe("Dev Smoke — gacha wheel spin (transactional coin deduction)", (
     ).toBe(400);
   });
 });
+
+test.describe("Dev Smoke — push notification token + settings", () => {
+  // Per `feedback-dev-deploy-smoke-tests` Tier 1 follow-ups: push smoke
+  // was one of 4 missing journeys. Exercises POST/DELETE on the FCM
+  // token endpoint plus PATCH on notification settings — covers the
+  // entire `notifications.js` route file.
+  //
+  // The token value is intentionally a non-real string. We never try to
+  // actually deliver via FCM; we only verify the Express route writes
+  // to `users/{uniqueId}.fcmTokens` (arrayUnion) and `arrayRemove`
+  // operations succeed. A token-shaped string keeps it from being
+  // mistaken for a real device token in admin tools / log diagnostics.
+  //
+  // Per-run unique suffix prevents cross-run collision: parallel
+  // smoke runs against the same dev environment would otherwise share
+  // the smoke account's fcmTokens array, and the idempotency test
+  // below depends on knowing the token wasn't already present.
+  let smokeFcmToken: string;
+
+  test.beforeAll(() => {
+    smokeFcmToken = `smoke-test-fake-fcm-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 10)}`;
+  });
+
+  test("POST /api/notifications/token saves a fake token (auth + Firestore arrayUnion)", async () => {
+    // Pre-clean: idempotent DELETE to ensure the token isn't lingering
+    // from a previous failed run that didn't reach its own cleanup.
+    // arrayRemove is a no-op when the value isn't present, so this
+    // shouldn't 5xx — but we ASSERT 200 anyway because a 5xx here
+    // would mask a recurring failure on the actual save below.
+    const preClean = await smoke.api.delete(`${API_BASE}/api/notifications/token`, {
+      headers: authedHeaders(),
+      data: { token: smokeFcmToken },
+    });
+    expect(
+      preClean.ok(),
+      `pre-clean DELETE must succeed (${preClean.status()}: ${await preClean.text()})`,
+    ).toBe(true);
+
+    const save = await smoke.api.post(`${API_BASE}/api/notifications/token`, {
+      headers: authedHeaders(),
+      data: { token: smokeFcmToken },
+    });
+    expect(
+      save.ok(),
+      `POST /api/notifications/token must succeed (${save.status()}: ${await save.text()})`,
+    ).toBe(true);
+    const body = await save.json();
+    expect(body.success, `expected success=true, got ${JSON.stringify(body)}`).toBe(true);
+  });
+
+  test("POST same token twice is idempotent (arrayUnion semantic)", async () => {
+    // Saving the same token a second time MUST NOT 5xx and MUST NOT
+    // produce a duplicate in the array — Firestore's arrayUnion handles
+    // de-dup. The smoke test verifies the route doesn't accidentally
+    // trade arrayUnion for `update({fcmTokens: [token]})` (which would
+    // clobber other devices' tokens) or `arrayUnion(token, token)`
+    // (no-op but suspicious). We can't directly inspect the array
+    // since the GET /users/:uniqueId response strips fcmTokens, so we
+    // verify behaviorally: the second POST returns 200 just like the
+    // first.
+    const second = await smoke.api.post(`${API_BASE}/api/notifications/token`, {
+      headers: authedHeaders(),
+      data: { token: smokeFcmToken },
+    });
+    expect(
+      second.ok(),
+      `second POST same token must still succeed (${second.status()}: ${await second.text()})`,
+    ).toBe(true);
+  });
+
+  test("DELETE /api/notifications/token removes the token (cleanup)", async () => {
+    const remove = await smoke.api.delete(`${API_BASE}/api/notifications/token`, {
+      headers: authedHeaders(),
+      data: { token: smokeFcmToken },
+    });
+    expect(
+      remove.ok(),
+      `DELETE must succeed (${remove.status()}: ${await remove.text()})`,
+    ).toBe(true);
+
+    // Idempotent re-DELETE — arrayRemove on a missing value is a no-op
+    // at the Firestore level. Asserting 200 here documents the route's
+    // contract: subsequent token rotations on the same device must not
+    // 5xx if a stale token was already cleaned up server-side (e.g.,
+    // by an admin tool or a parallel client).
+    const removeAgain = await smoke.api.delete(`${API_BASE}/api/notifications/token`, {
+      headers: authedHeaders(),
+      data: { token: smokeFcmToken },
+    });
+    expect(
+      removeAgain.ok(),
+      `idempotent re-DELETE must still succeed (${removeAgain.status()}: ${await removeAgain.text()})`,
+    ).toBe(true);
+  });
+
+  test("POST /api/notifications/token without token field is rejected with 400", async () => {
+    // Invariant: route line 16 — `token` must be a non-empty string ≤500
+    // chars. A missing/empty body is the most common client bug
+    // (forgetting to JSON-stringify, or sending an empty object after
+    // a token rotation race). 400 short-circuits before any Firestore
+    // write — failure here means a malformed client could write an
+    // unbounded value to fcmTokens.
+    const res = await smoke.api.post(`${API_BASE}/api/notifications/token`, {
+      headers: authedHeaders(),
+      data: {},
+    });
+    expect(
+      res.status(),
+      `expected 400 for missing token, got ${res.status()}: ${await res.text()}`,
+    ).toBe(400);
+  });
+
+  test("PATCH /api/notifications/settings updates pmNotificationsEnabled", async () => {
+    // Toggle to true then back to false to leave the smoke account in
+    // its prior state (assuming default false). The PATCH route writes
+    // a sparse update — only the keys we send — so we don't disturb
+    // other settings the smoke account may rely on for its other smoke
+    // tests (e.g., timestamp/date-separator preferences).
+    const enable = await smoke.api.patch(`${API_BASE}/api/notifications/settings`, {
+      headers: authedHeaders(),
+      data: { pmNotificationsEnabled: true },
+    });
+    expect(
+      enable.ok(),
+      `PATCH enable must succeed (${enable.status()}: ${await enable.text()})`,
+    ).toBe(true);
+    expect((await enable.json()).success).toBe(true);
+
+    const disable = await smoke.api.patch(`${API_BASE}/api/notifications/settings`, {
+      headers: authedHeaders(),
+      data: { pmNotificationsEnabled: false },
+    });
+    expect(
+      disable.ok(),
+      `PATCH disable must succeed (${disable.status()}: ${await disable.text()})`,
+    ).toBe(true);
+  });
+
+  test("PATCH /api/notifications/settings with no allowed fields is rejected with 400", async () => {
+    // The route allowlist is: pmNotificationsEnabled, pmSoundEnabled,
+    // pmShowTimestamps, pmShowDateSeparators, pmNotificationPreview.
+    // Anything else gets dropped, and if no allowed key is present
+    // the route returns 400 — guards against a body with only typo'd
+    // keys silently producing a 200 no-op (which would hide a client
+    // refactor that renames a setting on one platform but not the
+    // other).
+    const res = await smoke.api.patch(`${API_BASE}/api/notifications/settings`, {
+      headers: authedHeaders(),
+      data: { someUnknownField: true, anotherUnknown: "x" },
+    });
+    expect(
+      res.status(),
+      `expected 400 for body with no allowed fields, got ${res.status()}: ${await res.text()}`,
+    ).toBe(400);
+  });
+});
