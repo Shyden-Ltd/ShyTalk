@@ -32,6 +32,7 @@ import com.shyden.shytalk.data.repository.SeatRequestRepository
 import com.shyden.shytalk.data.repository.StorageRepository
 import com.shyden.shytalk.data.repository.TranslationRepository
 import com.shyden.shytalk.data.repository.UserRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
@@ -468,6 +469,8 @@ class RoomViewModel(
                             _uiState.update { it.copy(isLoading = false, shouldNavigateBack = true) }
                             return@launch
                         }
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         logE(TAG, "Failed to check suspension during auto-rejoin", e)
                     }
@@ -902,6 +905,8 @@ class RoomViewModel(
                     roomRepository.leaveAllRooms(userId, exceptRoomId = roomId)
                     roomRepository.joinRoom(roomId, userId)
                     roomRepository.recordFirstJoinTimestamp(roomId, userId)
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     logE(TAG, "Failed to join room: ${e.message}")
                 }
@@ -1052,6 +1057,8 @@ class RoomViewModel(
 
                     is Resource.Loading -> Unit
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logE(TAG, "Seat action failed", e)
                 _uiState.update { it.copy(seatActionStatus = SeatActionStatus.Idle, error = e.message ?: "Action failed") }
@@ -1457,6 +1464,8 @@ class RoomViewModel(
                     voiceService.setMicrophoneEnabled(shouldUnmute)
                     voiceService.setAudioMode(shouldUnmute)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logE(TAG, "ownerReturn failed, will retry on next room update", e)
                 isOwnerReturnTriggered = false

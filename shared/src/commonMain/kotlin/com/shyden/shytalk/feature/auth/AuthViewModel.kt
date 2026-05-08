@@ -170,6 +170,8 @@ class AuthViewModel(
                     var signedOut = true
                     try {
                         authRepository.signOut()
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         signedOut = false
                         logE(TAG, "signOut during migration abort failed: ${e.message}")
@@ -423,12 +425,16 @@ class AuthViewModel(
             var signedOut = true
             try {
                 appLockRepository?.clearCredential()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 credentialCleared = false
                 logE(TAG, "Failed to clear credential during auth-error recovery: ${e.message}")
             }
             try {
                 authRepository.signOut()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 signedOut = false
                 logE(TAG, "Sign-out during auth-error recovery failed: ${e.message}")
@@ -764,6 +770,8 @@ class AuthViewModel(
             // Revoke biometric key BEFORE clearing Firebase session (needs auth token)
             try {
                 biometricRepository?.revoke(deviceId)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logW(TAG, "Failed to revoke biometric key: ${e.message}")
             }

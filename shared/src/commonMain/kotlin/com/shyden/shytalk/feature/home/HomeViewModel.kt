@@ -89,6 +89,8 @@ class HomeViewModel(
                 val banners = bannerRepository.getActiveBanners()
                 logI(TAG, "Loaded ${banners.size} active banners")
                 _uiState.update { it.copy(banners = banners) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logE(TAG, "Failed to load banners: ${e.message}")
             }

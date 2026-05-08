@@ -13,6 +13,7 @@ import com.shyden.shytalk.data.repository.FunFactRepository
 import com.shyden.shytalk.data.repository.PrivateMessageRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.UserRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -57,6 +58,8 @@ class FunFactSplashViewModel(
                                 launch {
                                     try {
                                         imagePreloader?.preload(banner.imageUrl)
+                                    } catch (e: CancellationException) {
+                                        throw e
                                     } catch (e: Exception) {
                                         logD(TAG, "Banner image preload failed: ${e.message}")
                                     }
@@ -66,12 +69,16 @@ class FunFactSplashViewModel(
                                     launch {
                                         try {
                                             webContentPreloader?.preload(actionValue)
+                                        } catch (e: CancellationException) {
+                                            throw e
                                         } catch (e: Exception) {
                                             logD(TAG, "Web content preload failed: ${e.message}")
                                         }
                                     }
                                 }
                             }
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (e: Exception) {
                             logE(TAG, "Banner preload failed: ${e.message}")
                         }
@@ -83,6 +90,8 @@ class FunFactSplashViewModel(
                                 logI(TAG, "Synced ${fresh.size} fresh fun facts")
                                 _funFacts.value = fresh.shuffled()
                             }
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (e: Exception) {
                             logE(TAG, "Fun fact sync failed: ${e.message}")
                         }

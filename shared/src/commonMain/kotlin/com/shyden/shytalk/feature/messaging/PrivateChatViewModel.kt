@@ -39,6 +39,7 @@ import com.shyden.shytalk.feature.ageverification.AgeRestrictionService
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsBytes
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -386,6 +387,8 @@ class PrivateChatViewModel(
                         _uiState.update { it.copy(messages = combined) }
                         resolveRoomInvites(combined)
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     logE(TAG, "Messages observation failed: ${e.message}")
                     _uiState.update { it.copy(error = e.message ?: "Failed to load messages") }
@@ -858,6 +861,8 @@ class PrivateChatViewModel(
                 pendingMessages.remove(tempId)
                 updateMessagesWithPending()
                 sendImages(urls)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 pendingMessages[tempId] = pendingMsg.copy(sendStatus = SendStatus.FAILED)
                 updateMessagesWithPending()
@@ -978,6 +983,8 @@ class PrivateChatViewModel(
                 val bytes =
                     try {
                         stickerStorage?.readStickerBytes(sticker.id) ?: error("No sticker storage")
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         pendingMessages[tempId] = pendingMsg.copy(sendStatus = SendStatus.FAILED)
                         updateMessagesWithPending()
@@ -1090,6 +1097,8 @@ class PrivateChatViewModel(
 
                     else -> { /* Silently ignore — first send will upload as fallback */ }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logW(TAG, "Sticker pre-upload failed (best-effort)", e)
             }
@@ -1120,6 +1129,8 @@ class PrivateChatViewModel(
                         error = "Sticker saved!",
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logW(TAG, "Failed to save sticker from URL", e)
                 _uiState.update { it.copy(error = "Failed to save sticker") }
