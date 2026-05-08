@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.auth.FirebaseAuth
 import com.shyden.shytalk.core.BuildVariant
@@ -461,7 +462,11 @@ class MainActivity : AppCompatActivity() {
                                 onEmailLinkConsumed = { pendingEmailLinkState.value = null },
                                 onSignOut = {
                                     workerApiClient.clearTokenCache()
-                                    authRepository.signOut()
+                                    // Process-scoped: sign-out must finish even if this
+                                    // Activity is destroyed by the navigation it triggers.
+                                    ProcessLifecycleOwner.get().lifecycleScope.launch {
+                                        authRepository.signOut()
+                                    }
                                 },
                             )
 

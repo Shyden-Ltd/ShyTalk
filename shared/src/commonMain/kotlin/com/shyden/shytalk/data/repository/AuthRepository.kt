@@ -50,5 +50,5 @@ interface AuthRepository {
 
     suspend fun signInWithCustomToken(token: String): Resource<String>
 
-    fun signOut()
+    suspend fun signOut()
 }

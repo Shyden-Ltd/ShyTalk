@@ -86,7 +86,7 @@ class AuthViewModelIdentityTest {
 
         var signOutShouldThrow = false
 
-        override fun signOut() {
+        override suspend fun signOut() {
             if (signOutShouldThrow) throw RuntimeException("signOut deliberately failing in test")
             signedOut = true
             resolvedUniqueId = null

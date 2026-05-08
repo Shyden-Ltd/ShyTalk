@@ -345,6 +345,6 @@ class HomeViewModel(
 
     fun signOut() {
         logI(TAG, "User signing out")
-        authRepository.signOut()
+        viewModelScope.launch { authRepository.signOut() }
     }
 }

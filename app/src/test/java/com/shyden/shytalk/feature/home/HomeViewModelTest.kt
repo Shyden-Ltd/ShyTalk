@@ -197,7 +197,7 @@ class HomeViewModelTest {
 
             vm.signOut()
 
-            verify { authRepository.signOut() }
+            coVerify { authRepository.signOut() }
         }
 
     @Test
@@ -541,7 +541,7 @@ class HomeViewModelTest {
 
             vm.signOut()
 
-            verify { authRepository.signOut() }
+            coVerify { authRepository.signOut() }
         }
 
     // ===== createRoom sets isLoading during operation =====

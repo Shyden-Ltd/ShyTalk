@@ -157,17 +157,19 @@ class AuthRepositoryImplTest {
         }
 
     @Test
-    fun `signOut calls auth signOut`() {
-        repo.signOut()
-        verify { auth.signOut() }
-    }
+    fun `signOut calls auth signOut`() =
+        runTest {
+            repo.signOut()
+            verify { auth.signOut() }
+        }
 
     @Test
-    fun `signOut clears resolvedUniqueId`() {
-        repo.resolvedUniqueId = "10000005"
-        repo.signOut()
-        assertNull(repo.resolvedUniqueId)
-    }
+    fun `signOut clears resolvedUniqueId`() =
+        runTest {
+            repo.resolvedUniqueId = "10000005"
+            repo.signOut()
+            assertNull(repo.resolvedUniqueId)
+        }
 
     // ===== currentFirebaseUid =====
 

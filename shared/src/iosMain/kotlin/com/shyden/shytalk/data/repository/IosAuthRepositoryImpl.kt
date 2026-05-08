@@ -100,11 +100,8 @@ class IosAuthRepositoryImpl(
             result.user?.uid ?: throw Exception("Sign in failed: no user returned")
         }
 
-    override fun signOut() {
+    override suspend fun signOut() {
         resolvedUniqueId = null
-        // GitLive signOut is a suspend function, but our interface declares it as non-suspend.
-        // Firebase iOS SDK's signOut is synchronous underneath, so this is safe.
-        @Suppress("BlockingMethodInNonBlockingContext")
-        kotlinx.coroutines.runBlocking { auth.signOut() }
+        auth.signOut()
     }
 }

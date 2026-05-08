@@ -64,7 +64,7 @@ class FakeAuthRepository : AuthRepository {
         return Resource.Success("test-user-1")
     }
 
-    override fun signOut() {
+    override suspend fun signOut() {
         resolvedUniqueId = null
         fakeAuthenticated = false
         fakeUserId = null

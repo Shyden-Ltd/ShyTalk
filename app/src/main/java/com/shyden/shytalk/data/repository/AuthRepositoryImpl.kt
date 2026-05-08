@@ -150,7 +150,7 @@ class AuthRepositoryImpl(
             result.user?.uid ?: throw Exception("Sign in failed: no user returned")
         }
 
-    override fun signOut() {
+    override suspend fun signOut() {
         resolvedUniqueId = null
         auth.signOut()
     }

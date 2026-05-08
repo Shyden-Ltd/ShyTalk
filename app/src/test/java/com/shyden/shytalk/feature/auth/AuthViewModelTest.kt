@@ -446,7 +446,7 @@ class AuthViewModelTest {
             vm.signOut()
 
             assertFalse(vm.uiState.value.isAuthenticated)
-            verify { authRepository.signOut() }
+            coVerify { authRepository.signOut() }
         }
 
     @Test
