@@ -110,8 +110,17 @@
       var signInBtn = header.querySelector('[data-testid="header-signin-btn"]');
       if (signInBtn) {
         signInBtn.addEventListener('click', function () {
+          // Roadmap registers `window.shytalkShowLoginModal` (via
+          // suggestions-board.js) for an in-page modal. The static
+          // legal pages, homepage, and event landing pages do NOT
+          // load suggestions-board.js, so the modal hook is undefined
+          // there — leaving the Sign In button silently broken.
+          // Fall back to the unified portal at /portal/, which is the
+          // canonical web auth UI per roadmap item #47.
           if (window.shytalkShowLoginModal) {
             window.shytalkShowLoginModal('access your account');
+          } else {
+            window.location.href = '/portal/';
           }
         });
       }
