@@ -50,8 +50,17 @@ async function sendOutcomePush(targetUserId, data) {
     const invalid = await sendFcmToTokens(tokens, data);
     if (invalid.length > 0) {
       // Best-effort cleanup of stale tokens — pruning failures here
-      // shouldn't block the decision flow.
-      cleanupInvalidTokens(invalid, targetUserId).catch(() => {});
+      // shouldn't block the decision flow, but they MUST surface in
+      // logs so ops can spot a Firestore-permission regression that
+      // would otherwise let stale tokens accumulate forever.
+      cleanupInvalidTokens(invalid, targetUserId).catch((cleanupErr) => {
+        log.warn('age-verification-fcm', 'Stale-token cleanup failed', {
+          targetUserId,
+          invalidCount: invalid.length,
+          error: cleanupErr?.message,
+          code: cleanupErr?.code,
+        });
+      });
     }
     return true;
   } catch (err) {

@@ -140,18 +140,19 @@ router.post('/users/:uniqueId/data-export', async (req, res) => {
           error: err.message,
         });
         // Don't swallow the status update failure silently — if this fails,
-        // the user's `dataExportStatus` stays at `building` forever, the
-        // polling endpoint reports "in progress", and the user sits waiting
+        // the user's `dataExportStatus` stays at `pending` forever, the
+        // polling endpoint reports "pending", and the user sits waiting
         // for an export that will never complete. This is a GDPR
         // data-export endpoint — silent stuck-in-progress states are a
-        // compliance issue.
+        // compliance issue. (Earlier wording said "building"; the actual
+        // state name set on the user doc is `pending` — see line 76.)
         await db
           .doc(`users/${uniqueId}`)
           .update({ dataExportStatus: 'failed' })
           .catch((statusErr) => {
             log.error(
               'data-export',
-              'Failed to mark dataExportStatus=failed — user may be stuck in building state',
+              'Failed to mark dataExportStatus=failed — user may be stuck in pending state',
               {
                 uniqueId,
                 error: statusErr.message,

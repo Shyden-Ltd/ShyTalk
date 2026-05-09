@@ -20,6 +20,14 @@ jest.mock('../../src/utils/firebase', () => ({
   },
 }));
 
+const mockLogWarn = jest.fn();
+const mockLogError = jest.fn();
+jest.mock('../../src/utils/log', () => ({
+  warn: (...args) => mockLogWarn(...args),
+  error: (...args) => mockLogError(...args),
+  info: jest.fn(),
+}));
+
 beforeEach(() => {
   jest.clearAllMocks();
 });
@@ -74,6 +82,30 @@ describe('sendAgeVerificationApprovedPush', () => {
     await sendAgeVerificationApprovedPush(10000050);
 
     expect(mockCleanupInvalidTokens).toHaveBeenCalledWith(['tok-bad'], 10000050);
+  });
+
+  test('cleanup failure is logged (not silently swallowed) but does not fail the push', async () => {
+    mockDocGet.mockResolvedValue(userWithTokens(['tok-good', 'tok-bad']));
+    mockSendFcmToTokens.mockResolvedValue(['tok-bad']);
+    const cleanupErr = new Error('PERMISSION_DENIED');
+    cleanupErr.code = 'permission-denied';
+    mockCleanupInvalidTokens.mockRejectedValueOnce(cleanupErr);
+
+    const ok = await sendAgeVerificationApprovedPush(10000050);
+    // Yield once so the .catch handler attached to cleanup runs.
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(ok).toBe(true); // push itself succeeded — only the cleanup failed
+    expect(mockLogWarn).toHaveBeenCalledWith(
+      'age-verification-fcm',
+      'Stale-token cleanup failed',
+      expect.objectContaining({
+        targetUserId: 10000050,
+        invalidCount: 1,
+        error: 'PERMISSION_DENIED',
+        code: 'permission-denied',
+      }),
+    );
   });
 
   test('swallows send errors and returns false (admin decision must not fail on push)', async () => {
