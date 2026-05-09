@@ -7,17 +7,20 @@ _Prioritised 2026-03-29 — last revised 2026-05-08 (status sweep: B6.9 deviceId
 
 ---
 
-## Top Priorities (next 7, revised 2026-05-08)
+## Top Priorities (next 6, revised 2026-05-09)
 
 The next batch to push toward DONE, in order:
 
-1. **B7 — Billing v7→v8** (Phase 2) — IN PROGRESS, Dependabot PR #270 build fails; needs investigation. Google Play deprecation deadline.
-2. **B6.12 — `resolveReport` partial-failure surfacing** (Phase 2) — IN PROGRESS, admin UI plumbing partly landed (PRs #385, #392, #393); resolveReport-specific outcome shape still pending.
-3. **B3 — Room message reporting** (Phase 1) — UK OSA, small effort, blocking nothing — quick compliance win.
-4. **C7 — Gift-blocked-but-profile-viewable gap** (Phase 1) — small block-list integrity bugfix; quick win.
-5. **17 — Age-based segregation** (Phase 1) — UK OSA, large; complementary to C8 (which is age-*gating* per-feature; this is age-*segregation*).
-6. **W1 — Shared header on all web pages** (Phase 6) — bundles 4 latent web bugs (COOP, /api/firebase-config 503, watch-bell re-prompt, Google `select_account`).
-7. **C8 PR 14 — manual-QA cycle** (Phase 1) — final gate for the age-verification initiative; triggers DEV + PROD deploy. Multi-day work, defer until other Top Priority items are stacked up to bundle into one DEV deploy. See `.project/plans/2026-05-03-age-verification.md`.
+1. **B6.12 — `resolveReport` partial-failure surfacing** (Phase 2) — IN PROGRESS, admin UI plumbing partly landed (PRs #385, #392, #393); resolveReport-specific outcome shape still pending.
+2. **B3 — Room message reporting** (Phase 1) — UK OSA, small effort, blocking nothing — quick compliance win.
+3. **C7 — Gift-blocked-but-profile-viewable gap** (Phase 1) — small block-list integrity bugfix; quick win.
+4. **17 — Age-based segregation** (Phase 1) — UK OSA, large; complementary to C8 (which is age-*gating* per-feature; this is age-*segregation*).
+5. **W1 — Shared header on all web pages** (Phase 6) — bundles 4 latent web bugs (COOP, /api/firebase-config 503, watch-bell re-prompt, Google `select_account`).
+6. **C8 PR 14 — manual-QA cycle** (Phase 1) — final gate for the age-verification initiative; triggers DEV + PROD deploy. Multi-day work, defer until other Top Priority items are stacked up to bundle into one DEV deploy. See `.project/plans/2026-05-03-age-verification.md`.
+
+> **Candidate adds (when re-promoting to 7+):** scan Phase 0 (test infra: #67 allure landing-page generator, #69 stable Kotlin upgrade off Beta2), Phase 0.5 (test-suite gaps), Phase 1 (other compliance items), and Phase 6 (W2+ web sub-tasks once W1 lands). **Skip** B6.10 (BLOCKED on Apple Dev account) and B6.15 (DEFERRED on UX decision) until their gates clear.
+
+**B7 — Billing v7→v8** — DONE (verified 2026-05-09). Dependabot PR #270 (commit `96f889ee1b0`, 2026-03-30) bumped `billing-ktx` 7.1.1 → 8.3.0 (`gradle/libs.versions.toml:29`). The Android app code already targeted Billing v8 APIs (`ProductDetails`, `QueryProductDetailsParams`, `PendingPurchasesParams`, plus v8-only `onPurchasesUpdatedSubResponseCode` / `unfetchedProductList` in `BillingService.kt:77-81,161-167`); no v7 surfaces (`SkuDetails`, `querySkuDetails`, `launchPriceChangeConfirmationFlow`) remain in the codebase. `./gradlew :app:assembleDevDebug` and `./gradlew :app:testDevDebugUnitTest` both BUILD SUCCESSFUL on 2026-05-09.
 
 **Resource.Loading silent-failure follow-up** — DONE (PR #556, 2026-05-08). `AgeVerificationSubmitViewModel.submit()` lines 215/232/256 now route through `handleUnexpectedLoading(stage)` (logE + reset state) instead of silent `return@launch`/`Unit`. Three RED→GREEN tests pin the recovery contract.
 
@@ -134,7 +137,7 @@ Keep Play Store billing current. Ship iOS alongside Android.
 
 | #     | Feature                                                                     | Effort | Status |
 |-------|-----------------------------------------------------------------------------|--------|--------|
-| B7    | **Billing v7→v8** — Google Play Billing major version, deprecation deadline | Medium | IN PROGRESS — Dependabot PR #270 build fails; needs investigation. **Top Priority #2.** |
+| B7    | **Billing v7→v8** — Google Play Billing major version, deprecation deadline | Medium | DONE (PR #270, 2026-03-30, verified 2026-05-09) — `billing-ktx` 7.1.1 → 8.3.0 in `gradle/libs.versions.toml:29`; `BillingService.kt` already on v8 APIs (`ProductDetails` / `QueryProductDetailsParams` / `PendingPurchasesParams`) plus v8-only surfaces (`onPurchasesUpdatedSubResponseCode`, `unfetchedProductList`). No v7 leftovers (`SkuDetails` / `querySkuDetails` / `launchPriceChangeConfirmationFlow`) anywhere. `assembleDevDebug` + `testDevDebugUnitTest` BUILD SUCCESSFUL on 2026-05-09. |
 | B6.12 | **`resolveReport` partial-failure flag surfacing** — admin UI must show per-sub-action failures (`warning.failed`, `suspension.failed`, `auditLog.failed`, `pms.failed`, `cascade`) currently swallowed by `Resource<Unit>`. Mostly DONE for admin-bans / economy / devices / warn / backpack PMs (PRs #385, #392, #393). Remaining: re-audit `resolveReport` itself + `reportMessage` / `reportUser` paths and any iOS admin surface when added. See `feedback-partial-failure-contracts.md` | Medium | IN PROGRESS — admin UI partial-failure plumbing landed PRs #385, #392, #393. resolveReport-specific outcome shape still pending. **Top Priority #3.** |
 | B6.10 | **iOS StoreKit billing integration** — mirrors Android Billing v8. Full 4-step plan at `.project/plans/2026-04-30-ios-storekit-blocker.md` | Large  | BLOCKED on Apple Developer account + App Store Connect product setup       |
 | B6.15 | **iOS dev sign-in multi-account picker** — Phase 4 simplified iOS to single-account dev sign-in (parity with Android). Restoring the picker on both platforms requires `BuildVariant.localDevEmails: List<String>`. Defer pending UX decision | Small  | DEFERRED — pending UX decision                                              |

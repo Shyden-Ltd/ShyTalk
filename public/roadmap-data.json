@@ -1,94 +1,11 @@
 {
-  "lastUpdated": "2026-05-08",
+  "lastUpdated": "2026-05-09",
   "currentlyWorkingOn": [
     {
       "name": "Age-gating per feature",
       "description": "separate age gates for voice rooms / gifting / DMs-with-strangers. Currently single 13+ gate at signup; needs per-feature age sensitivity",
       "phase": "Safety & Compliance",
       "i18n": {}
-    },
-    {
-      "name": "Billing v7→v8",
-      "description": "Google Play Billing major version, deprecation deadline",
-      "phase": "Platform & iOS",
-      "i18n": {
-        "ar": {
-          "n": "ترقية الفواتير",
-          "d": "عمليات شراء أكثر سلاسة"
-        },
-        "de": {
-          "n": "Billing-Upgrade",
-          "d": "Reibungslosere Käufe"
-        },
-        "es": {
-          "n": "Actualización de pagos",
-          "d": "Compras más fluidas"
-        },
-        "fr": {
-          "n": "Mise à jour paiements",
-          "d": "Achats plus fluides"
-        },
-        "hi": {
-          "n": "बिलिंग अपग्रेड",
-          "d": "आसान खरीदारी"
-        },
-        "id": {
-          "n": "Upgrade billing",
-          "d": "Pembelian lebih lancar"
-        },
-        "it": {
-          "n": "Aggiornamento billing",
-          "d": "Acquisti più fluidi"
-        },
-        "ja": {
-          "n": "課金アップグレード",
-          "d": "よりスムーズな購入"
-        },
-        "ko": {
-          "n": "결제 업그레이드",
-          "d": "더 원활한 구매"
-        },
-        "nl": {
-          "n": "Billing-upgrade",
-          "d": "Soepelere aankopen"
-        },
-        "pl": {
-          "n": "Aktualizacja płatności",
-          "d": "Płynniejsze zakupy"
-        },
-        "pt": {
-          "n": "Atualização de pagamento",
-          "d": "Compras mais suaves"
-        },
-        "ru": {
-          "n": "Обновление оплаты",
-          "d": "Более плавные покупки"
-        },
-        "sv": {
-          "n": "Betalningsuppgradering",
-          "d": "Smidigare köp"
-        },
-        "th": {
-          "n": "อัปเกรดการชำระเงิน",
-          "d": "การซื้อที่ราบรื่นขึ้น"
-        },
-        "tr": {
-          "n": "Ödeme yükseltme",
-          "d": "Daha akıcı satın alma"
-        },
-        "uk": {
-          "n": "Оновлення оплати",
-          "d": "Зручніші покупки"
-        },
-        "vi": {
-          "n": "Nâng cấp thanh toán",
-          "d": "Mua hàng mượt mà hơn"
-        },
-        "zh": {
-          "n": "支付升级",
-          "d": "更流畅的购买体验"
-        }
-      }
     },
     {
       "name": "`resolveReport` partial-failure flag surfacing",
@@ -730,14 +647,14 @@
       },
       "status": "in-progress",
       "progress": {
-        "done": 13,
+        "done": 14,
         "total": 17
       },
       "features": [
         {
           "name": "Billing v7→v8",
           "description": "Google Play Billing major version, deprecation deadline",
-          "status": "in-progress",
+          "status": "done",
           "i18n": {
             "ar": {
               "n": "ترقية الفواتير",
