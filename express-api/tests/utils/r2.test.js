@@ -414,3 +414,78 @@ describe('exported constants', () => {
     expect(CDN_URL).toMatch(/^https?:\/\//);
   });
 });
+
+// ─── Environment-aware CDN_URL fallback (env-isolation regression) ──
+//
+// Pre-fix: r2.js used `isLocal ? local-minio : prod-CDN` — so dev
+// (NODE_ENV=development) leaked through to the prod images domain.
+// Now: prod → prod CDN, local → MinIO, otherwise → dev CDN.
+// ────────────────────────────────────────────────────────────────────
+
+describe('CDN_URL env-isolation fallback', () => {
+  const SAVED = {
+    CDN_URL: process.env.CDN_URL,
+    NODE_ENV: process.env.NODE_ENV,
+    MINIO_ENDPOINT: process.env.MINIO_ENDPOINT,
+  };
+
+  afterEach(() => {
+    delete process.env.CDN_URL;
+    delete process.env.NODE_ENV;
+    delete process.env.MINIO_ENDPOINT;
+    if (SAVED.CDN_URL !== undefined) process.env.CDN_URL = SAVED.CDN_URL;
+    if (SAVED.NODE_ENV !== undefined) process.env.NODE_ENV = SAVED.NODE_ENV;
+    if (SAVED.MINIO_ENDPOINT !== undefined) process.env.MINIO_ENDPOINT = SAVED.MINIO_ENDPOINT;
+  });
+
+  function loadFresh() {
+    let mod;
+    jest.isolateModules(() => {
+      // Re-mock in the isolated context — top-level jest.mock doesn't
+      // carry across isolateModules boundaries.
+      jest.doMock('@aws-sdk/client-s3', () => ({
+        S3Client: jest.fn(() => ({ send: jest.fn() })),
+        PutObjectCommand: jest.fn(),
+        GetObjectCommand: jest.fn(),
+        DeleteObjectCommand: jest.fn(),
+        DeleteObjectsCommand: jest.fn(),
+        ListObjectsV2Command: jest.fn(),
+      }));
+      jest.doMock('@aws-sdk/s3-request-presigner', () => ({
+        getSignedUrl: jest.fn(),
+      }));
+      // eslint-disable-next-line global-require
+      mod = require('../../src/utils/r2');
+    });
+    return mod;
+  }
+
+  it('NODE_ENV=production with no override → prod CDN', () => {
+    delete process.env.CDN_URL;
+    process.env.NODE_ENV = 'production';
+    const { CDN_URL: url } = loadFresh();
+    expect(url).toBe('https://images.shytalk.shyden.co.uk');
+  });
+
+  it('NODE_ENV=local with no override → MinIO localhost (NOT prod, NOT dev)', () => {
+    delete process.env.CDN_URL;
+    process.env.NODE_ENV = 'local';
+    const { CDN_URL: url } = loadFresh();
+    expect(url).toMatch(/^http:\/\/localhost:9002\//);
+    expect(url).not.toContain('shytalk.shyden.co.uk');
+  });
+
+  it('NODE_ENV=development with no override → dev CDN (NOT prod)', () => {
+    delete process.env.CDN_URL;
+    process.env.NODE_ENV = 'development';
+    const { CDN_URL: url } = loadFresh();
+    expect(url).toBe('https://dev-images.shytalk.shyden.co.uk');
+  });
+
+  it('explicit CDN_URL override beats NODE_ENV', () => {
+    process.env.CDN_URL = 'https://cdn.staging.example.test';
+    process.env.NODE_ENV = 'production';
+    const { CDN_URL: url } = loadFresh();
+    expect(url).toBe('https://cdn.staging.example.test');
+  });
+});

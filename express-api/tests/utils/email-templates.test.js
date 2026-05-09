@@ -211,3 +211,68 @@ describe('Email Templates', () => {
     });
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// Environment-aware CDN_URL fallback (env-isolation regression)
+//
+// Pre-fix: CDN_URL fell back to PROD images domain unconditionally.
+// Now: prod → prod CDN, local → MinIO, otherwise → dev CDN.
+// ═══════════════════════════════════════════════════════════════
+
+describe('CDN_URL env-isolation fallback', () => {
+  const SAVED = {
+    CDN_URL: process.env.CDN_URL,
+    NODE_ENV: process.env.NODE_ENV,
+  };
+
+  afterEach(() => {
+    delete process.env.CDN_URL;
+    delete process.env.NODE_ENV;
+    if (SAVED.CDN_URL !== undefined) process.env.CDN_URL = SAVED.CDN_URL;
+    if (SAVED.NODE_ENV !== undefined) process.env.NODE_ENV = SAVED.NODE_ENV;
+  });
+
+  function loadFresh() {
+    let mod;
+    jest.isolateModules(() => {
+      // eslint-disable-next-line global-require
+      mod = require('../../src/utils/email-templates');
+    });
+    return mod;
+  }
+
+  it('NODE_ENV=production with no override → prod CDN', () => {
+    delete process.env.CDN_URL;
+    process.env.NODE_ENV = 'production';
+    const { buildOtpEmail } = loadFresh();
+    const email = buildOtpEmail('123456');
+    expect(email.html).toContain('https://images.shytalk.shyden.co.uk/');
+    expect(email.html).not.toContain('dev-images.shytalk.shyden.co.uk');
+  });
+
+  it('NODE_ENV=local with no override → localhost MinIO (NOT prod, NOT dev)', () => {
+    delete process.env.CDN_URL;
+    process.env.NODE_ENV = 'local';
+    const { buildOtpEmail } = loadFresh();
+    const email = buildOtpEmail('123456');
+    expect(email.html).toContain('http://localhost:9002/shytalk-media/');
+    expect(email.html).not.toContain('shytalk.shyden.co.uk');
+  });
+
+  it('NODE_ENV=development with no override → dev CDN (NOT prod)', () => {
+    delete process.env.CDN_URL;
+    process.env.NODE_ENV = 'development';
+    const { buildOtpEmail } = loadFresh();
+    const email = buildOtpEmail('123456');
+    expect(email.html).toContain('https://dev-images.shytalk.shyden.co.uk/');
+  });
+
+  it('explicit CDN_URL override beats NODE_ENV', () => {
+    process.env.CDN_URL = 'https://cdn.staging.example.test';
+    process.env.NODE_ENV = 'production';
+    const { buildOtpEmail } = loadFresh();
+    const email = buildOtpEmail('123456');
+    expect(email.html).toContain('https://cdn.staging.example.test/');
+    expect(email.html).not.toContain('shytalk.shyden.co.uk');
+  });
+});
