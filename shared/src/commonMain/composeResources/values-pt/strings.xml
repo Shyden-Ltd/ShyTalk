@@ -1692,4 +1692,6 @@
     <string name="age_verif_test_env_label">Ambiente de teste</string>
     <!-- google-translated 2026-05-08 -->
     <string name="age_verif_test_env_warning">Faça upload de qualquer imagem – este é um ambiente de teste, IDs reais não são necessários e não são armazenados por longo prazo.</string>
+    <!-- google-translated 2026-05-09 -->
+    <string name="success_report_resolved_with_issues">Relatório resolvido, mas algumas ações não foram concluídas. Verifique o painel de administração da web e tente novamente conforme necessário.</string>
 </resources>

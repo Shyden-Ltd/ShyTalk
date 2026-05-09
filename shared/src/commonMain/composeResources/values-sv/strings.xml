@@ -1691,4 +1691,6 @@
     <string name="age_verif_test_env_label">Testmiljö</string>
     <!-- google-translated 2026-05-08 -->
     <string name="age_verif_test_env_warning">Ladda upp vilken bild som helst – det här är en testmiljö, riktiga ID:n krävs inte och lagras inte på lång sikt.</string>
+    <!-- google-translated 2026-05-09 -->
+    <string name="success_report_resolved_with_issues">Rapporten löstes, men vissa åtgärder slutfördes inte. Kontrollera adminwebbpanelen och försök igen vid behov.</string>
 </resources>

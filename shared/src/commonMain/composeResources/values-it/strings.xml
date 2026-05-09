@@ -1692,4 +1692,6 @@
     <string name="age_verif_test_env_label">Ambiente di prova</string>
     <!-- google-translated 2026-05-08 -->
     <string name="age_verif_test_env_warning">Carica qualsiasi immagine: questo è un ambiente di test, gli ID reali non sono richiesti e non vengono archiviati a lungo termine.</string>
+    <!-- google-translated 2026-05-09 -->
+    <string name="success_report_resolved_with_issues">Il report è stato risolto, ma alcune azioni non sono state completate. Controlla il pannello web di amministrazione e riprova se necessario.</string>
 </resources>

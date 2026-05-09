@@ -1690,4 +1690,6 @@
     <string name="age_verif_test_env_label">สภาพแวดล้อมการทดสอบ</string>
     <!-- google-translated 2026-05-08 -->
     <string name="age_verif_test_env_warning">อัปโหลดรูปภาพใดๆ — นี่เป็นสภาพแวดล้อมการทดสอบ ไม่จำเป็นต้องใช้ ID จริงและไม่ได้จัดเก็บไว้ในระยะยาว</string>
+    <!-- google-translated 2026-05-09 -->
+    <string name="success_report_resolved_with_issues">รายงานได้รับการแก้ไขแล้ว แต่การดำเนินการบางอย่างไม่เสร็จสมบูรณ์ ตรวจสอบแผงเว็บของผู้ดูแลระบบแล้วลองอีกครั้งตามความจำเป็น</string>
 </resources>

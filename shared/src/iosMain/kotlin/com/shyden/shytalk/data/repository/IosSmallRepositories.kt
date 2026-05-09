@@ -203,12 +203,14 @@ class IosReportRepositoryImpl(
     override suspend fun resolveReport(
         reportId: String,
         action: String,
-    ): Resource<Unit> =
+    ): Resource<ResolveReportOutcome> =
         firebaseCall("Failed to resolve report") {
-            api.post(
-                "/api/reports/$reportId/resolve",
-                JsonObject(mapOf("action" to JsonPrimitive(action))),
-            )
+            val response =
+                api.post(
+                    "/api/reports/$reportId/resolve",
+                    JsonObject(mapOf("action" to JsonPrimitive(action))),
+                )
+            parseResolveReportOutcome(response)
         }
 }
 

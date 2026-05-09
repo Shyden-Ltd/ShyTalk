@@ -1692,4 +1692,6 @@
     <string name="age_verif_test_env_label">テスト環境</string>
     <!-- google-translated 2026-05-08 -->
     <string name="age_verif_test_env_warning">任意の画像をアップロードします。これはテスト環境であり、実際の ID は必要なく、長期保存されません。</string>
+    <!-- google-translated 2026-05-09 -->
+    <string name="success_report_resolved_with_issues">レポートは解決されましたが、一部のアクションは完了しませんでした。管理 Web パネルを確認し、必要に応じて再試行してください。</string>
 </resources>

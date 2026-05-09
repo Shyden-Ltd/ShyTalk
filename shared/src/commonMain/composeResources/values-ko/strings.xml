@@ -1692,4 +1692,6 @@
     <string name="age_verif_test_env_label">테스트 환경</string>
     <!-- google-translated 2026-05-08 -->
     <string name="age_verif_test_env_warning">이미지 업로드 - 이는 테스트 환경이므로 실제 ID가 필요하지 않으며 장기간 저장되지 않습니다.</string>
+    <!-- google-translated 2026-05-09 -->
+    <string name="success_report_resolved_with_issues">보고서가 해결되었지만 일부 작업이 완료되지 않았습니다. 관리자 웹 패널을 확인하고 필요에 따라 다시 시도하세요.</string>
 </resources>

@@ -1692,4 +1692,6 @@
     <string name="age_verif_test_env_label">परीक्षण वातावरण</string>
     <!-- google-translated 2026-05-08 -->
     <string name="age_verif_test_env_warning">कोई भी छवि अपलोड करें - यह एक परीक्षण वातावरण है, वास्तविक आईडी की आवश्यकता नहीं है और इसे लंबे समय तक संग्रहीत नहीं किया जाता है।</string>
+    <!-- google-translated 2026-05-09 -->
+    <string name="success_report_resolved_with_issues">रिपोर्ट का समाधान हो गया, लेकिन कुछ कार्रवाइयां पूरी नहीं हुईं. व्यवस्थापक वेब पैनल की जाँच करें और आवश्यकतानुसार पुनः प्रयास करें।</string>
 </resources>

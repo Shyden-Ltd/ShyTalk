@@ -1777,4 +1777,6 @@
     <string name="age_verif_test_env_label">បរិយាកាសសាកល្បង</string>
     <!-- google-translated 2026-05-08 -->
     <string name="age_verif_test_env_warning">បង្ហោះរូបភាពណាមួយ — នេះគឺជាបរិយាកាសសាកល្បង លេខសម្គាល់ពិតប្រាកដមិនត្រូវបានទាមទារ និងមិនត្រូវបានរក្សាទុករយៈពេលវែង។</string>
+    <!-- google-translated 2026-05-09 -->
+    <string name="success_report_resolved_with_issues">របាយការណ៍ត្រូវបានដោះស្រាយ ប៉ុន្តែសកម្មភាពមួយចំនួនមិនបានបញ្ចប់ទេ។ ពិនិត្យផ្ទាំងគ្រប់គ្រងគេហទំព័រ ហើយព្យាយាមម្តងទៀតតាមតម្រូវការ។</string>
 </resources>

@@ -1692,4 +1692,6 @@
     <string name="age_verif_test_env_label">Środowisko testowe</string>
     <!-- google-translated 2026-05-08 -->
     <string name="age_verif_test_env_warning">Prześlij dowolny obraz — jest to środowisko testowe, prawdziwe identyfikatory nie są wymagane i nie są przechowywane długoterminowo.</string>
+    <!-- google-translated 2026-05-09 -->
+    <string name="success_report_resolved_with_issues">Raport został rozwiązany, ale niektóre działania nie zostały ukończone. Sprawdź panel administracyjny i spróbuj ponownie, jeśli zajdzie taka potrzeba.</string>
 </resources>

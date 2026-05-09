@@ -1692,4 +1692,6 @@
     <string name="age_verif_test_env_label">Test ortamı</string>
     <!-- google-translated 2026-05-08 -->
     <string name="age_verif_test_env_warning">Herhangi bir görsel yükleyin — bu bir test ortamıdır, gerçek kimlikler gerekli değildir ve uzun süre saklanmaz.</string>
+    <!-- google-translated 2026-05-09 -->
+    <string name="success_report_resolved_with_issues">Rapor çözümlendi ancak bazı işlemler tamamlanmadı. Yönetici web panelini kontrol edin ve gerektiğinde yeniden deneyin.</string>
 </resources>

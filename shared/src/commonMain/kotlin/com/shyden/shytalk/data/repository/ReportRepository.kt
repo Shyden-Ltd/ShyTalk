@@ -37,5 +37,5 @@ interface ReportRepository {
     suspend fun resolveReport(
         reportId: String,
         action: String,
-    ): Resource<Unit>
+    ): Resource<ResolveReportOutcome>
 }

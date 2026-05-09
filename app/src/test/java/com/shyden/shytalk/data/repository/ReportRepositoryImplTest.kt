@@ -192,7 +192,7 @@ class ReportRepositoryImplTest {
     // --- resolveReport ---
 
     @Test
-    fun `resolveReport posts to correct endpoint with action`() =
+    fun `resolveReport posts to correct endpoint with action and returns empty outcome on plain success`() =
         runTest {
             val bodySlot = slot<JSONObject>()
             coEvery { api.post("/api/reports/report-1/resolve", capture(bodySlot)) } returns
@@ -204,6 +204,8 @@ class ReportRepositoryImplTest {
 
             assertTrue(result is Resource.Success)
             assertEquals("warn", bodySlot.captured.getString("action"))
+            val outcome = (result as Resource.Success).data
+            assertTrue(!outcome.hasAnyFailure)
         }
 
     @Test
@@ -214,6 +216,123 @@ class ReportRepositoryImplTest {
             val result = repo.resolveReport("report-1", "dismiss")
 
             assertTrue(result is Resource.Error)
+        }
+
+    // ─── partial-failure response surfacing (B6.12) ─────────────────
+    //
+    // The Express handler emits per-sub-action failure flags
+    // (warning|suspension|auditLog|lockRelease + cascade + pms). The
+    // Kotlin client previously dropped the body and shipped a green
+    // toast. These tests pin the parsing wire so a future refactor of
+    // the response body keys can't silently regress to Resource<Unit>.
+
+    @Test
+    fun `resolveReport surfaces warning failure flag`() =
+        runTest {
+            coEvery { api.post(any(), any()) } returns
+                JSONObject().apply {
+                    put("success", true)
+                    put(
+                        "warning",
+                        JSONObject().apply {
+                            put("failed", true)
+                            put("error", "warning_create_failed")
+                        },
+                    )
+                }
+
+            val result = repo.resolveReport("report-1", "warn")
+
+            assertTrue(result is Resource.Success)
+            val outcome = (result as Resource.Success).data
+            assertTrue(outcome.hasAnyFailure)
+            assertEquals("warning_create_failed", outcome.warning?.error)
+        }
+
+    @Test
+    fun `resolveReport surfaces suspension and cascade partial-failure flags`() =
+        runTest {
+            coEvery { api.post(any(), any()) } returns
+                JSONObject().apply {
+                    put("success", true)
+                    put(
+                        "suspension",
+                        JSONObject().apply {
+                            put("failed", true)
+                            put("error", "suspension_update_failed")
+                        },
+                    )
+                    put(
+                        "cascade",
+                        JSONObject().apply {
+                            put("roomsClosed", 1)
+                            put("roomsUpdated", 0)
+                            put("partial", true)
+                            put("failedRoomIds", JSONArray(listOf("room-x")))
+                            put("userDocFailed", true)
+                            put("rtdbEventsFailed", 1)
+                            put("error", "cascade_failed")
+                        },
+                    )
+                }
+
+            val result = repo.resolveReport("report-1", "suspended")
+
+            assertTrue(result is Resource.Success)
+            val outcome = (result as Resource.Success).data
+            assertTrue(outcome.hasAnyFailure)
+            assertEquals("suspension_update_failed", outcome.suspension?.error)
+            assertEquals(true, outcome.cascade?.partial)
+            assertEquals("cascade_failed", outcome.cascade?.error)
+            assertEquals(listOf("room-x"), outcome.cascade?.failedRoomIds)
+        }
+
+    @Test
+    fun `resolveReport surfaces pms failure counters`() =
+        runTest {
+            coEvery { api.post(any(), any()) } returns
+                JSONObject().apply {
+                    put("success", true)
+                    put(
+                        "pms",
+                        JSONObject().apply {
+                            put("failed", 2)
+                            put("total", 3)
+                        },
+                    )
+                }
+
+            val result = repo.resolveReport("report-1", "warn")
+
+            assertTrue(result is Resource.Success)
+            val outcome = (result as Resource.Success).data
+            assertTrue(outcome.hasAnyFailure)
+            assertEquals(2, outcome.pms?.failed)
+            assertEquals(3, outcome.pms?.total)
+        }
+
+    @Test
+    fun `resolveReport ignores unknown extra keys on response body`() =
+        runTest {
+            // Forward compatibility: a future flag (e.g. cooldown) must not
+            // break older clients. Parser tolerates and ignores.
+            coEvery { api.post(any(), any()) } returns
+                JSONObject().apply {
+                    put("success", true)
+                    put(
+                        "cooldown",
+                        JSONObject().apply {
+                            put("failed", true)
+                            put("error", "cooldown_failed")
+                        },
+                    )
+                }
+
+            val result = repo.resolveReport("report-1", "warn")
+
+            assertTrue(result is Resource.Success)
+            val outcome = (result as Resource.Success).data
+            assertTrue(!outcome.hasAnyFailure)
         }
 
     // --- getPendingReports ---

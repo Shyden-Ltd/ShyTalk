@@ -81,12 +81,40 @@ class ReportReviewViewModel(
         action: String,
     ) {
         viewModelScope.launch {
-            when (reportRepository.resolveReport(reportId, action)) {
+            when (val result = reportRepository.resolveReport(reportId, action)) {
                 is Resource.Success -> {
+                    // Always drop the report from the local list — even on
+                    // partial-failure the backend marks `status:'resolved'`
+                    // before any sub-action runs, so the report won't return
+                    // on the next pending-reports query. Keeping it in the
+                    // list would mislead the admin into thinking the resolve
+                    // can be retried in-place; the retry path is per-sub-
+                    // action through the targeted admin tabs (warn, suspend).
+                    val outcome = result.data
+                    val message =
+                        if (outcome.hasAnyFailure) {
+                            // Log the structured outcome so an admin reading
+                            // logcat can see WHICH sub-action failed (the toast
+                            // is intentionally generic — full detail belongs in
+                            // the admin web panel, not a phone toast).
+                            logI(
+                                TAG,
+                                "Report $reportId resolved with partial failure: " +
+                                    "warning=${outcome.warning?.error} " +
+                                    "suspension=${outcome.suspension?.error} " +
+                                    "auditLog=${outcome.auditLog?.error} " +
+                                    "lockRelease=${outcome.lockRelease != null} " +
+                                    "cascade.partial=${outcome.cascade?.partial} " +
+                                    "pms=${outcome.pms?.failed}/${outcome.pms?.total}",
+                            )
+                            UiText.res(Res.string.success_report_resolved_with_issues)
+                        } else {
+                            UiText.res(Res.string.success_report_resolved)
+                        }
                     _uiState.update {
                         it.copy(
                             reports = it.reports.filter { r -> r.reportId != reportId },
-                            message = UiText.res(Res.string.success_report_resolved),
+                            message = message,
                         )
                     }
                 }

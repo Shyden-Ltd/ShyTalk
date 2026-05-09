@@ -1692,4 +1692,6 @@
     <string name="age_verif_test_env_label">Тестовая среда</string>
     <!-- google-translated 2026-05-08 -->
     <string name="age_verif_test_env_warning">Загрузите любое изображение — это тестовая среда, настоящие идентификаторы не требуются и долговременно не хранятся.</string>
+    <!-- google-translated 2026-05-09 -->
+    <string name="success_report_resolved_with_issues">Отчет решен, но некоторые действия не выполнены. Проверьте веб-панель администратора и повторите попытку при необходимости.</string>
 </resources>

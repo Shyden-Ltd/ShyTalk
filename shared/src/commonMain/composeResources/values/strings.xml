@@ -751,6 +751,7 @@
     <string name="success_redeemed_beans_bonus">Redeemed %1$s beans (10%% bonus!)</string>
     <string name="success_coins_added">+%1$s coins added!</string>
     <string name="success_report_resolved">Report resolved</string>
+    <string name="success_report_resolved_with_issues">Report resolved, but some actions did not complete. Check the admin web panel and retry as needed.</string>
     <string name="success_super_shy_activated">Super Shy activated! +30 days</string>
     <string name="success_sent_backpack">entire backpack (%1$d items)</string>
 

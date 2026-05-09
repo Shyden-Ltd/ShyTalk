@@ -1692,4 +1692,6 @@
     <string name="age_verif_test_env_label">Testomgeving</string>
     <!-- google-translated 2026-05-08 -->
     <string name="age_verif_test_env_warning">Upload een afbeelding – dit is een testomgeving, echte ID’s zijn niet vereist en worden niet langdurig bewaard.</string>
+    <!-- google-translated 2026-05-09 -->
+    <string name="success_report_resolved_with_issues">Rapport opgelost, maar sommige acties zijn niet voltooid. Controleer het beheerderswebpaneel en probeer het indien nodig opnieuw.</string>
 </resources>

@@ -1692,4 +1692,6 @@
     <string name="age_verif_test_env_label">Môi trường thử nghiệm</string>
     <!-- google-translated 2026-05-08 -->
     <string name="age_verif_test_env_warning">Tải lên bất kỳ hình ảnh nào - đây là môi trường thử nghiệm, không yêu cầu ID thực và không được lưu trữ lâu dài.</string>
+    <!-- google-translated 2026-05-09 -->
+    <string name="success_report_resolved_with_issues">Báo cáo đã được giải quyết nhưng một số hành động chưa hoàn tất. Kiểm tra bảng quản trị web và thử lại nếu cần.</string>
 </resources>

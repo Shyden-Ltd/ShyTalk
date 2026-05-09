@@ -1692,4 +1692,6 @@
     <string name="age_verif_test_env_label">测试环境</string>
     <!-- google-translated 2026-05-08 -->
     <string name="age_verif_test_env_warning">上传任何图像 - 这是一个测试环境，不需要真实 ID，也不会长期存储。</string>
+    <!-- google-translated 2026-05-09 -->
+    <string name="success_report_resolved_with_issues">报告已解决，但某些操作未完成。检查管理 Web 面板并根据需要重试。</string>
 </resources>

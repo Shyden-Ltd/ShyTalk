@@ -1692,4 +1692,6 @@
     <string name="age_verif_test_env_label">Entorno de prueba</string>
     <!-- google-translated 2026-05-08 -->
     <string name="age_verif_test_env_warning">Cargue cualquier imagen: este es un entorno de prueba, no se requieren identificaciones reales y no se almacenan a largo plazo.</string>
+    <!-- google-translated 2026-05-09 -->
+    <string name="success_report_resolved_with_issues">Informe resuelto, pero algunas acciones no se completaron. Consulte el panel web de administración y vuelva a intentarlo según sea necesario.</string>
 </resources>

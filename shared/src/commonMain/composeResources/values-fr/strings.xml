@@ -1688,4 +1688,6 @@
     <string name="age_verif_test_env_label">Environnement de test</string>
     <!-- google-translated 2026-05-08 -->
     <string name="age_verif_test_env_warning">Téléchargez n\'importe quelle image : il s\'agit d\'un environnement de test, les véritables identifiants ne sont pas requis et ne sont pas stockés à long terme.</string>
+    <!-- google-translated 2026-05-09 -->
+    <string name="success_report_resolved_with_issues">Rapport résolu, mais certaines actions n\'ont pas abouti. Vérifiez le panneau Web d\'administration et réessayez si nécessaire.</string>
 </resources>

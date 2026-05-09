@@ -1691,4 +1691,6 @@
     <string name="age_verif_test_env_label">Тестове середовище</string>
     <!-- google-translated 2026-05-08 -->
     <string name="age_verif_test_env_warning">Завантажте будь-яке зображення — це тестове середовище, справжні ідентифікатори не потрібні та не зберігаються довго.</string>
+    <!-- google-translated 2026-05-09 -->
+    <string name="success_report_resolved_with_issues">Звіт вирішено, але деякі дії не виконано. Перевірте веб-панель адміністратора та за потреби повторіть спробу.</string>
 </resources>

@@ -1692,4 +1692,6 @@
     <string name="age_verif_test_env_label">Lingkungan pengujian</string>
     <!-- google-translated 2026-05-08 -->
     <string name="age_verif_test_env_warning">Unggah gambar apa pun — ini adalah lingkungan pengujian, ID asli tidak diperlukan dan tidak disimpan dalam jangka panjang.</string>
+    <!-- google-translated 2026-05-09 -->
+    <string name="success_report_resolved_with_issues">Laporan terselesaikan, namun beberapa tindakan tidak selesai. Periksa panel web admin dan coba lagi sesuai kebutuhan.</string>
 </resources>

@@ -5,7 +5,7 @@ import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.data.remote.WorkerApiClient
 import com.shyden.shytalk.feature.messaging.Report
 import org.json.JSONArray
-import org.json.JSONObject
+import org.json.JSONObject as OrgJsonObject
 
 class ReportRepositoryImpl(
     private val api: WorkerApiClient,
@@ -26,7 +26,7 @@ class ReportRepositoryImpl(
         firebaseCall<Unit>("Failed to submit report") {
             api.post(
                 "/api/reports",
-                JSONObject().apply {
+                OrgJsonObject().apply {
                     put("reportedUserId", reportedUserId)
                     put("reportedUserName", reportedUserName)
                     put("reportedUserUniqueId", reportedUserUniqueId)
@@ -54,7 +54,7 @@ class ReportRepositoryImpl(
         firebaseCall<Unit>("Failed to submit report") {
             api.post(
                 "/api/reports",
-                JSONObject().apply {
+                OrgJsonObject().apply {
                     put("reportedUserId", reportedUserId)
                     put("reportedUserName", reportedUserName)
                     put("reportedUserUniqueId", reportedUserUniqueId)
@@ -96,13 +96,17 @@ class ReportRepositoryImpl(
     override suspend fun resolveReport(
         reportId: String,
         action: String,
-    ): Resource<Unit> =
-        firebaseCall<Unit>("Failed to resolve report") {
-            api.post(
-                "/api/reports/$reportId/resolve",
-                JSONObject().apply {
-                    put("action", action)
-                },
-            )
+    ): Resource<ResolveReportOutcome> =
+        firebaseCall("Failed to resolve report") {
+            val response =
+                api.post(
+                    "/api/reports/$reportId/resolve",
+                    OrgJsonObject().apply {
+                        put("action", action)
+                    },
+                )
+            // String overload keeps kotlinx.serialization a shared-internal
+            // dep — :app stays on org.json. Hop is paid only on resolveReport.
+            parseResolveReportOutcome(response.toString())
         }
 }
