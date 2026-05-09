@@ -43,7 +43,13 @@ permissions:
   contents: write
 
 concurrency:
-  group: playwright-tests
+  # Per-ref scoping: each PR / branch has its own queue, so independent PRs
+  # don't serialize through one slot. Without this, three concurrent PRs
+  # cause queue-cancellation: GitHub Actions allows at most ONE pending run
+  # per group, so the 3rd arrival cancels the 2nd's pending run, surfacing as
+  # `playwright-web / Resolve Inputs: CANCELLED → PR Gate: FAILURE` on PRs
+  # that did nothing wrong. (Observed 2026-05-09 against PR #568, #570.)
+  group: playwright-tests-${{ inputs.ref || github.ref }}
   cancel-in-progress: false
 
 env:
