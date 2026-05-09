@@ -182,6 +182,26 @@ Features that drive daily active usage and retention.
 | 20  | **Gift wall overhaul** — leaderboard, history, categories, full customization                                                                               | Large  |        |
 | 2   | **Posts & Stories** — social feed + ephemeral stories                                                                                                       | XL     |        |
 | B20 | **Clans system** — user-created groups with leaders, members, ranks, shared chat, clan-level leaderboards, inter-clan competitions. Clan badges on profiles | XL     |        |
+| B24 | **Friend & follower streaks** — daily streak counter for sustained interaction with each friend/follower (chat, voice room together, gift, react). Streak pets that grow/evolve as the streak lengthens, exclusive decorations (profile frames, chat-bubble themes, badges) unlocked at streak tiers, plus extra perks (e.g. boosted gift visibility, free re-roll on the daily wheel) for maintaining long streaks. Asked 2026-05-09. | TBD    | **NEEDS DISCUSSION** — open design questions before scoping (see notes below) |
+
+### B24 design notes (NEEDS DISCUSSION — added 2026-05-09)
+
+Open questions before scoping or implementation. Collect answers; do not start building until each is decided.
+
+1. **Interaction definition** — what counts as "interacting" for the daily streak? Options: any private message exchanged that day, or both users co-present in the same voice room for ≥N seconds, or any of {chat, voice, gift, react}. Mission-aligned reading: language-exchange streaks should privilege MEANINGFUL exchange, not "send 'hi' once a day."
+2. **Scope** — does the streak require MUTUAL interaction (both sides messaged) or one-sided (only need to send something)? Mutual is socially healthier (no farming inactive followers); one-sided is friendlier to time-zone-misaligned international friends — relevant for the language-exchange mission.
+3. **Window & grace period** — UTC midnight reset, or per-user-timezone? Should there be a 24h grace day so a missed weekend doesn't wipe a 6-month streak? Mobile-first apps (Snap, Duolingo) typically offer paid streak-freeze; consider whether that fits the "$0 hosting" constraint and existing economy.
+4. **Friend vs follower scope** — streaks only with mutual followers, only with explicitly-added "friends" (do we need a separate friends layer?), or anyone the user has interacted with in the last 30 days?
+5. **Streak pets** — fully-custom assets per tier (heavy art budget) or procedurally-mixed (head/body/accessory layers shared across tiers — reuses the gift-art asset pipeline)? Pet TYPE assignment: random per-pair, choosable, or earned via gift purchases?
+6. **Decoration tiers** — at what streak lengths do unlocks land? Tentative: 7d (basic frame), 30d (chat bubble), 90d (animated badge), 365d (rare pet evolution). Confirm before producing art.
+7. **Perks vs revenue model** — perks like "free wheel re-roll" cannibalise the existing economy. Are streak perks ADDITIVE-only (cosmetic, no Bean/Coin economy impact) or do they include economy boosts? If the latter, model the SuperShy subscriber impact before committing.
+8. **Privacy & abuse** — does displaying a streak count on profiles enable social-pressure abuse (forced daily DMs, jealousy, harassment if a streak breaks)? Compare with Snap's well-documented harm patterns. Consider per-pair opt-out.
+9. **Server cost** — naive implementation = O(friends²) Firestore writes per interaction. Need denormalised streak collection with a single doc per ordered pair (or batched writeLimiter), and a daily cron to reset broken streaks. Confirm Spark-tier budget before scoping.
+10. **App parity** — feature must ship on Android + iOS + web admin (per tri-platform policy). Decide whether the public web roadmap surfaces streaks or only the apps do.
+11. **Compliance interaction** — minors get streaks too, but COPPA/UK-OSA limits on profile features (decorations) need review. Align with C7 (block-list integrity) and roadmap age-segregation work.
+12. **Migration** — back-fill existing relationships from the past 30d of interaction so day-one users see SOME initial streaks rather than every count starting at zero?
+
+Once these answers exist, re-categorise from "TBD" to a concrete Effort estimate and pick a target Phase (Phase 4 if retention-driven, Phase 3 if economy-coupled).
 
 ---
 

@@ -1215,7 +1215,7 @@
       "status": "planned",
       "progress": {
         "done": 0,
-        "total": 7
+        "total": 8
       },
       "features": [
         {
@@ -1719,6 +1719,12 @@
         {
           "name": "Clans system",
           "description": "user-created groups with leaders, members, ranks, shared chat, clan-level leaderboards, inter-clan competitions. Clan badges on profiles",
+          "status": "planned",
+          "i18n": {}
+        },
+        {
+          "name": "Friend & follower streaks",
+          "description": "daily streak counter for sustained interaction with each friend/follower (chat, voice room together, gift, react). Streak pets that grow/evolve as the streak lengthens, exclusive decorations (profile frames, chat-bubble themes, badges) unlocked at streak tiers, plus extra perks (e.g. boosted gift visibility, free re-roll on the daily wheel) for maintaining long streaks. Asked 2026-05-09",
           "status": "planned",
           "i18n": {}
         }
