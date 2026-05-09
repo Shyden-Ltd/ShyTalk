@@ -207,6 +207,19 @@ jobs:
             }
           };
           EOF
+          # Roadmap page references /js/roadmap-config.js, which is gitignored
+          # because the prod/dev deploys sed-substitute the API key into it
+          # from the .example template. CI doesn't run those deploy steps, so
+          # without this stub the file 404s and the console-errors test fails
+          # (the previous blanket "Failed to load resource" mask was tightened
+          # in this PR — the test now surfaces real broken-asset bugs).
+          cat > public/js/roadmap-config.js << 'EOF'
+          window.ROADMAP_FIREBASE_CONFIG = {
+            apiKey: "fake-api-key",
+            authDomain: "localhost",
+            projectId: "demo-shytalk"
+          };
+          EOF
 
       - name: Serve admin panel
         run: npx serve public -l 8888 &
