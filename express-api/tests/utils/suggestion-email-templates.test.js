@@ -784,3 +784,90 @@ describe('unknown language falls back to English subject', () => {
     expect(unknownResult.subject).toBe(enResult.subject);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// Environment-aware URL fallbacks
+//
+// Pre-fix: SITE_BASE / API_BASE fell back to PROD URLs unconditionally
+// when SITE_BASE_URL / API_BASE_URL env vars were unset, so a developer
+// clicking the unsubscribe link in a dev test email would unsubscribe
+// their PROD account.
+// ═══════════════════════════════════════════════════════════════
+
+describe('environment-aware fallbacks (env-isolation regression)', () => {
+  const SAVED_ENV = {
+    SITE_BASE_URL: process.env.SITE_BASE_URL,
+    API_BASE_URL: process.env.API_BASE_URL,
+    NODE_ENV: process.env.NODE_ENV,
+  };
+
+  afterEach(() => {
+    process.env.SITE_BASE_URL = SAVED_ENV.SITE_BASE_URL;
+    process.env.API_BASE_URL = SAVED_ENV.API_BASE_URL;
+    process.env.NODE_ENV = SAVED_ENV.NODE_ENV;
+    delete process.env.SITE_BASE_URL;
+    delete process.env.API_BASE_URL;
+    if (SAVED_ENV.SITE_BASE_URL !== undefined) process.env.SITE_BASE_URL = SAVED_ENV.SITE_BASE_URL;
+    if (SAVED_ENV.API_BASE_URL !== undefined) process.env.API_BASE_URL = SAVED_ENV.API_BASE_URL;
+    if (SAVED_ENV.NODE_ENV !== undefined) process.env.NODE_ENV = SAVED_ENV.NODE_ENV;
+  });
+
+  function loadFresh() {
+    let mod;
+    jest.isolateModules(() => {
+      // eslint-disable-next-line global-require
+      mod = require('../../src/utils/suggestion-email-templates');
+    });
+    return mod;
+  }
+
+  test('NODE_ENV=production with no overrides → prod URLs', () => {
+    delete process.env.SITE_BASE_URL;
+    delete process.env.API_BASE_URL;
+    process.env.NODE_ENV = 'production';
+
+    const { buildAcceptedEmail } = loadFresh();
+    const email = buildAcceptedEmail('sug-1', 'Title', 'en');
+
+    expect(email.html).toContain('https://shytalk.shyden.co.uk/roadmap.html#suggestion-sug-1');
+    expect(email.headers['List-Unsubscribe']).toContain('https://api.shytalk.shyden.co.uk');
+  });
+
+  test('NODE_ENV=local with no overrides → localhost URLs (NOT prod, NOT dev)', () => {
+    delete process.env.SITE_BASE_URL;
+    delete process.env.API_BASE_URL;
+    process.env.NODE_ENV = 'local';
+
+    const { buildAcceptedEmail } = loadFresh();
+    const email = buildAcceptedEmail('sug-1', 'Title', 'en');
+
+    expect(email.html).toContain('http://localhost:8888/roadmap.html#suggestion-sug-1');
+    expect(email.html).not.toContain('shytalk.shyden.co.uk');
+    expect(email.headers['List-Unsubscribe']).toContain('http://localhost:3000');
+    expect(email.headers['List-Unsubscribe']).not.toContain('shytalk.shyden.co.uk');
+  });
+
+  test('NODE_ENV undefined (defaults to non-prod) with no overrides → DEV URLs (NOT prod)', () => {
+    delete process.env.SITE_BASE_URL;
+    delete process.env.API_BASE_URL;
+    delete process.env.NODE_ENV;
+
+    const { buildAcceptedEmail } = loadFresh();
+    const email = buildAcceptedEmail('sug-1', 'Title', 'en');
+
+    expect(email.html).toContain('https://dev.shytalk.shyden.co.uk');
+    expect(email.html).not.toContain('https://shytalk.shyden.co.uk/');
+  });
+
+  test('explicit overrides win over NODE_ENV-based defaults', () => {
+    process.env.SITE_BASE_URL = 'https://staging.example.test';
+    process.env.API_BASE_URL = 'https://api.staging.example.test';
+    process.env.NODE_ENV = 'production'; // would otherwise pick prod URLs
+
+    const { buildAcceptedEmail } = loadFresh();
+    const email = buildAcceptedEmail('sug-1', 'Title', 'en');
+
+    expect(email.html).toContain('https://staging.example.test/roadmap.html#suggestion-sug-1');
+    expect(email.headers['List-Unsubscribe']).toContain('https://api.staging.example.test');
+  });
+});

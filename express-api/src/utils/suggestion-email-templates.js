@@ -76,8 +76,20 @@ function getSubject(type, language, title) {
   return base;
 }
 
-const SITE_BASE = process.env.SITE_BASE_URL || 'https://shytalk.shyden.co.uk';
-const API_BASE = process.env.API_BASE_URL || 'https://api.shytalk.shyden.co.uk';
+// Env-aware fallbacks. The previous unconditional `|| 'https://shytalk...'`
+// + `|| 'https://api.shytalk...'` would silently emit prod URLs in
+// roadmap-suggestion emails sent from dev / local if SITE_BASE_URL /
+// API_BASE_URL were unset — so a developer clicking the unsubscribe link
+// from a dev test email would unsubscribe their PROD account from
+// suggestion notifications. See feedback-environment-isolation memory.
+// Kept on one line each (prettier-ignore) so the pre-commit URL-
+// isolation guard sees the localhost fallback alongside the prod URL.
+/* eslint-disable no-nested-ternary, max-len */
+// prettier-ignore
+const SITE_BASE = process.env.SITE_BASE_URL || (process.env.NODE_ENV === 'production' ? 'https://shytalk.shyden.co.uk' : process.env.NODE_ENV === 'local' ? 'http://localhost:8888' : 'https://dev.shytalk.shyden.co.uk');
+// prettier-ignore
+const API_BASE = process.env.API_BASE_URL || (process.env.NODE_ENV === 'production' ? 'https://api.shytalk.shyden.co.uk' : process.env.NODE_ENV === 'local' ? 'http://localhost:3000' : 'https://dev-api.shytalk.shyden.co.uk');
+/* eslint-enable no-nested-ternary, max-len */
 
 function buildHeaders(uid) {
   const unsubUrl = `${API_BASE}/api/subscriptions/unsubscribe?token=${uid}`;
