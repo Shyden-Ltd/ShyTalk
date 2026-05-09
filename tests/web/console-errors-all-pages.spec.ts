@@ -31,12 +31,17 @@ test.describe('Console Errors — All Pages', () => {
       await page.goto(`${BASE}${path}`);
       await page.waitForTimeout(2_000);
 
-      // Filter benign errors (browser extensions, third-party scripts)
+      // Filter benign errors that occur in CI where the local stack may
+      // race the page load. The previous version of this filter included
+      // `!e.includes('favicon')` and `!e.includes('Failed to load resource')`
+      // — both blanket masks. The favicon mask hid a real /favicon.ico 404
+      // bug for months (browsers auto-request /favicon.ico even when
+      // <link rel="icon"> points to .svg) and the resource-load mask
+      // would have hidden any future broken-asset regression. Now narrowed
+      // to only the specific Firebase-config-might-not-be-up case.
       const realErrors = errors.filter(e =>
-        !e.includes('favicon') &&
         !e.includes('ERR_CONNECTION_REFUSED') &&
-        !e.includes('net::ERR_') &&
-        !e.includes('Failed to load resource') // Firebase config may fail in test env
+        !(e.includes('Failed to load resource') && e.includes('firebase-config'))
       );
 
       if (realErrors.length > 0) {
@@ -45,4 +50,21 @@ test.describe('Console Errors — All Pages', () => {
       expect(realErrors).toHaveLength(0);
     });
   }
+
+  // Regression: /favicon.ico was missing for months and every public page
+  // logged a 404 on it. Browsers auto-request /favicon.ico even when
+  // <link rel="icon"> points to favicon.svg — a 16x16 ICO at the root is
+  // the only way to silence the request across all browsers including
+  // legacy Safari.
+  test('/favicon.ico returns 200 (no 404 on auto-request)', async ({ request }) => {
+    const res = await request.get(`${BASE}/favicon.ico`);
+    expect(res.status()).toBe(200);
+    const buf = await res.body();
+    expect(buf.byteLength).toBeGreaterThan(0);
+    // First two bytes of an ICO file: reserved=0x0000, type=0x0001 (icon)
+    expect(buf[0]).toBe(0);
+    expect(buf[1]).toBe(0);
+    expect(buf[2]).toBe(1);
+    expect(buf[3]).toBe(0);
+  });
 });
