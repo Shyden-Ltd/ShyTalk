@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="theme-color" content="#0f0d15">
+<meta name="description" content="The page you were looking for could not be found on ShyTalk.">
+<title>Page not found — ShyTalk</title>
+<style>
+  :root {
+    --bg: #0f0d15;
+    --surface: #1c1a24;
+    --border: #3a3550;
+    --text: #e8e0f0;
+    --text2: #a89ec0;
+    --primary: #6750a4;
+    --primary-glow: #9a82db;
+    --accent: #d0bcff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: min(600px, 100vw);
+    height: min(600px, 100vh);
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, rgba(103,80,164,0.15) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 24px;
+    text-align: center;
+    position: relative;
+    z-index: 1;
+  }
+  .code {
+    font-size: clamp(72px, 14vw, 144px);
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+    letter-spacing: -0.04em;
+  }
+  h1 {
+    margin-top: 16px;
+    font-size: clamp(20px, 4vw, 28px);
+    font-weight: 600;
+    color: var(--text);
+  }
+  p {
+    margin-top: 12px;
+    font-size: 0.95rem;
+    color: var(--text2);
+    max-width: 480px;
+    line-height: 1.6;
+  }
+  .home-link {
+    margin-top: 32px;
+    display: inline-block;
+    padding: 12px 28px;
+    background: var(--primary);
+    color: #fff;
+    text-decoration: none;
+    border-radius: 999px;
+    font-weight: 600;
+    transition: background 0.2s, transform 0.2s;
+    min-height: 44px;
+    line-height: 20px;
+  }
+  .home-link:hover {
+    background: var(--primary-glow);
+    transform: translateY(-1px);
+  }
+  .home-link:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="code" data-testid="404-code">404</div>
+  <h1>Page not found</h1>
+  <p>The page you were looking for doesn't exist or has moved. Try the homepage or one of the links below.</p>
+  <a href="/" class="home-link" data-testid="404-home-link">Back to ShyTalk</a>
+</main>
+<script src="/js/shared-header.js"></script>
+</body>
+</html>
