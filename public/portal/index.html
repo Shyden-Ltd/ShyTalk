@@ -9,6 +9,10 @@
   <meta name="description" content="ShyTalk Portal — Manage your account, security, and privacy.">
   <title>ShyTalk — Portal</title>
   <link rel="stylesheet" href="portal.css">
+  <!-- data-language-selector-styles sentinel tells language-selector.js
+       to skip its inline-style injection (CSP forbids `unsafe-inline`
+       on /portal/* — see public/_headers line 25). -->
+  <link rel="stylesheet" href="/css/language-selector.css" data-language-selector-styles>
   <noscript>This page requires JavaScript to function. Please enable JavaScript in your browser settings.</noscript>
 </head>
 <body>
@@ -522,6 +526,10 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="config.js"></script>
 <script src="qrcode.min.js"></script>
+<!-- language-selector.js BEFORE portal-translations.js so window.ShyTalkLanguage
+     is exposed when portal-translations.js's bottom IIFE runs the initial
+     applyPortalTranslations(savedLang) bridge. -->
+<script src="/js/language-selector.js"></script>
 <script src="portal-translations.js"></script>
 <script src="portal.js"></script>
 <script type="module" src="/js/seasonal-theme.js"></script>

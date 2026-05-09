@@ -1946,9 +1946,27 @@ function applyPortalTranslations(lang) {
   });
 
   document.documentElement.lang = lang;
+  // RTL handling — mirrors language-selector.js's RTL_LANGS list.
+  // Without this, Arabic (and any other RTL locale) would translate
+  // text but leave the layout LTR, mis-rendering the portal.
+  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
 }
 
 // Hook for the language selector (mirrors legal-translations.js pattern)
 window.applyLanguage = function(lang) {
   applyPortalTranslations(lang);
 };
+
+// Apply saved language on initial load. The portal CSP forbids inline
+// <script> blocks (no `unsafe-inline` for script-src), so the bridge
+// has to live in an external file — this one. Called synchronously at
+// script-parse time, after the file's globals are defined above.
+(function () {
+  var saved = (window.ShyTalkLanguage && window.ShyTalkLanguage.get)
+    ? window.ShyTalkLanguage.get()
+    : (function () {
+        try { return localStorage.getItem('shytalk_language') || 'en'; }
+        catch (_e) { return 'en'; }
+      })();
+  applyPortalTranslations(saved);
+})();

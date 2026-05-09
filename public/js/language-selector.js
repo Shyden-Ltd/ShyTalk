@@ -72,6 +72,14 @@
   };
 
   // ── Inject styles ──
+  // Skip injection if the page already loaded the extracted stylesheet
+  // (via <link rel="stylesheet" href="/css/language-selector.css"
+  // data-language-selector-styles>). Pages with strict CSP — e.g.
+  // /portal/* (style-src 'self', no `unsafe-inline`) — can't tolerate
+  // runtime <style> element creation; they ship the link tag instead
+  // and this guard avoids a CSP violation. Pages without strict CSP
+  // (legal pages, homepage, roadmap) keep the inline-injection path.
+  if (!document.querySelector('link[data-language-selector-styles]')) {
   var style = document.createElement('style');
   style.textContent = [
     '.stl-lang-btn{position:fixed;bottom:20px;left:20px;z-index:9999;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:rgba(30,28,40,.85);backdrop-filter:blur(8px);color:#d0bcff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .2s,box-shadow .2s;box-shadow:0 2px 12px rgba(0,0,0,.3)}',
@@ -99,6 +107,7 @@
     '.stl-lang-close:focus-visible{outline:2px solid #d0bcff}',
   ].join('\n');
   document.head.appendChild(style);
+  }
 
   // ── Inject button ──
   var btn = document.createElement('button');

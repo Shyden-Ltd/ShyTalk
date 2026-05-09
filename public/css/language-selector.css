@@ -1,0 +1,165 @@
+/*
+ * Language selector styles — extracted from language-selector.js so pages
+ * with strict CSP (e.g. /portal/* — no `unsafe-inline` for style-src)
+ * can load them via <link> instead of inline injection. Pages without
+ * strict CSP keep using the JS-injected fallback for backwards
+ * compatibility — the JS guards against double-load via the
+ * `data-language-selector-styles` sentinel attribute on the link tag.
+ *
+ * Pages that load this file MUST also tag the link with the sentinel:
+ *   <link rel="stylesheet" href="/css/language-selector.css" data-language-selector-styles>
+ */
+
+.stl-lang-btn {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  z-index: 9999;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(30, 28, 40, 0.85);
+  backdrop-filter: blur(8px);
+  color: #d0bcff;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+}
+.stl-lang-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 20px rgba(103, 80, 164, 0.4);
+}
+.stl-lang-btn:focus-visible {
+  outline: 2px solid #d0bcff;
+  outline-offset: 3px;
+}
+
+.stl-lang-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.stl-lang-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.stl-lang-modal {
+  background: #1c1a24;
+  border: 1px solid #3a3550;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 400px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+}
+.stl-lang-header {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid #3a3550;
+}
+.stl-lang-header h2 {
+  margin: 0 0 12px;
+  font-size: 1.1rem;
+  color: #e8e0f0;
+  font-weight: 600;
+}
+.stl-lang-search {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #3a3550;
+  border-radius: 10px;
+  background: #0f0d15;
+  color: #e8e0f0;
+  font-size: 0.95rem;
+  outline: none;
+}
+.stl-lang-search:focus {
+  border-color: #6750a4;
+}
+.stl-lang-search::placeholder {
+  color: #6b6480;
+}
+
+.stl-lang-list {
+  overflow-y: auto;
+  padding: 8px 0;
+  flex: 1;
+}
+.stl-lang-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  cursor: pointer;
+  transition: background 0.15s;
+  color: #e8e0f0;
+  font-size: 0.95rem;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+}
+.stl-lang-item:hover,
+.stl-lang-item:focus-visible {
+  background: rgba(103, 80, 164, 0.15);
+}
+.stl-lang-item:focus-visible {
+  outline: 2px solid #d0bcff;
+  outline-offset: -2px;
+}
+.stl-lang-item.active {
+  background: rgba(103, 80, 164, 0.25);
+}
+.stl-lang-item .native {
+  color: #d0bcff;
+  font-weight: 600;
+  min-width: 80px;
+}
+.stl-lang-item .name {
+  color: #a89ec0;
+}
+.stl-lang-item .check {
+  margin-left: auto;
+  color: #66bb6a;
+  font-size: 1.1rem;
+  visibility: hidden;
+}
+.stl-lang-item.active .check {
+  visibility: visible;
+}
+
+.stl-lang-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: none;
+  border: none;
+  color: #a89ec0;
+  font-size: 1.4rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+.stl-lang-close:hover {
+  color: #e8e0f0;
+  background: rgba(255, 255, 255, 0.1);
+}
+.stl-lang-close:focus-visible {
+  outline: 2px solid #d0bcff;
+}
