@@ -46,9 +46,19 @@
     return 'en';
   }
 
+  // Languages whose script is read right-to-left. Only one in our
+  // current 20-locale set, but listed as a Set so adding Hebrew /
+  // Persian / Urdu later is a single-line change. Without this, the
+  // page keeps `dir` empty (browser-default LTR) even after switching
+  // to Arabic, so the layout never mirrors and Arabic users see a
+  // backwards UX. Found 2026-05-09 via /manual-qa: language picker
+  // set lang=ar but kept dir=""/ltr.
+  var RTL_LANGS = ['ar'];
+
   function setLanguage(lang) {
     localStorage.setItem(STORAGE_KEY, lang);
     document.documentElement.lang = lang;
+    document.documentElement.dir = RTL_LANGS.indexOf(lang) !== -1 ? 'rtl' : 'ltr';
     if (typeof window.applyLanguage === 'function') {
       window.applyLanguage(lang);
     }
@@ -207,9 +217,12 @@
     }
   });
 
-  // Apply saved language on load
+  // Apply saved language on load. Mirrors setLanguage() — keep both
+  // sites in sync so a refresh-into-Arabic shows RTL just like a
+  // mid-session switch does.
   var savedLang = getLanguage();
   document.documentElement.lang = savedLang;
+  document.documentElement.dir = RTL_LANGS.indexOf(savedLang) !== -1 ? 'rtl' : 'ltr';
   if (typeof window.applyLanguage === 'function') {
     window.applyLanguage(savedLang);
   }
