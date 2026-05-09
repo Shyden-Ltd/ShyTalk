@@ -863,14 +863,21 @@
     return (navigator.language || "en").split("-")[0];
   }
 
-  // Called by language-selector.js when user changes language
-  window.applyLanguage = function (lang) {
-    currentLang = lang;
-    if (roadmapData) {
-      renderPhases(roadmapData);
-      setupScrollSpy();
-    }
-  };
+  // Called by language-selector.js when user changes language.
+  // Chains with any prior applyLanguage handler (e.g. legal-translations.js
+  // for footer link i18n) so multiple translation modules can co-exist
+  // without overwriting each other.
+  (function () {
+    var _prev = window.applyLanguage;
+    window.applyLanguage = function (lang) {
+      currentLang = lang;
+      if (roadmapData) {
+        renderPhases(roadmapData);
+        setupScrollSpy();
+      }
+      if (typeof _prev === "function") _prev(lang);
+    };
+  })();
 
   // ── Fetch and init ──
 

@@ -1794,10 +1794,10 @@
       >
       <span class="footer-updated last-updated" id="footer-updated" data-testid="last-updated"></span>
       <nav class="footer-links" aria-label="Legal" style="display:flex;gap:16px;margin-top:8px;font-size:0.75rem;flex-wrap:wrap;">
-        <a href="/privacy.html" style="color:var(--text-secondary);text-decoration:none;">Privacy Policy</a>
-        <a href="/terms.html" style="color:var(--text-secondary);text-decoration:none;">Terms</a>
-        <a href="/community-guidelines.html" style="color:var(--text-secondary);text-decoration:none;">Community Guidelines</a>
-        <a href="/do-not-sell.html" style="color:var(--text-secondary);text-decoration:none;">Do Not Sell or Share My Personal Information</a>
+        <a href="/privacy.html" data-i18n="footer_privacy" style="color:var(--text-secondary);text-decoration:none;">Privacy Policy</a>
+        <a href="/terms.html" data-i18n="footer_terms" style="color:var(--text-secondary);text-decoration:none;">Terms</a>
+        <a href="/community-guidelines.html" data-i18n="footer_guidelines" style="color:var(--text-secondary);text-decoration:none;">Community Guidelines</a>
+        <a href="/do-not-sell.html" data-i18n="footer_do_not_sell" style="color:var(--text-secondary);text-decoration:none;">Do Not Sell or Share My Personal Information</a>
       </nav>
     </footer>
 
@@ -1863,6 +1863,13 @@
       })();
     </script>
     <script src="/js/roadmap-auth.js"></script>
+    <!-- legal-translations.js + LEGAL_PAGE_TYPE='roadmap' (no LEGAL_T.roadmap
+         section exists, so only LEGAL_T.footer applies — translates the
+         footer-link text alongside the existing copyright/disclaimer i18n). -->
+    <script>
+      window.LEGAL_PAGE_TYPE = "roadmap";
+    </script>
+    <script src="/js/legal-translations.js"></script>
     <script src="/js/roadmap-app.js" defer></script>
     <script src="/js/suggestions-i18n.js" defer></script>
     <script src="/js/suggestions-board.js" defer></script>
