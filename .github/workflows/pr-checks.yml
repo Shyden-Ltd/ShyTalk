@@ -51,6 +51,13 @@ jobs:
             case "$file" in
               public/*.md) WEB=true ;;
               public/*) WEB=true ;;
+              # Tests under tests/web/ exercise the public/ surface via
+              # Playwright; treat them as web changes so the playwright-web
+              # job runs against the source they're testing. Without this
+              # branch, a PR that ADDS a Playwright test would silently
+              # skip the entire playwright-web pipeline (the test would
+              # only run locally before push, never in CI).
+              tests/web/*|playwright.config.ts|playwright.config.js) WEB=true ;;
               app/*|shared/*|iosApp/*|gradle/*|*.gradle.kts|gradle.properties|gradlew|gradlew.bat) APP=true ;;
               # Integration test files match BEFORE express-api/* so a
               # PR that changes ONLY tests/integration/ files runs the
