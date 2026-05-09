@@ -2,6 +2,9 @@
   Cross-Origin-Opener-Policy: same-origin-allow-popups
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), accelerometer=(), gyroscope=(), usb=(), bluetooth=()
 
 # Force browsers to revalidate JS / CSS on every load. Cloudflare Pages'
 # default for unfingerprinted assets is `public, max-age=14400` (4h),
