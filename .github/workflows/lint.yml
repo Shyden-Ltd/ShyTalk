@@ -85,3 +85,6 @@ jobs:
 
       - name: No paid GitHub-hosted runner specs
         run: bash scripts/check-no-paid-runners.sh
+
+      - name: Workflow concurrency groups are scoped or intentionally global
+        run: bash scripts/check-workflow-concurrency-scoping.sh
